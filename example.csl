@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only" default-locale="en-GB">
+  <info>
+    <title>Australian Guide to Legal Citation</title>
+    <title-short>AGLC</title-short>
+    <id>http://www.zotero.org/styles/australian-guide-to-legal-citation</id>
+    <link href="http://www.zotero.org/styles/australian-guide-to-legal-citation" rel="self"/>
+    <link href="https://forums.zotero.org/discussion/4841/new-australian-legal-citation-style/?Focus=20831#Comment_20831" rel="documentation"/>
+    <author>
+      <name>Sebastian Karcher</name>
+    </author>
+    <author>
+      <name>Anton Hughes</name>
+      <email>antonh@lawtec.net</email>
+    </author>
+    <author>
+      <name>Bruce D'Arcus</name>
+      <email>bdarcus@gmail.com</email>
+    </author>
+    <author>
+      <name>Nancy Sims</name>
+      <email>nsims@umich.edu</email>
+    </author>
+    <author>
+      <name>Nic Suzor</name>
+      <email>nic@suzor.com</email>
+    </author>
+    <contributor>
+      <name>Tim Baxter</name>
+      <email>tbaxter1@unimelb.edu.au</email>
+    </contributor> <category citation-format="note"/>
+    <category field="law"/>
+    <summary>A modification of the Bluebook legal citation style for Australian conditions.</summary>
+    <updated>2018-09-03T17:14:48+00:00</updated>
+    <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
+  </info>
+  <locale>
+    <terms>
+      <term name="et-al">et al</term>
+    </terms>
+  </locale>
+  <macro name="Splendiferous">
+    <text variable="locator" font-style="italic" />
+  </macro>
+  <citation et-al-min="4" et-al-use-first="1">
+    <layout suffix="." delimiter="; ">
+      <group delimiter=", ">
+        <text value="citation" />
+        <number variable="issue" />
+        <names variable="editor">
+          <name name-as-sort-order="all" />
+        </names>
+        <choose>
+          <if variable="printer">
+            <text value="printer" />
+          </if>
+          <else-if variable="printer">
+            <text value="printer" />
+            <date variable="printer" delimiter=" ">
+              <date-part name="day" range-delimiter="&#x2013;"/>
+              <date-part name="month" range-delimiter=" &#x2013; "/>
+              <date-part name="year" range-delimiter=" &#x2013; "/>
+            </date>
+          </else-if>
+          <else>
+          </else>
+        </choose>
+      </group>
+    </layout>
+  </citation>
+  <bibliography et-al-min="4" et-al-use-first="1">
+    <sort>
+      <key macro="sort-type"/>
+      <key macro="author" names-min="1" names-use-first="1"/>
+      <key variable="issued"/>
+    </sort>
+    <layout>
+      <text value="bibliography" />
+    </layout>
+  </bibliography>
+</style>
