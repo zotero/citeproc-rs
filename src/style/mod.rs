@@ -378,35 +378,45 @@ fn names_el(node: &Node) -> Result<Element, CslValidationError> {
         .collect();
 
     let els: Vec<Node> = node.children().filter(|n| n.is_element()).collect();
-    let mut iter = els.iter().peekable();
 
-    let name_els: Result<Vec<_>, _> = CautiousTakeWhile{
-        inner: iter.by_ref(),
-        condition: |n| n.has_tag_name("name")
-    }.map(|el| Name::from_node(&el)).collect();
-    let names = name_els?;
+    let mut names = vec![];
+    let mut label = None;
+    let mut substitute = None;
+    let mut seen_label = false;
+    let mut seen_subst = false;
 
-    let label_els: Result<Vec<_>, _> = CautiousTakeWhile{
-        inner: iter.by_ref(),
-        condition: |n| n.has_tag_name("label")
-    }.map(|el| NameLabel::from_node(&el)).collect();
-    let label = label_els?.into_iter().nth(0);
+    let unrecognised = |el, tag| {
+        if tag == "name" || tag == "label" || tag == "substitute" {
+            return Err(CslValidationError::new(el, format!("<names> elements out of order; found <{}> in wrong position", tag)))
+        }
+        return Err(CslValidationError::new(el, format!("Unrecognised element {} in <names>", tag)))
+    };
 
-    let subst_els: Vec<_> = CautiousTakeWhile{
-        inner: iter.by_ref(),
-        condition: |n| n.has_tag_name("substitute")
-    }.collect();
-
-    if subst_els.len() > 1 {
-        return Err(CslValidationError::new(subst_els[1], "There can only be one <substitute> in a <names> block.".into()))?;
-    }
-    let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| Substitute::from_node(&el)).collect();
-    let substitute = substs?.into_iter().nth(0);
-
-    if iter.by_ref().count() > 0 {
-        let last = els.iter().last().expect("already established that there were > 0 elements in the list");
-        return Err(CslValidationError::new(
-                last, "<substitute> cannot be followed by any elements in a <names> block".into()))?;
+    for el in els.into_iter() {
+        let tag = el.tag_name().name().to_owned();
+        println!("{}", tag);
+        if !seen_label {
+            if tag == "name" {
+                names.push(Name::from_node(&el)?);
+            } else if tag == "label" {
+                seen_label = true;
+                label = Some(NameLabel::from_node(&el)?);
+            } else if tag == "substitute" {
+                seen_subst = true;
+                substitute = Some(Substitute::from_node(&el)?);
+            }
+        } else if !seen_subst {
+            if tag == "label" {
+                label = Some(NameLabel::from_node(&el)?);
+            } else if tag == "substitute" {
+                seen_subst = true;
+                substitute = Some(Substitute::from_node(&el)?);
+            } else {
+                return unrecognised(&el, tag);
+            }
+        } else {
+            return unrecognised(&el, tag);
+        }
     }
 
     Ok(Element::Names(
