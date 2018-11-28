@@ -36,10 +36,9 @@
           <name name-as-sort-order="all" />
         </names>
         <choose>
-          <if variable="printer">
-            <text value="printer" />
+          <if number="number">
           </if>
-          <else-if variable="printer">
+          <else-if variable="number">
             <text value="printer" />
             <date variable="printer" delimiter=" ">
               <date-part name="day" range-delimiter="&#x2013;"/>

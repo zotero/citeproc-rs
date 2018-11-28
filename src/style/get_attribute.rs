@@ -13,9 +13,9 @@ pub trait GetAttribute where Self : Sized {
 #[derive(AsRefStr, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="snake_case")]
 pub enum CslVersion {
-    #[strum(serialize = "csl_101")]
+    #[strum(serialize = "csl101")]
     Csl101,
-    #[strum(serialize = "csl_m")]
+    #[strum(serialize = "cslM")]
     CslM,
 }
 
