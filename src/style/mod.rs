@@ -481,7 +481,7 @@ impl FromNode for Element {
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(Date::from_node(node, false)?)),
-            _ => Err(CslValidationError::new(node, "Dunno how to work that one".into()))?
+            _ => Err(CslValidationError::new(node, "Unrecognised node.".into()))?
         }
     }
 }

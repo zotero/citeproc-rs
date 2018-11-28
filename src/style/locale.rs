@@ -1,8 +1,4 @@
-use std::fmt;
-use std::str::FromStr;
-use crate::style::error::*;
 use crate::style::element::{ Form, Date };
-use strum::{ AsStaticRef };
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CslOption(String, String);
@@ -41,7 +37,15 @@ pub struct Locale {
     pub date: Vec<Date>,
 }
 
-fn merge_locales(_base: Locale, locales: Vec<Locale>) -> Vec<Locale> {
+pub fn merge_locales(_base: Locale, locales: Vec<Locale>) -> Vec<Locale> {
     locales
 }
+
+fn has_ordinals(ls: Vec<Locale>) -> bool {
+    ls.iter().any(|locale| {
+        locale.terms.iter().any(|term| term.name.contains("ordinal"))
+    })
+}
+
+fn remove_ordinals() {}
 
