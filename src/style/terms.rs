@@ -151,7 +151,7 @@ impl FromStr for Ordinals {
             "long-ordinal-09" => Ok(LongOrdinal09),
             "long-ordinal-10" => Ok(LongOrdinal10),
             _ => {
-                let segments: Vec<&str> = s.split("-").collect();
+                let segments: Vec<&str> = s.split('-').collect();
                 match &segments[..] {
                     ["ordinal", val] => {
                         let n = val.parse::<u32>().unwrap_or(200);

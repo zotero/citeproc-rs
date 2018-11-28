@@ -111,8 +111,12 @@ impl Default for Formatting {
 impl fmt::Debug for Affixes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Affixes {{ ");
-        if self.prefix.len() > 0 { write!(f, "prefix: {:?}, ", self.prefix); }
-        if self.suffix.len() > 0 { write!(f, "suffix: {:?}, ", self.suffix); }
+        if !self.prefix.is_empty() {
+            write!(f, "prefix: {:?}, ", self.prefix);
+        }
+        if !self.suffix.is_empty() {
+            write!(f, "suffix: {:?}, ", self.suffix);
+        }
         write!(f, "}}")
     }
 }

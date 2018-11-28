@@ -31,7 +31,7 @@ pub struct InvalidCsl {
 impl InvalidCsl {
     pub fn new(node: &Node, message: String) -> Self {
         let mut pos = node.node_pos();
-        pos.col = pos.col + 1;
+        pos.col += 1;
         InvalidCsl {
             text_pos: pos,
             len: node.tag_name().name().len(),
@@ -40,10 +40,12 @@ impl InvalidCsl {
         }
     }
 
-    pub fn bad_int(node: &Node, attr: &str, uav: ParseIntError) -> Self {
+    pub fn bad_int(node: &Node, attr: &str, uav: &ParseIntError) -> Self {
         InvalidCsl {
-            text_pos: node.attribute_value_pos(attr).unwrap_or(node.node_pos()),
-            len: node.attribute("attr").map(|a| a.len()).unwrap_or(1),
+            text_pos: node
+                .attribute_value_pos(attr)
+                .unwrap_or_else(|| node.node_pos()),
+            len: node.attribute("attr").map(|a| a.len()).unwrap_or_else(|| 1),
             message: format!("Invalid integer value for {}: {:?}", attr, uav),
             severity: Severity::Error,
         }
@@ -51,7 +53,9 @@ impl InvalidCsl {
 
     pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
         InvalidCsl {
-            text_pos: node.attribute_value_pos(attr).unwrap_or(node.node_pos()),
+            text_pos: node
+                .attribute_value_pos(attr)
+                .unwrap_or_else(|| node.node_pos()),
             len: uav.len(),
             message: format!("Unknown attribute value for {}: \"{}\"", attr, uav),
             severity: Severity::Error,
@@ -93,7 +97,7 @@ fn get_pos(e: &Error) -> TextPos {
         Error::UnexpectedXmlnsUri(pos) => pos,
         Error::InvalidElementNamePrefix(pos) => pos,
         Error::DuplicatedNamespace(ref _name, pos) => pos,
-        Error::UnexpectedCloseTag { expected: _, actual: _, pos } => pos,
+        Error::UnexpectedCloseTag { pos, .. } => pos,
         Error::UnexpectedEntityCloseTag(pos) => pos,
         Error::UnknownEntityReference(ref _name, pos) => pos,
         Error::EntityReferenceLoop(pos) => pos,
@@ -105,9 +109,9 @@ fn get_pos(e: &Error) -> TextPos {
 impl StyleError {
 
     pub fn to_diagnostic(&self, file_map: &FileMap) -> Option<Diagnostic> {
-        match self {
-            &StyleError::ValidationError(ref e) => e.to_diagnostic(file_map),
-            &StyleError::ParseError(ref e) => {
+        match *self {
+            StyleError::ValidationError(ref e) => e.to_diagnostic(file_map),
+            StyleError::ParseError(ref e) => {
                 let pos = get_pos(&e);
 
                 let str_start = file_map
@@ -137,7 +141,7 @@ impl Default for StyleError {
     }
 }
 
-pub fn file_diagnostics<'a>(diagnostics: &Vec<StyleError>, filename: &'a str, document: &'a str) {
+pub fn file_diagnostics<'a>(diagnostics: &[StyleError], filename: &'a str, document: &'a str) {
     let mut code_map = CodeMap::new();
     let file_map = code_map.add_filemap(filename.to_owned().into(), document.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);

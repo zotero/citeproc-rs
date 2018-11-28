@@ -61,7 +61,7 @@ pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, Inval
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s, 10);
-            parsed.map_err(|e| InvalidCsl::bad_int(node, attr, e))
+            parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
         },
         None => Ok(default),
     }
@@ -94,7 +94,7 @@ pub fn attribute_optional<T: Default + GetAttribute>(node: &Node, attr: &str) ->
 pub fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {
         Some(a) => {
-            let split: Result<Vec<_>, _> = a.split(" ")
+            let split: Result<Vec<_>, _> = a.split(' ')
                 .map(|a| T::get_attr(a, CSL_VERSION))
                 .collect();
             match split {

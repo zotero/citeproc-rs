@@ -130,43 +130,39 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
     use self::element::Element::*;
     let formatting = Formatting::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
-    match node.attribute("macro") {
-        Some(m) => return Ok(Macro(
+    if let Some(m) =  node.attribute("macro") {
+        return Ok(Macro(
                 m.to_owned(),
                 formatting,
                 affixes,
                 attribute_bool(node, "quotes", false)?
-                )),
-        None => {}
+        ));
     };
-    match node.attribute("variable") {
-        Some(_m) => return Ok(Variable(
+    if let Some(_m) = node.attribute("variable") {
+        return Ok(Variable(
                 attribute_required(node, "variable")?,
                 formatting,
                 affixes,
                 attribute_optional2(node, "form", Form::from_str)?,
                 Delimiter::from_node(node)?,
                 attribute_bool(node, "quotes", false)?
-                )),
-        None => {}
+        ));
     }
-    match node.attribute("value") {
-        Some(v) => return Ok(Const(
+    if let Some(v) = node.attribute("value") {
+        return Ok(Const(
                 v.to_owned(),
                 formatting,
                 affixes,
                 attribute_bool(node, "quotes", false)?
-                )),
-        None => {}
+        ));
     };
-    match node.attribute("term") {
-        Some(t) => return Ok(Term(
+    if let Some(t) = node.attribute("term") {
+        return Ok(Term(
                 t.to_owned(),
                 attribute_optional2(node, "form", Form::from_str)?,
                 formatting, affixes,
                 attribute_bool(node, "plural", false)?
-                )),
-        None => {}
+        ));
     };
     Err(InvalidCsl::new(node, "yeah".to_owned()))?
 }
@@ -254,7 +250,7 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
         if tag == "if" || tag == "else-if" || tag == "else" {
             return Err(InvalidCsl::new(el, format!("<choose> elements out of order; found <{}> in wrong position", tag)))
         }
-        return Err(InvalidCsl::new(el, format!("Unrecognised element {} in <choose>", tag)))
+        Err(InvalidCsl::new(el, format!("Unrecognised element {} in <choose>", tag)))
     };
 
     for el in els.into_iter() {
@@ -311,7 +307,7 @@ impl FromNode for Substitute {
 
 fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, InvalidCsl> {
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
-    if subst_els.len() > 1 {
+    if !subst_els.is_empty() {
         return Err(InvalidCsl::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
     }
     let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| T::from_node(&el)).collect();
@@ -362,7 +358,7 @@ impl FromNode for TextCase {
 fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bool) -> Result<T, InvalidCsl> {
     if disallow {
         let attrs = T::is_on_node(node);
-        if attrs.len() > 0 {
+        if !attrs.is_empty() {
             Err(InvalidCsl::new(node, format!("Disallowed attribute on node: {:?}", attrs)))?
         } else {
             Ok(T::default())
@@ -428,7 +424,7 @@ impl FromNode for Element {
 pub fn get_toplevel<'a, 'd: 'a>(root: &Node<'a, 'd>, nodename: &'static str) -> Result<Node<'a, 'd>, InvalidCsl> {
     let matches = root.children().filter(|n| n.has_tag_name(nodename))
         .collect::<Vec<Node<'a, 'd>>>();
-    if matches.len() > 1 {
+    if !matches.is_empty() {
         Err(InvalidCsl::new(&root, format!("Cannot have more than one <{}>", nodename)))
     } else {
         // move matches into its first item
@@ -506,21 +502,21 @@ impl FromNode for Style {
     }
 }
 
-fn build_style_inner(doc: Document) -> Result<Style, InvalidCsl> {
+fn build_style_inner(doc: &Document) -> Result<Style, InvalidCsl> {
     Style::from_node(&doc.root_element())
 }
 
-pub fn build_style(text: &String) -> Result<Style, StyleError> {
+pub fn build_style(text: &str) -> Result<Style, StyleError> {
     let doc = Document::parse(text)?;
-    let style = build_style_inner(doc)?;
+    let style = build_style_inner(&doc)?;
     Ok(style)
 }
 
-pub fn drive_style(path: &str, text: &String) -> String {
+pub fn drive_style(path: &str, text: &str) -> String {
     match build_style(text) {
-        Ok(_style) => format!("done!"),
+        Ok(_style) => "done!".to_string(),
         Err(e) => {
-            file_diagnostics(&vec![e], path.into(), text);
+            file_diagnostics(&[e], path, text);
             "failed".into()
         }
     }

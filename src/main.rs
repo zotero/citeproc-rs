@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 use clap::{Arg, App};
 
 extern crate citeproc;
@@ -25,11 +24,8 @@ fn main() {
              .value_name("FILE")
              .takes_value(true))
         .get_matches();
-    match matches.value_of("csl") {
-        Some(csl_path) => {
-            parse(csl_path);
-        },
-        None => {}
+    if let Some(path) = matches.value_of("csl") {
+        parse(path);
     }
 }
 
