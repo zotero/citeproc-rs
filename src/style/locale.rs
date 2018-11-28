@@ -18,14 +18,14 @@ pub struct Term {
 }
 
 #[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum OrdinalMatch {
-    #[strum(serialize="last-two-digits")]
     LastTwoDigits,
-    #[strum(serialize="whole-number")]
     WholeNumber,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum Gender {
     Masculine,
     Feminine,

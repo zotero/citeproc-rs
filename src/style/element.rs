@@ -1,20 +1,17 @@
 use std::fmt;
 use std::str::FromStr;
 use crate::style::error::*;
+use crate::style::get_attribute::GetAttribute;
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+// No EnumString; this one is manual for CSL-M
+#[derive(AsStaticStr, Debug, PartialEq, Eq)]
+#[strum(serialize_all="snake_case")]
 pub enum Form {
-    #[strum(serialize="long")]
     Long,
-    #[strum(serialize="short")]
     Short,
-    #[strum(serialize="count")]
     Count,
-    #[strum(serialize="verb")]
     Verb,
-    #[strum(serialize="verb-short")]
     VerbShort,
-    #[strum(serialize="symbol")]
     Symbol,
     NotSet,
 }
@@ -52,7 +49,8 @@ impl Default for Form {
     fn default() -> Self { Form::Long }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum NumericForm {
     Numeric,
     Ordinal,
@@ -62,20 +60,6 @@ pub enum NumericForm {
 
 impl Default for NumericForm {
     fn default() -> Self { NumericForm::Numeric }
-}
-
-impl FromStr for NumericForm {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::NumericForm::*;
-        match s {
-            "numeric" => Ok(Numeric),
-            "ordinal" => Ok(Ordinal),
-            "roman" => Ok(Roman),
-            "long-ordinal" => Ok(LongOrdinal),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(PartialEq, Eq)]
@@ -124,9 +108,7 @@ impl Default for Formatting {
 
 impl fmt::Debug for Affixes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let default = Formatting::default();
         write!(f, "Affixes {{ ");
-        let empty = "".to_owned();
         if self.prefix.len() > 0 { write!(f, "prefix: {:?}, ", self.prefix); }
         if self.suffix.len() > 0 { write!(f, "suffix: {:?}, ", self.suffix); }
         write!(f, "}}")
@@ -149,7 +131,8 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum FormattingDisplay {
     None,
     Block,
@@ -158,25 +141,12 @@ pub enum FormattingDisplay {
     Indent
 }
 
-
 impl Default for FormattingDisplay {
     fn default() -> Self { FormattingDisplay::None }
 }
 
-impl FromStr for FormattingDisplay {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::FormattingDisplay::*;
-        match s {
-            "block" => Ok(Block),
-            "left-margin" => Ok(LeftMargin),
-            "right-inline" => Ok(RightInline),
-            "indent" => Ok(Indent),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum TextCase {
     None,
     Lowercase,
@@ -191,23 +161,8 @@ impl Default for TextCase {
     fn default() -> Self { TextCase::None }
 }
 
-impl FromStr for TextCase {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::TextCase::*;
-        match s {
-            "lowercase" => Ok(Lowercase),
-            "uppercase" => Ok(Uppercase),
-            "capitalize-first" => Ok(CapitalizeFirst),
-            "capitalize-all" => Ok(CapitalizeAll),
-            "sentence" => Ok(Sentence),
-            "title" => Ok(Title),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum FontStyle {
     Normal,
     Italic,
@@ -218,20 +173,8 @@ impl Default for FontStyle {
     fn default() -> Self { FontStyle::Normal }
 }
 
-impl FromStr for FontStyle {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::FontStyle::*;
-        match s {
-            "normal" => Ok(Normal),
-            "italic" => Ok(Italic),
-            "oblique" => Ok(Oblique),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum FontVariant {
     Normal,
     SmallCaps,
@@ -241,19 +184,8 @@ impl Default for FontVariant {
     fn default() -> Self { FontVariant::Normal }
 }
 
-impl FromStr for FontVariant {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::FontVariant::*;
-        match s {
-            "normal" => Ok(Normal),
-            "small-caps" => Ok(SmallCaps),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum FontWeight {
     Normal,
     Bold,
@@ -264,20 +196,8 @@ impl Default for FontWeight {
     fn default() -> Self { FontWeight::Normal }
 }
 
-impl FromStr for FontWeight {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::FontWeight::*;
-        match s {
-            "normal" => Ok(Normal),
-            "bold" => Ok(Bold),
-            "light" => Ok(Light),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum TextDecoration {
     None,
     Underline,
@@ -287,68 +207,32 @@ impl Default for TextDecoration {
     fn default() -> Self { TextDecoration::None }
 }
 
-impl FromStr for TextDecoration {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::TextDecoration::*;
-        match s {
-            "none" => Ok(None),
-            "underline" => Ok(Underline),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
 pub enum VerticalAlignment {
+    #[strum(serialize="baseline")]
     Baseline,
+    #[strum(serialize="sup", serialize="superscript")]
     Superscript,
+    #[strum(serialize="sub", serialize="subscript")]
     Subscript,
 }
 
 impl Default for VerticalAlignment {
-    fn default() -> Self {
-        VerticalAlignment::Baseline
-    }
-}
-
-impl FromStr for VerticalAlignment {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::VerticalAlignment::*;
-        match s {
-            "baseline" => Ok(Baseline),
-            "sup" => Ok(Superscript),
-            "sub" => Ok(Subscript),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
+    fn default() -> Self { VerticalAlignment::Baseline }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Delimiter(pub String);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum Plural {
     Contextual,
     Always,
     Never,
 }
-
 impl Default for Plural {
     fn default() -> Self { Plural::Contextual }
-}
-impl FromStr for Plural {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::Plural::*;
-        match s {
-            "contextual" => Ok(Contextual),
-            "always" => Ok(Always),
-            "never" => Ok(Never),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -365,13 +249,14 @@ impl FromStr for LabelVariable {
         match s {
             "locator" => Ok(Locator),
             "page" => Ok(Page),
-            x => Ok(Number(NumberVariable::from_str(x)?))
+            x => Ok(Number(NumberVariable::get_attr(x)?))
         }
     }
 }
 
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum NumberVariable {
     ChapterNumber,
     CollectionNumber,
@@ -383,45 +268,14 @@ pub enum NumberVariable {
     Volume,
 }
 
-impl FromStr for NumberVariable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::NumberVariable::*;
-        match s {
-            "chapter-number" => Ok(ChapterNumber),
-            "collection-number" => Ok(CollectionNumber),
-            "edition" => Ok(Edition),
-            "issue" => Ok(Issue),
-            "number" => Ok(Number),
-            "number-of-pages" => Ok(NumberOfPages),
-            "number-of-volumes" => Ok(NumberOfVolumes),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum Position {
     First,
     Ibid,
     IbidWithLocator,
     Subsequent,
     NearNote,
-}
-
-impl FromStr for Position {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::Position::*;
-        match s {
-            "any" => Ok(First),
-            "ibid" => Ok(Ibid),
-            "ibid-with-locator" => Ok(IbidWithLocator),
-            "subsequent" => Ok(Subsequent),
-            "near-note" => Ok(NearNote),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -435,7 +289,8 @@ pub struct Condition {
     pub is_uncertain_date: Vec<DateVariable>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum Match {
     Any,
     All,
@@ -444,19 +299,6 @@ pub enum Match {
 }
 impl Default for Match {
     fn default() -> Self { Match::Any }
-}
-impl FromStr for Match {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::Match::*;
-        match s {
-            "any" => Ok(Any),
-            "all" => Ok(All),
-            "none" => Ok(None),
-            // "nand" => Ok(Nand),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -487,31 +329,21 @@ pub struct NameLabel {
     pub plural: Plural,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
     AfterInvertedName,
     Always,
     Never,
 }
+
 impl Default for DelimiterPrecedes {
     fn default() -> Self { DelimiterPrecedes::Contextual }
 }
-impl FromStr for DelimiterPrecedes {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::DelimiterPrecedes::*;
-        match s {
-            "contextual" => Ok(Contextual),
-            "after-inverted-name" => Ok(AfterInvertedName),
-            "always" => Ok(Always),
-            "never" => Ok(Never),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum NameForm {
     Long,
     Short,
@@ -520,37 +352,15 @@ pub enum NameForm {
 impl Default for NameForm {
     fn default() -> Self { NameForm::Long }
 }
-impl FromStr for NameForm {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::NameForm::*;
-        match s {
-            "long" => Ok(Long),
-            "short" => Ok(Short),
-            "count" => Ok(Count),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum NameAsSortOrder {
     First,
     All,
 }
 impl Default for NameAsSortOrder {
     fn default() -> Self { NameAsSortOrder::All }
-}
-impl FromStr for NameAsSortOrder {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::NameAsSortOrder::*;
-        match s {
-            "first" => Ok(First),
-            "all" => Ok(All),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -566,28 +376,18 @@ pub struct Name {
     pub et_al_use_last: bool, // default is false
     pub form: NameForm,
     pub initialize: bool, // default is true
-    pub initialize_with: bool, // default is false
+    pub initialize_with: String,
     pub name_as_sort_order: NameAsSortOrder, // TODO: work out default
     pub sort_separator: String,
     pub formatting: Formatting,
     pub affixes: Affixes,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum NamePartName {
     Given,
     Family,
-}
-impl FromStr for NamePartName {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::NamePartName::*;
-        match s {
-            "given" => Ok(Given),
-            "family" => Ok(Family),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -600,7 +400,8 @@ pub struct NamePart {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Substitute(pub Vec<Element>);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum GivenNameDisambiguationRule {
     AllNames,
     AllNamesWithInitials,
@@ -610,20 +411,6 @@ pub enum GivenNameDisambiguationRule {
 }
 impl Default for GivenNameDisambiguationRule {
     fn default() -> Self { GivenNameDisambiguationRule::ByCite }
-}
-impl FromStr for GivenNameDisambiguationRule {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::GivenNameDisambiguationRule::*;
-        match s {
-            "all-names" => Ok(AllNames),
-            "all-names-with-initials" => Ok(AllNamesWithInitials),
-            "primary-name" => Ok(PrimaryName),
-            "primary-name-with-initials" => Ok(PrimaryNameWithInitials),
-            "by-cite" => Ok(ByCite),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -649,17 +436,21 @@ pub struct MacroMap {
     pub elements: Vec<Element>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum StyleClass {
     InText,
     Note
 }
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Info {
 }
 #[derive(Debug, Eq, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
+    pub macros: Vec<MacroMap>,
+    pub citation: Citation,
     pub info: Info
 }
 
@@ -711,7 +502,8 @@ impl FromStr for Variable {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum DateParts {
     YearMonthDay,
     YearMonth,
@@ -722,42 +514,16 @@ impl Default for DateParts {
     fn default() -> Self { DateParts::YearMonthDay }
 }
 
-// TODO: check against list
-impl FromStr for DateParts {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::DateParts::*;
-        match s {
-            "year-month-day" => Ok(YearMonthDay),
-            "year-month" => Ok(YearMonth),
-            "year" => Ok(Year),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum DatePartName {
     Day,
     Month,
     Year,
 }
 
-// TODO: check against list
-impl FromStr for DatePartName {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::DatePartName::*;
-        match s {
-            "day" => Ok(Day),
-            "month" => Ok(Month),
-            "year" => Ok(Year),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum DayForm { 
     Numeric,
     NumericLeadingZeros,
@@ -766,20 +532,9 @@ pub enum DayForm {
 impl Default for DayForm {
     fn default() -> Self { DayForm::Numeric }
 }
-impl FromStr for DayForm {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::DayForm::*;
-        match s {
-            "numeric" => Ok(Numeric),
-            "ordinal" => Ok(Ordinal),
-            "numeric-leading-zeros" => Ok(NumericLeadingZeros),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum MonthForm { 
     Long,
     Short,
@@ -789,21 +544,9 @@ pub enum MonthForm {
 impl Default for MonthForm {
     fn default() -> Self { MonthForm::Long }
 }
-impl FromStr for MonthForm {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::MonthForm::*;
-        match s {
-            "long" => Ok(Long),
-            "short" => Ok(Short),
-            "numeric" => Ok(Numeric),
-            "numeric-leading-zeros" => Ok(NumericLeadingZeros),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum YearForm { 
     Long,
     Short,
@@ -811,32 +554,21 @@ pub enum YearForm {
 impl Default for YearForm {
     fn default() -> Self { YearForm::Long }
 }
-impl FromStr for YearForm {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::YearForm::*;
-        match s {
-            "long" => Ok(Long),
-            "short" => Ok(Short),
-            _ => Err(UnknownAttributeValue::new(s))
-        }
-    }
-}
 
 
 #[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
 pub enum DateForm { 
-    #[strum(serialize="text")]
     Text,
-    #[strum(serialize="numeric")]
     Numeric,
+    #[strum(serialize="")]
     NotSet,
 }
 impl Default for DateForm {
     fn default() -> Self { DateForm::NotSet }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Display, Eq, PartialEq)]
 pub enum DatePartForm {
     Day(DayForm),
     Month(MonthForm),

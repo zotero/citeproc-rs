@@ -7,7 +7,6 @@ use self::take_while::*;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
-use std::str::FromStr;
 use roxmltree::{ Node, Document };
 
 fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, CslValidationError> {
@@ -16,7 +15,7 @@ fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, CslVal
         Some("false") => Ok(false),
         None => Ok(default),
         Some(s) => Err(CslValidationError::unknown_attribute_value(node, attr,
-                                                                   UnknownAttributeValue::new(s)))
+                                                                   UnknownAttributeValue::new(s)))?
     }
 }
 
@@ -86,9 +85,6 @@ fn attribute_optional2<T : Default, F : FnOnce(&str) -> Result<T, UnknownAttribu
         None => Ok(T::default())
     }
 }
-
-use std::collections::HashSet;
-type UsedAttributes<'a> = HashSet<&'a str>;
 
 pub trait IsOnNode where Self : Sized {
     fn is_on_node(node: &Node) -> Vec<String>;
@@ -173,7 +169,7 @@ impl FromNode for Citation {
         let children: Vec<_> = node.children().filter(|n| n.is_element()).collect();
         if children.len() != 1 {
             println!("{:?}", children);
-            return Err(CslValidationError::new(node, "<citation> must contain exactly one <layout>".into()))
+            return Err(CslValidationError::new(node, "<citation> must contain exactly one <layout>".into()))?
         }
         let layout_node = children[0];
         Ok(Citation{
@@ -213,7 +209,7 @@ fn text_el(node: &Node) -> Result<Element, CslValidationError> {
     match node.attribute("term") {
         Some(t) => return Ok(Term(
                 t.to_owned(),
-                attribute_optional2(node, "form", Form::get_attr)?,
+                attribute_optional2(node, "form", Form::from_str)?,
                 formatting, affixes,
                 attribute_bool(node, "plural", false)?)),
         None => {}
@@ -225,7 +221,7 @@ fn text_el(node: &Node) -> Result<Element, CslValidationError> {
     match node.attribute("variable") {
         Some(m) => return Ok(Variable(
                 m.to_owned(),
-                attribute_optional2(node, "form", Form::get_attr)?,
+                attribute_optional2(node, "form", Form::from_str)?,
                 formatting, affixes,
                 Delimiter::from_node(node)?)),
         None => {}
@@ -234,7 +230,7 @@ fn text_el(node: &Node) -> Result<Element, CslValidationError> {
         Some(v) => return Ok(Const(v.to_owned(), formatting, affixes)),
         None => {}
     };
-    Err(CslValidationError::new(node, "yeah".to_owned()))
+    Err(CslValidationError::new(node, "yeah".to_owned()))?
 }
 
 fn label_el(node: &Node) -> Result<Element, CslValidationError> {
@@ -330,7 +326,7 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
                 seen_if = true;
                 if_block = Some(IfThen::from_node(&el)?);
             } else {
-                return Err(CslValidationError::new(&el, "<choose> blocks must begin with an <if>".into()));
+                return Err(CslValidationError::new(&el, "<choose> blocks must begin with an <if>".into()))?;
             }
         } else if !seen_else {
             if tag == "else-if" {
@@ -402,7 +398,7 @@ fn names_el(node: &Node) -> Result<Element, CslValidationError> {
     }.collect();
 
     if subst_els.len() > 1 {
-        return Err(CslValidationError::new(subst_els[1], "There can only be one <substitute> in a <names> block.".into()));
+        return Err(CslValidationError::new(subst_els[1], "There can only be one <substitute> in a <names> block.".into()))?;
     }
     let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| Substitute::from_node(&el)).collect();
     let substitute = substs?.into_iter().nth(0);
@@ -410,7 +406,7 @@ fn names_el(node: &Node) -> Result<Element, CslValidationError> {
     if iter.by_ref().count() > 0 {
         let last = els.iter().last().expect("already established that there were > 0 elements in the list");
         return Err(CslValidationError::new(
-                last, "<substitute> cannot be followed by any elements in a <names> block".into()));
+                last, "<substitute> cannot be followed by any elements in a <names> block".into()))?;
     }
 
     Ok(Element::Names(
@@ -439,11 +435,10 @@ impl FromNode for TextCase {
 }
 
 fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bool) -> Result<T, CslValidationError> {
-    let tag = node.tag_name().name().to_owned();
     if disallow {
         let attrs = T::is_on_node(node);
         if attrs.len() > 0 {
-            Err(CslValidationError::new(node, format!("Disallowed attribute on node: {:?}", attrs)))
+            Err(CslValidationError::new(node, format!("Disallowed attribute on node: {:?}", attrs)))?
         } else {
             Ok(T::default())
         }
@@ -474,7 +469,7 @@ impl DatePart {
 impl Date {
     fn from_node(node: &Node, is_in_locale: bool) -> Result<Self, CslValidationError> {
         let form: DateForm = attribute_optional(node, "form")?;
-        let mut not_set = form == DateForm::NotSet;
+        let not_set = form == DateForm::NotSet;
         let full = if is_in_locale { true } else { not_set };
         let elements: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
@@ -500,7 +495,7 @@ impl FromNode for Element {
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(Date::from_node(node, false)?)),
-            _ => Err(CslValidationError::new(node, "Dunno how to work that one".into()))
+            _ => Err(CslValidationError::new(node, "Dunno how to work that one".into()))?
         }
     }
 }
@@ -560,8 +555,8 @@ impl FromNode for Name {
             et_al_use_last: attribute_bool(node, "et-al-use-last", false)?,
             form: attribute_optional(node, "form")?,
             initialize: attribute_bool(node, "initialize", true)?,
-            initialize_with: attribute_bool(node, "initialize-with", false)?,
-            name_as_sort_order: attribute_required(node, "name-as-sort-order")?,
+            initialize_with: attribute_string(node, "initialize-with"),
+            name_as_sort_order: attribute_optional(node, "name-as-sort-order")?,
             sort_separator: attribute_string(node, "sort-separator"),
             formatting: Formatting::from_node(node)?,
             affixes: Affixes::from_node(node)?,
@@ -569,11 +564,7 @@ impl FromNode for Name {
     }
 }
 
-pub fn build_style(text: String) -> Result<Style, CslValidationError> {
-    let doc = match Document::parse(&text) {
-        Ok(d) => Ok(d),
-        Err(e) => Err(CslValidationError::default())
-    }?;
+fn build_style_inner(doc: Document) ->Result<Style, CslValidationError> {
     let info_node = get_toplevel(&doc, "info")?;
     let locale_node = get_toplevel(&doc, "locale")?;
     let macros: Result<Vec<_>, _> = doc.root_element().children()
@@ -581,22 +572,23 @@ pub fn build_style(text: String) -> Result<Style, CslValidationError> {
             .map(|el| MacroMap::from_node(&el)).collect();
     let citation = Citation::from_node(&get_toplevel(&doc, "citation")?);
 
-    match macros {
-        Ok(l) => println!("{:?}", l),
-        Err(e) => {
-            file_diagnostics(&vec![e], "csl".into(), &text)
-        }
-    }
-
-    match citation {
-        Ok(l) => println!("{:?}", l),
-        Err(e) => {
-            file_diagnostics(&vec![e], "csl".into(), &text)
-        }
-    }
-
     Ok(Style{
+        macros: macros?,
+        citation: citation?,
         info: Info{},
         class: StyleClass::Note
     })
+}
+
+pub fn build_style(text: &String) -> Result<Style, StyleError> {
+    let doc = Document::parse(text)?;
+    let style = build_style_inner(doc)?;
+    Ok(style)
+}
+
+pub fn drive_style(path: &str, text: &String) {
+    match build_style(text) {
+        Ok(style) => println!("{:?}", style),
+        Err(e) => file_diagnostics(&vec![e], path.into(), text)
+    }
 }

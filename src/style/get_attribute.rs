@@ -9,7 +9,7 @@ impl<T: FromStr> GetAttribute for T {
     fn get_attr(s: &str) -> Result<Self, UnknownAttributeValue> {
         match T::from_str(s) {
             Ok(a) => Ok(a),
-            Err(e) => Err(UnknownAttributeValue::new(s))
+            Err(_) => Err(UnknownAttributeValue::new(s))
         }
     }
 }

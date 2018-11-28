@@ -1,20 +1,19 @@
 use roxmltree::Document;
 use clap::{Arg, App};
-use std::fs::File;
-use std::io::prelude::*;
 #[allow(dead_code)]
 mod style;
-use self::style::build_style;
+use self::style::drive_style;
 #[macro_use]
 extern crate strum_macros;
+use std::fs::File;
+use std::io::prelude::*;
 
-fn parse(path: &str) -> Result<i32, roxmltree::Error> {
+fn parse(path: &str) {
     let mut f = File::open(path).expect("no file at path");
     let mut contents = String::new();
     f.read_to_string(&mut contents)
         .expect("something went wrong reading the file");
-    build_style(contents);
-    Ok(0)
+    drive_style(path, &contents);
 }
 
 fn main() {

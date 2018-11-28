@@ -1,4 +1,4 @@
-use roxmltree::{ TextPos, Node };
+use roxmltree::{ TextPos, Node, Error };
 use codespan::{CodeMap, Span, FileMap};
 use codespan_reporting::termcolor::{ StandardStream, ColorChoice };
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
@@ -12,6 +12,11 @@ impl UnknownAttributeValue {
     pub fn new(s: &str) -> Self {
         UnknownAttributeValue { value: s.to_owned() }
     }
+}
+
+pub enum StyleError {
+    ValidationError(CslValidationError),
+    ParseError(Error),
 }
 
 #[derive(Debug, PartialEq)]
@@ -52,39 +57,93 @@ impl CslValidationError {
         }
     }
 
-    pub fn to_diagnostic(&self, file_map: &FileMap) -> Diagnostic {
+    pub fn to_diagnostic(&self, file_map: &FileMap) -> Option<Diagnostic> {
         let str_start = file_map
             .byte_index(
                 (self.text_pos.row - 1 as u32).into(),
                 (self.text_pos.col - 1 as u32).into()
-            ).unwrap();
+            ).ok()?;
 
-        Diagnostic::new(self.severity, self.message.clone())
+        Some(Diagnostic::new(self.severity, self.message.clone())
             .with_label(
                 Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
                 .with_message("")
                 // .with_message(self.message.clone()),
-            )
+            ))
     }
 }
 
-impl Default for CslValidationError {
-    fn default() -> Self {
-        CslValidationError {
-            severity: Severity::Error,
-            text_pos: TextPos::new(0, 0),
-            len: 0,
-            message: String::from(""),
+impl From<Error> for StyleError {
+    fn from(err: Error) -> StyleError {
+        StyleError::ParseError(err)
+    }
+}
+
+impl From<CslValidationError> for StyleError {
+    fn from(err: CslValidationError) -> StyleError {
+        StyleError::ValidationError(err)
+    }
+}
+
+fn get_pos(e: &Error) -> TextPos {
+    match *e {
+        Error::InvalidXmlPrefixUri(pos) => pos,
+        Error::UnexpectedXmlUri(pos) => pos,
+        Error::UnexpectedXmlnsUri(pos) => pos,
+        Error::InvalidElementNamePrefix(pos) => pos,
+        Error::DuplicatedNamespace(ref _name, pos) => pos,
+        Error::UnexpectedCloseTag { ref expected, ref actual, pos } => pos,
+        Error::UnexpectedEntityCloseTag(pos) => pos,
+        Error::UnknownEntityReference(ref _name, pos) => pos,
+        Error::EntityReferenceLoop(pos) => pos,
+        Error::DuplicatedAttribute(ref _name, pos) => pos,
+        _ => TextPos::new(0, 0),
+    }
+}
+
+impl StyleError {
+
+    pub fn to_diagnostic(&self, file_map: &FileMap) -> Option<Diagnostic> {
+        match self {
+            &StyleError::ValidationError(ref e) => e.to_diagnostic(file_map),
+            &StyleError::ParseError(ref e) => {
+                let pos = get_pos(&e);
+
+                let str_start = file_map
+                    .byte_index(
+                        (pos.row - 1 as u32).into(),
+                        (pos.col - 1 as u32).into()
+                    ).ok()?;
+
+                Some(Diagnostic::new(Severity::Error, format!("{}", e))
+                    .with_label(
+                        Label::new_primary(Span::from_offset(str_start, (0 as i64).into()))
+                        .with_message("")
+                    ))
+            }
         }
     }
 }
 
-pub fn file_diagnostics(diagnostics: &Vec<CslValidationError>, filename: String, document: &String) {
+impl Default for StyleError {
+    fn default() -> Self {
+        StyleError::ValidationError(CslValidationError {
+            severity: Severity::Error,
+            text_pos: TextPos::new(0, 0),
+            len: 0,
+            message: String::from(""),
+        })
+    }
+}
+
+pub fn file_diagnostics(diagnostics: &Vec<StyleError>, filename: String, document: &String) {
     let mut code_map = CodeMap::new();
     let file_map = code_map.add_filemap(filename.into(), document.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
     for diag in diagnostics.iter().map(|d| d.to_diagnostic(&file_map)) {
-        emit(&mut writer.lock(), &code_map, &diag).unwrap();
-        println!();
+        if let Some(d) = diag {
+            emit(&mut writer.lock(), &code_map, &d).unwrap();
+            println!();
+        }
     }
 }
