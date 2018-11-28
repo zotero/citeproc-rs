@@ -7,7 +7,7 @@ use self::take_while::*;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
-use roxmltree::{ Node, Document };
+use roxmltree::{ Node, Document, Children };
 
 fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, CslValidationError> {
     match node.attribute(attr) {
@@ -370,6 +370,17 @@ impl FromNode for Substitute {
     }
 }
 
+fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, CslValidationError> {
+    let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
+    if subst_els.len() > 1 {
+        return Err(CslValidationError::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
+    }
+    let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| T::from_node(&el)).collect();
+    let substitute = substs?.into_iter().nth(0);
+    Ok(substitute)
+
+}
+
 fn names_el(node: &Node) -> Result<Element, CslValidationError> {
     let variable: Vec<String> = attribute_string(node, "variable")
         .split(" ")
@@ -377,47 +388,12 @@ fn names_el(node: &Node) -> Result<Element, CslValidationError> {
         .map(|s| s.to_owned())
         .collect();
 
-    let els: Vec<Node> = node.children().filter(|n| n.is_element()).collect();
+    let children = node.children();
+    let name_els: Result<Vec<_>, _> = children.filter(|n| n.has_tag_name("name")).map(|el| Name::from_node(&el)).collect();
+    let names = name_els?;
 
-    let mut names = vec![];
-    let mut label = None;
-    let mut substitute = None;
-    let mut seen_label = false;
-    let mut seen_subst = false;
-
-    let unrecognised = |el, tag| {
-        if tag == "name" || tag == "label" || tag == "substitute" {
-            return Err(CslValidationError::new(el, format!("<names> elements out of order; found <{}> in wrong position", tag)))
-        }
-        return Err(CslValidationError::new(el, format!("Unrecognised element {} in <names>", tag)))
-    };
-
-    for el in els.into_iter() {
-        let tag = el.tag_name().name().to_owned();
-        println!("{}", tag);
-        if !seen_label {
-            if tag == "name" {
-                names.push(Name::from_node(&el)?);
-            } else if tag == "label" {
-                seen_label = true;
-                label = Some(NameLabel::from_node(&el)?);
-            } else if tag == "substitute" {
-                seen_subst = true;
-                substitute = Some(Substitute::from_node(&el)?);
-            }
-        } else if !seen_subst {
-            if tag == "label" {
-                label = Some(NameLabel::from_node(&el)?);
-            } else if tag == "substitute" {
-                seen_subst = true;
-                substitute = Some(Substitute::from_node(&el)?);
-            } else {
-                return unrecognised(&el, tag);
-            }
-        } else {
-            return unrecognised(&el, tag);
-        }
-    }
+    let label = max1_child("names", "label", node.children())?;
+    let substitute = max1_child("names", "substitute", node.children())?;
 
     Ok(Element::Names(
             variable,
