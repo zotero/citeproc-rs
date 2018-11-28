@@ -166,12 +166,11 @@ impl IsOnNode for Formatting {
 
 impl FromNode for Citation {
     fn from_node(node: &Node) -> Result<Self, CslValidationError> {
-        let children: Vec<_> = node.children().filter(|n| n.is_element()).collect();
-        if children.len() != 1 {
-            println!("{:?}", children);
+        let layouts: Vec<_> = node.children().filter(|n| n.has_tag_name("layout")).collect();
+        if layouts.len() != 1 {
             return Err(CslValidationError::new(node, "<citation> must contain exactly one <layout>".into()))?
         }
-        let layout_node = children[0];
+        let layout_node = layouts[0];
         Ok(Citation{
             disambiguate_add_names: attribute_bool(node, "disambiguate-add-names", false)?,
             disambiguate_add_givenname: attribute_bool(node, "disambiguate-add-givenname", false)?,
@@ -574,10 +573,10 @@ pub fn build_style(text: &String) -> Result<Style, StyleError> {
 
 pub fn drive_style(path: &str, text: &String) -> String {
     match build_style(text) {
-        Ok(style) => format!("done!"),
+        Ok(_style) => format!("done!"),
         Err(e) => {
             file_diagnostics(&vec![e], path.into(), text);
-            "".into()
+            "failed".into()
         }
     }
 }

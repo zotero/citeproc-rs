@@ -11,7 +11,7 @@ fn parse(path: &str) {
     let mut contents = String::new();
     f.read_to_string(&mut contents)
         .expect("something went wrong reading the file");
-    drive_style(path, &contents);
+    println!("{}", drive_style(path, &contents));
 }
 
 fn main() {
