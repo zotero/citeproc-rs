@@ -1,3 +1,4 @@
+pub mod terms;
 pub mod locale;
 pub mod element;
 pub mod error;
@@ -9,93 +10,16 @@ use self::error::*;
 use self::get_attribute::*;
 use roxmltree::{ Node, Document, Children };
 
-fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, CslValidationError> {
-    match node.attribute(attr) {
-        Some("true") => Ok(true),
-        Some("false") => Ok(false),
-        None => Ok(default),
-        Some(s) => Err(CslValidationError::unknown_attribute_value(node, attr,
-                                                                   UnknownAttributeValue::new(s)))?
-    }
-}
-
-fn attribute_only_true(node: &Node, attr: &str) -> Result<bool, CslValidationError> {
-    match node.attribute(attr) {
-        Some("true") => Ok(true),
-        None => Ok(false),
-        Some(s) => Err(CslValidationError::unknown_attribute_value(node, attr,
-                                                                   UnknownAttributeValue::new(s)))
-    }
-}
-
-fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, CslValidationError> {
-    match node.attribute(attr) {
-        Some(s) => {
-            let parsed = u32::from_str_radix(s, 10);
-            parsed.map_err(|e| CslValidationError::bad_int(node, attr, e))
-        },
-        None => Ok(default),
-    }
-}
-
-fn attribute_string(node: &Node, attr: &str) -> String {
-    node.attribute(attr).map(String::from).unwrap_or_else(|| String::from(""))
-}
-
-fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, CslValidationError> {
-    match node.attribute(attr) {
-        Some(a) => match T::get_attr(a) {
-            Ok(val) => Ok(val),
-            Err(e)  => Err(CslValidationError::unknown_attribute_value(node, attr, e))
-        },
-        None => Err(CslValidationError::new(node, format!("Must have '{}' attribute", attr)))
-    }
-}
-
-fn attribute_optional<T: Default + GetAttribute>(node: &Node, attr: &str) -> Result<T, CslValidationError> {
-    match node.attribute(attr) {
-        Some(a) => match T::get_attr(a) {
-            Ok(val) => Ok(val),
-            Err(e)  => Err(CslValidationError::unknown_attribute_value(node, attr, e))
-        },
-        None => Ok(T::default())
-    }
-}
-
-fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T>, CslValidationError> {
-    match node.attribute(attr) {
-        Some(a) => {
-            let split: Result<Vec<_>, _> = a.split(" ").map(T::get_attr).collect();
-            match split {
-                Ok(val) => Ok(val),
-                Err(e)  => Err(CslValidationError::unknown_attribute_value(node, attr, e))
-            }
-        },
-        None => Ok(vec![])
-    }
-}
-
-fn attribute_optional2<T : Default, F : FnOnce(&str) -> Result<T, UnknownAttributeValue>>(node: &Node, attr: &str, result: F) -> Result<T, CslValidationError>
-{
-    match node.attribute(attr) {
-        Some(a) => match result(a) {
-            Ok(val) => Ok(val),
-            Err(e)  => Err(CslValidationError::unknown_attribute_value(node, attr, e))
-        },
-        None => Ok(T::default())
-    }
-}
-
 pub trait IsOnNode where Self : Sized {
     fn is_on_node(node: &Node) -> Vec<String>;
 }
 
 pub trait FromNode where Self : Sized {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError>;
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl>;
 }
 
 impl FromNode for Affixes {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(Affixes {
             prefix: attribute_string(node, "prefix"),
             suffix: attribute_string(node, "suffix"),
@@ -104,8 +28,8 @@ impl FromNode for Affixes {
 }
 
 impl FromNode for RangeDelimiter {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
-        Ok(attribute_optional(node, "range-delimiter")?)
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
+        Ok(RangeDelimiter(attribute_string(node, "range-delimiter")))
     }
 }
 
@@ -131,7 +55,7 @@ impl IsOnNode for Affixes {
 }
 
 impl FromNode for Formatting {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(Formatting {
             font_style: attribute_optional(node, "font-style")?,
             font_variant: attribute_optional(node, "font-variant")?,
@@ -165,10 +89,10 @@ impl IsOnNode for Formatting {
 }
 
 impl FromNode for Citation {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let layouts: Vec<_> = node.children().filter(|n| n.has_tag_name("layout")).collect();
         if layouts.len() != 1 {
-            return Err(CslValidationError::new(node, "<citation> must contain exactly one <layout>".into()))?
+            return Err(InvalidCsl::new(node, "<citation> must contain exactly one <layout>".into()))?
         }
         let layout_node = layouts[0];
         Ok(Citation{
@@ -182,13 +106,13 @@ impl FromNode for Citation {
 }
 
 impl FromNode for Delimiter {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(Delimiter(attribute_string(node, "delimiter")))
     }
 }
 
 impl FromNode for Layout {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let elements: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el)).collect();
@@ -201,38 +125,52 @@ impl FromNode for Layout {
     }
 }
 
-fn text_el(node: &Node) -> Result<Element, CslValidationError> {
+fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
     use self::element::Element::*;
     let formatting = Formatting::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
+    match node.attribute("macro") {
+        Some(m) => return Ok(Macro(
+                m.to_owned(),
+                formatting,
+                affixes,
+                attribute_bool(node, "quotes", false)?
+                )),
+        None => {}
+    };
+    match node.attribute("variable") {
+        Some(_m) => return Ok(Variable(
+                attribute_required(node, "variable")?,
+                formatting,
+                affixes,
+                attribute_optional2(node, "form", Form::from_str)?,
+                Delimiter::from_node(node)?,
+                attribute_bool(node, "quotes", false)?
+                )),
+        None => {}
+    }
+    match node.attribute("value") {
+        Some(v) => return Ok(Const(
+                v.to_owned(),
+                formatting,
+                affixes,
+                attribute_bool(node, "quotes", false)?
+                )),
+        None => {}
+    };
     match node.attribute("term") {
         Some(t) => return Ok(Term(
                 t.to_owned(),
                 attribute_optional2(node, "form", Form::from_str)?,
                 formatting, affixes,
-                attribute_bool(node, "plural", false)?)),
+                attribute_bool(node, "plural", false)?
+                )),
         None => {}
     };
-    match node.attribute("macro") {
-        Some(m) => return Ok(Macro(m.to_owned(), formatting, affixes)),
-        None => {}
-    };
-    match node.attribute("variable") {
-        Some(m) => return Ok(Variable(
-                m.to_owned(),
-                attribute_optional2(node, "form", Form::from_str)?,
-                formatting, affixes,
-                Delimiter::from_node(node)?)),
-        None => {}
-    }
-    match node.attribute("value") {
-        Some(v) => return Ok(Const(v.to_owned(), formatting, affixes)),
-        None => {}
-    };
-    Err(CslValidationError::new(node, "yeah".to_owned()))?
+    Err(InvalidCsl::new(node, "yeah".to_owned()))?
 }
 
-fn label_el(node: &Node) -> Result<Element, CslValidationError> {
+fn label_el(node: &Node) -> Result<Element, InvalidCsl> {
     Ok(Element::Label(
             attribute_required(node, "variable")?,
             attribute_optional2(node, "form", Form::from_str)?,
@@ -241,7 +179,7 @@ fn label_el(node: &Node) -> Result<Element, CslValidationError> {
             attribute_optional(node, "plural")?))
 }
 
-fn number_el(node: &Node) -> Result<Element, CslValidationError> {
+fn number_el(node: &Node) -> Result<Element, InvalidCsl> {
     Ok(Element::Number(
             attribute_required(node, "variable")?,
             attribute_optional(node, "form")?,
@@ -250,7 +188,7 @@ fn number_el(node: &Node) -> Result<Element, CslValidationError> {
             attribute_optional(node, "plural")?))
 }
 
-fn group_el(node: &Node) -> Result<Element, CslValidationError> {
+fn group_el(node: &Node) -> Result<Element, InvalidCsl> {
     let elements: Result<Vec<_>, _> = node.children()
         .filter(|n| n.is_element())
         .map(|el| Element::from_node(&el)).collect();
@@ -261,7 +199,7 @@ fn group_el(node: &Node) -> Result<Element, CslValidationError> {
 }
 
 impl FromNode for Else {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let elements: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el)).collect();
@@ -270,13 +208,13 @@ impl FromNode for Else {
 }
 
 impl FromNode for Match {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(attribute_optional(node, "match")?)
     }
 }
 
 impl FromNode for Condition {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(Condition {
             match_type: Match::from_node(node)?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
@@ -285,12 +223,13 @@ impl FromNode for Condition {
             position: attribute_array(node, "position")?,
             is_uncertain_date: attribute_array(node, "is-uncertain-date")?,
             csl_type: attribute_array(node, "type")?,
+            locator: attribute_array(node, "locator")?,
         })
     }
 }
 
 impl FromNode for IfThen {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let elements: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el)).collect();
@@ -301,7 +240,7 @@ impl FromNode for IfThen {
     }
 }
 
-fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
+fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
     let els: Vec<Node> = node.children().filter(|n| n.is_element()).collect();
 
     let mut if_block: Option<IfThen> = None;
@@ -312,9 +251,9 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
 
     let unrecognised = |el, tag| {
         if tag == "if" || tag == "else-if" || tag == "else" {
-            return Err(CslValidationError::new(el, format!("<choose> elements out of order; found <{}> in wrong position", tag)))
+            return Err(InvalidCsl::new(el, format!("<choose> elements out of order; found <{}> in wrong position", tag)))
         }
-        return Err(CslValidationError::new(el, format!("Unrecognised element {} in <choose>", tag)))
+        return Err(InvalidCsl::new(el, format!("Unrecognised element {} in <choose>", tag)))
     };
 
     for el in els.into_iter() {
@@ -325,7 +264,7 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
                 seen_if = true;
                 if_block = Some(IfThen::from_node(&el)?);
             } else {
-                return Err(CslValidationError::new(&el, "<choose> blocks must begin with an <if>".into()))?;
+                return Err(InvalidCsl::new(&el, "<choose> blocks must begin with an <if>".into()))?;
             }
         } else if !seen_else {
             if tag == "else-if" {
@@ -341,7 +280,7 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
         }
     }
 
-    let _if = if_block.ok_or_else(|| CslValidationError::new(node, "<choose> blocks must have an <if>".into()))?;
+    let _if = if_block.ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
 
     Ok(Element::Choose(
             _if,
@@ -350,7 +289,7 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
 }
 
 impl FromNode for NameLabel {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(NameLabel {
             form: attribute_optional2(node, "form", Form::from_str_names)?,
             formatting: Formatting::from_node(node)?,
@@ -361,7 +300,7 @@ impl FromNode for NameLabel {
 }
 
 impl FromNode for Substitute {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let els: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element() && n.has_tag_name("name"))
             .map(|el| Element::from_node(&el)).collect();
@@ -369,10 +308,10 @@ impl FromNode for Substitute {
     }
 }
 
-fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, CslValidationError> {
+fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, InvalidCsl> {
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
     if subst_els.len() > 1 {
-        return Err(CslValidationError::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
+        return Err(InvalidCsl::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
     }
     let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| T::from_node(&el)).collect();
     let substitute = substs?.into_iter().nth(0);
@@ -380,12 +319,12 @@ fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> 
 
 }
 
-fn names_el(node: &Node) -> Result<Element, CslValidationError> {
-    let variable: Vec<String> = attribute_string(node, "variable")
-        .split(" ")
-        .filter(|s| s.len() > 0)
-        .map(|s| s.to_owned())
-        .collect();
+fn names_el(node: &Node) -> Result<Element, InvalidCsl> {
+    // let variable: Vec<String> = attribute_string(node, "variable")
+    //     .split(" ")
+    //     .filter(|s| s.len() > 0)
+    //     .map(|s| s.to_owned())
+    //     .collect();
 
     let children = node.children();
     let name_els: Result<Vec<_>, _> = children.filter(|n| n.has_tag_name("name")).map(|el| Name::from_node(&el)).collect();
@@ -395,7 +334,7 @@ fn names_el(node: &Node) -> Result<Element, CslValidationError> {
     let substitute = max1_child("names", "substitute", node.children())?;
 
     Ok(Element::Names(
-            variable,
+            attribute_array(node, "variable")?,
             names,
             label,
             Formatting::from_node(node)?,
@@ -414,16 +353,16 @@ impl IsOnNode for TextCase {
 }
 
 impl FromNode for TextCase {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(attribute_optional(node, "text-case")?)
     }
 }
 
-fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bool) -> Result<T, CslValidationError> {
+fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bool) -> Result<T, InvalidCsl> {
     if disallow {
         let attrs = T::is_on_node(node);
         if attrs.len() > 0 {
-            Err(CslValidationError::new(node, format!("Disallowed attribute on node: {:?}", attrs)))?
+            Err(InvalidCsl::new(node, format!("Disallowed attribute on node: {:?}", attrs)))?
         } else {
             Ok(T::default())
         }
@@ -433,7 +372,7 @@ fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bo
 }
 
 impl DatePart {
-    fn from_node(node: &Node, full: bool) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node, full: bool) -> Result<Self, InvalidCsl> {
         let name: DatePartName = attribute_required(node, "name")?;
         let form = match name {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form")?),
@@ -452,7 +391,7 @@ impl DatePart {
 }
 
 impl Date {
-    fn from_node(node: &Node, is_in_locale: bool) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node, is_in_locale: bool) -> Result<Self, InvalidCsl> {
         let form: DateForm = attribute_optional(node, "form")?;
         let not_set = form == DateForm::NotSet;
         let full = if is_in_locale { true } else { not_set };
@@ -471,7 +410,7 @@ impl Date {
 }
 
 impl FromNode for Element {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         match node.tag_name().name() {
             "text" => Ok(text_el(node)?),
             "label" => Ok(label_el(node)?),
@@ -480,32 +419,32 @@ impl FromNode for Element {
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(Date::from_node(node, false)?)),
-            _ => Err(CslValidationError::new(node, "Unrecognised node.".into()))?
+            _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?
         }
     }
 }
 
-pub fn get_toplevel<'a, 'd: 'a>(doc: &'d Document, nodename: &'static str) -> Result<Node<'a, 'd>, CslValidationError> {
-    let root = doc.root_element();
+pub fn get_toplevel<'a, 'd: 'a>(root: &Node<'a, 'd>, nodename: &'static str) -> Result<Node<'a, 'd>, InvalidCsl> {
     let matches = root.children().filter(|n| n.has_tag_name(nodename))
         .collect::<Vec<Node<'a, 'd>>>();
     if matches.len() > 1 {
-        Err(CslValidationError::new(&root, "yeah".to_owned()))
+        Err(InvalidCsl::new(&root, format!("Cannot have more than one <{}>", nodename)))
     } else {
         // move matches into its first item
-        matches.into_iter().nth(0).ok_or_else(|| CslValidationError::new(&root, "yeah".to_owned()))
+        matches.into_iter().nth(0)
+            .ok_or_else(|| InvalidCsl::new(&root, "Must have one <...>".to_owned()))
     }
 }
 
 impl FromNode for MacroMap {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         let elements: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el)).collect();
         let name = match node.attribute("name") {
             Some(n) => n,
             None => return Err(
-                CslValidationError::new(
+                InvalidCsl::new(
                     node,
                     "Macro must have a 'name' attribute.".into()))
         };
@@ -517,7 +456,7 @@ impl FromNode for MacroMap {
 }
 
 impl FromNode for NamePart {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(NamePart{
             name: attribute_required(node, "name")?,
             text_case: TextCase::from_node(node)?,
@@ -527,7 +466,7 @@ impl FromNode for NamePart {
 }
 
 impl FromNode for Name {
-    fn from_node(node: &Node) -> Result<Self, CslValidationError> {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(Name{
             and: attribute_string(node, "and"),
             delimiter: Delimiter::from_node(node)?,
@@ -549,20 +488,25 @@ impl FromNode for Name {
     }
 }
 
-fn build_style_inner(doc: Document) ->Result<Style, CslValidationError> {
-    // let info_node = get_toplevel(&doc, "info")?;
-    // let locale_node = get_toplevel(&doc, "locale")?;
-    let macros: Result<Vec<_>, _> = doc.root_element().children()
+impl FromNode for Style {
+    fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
+        let macros: Result<Vec<_>, _> = node.children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
             .map(|el| MacroMap::from_node(&el)).collect();
-    let citation = Citation::from_node(&get_toplevel(&doc, "citation")?);
+        let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
+        // let info_node = get_toplevel(&doc, "info")?;
+        // let locale_node = get_toplevel(&doc, "locale")?;
+        Ok(Style{
+            macros: macros?,
+            citation: citation?,
+            info: Info{},
+            class: StyleClass::Note
+        })
+    }
+}
 
-    Ok(Style{
-        macros: macros?,
-        citation: citation?,
-        info: Info{},
-        class: StyleClass::Note
-    })
+fn build_style_inner(doc: Document) -> Result<Style, InvalidCsl> {
+    Style::from_node(&doc.root_element())
 }
 
 pub fn build_style(text: &String) -> Result<Style, StyleError> {
@@ -580,3 +524,4 @@ pub fn drive_style(path: &str, text: &String) -> String {
         }
     }
 }
+

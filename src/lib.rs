@@ -1,15 +1,7 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+#![feature(test)]
 
 pub mod style;
 mod utils;
-
-use self::style::drive_style;
 
 #[macro_use]
 extern crate strum_macros;
@@ -30,6 +22,8 @@ cfg_if! {
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
 
+        use self::style::drive_style;
+
         extern crate wasm_bindgen;
         use wasm_bindgen::prelude::*;
 
@@ -48,5 +42,37 @@ cfg_if! {
             drive_style("in-memory", &str.to_owned())
         }
 
+    }
+}
+
+extern crate test;
+
+#[cfg(test)]
+mod tests {
+    use crate::test::{Bencher};
+    use std::fs::File;
+    use std::io::prelude::*;
+    use crate::style::drive_style;
+
+    #[bench]
+    fn bench_build_tree(b: &mut Bencher) {
+        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let mut f = File::open(path).expect("no file at path");
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .expect("something went wrong reading the file");
+        println!("hello?");
+        b.iter(|| {
+            drive_style(path, &contents);
+        });
+    }
+
+    #[bench]
+    fn bench_fail(b: &mut Bencher) {
+        let path = "path";
+        let contents = "<content></content>".to_owned();
+        b.iter(|| {
+            drive_style(path, &contents);
+        });
     }
 }

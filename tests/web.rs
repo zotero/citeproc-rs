@@ -11,3 +11,4 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn pass() {
     assert_eq!(1 + 1, 2);
 }
+

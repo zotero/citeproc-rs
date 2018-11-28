@@ -4,6 +4,7 @@ use codespan_reporting::termcolor::{ StandardStream, ColorChoice };
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
 use std::num::ParseIntError;
 
+#[derive(Debug, PartialEq)]
 pub struct UnknownAttributeValue {
     pub value: String,
 }
@@ -15,23 +16,23 @@ impl UnknownAttributeValue {
 }
 
 pub enum StyleError {
-    ValidationError(CslValidationError),
+    ValidationError(InvalidCsl),
     ParseError(Error),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct CslValidationError {
+pub struct InvalidCsl {
     pub severity: Severity,
     pub text_pos: TextPos,
     pub len: usize,
     pub message: String,
 }
 
-impl CslValidationError {
+impl InvalidCsl {
     pub fn new(node: &Node, message: String) -> Self {
         let mut pos = node.node_pos();
         pos.col = pos.col + 1;
-        CslValidationError {
+        InvalidCsl {
             text_pos: pos,
             len: node.tag_name().name().len(),
             severity: Severity::Error,
@@ -40,7 +41,7 @@ impl CslValidationError {
     }
 
     pub fn bad_int(node: &Node, attr: &str, uav: ParseIntError) -> Self {
-        CslValidationError {
+        InvalidCsl {
             text_pos: node.attribute_value_pos(attr).unwrap_or(node.node_pos()),
             len: node.attribute("attr").map(|a| a.len()).unwrap_or(1),
             message: format!("Invalid integer value for {}: {:?}", attr, uav),
@@ -48,11 +49,11 @@ impl CslValidationError {
         }
     }
 
-    pub fn unknown_attribute_value(node: &Node, attr: &str, uav: UnknownAttributeValue) -> Self {
-        CslValidationError {
+    pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
+        InvalidCsl {
             text_pos: node.attribute_value_pos(attr).unwrap_or(node.node_pos()),
-            len: uav.value.len(),
-            message: format!("Unknown attribute value for {}: \"{}\"", attr, uav.value),
+            len: uav.len(),
+            message: format!("Unknown attribute value for {}: \"{}\"", attr, uav),
             severity: Severity::Error,
         }
     }
@@ -79,8 +80,8 @@ impl From<Error> for StyleError {
     }
 }
 
-impl From<CslValidationError> for StyleError {
-    fn from(err: CslValidationError) -> StyleError {
+impl From<InvalidCsl> for StyleError {
+    fn from(err: InvalidCsl) -> StyleError {
         StyleError::ValidationError(err)
     }
 }
@@ -127,7 +128,7 @@ impl StyleError {
 
 impl Default for StyleError {
     fn default() -> Self {
-        StyleError::ValidationError(CslValidationError {
+        StyleError::ValidationError(InvalidCsl {
             severity: Severity::Error,
             text_pos: TextPos::new(0, 0),
             len: 0,
@@ -136,9 +137,9 @@ impl Default for StyleError {
     }
 }
 
-pub fn file_diagnostics(diagnostics: &Vec<StyleError>, filename: String, document: &String) {
+pub fn file_diagnostics<'a>(diagnostics: &Vec<StyleError>, filename: &'a str, document: &'a str) {
     let mut code_map = CodeMap::new();
-    let file_map = code_map.add_filemap(filename.into(), document.to_string());
+    let file_map = code_map.add_filemap(filename.to_owned().into(), document.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
     for diag in diagnostics.iter().map(|d| d.to_diagnostic(&file_map)) {
         if let Some(d) = diag {
@@ -147,3 +148,4 @@ pub fn file_diagnostics(diagnostics: &Vec<StyleError>, filename: String, documen
         }
     }
 }
+

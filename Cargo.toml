@@ -17,7 +17,6 @@ codespan = "0.2.0"
 codespan-reporting = "0.2.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
-wasm-bindgen = "0.2"
 cfg-if = "0.1.2"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
@@ -32,6 +31,10 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 #
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 wee_alloc = { version = "0.4.2", optional = true }
+
+# https://rustwasm.github.io/wasm-bindgen/reference/rust-targets.html
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"

@@ -37,17 +37,17 @@ pub struct Locale {
     pub date: Vec<Date>,
 }
 
-pub fn merge_locales(_base: Locale, locales: Vec<Locale>) -> Vec<Locale> {
-    locales
-}
+// pub fn merge_locales<'d, 'l: 'd>(_base: Locale<'d>, locales: Vec<Locale<'l>>) -> Vec<Locale<'l>> {
+//     locales
+// }
 
-#[allow(dead_code)]
-fn has_ordinals(ls: Vec<Locale>) -> bool {
-    ls.iter().any(|locale| {
-        locale.terms.iter().any(|term| term.name.contains("ordinal"))
-    })
-}
+// #[allow(dead_code)]
+// fn has_ordinals(ls: Vec<Locale>) -> bool {
+//     ls.iter().any(|locale| {
+//         locale.terms.iter().any(|term| term.name.contains("ordinal"))
+//     })
+// }
 
-#[allow(dead_code)]
-fn remove_ordinals() {}
+// #[allow(dead_code)]
+// fn remove_ordinals() {}
 

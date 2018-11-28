@@ -10,3 +10,4 @@ Cargo.lock
 **/*.rs.bk
 Cargo.lock
 wasm-pack.log
+

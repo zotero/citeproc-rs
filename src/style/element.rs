@@ -1,10 +1,11 @@
 use std::fmt;
 use std::str::FromStr;
 use crate::style::error::*;
-use crate::style::get_attribute::GetAttribute;
+use crate::style::get_attribute::{ GetAttribute, CSL_VERSION };
+use crate::style::terms::{ LocatorType };
 
 // No EnumString; this one is manual for CSL-M
-#[derive(AsStaticStr, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, Debug, PartialEq, Eq)]
 #[strum(serialize_all="snake_case")]
 pub enum Form {
     Long,
@@ -49,7 +50,7 @@ impl Default for Form {
     fn default() -> Self { Form::Long }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NumericForm {
     Numeric,
@@ -71,8 +72,8 @@ pub struct Affixes {
 impl Default for Affixes {
     fn default() -> Self {
         Affixes {
-            prefix: "".to_owned(),
-            suffix: "".to_owned(),
+            prefix: "".into(),
+            suffix: "".into(),
         }
     }
 }
@@ -131,7 +132,7 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FormattingDisplay {
     None,
@@ -145,7 +146,7 @@ impl Default for FormattingDisplay {
     fn default() -> Self { FormattingDisplay::None }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum TextCase {
     None,
@@ -161,7 +162,7 @@ impl Default for TextCase {
     fn default() -> Self { TextCase::None }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontStyle {
     Normal,
@@ -173,7 +174,7 @@ impl Default for FontStyle {
     fn default() -> Self { FontStyle::Normal }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontVariant {
     Normal,
@@ -184,7 +185,7 @@ impl Default for FontVariant {
     fn default() -> Self { FontVariant::Normal }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontWeight {
     Normal,
@@ -196,7 +197,7 @@ impl Default for FontWeight {
     fn default() -> Self { FontWeight::Normal }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum TextDecoration {
     None,
@@ -207,7 +208,7 @@ impl Default for TextDecoration {
     fn default() -> Self { TextDecoration::None }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 pub enum VerticalAlignment {
     #[strum(serialize="baseline")]
     Baseline,
@@ -224,7 +225,7 @@ impl Default for VerticalAlignment {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Delimiter(pub String);
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Plural {
     Contextual,
@@ -235,7 +236,7 @@ impl Default for Plural {
     fn default() -> Self { Plural::Contextual }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, EnumProperty, Eq, PartialEq)]
 pub enum LabelVariable {
     Locator,
     Page,
@@ -249,33 +250,20 @@ impl FromStr for LabelVariable {
         match s {
             "locator" => Ok(Locator),
             "page" => Ok(Page),
-            x => Ok(Number(NumberVariable::get_attr(x)?))
+            x => Ok(Number(NumberVariable::get_attr(x, CSL_VERSION)?))
         }
     }
 }
 
-
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum NumberVariable {
-    ChapterNumber,
-    CollectionNumber,
-    Edition,
-    Issue,
-    Number,
-    NumberOfPages,
-    NumberOfVolumes,
-    Volume,
-}
-
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum Position {
-    First,
-    Ibid,
-    IbidWithLocator,
-    Subsequent,
-    NearNote,
+impl AsRef<str> for LabelVariable {
+    fn as_ref(&self) -> &str {
+        use self::LabelVariable::*;
+        match *self {
+            Locator => "locator",
+            Page => "page",
+            Number(ref n) => n.as_ref()
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -286,10 +274,11 @@ pub struct Condition {
     pub variable: Vec<Variable>,
     pub position: Vec<Position>,
     pub csl_type: Vec<CslType>,
+    pub locator: Vec<LocatorType>,
     pub is_uncertain_date: Vec<DateVariable>,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Match {
     Any,
@@ -307,17 +296,29 @@ pub struct IfThen(pub Condition, pub Vec<Element>);
 #[derive(Debug, Eq, PartialEq)]
 pub struct Else(pub Vec<Element>);
 
+type Quotes = bool;
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum Element {
+    // <cs:choose>
     Choose(IfThen, Vec<IfThen>, Else),
-    Macro(String, Formatting, Affixes),
-    Const(String, Formatting, Affixes),
-    Variable(String, Form, Formatting, Affixes, Delimiter),
+    // <cs:text>
+    Macro(String, Formatting, Affixes, Quotes),
+    // <cs:text>
+    Const(String, Formatting, Affixes, Quotes),
+    // <cs:text>
+    Variable(Variable, Formatting, Affixes, Form, Delimiter, Quotes),
+    // <cs:term>
     Term(String, Form, Formatting, Affixes, bool), // bool is plural
+    // <cs:label>
     Label(LabelVariable, Form, Formatting, Affixes, Plural),
+    // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
-    Names(Vec<String>, Vec<Name>, Option<NameLabel>, Formatting, Delimiter, Option<Substitute>),
+    // <cs:names>
+    Names(Vec<NameVariable>, Vec<Name>, Option<NameLabel>, Formatting, Delimiter, Option<Substitute>),
+    // <cs:group>
     Group(Formatting, Delimiter, Vec<Element>), // done
+    // <cs:date>
     Date(Date)
 }
 
@@ -329,7 +330,7 @@ pub struct NameLabel {
     pub plural: Plural,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
@@ -342,7 +343,7 @@ impl Default for DelimiterPrecedes {
     fn default() -> Self { DelimiterPrecedes::Contextual }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NameForm {
     Long,
@@ -353,7 +354,7 @@ impl Default for NameForm {
     fn default() -> Self { NameForm::Long }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NameAsSortOrder {
     First,
@@ -383,7 +384,7 @@ pub struct Name {
     pub affixes: Affixes,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NamePartName {
     Given,
@@ -400,7 +401,7 @@ pub struct NamePart {
 #[derive(Debug, Eq, PartialEq)]
 pub struct Substitute(pub Vec<Element>);
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum GivenNameDisambiguationRule {
     AllNames,
@@ -436,7 +437,7 @@ pub struct MacroMap {
     pub elements: Vec<Element>,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum StyleClass {
     InText,
@@ -458,10 +459,16 @@ pub struct Style {
 pub struct RangeDelimiter(pub String);
 
 impl Default for RangeDelimiter {
-    fn default() -> Self { RangeDelimiter("".into()) }
+    fn default() -> Self { RangeDelimiter("".to_owned()) }
 }
 
-// TODO: check against list
+impl std::convert::AsRef<str> for RangeDelimiter {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+
 impl FromStr for RangeDelimiter {
     type Err = UnknownAttributeValue;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -469,40 +476,8 @@ impl FromStr for RangeDelimiter {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct CslType(pub String);
 
-// TODO: check against list
-impl FromStr for CslType {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(CslType(s.to_owned()))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct DateVariable(pub String);
-
-// TODO: check against list
-impl FromStr for DateVariable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(DateVariable(s.to_owned()))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Variable(pub String);
-
-// TODO: check against list
-impl FromStr for Variable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Variable(s.to_owned()))
-    }
-}
-
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DateParts {
     YearMonthDay,
@@ -514,7 +489,7 @@ impl Default for DateParts {
     fn default() -> Self { DateParts::YearMonthDay }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DatePartName {
     Day,
@@ -522,7 +497,7 @@ pub enum DatePartName {
     Year,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DayForm { 
     Numeric,
@@ -533,7 +508,7 @@ impl Default for DayForm {
     fn default() -> Self { DayForm::Numeric }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum MonthForm { 
     Long,
@@ -545,7 +520,7 @@ impl Default for MonthForm {
     fn default() -> Self { MonthForm::Long }
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum YearForm { 
     Long,
@@ -556,7 +531,7 @@ impl Default for YearForm {
 }
 
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DateForm { 
     Text,
@@ -595,96 +570,313 @@ pub struct Date {
     pub formatting: Formatting,
 }
 
-// pub enum Variable {
-// abstract
-//     abstract of the item (e.g. the abstract of a journal article)
-// annote
-//     reader’s notes about the item content
-// archive
-//     archive storing the item
-// archive_location
-//     storage location within an archive (e.g. a box and folder number)
-// archive-place
-//     geographic location of the archive
-// authority
-//     issuing or judicial authority (e.g. “USPTO” for a patent, “Fairfax Circuit Court” for a legal case)
-// call-number
-//     call number (to locate the item in a library)
-// citation-label
-//     label identifying the item in in-text citations of label styles (e.g. “Ferr78”). May be assigned by the CSL processor based on item metadata.
-// citation-number
-//     index (starting at 1) of the cited reference in the bibliography (generated by the CSL processor)
-// collection-title
-//     title of the collection holding the item (e.g. the series title for a book)
-// container-title
-//     title of the container holding the item (e.g. the book title for a book chapter, the journal title for a journal article)
-// container-title-short
-//     short/abbreviated form of “container-title” (also accessible through the “short” form of the “container-title” variable)
-// dimensions
-//     physical (e.g. size) or temporal (e.g. running time) dimensions of the item
-// DOI
-//     Digital Object Identifier (e.g. “10.1128/AEM.02591-07”)
-// event
-//     name of the related event (e.g. the conference name when citing a conference paper)
-// event-place
-//     geographic location of the related event (e.g. “Amsterdam, the Netherlands”)
-// first-reference-note-number
-//     number of a preceding note containing the first reference to the item. Assigned by the CSL processor. The variable holds no value for non-note-based styles, or when the item hasn’t been cited in any preceding notes.
-// genre
-//     class, type or genre of the item (e.g. “adventure” for an adventure movie, “PhD dissertation” for a PhD thesis)
-// ISBN
-//     International Standard Book Number
-// ISSN
-//     International Standard Serial Number
-// jurisdiction
-//     geographic scope of relevance (e.g. “US” for a US patent)
-// keyword
-//     keyword(s) or tag(s) attached to the item
-// locator
-//     a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
-// medium
-//     medium description (e.g. “CD”, “DVD”, etc.)
-// note
-//     (short) inline note giving additional item details (e.g. a concise summary or commentary)
-// original-publisher
-//     original publisher, for items that have been republished by a different publisher
-// original-publisher-place
-//     geographic location of the original publisher (e.g. “London, UK”)
-// original-title
-//     title of the original version (e.g. “Война и мир”, the untranslated Russian title of “War and Peace”)
-// page
-//     range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-// page-first
-//     first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-// PMCID
-//     PubMed Central reference number
-// PMID
-//     PubMed reference number
-// publisher
-//     publisher
-// publisher-place
-//     geographic location of the publisher
-// references
-//     resources related to the procedural history of a legal case
-// reviewed-title
-//     title of the item reviewed by the current item
-// scale
-//     scale of e.g. a map
-// section
-//     container section holding the item (e.g. “politics” for a newspaper article)
-// source
-//     from whence the item originates (e.g. a library catalog or database)
-// status
-//     (publication) status of the item (e.g. “forthcoming”)
-// title
-//     primary title of the item
-// title-short
-//     short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
-// URL
-//     Uniform Resource Locator (e.g. “http://aem.asm.org/cgi/content/full/74/9/2766”)
-// version
-//     version of the item (e.g. “2.0.9” for a software program)
-// year-suffix
-//     disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”) 
-// }
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum Variable {
+    /// abstract of the item (e.g. the abstract of a journal article)
+    Abstract,
+    /// reader’s notes about the item content
+    Annote,
+    /// archive storing the item
+    Archive,
+    /// storage location within an archive (e.g. a box and folder number)
+    /// technically the spec says use an underscore, but that's probably a typo.
+    #[strum(serialize="archive_location", serialize="archive-location")]
+    ArchiveLocation,
+    /// geographic location of the archive,
+    ArchivePlace,
+    /// issuing or judicial authority (e.g. “USPTO” for a patent, “Fairfax Circuit Court” for a legal case)
+    Authority,
+    /// active={true} call number (to locate the item in a library)
+    CallNumber,
+    /// label identifying the item in in-text citations of label styles (e.g. “Ferr78”). May be assigned by the CSL processor based on item metadata.
+    CitationLabel,
+    /// index (starting at 1) of the cited reference in the bibliography (generated by the CSL processor)
+    CitationNumber,
+    /// title of the collection holding the item (e.g. the series title for a book)
+    CollectionTitle,
+    /// title of the container holding the item (e.g. the book title for a book chapter, the journal title for a journal article)
+    ContainerTitle,
+    /// short/abbreviated form of “container-title” (also accessible through the “short” form of the “container-title” variable)
+    ContainerTitleShort,
+    /// physical (e.g. size) or temporal (e.g. running time) dimensions of the item
+    Dimensions,
+    /// Digital Object Identifier (e.g. “10.1128/AEM.02591-07”)
+    #[strum(serialize="DOI")]
+    DOI,
+    /// name of the related event (e.g. the conference name when citing a conference paper)
+    Event,
+    /// geographic location of the related event (e.g. “Amsterdam, the Netherlands”)
+    EventPlace,
+    /// number of a preceding note containing the first reference to the item. Assigned by the CSL processor. The variable holds no value for non-note-based styles, or when the item hasn’t been cited in any preceding notes.
+    FirstReferenceNoteNumber,
+    /// class, type or genre of the item (e.g. “adventure” for an adventure movie, “PhD dissertation” for a PhD thesis)
+    Genre,
+    /// International Standard Book Number
+    ISBN,
+    /// International Standard Serial Number
+    ISSN,
+    /// geographic scope of relevance (e.g. “US” for a US patent)
+    Jurisdiction,
+    /// keyword(s) or tag(s) attached to the item
+    Keyword,
+    /// a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
+    Locator,
+    /// medium description (e.g. “CD”, “DVD”, etc.)
+    Medium,
+    /// (short) inline note giving additional item details (e.g. a concise summary or commentary)
+    Note,
+    /// original publisher, for items that have been republished by a different publisher
+    OriginalPublisher,
+    /// geographic location of the original publisher (e.g. “London, UK”)
+    OriginalPublisherPlace,
+    /// title of the original version (e.g. “Война и мир”, the untranslated Russian title of “War and Peace”)
+    OriginalTitle,
+    /// range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
+    Page,
+    /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
+    PageFirst,
+    /// PubMed Central reference number
+    #[strum(serialize="PMCID")]
+    PMCID,
+    /// PubMed reference number
+    #[strum(serialize="PMID")]
+    PMID,
+    /// publisher
+    Publisher,
+    /// geographic location of the publisher
+    PublisherPlace,
+    /// resources related to the procedural history of a legal case
+    References,
+    /// title of the item reviewed by the current item
+    ReviewedTitle,
+    /// scale of e.g. a map
+    Scale,
+    /// container section holding the item (e.g. “politics” for a newspaper article)
+    Section,
+    /// from whence the item originates (e.g. a library catalog or database)
+    Source,
+    /// (publication) status of the item (e.g. “forthcoming”)
+    Status,
+    /// primary title of the item
+    Title,
+    /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
+    TitleShort,
+    ///  Uniform Resource Locator (e.g. “http://aem.asm.org/cgi/content/full/74/9/2766”)
+    #[strum(serialize="URL")]
+    URL,
+    /// version of the item (e.g. “2.0.9” for a software program)
+    Version,
+    /// disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”) 
+    YearSuffix,
+
+    #[strum(props(number="1"))]
+    ChapterNumber,
+    #[strum(props(number="1"))]
+    CollectionNumber,
+    #[strum(props(number="1"))]
+    Edition,
+    #[strum(props(number="1"))]
+    Issue,
+    #[strum(props(number="1"))]
+    Number,
+    #[strum(props(number="1"))]
+    NumberOfPages,
+    #[strum(props(number="1"))]
+    NumberOfVolumes,
+    #[strum(props(number="1"))]
+    Volume,
+
+    #[strum(props(name="1"))]
+    Author,
+    /// editor of the collection holding the item (e.g. the series editor for a book)
+    #[strum(props(name="1"))]
+    CollectionEditor,
+    /// composer (e.g. of a musical score)
+    #[strum(props(name="1"))]
+    Composer,
+    /// author of the container holding the item (e.g. the book author for a book chapter)
+    #[strum(props(name="1"))]
+    ContainerAuthor,
+    /// director (e.g. of a film)
+    #[strum(props(name="1"))]
+    Director,
+    /// editor
+    #[strum(props(name="1"))]
+    Editor,
+    /// managing editor (“Directeur de la Publication” in French)
+    #[strum(props(name="1"))]
+    EditorialDirector,
+    /// illustrator (e.g. of a children’s book)
+    #[strum(props(name="1"))]
+    Illustrator,
+    /// interviewer (e.g. of an interview)
+    #[strum(props(name="1"))]
+    Interviewer,
+    /// ?
+    #[strum(props(name="1"))]
+    OriginalAuthor,
+    /// recipient (e.g. of a letter)
+    #[strum(props(name="1"))]
+    Recipient,
+    /// author of the item reviewed by the current item
+    #[strum(props(name="1"))]
+    ReviewedAuthor,
+    /// translator 
+    #[strum(props(name="1"))]
+    Translator,
+
+    /// date the item has been accessed
+    #[strum(props(date="1"))]
+    Accessed,
+    /// ?
+    #[strum(props(date="1"))]
+    Container,
+    /// date the related event took place
+    #[strum(props(date="1"))]
+    EventDate,
+    /// date the item was issued/published
+    #[strum(props(date="1"))]
+    Issued,
+    /// (issue) date of the original version
+    #[strum(props(date="1"))]
+    OriginalDate,
+    /// date the item (e.g. a manuscript) has been submitted for publication
+    #[strum(props(date="1"))]
+    Submitted,
+
+    // CSL-M Additions
+    #[strum(props(csl_101="0", csl_m="1"))]
+    Hereinafter
+}
+
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum NumberVariable {
+    ChapterNumber,
+    CollectionNumber,
+    Edition,
+    Issue,
+    Number,
+    NumberOfPages,
+    NumberOfVolumes,
+    Volume,
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum Position {
+    First,
+    Ibid,
+    IbidWithLocator,
+    Subsequent,
+    NearNote,
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum DateVariable {
+    /// date the item has been accessed
+    Accessed,
+    /// ?
+    Container,
+    /// date the related event took place
+    EventDate,
+    /// date the item was issued/published
+    Issued,
+    /// (issue) date of the original version
+    OriginalDate,
+    /// date the item (e.g. a manuscript) has been submitted for publication
+    Submitted,
+}
+
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum NameVariable {
+    /// author
+    Author,
+    /// editor of the collection holding the item (e.g. the series editor for a book)
+    CollectionEditor,
+    /// composer (e.g. of a musical score)
+    Composer,
+    /// author of the container holding the item (e.g. the book author for a book chapter)
+    ContainerAuthor,
+    /// director (e.g. of a film)
+    Director,
+    /// editor
+    Editor,
+    /// managing editor (“Directeur de la Publication” in French)
+    EditorialDirector,
+    /// illustrator (e.g. of a children’s book)
+    Illustrator,
+    /// interviewer (e.g. of an interview)
+    Interviewer,
+    /// ?
+    OriginalAuthor,
+    /// recipient (e.g. of a letter)
+    Recipient,
+    /// author of the item reviewed by the current item
+    ReviewedAuthor,
+    /// translator 
+    Translator,
+}
+
+/// http://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum PageRangeFormat {
+    Chicago,
+    Expanded,
+    Minimal,
+    MinimalTwo
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[strum(serialize_all="kebab_case")]
+pub enum CslType {
+    Article,
+    ArticleMagazine,
+    ArticleNewspaper,
+    ArticleJournal,
+    Bill,
+    Book,
+    Broadcast,
+    Chapter,
+    Dataset,
+    Entry,
+    EntryDictionary,
+    EntryEncyclopedia,
+    Figure,
+    Graphic,
+    Interview,
+    Legislation,
+    #[strum(serialize="legal_case")]
+    LegalCase,
+    Manuscript,
+    Map,
+    #[strum(serialize="motion_picture")]
+    MotionPicture,
+    #[strum(serialize="musical_score")]
+    MusicalScore,
+    Pamphlet,
+    PaperConference,
+    Patent,
+    Post,
+    PostWeblog,
+    #[strum(serialize="personal_communication")]
+    PersonalCommunication,
+    Report,
+    Review,
+    ReviewBook,
+    Song,
+    Speech,
+    Thesis,
+    Treaty,
+    Webpage,
+}
+
+
 

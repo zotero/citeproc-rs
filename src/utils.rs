@@ -11,6 +11,7 @@ cfg_if! {
         extern crate console_error_panic_hook;
         pub use self::console_error_panic_hook::set_once as set_panic_hook;
     } else {
+        #[allow(dead_code)]
         #[inline]
         pub fn set_panic_hook() {}
     }
