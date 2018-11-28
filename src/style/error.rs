@@ -92,7 +92,7 @@ fn get_pos(e: &Error) -> TextPos {
         Error::UnexpectedXmlnsUri(pos) => pos,
         Error::InvalidElementNamePrefix(pos) => pos,
         Error::DuplicatedNamespace(ref _name, pos) => pos,
-        Error::UnexpectedCloseTag { ref expected, ref actual, pos } => pos,
+        Error::UnexpectedCloseTag { expected: _, actual: _, pos } => pos,
         Error::UnexpectedEntityCloseTag(pos) => pos,
         Error::UnknownEntityReference(ref _name, pos) => pos,
         Error::EntityReferenceLoop(pos) => pos,

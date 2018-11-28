@@ -1,10 +1,8 @@
-use roxmltree::Document;
-use clap::{Arg, App};
 #[allow(dead_code)]
-mod style;
-use self::style::drive_style;
-#[macro_use]
-extern crate strum_macros;
+use clap::{Arg, App};
+
+extern crate citeproc;
+use citeproc::style::drive_style;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -34,3 +32,5 @@ fn main() {
         None => {}
     }
 }
+
+

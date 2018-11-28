@@ -1,36 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only" default-locale="en-GB">
   <info>
-    <title>Australian Guide to Legal Citation</title>
-    <title-short>AGLC</title-short>
+    <title>citeproc-rs test file</title>
+    <title-short>citeproc-rs</title-short>
     <id>http://www.zotero.org/styles/australian-guide-to-legal-citation</id>
     <link href="http://www.zotero.org/styles/australian-guide-to-legal-citation" rel="self"/>
     <link href="https://forums.zotero.org/discussion/4841/new-australian-legal-citation-style/?Focus=20831#Comment_20831" rel="documentation"/>
     <author>
-      <name>Sebastian Karcher</name>
-    </author>
-    <author>
-      <name>Anton Hughes</name>
+      <name>Genius Jones</name>
       <email>antonh@lawtec.net</email>
     </author>
-    <author>
-      <name>Bruce D'Arcus</name>
-      <email>bdarcus@gmail.com</email>
-    </author>
-    <author>
-      <name>Nancy Sims</name>
-      <email>nsims@umich.edu</email>
-    </author>
-    <author>
-      <name>Nic Suzor</name>
-      <email>nic@suzor.com</email>
-    </author>
     <contributor>
-      <name>Tim Baxter</name>
-      <email>tbaxter1@unimelb.edu.au</email>
-    </contributor> <category citation-format="note"/>
+      <name>Greg McSly</name>
+    </contributor>
+    <category citation-format="note"/>
     <category field="law"/>
-    <summary>A modification of the Bluebook legal citation style for Australian conditions.</summary>
+    <summary>Test case for citeproc-rs</summary>
     <updated>2018-09-03T17:14:48+00:00</updated>
     <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
   </info>
@@ -39,7 +24,7 @@
       <term name="et-al">et al</term>
     </terms>
   </locale>
-  <macro name="Splendiferous">
+  <macro name="SuperMacro">
     <text variable="locator" font-style="italic" />
   </macro>
   <citation et-al-min="4" et-al-use-first="1">

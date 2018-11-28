@@ -1,9 +1,9 @@
 pub mod locale;
 pub mod element;
 pub mod error;
-mod take_while;
 mod get_attribute;
-use self::take_while::*;
+// mod take_while;
+// use self::take_while::*;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
@@ -342,7 +342,7 @@ fn choose_el(node: &Node) -> Result<Element, CslValidationError> {
         }
     }
 
-    let _if = if_block.ok_or(CslValidationError::new(node, "<choose> blocks must have an <if>".into()))?;
+    let _if = if_block.ok_or_else(|| CslValidationError::new(node, "<choose> blocks must have an <if>".into()))?;
 
     Ok(Element::Choose(
             _if,
@@ -494,7 +494,7 @@ pub fn get_toplevel<'a, 'd: 'a>(doc: &'d Document, nodename: &'static str) -> Re
         Err(CslValidationError::new(&root, "yeah".to_owned()))
     } else {
         // move matches into its first item
-        matches.into_iter().nth(0).ok_or(CslValidationError::new(&root, "yeah".to_owned()))
+        matches.into_iter().nth(0).ok_or_else(|| CslValidationError::new(&root, "yeah".to_owned()))
     }
 }
 
@@ -551,8 +551,8 @@ impl FromNode for Name {
 }
 
 fn build_style_inner(doc: Document) ->Result<Style, CslValidationError> {
-    let info_node = get_toplevel(&doc, "info")?;
-    let locale_node = get_toplevel(&doc, "locale")?;
+    // let info_node = get_toplevel(&doc, "info")?;
+    // let locale_node = get_toplevel(&doc, "locale")?;
     let macros: Result<Vec<_>, _> = doc.root_element().children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
             .map(|el| MacroMap::from_node(&el)).collect();
@@ -572,9 +572,12 @@ pub fn build_style(text: &String) -> Result<Style, StyleError> {
     Ok(style)
 }
 
-pub fn drive_style(path: &str, text: &String) {
+pub fn drive_style(path: &str, text: &String) -> String {
     match build_style(text) {
-        Ok(style) => println!("{:?}", style),
-        Err(e) => file_diagnostics(&vec![e], path.into(), text)
+        Ok(style) => format!("done!"),
+        Err(e) => {
+            file_diagnostics(&vec![e], path.into(), text);
+            "".into()
+        }
     }
 }

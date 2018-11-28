@@ -41,11 +41,13 @@ pub fn merge_locales(_base: Locale, locales: Vec<Locale>) -> Vec<Locale> {
     locales
 }
 
+#[allow(dead_code)]
 fn has_ordinals(ls: Vec<Locale>) -> bool {
     ls.iter().any(|locale| {
         locale.terms.iter().any(|term| term.name.contains("ordinal"))
     })
 }
 
+#[allow(dead_code)]
 fn remove_ordinals() {}
 
