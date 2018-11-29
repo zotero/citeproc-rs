@@ -1,21 +1,27 @@
-pub mod variables;
-pub mod terms;
-pub mod locale;
 pub mod element;
 pub mod error;
 mod get_attribute;
+pub mod locale;
+pub mod terms;
+pub mod variables;
 // mod take_while;
 // use self::take_while::*;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
-use roxmltree::{ Node, Document, Children };
+use roxmltree::{Children, Document, Node};
 
-pub trait IsOnNode where Self : Sized {
+pub trait IsOnNode
+where
+    Self: Sized,
+{
     fn is_on_node(node: &Node) -> Vec<String>;
 }
 
-pub trait FromNode where Self : Sized {
+pub trait FromNode
+where
+    Self: Sized,
+{
     fn from_node(node: &Node) -> Result<Self, InvalidCsl>;
 }
 
@@ -48,8 +54,7 @@ impl IsOnNode for Affixes {
     fn is_on_node(node: &Node) -> Vec<String> {
         node.attributes()
             .iter()
-            .filter(|a| a.name() == "prefix"
-                     || a.name() == "suffix")
+            .filter(|a| a.name() == "prefix" || a.name() == "suffix")
             .map(|a| a.name().to_owned())
             .collect()
     }
@@ -74,34 +79,48 @@ impl FromNode for Formatting {
 
 impl IsOnNode for Formatting {
     fn is_on_node(node: &Node) -> Vec<String> {
-    node.attributes()
-        .iter()
-        .filter(|a| a.name() == "font-style"
-                || a.name() == "font-variant"
-                || a.name() == "font-weight"
-                || a.name() == "text-decoration"
-                || a.name() == "vertical-alignment"
-                || a.name() == "display"
-                || a.name() == "strip-periods"
-        )
-        .map(|a| a.name().to_owned())
-        .collect()
+        node.attributes()
+            .iter()
+            .filter(|a| {
+                a.name() == "font-style"
+                    || a.name() == "font-variant"
+                    || a.name() == "font-weight"
+                    || a.name() == "text-decoration"
+                    || a.name() == "vertical-alignment"
+                    || a.name() == "display"
+                    || a.name() == "strip-periods"
+            })
+            .map(|a| a.name().to_owned())
+            .collect()
     }
 }
 
 impl FromNode for Citation {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let layouts: Vec<_> = node.children().filter(|n| n.has_tag_name("layout")).collect();
+        let layouts: Vec<_> = node
+            .children()
+            .filter(|n| n.has_tag_name("layout"))
+            .collect();
         if layouts.len() != 1 {
-            return Err(InvalidCsl::new(node, "<citation> must contain exactly one <layout>".into()))?
+            return Err(InvalidCsl::new(
+                node,
+                "<citation> must contain exactly one <layout>".into(),
+            ))?;
         }
         let layout_node = layouts[0];
-        Ok(Citation{
+        Ok(Citation {
             disambiguate_add_names: attribute_bool(node, "disambiguate-add-names", false)?,
             disambiguate_add_givenname: attribute_bool(node, "disambiguate-add-givenname", false)?,
-            givenname_disambiguation_rule: attribute_optional(node, "givenname-disambiguation-rule")?,
-            disambiguate_add_year_suffix: attribute_bool(node, "disambiguate-add-year-suffix", false)?,
-            layout: Layout::from_node(&layout_node)?
+            givenname_disambiguation_rule: attribute_optional(
+                node,
+                "givenname-disambiguation-rule",
+            )?,
+            disambiguate_add_year_suffix: attribute_bool(
+                node,
+                "disambiguate-add-year-suffix",
+                false,
+            )?,
+            layout: Layout::from_node(&layout_node)?,
         })
     }
 }
@@ -114,14 +133,16 @@ impl FromNode for Delimiter {
 
 impl FromNode for Layout {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let elements: Result<Vec<_>, _> = node.children()
+        let elements: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el)).collect();
+            .map(|el| Element::from_node(&el))
+            .collect();
         Ok(Layout {
             formatting: Formatting::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
-            elements: elements?
+            elements: elements?,
         })
     }
 }
@@ -130,38 +151,39 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
     use self::element::Element::*;
     let formatting = Formatting::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
-    if let Some(m) =  node.attribute("macro") {
+    if let Some(m) = node.attribute("macro") {
         return Ok(Macro(
-                m.to_owned(),
-                formatting,
-                affixes,
-                attribute_bool(node, "quotes", false)?
+            m.to_owned(),
+            formatting,
+            affixes,
+            attribute_bool(node, "quotes", false)?,
         ));
     };
     if let Some(_m) = node.attribute("variable") {
         return Ok(Variable(
-                attribute_required(node, "variable")?,
-                formatting,
-                affixes,
-                attribute_optional2(node, "form", Form::from_str)?,
-                Delimiter::from_node(node)?,
-                attribute_bool(node, "quotes", false)?
+            attribute_required(node, "variable")?,
+            formatting,
+            affixes,
+            attribute_optional2(node, "form", Form::from_str)?,
+            Delimiter::from_node(node)?,
+            attribute_bool(node, "quotes", false)?,
         ));
     }
     if let Some(v) = node.attribute("value") {
         return Ok(Const(
-                v.to_owned(),
-                formatting,
-                affixes,
-                attribute_bool(node, "quotes", false)?
+            v.to_owned(),
+            formatting,
+            affixes,
+            attribute_bool(node, "quotes", false)?,
         ));
     };
     if let Some(t) = node.attribute("term") {
         return Ok(Term(
-                t.to_owned(),
-                attribute_optional2(node, "form", Form::from_str)?,
-                formatting, affixes,
-                attribute_bool(node, "plural", false)?
+            t.to_owned(),
+            attribute_optional2(node, "form", Form::from_str)?,
+            formatting,
+            affixes,
+            attribute_bool(node, "plural", false)?,
         ));
     };
     Err(InvalidCsl::new(node, "yeah".to_owned()))?
@@ -169,37 +191,44 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
 
 fn label_el(node: &Node) -> Result<Element, InvalidCsl> {
     Ok(Element::Label(
-            attribute_required(node, "variable")?,
-            attribute_optional2(node, "form", Form::from_str)?,
-            Formatting::from_node(node)?,
-            Affixes::from_node(node)?,
-            attribute_optional(node, "plural")?))
+        attribute_required(node, "variable")?,
+        attribute_optional2(node, "form", Form::from_str)?,
+        Formatting::from_node(node)?,
+        Affixes::from_node(node)?,
+        attribute_optional(node, "plural")?,
+    ))
 }
 
 fn number_el(node: &Node) -> Result<Element, InvalidCsl> {
     Ok(Element::Number(
-            attribute_required(node, "variable")?,
-            attribute_optional(node, "form")?,
-            Formatting::from_node(node)?,
-            Affixes::from_node(node)?,
-            attribute_optional(node, "plural")?))
+        attribute_required(node, "variable")?,
+        attribute_optional(node, "form")?,
+        Formatting::from_node(node)?,
+        Affixes::from_node(node)?,
+        attribute_optional(node, "plural")?,
+    ))
 }
 
 fn group_el(node: &Node) -> Result<Element, InvalidCsl> {
-    let elements: Result<Vec<_>, _> = node.children()
+    let elements: Result<Vec<_>, _> = node
+        .children()
         .filter(|n| n.is_element())
-        .map(|el| Element::from_node(&el)).collect();
+        .map(|el| Element::from_node(&el))
+        .collect();
     Ok(Element::Group(
-            Formatting::from_node(node)?,
-            Delimiter::from_node(node)?,
-            elements?))
+        Formatting::from_node(node)?,
+        Delimiter::from_node(node)?,
+        elements?,
+    ))
 }
 
 impl FromNode for Else {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let elements: Result<Vec<_>, _> = node.children()
+        let elements: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el)).collect();
+            .map(|el| Element::from_node(&el))
+            .collect();
         Ok(Else(elements?))
     }
 }
@@ -227,13 +256,12 @@ impl FromNode for Condition {
 
 impl FromNode for IfThen {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let elements: Result<Vec<_>, _> = node.children()
+        let elements: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el)).collect();
-        Ok(IfThen(
-                Condition::from_node(node)?,
-                elements?
-        ))
+            .map(|el| Element::from_node(&el))
+            .collect();
+        Ok(IfThen(Condition::from_node(node)?, elements?))
     }
 }
 
@@ -248,9 +276,18 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
 
     let unrecognised = |el, tag| {
         if tag == "if" || tag == "else-if" || tag == "else" {
-            return Err(InvalidCsl::new(el, format!("<choose> elements out of order; found <{}> in wrong position", tag)))
+            return Err(InvalidCsl::new(
+                el,
+                format!(
+                    "<choose> elements out of order; found <{}> in wrong position",
+                    tag
+                ),
+            ));
         }
-        Err(InvalidCsl::new(el, format!("Unrecognised element {} in <choose>", tag)))
+        Err(InvalidCsl::new(
+            el,
+            format!("Unrecognised element {} in <choose>", tag),
+        ))
     };
 
     for el in els.into_iter() {
@@ -261,7 +298,10 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
                 seen_if = true;
                 if_block = Some(IfThen::from_node(&el)?);
             } else {
-                return Err(InvalidCsl::new(&el, "<choose> blocks must begin with an <if>".into()))?;
+                return Err(InvalidCsl::new(
+                    &el,
+                    "<choose> blocks must begin with an <if>".into(),
+                ))?;
             }
         } else if !seen_else {
             if tag == "else-if" {
@@ -277,12 +317,10 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
         }
     }
 
-    let _if = if_block.ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
+    let _if = if_block
+        .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
 
-    Ok(Element::Choose(
-            _if,
-            elseifs,
-            else_block))
+    Ok(Element::Choose(_if, elseifs, else_block))
 }
 
 impl FromNode for NameLabel {
@@ -298,22 +336,33 @@ impl FromNode for NameLabel {
 
 impl FromNode for Substitute {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let els: Result<Vec<_>, _> = node.children()
+        let els: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element() && n.has_tag_name("name"))
-            .map(|el| Element::from_node(&el)).collect();
+            .map(|el| Element::from_node(&el))
+            .collect();
         Ok(Substitute(els?))
     }
 }
 
-fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, InvalidCsl> {
+fn max1_child<T: FromNode>(
+    parent_tag: &str,
+    child_tag: &str,
+    els: Children,
+) -> Result<Option<T>, InvalidCsl> {
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
     if subst_els.len() > 1 {
-        return Err(InvalidCsl::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
+        return Err(InvalidCsl::new(
+            &subst_els[1],
+            format!(
+                "There can only be one <{}> in a <{}> block.",
+                child_tag, parent_tag
+            ),
+        ))?;
     }
     let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| T::from_node(&el)).collect();
     let substitute = substs?.into_iter().nth(0);
     Ok(substitute)
-
 }
 
 fn names_el(node: &Node) -> Result<Element, InvalidCsl> {
@@ -324,19 +373,23 @@ fn names_el(node: &Node) -> Result<Element, InvalidCsl> {
     //     .collect();
 
     let children = node.children();
-    let name_els: Result<Vec<_>, _> = children.filter(|n| n.has_tag_name("name")).map(|el| Name::from_node(&el)).collect();
+    let name_els: Result<Vec<_>, _> = children
+        .filter(|n| n.has_tag_name("name"))
+        .map(|el| Name::from_node(&el))
+        .collect();
     let names = name_els?;
 
     let label = max1_child("names", "label", node.children())?;
     let substitute = max1_child("names", "substitute", node.children())?;
 
     Ok(Element::Names(
-            attribute_array(node, "variable")?,
-            names,
-            label,
-            Formatting::from_node(node)?,
-            Delimiter::from_node(node)?,
-            substitute))
+        attribute_array(node, "variable")?,
+        names,
+        label,
+        Formatting::from_node(node)?,
+        Delimiter::from_node(node)?,
+        substitute,
+    ))
 }
 
 impl IsOnNode for TextCase {
@@ -355,11 +408,17 @@ impl FromNode for TextCase {
     }
 }
 
-fn disallow_default<T : Default + FromNode + IsOnNode>(node: &Node, disallow: bool) -> Result<T, InvalidCsl> {
+fn disallow_default<T: Default + FromNode + IsOnNode>(
+    node: &Node,
+    disallow: bool,
+) -> Result<T, InvalidCsl> {
     if disallow {
         let attrs = T::is_on_node(node);
         if !attrs.is_empty() {
-            Err(InvalidCsl::new(node, format!("Disallowed attribute on node: {:?}", attrs)))?
+            Err(InvalidCsl::new(
+                node,
+                format!("Disallowed attribute on node: {:?}", attrs),
+            ))?
         } else {
             Ok(T::default())
         }
@@ -392,10 +451,12 @@ impl Date {
         let form: DateForm = attribute_optional(node, "form")?;
         let not_set = form == DateForm::NotSet;
         let full = if is_in_locale { true } else { not_set };
-        let elements: Result<Vec<_>, _> = node.children()
+        let elements: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node(&el, full)).collect();
-        Ok(Date{
+            .map(|el| DatePart::from_node(&el, full))
+            .collect();
+        Ok(Date {
             form,
             date_parts: elements?,
             date_parts_attr: attribute_optional(node, "date-parts")?,
@@ -416,45 +477,59 @@ impl FromNode for Element {
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(Date::from_node(node, false)?)),
-            _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?
+            _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?,
         }
     }
 }
 
-pub fn get_toplevel<'a, 'd: 'a>(root: &Node<'a, 'd>, nodename: &'static str) -> Result<Node<'a, 'd>, InvalidCsl> {
-    let matches = root.children().filter(|n| n.has_tag_name(nodename))
+pub fn get_toplevel<'a, 'd: 'a>(
+    root: &Node<'a, 'd>,
+    nodename: &'static str,
+) -> Result<Node<'a, 'd>, InvalidCsl> {
+    let matches = root
+        .children()
+        .filter(|n| n.has_tag_name(nodename))
         .collect::<Vec<Node<'a, 'd>>>();
     if matches.len() > 1 {
-        Err(InvalidCsl::new(&root, format!("Cannot have more than one <{}>", nodename)))
+        Err(InvalidCsl::new(
+            &root,
+            format!("Cannot have more than one <{}>", nodename),
+        ))
     } else {
         // move matches into its first item
-        matches.into_iter().nth(0)
+        matches
+            .into_iter()
+            .nth(0)
             .ok_or_else(|| InvalidCsl::new(&root, "Must have one <...>".to_owned()))
     }
 }
 
 impl FromNode for MacroMap {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let elements: Result<Vec<_>, _> = node.children()
+        let elements: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el)).collect();
+            .map(|el| Element::from_node(&el))
+            .collect();
         let name = match node.attribute("name") {
             Some(n) => n,
-            None => return Err(
-                InvalidCsl::new(
+            None => {
+                return Err(InvalidCsl::new(
                     node,
-                    "Macro must have a 'name' attribute.".into()))
+                    "Macro must have a 'name' attribute.".into(),
+                ))
+            }
         };
         Ok(MacroMap {
             name: name.to_owned(),
-            elements: elements?
+            elements: elements?,
         })
     }
 }
 
 impl FromNode for NamePart {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        Ok(NamePart{
+        Ok(NamePart {
             name: attribute_required(node, "name")?,
             text_case: TextCase::from_node(node)?,
             formatting: Formatting::from_node(node)?,
@@ -464,7 +539,7 @@ impl FromNode for NamePart {
 
 impl FromNode for Name {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        Ok(Name{
+        Ok(Name {
             and: attribute_string(node, "and"),
             delimiter: Delimiter::from_node(node)?,
             delimiter_precedes_et_al: attribute_optional(node, "delimiter-precedes-et-al")?,
@@ -487,17 +562,19 @@ impl FromNode for Name {
 
 impl FromNode for Style {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
-        let macros: Result<Vec<_>, _> = node.children()
+        let macros: Result<Vec<_>, _> = node
+            .children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el)).collect();
+            .map(|el| MacroMap::from_node(&el))
+            .collect();
         let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
         // let info_node = get_toplevel(&doc, "info")?;
         // let locale_node = get_toplevel(&doc, "locale")?;
-        Ok(Style{
+        Ok(Style {
             macros: macros?,
             citation: citation?,
-            info: Info{},
-            class: StyleClass::Note
+            info: Info {},
+            class: StyleClass::Note,
         })
     }
 }
@@ -521,4 +598,3 @@ pub fn drive_style(path: &str, text: &str) -> String {
         }
     }
 }
-

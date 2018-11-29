@@ -14,7 +14,7 @@ impl<T: Clone> JoinMany<T> for [Vec<T>] {
             None => return vec![],
         };
         let len = self.len();
-        let mut result: Vec<T> = Vec::with_capacity(len + (len-1) * sep.len());
+        let mut result: Vec<T> = Vec::with_capacity(len + (len - 1) * sep.len());
         result.extend_from_slice(first);
 
         for v in iter {

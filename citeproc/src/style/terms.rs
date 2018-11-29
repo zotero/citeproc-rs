@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 /// http://docs.citationstyles.org/en/stable/specification.html#locators
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum LocatorType {
     Book,
     Chapter,
@@ -25,7 +25,7 @@ pub enum LocatorType {
 
 /// http://docs.citationstyles.org/en/stable/specification.html#quotes
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum QuotationMarks {
     OpenQuote,
     CloseQuote,
@@ -34,7 +34,7 @@ pub enum QuotationMarks {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Seasons {
     Season01,
     Season02,
@@ -43,7 +43,7 @@ pub enum Seasons {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Miscellaneous {
     Accessed,
     Ad,
@@ -77,7 +77,7 @@ pub enum Miscellaneous {
 
 /// http://docs.citationstyles.org/en/stable/specification.html#months
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Months {
     Month01,
     Month02,
@@ -92,7 +92,6 @@ pub enum Months {
     Month11,
     Month12,
 }
-
 
 /// http://docs.citationstyles.org/en/stable/specification.html#quotes
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,7 +132,6 @@ pub enum Ordinals {
 //     }
 // }
 
-
 impl FromStr for Ordinals {
     type Err = UnknownAttributeValue;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -161,7 +159,7 @@ impl FromStr for Ordinals {
                             Err(UnknownAttributeValue::new(s))
                         }
                     }
-                    _ => Err(UnknownAttributeValue::new(s))
+                    _ => Err(UnknownAttributeValue::new(s)),
                 }
             }
         }
@@ -171,8 +169,13 @@ impl FromStr for Ordinals {
 #[cfg(test)]
 #[test]
 fn test_ordinals() {
-    assert_eq!(Ok(Ordinals::Ordinal00ThroughOrdinal99(34)), Ordinals::from_str("ordinal-34"));
-    assert_eq!(Ordinals::from_str("long-ordinal-08"), Ok(Ordinals::LongOrdinal08));
+    assert_eq!(
+        Ok(Ordinals::Ordinal00ThroughOrdinal99(34)),
+        Ordinals::from_str("ordinal-34")
+    );
+    assert_eq!(
+        Ordinals::from_str("long-ordinal-08"),
+        Ok(Ordinals::LongOrdinal08)
+    );
     assert!(Ordinals::from_str("ordinal-129").is_err());
 }
-

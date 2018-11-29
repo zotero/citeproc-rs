@@ -1,4 +1,4 @@
-use crate::style::element::{ Form, Date };
+use crate::style::element::{Date, Form};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CslOption(String, String);
@@ -14,14 +14,14 @@ pub struct Term {
 }
 
 #[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum OrdinalMatch {
     LastTwoDigits,
     WholeNumber,
 }
 
 #[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Gender {
     Masculine,
     Feminine,
@@ -50,4 +50,3 @@ pub struct Locale {
 
 // #[allow(dead_code)]
 // fn remove_ordinals() {}
-

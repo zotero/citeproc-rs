@@ -1,13 +1,18 @@
 use crate::output::formatter::Format;
 use crate::utils::Intercalate;
 
-use crate::style::element::{ Formatting, FontStyle, FontWeight };
+use crate::style::element::{FontStyle, FontWeight, Formatting};
 
 // use typed_arena::Arena;
-use serde::{ Serialize, Serializer };
+use serde::{Serialize, Serializer};
 
 #[derive(Clone, PartialEq)]
-pub enum MarkdownFormatting { Bold, Italic, BoldItalic, None }
+pub enum MarkdownFormatting {
+    Bold,
+    Italic,
+    BoldItalic,
+    None,
+}
 impl MarkdownFormatting {
     fn surround(&self, s: &str) -> String {
         let start = match *self {
@@ -68,9 +73,11 @@ pub struct MarkdownFormat {
     // arena: Arena<MarkdownNode>
 }
 impl MarkdownFormat {
-    pub fn new() -> Self { MarkdownFormat {
+    pub fn new() -> Self {
+        MarkdownFormat {
         // arena: Arena::new()
-    } }
+    }
+    }
 }
 impl<'a> From<&'a Formatting> for MarkdownFormatting {
     fn from(f: &'a Formatting) -> Self {
@@ -88,7 +95,12 @@ impl Format<MarkdownNode, MarkdownNode> for MarkdownFormat {
         MarkdownNode::Text(s.to_owned(), formatting.into())
     }
 
-    fn group(&self, nodes: &[MarkdownNode], delimiter: &str, formatting: &Formatting) -> MarkdownNode {
+    fn group(
+        &self,
+        nodes: &[MarkdownNode],
+        delimiter: &str,
+        formatting: &Formatting,
+    ) -> MarkdownNode {
         let delim = self.text_node(delimiter, &Formatting::default());
         MarkdownNode::Group(nodes.intercalate(&delim), formatting.into())
     }

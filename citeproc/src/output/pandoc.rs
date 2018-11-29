@@ -1,22 +1,21 @@
-use crate::utils::{ Intercalate, JoinMany };
 use crate::output::Format;
-use crate::style::element::{ Formatting, FontStyle, FontWeight, FontVariant, VerticalAlignment, TextDecoration };
+use crate::style::element::{
+    FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
+};
+use crate::utils::{Intercalate, JoinMany};
 
 extern crate pandoc_types;
-use pandoc_types::definition::*;
 use pandoc_types::definition::Inline::*;
+use pandoc_types::definition::*;
 
-pub struct PandocFormat {
-}
+pub struct PandocFormat {}
 
 impl PandocFormat {
     pub fn new() -> Self {
-        PandocFormat {
-        }
+        PandocFormat {}
     }
 
     fn fmt_vec(&self, inlines: Vec<Inline>, f: &Formatting) -> Option<Inline> {
-
         let mut current: Result<Inline, Vec<Inline>> = Err(inlines);
 
         let maybe = |cur| {
@@ -36,21 +35,20 @@ impl PandocFormat {
         current = match f.font_weight {
             FontWeight::Bold => maybe(current).map(Strong),
             // Light => unimplemented!(),
-            _ => current
+            _ => current,
         };
         current = match f.font_variant {
             FontVariant::SmallCaps => maybe(current).map(SmallCaps),
-            _ => current
+            _ => current,
         };
         current = match f.text_decoration {
-            TextDecoration::Underline => maybe(current)
-                .map(|v| Span(attr_class("underline"), v)),
-            _ => current
+            TextDecoration::Underline => maybe(current).map(|v| Span(attr_class("underline"), v)),
+            _ => current,
         };
         current = match f.vertical_alignment {
             VerticalAlignment::Superscript => maybe(current).map(Superscript),
             VerticalAlignment::Subscript => maybe(current).map(Subscript),
-            _ => current
+            _ => current,
         };
 
         current.ok()
@@ -59,19 +57,14 @@ impl PandocFormat {
 
 impl Format<Vec<Inline>, Vec<Inline>> for PandocFormat {
     fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
-        let fmts: Vec<Inline> = text
-            .split(' ')
-            .map(|s| Str(s.to_owned()))
-            .collect();
+        let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
         fmts.intercalate(&Space)
             .into_iter()
-            .filter_map(|t| {
-                match t {
-                    Space => Some(t),
-                    Str(ref s) if s == "" => None,
-                    _ => Some(self.fmt_vec(vec![t.clone()], f).unwrap_or(t))
-                }
+            .filter_map(|t| match t {
+                Space => Some(t),
+                Str(ref s) if s == "" => None,
+                _ => Some(self.fmt_vec(vec![t.clone()], f).unwrap_or(t)),
             })
             .collect()
     }
@@ -104,15 +97,15 @@ fn attr_class(class: &str) -> Attr {
 }
 
 fn flip_flop_inlines(inlines: &Vec<Inline>, state: &FlipFlopState) -> Vec<Inline> {
-    inlines.into_iter().map(|inl| {
-        flip_flop(inl, state).unwrap_or_else(|| inl.clone())
-    }).collect()
+    inlines
+        .into_iter()
+        .map(|inl| flip_flop(inl, state).unwrap_or_else(|| inl.clone()))
+        .collect()
 }
 
-fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> { 
+fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
     let fl = |ils, st| flip_flop_inlines(ils, st);
     match inline {
-
         Note(ref blocks) => {
             if let Some(Block::Para(ref ils)) = blocks.into_iter().nth(0) {
                 Some(Note(vec![Block::Para(fl(ils, state))]))
@@ -184,11 +177,10 @@ fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
             Some(Link(attr.clone(), subs, t.clone()))
         }
 
-        _ => None
-
+        _ => None,
     }
 
-        // a => a
+    // a => a
 }
 
 #[cfg(test)]
@@ -201,7 +193,10 @@ mod test {
         assert_eq!(f.plain(" ")[0], Space);
         assert_eq!(f.plain("  "), &[Space, Space]);
         assert_eq!(f.plain(" h "), &[Space, Str("h".into()), Space]);
-        assert_eq!(f.plain("  hello "), &[Space, Space, Str("hello".into()), Space]);
+        assert_eq!(
+            f.plain("  hello "),
+            &[Space, Space, Str("hello".into()), Space]
+        );
     }
 
     #[test]

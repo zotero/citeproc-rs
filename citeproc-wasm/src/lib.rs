@@ -19,7 +19,7 @@ extern crate wasm_bindgen;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-extern {
+extern "C" {
     fn alert(s: &str);
 }
 
@@ -27,4 +27,3 @@ extern {
 pub fn parse(style: &str) -> String {
     drive_style("in-memory", &style.to_owned())
 }
-

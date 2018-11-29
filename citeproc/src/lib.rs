@@ -1,8 +1,8 @@
 #![feature(test)]
 
-pub mod style;
 pub mod input;
 pub mod output;
+pub mod style;
 mod utils;
 
 #[macro_use]
@@ -20,10 +20,10 @@ extern crate test;
 
 #[cfg(test)]
 mod tests {
-    use crate::test::{Bencher};
+    use crate::style::drive_style;
+    use crate::test::Bencher;
     use std::fs::File;
     use std::io::prelude::*;
-    use crate::style::drive_style;
 
     #[bench]
     fn bench_build_tree(b: &mut Bencher) {

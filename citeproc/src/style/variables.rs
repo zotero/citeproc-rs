@@ -1,5 +1,5 @@
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Variable {
     /// abstract of the item (e.g. the abstract of a journal article)
     Abstract,
@@ -9,12 +9,15 @@ pub enum Variable {
     Archive,
     /// storage location within an archive (e.g. a box and folder number)
     /// technically the spec says use an underscore, but that's probably a typo.
-    #[strum(serialize="archive_location", serialize="archive-location")]
+    #[strum(
+        serialize = "archive_location",
+        serialize = "archive-location"
+    )]
     ArchiveLocation,
     /// geographic location of the archive,
     ArchivePlace,
     /// issuing or judicial authority (e.g. “USPTO” for a patent, “Fairfax Circuit Court” for a legal case)
-    #[strum(props(csl101="1", cslM="0"))]
+    #[strum(props(csl101 = "1", cslM = "0"))]
     Authority,
     /// active={true} call number (to locate the item in a library)
     CallNumber,
@@ -31,7 +34,7 @@ pub enum Variable {
     /// physical (e.g. size) or temporal (e.g. running time) dimensions of the item
     Dimensions,
     /// Digital Object Identifier (e.g. “10.1128/AEM.02591-07”)
-    #[strum(serialize="DOI")]
+    #[strum(serialize = "DOI")]
     DOI,
     /// name of the related event (e.g. the conference name when citing a conference paper)
     Event,
@@ -50,7 +53,7 @@ pub enum Variable {
     /// keyword(s) or tag(s) attached to the item
     Keyword,
     /// a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
-    #[strum(props(csl101="1", cslM="0"))]
+    #[strum(props(csl101 = "1", cslM = "0"))]
     Locator,
     /// medium description (e.g. “CD”, “DVD”, etc.)
     Medium,
@@ -63,16 +66,16 @@ pub enum Variable {
     /// title of the original version (e.g. “Война и мир”, the untranslated Russian title of “War and Peace”)
     OriginalTitle,
     /// range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-    #[strum(props(csl101="1", cslM="0"))]
+    #[strum(props(csl101 = "1", cslM = "0"))]
     Page,
     /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-    #[strum(props(csl101="1", cslM="0"))]
+    #[strum(props(csl101 = "1", cslM = "0"))]
     PageFirst,
     /// PubMed Central reference number
-    #[strum(serialize="PMCID")]
+    #[strum(serialize = "PMCID")]
     PMCID,
     /// PubMed reference number
-    #[strum(serialize="PMID")]
+    #[strum(serialize = "PMID")]
     PMID,
     /// publisher
     Publisher,
@@ -95,28 +98,28 @@ pub enum Variable {
     /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
     TitleShort,
     ///  URL (e.g. “http://aem.asm.org/cgi/content/full/74/9/2766”)
-    #[strum(serialize="URL")]
+    #[strum(serialize = "URL")]
     URL,
     /// version of the item (e.g. “2.0.9” for a software program)
     Version,
-    /// disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”) 
+    /// disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”)
     YearSuffix,
 
     // CSL-M Additions
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Hereinafter,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     AvailableDate,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Dummy,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     LocatorExtra,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     VolumeTitle,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NumberVariable {
     ChapterNumber,
     CollectionNumber,
@@ -126,25 +129,25 @@ pub enum NumberVariable {
     NumberOfPages,
     NumberOfVolumes,
     Volume,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Locator,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Page,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     PageFirst,
 
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     PublicationNumber,
 
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Supplement,
 
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     Authority,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NameVariable {
     /// author
     Author,
@@ -170,12 +173,12 @@ pub enum NameVariable {
     Recipient,
     /// author of the item reviewed by the current item
     ReviewedAuthor,
-    /// translator 
+    /// translator
     Translator,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum DateVariable {
     /// date the item has been accessed
     Accessed,
@@ -189,10 +192,8 @@ pub enum DateVariable {
     OriginalDate,
     /// date the item (e.g. a manuscript) has been submitted for publication
     Submitted,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     LocatorDate,
-    #[strum(props(csl101="0", cslM="1"))]
+    #[strum(props(csl101 = "0", cslM = "1"))]
     PublicationDate,
 }
-
-

@@ -1,7 +1,7 @@
-use roxmltree::{ TextPos, Node, Error };
-use codespan::{CodeMap, Span, FileMap};
-use codespan_reporting::termcolor::{ StandardStream, ColorChoice };
+use codespan::{CodeMap, FileMap, Span};
+use codespan_reporting::termcolor::{ColorChoice, StandardStream};
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
+use roxmltree::{Error, Node, TextPos};
 use std::num::ParseIntError;
 
 #[derive(Debug, PartialEq)]
@@ -11,7 +11,9 @@ pub struct UnknownAttributeValue {
 
 impl UnknownAttributeValue {
     pub fn new(s: &str) -> Self {
-        UnknownAttributeValue { value: s.to_owned() }
+        UnknownAttributeValue {
+            value: s.to_owned(),
+        }
     }
 }
 
@@ -66,15 +68,18 @@ impl InvalidCsl {
         let str_start = file_map
             .byte_index(
                 (self.text_pos.row - 1 as u32).into(),
-                (self.text_pos.col - 1 as u32).into()
-            ).ok()?;
+                (self.text_pos.col - 1 as u32).into(),
+            )
+            .ok()?;
 
-        Some(Diagnostic::new(self.severity, self.message.clone())
+        Some(
+            Diagnostic::new(self.severity, self.message.clone())
             .with_label(
                 Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
                 .with_message("")
                 // .with_message(self.message.clone()),
-            ))
+            ),
+        )
     }
 }
 
@@ -107,7 +112,6 @@ fn get_pos(e: &Error) -> TextPos {
 }
 
 impl StyleError {
-
     pub fn to_diagnostic(&self, file_map: &FileMap) -> Option<Diagnostic> {
         match *self {
             StyleError::ValidationError(ref e) => e.to_diagnostic(file_map),
@@ -115,16 +119,15 @@ impl StyleError {
                 let pos = get_pos(&e);
 
                 let str_start = file_map
-                    .byte_index(
-                        (pos.row - 1 as u32).into(),
-                        (pos.col - 1 as u32).into()
-                    ).ok()?;
+                    .byte_index((pos.row - 1 as u32).into(), (pos.col - 1 as u32).into())
+                    .ok()?;
 
-                Some(Diagnostic::new(Severity::Error, format!("{}", e))
-                    .with_label(
+                Some(
+                    Diagnostic::new(Severity::Error, format!("{}", e)).with_label(
                         Label::new_primary(Span::from_offset(str_start, (0 as i64).into()))
-                        .with_message("")
-                    ))
+                            .with_message(""),
+                    ),
+                )
             }
         }
     }
@@ -152,4 +155,3 @@ pub fn file_diagnostics<'a>(diagnostics: &[StyleError], filename: &'a str, docum
         }
     }
 }
-

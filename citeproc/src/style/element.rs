@@ -1,13 +1,13 @@
+use crate::style::error::*;
+use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
+use crate::style::terms::LocatorType;
+use crate::style::variables::*;
 use std::fmt;
 use std::str::FromStr;
-use crate::style::variables::*;
-use crate::style::error::*;
-use crate::style::get_attribute::{ GetAttribute, CSL_VERSION };
-use crate::style::terms::{ LocatorType };
 
 // No EnumString; this one is manual for CSL-M
 #[derive(AsRefStr, EnumProperty, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Form {
     Long,
     Short,
@@ -29,7 +29,7 @@ impl Form {
             // "verb" => Ok(Verb),
             // "verb-short" => Ok(VerbShort),
             "symbol" => Ok(Symbol),
-            _ => Err(UnknownAttributeValue::new(s))
+            _ => Err(UnknownAttributeValue::new(s)),
         }
     }
     pub fn from_str_names(s: &str) -> Result<Self, UnknownAttributeValue> {
@@ -42,17 +42,19 @@ impl Form {
             "verb" => Ok(Verb),
             "verb-short" => Ok(VerbShort),
             "symbol" => Ok(Symbol),
-            _ => Err(UnknownAttributeValue::new(s))
+            _ => Err(UnknownAttributeValue::new(s)),
         }
     }
 }
 
 impl Default for Form {
-    fn default() -> Self { Form::Long }
+    fn default() -> Self {
+        Form::Long
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NumericForm {
     Numeric,
     Ordinal,
@@ -61,7 +63,9 @@ pub enum NumericForm {
 }
 
 impl Default for NumericForm {
-    fn default() -> Self { NumericForm::Numeric }
+    fn default() -> Self {
+        NumericForm::Numeric
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -138,34 +142,52 @@ impl fmt::Debug for Formatting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let default = Formatting::default();
         write!(f, "Formatting {{ ");
-        if self.font_style != default.font_style { write!(f, "font_style: {:?}, ", self.font_style); }
-        if self.font_variant != default.font_variant { write!(f, "font_variant: {:?}, ", self.font_variant); }
-        if self.font_weight != default.font_weight { write!(f, "font_weight: {:?}, ", self.font_weight); }
-        if self.text_decoration != default.text_decoration { write!(f, "text_decoration: {:?}, ", self.text_decoration); }
-        if self.vertical_alignment != default.vertical_alignment { write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment); }
-        if self.display != default.display { write!(f, "display: {:?}, ", self.display); }
-        if self.strip_periods != default.strip_periods { write!(f, "strip_periods: {:?}, ", self.strip_periods); }
-        if self.hyperlink != default.hyperlink { write!(f, "hyperlink: {:?}, ", self.hyperlink); }
+        if self.font_style != default.font_style {
+            write!(f, "font_style: {:?}, ", self.font_style);
+        }
+        if self.font_variant != default.font_variant {
+            write!(f, "font_variant: {:?}, ", self.font_variant);
+        }
+        if self.font_weight != default.font_weight {
+            write!(f, "font_weight: {:?}, ", self.font_weight);
+        }
+        if self.text_decoration != default.text_decoration {
+            write!(f, "text_decoration: {:?}, ", self.text_decoration);
+        }
+        if self.vertical_alignment != default.vertical_alignment {
+            write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment);
+        }
+        if self.display != default.display {
+            write!(f, "display: {:?}, ", self.display);
+        }
+        if self.strip_periods != default.strip_periods {
+            write!(f, "strip_periods: {:?}, ", self.strip_periods);
+        }
+        if self.hyperlink != default.hyperlink {
+            write!(f, "hyperlink: {:?}, ", self.hyperlink);
+        }
         write!(f, "}}")
     }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum FormattingDisplay {
     None,
     Block,
     LeftMargin,
     RightInline,
-    Indent
+    Indent,
 }
 
 impl Default for FormattingDisplay {
-    fn default() -> Self { FormattingDisplay::None }
+    fn default() -> Self {
+        FormattingDisplay::None
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum TextCase {
     None,
     Lowercase,
@@ -177,11 +199,13 @@ pub enum TextCase {
 }
 
 impl Default for TextCase {
-    fn default() -> Self { TextCase::None }
+    fn default() -> Self {
+        TextCase::None
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum FontStyle {
     Normal,
     Italic,
@@ -189,22 +213,26 @@ pub enum FontStyle {
 }
 
 impl Default for FontStyle {
-    fn default() -> Self { FontStyle::Normal }
+    fn default() -> Self {
+        FontStyle::Normal
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum FontVariant {
     Normal,
     SmallCaps,
 }
 
 impl Default for FontVariant {
-    fn default() -> Self { FontVariant::Normal }
+    fn default() -> Self {
+        FontVariant::Normal
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum FontWeight {
     Normal,
     Bold,
@@ -212,53 +240,61 @@ pub enum FontWeight {
 }
 
 impl Default for FontWeight {
-    fn default() -> Self { FontWeight::Normal }
+    fn default() -> Self {
+        FontWeight::Normal
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum TextDecoration {
     None,
     Underline,
 }
 
 impl Default for TextDecoration {
-    fn default() -> Self { TextDecoration::None }
+    fn default() -> Self {
+        TextDecoration::None
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 pub enum VerticalAlignment {
-    #[strum(serialize="baseline")]
+    #[strum(serialize = "baseline")]
     Baseline,
-    #[strum(serialize="sup")]
+    #[strum(serialize = "sup")]
     Superscript,
-    #[strum(serialize="sub")]
+    #[strum(serialize = "sub")]
     Subscript,
 }
 
 impl Default for VerticalAlignment {
-    fn default() -> Self { VerticalAlignment::Baseline }
+    fn default() -> Self {
+        VerticalAlignment::Baseline
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Delimiter(pub String);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Plural {
     Contextual,
     Always,
     Never,
 }
 impl Default for Plural {
-    fn default() -> Self { Plural::Contextual }
+    fn default() -> Self {
+        Plural::Contextual
+    }
 }
 
 #[derive(Debug, EnumProperty, Eq, Clone, PartialEq)]
 pub enum LabelVariable {
     Locator,
     Page,
-    Number(NumberVariable)
+    Number(NumberVariable),
 }
 
 impl FromStr for LabelVariable {
@@ -268,7 +304,7 @@ impl FromStr for LabelVariable {
         match s {
             "locator" => Ok(Locator),
             "page" => Ok(Page),
-            x => Ok(Number(NumberVariable::get_attr(x, CSL_VERSION)?))
+            x => Ok(Number(NumberVariable::get_attr(x, CSL_VERSION)?)),
         }
     }
 }
@@ -279,7 +315,7 @@ impl AsRef<str> for LabelVariable {
         match *self {
             Locator => "locator",
             Page => "page",
-            Number(ref n) => n.as_ref()
+            Number(ref n) => n.as_ref(),
         }
     }
 }
@@ -297,7 +333,7 @@ pub struct Condition {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Match {
     Any,
     All,
@@ -305,7 +341,9 @@ pub enum Match {
     // Nand,
 }
 impl Default for Match {
-    fn default() -> Self { Match::Any }
+    fn default() -> Self {
+        Match::Any
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -333,11 +371,18 @@ pub enum Element {
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
     // <cs:names>
-    Names(Vec<NameVariable>, Vec<Name>, Option<NameLabel>, Formatting, Delimiter, Option<Substitute>),
+    Names(
+        Vec<NameVariable>,
+        Vec<Name>,
+        Option<NameLabel>,
+        Formatting,
+        Delimiter,
+        Option<Substitute>,
+    ),
     // <cs:group>
     Group(Formatting, Delimiter, Vec<Element>), // done
     // <cs:date>
-    Date(Date)
+    Date(Date),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -349,7 +394,7 @@ pub struct NameLabel {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
     AfterInvertedName,
@@ -358,28 +403,34 @@ pub enum DelimiterPrecedes {
 }
 
 impl Default for DelimiterPrecedes {
-    fn default() -> Self { DelimiterPrecedes::Contextual }
+    fn default() -> Self {
+        DelimiterPrecedes::Contextual
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NameForm {
     Long,
     Short,
     Count,
 }
 impl Default for NameForm {
-    fn default() -> Self { NameForm::Long }
+    fn default() -> Self {
+        NameForm::Long
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NameAsSortOrder {
     First,
     All,
 }
 impl Default for NameAsSortOrder {
-    fn default() -> Self { NameAsSortOrder::All }
+    fn default() -> Self {
+        NameAsSortOrder::All
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -403,7 +454,7 @@ pub struct Name {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum NamePartName {
     Given,
     Family,
@@ -420,16 +471,18 @@ pub struct NamePart {
 pub struct Substitute(pub Vec<Element>);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum GivenNameDisambiguationRule {
     AllNames,
     AllNamesWithInitials,
     PrimaryName,
     PrimaryNameWithInitials,
-    ByCite
+    ByCite,
 }
 impl Default for GivenNameDisambiguationRule {
-    fn default() -> Self { GivenNameDisambiguationRule::ByCite }
+    fn default() -> Self {
+        GivenNameDisambiguationRule::ByCite
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -456,28 +509,29 @@ pub struct MacroMap {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum StyleClass {
     InText,
-    Note
+    Note,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Info {
-}
+pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
     pub macros: Vec<MacroMap>,
     pub citation: Citation,
-    pub info: Info
+    pub info: Info,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct RangeDelimiter(pub String);
 
 impl Default for RangeDelimiter {
-    fn default() -> Self { RangeDelimiter("".to_owned()) }
+    fn default() -> Self {
+        RangeDelimiter("".to_owned())
+    }
 }
 
 impl std::convert::AsRef<str> for RangeDelimiter {
@@ -486,7 +540,6 @@ impl std::convert::AsRef<str> for RangeDelimiter {
     }
 }
 
-
 impl FromStr for RangeDelimiter {
     type Err = UnknownAttributeValue;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -494,9 +547,8 @@ impl FromStr for RangeDelimiter {
     }
 }
 
-
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum DateParts {
     YearMonthDay,
     YearMonth,
@@ -504,11 +556,13 @@ pub enum DateParts {
 }
 
 impl Default for DateParts {
-    fn default() -> Self { DateParts::YearMonthDay }
+    fn default() -> Self {
+        DateParts::YearMonthDay
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum DatePartName {
     Day,
     Month,
@@ -516,49 +570,56 @@ pub enum DatePartName {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum DayForm { 
+#[strum(serialize_all = "kebab_case")]
+pub enum DayForm {
     Numeric,
     NumericLeadingZeros,
     Ordinal,
 }
 impl Default for DayForm {
-    fn default() -> Self { DayForm::Numeric }
+    fn default() -> Self {
+        DayForm::Numeric
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum MonthForm { 
+#[strum(serialize_all = "kebab_case")]
+pub enum MonthForm {
     Long,
     Short,
     Numeric,
     NumericLeadingZeros,
 }
 impl Default for MonthForm {
-    fn default() -> Self { MonthForm::Long }
+    fn default() -> Self {
+        MonthForm::Long
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum YearForm { 
+#[strum(serialize_all = "kebab_case")]
+pub enum YearForm {
     Long,
     Short,
 }
 impl Default for YearForm {
-    fn default() -> Self { YearForm::Long }
+    fn default() -> Self {
+        YearForm::Long
+    }
 }
 
-
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
-pub enum DateForm { 
+#[strum(serialize_all = "kebab_case")]
+pub enum DateForm {
     Text,
     Numeric,
-    #[strum(serialize="")]
+    #[strum(serialize = "")]
     NotSet,
 }
 impl Default for DateForm {
-    fn default() -> Self { DateForm::NotSet }
+    fn default() -> Self {
+        DateForm::NotSet
+    }
 }
 
 #[derive(Debug, Display, Eq, Clone, PartialEq)]
@@ -590,10 +651,10 @@ pub struct Date {
 
 #[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
-  Standard(Variable),
-  Name(NameVariable),
-  Date(DateVariable),
-  Number(NumberVariable),
+    Standard(Variable),
+    Name(NameVariable),
+    Date(DateVariable),
+    Number(NumberVariable),
 }
 
 impl FromStr for AnyVariable {
@@ -614,7 +675,7 @@ impl FromStr for AnyVariable {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum Position {
     First,
     Ibid,
@@ -625,16 +686,16 @@ pub enum Position {
 
 /// http://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum PageRangeFormat {
     Chicago,
     Expanded,
     Minimal,
-    MinimalTwo
+    MinimalTwo,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all="kebab_case")]
+#[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,
     ArticleMagazine,
@@ -652,20 +713,20 @@ pub enum CslType {
     Graphic,
     Interview,
     Legislation,
-    #[strum(serialize="legal_case")]
+    #[strum(serialize = "legal_case")]
     LegalCase,
     Manuscript,
     Map,
-    #[strum(serialize="motion_picture")]
+    #[strum(serialize = "motion_picture")]
     MotionPicture,
-    #[strum(serialize="musical_score")]
+    #[strum(serialize = "musical_score")]
     MusicalScore,
     Pamphlet,
     PaperConference,
     Patent,
     Post,
     PostWeblog,
-    #[strum(serialize="personal_communication")]
+    #[strum(serialize = "personal_communication")]
     PersonalCommunication,
     Report,
     Review,
@@ -676,5 +737,3 @@ pub enum CslType {
     Treaty,
     Webpage,
 }
-
-
