@@ -6,7 +6,7 @@ use crate::style::get_attribute::{ GetAttribute, CSL_VERSION };
 use crate::style::terms::{ LocatorType };
 
 // No EnumString; this one is manual for CSL-M
-#[derive(AsRefStr, EnumProperty, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="snake_case")]
 pub enum Form {
     Long,
@@ -51,7 +51,7 @@ impl Default for Form {
     fn default() -> Self { Form::Long }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NumericForm {
     Numeric,
@@ -64,7 +64,7 @@ impl Default for NumericForm {
     fn default() -> Self { NumericForm::Numeric }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Affixes {
     pub prefix: String,
     pub suffix: String,
@@ -79,7 +79,7 @@ impl Default for Affixes {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, Clone, PartialEq)]
 pub struct Formatting {
     pub font_style: FontStyle,
     pub font_variant: FontVariant,
@@ -91,6 +91,19 @@ pub struct Formatting {
     // TODO: refactor
     pub strip_periods: bool,
     pub hyperlink: String,
+}
+
+impl Formatting {
+    pub fn bold() -> Self {
+        let mut f = Formatting::default();
+        f.font_weight = FontWeight::Bold;
+        f
+    }
+    pub fn italic() -> Self {
+        let mut f = Formatting::default();
+        f.font_style = FontStyle::Italic;
+        f
+    }
 }
 
 impl Default for Formatting {
@@ -137,7 +150,7 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FormattingDisplay {
     None,
@@ -151,7 +164,7 @@ impl Default for FormattingDisplay {
     fn default() -> Self { FormattingDisplay::None }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum TextCase {
     None,
@@ -167,7 +180,7 @@ impl Default for TextCase {
     fn default() -> Self { TextCase::None }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontStyle {
     Normal,
@@ -179,7 +192,7 @@ impl Default for FontStyle {
     fn default() -> Self { FontStyle::Normal }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontVariant {
     Normal,
@@ -190,7 +203,7 @@ impl Default for FontVariant {
     fn default() -> Self { FontVariant::Normal }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum FontWeight {
     Normal,
@@ -202,7 +215,7 @@ impl Default for FontWeight {
     fn default() -> Self { FontWeight::Normal }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum TextDecoration {
     None,
@@ -213,13 +226,13 @@ impl Default for TextDecoration {
     fn default() -> Self { TextDecoration::None }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 pub enum VerticalAlignment {
     #[strum(serialize="baseline")]
     Baseline,
-    #[strum(serialize="sup", serialize="superscript")]
+    #[strum(serialize="sup")]
     Superscript,
-    #[strum(serialize="sub", serialize="subscript")]
+    #[strum(serialize="sub")]
     Subscript,
 }
 
@@ -227,10 +240,10 @@ impl Default for VerticalAlignment {
     fn default() -> Self { VerticalAlignment::Baseline }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Delimiter(pub String);
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Plural {
     Contextual,
@@ -241,7 +254,7 @@ impl Default for Plural {
     fn default() -> Self { Plural::Contextual }
 }
 
-#[derive(Debug, EnumProperty, Eq, PartialEq)]
+#[derive(Debug, EnumProperty, Eq, Clone, PartialEq)]
 pub enum LabelVariable {
     Locator,
     Page,
@@ -271,7 +284,7 @@ impl AsRef<str> for LabelVariable {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Condition {
     pub match_type: Match,
     pub disambiguate: bool,
@@ -283,7 +296,7 @@ pub struct Condition {
     pub is_uncertain_date: Vec<DateVariable>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Match {
     Any,
@@ -295,15 +308,15 @@ impl Default for Match {
     fn default() -> Self { Match::Any }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct IfThen(pub Condition, pub Vec<Element>);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Else(pub Vec<Element>);
 
 type Quotes = bool;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     // <cs:choose>
     Choose(IfThen, Vec<IfThen>, Else),
@@ -327,7 +340,7 @@ pub enum Element {
     Date(Date)
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
     pub form: Form,
     pub formatting: Formatting,
@@ -335,7 +348,7 @@ pub struct NameLabel {
     pub plural: Plural,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
@@ -348,7 +361,7 @@ impl Default for DelimiterPrecedes {
     fn default() -> Self { DelimiterPrecedes::Contextual }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NameForm {
     Long,
@@ -359,7 +372,7 @@ impl Default for NameForm {
     fn default() -> Self { NameForm::Long }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NameAsSortOrder {
     First,
@@ -369,7 +382,7 @@ impl Default for NameAsSortOrder {
     fn default() -> Self { NameAsSortOrder::All }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Name {
     pub and: String,
     pub delimiter: Delimiter,
@@ -389,24 +402,24 @@ pub struct Name {
     pub affixes: Affixes,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NamePartName {
     Given,
     Family,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamePart {
     pub name: NamePartName,
     pub text_case: TextCase,
     pub formatting: Formatting,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Substitute(pub Vec<Element>);
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum GivenNameDisambiguationRule {
     AllNames,
@@ -419,7 +432,7 @@ impl Default for GivenNameDisambiguationRule {
     fn default() -> Self { GivenNameDisambiguationRule::ByCite }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Citation {
     pub disambiguate_add_names: bool,
     pub disambiguate_add_givenname: bool,
@@ -428,7 +441,7 @@ pub struct Citation {
     pub layout: Layout,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
     pub formatting: Formatting,
     pub affixes: Affixes,
@@ -436,23 +449,23 @@ pub struct Layout {
     pub elements: Vec<Element>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct MacroMap {
     pub name: String,
     pub elements: Vec<Element>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum StyleClass {
     InText,
     Note
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Info {
 }
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
     pub macros: Vec<MacroMap>,
@@ -460,7 +473,7 @@ pub struct Style {
     pub info: Info
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct RangeDelimiter(pub String);
 
 impl Default for RangeDelimiter {
@@ -482,7 +495,7 @@ impl FromStr for RangeDelimiter {
 }
 
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DateParts {
     YearMonthDay,
@@ -494,7 +507,7 @@ impl Default for DateParts {
     fn default() -> Self { DateParts::YearMonthDay }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DatePartName {
     Day,
@@ -502,7 +515,7 @@ pub enum DatePartName {
     Year,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DayForm { 
     Numeric,
@@ -513,7 +526,7 @@ impl Default for DayForm {
     fn default() -> Self { DayForm::Numeric }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum MonthForm { 
     Long,
@@ -525,7 +538,7 @@ impl Default for MonthForm {
     fn default() -> Self { MonthForm::Long }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum YearForm { 
     Long,
@@ -536,7 +549,7 @@ impl Default for YearForm {
 }
 
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DateForm { 
     Text,
@@ -548,14 +561,14 @@ impl Default for DateForm {
     fn default() -> Self { DateForm::NotSet }
 }
 
-#[derive(Debug, Display, Eq, PartialEq)]
+#[derive(Debug, Display, Eq, Clone, PartialEq)]
 pub enum DatePartForm {
     Day(DayForm),
     Month(MonthForm),
     Year(YearForm),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct DatePart {
     pub form: DatePartForm,
     pub name: DatePartName,
@@ -565,7 +578,7 @@ pub struct DatePart {
     pub range_delimiter: RangeDelimiter,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Date {
     pub form: DateForm,
     pub date_parts_attr: DateParts,
@@ -575,7 +588,7 @@ pub struct Date {
     pub formatting: Formatting,
 }
 
-#[derive(Debug, Eq, PartialEq, EnumProperty)]
+#[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
   Standard(Variable),
   Name(NameVariable),
@@ -600,7 +613,7 @@ impl FromStr for AnyVariable {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Position {
     First,
@@ -611,7 +624,7 @@ pub enum Position {
 }
 
 /// http://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum PageRangeFormat {
     Chicago,
@@ -620,7 +633,7 @@ pub enum PageRangeFormat {
     MinimalTwo
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum CslType {
     Article,

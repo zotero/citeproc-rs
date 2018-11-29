@@ -307,7 +307,7 @@ impl FromNode for Substitute {
 
 fn max1_child<T: FromNode>(parent_tag: &str, child_tag: &str, els: Children) -> Result<Option<T>, InvalidCsl> {
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
-    if !subst_els.is_empty() {
+    if subst_els.len() > 1 {
         return Err(InvalidCsl::new(&subst_els[1], format!("There can only be one <{}> in a <{}> block.", child_tag, parent_tag)))?;
     }
     let substs: Result<Vec<_>, _> = subst_els.iter().map(|el| T::from_node(&el)).collect();
@@ -424,7 +424,7 @@ impl FromNode for Element {
 pub fn get_toplevel<'a, 'd: 'a>(root: &Node<'a, 'd>, nodename: &'static str) -> Result<Node<'a, 'd>, InvalidCsl> {
     let matches = root.children().filter(|n| n.has_tag_name(nodename))
         .collect::<Vec<Node<'a, 'd>>>();
-    if !matches.is_empty() {
+    if matches.len() > 1 {
         Err(InvalidCsl::new(&root, format!("Cannot have more than one <{}>", nodename)))
     } else {
         // move matches into its first item

@@ -8,16 +8,23 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+# wasm-pack has no way of selecting feature sets, so this is wasm's
 default = ["console_error_panic_hook"]
+pandoc = ["pandoc_types"]
 
 [dependencies]
 roxmltree = "0.3.0"
-clap = "*"
+clap = "2.32.0"
 codespan = "0.2.0"
 codespan-reporting = "0.2.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
 cfg-if = "0.1.2"
+typed-arena = "1.4.1"
+pandoc_types = { version = "0.2", optional = true }
+serde_derive = "1.0.80"
+serde = "1.0.80"
+serde_json = "1.0.33"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

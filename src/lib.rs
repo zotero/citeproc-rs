@@ -1,10 +1,17 @@
 #![feature(test)]
 
 pub mod style;
+pub mod input;
+pub mod output;
 mod utils;
 
 #[macro_use]
 extern crate strum_macros;
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 extern crate cfg_if;
 use cfg_if::cfg_if;
@@ -45,6 +52,7 @@ cfg_if! {
     }
 }
 
+#[cfg(test)]
 extern crate test;
 
 #[cfg(test)]

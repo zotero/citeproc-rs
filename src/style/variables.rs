@@ -1,4 +1,4 @@
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Variable {
     /// abstract of the item (e.g. the abstract of a journal article)
@@ -115,7 +115,7 @@ pub enum Variable {
     VolumeTitle,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NumberVariable {
     ChapterNumber,
@@ -143,7 +143,7 @@ pub enum NumberVariable {
     Authority,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum NameVariable {
     /// author
@@ -174,7 +174,7 @@ pub enum NameVariable {
     Translator,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum DateVariable {
     /// date the item has been accessed

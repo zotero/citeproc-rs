@@ -2,7 +2,7 @@ use crate::style::error::*;
 use std::str::FromStr;
 
 /// http://docs.citationstyles.org/en/stable/specification.html#locators
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum LocatorType {
     Book,
@@ -24,7 +24,7 @@ pub enum LocatorType {
 }
 
 /// http://docs.citationstyles.org/en/stable/specification.html#quotes
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum QuotationMarks {
     OpenQuote,
@@ -33,7 +33,7 @@ pub enum QuotationMarks {
     CloseInnerQuote,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Seasons {
     Season01,
@@ -42,7 +42,7 @@ pub enum Seasons {
     Season04,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Miscellaneous {
     Accessed,
@@ -76,7 +76,7 @@ pub enum Miscellaneous {
 }
 
 /// http://docs.citationstyles.org/en/stable/specification.html#months
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Months {
     Month01,
@@ -95,7 +95,7 @@ pub enum Months {
 
 
 /// http://docs.citationstyles.org/en/stable/specification.html#quotes
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ordinals {
     Ordinal,
     Ordinal00ThroughOrdinal99(u32),
