@@ -1,3 +1,14 @@
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(feature = "thread")] {
+        #[allow(dead_code)]
+        pub type Rc<T> = std::sync::Arc<T>;
+    } else {
+        #[allow(dead_code)]
+        pub type Rc<T> = std::rc::Rc<T>;
+    }
+}
+
 pub trait Intercalate<T> {
     fn intercalate(&self, sep: &T) -> Vec<T>;
 }

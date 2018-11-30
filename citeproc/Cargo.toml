@@ -15,6 +15,7 @@ path = "src/main.rs"
 [features]
 default = []
 flame_it = ["flame", "flamer"]
+thread = []
 # cli = ["clap"]
 
 [dependencies]

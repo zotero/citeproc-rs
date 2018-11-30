@@ -1,7 +1,6 @@
 use clap::{App, Arg};
 
 extern crate citeproc;
-use citeproc::output::pandoc::PandocFormat;
 use citeproc::output::plain::PlainTextFormat;
 use citeproc::proc::*;
 use citeproc::style::error::StyleError;
@@ -23,7 +22,7 @@ fn parse(path: &str) -> Result<(), StyleError> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), StyleError> {
     let matches = App::new("citeproc")
         .version("0.0.0")
         .author("Cormac Relf")
@@ -37,14 +36,15 @@ fn main() {
         )
         .get_matches();
     if let Some(path) = matches.value_of("csl") {
-        parse(path);
+        parse(path)?;
     }
+    Ok(())
 }
 
 #[cfg(not(feature = "flame_it"))]
 mod flame_it {
     use citeproc::style::element::Style;
-    pub fn flame_it(style: &Style) {}
+    pub fn flame_it(_style: &Style) {}
 }
 #[cfg(feature = "flame_it")]
 mod flame_it {

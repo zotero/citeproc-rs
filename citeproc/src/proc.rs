@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use crate::output::Format;
 use crate::style::element::{
     Choose as ChooseEl, Date as DateEl, Element, Formatting, Layout as LayoutEl, Names as NamesEl,
@@ -6,6 +5,7 @@ use crate::style::element::{
 };
 use serde::Serialize;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum YearSuffixHook {

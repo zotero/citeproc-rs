@@ -17,6 +17,7 @@ impl UnknownAttributeValue {
     }
 }
 
+#[derive(Debug)]
 pub enum StyleError {
     ValidationError(InvalidCsl),
     ParseError(Error),

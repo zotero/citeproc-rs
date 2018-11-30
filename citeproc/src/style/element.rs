@@ -1,16 +1,30 @@
-use std::rc::Rc;
-
 use crate::style::error::*;
 use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 use std::fmt;
+use std::rc::Rc;
 use std::str::FromStr;
 
-// No EnumString; this one is manual for CSL-M
-#[derive(AsRefStr, EnumProperty, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "snake_case")]
 pub enum Form {
+    Long,
+    Short,
+    Count,
+    Symbol,
+    NotSet,
+}
+
+impl Default for Form {
+    fn default() -> Self {
+        Form::Long
+    }
+}
+
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "snake_case")]
+pub enum NameLabelForm {
     Long,
     Short,
     Count,
@@ -20,38 +34,9 @@ pub enum Form {
     NotSet,
 }
 
-impl Form {
-    pub fn from_str(s: &str) -> Result<Self, UnknownAttributeValue> {
-        use self::Form::*;
-        match s {
-            "long" => Ok(Long),
-            "short" => Ok(Short),
-            "count" => Ok(Count),
-            // not available usually
-            // "verb" => Ok(Verb),
-            // "verb-short" => Ok(VerbShort),
-            "symbol" => Ok(Symbol),
-            _ => Err(UnknownAttributeValue::new(s)),
-        }
-    }
-    pub fn from_str_names(s: &str) -> Result<Self, UnknownAttributeValue> {
-        use self::Form::*;
-        match s {
-            "long" => Ok(Long),
-            "short" => Ok(Short),
-            "count" => Ok(Count),
-            // available inside names block
-            "verb" => Ok(Verb),
-            "verb-short" => Ok(VerbShort),
-            "symbol" => Ok(Symbol),
-            _ => Err(UnknownAttributeValue::new(s)),
-        }
-    }
-}
-
-impl Default for Form {
+impl Default for NameLabelForm {
     fn default() -> Self {
-        Form::Long
+        NameLabelForm::Long
     }
 }
 
@@ -395,7 +380,7 @@ pub enum Element {
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
-    pub form: Form,
+    pub form: NameLabelForm,
     pub formatting: Formatting,
     pub delimiter: Delimiter,
     pub plural: Plural,

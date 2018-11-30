@@ -169,7 +169,7 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
             attribute_required(node, "variable")?,
             formatting,
             affixes,
-            attribute_optional2(node, "form", Form::from_str)?,
+            attribute_optional(node, "form")?,
             Delimiter::from_node(node)?,
             attribute_bool(node, "quotes", false)?,
         ));
@@ -185,7 +185,7 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
     if let Some(t) = node.attribute("term") {
         return Ok(Term(
             t.to_owned(),
-            attribute_optional2(node, "form", Form::from_str)?,
+            attribute_optional(node, "form")?,
             formatting,
             affixes,
             attribute_bool(node, "plural", false)?,
@@ -197,7 +197,7 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
 fn label_el(node: &Node) -> Result<Element, InvalidCsl> {
     Ok(Element::Label(
         attribute_required(node, "variable")?,
-        attribute_optional2(node, "form", Form::from_str)?,
+        attribute_optional(node, "form")?,
         Formatting::from_node(node)?,
         Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
@@ -331,7 +331,7 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
 impl FromNode for NameLabel {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl> {
         Ok(NameLabel {
-            form: attribute_optional2(node, "form", Form::from_str_names)?,
+            form: attribute_optional(node, "form")?,
             formatting: Formatting::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             plural: attribute_optional(node, "plural")?,

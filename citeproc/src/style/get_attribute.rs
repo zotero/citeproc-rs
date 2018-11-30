@@ -115,17 +115,3 @@ pub fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T
         None => Ok(vec![]),
     }
 }
-
-pub fn attribute_optional2<T: Default, F: FnOnce(&str) -> Result<T, UnknownAttributeValue>>(
-    node: &Node,
-    attr: &str,
-    result: F,
-) -> Result<T, InvalidCsl> {
-    match node.attribute(attr) {
-        Some(a) => match result(a) {
-            Ok(val) => Ok(val),
-            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
-        },
-        None => Ok(T::default()),
-    }
-}
