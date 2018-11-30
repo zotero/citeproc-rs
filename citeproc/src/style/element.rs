@@ -355,9 +355,22 @@ pub struct Else(pub Vec<Element>);
 type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Names(
+    pub Vec<NameVariable>,
+    pub Vec<Name>,
+    pub Option<NameLabel>,
+    pub Formatting,
+    pub Delimiter,
+    pub Option<Substitute>,
+);
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
+
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     // <cs:choose>
-    Choose(IfThen, Vec<IfThen>, Else),
+    Choose(Choose),
     // <cs:text>
     Macro(String, Formatting, Affixes, Quotes),
     // <cs:text>
@@ -371,14 +384,7 @@ pub enum Element {
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
     // <cs:names>
-    Names(
-        Vec<NameVariable>,
-        Vec<Name>,
-        Option<NameLabel>,
-        Formatting,
-        Delimiter,
-        Option<Substitute>,
-    ),
+    Names(Names),
     // <cs:group>
     Group(Formatting, Delimiter, Vec<Element>), // done
     // <cs:date>
@@ -433,7 +439,7 @@ impl Default for NameAsSortOrder {
     }
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Eq, Clone, PartialEq)]
 pub struct Name {
     pub and: String,
     pub delimiter: Delimiter,
@@ -451,6 +457,12 @@ pub struct Name {
     pub sort_separator: String,
     pub formatting: Formatting,
     pub affixes: Affixes,
+}
+
+impl fmt::Debug for Name {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Name {{ .. }}")
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]

@@ -29,6 +29,19 @@
   </macro>
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
+      <group delimiter=" & ">
+        <group delimiter="-">
+          <text value="yeah" />
+          <text value="the" />
+          <text value="boys" />
+        </group>
+        <group delimiter="-">
+          <text value="never" />
+          <text value="stop" />
+          <text value="never" />
+          <text value="stopping" />
+        </group>
+      </group>
       <group delimiter=", ">
         <text value="citation" />
         <number variable="issue" />

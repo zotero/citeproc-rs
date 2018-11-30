@@ -13,7 +13,9 @@ cfg_if! {
     }
 }
 
-use citeproc::style::drive_style;
+use citeproc::output::plain::PlainTextFormat;
+use citeproc::proc::proc_intermediate;
+use citeproc::style::build_style;
 
 extern crate wasm_bindgen;
 use wasm_bindgen::prelude::*;
@@ -25,5 +27,12 @@ extern "C" {
 
 #[wasm_bindgen]
 pub fn parse(style: &str) -> String {
-    drive_style("in-memory", &style.to_owned())
+    let s = build_style(&style.to_owned());
+    if let Ok(style) = s {
+        let fmt = PlainTextFormat::new();
+        proc_intermediate(&style, &fmt);
+        "done!".into()
+    } else {
+        "failed".into()
+    }
 }

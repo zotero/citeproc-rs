@@ -1,9 +1,19 @@
 #![feature(test)]
+#![cfg_attr(feature = "flame_it", feature(proc_macro_hygiene))]
+
+#[cfg(feature = "flame_it")]
+extern crate flame;
+#[cfg(feature = "flame_it")]
+#[macro_use]
+extern crate flamer;
 
 pub mod input;
 pub mod output;
 pub mod style;
 mod utils;
+
+#[cfg_attr(feature = "flame_it", flame)]
+pub mod proc;
 
 #[macro_use]
 extern crate strum_macros;
@@ -38,12 +48,13 @@ mod tests {
         });
     }
 
-    #[bench]
-    fn bench_fail(b: &mut Bencher) {
-        let path = "path";
-        let contents = "<content></content>".to_owned();
-        b.iter(|| {
-            drive_style(path, &contents);
-        });
-    }
+    // #[bench]
+    // fn bench_fail(b: &mut Bencher) {
+    //     let path = "path";
+    //     let contents = "<content></content>".to_owned();
+    //     b.iter(|| {
+    //         drive_style(path, &contents);
+    //     });
+    // }
+
 }

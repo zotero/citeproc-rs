@@ -1,7 +1,6 @@
 mod formatter;
 pub use self::formatter::Format;
 
-#[cfg(feature = "pandoc")]
 pub mod pandoc;
 
 pub mod markdown;

@@ -320,7 +320,7 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
     let _if = if_block
         .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
 
-    Ok(Element::Choose(_if, elseifs, else_block))
+    Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
 
 impl FromNode for NameLabel {
@@ -382,14 +382,14 @@ fn names_el(node: &Node) -> Result<Element, InvalidCsl> {
     let label = max1_child("names", "label", node.children())?;
     let substitute = max1_child("names", "substitute", node.children())?;
 
-    Ok(Element::Names(
+    Ok(Element::Names(Names(
         attribute_array(node, "variable")?,
         names,
         label,
         Formatting::from_node(node)?,
         Delimiter::from_node(node)?,
         substitute,
-    ))
+    )))
 }
 
 impl IsOnNode for TextCase {
