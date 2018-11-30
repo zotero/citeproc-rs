@@ -1,5 +1,5 @@
+use std::rc::Rc;
 use crate::output::Format;
-use crate::style::element;
 use crate::style::element::{
     Choose as ChooseEl, Date as DateEl, Element, Formatting, Layout as LayoutEl, Names as NamesEl,
     Style,
@@ -9,7 +9,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum YearSuffixHook {
-    Date(DateEl),
+    Date(Rc<DateEl>),
     Explicit(),
 }
 
@@ -22,11 +22,11 @@ where
     Rendered(T),
     // the name block,
     // the current render
-    Names(NamesEl, T),
+    Names(Rc<NamesEl>, T),
     // a single <if disambiguate="true"> means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
     // the current render
-    ConditionalDisamb(ChooseEl, Vec<Intermediate<T>>),
+    ConditionalDisamb(Rc<ChooseEl>, Vec<Intermediate<T>>),
     YearSuffix(YearSuffixHook, T),
 
     // Think:
@@ -65,19 +65,19 @@ pub fn proc_intermediate<T: Debug, O: Serialize>(
 
 // Levels 1-3 will also have to update the ConditionalDisamb's current render
 
-fn disamb_1() {
+fn _disamb_1() {
     unimplemented!()
 }
 
-fn disamb_2() {
+fn _disamb_2() {
     unimplemented!()
 }
 
-fn disamb_3() {
+fn _disamb_3() {
     unimplemented!()
 }
 
-fn disamb_4() {
+fn _disamb_4() {
     unimplemented!()
 }
 
@@ -95,7 +95,7 @@ impl Proc for LayoutEl {
         fmt: &impl Format<T, O>,
     ) -> Intermediate<T> {
         let f = &self.formatting;
-        let af = &self.affixes;
+        let _af = &self.affixes;
         let d = &self.delimiter;
         let els = &self.elements;
         let mut dedup = vec![];
@@ -133,14 +133,14 @@ impl Proc for Element {
     ) -> Intermediate<T> {
         let null_f = Formatting::default();
         match *self {
-            Element::Choose(ref ch) => {
+            Element::Choose(ref _ch) => {
                 // TODO: work out if disambiguate appears on the conditions
                 Rendered(fmt.plain("choose"))
             }
-            Element::Macro(ref name, ref f, ref af, ref quo) => {
+            Element::Macro(ref name, ref f, ref _af, ref _quo) => {
                 Rendered(fmt.text_node(&format!("(macro {})", name), &f))
             }
-            Element::Const(ref val, ref f, ref af, ref quo) => Intermediate::Rendered(fmt.group(
+            Element::Const(ref val, ref f, ref af, ref _quo) => Intermediate::Rendered(fmt.group(
                 &[
                     fmt.plain(&af.prefix),
                     fmt.text_node(&val, &f),
@@ -149,7 +149,7 @@ impl Proc for Element {
                 "",
                 &null_f,
             )),
-            Element::Variable(ref var, ref f, ref af, ref form, ref del, ref quo) => {
+            Element::Variable(ref var, ref f, ref af, ref _form, ref _del, ref _quo) => {
                 Intermediate::Rendered(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
@@ -160,7 +160,7 @@ impl Proc for Element {
                     &null_f,
                 ))
             }
-            Element::Term(ref term, ref form, ref f, ref af, ref pl) => {
+            Element::Term(ref term, ref _form, ref f, ref af, ref _pl) => {
                 Intermediate::Rendered(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
@@ -171,7 +171,7 @@ impl Proc for Element {
                     &null_f,
                 ))
             }
-            Element::Label(ref var, ref form, ref f, ref af, ref pl) => {
+            Element::Label(ref var, ref _form, ref f, ref af, ref _pl) => {
                 Intermediate::Rendered(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
@@ -182,7 +182,7 @@ impl Proc for Element {
                     &null_f,
                 ))
             }
-            Element::Number(ref var, ref form, ref f, ref af, ref pl) => {
+            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
                 Intermediate::Rendered(fmt.group(
                     &[
                         fmt.plain(&af.prefix),

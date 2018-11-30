@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 pub mod element;
 pub mod error;
 mod get_attribute;
@@ -23,6 +25,9 @@ where
     Self: Sized,
 {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl>;
+    fn from_node_rc(node: &Node) -> Result<Rc<Self>, InvalidCsl> {
+        Ok(Rc::new(Self::from_node(node)?))
+    }
 }
 
 impl FromNode for Affixes {
@@ -120,7 +125,7 @@ impl FromNode for Citation {
                 "disambiguate-add-year-suffix",
                 false,
             )?,
-            layout: Layout::from_node(&layout_node)?,
+            layout: Layout::from_node_rc(&layout_node)?,
         })
     }
 }
@@ -213,7 +218,7 @@ fn group_el(node: &Node) -> Result<Element, InvalidCsl> {
     let elements: Result<Vec<_>, _> = node
         .children()
         .filter(|n| n.is_element())
-        .map(|el| Element::from_node(&el))
+        .map(|el| Element::from_node_rc(&el))
         .collect();
     Ok(Element::Group(
         Formatting::from_node(node)?,
@@ -227,7 +232,7 @@ impl FromNode for Else {
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el))
+            .map(|el| Element::from_node_rc(&el))
             .collect();
         Ok(Else(elements?))
     }
@@ -259,7 +264,7 @@ impl FromNode for IfThen {
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el))
+            .map(|el| Element::from_node_rc(&el))
             .collect();
         Ok(IfThen(Condition::from_node(node)?, elements?))
     }
@@ -320,7 +325,7 @@ fn choose_el(node: &Node) -> Result<Element, InvalidCsl> {
     let _if = if_block
         .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
 
-    Ok(Element::Choose(Choose(_if, elseifs, else_block)))
+    Ok(Element::Choose(Rc::new(Choose(_if, elseifs, else_block))))
 }
 
 impl FromNode for NameLabel {
@@ -382,14 +387,14 @@ fn names_el(node: &Node) -> Result<Element, InvalidCsl> {
     let label = max1_child("names", "label", node.children())?;
     let substitute = max1_child("names", "substitute", node.children())?;
 
-    Ok(Element::Names(Names(
+    Ok(Element::Names(Rc::new(Names(
         attribute_array(node, "variable")?,
         names,
         label,
         Formatting::from_node(node)?,
         Delimiter::from_node(node)?,
         substitute,
-    )))
+    ))))
 }
 
 impl IsOnNode for TextCase {
@@ -476,7 +481,7 @@ impl FromNode for Element {
             "number" => Ok(number_el(node)?),
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
-            "date" => Ok(Element::Date(Date::from_node(node, false)?)),
+            "date" => Ok(Element::Date(Rc::new(Date::from_node(node, false)?))),
             _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?,
         }
     }
@@ -565,7 +570,7 @@ impl FromNode for Style {
         let macros: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el))
+            .map(|el| MacroMap::from_node_rc(&el))
             .collect();
         let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
         // let info_node = get_toplevel(&doc, "info")?;

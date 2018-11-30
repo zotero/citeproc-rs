@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::style::error::*;
 use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
@@ -347,10 +349,10 @@ impl Default for Match {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct IfThen(pub Condition, pub Vec<Element>);
+pub struct IfThen(pub Condition, pub Vec<Rc<Element>>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Else(pub Vec<Element>);
+pub struct Else(pub Vec<Rc<Element>>);
 
 type Quotes = bool;
 
@@ -370,7 +372,7 @@ pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     // <cs:choose>
-    Choose(Choose),
+    Choose(Rc<Choose>),
     // <cs:text>
     Macro(String, Formatting, Affixes, Quotes),
     // <cs:text>
@@ -384,11 +386,11 @@ pub enum Element {
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
     // <cs:names>
-    Names(Names),
+    Names(Rc<Names>),
     // <cs:group>
-    Group(Formatting, Delimiter, Vec<Element>), // done
+    Group(Formatting, Delimiter, Vec<Rc<Element>>), // done
     // <cs:date>
-    Date(Date),
+    Date(Rc<Date>),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -503,7 +505,7 @@ pub struct Citation {
     pub disambiguate_add_givenname: bool,
     pub givenname_disambiguation_rule: GivenNameDisambiguationRule,
     pub disambiguate_add_year_suffix: bool,
-    pub layout: Layout,
+    pub layout: Rc<Layout>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -532,7 +534,7 @@ pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
-    pub macros: Vec<MacroMap>,
+    pub macros: Vec<Rc<MacroMap>>,
     pub citation: Citation,
     pub info: Info,
 }
