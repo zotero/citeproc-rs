@@ -29,9 +29,9 @@
   </macro>
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
-      <group delimiter=" & ">
+      <group delimiter=" & " font-style="italic" >
         <group delimiter="-">
-          <text value="yeah" />
+          <text value="yeah" font-style="italic" font-weight="bold" />
           <text value="the" />
           <text value="boys" />
         </group>

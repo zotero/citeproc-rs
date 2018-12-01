@@ -735,4 +735,15 @@ pub enum CslType {
     Thesis,
     Treaty,
     Webpage,
+
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Classic,
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Gazette,
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Hearing,
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Regulation,
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Video,
 }
