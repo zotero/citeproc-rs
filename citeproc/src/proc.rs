@@ -8,16 +8,15 @@ use crate::style::element::{
 };
 use serde::Serialize;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 #[derive(Debug)]
-pub enum YearSuffixHook {
-    Date(Rc<DateEl>),
+pub enum YearSuffixHook<'s> {
+    Date(&'s DateEl),
     Explicit(),
 }
 
 #[derive(Debug)]
-pub enum Intermediate<T>
+pub enum Intermediate<'s, T>
 where
     T: Debug,
 {
@@ -25,12 +24,12 @@ where
     Rendered(Option<T>),
     // the name block,
     // the current render
-    Names(Rc<NamesEl>, T),
+    Names(&'s NamesEl, T),
     // a single <if disambiguate="true"> means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
     // the current render
-    ConditionalDisamb(Rc<ChooseEl>, Vec<Intermediate<T>>),
-    YearSuffix(YearSuffixHook, T),
+    ConditionalDisamb(&'s ChooseEl, Vec<Intermediate<'s, T>>),
+    YearSuffix(YearSuffixHook<'s>, T),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -45,7 +44,7 @@ where
     //     Rendered(..)
     // ]
     // // TODO: store delimiter and affixes for later
-    Seq(Vec<Intermediate<T>>),
+    Seq(Vec<Intermediate<'s, T>>),
 }
 
 use self::Intermediate::*;
@@ -76,20 +75,20 @@ fn _disamb_4() {
 
 pub trait Proc {
     // TODO: include settings and reference and macro map
-    fn proc_intermediate<'r, T: Debug, O: Serialize>(
-        &self,
+    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
+        &'s self,
         fmt: &impl OutputFormat<T, O>,
         refr: &Reference<'r>
-    ) -> Intermediate<T>;
+    ) -> Intermediate<'s, T>;
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
 impl Proc for Style {
-    fn proc_intermediate<'r, T: Debug, O: Serialize>(
-        &self,
+    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
+        &'s self,
         fmt: &impl OutputFormat<T, O>,
         refr: &Reference<'r>,
-        ) -> Intermediate<T> {
+        ) -> Intermediate<'s, T> {
         let citation = &self.citation;
         let layout = &citation.layout;
         layout.proc_intermediate(fmt, refr)
@@ -99,22 +98,22 @@ impl Proc for Style {
 // TODO: insert affixes into group before processing as a group
 impl Proc for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'r, T: Debug, O: Serialize>(
-        &self,
+    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
+        &'s self,
         fmt: &impl OutputFormat<T, O>,
         refr: &Reference<'r>
-    ) -> Intermediate<T> {
-        sequence(fmt, refr, &self.formatting, &self.delimiter, self.elements.as_ref())
+    ) -> Intermediate<'s, T> {
+        sequence(fmt, refr, &self.formatting, &self.delimiter, &self.elements)
     }
 }
 
 impl Proc for Element {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'r, T: Debug, O: Serialize>(
-        &self,
+    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
+        &'s self,
         fmt: &impl OutputFormat<T, O>,
         refr: &Reference<'r>,
-    ) -> Intermediate<T> {
+    ) -> Intermediate<'s, T> {
         let null_f = Formatting::default();
         match *self {
             Element::Choose(ref _ch) => {
@@ -187,7 +186,7 @@ impl Proc for Element {
                 Intermediate::Rendered(content)
             }
             Element::Names(ref ns) => {
-                Intermediate::Names(ns.clone(), fmt.plain("names first-pass"))
+                Intermediate::Names(ns, fmt.plain("names first-pass"))
             }
             Element::Group(ref f, ref d, ref els) => {
                 sequence(fmt, refr, f, d, els.as_ref())
@@ -200,13 +199,13 @@ impl Proc for Element {
     }
 }
 
-fn sequence<'r, T: Debug, O: Serialize>(
+fn sequence<'s, 'r, T: Debug, O: Serialize>(
     fmt: &impl OutputFormat<T, O>,
     refr: &Reference<'r>,
     f: &Formatting,
     delim: &Delimiter,
-    els: &[Rc<Element>]
-) -> Intermediate<T> {
+    els: &'s [Element]
+) -> Intermediate<'s, T> {
 
     let mut dedup = vec![];
     let mut dups = vec![];
@@ -237,11 +236,11 @@ fn sequence<'r, T: Debug, O: Serialize>(
 
 impl Proc for DateEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'r, T: Debug, O: Serialize>(
-        &self,
+    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
+        &'s self,
         fmt: &impl OutputFormat<T, O>,
         refr: &Reference<'r>,
-    ) -> Intermediate<T> {
+    ) -> Intermediate<'s, T> {
         let content = refr.date
             .get(&self.variable)
             .and_then(|val| {
@@ -267,7 +266,11 @@ impl Proc for DateEl {
 
 #[cfg(all(test, feature = "flame_it"))]
 mod test {
-    use super::proc_intermediate;
+    use std::str::FromStr;
+    use super::Proc;
+    use crate::input::*;
+    use crate::style::variables::*;
+    use crate::style::element::{ Style, CslType };
     use crate::output::PlainText;
     use crate::style::build_style;
     use crate::test::Bencher;
@@ -283,9 +286,13 @@ mod test {
             .expect("something went wrong reading the file");
         let s = build_style(&contents);
         let fmt = PlainText::new();
+        let mut refr = Reference::empty("id", CslType::LegalCase);
+        refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+        refr.number.insert(NumberVariable::Number, 55);
+        refr.date.insert(DateVariable::Issued, DateOrRange::from_str("1998-01-04").unwrap());
         if let Ok(style) = s {
             b.iter(|| {
-                proc_intermediate(&style, &fmt);
+                style.proc_intermediate(&fmt, &refr);
             });
         }
     }

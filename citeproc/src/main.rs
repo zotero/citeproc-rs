@@ -19,7 +19,7 @@ fn parse(path: &str) -> Result<Style, StyleError> {
         .expect("something went wrong reading the file");
     println!("{}", drive_style(path, &contents));
     let style = build_style(&contents)?;
-    flame_it::flame_it(&style);
+    // flame_it::flame_it(&style);
     Ok(style)
 }
 
@@ -49,24 +49,24 @@ fn main() -> Result<(), StyleError> {
     Ok(())
 }
 
-#[cfg(not(feature = "flame_it"))]
-mod flame_it {
-    use citeproc::style::element::Style;
-    pub fn flame_it(_style: &Style) {}
-}
+// #[cfg(not(feature = "flame_it"))]
+// mod flame_it {
+//     use citeproc::style::element::Style;
+//     pub fn flame_it(_style: &Style) {}
+// }
 
-#[cfg(feature = "flame_it")]
-mod flame_it {
-    use citeproc::output::PlainText;
-    use citeproc::proc::proc_intermediate;
-    use citeproc::style::element::Style;
-    use std::fs::File;
-    pub fn flame_it(style: &Style) {
-        let pandoc = PlainTextFormat::new();
-        flame::span_of("bench_run", || {
-            proc_intermediate(&style, &pandoc);
-        });
-        // Dump the report to disk
-        flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
-    }
-}
+// #[cfg(feature = "flame_it")]
+// mod flame_it {
+//     use citeproc::output::*;
+//     use citeproc::proc::*;
+//     use citeproc::style::element::Style;
+//     use std::fs::File;
+//     pub fn flame_it(style: &Style) {
+//         let fmt = PlainText::new();
+//         flame::span_of("bench_run", || {
+//             style.proc_intermediate(&fmt, &refr);
+//         });
+//         // Dump the report to disk
+//         flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+//     }
+// }

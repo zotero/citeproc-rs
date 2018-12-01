@@ -3,7 +3,6 @@ use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 use std::fmt;
-use std::rc::Rc;
 use std::str::FromStr;
 
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
@@ -334,10 +333,10 @@ impl Default for Match {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct IfThen(pub Condition, pub Vec<Rc<Element>>);
+pub struct IfThen(pub Condition, pub Vec<Element>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Else(pub Vec<Rc<Element>>);
+pub struct Else(pub Vec<Element>);
 
 type Quotes = bool;
 
@@ -357,7 +356,7 @@ pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     // <cs:choose>
-    Choose(Rc<Choose>),
+    Choose(Choose),
     // <cs:text>
     Macro(String, Formatting, Affixes, Quotes),
     // <cs:text>
@@ -371,11 +370,11 @@ pub enum Element {
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
     // <cs:names>
-    Names(Rc<Names>),
+    Names(Names),
     // <cs:group>
-    Group(Formatting, Delimiter, Vec<Rc<Element>>), // done
+    Group(Formatting, Delimiter, Vec<Element>), // done
     // <cs:date>
-    Date(Rc<Date>),
+    Date(Date),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -490,7 +489,7 @@ pub struct Citation {
     pub disambiguate_add_givenname: bool,
     pub givenname_disambiguation_rule: GivenNameDisambiguationRule,
     pub disambiguate_add_year_suffix: bool,
-    pub layout: Rc<Layout>,
+    pub layout: Layout,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -498,7 +497,7 @@ pub struct Layout {
     pub formatting: Formatting,
     pub affixes: Affixes,
     pub delimiter: Delimiter,
-    pub elements: Vec<Rc<Element>>,
+    pub elements: Vec<Element>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -519,7 +518,7 @@ pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
-    pub macros: Vec<Rc<MacroMap>>,
+    pub macros: Vec<MacroMap>,
     pub citation: Citation,
     pub info: Info,
 }
