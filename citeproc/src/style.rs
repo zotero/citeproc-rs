@@ -22,10 +22,7 @@ where
     fn is_on_node(node: &Node) -> Vec<String>;
 }
 
-pub trait FromNode
-where
-    Self: Sized,
-{
+pub trait FromNode where Self: Sized {
     fn from_node(node: &Node) -> Result<Self, InvalidCsl>;
     fn from_node_rc(node: &Node) -> Result<Rc<Self>, InvalidCsl> {
         Ok(Rc::new(Self::from_node(node)?))
@@ -143,7 +140,7 @@ impl FromNode for Layout {
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el))
+            .map(|el| Element::from_node_rc(&el))
             .collect();
         Ok(Layout {
             formatting: Formatting::from_node(node)?,
@@ -165,7 +162,7 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
             affixes,
             attribute_bool(node, "quotes", false)?,
         ));
-    };
+    }
     if let Some(_m) = node.attribute("variable") {
         return Ok(Variable(
             attribute_required(node, "variable")?,
@@ -183,7 +180,7 @@ fn text_el(node: &Node) -> Result<Element, InvalidCsl> {
             affixes,
             attribute_bool(node, "quotes", false)?,
         ));
-    };
+    }
     if let Some(t) = node.attribute("term") {
         return Ok(Term(
             t.to_owned(),
@@ -464,6 +461,7 @@ impl Date {
             .map(|el| DatePart::from_node(&el, full))
             .collect();
         Ok(Date {
+            variable: attribute_required(node, "variable")?,
             form,
             date_parts: elements?,
             date_parts_attr: attribute_optional(node, "date-parts")?,

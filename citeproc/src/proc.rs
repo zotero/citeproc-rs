@@ -1,3 +1,6 @@
+use crate::input::Reference;
+use crate::input::DateOrRange;
+use crate::style::element::Delimiter;
 use crate::output::OutputFormat;
 use crate::style::element::{
     Choose as ChooseEl, Date as DateEl, Element, Formatting, Layout as LayoutEl, Names as NamesEl,
@@ -19,7 +22,7 @@ where
     T: Debug,
 {
     // no (further) disambiguation possible
-    Rendered(T),
+    Rendered(Option<T>),
     // the name block,
     // the current render
     Names(Rc<NamesEl>, T),
@@ -53,16 +56,6 @@ use self::Intermediate::*;
 // TODO: also to figure out which macros are needed
 // TODO: juris-m module loading in advance? probably in advance.
 
-#[cfg_attr(feature = "flame_it", flame)]
-pub fn proc_intermediate<T: Debug, O: Serialize>(
-    style: &Style,
-    fmt: &impl OutputFormat<T, O>,
-) -> Intermediate<T> {
-    let citation = &style.citation;
-    let layout = &citation.layout;
-    layout.proc_intermediate(fmt)
-}
-
 // Levels 1-3 will also have to update the ConditionalDisamb's current render
 
 fn _disamb_1() {
@@ -81,66 +74,58 @@ fn _disamb_4() {
     unimplemented!()
 }
 
-trait Proc {
+pub trait Proc {
     // TODO: include settings and reference and macro map
-    fn proc_intermediate<T: Debug, O: Serialize>(&self, fmt: &impl OutputFormat<T, O>)
-        -> Intermediate<T>;
+    fn proc_intermediate<'r, T: Debug, O: Serialize>(
+        &self,
+        fmt: &impl OutputFormat<T, O>,
+        refr: &Reference<'r>
+    ) -> Intermediate<T>;
+}
+
+#[cfg_attr(feature = "flame_it", flame)]
+impl Proc for Style {
+    fn proc_intermediate<'r, T: Debug, O: Serialize>(
+        &self,
+        fmt: &impl OutputFormat<T, O>,
+        refr: &Reference<'r>,
+        ) -> Intermediate<T> {
+        let citation = &self.citation;
+        let layout = &citation.layout;
+        layout.proc_intermediate(fmt, refr)
+    }
 }
 
 // TODO: insert affixes into group before processing as a group
 impl Proc for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<T: Debug, O: Serialize>(
+    fn proc_intermediate<'r, T: Debug, O: Serialize>(
         &self,
         fmt: &impl OutputFormat<T, O>,
+        refr: &Reference<'r>
     ) -> Intermediate<T> {
-        let f = &self.formatting;
-        let _af = &self.affixes;
-        let d = &self.delimiter;
-        let els = &self.elements;
-        let mut dedup = vec![];
-        let mut dups = vec![];
-        for el in els.into_iter() {
-            let pr = el.proc_intermediate(fmt);
-            if let Rendered(r) = pr {
-                dups.push(r);
-            } else {
-                if !dups.is_empty() {
-                    let r = Rendered(fmt.group(&dups, &d.0, &f));
-                    dedup.push(r);
-                    dups.clear();
-                }
-                dedup.push(pr);
-            }
-        }
-        if !dups.is_empty() {
-            let r = Rendered(fmt.group(&dups, &d.0, &f));
-            dedup.push(r);
-            dups.clear();
-        }
-        if dedup.len() == 1 {
-            return dedup.into_iter().nth(0).unwrap();
-        }
-        Seq(dedup)
+        sequence(fmt, refr, &self.formatting, &self.delimiter, self.elements.as_ref())
     }
 }
 
 impl Proc for Element {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<T: Debug, O: Serialize>(
+    fn proc_intermediate<'r, T: Debug, O: Serialize>(
         &self,
         fmt: &impl OutputFormat<T, O>,
+        refr: &Reference<'r>,
     ) -> Intermediate<T> {
         let null_f = Formatting::default();
         match *self {
             Element::Choose(ref _ch) => {
                 // TODO: work out if disambiguate appears on the conditions
-                Rendered(fmt.plain("choose"))
+                Rendered(Some(fmt.plain("choose")))
             }
             Element::Macro(ref name, ref f, ref _af, ref _quo) => {
-                Rendered(fmt.text_node(&format!("(macro {})", name), &f))
+                Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
             }
-            Element::Const(ref val, ref f, ref af, ref _quo) => Intermediate::Rendered(fmt.group(
+            Element::Const(ref val, ref f, ref af, ref _quo) =>
+                Intermediate::Rendered(Some(fmt.group(
                 &[
                     fmt.plain(&af.prefix),
                     fmt.text_node(&val, &f),
@@ -148,20 +133,25 @@ impl Proc for Element {
                 ],
                 "",
                 &null_f,
-            )),
+            ))),
+
             Element::Variable(ref var, ref f, ref af, ref _form, ref _del, ref _quo) => {
-                Intermediate::Rendered(fmt.group(
-                    &[
-                        fmt.plain(&af.prefix),
-                        fmt.text_node(&format!("(var {})", var.as_ref()), &f),
-                        fmt.plain(&af.suffix),
-                    ],
-                    "",
-                    &null_f,
-                ))
+                let content = if let Some(val) = refr.ordinary.get(var) {
+                    Some(fmt.group(
+                        &[
+                            fmt.plain(&af.prefix),
+                            fmt.text_node(val, &f),
+                            fmt.plain(&af.suffix),
+                        ],
+                        "",
+                        &null_f,
+                    ))
+                } else { None };
+                Intermediate::Rendered(content)
             }
+
             Element::Term(ref term, ref _form, ref f, ref af, ref _pl) => {
-                Intermediate::Rendered(fmt.group(
+                Intermediate::Rendered(Some(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
                         fmt.text_node(&format!("(term {})", term), &f),
@@ -169,10 +159,10 @@ impl Proc for Element {
                     ],
                     "",
                     &null_f,
-                ))
+                )))
             }
             Element::Label(ref var, ref _form, ref f, ref af, ref _pl) => {
-                Intermediate::Rendered(fmt.group(
+                Intermediate::Rendered(Some(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
                         fmt.text_node(&format!("(label {})", var.as_ref()), &f),
@@ -180,52 +170,98 @@ impl Proc for Element {
                     ],
                     "",
                     &null_f,
-                ))
+                )))
             }
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                Intermediate::Rendered(fmt.group(
-                    &[
-                        fmt.plain(&af.prefix),
-                        fmt.text_node(&format!("(num {})", var.as_ref()), &f),
-                        fmt.plain(&af.suffix),
-                    ],
-                    "",
-                    &null_f,
-                ))
+                let content = if let Some(val) = refr.number.get(var) {
+                    Some(fmt.group(
+                        &[
+                            fmt.plain(&af.prefix),
+                            fmt.text_node(&format!("{}", val), &f),
+                            fmt.plain(&af.suffix),
+                        ],
+                        "",
+                        &null_f,
+                    ))
+                } else { None };
+                Intermediate::Rendered(content)
             }
             Element::Names(ref ns) => {
                 Intermediate::Names(ns.clone(), fmt.plain("names first-pass"))
             }
             Element::Group(ref f, ref d, ref els) => {
-                let mut dedup = vec![];
-                let mut dups = vec![];
-                for el in els.into_iter() {
-                    let pr = el.proc_intermediate(fmt);
-                    if let Rendered(r) = pr {
-                        dups.push(r);
-                    } else {
-                        if !dups.is_empty() {
-                            let r = Rendered(fmt.group(&dups, &d.0, &f));
-                            dedup.push(r);
-                            dups.clear();
-                        }
-                        dedup.push(pr);
-                    }
-                }
-                if !dups.is_empty() {
-                    let r = Rendered(fmt.group(&dups, &d.0, &f));
-                    dedup.push(r);
-                    dups.clear();
-                }
-                if dedup.len() == 1 {
-                    return dedup.into_iter().nth(0).unwrap();
-                }
-                Seq(dedup)
+                sequence(fmt, refr, f, d, els.as_ref())
             }
             Element::Date(ref dt) => {
-                Intermediate::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
+                dt.proc_intermediate(fmt, refr)
+                // Intermediate::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }
+    }
+}
+
+fn sequence<'r, T: Debug, O: Serialize>(
+    fmt: &impl OutputFormat<T, O>,
+    refr: &Reference<'r>,
+    f: &Formatting,
+    delim: &Delimiter,
+    els: &[Rc<Element>]
+) -> Intermediate<T> {
+
+    let mut dedup = vec![];
+    let mut dups = vec![];
+    for el in els.iter() {
+        let pr = el.proc_intermediate(fmt, refr);
+        if let Rendered(Some(r)) = pr {
+            dups.push(r);
+        } else if let Rendered(None) = pr {
+        } else {
+            if !dups.is_empty() {
+                let r = Rendered(Some(fmt.group(&dups, &delim.0, &f)));
+                dedup.push(r);
+                dups.clear();
+            }
+            dedup.push(pr);
+        }
+    }
+    if !dups.is_empty() {
+        let r = Rendered(Some(fmt.group(&dups, &delim.0, &f)));
+        dedup.push(r);
+        dups.clear();
+    }
+    if dedup.len() == 1 {
+        return dedup.into_iter().nth(0).unwrap();
+    }
+    Seq(dedup)
+}
+
+impl Proc for DateEl {
+    #[cfg_attr(feature = "flame_it", flame)]
+    fn proc_intermediate<'r, T: Debug, O: Serialize>(
+        &self,
+        fmt: &impl OutputFormat<T, O>,
+        refr: &Reference<'r>,
+    ) -> Intermediate<T> {
+        let content = refr.date
+            .get(&self.variable)
+            .and_then(|val| {
+                if let DateOrRange::Single(d) = val {
+                    Some(d)
+                } else { None }
+            })
+            .map(|val| {
+                let string = format!("{}-{}-{}",  val.year, val.month, val.day);
+                fmt.group(
+                    &[
+                        fmt.plain(&self.affixes.prefix),
+                        fmt.text_node(&string, &self.formatting),
+                        fmt.plain(&self.affixes.suffix),
+                    ],
+                    "",
+                    &Formatting::default(),
+                )
+            });
+        Intermediate::Rendered(content)
     }
 }
 

@@ -30,6 +30,13 @@
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
       <group delimiter=" & " font-style="italic" >
+        <text variable="container-title" />
+        <number variable="number" />
+        <date variable="issued" delimiter=" " font-style="italic">
+          <date-part name="day" range-delimiter="&#x2013;"/>
+          <date-part name="month" range-delimiter=" &#x2013; "/>
+          <date-part name="year" range-delimiter=" &#x2013; "/>
+        </date>
         <group delimiter="-">
           <text value="yeah" font-style="italic" font-weight="bold" />
           <text value="the" />
@@ -53,7 +60,7 @@
           </if>
           <else-if variable="number">
             <text value="printer" />
-            <date variable="printer" delimiter=" ">
+            <date variable="issued" delimiter=" ">
               <date-part name="day" range-delimiter="&#x2013;"/>
               <date-part name="month" range-delimiter=" &#x2013; "/>
               <date-part name="year" range-delimiter=" &#x2013; "/>

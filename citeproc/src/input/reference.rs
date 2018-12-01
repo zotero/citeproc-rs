@@ -29,7 +29,7 @@ pub struct Reference<'r> {
     pub ordinary: FnvHashMap<Variable, &'r str>,
     pub number: FnvHashMap<NumberVariable, i32>,
     pub name: FnvHashMap<NameVariable, Vec<Name<'r>>>,
-    pub date: FnvHashMap<DateVariable, Vec<DateOrRange>>,
+    pub date: FnvHashMap<DateVariable, DateOrRange>,
 }
 
 impl<'r> Reference<'r> {

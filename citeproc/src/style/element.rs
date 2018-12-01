@@ -498,7 +498,7 @@ pub struct Layout {
     pub formatting: Formatting,
     pub affixes: Affixes,
     pub delimiter: Delimiter,
-    pub elements: Vec<Element>,
+    pub elements: Vec<Rc<Element>>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -640,6 +640,7 @@ pub struct DatePart {
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Date {
+    pub variable: DateVariable,
     pub form: DateForm,
     pub date_parts_attr: DateParts,
     pub date_parts: Vec<DatePart>,
