@@ -22,6 +22,15 @@ impl Date {
     pub fn new(y: i32, m: u32, d: u32) -> Self {
         Date { year: y, month: m, day: d }
     }
+    pub fn from_parts(parts: &[i32]) -> Option<Self> {
+        let m = *parts.get(1).unwrap_or(&0);
+        let d = *parts.get(2).unwrap_or(&0);
+        Some(Date {
+            year: *parts.get(0)?,
+            month: if m >= 1 && m <= 12 { m as u32 } else { 0 },
+            day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
+        })
+    }
     // fn invalid_default() {
         // it isn't possible to parse an invalid month, bad ones default to zero (see tests)
         // and cause the day not to parse as well.
@@ -44,6 +53,15 @@ pub enum DateOrRange {
 impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
         DateOrRange::Single(Date { year, month, day })
+    }
+    pub fn from_parts(parts: &[&[i32]]) -> Option<Self> {
+        if parts.is_empty() {
+            None
+        } else if parts.len() == 1 {
+            Some(DateOrRange::Single(Date::from_parts(parts[0])?))
+        } else {
+            Some(DateOrRange::Range(Date::from_parts(parts[0])?, Date::from_parts(parts[1])?))
+        }
     }
 }
 
@@ -86,6 +104,28 @@ fn test_range_parsing() {
         Ok(DateOrRange::Range(Date::new(1998, 0, 0), Date::new(2001, 0, 0))));
 }
 
+
+#[cfg(test)]
+#[test]
+fn test_from_parts() {
+    assert_eq!(DateOrRange::from_parts(&[&[1998, 9, 21]]), Some(DateOrRange::new(1998, 09, 21)));
+    assert_eq!(DateOrRange::from_parts(&[&[1998, 9]]), Some(DateOrRange::new(1998, 9, 0)));
+    assert_eq!(DateOrRange::from_parts(&[&[1998]]), Some(DateOrRange::new(1998, 0, 0)));
+    assert_eq!(
+        DateOrRange::from_parts(&[&[1998, 9, 21], &[2001, 8, 16]]),
+        Some(DateOrRange::Range(Date::new(1998, 9, 21), Date::new(2001, 8, 16)))
+    );
+    assert_eq!(
+        DateOrRange::from_parts(&[&[1998, 9, 21], &[2001, 8]]),
+        Some(DateOrRange::Range(Date::new(1998, 9, 21), Date::new(2001, 8, 0)))
+    );
+    assert_eq!(
+        DateOrRange::from_parts(&[&[1998, 9], &[2001, 8, 1]]),
+        Some(DateOrRange::Range(Date::new(1998, 9, 0), Date::new(2001, 8, 1))));
+    assert_eq!(
+        DateOrRange::from_parts(&[&[1998], &[2001]]),
+        Some(DateOrRange::Range(Date::new(1998, 0, 0), Date::new(2001, 0, 0))));
+}
 
 
 
