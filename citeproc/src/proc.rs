@@ -47,6 +47,28 @@ where
     Seq(Vec<Intermediate<'s, T>>),
 }
 
+impl<'s, T> Intermediate<'s, T> where T : Debug + Clone {
+    pub fn flatten<'r, O: Serialize>(
+        &self,
+        fmt: &impl OutputFormat<T, O>
+    ) -> T {
+        // TODO: change fmt.group to accept iterators instead
+        let seq = |xs: &[Intermediate<'s, T>]| {
+            let v: Vec<T> = xs.iter().map(|i| i.flatten(fmt)).collect();
+            fmt.group(&v, "", &Formatting::default())
+        };
+        // must clone
+        match self {
+            Rendered(None) => fmt.plain(""),
+            Rendered(Some(ref x)) => x.clone(),
+            Names(_, ref x) => x.clone(),
+            ConditionalDisamb(_, ref xs) => seq(xs),
+            YearSuffix(_, ref x) => x.clone(),
+            Seq(ref xs) => seq(xs),
+        }
+    }
+}
+
 use self::Intermediate::*;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which

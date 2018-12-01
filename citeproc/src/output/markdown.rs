@@ -6,7 +6,7 @@ use crate::style::element::{FontStyle, FontWeight, Formatting};
 // use typed_arena::Arena;
 use serde::{Serialize, Serializer};
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MarkdownFormatting {
     Bold,
     Italic,
@@ -31,7 +31,7 @@ impl MarkdownFormatting {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum MarkdownNode {
     Text(String, MarkdownFormatting),
     Group(Vec<MarkdownNode>, MarkdownFormatting),
@@ -87,7 +87,7 @@ impl<'a> From<&'a Formatting> for MarkdownFormatting {
     }
 }
 
-impl OutputFormat<MarkdownNode, MarkdownNode> for Markdown {
+impl OutputFormat<MarkdownNode, String> for Markdown {
     fn text_node(&self, s: &str, formatting: &Formatting) -> MarkdownNode {
         MarkdownNode::Text(s.to_owned(), formatting.into())
     }
@@ -102,7 +102,7 @@ impl OutputFormat<MarkdownNode, MarkdownNode> for Markdown {
         MarkdownNode::Group(nodes.intercalate(&delim), formatting.into())
     }
 
-    fn output(&self, intermediate: MarkdownNode) -> MarkdownNode {
-        intermediate
+    fn output(&self, intermediate: MarkdownNode) -> String {
+        intermediate.to_string()
     }
 }

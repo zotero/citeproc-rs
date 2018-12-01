@@ -8,7 +8,7 @@ use citeproc::input::*;
 use citeproc::style::element::{ Style, CslType };
 use citeproc::style::error::StyleError;
 use citeproc::style::variables::*;
-use citeproc::style::{build_style, drive_style};
+use citeproc::style::{build_style};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -17,7 +17,6 @@ fn parse(path: &str) -> Result<Style, StyleError> {
     let mut contents = String::new();
     f.read_to_string(&mut contents)
         .expect("something went wrong reading the file");
-    println!("{}", drive_style(path, &contents));
     let style = build_style(&contents)?;
     // flame_it::flame_it(&style);
     Ok(style)
@@ -38,13 +37,18 @@ fn main() -> Result<(), StyleError> {
         .get_matches();
     if let Some(path) = matches.value_of("csl") {
         let style = parse(path)?;
-        let pandoc = PlainText::new();
+        let pandoc = Pandoc::new();
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
         refr.number.insert(NumberVariable::Number, 55);
         refr.date.insert(DateVariable::Issued, DateOrRange::from_str("1998-01-04").unwrap());
-        let p = style.proc_intermediate(&pandoc, &refr);
-        println!("{:?}", p);
+        let i = style.proc_intermediate(&pandoc, &refr);
+        let flat = i.flatten(&pandoc);
+        let o = pandoc.output(flat);
+        let header = r#"{"blocks":[{"t":"Para","c":"#;
+        let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
+        let serialized = serde_json::to_string(&o).unwrap();
+        println!("{}{}{}", header, serialized, footer);
     }
     Ok(())
 }

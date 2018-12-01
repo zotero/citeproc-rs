@@ -13,8 +13,8 @@ cfg_if! {
     }
 }
 
-use citeproc::output::PlainText;
-use citeproc::proc::proc_intermediate;
+// use citeproc::output::PlainText;
+// use citeproc::proc::Proc;
 use citeproc::style::build_style;
 
 extern crate wasm_bindgen;
@@ -28,9 +28,9 @@ extern "C" {
 #[wasm_bindgen]
 pub fn parse(style: &str) -> String {
     let s = build_style(&style.to_owned());
-    if let Ok(style) = s {
-        let fmt = PlainText::new();
-        proc_intermediate(&style, &fmt);
+    if let Ok(_) = s {
+        // let fmt = PlainText::new();
+        // proc_intermediate(&style, &fmt);
         "done!".into()
     } else {
         "failed".into()
