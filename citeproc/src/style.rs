@@ -6,6 +6,8 @@ mod get_attribute;
 pub mod locale;
 pub mod terms;
 pub mod variables;
+pub mod version;
+
 // mod take_while;
 // use self::take_while::*;
 use self::element::*;

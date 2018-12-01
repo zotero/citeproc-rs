@@ -1,4 +1,4 @@
-use crate::output::formatter::Format;
+use super::OutputFormat;
 use crate::utils::Intercalate;
 
 use crate::style::element::{FontStyle, FontWeight, Formatting};
@@ -69,14 +69,11 @@ impl Serialize for MarkdownNode {
     }
 }
 
-pub struct MarkdownFormat {
-    // arena: Arena<MarkdownNode>
+pub struct Markdown {
 }
-impl MarkdownFormat {
+impl Markdown {
     pub fn new() -> Self {
-        MarkdownFormat {
-        // arena: Arena::new()
-    }
+        Markdown { }
     }
 }
 impl<'a> From<&'a Formatting> for MarkdownFormatting {
@@ -90,7 +87,7 @@ impl<'a> From<&'a Formatting> for MarkdownFormatting {
     }
 }
 
-impl Format<MarkdownNode, MarkdownNode> for MarkdownFormat {
+impl OutputFormat<MarkdownNode, MarkdownNode> for Markdown {
     fn text_node(&self, s: &str, formatting: &Formatting) -> MarkdownNode {
         MarkdownNode::Text(s.to_owned(), formatting.into())
     }

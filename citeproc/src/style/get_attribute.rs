@@ -1,9 +1,10 @@
 use crate::style::error::*;
 use roxmltree::Node;
-use std::convert::AsRef;
 use std::str::FromStr;
 use strum::EnumProperty;
+use super::version::CslVersion;
 
+// Temporary
 pub const CSL_VERSION: CslVersion = CslVersion::Csl101;
 
 pub trait GetAttribute
@@ -11,25 +12,6 @@ where
     Self: Sized,
 {
     fn get_attr(s: &str, csl_version: CslVersion) -> Result<Self, UnknownAttributeValue>;
-}
-
-#[derive(AsRefStr, EnumString, Debug, PartialEq, Eq)]
-#[strum(serialize_all = "snake_case")]
-pub enum CslVersion {
-    #[strum(serialize = "csl101")]
-    Csl101,
-    #[strum(serialize = "cslM")]
-    CslM,
-}
-
-impl CslVersion {
-    fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
-        let version: &str = self.as_ref();
-        if let Some("0") = val.get_str(version) {
-            return None;
-        }
-        Some(val)
-    }
 }
 
 impl<T: FromStr + EnumProperty> GetAttribute for T {

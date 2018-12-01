@@ -1,4 +1,4 @@
-use crate::output::Format;
+use super::OutputFormat;
 use crate::style::element::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
@@ -8,11 +8,11 @@ extern crate pandoc_types;
 use pandoc_types::definition::Inline::*;
 use pandoc_types::definition::*;
 
-pub struct PandocFormat {}
+pub struct Pandoc {}
 
-impl PandocFormat {
+impl Pandoc {
     pub fn new() -> Self {
-        PandocFormat {}
+        Pandoc {}
     }
 
     fn fmt_vec(&self, inlines: Vec<Inline>, f: &Formatting) -> Option<Inline> {
@@ -55,7 +55,7 @@ impl PandocFormat {
     }
 }
 
-impl Format<Vec<Inline>, Vec<Inline>> for PandocFormat {
+impl OutputFormat<Vec<Inline>, Vec<Inline>> for Pandoc {
     fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
@@ -189,7 +189,7 @@ mod test {
 
     #[test]
     fn test_space() {
-        let f = PandocFormat::new();
+        let f = Pandoc::new();
         assert_eq!(f.plain(" ")[0], Space);
         assert_eq!(f.plain("  "), &[Space, Space]);
         assert_eq!(f.plain(" h "), &[Space, Str("h".into()), Space]);
@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn test_flip_emph() {
-        let f = PandocFormat::new();
+        let f = Pandoc::new();
         let a = f.plain("normal");
         let b = f.text_node("emph", &Formatting::italic());
         let c = f.plain("normal");

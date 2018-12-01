@@ -1,4 +1,4 @@
-use crate::output::Format;
+use crate::output::OutputFormat;
 use crate::style::element::{
     Choose as ChooseEl, Date as DateEl, Element, Formatting, Layout as LayoutEl, Names as NamesEl,
     Style,
@@ -56,7 +56,7 @@ use self::Intermediate::*;
 #[cfg_attr(feature = "flame_it", flame)]
 pub fn proc_intermediate<T: Debug, O: Serialize>(
     style: &Style,
-    fmt: &impl Format<T, O>,
+    fmt: &impl OutputFormat<T, O>,
 ) -> Intermediate<T> {
     let citation = &style.citation;
     let layout = &citation.layout;
@@ -83,7 +83,7 @@ fn _disamb_4() {
 
 trait Proc {
     // TODO: include settings and reference and macro map
-    fn proc_intermediate<T: Debug, O: Serialize>(&self, fmt: &impl Format<T, O>)
+    fn proc_intermediate<T: Debug, O: Serialize>(&self, fmt: &impl OutputFormat<T, O>)
         -> Intermediate<T>;
 }
 
@@ -92,7 +92,7 @@ impl Proc for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
     fn proc_intermediate<T: Debug, O: Serialize>(
         &self,
-        fmt: &impl Format<T, O>,
+        fmt: &impl OutputFormat<T, O>,
     ) -> Intermediate<T> {
         let f = &self.formatting;
         let _af = &self.affixes;
@@ -129,7 +129,7 @@ impl Proc for Element {
     #[cfg_attr(feature = "flame_it", flame)]
     fn proc_intermediate<T: Debug, O: Serialize>(
         &self,
-        fmt: &impl Format<T, O>,
+        fmt: &impl OutputFormat<T, O>,
     ) -> Intermediate<T> {
         let null_f = Formatting::default();
         match *self {
@@ -232,7 +232,7 @@ impl Proc for Element {
 #[cfg(all(test, feature = "flame_it"))]
 mod test {
     use super::proc_intermediate;
-    use crate::output::plain::PlainTextFormat;
+    use crate::output::PlainText;
     use crate::style::build_style;
     use crate::test::Bencher;
     use std::fs::File;
@@ -246,10 +246,10 @@ mod test {
         f.read_to_string(&mut contents)
             .expect("something went wrong reading the file");
         let s = build_style(&contents);
-        let pandoc = PlainTextFormat::new();
+        let fmt = PlainText::new();
         if let Ok(style) = s {
             b.iter(|| {
-                proc_intermediate(&style, &pandoc);
+                proc_intermediate(&style, &fmt);
             });
         }
     }

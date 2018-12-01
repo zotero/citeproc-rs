@@ -13,7 +13,7 @@ cfg_if! {
     }
 }
 
-use citeproc::output::plain::PlainTextFormat;
+use citeproc::output::PlainText;
 use citeproc::proc::proc_intermediate;
 use citeproc::style::build_style;
 
@@ -29,7 +29,7 @@ extern "C" {
 pub fn parse(style: &str) -> String {
     let s = build_style(&style.to_owned());
     if let Ok(style) = s {
-        let fmt = PlainTextFormat::new();
+        let fmt = PlainText::new();
         proc_intermediate(&style, &fmt);
         "done!".into()
     } else {

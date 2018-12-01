@@ -1,7 +1,7 @@
 use clap::{App, Arg};
 
 extern crate citeproc;
-use citeproc::output::plain::PlainTextFormat;
+use citeproc::output::Pandoc;
 use citeproc::proc::*;
 use citeproc::style::error::StyleError;
 use citeproc::style::{build_style, drive_style};
@@ -15,7 +15,7 @@ fn parse(path: &str) -> Result<(), StyleError> {
         .expect("something went wrong reading the file");
     println!("{}", drive_style(path, &contents));
     let style = build_style(&contents)?;
-    let pandoc = PlainTextFormat::new();
+    let pandoc = Pandoc::new();
     let p = proc_intermediate(&style, &pandoc);
     println!("{:?}", p);
     flame_it::flame_it(&style);
@@ -46,9 +46,10 @@ mod flame_it {
     use citeproc::style::element::Style;
     pub fn flame_it(_style: &Style) {}
 }
+
 #[cfg(feature = "flame_it")]
 mod flame_it {
-    use citeproc::output::plain::PlainTextFormat;
+    use citeproc::output::PlainText;
     use citeproc::proc::proc_intermediate;
     use citeproc::style::element::Style;
     use std::fs::File;

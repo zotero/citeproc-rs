@@ -1,14 +1,14 @@
-use crate::output::Format;
+use super::OutputFormat;
 
 use crate::style::element::Formatting;
 
-pub struct PlainTextFormat {}
-impl PlainTextFormat {
+pub struct PlainText {}
+impl PlainText {
     pub fn new() -> Self {
-        PlainTextFormat {}
+        PlainText {}
     }
 }
-impl Format<String, String> for PlainTextFormat {
+impl OutputFormat<String, String> for PlainText {
     fn text_node(&self, s: &str, _: &Formatting) -> String {
         s.to_owned()
     }
