@@ -35,3 +35,4 @@ serde_json = "1.0.33"
 flame = { version = "0.2.2", optional = true }
 flamer = { version = "0.3", optional = true }
 fnv = "1.0.6"
+nom = "3"

@@ -5,6 +5,7 @@ extern crate fnv;
 use fnv::FnvHashMap;
 use crate::style::element::{ CslType };
 use crate::style::variables::{ Variable, NumberVariable, DateVariable, NameVariable };
+use super::date::DateOrRange;
 
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
@@ -17,42 +18,6 @@ pub struct Name<'r> {
     pub dropping_particle: Option<&'r str>,
     pub suffix: Option<&'r str>,
 }
-
-// This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
-// then we'd just use chrono::DateTime and support ISO input
-#[derive(Deserialize, Clone, Eq, PartialEq)]
-pub struct Date {
-    /// think 10,000 BC; it's a signed int
-    /// "not present" is expressed by not having a date in the first place
-    pub year: i32,
-    /// range 1 to 12 inclusive
-    /// 0 is "not present"
-    pub month: u8,
-    /// range 1 to 31 inclusive
-    /// 0 is "not present"
-    pub day: u16,
-}
-
-// TODO: implement PartialOrd?
-
-impl Date {
-    pub fn has_month(&self) -> bool { self.month != 0 }
-    pub fn has_day(&self) -> bool { self.day != 0 }
-}
-
-// TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day } 
-#[derive(Clone, Eq, PartialEq)]
-pub enum DateOrRange {
-    Single(Date),
-    Range(Date, Date),
-}
-
-impl DateOrRange {
-    pub fn new(year: i32, month: u8, day: u16) -> Self {
-        DateOrRange::Single(Date { year, month, day })
-    }
-}
-
 // We're saving copies and allocations by not using String here.
 pub struct Reference<'r> {
     pub id: &'r str,

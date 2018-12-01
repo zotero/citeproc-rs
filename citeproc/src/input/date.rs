@@ -1,0 +1,260 @@
+
+// This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
+// then we'd just use chrono::DateTime and support ISO input
+#[derive(Debug, Deserialize, Clone, Eq, PartialEq)]
+pub struct Date {
+    /// think 10,000 BC; it's a signed int
+    /// "not present" is expressed by not having a date in the first place
+    pub year: i32,
+    /// range 1 to 12 inclusive
+    /// 0 is "not present"
+    pub month: u32,
+    /// range 1 to 31 inclusive
+    /// 0 is "not present"
+    pub day: u32,
+}
+
+// TODO: implement PartialOrd?
+
+impl Date {
+    pub fn has_month(&self) -> bool { self.month != 0 }
+    pub fn has_day(&self) -> bool { self.day != 0 }
+    pub fn new(y: i32, m: u32, d: u32) -> Self {
+        Date { year: y, month: m, day: d }
+    }
+    // fn invalid_default() {
+        // it isn't possible to parse an invalid month, bad ones default to zero (see tests)
+        // and cause the day not to parse as well.
+        // so we only need to default days to zero when they are invalid.
+        // Maybe just leave this as is. You would need to know leap years, hence a whole bunch
+        // of date math that isn't all that valuable (real publications don't make those
+        // mistakes anyway, and users who don't know when months end... it's on them)
+        // plus there is no non-numeric day output for CSL. So it doesn't matter.
+    // }
+}
+
+
+// TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day } 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum DateOrRange {
+    Single(Date),
+    Range(Date, Date),
+}
+
+impl DateOrRange {
+    pub fn new(year: i32, month: u32, day: u32) -> Self {
+        DateOrRange::Single(Date { year, month, day })
+    }
+}
+
+impl FromStr for DateOrRange {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_range(s)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn test_date_parsing() {
+    assert_eq!(DateOrRange::from_str("1998-09-21"), Ok(DateOrRange::new(1998, 09, 21)));
+    assert_eq!(DateOrRange::from_str("1998-09"), Ok(DateOrRange::new(1998, 09, 0)));
+    assert_eq!(DateOrRange::from_str("1998"), Ok(DateOrRange::new(1998, 0, 0)));
+    assert_eq!(DateOrRange::from_str("1998trailing"), Ok(DateOrRange::new(1998, 0, 0)));
+    // can't parse 13 as a month, default to no month
+    assert_eq!(DateOrRange::from_str("1998-13"), Ok(DateOrRange::new(1998, 0, 0)));
+    // can't parse 34 as a day, default to no day
+    assert_eq!(DateOrRange::from_str("1998-12-34"), Ok(DateOrRange::new(1998, 12, 0)));
+}
+
+#[cfg(test)]
+#[test]
+fn test_range_parsing() {
+    assert_eq!(
+        DateOrRange::from_str("1998-09-21/2001-08-16"),
+        Ok(DateOrRange::Range(Date::new(1998, 9, 21), Date::new(2001, 8, 16)))
+    );
+    assert_eq!(
+        DateOrRange::from_str("1998-09-21/2001-08"),
+        Ok(DateOrRange::Range(Date::new(1998, 9, 21), Date::new(2001, 8, 0)))
+    );
+    assert_eq!(
+        DateOrRange::from_str("1998-09/2001-08-01"),
+        Ok(DateOrRange::Range(Date::new(1998, 9, 0), Date::new(2001, 8, 1))));
+    assert_eq!(
+        DateOrRange::from_str("1998/2001"),
+        Ok(DateOrRange::Range(Date::new(1998, 0, 0), Date::new(2001, 0, 0))));
+}
+
+
+
+
+// substantial portions of the following copied from
+// https://github.com/badboy/iso8601/blob/master/src/parsers.rs
+/*
+Copyright (c) 2015 Jan-Erik Rediger, Hendrik Sollich
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+use nom::{ self, is_digit };
+use std::str::{FromStr, from_utf8_unchecked};
+
+pub fn to_string(s: &[u8]) -> &str {
+    unsafe { from_utf8_unchecked(s) }
+}
+pub fn to_i32(s: &str) -> i32 {
+    FromStr::from_str(s).unwrap()
+}
+pub fn to_u32(s: &str) -> u32 {
+    FromStr::from_str(s).unwrap()
+}
+
+pub fn buf_to_u32(s: &[u8]) -> u32 {
+    to_u32(to_string(s))
+}
+pub fn buf_to_i32(s: &[u8]) -> i32 {
+    to_i32(to_string(s))
+}
+
+macro_rules! check(
+  ($input:expr, $submac:ident!( $($args:tt)* )) => (
+
+    {
+      let mut failed = false;
+      for &idx in $input {
+        if !$submac!(idx, $($args)*) {
+            failed = true;
+            break;
+        }
+      }
+      if failed {
+        nom::IResult::Error(nom::ErrorKind::Custom(20))
+      } else {
+        nom::IResult::Done(&b""[..], $input)
+      }
+    }
+  );
+  ($input:expr, $f:expr) => (
+    check!($input, call!($f));
+  );
+);
+
+named!(take_4_digits, flat_map!(take!(4), check!(is_digit)));
+
+// year
+named!(year_prefix, alt!(tag!("+") | tag!("-")));
+named!(year <i32>,
+       do_parse!(
+           pref: opt!(complete!(year_prefix)) >>
+           year: call!(take_4_digits) >>
+           (
+               match pref {
+                   Some(b"-") => -buf_to_i32(year),
+                   _ => buf_to_i32(year)
+               }
+           )
+       )
+);
+
+macro_rules! char_between(
+    ($input:expr, $min:expr, $max:expr) => (
+        {
+        fn f(c: u8) -> bool { c >= ($min as u8) && c <= ($max as u8)}
+        flat_map!($input, take!(1), check!(f))
+        }
+    );
+);
+
+// DD
+named!(day_zero  <u32>, do_parse!(tag!("0") >> s:char_between!('1', '9') >> (buf_to_u32(s))));
+named!(day_one   <u32>, do_parse!(tag!("1") >> s:char_between!('0', '9') >> (10+buf_to_u32(s))));
+named!(day_two   <u32>, do_parse!(tag!("2") >> s:char_between!('0', '9') >> (20+buf_to_u32(s))));
+named!(day_three <u32>, do_parse!(tag!("3") >> s:char_between!('0', '1') >> (30+buf_to_u32(s))));
+named!(day <u32>, alt!(day_zero | day_one | day_two | day_three));
+
+named!(lower_month <u32>, do_parse!(tag!("0") >> s:char_between!('1', '9') >> (buf_to_u32(s))));
+named!(upper_month <u32>, do_parse!(tag!("1") >> s:char_between!('0', '2') >> (10+buf_to_u32(s))));
+named!(month <u32>, alt!(lower_month | upper_month));
+
+
+// Custom stuff built on top of that:
+
+named!(and_day <u32>, do_parse!(tag!("-") >> d:day >> (d)));
+
+enum MonthDay {
+    Month(u32),
+    MonthDay(u32, u32),
+}
+
+named!(month_day <MonthDay>,
+       do_parse!(
+           tag!("-") >>
+           m  : month >>
+           ad : opt!(complete!(and_day)) >>
+           (
+               match ad {
+                   Some(d) => MonthDay::MonthDay(m, d),
+                   None => MonthDay::Month(m),
+               }
+           )
+       )
+);
+
+// YYYY-MM-DD
+named!(ymd_date <Date>,
+       do_parse!(
+           y: year >>
+           md: opt!(complete!(month_day)) >>
+           ( {
+               match md {
+                   None => Date { year: y, month: 0, day: 0 },
+                   Some(MonthDay::MonthDay(m, d)) => Date { year: y, month: m, day: d },
+                   Some(MonthDay::Month(m)) => Date { year: y, month: m, day: 0 },
+               }
+           })
+       )
+);
+
+named!(and_ymd <Date>, do_parse!(tag!("/") >> d:ymd_date >> (d)));
+
+named!(range <DateOrRange>,
+       do_parse!(
+           d1: ymd_date >>
+           d2o: opt!(complete!(and_ymd)) >>
+           (
+               match d2o {
+                   None => DateOrRange::Single(d1),
+                   Some(d2) => DateOrRange::Range(d1, d2),
+               }
+           )
+       )
+);
+
+
+use nom::IResult::*;
+pub fn parse_range(string: &str) -> Result<DateOrRange, String> {
+    if let Done(_left_overs, parsed) = range(string.as_bytes()) {
+        Ok(parsed)
+    } else {
+        Err(format!("Date range parsing error: {}", string))
+    }
+}
+

@@ -34,7 +34,7 @@ mod test {
 
     use crate::style::element::Formatting;
 
-    use super::Format;
+    use super::OutputFormat;
     use super::PlainText;
 
     // #[test]

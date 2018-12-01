@@ -7,6 +7,9 @@ extern crate flame;
 #[macro_use]
 extern crate flamer;
 
+#[macro_use]
+extern crate nom;
+
 pub mod input;
 pub mod output;
 pub mod style;
