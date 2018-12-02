@@ -484,20 +484,20 @@ impl Default for GivenNameDisambiguationRule {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Citation<'s> {
+pub struct Citation {
     pub disambiguate_add_names: bool,
     pub disambiguate_add_givenname: bool,
     pub givenname_disambiguation_rule: GivenNameDisambiguationRule,
     pub disambiguate_add_year_suffix: bool,
-    pub layout: Layout<'s>,
+    pub layout: Layout,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Layout<'s> {
+pub struct Layout {
     pub formatting: Formatting,
     pub affixes: Affixes,
     pub delimiter: Delimiter,
-    pub elements: &'s [Element],
+    pub elements: Vec<Element>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -516,10 +516,10 @@ pub enum StyleClass {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Style<'s> {
+pub struct Style {
     pub class: StyleClass,
     pub macros: Vec<MacroMap>,
-    pub citation: Citation<'s>,
+    pub citation: Citation,
     pub info: Info,
 }
 

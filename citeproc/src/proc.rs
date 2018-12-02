@@ -82,7 +82,7 @@ pub trait Proc<'s> {
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-impl<'s> Proc<'s> for Style<'s> {
+impl<'s> Proc<'s> for Style {
     fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
     where
         O: OutputFormat,
@@ -94,7 +94,7 @@ impl<'s> Proc<'s> for Style<'s> {
 }
 
 // TODO: insert affixes into group before processing as a group
-impl<'s> Proc<'s> for LayoutEl<'s> {
+impl<'s> Proc<'s> for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
     fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
     where

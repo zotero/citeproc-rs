@@ -56,19 +56,27 @@ impl<T: Clone> Intercalate<T> for [T] {
     }
 }
 
-// pub struct PartitionErrors<'a, 'i, O, E>
-//     where
-//         I: Iterator<Item = Result<O, E>
-// {
-//     arena: &'a Arena<O>,
-//     inner: &'i mut I,
-// }
-
 pub trait PartitionArenaErrors<O, E> : Iterator<Item=Result<O, E>>
     where O: Sized,
           Self: Sized
 {
-    fn partition_results<'a>(self, arena: &'a Arena<O>) -> Result<&'a [O], Vec<E>>
+    fn partition_results<'a>(self) -> Result<Vec<O>, Vec<E>>
+    {
+        let mut errors = Vec::new();
+        let oks = self.filter_map(|res| {
+            match res {
+                Ok(ok) => Some(ok),
+                Err(e) => { errors.push(e); None }
+            }
+        }).collect();
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(oks)
+        }
+    }
+
+    fn partition_arena_results<'a>(self, arena: &'a Arena<O>) -> Result<&'a [O], Vec<E>>
     {
         let mut errors = Vec::new();
         let oks = self.filter_map(|res| {

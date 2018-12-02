@@ -23,15 +23,15 @@ where
     fn is_on_node(node: &Node) -> Vec<String>;
 }
 
-pub trait FromNode<'s>
+pub trait FromNode
 where
     Self: Sized,
 {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError>;
+    fn from_node(node: &Node) -> Result<Self, CslError>;
 }
 
-impl<'s> FromNode<'s> for Affixes {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Affixes {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(Affixes {
             prefix: attribute_string(node, "prefix"),
             suffix: attribute_string(node, "suffix"),
@@ -39,8 +39,8 @@ impl<'s> FromNode<'s> for Affixes {
     }
 }
 
-impl<'s> FromNode<'s> for RangeDelimiter {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for RangeDelimiter {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(RangeDelimiter(attribute_string(node, "range-delimiter")))
     }
 }
@@ -65,8 +65,8 @@ impl IsOnNode for Affixes {
     }
 }
 
-impl<'s> FromNode<'s> for Formatting {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Formatting {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(Formatting {
             font_style: attribute_optional(node, "font-style")?,
             font_variant: attribute_optional(node, "font-variant")?,
@@ -100,8 +100,8 @@ impl IsOnNode for Formatting {
     }
 }
 
-impl<'s> FromNode<'s> for Citation<'s> {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Citation {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         let layouts: Vec<_> = node
             .children()
             .filter(|n| n.has_tag_name("layout"))
@@ -125,37 +125,37 @@ impl<'s> FromNode<'s> for Citation<'s> {
                 "disambiguate-add-year-suffix",
                 false,
             )?,
-            layout: Layout::from_node(&layout_node, arena)?,
+            layout: Layout::from_node(&layout_node)?,
         })
     }
 }
 
-impl<'s> FromNode<'s> for Delimiter {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Delimiter {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(Delimiter(attribute_string(node, "delimiter")))
     }
 }
 
-impl<'s> FromNode<'s> for Layout<'s> {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
-        let results = node
+impl FromNode for Layout {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let elements = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el, arena));
-        let elements = results.partition_results(arena)?;
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
         Ok(Layout {
-            formatting: Formatting::from_node(node, arena)?,
-            affixes: Affixes::from_node(node, arena)?,
-            delimiter: Delimiter::from_node(node, arena)?,
+            formatting: Formatting::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
+            delimiter: Delimiter::from_node(node)?,
             elements,
         })
     }
 }
 
-fn text_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
+fn text_el(node: &Node) -> Result<Element, CslError> {
     use self::element::Element::*;
-    let formatting = Formatting::from_node(node, arena)?;
-    let affixes = Affixes::from_node(node, arena)?;
+    let formatting = Formatting::from_node(node)?;
+    let affixes = Affixes::from_node(node)?;
     if let Some(m) = node.attribute("macro") {
         return Ok(Macro(
             m.to_owned(),
@@ -170,7 +170,7 @@ fn text_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslErr
             formatting,
             affixes,
             attribute_optional(node, "form")?,
-            Delimiter::from_node(node, arena)?,
+            Delimiter::from_node(node)?,
             attribute_bool(node, "quotes", false)?,
         ));
     }
@@ -194,60 +194,60 @@ fn text_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslErr
     Err(InvalidCsl::new(node, "yeah".to_owned()))?
 }
 
-fn label_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
+fn label_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Label(
         attribute_required(node, "variable")?,
         attribute_optional(node, "form")?,
-        Formatting::from_node(node, arena)?,
-        Affixes::from_node(node, arena)?,
+        Formatting::from_node(node)?,
+        Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
 }
 
-fn number_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
+fn number_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Number(
         attribute_required(node, "variable")?,
         attribute_optional(node, "form")?,
-        Formatting::from_node(node, arena)?,
-        Affixes::from_node(node, arena)?,
+        Formatting::from_node(node)?,
+        Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
 }
 
-fn group_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
-    let elements: Result<Vec<_>, _> = node
+fn group_el(node: &Node) -> Result<Element, CslError> {
+    let elements = node
         .children()
         .filter(|n| n.is_element())
-        .map(|el| Element::from_node(&el, arena))
-        .collect();
+        .map(|el| Element::from_node(&el))
+        .partition_results()?;
     Ok(Element::Group(
-        Formatting::from_node(node, arena)?,
-        Delimiter::from_node(node, arena)?,
-        elements?,
+        Formatting::from_node(node)?,
+        Delimiter::from_node(node)?,
+        elements,
     ))
 }
 
-impl<'s> FromNode<'s> for Else {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
-        let elements: Result<Vec<_>, _> = node
+impl FromNode for Else {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let elements = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el, arena))
-            .collect();
-        Ok(Else(elements?))
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
+        Ok(Else(elements))
     }
 }
 
-impl<'s> FromNode<'s> for Match {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Match {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(attribute_optional(node, "match")?)
     }
 }
 
-impl<'s> FromNode<'s> for Condition {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Condition {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(Condition {
-            match_type: Match::from_node(node, arena)?,
+            match_type: Match::from_node(node)?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
             is_numeric: attribute_array(node, "is-numeric")?,
             variable: attribute_array(node, "variable")?,
@@ -259,18 +259,18 @@ impl<'s> FromNode<'s> for Condition {
     }
 }
 
-impl<'s> FromNode<'s> for IfThen {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
-        let elements: Result<Vec<_>, _> = node
+impl FromNode for IfThen {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let elements = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el, arena))
-            .collect();
-        Ok(IfThen(Condition::from_node(node, arena)?, elements?))
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
+        Ok(IfThen(Condition::from_node(node)?, elements))
     }
 }
 
-fn choose_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
+fn choose_el(node: &Node) -> Result<Element, CslError> {
     let els: Vec<Node> = node.children().filter(|n| n.is_element()).collect();
 
     let mut if_block: Option<IfThen> = None;
@@ -301,7 +301,7 @@ fn choose_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslE
         if !seen_if {
             if tag == "if" {
                 seen_if = true;
-                if_block = Some(IfThen::from_node(&el, arena)?);
+                if_block = Some(IfThen::from_node(&el)?);
             } else {
                 return Err(InvalidCsl::new(
                     &el,
@@ -310,10 +310,10 @@ fn choose_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslE
             }
         } else if !seen_else {
             if tag == "else-if" {
-                elseifs.push(IfThen::from_node(&el, arena)?);
+                elseifs.push(IfThen::from_node(&el)?);
             } else if tag == "else" {
                 seen_else = true;
-                else_block = Else::from_node(&el, arena)?;
+                else_block = Else::from_node(&el)?;
             } else {
                 return unrecognised(&el, tag);
             }
@@ -328,33 +328,32 @@ fn choose_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslE
     Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
 
-impl<'s> FromNode<'s> for NameLabel {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for NameLabel {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(NameLabel {
             form: attribute_optional(node, "form")?,
-            formatting: Formatting::from_node(node, arena)?,
-            delimiter: Delimiter::from_node(node, arena)?,
+            formatting: Formatting::from_node(node)?,
+            delimiter: Delimiter::from_node(node)?,
             plural: attribute_optional(node, "plural")?,
         })
     }
 }
 
-impl<'s> FromNode<'s> for Substitute {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
-        let els: Result<Vec<_>, _> = node
+impl FromNode for Substitute {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let els = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("name"))
-            .map(|el| Element::from_node(&el, arena))
-            .collect();
-        Ok(Substitute(els?))
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
+        Ok(Substitute(els))
     }
 }
 
-fn max1_child<'s, T: FromNode<'s>>(
+fn max1_child<'s, T: FromNode>(
     parent_tag: &str,
     child_tag: &str,
     els: Children,
-    arena: &'s Arena<Element>,
 ) -> Result<Option<T>, CslError> {
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
     if subst_els.len() > 1 {
@@ -366,37 +365,36 @@ fn max1_child<'s, T: FromNode<'s>>(
             ),
         ))?;
     }
-    let substs: Result<Vec<_>, _> = subst_els
+    let substs = subst_els
         .iter()
-        .map(|el| T::from_node(&el, arena))
-        .collect();
-    let substitute = substs?.into_iter().nth(0);
+        .map(|el| T::from_node(&el))
+        .partition_results()?;
+    let substitute = substs.into_iter().nth(0);
     Ok(substitute)
 }
 
-fn names_el<'s>(node: &Node, arena: &'s Arena<Element>) -> Result<Element, CslError> {
+fn names_el(node: &Node) -> Result<Element, CslError> {
     // let variable: Vec<String> = attribute_string(node, "variable")
     //     .split(" ")
     //     .filter(|s| s.len() > 0)
     //     .map(|s| s.to_owned())
     //     .collect();
 
-    let children = node.children();
-    let name_els: Result<Vec<_>, _> = children
+    let names = node
+        .children()
         .filter(|n| n.has_tag_name("name"))
-        .map(|el| Name::from_node(&el, arena))
-        .collect();
-    let names = name_els?;
+        .map(|el| Name::from_node(&el))
+        .partition_results()?;
 
-    let label = max1_child("names", "label", node.children(), arena)?;
-    let substitute = max1_child("names", "substitute", node.children(), arena)?;
+    let label = max1_child("names", "label", node.children())?;
+    let substitute = max1_child("names", "substitute", node.children())?;
 
     Ok(Element::Names(Names(
         attribute_array(node, "variable")?,
         names,
         label,
-        Formatting::from_node(node, arena)?,
-        Delimiter::from_node(node, arena)?,
+        Formatting::from_node(node)?,
+        Delimiter::from_node(node)?,
         substitute,
     )))
 }
@@ -411,15 +409,14 @@ impl IsOnNode for TextCase {
     }
 }
 
-impl<'s> FromNode<'s> for TextCase {
-    fn from_node(node: &Node, _arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for TextCase {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(attribute_optional(node, "text-case")?)
     }
 }
 
-fn disallow_default<'s, T: Default + FromNode<'s> + IsOnNode>(
+fn disallow_default<'s, T: Default + FromNode + IsOnNode>(
     node: &Node,
-    arena: &'s Arena<Element>,
     disallow: bool,
 ) -> Result<T, CslError> {
     if disallow {
@@ -433,14 +430,13 @@ fn disallow_default<'s, T: Default + FromNode<'s> + IsOnNode>(
             Ok(T::default())
         }
     } else {
-        T::from_node(node, arena)
+        T::from_node(node)
     }
 }
 
 impl DatePart {
-    fn from_node_dp<'s>(
+    fn from_node_dp(
         node: &Node,
-        arena: &'s Arena<Element>,
         full: bool,
     ) -> Result<Self, CslError> {
         let name: DatePartName = attribute_required(node, "name")?;
@@ -452,50 +448,49 @@ impl DatePart {
         Ok(DatePart {
             name,
             form,
-            affixes: disallow_default(node, arena, !full)?,
-            formatting: disallow_default(node, arena, !full)?,
-            text_case: disallow_default(node, arena, !full)?,
-            range_delimiter: disallow_default(node, arena, !full)?,
+            affixes: disallow_default(node, !full)?,
+            formatting: disallow_default(node, !full)?,
+            text_case: disallow_default(node, !full)?,
+            range_delimiter: disallow_default(node, !full)?,
         })
     }
 }
 
 impl Date {
-    fn from_node_date<'s>(
+    fn from_node_date(
         node: &Node,
-        arena: &'s Arena<Element>,
         is_in_locale: bool,
     ) -> Result<Self, CslError> {
         let form: DateForm = attribute_optional(node, "form")?;
         let not_set = form == DateForm::NotSet;
         let full = if is_in_locale { true } else { not_set };
-        let elements: Result<Vec<_>, _> = node
+        let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node_dp(&el, arena, full))
-            .collect();
+            .map(|el| DatePart::from_node_dp(&el, full))
+            .partition_results()?;
         Ok(Date {
             variable: attribute_required(node, "variable")?,
             form,
-            date_parts: elements?,
+            date_parts: elements,
             date_parts_attr: attribute_optional(node, "date-parts")?,
-            affixes: Affixes::from_node(node, arena)?,
-            formatting: Formatting::from_node(node, arena)?,
-            delimiter: Delimiter::from_node(node, arena)?,
+            affixes: Affixes::from_node(node)?,
+            formatting: Formatting::from_node(node)?,
+            delimiter: Delimiter::from_node(node)?,
         })
     }
 }
 
-impl<'s> FromNode<'s> for Element {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Element {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         match node.tag_name().name() {
-            "text" => Ok(text_el(node, arena)?),
-            "label" => Ok(label_el(node, arena)?),
-            "group" => Ok(group_el(node, arena)?),
-            "number" => Ok(number_el(node, arena)?),
-            "names" => Ok(names_el(node, arena)?),
-            "choose" => Ok(choose_el(node, arena)?),
-            "date" => Ok(Element::Date(Date::from_node_date(node, arena, false)?)),
+            "text" => Ok(text_el(node)?),
+            "label" => Ok(label_el(node)?),
+            "group" => Ok(group_el(node)?),
+            "number" => Ok(number_el(node)?),
+            "names" => Ok(names_el(node)?),
+            "choose" => Ok(choose_el(node)?),
+            "date" => Ok(Element::Date(Date::from_node_date(node, false)?)),
             _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?,
         }
     }
@@ -523,12 +518,12 @@ pub fn get_toplevel<'a, 'd: 'a>(
     }
 }
 
-impl<'s> FromNode<'s> for MacroMap {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for MacroMap {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
-            .map(|el| Element::from_node(&el, arena))
+            .map(|el| Element::from_node(&el))
             .collect();
         let name = match node.attribute("name") {
             Some(n) => n,
@@ -546,21 +541,21 @@ impl<'s> FromNode<'s> for MacroMap {
     }
 }
 
-impl<'s> FromNode<'s> for NamePart {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for NamePart {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(NamePart {
             name: attribute_required(node, "name")?,
-            text_case: TextCase::from_node(node, arena)?,
-            formatting: Formatting::from_node(node, arena)?,
+            text_case: TextCase::from_node(node)?,
+            formatting: Formatting::from_node(node)?,
         })
     }
 }
 
-impl<'s> FromNode<'s> for Name {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Name {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(Name {
             and: attribute_string(node, "and"),
-            delimiter: Delimiter::from_node(node, arena)?,
+            delimiter: Delimiter::from_node(node)?,
             delimiter_precedes_et_al: attribute_optional(node, "delimiter-precedes-et-al")?,
             delimiter_precedes_last: attribute_optional(node, "delimiter-precedes-last")?,
             et_al_min: attribute_int(node, "et-al-min", 0)?,
@@ -573,20 +568,20 @@ impl<'s> FromNode<'s> for Name {
             initialize_with: attribute_string(node, "initialize-with"),
             name_as_sort_order: attribute_optional(node, "name-as-sort-order")?,
             sort_separator: attribute_string(node, "sort-separator"),
-            formatting: Formatting::from_node(node, arena)?,
-            affixes: Affixes::from_node(node, arena)?,
+            formatting: Formatting::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
         })
     }
 }
 
-impl<'s> FromNode<'s> for Style<'s> {
-    fn from_node(node: &Node, arena: &'s Arena<Element>) -> Result<Self, CslError> {
+impl FromNode for Style {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         let macros: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el, arena))
+            .map(|el| MacroMap::from_node(&el))
             .collect();
-        let citation = Citation::from_node(&get_toplevel(&node, "citation")?, arena);
+        let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
         // let info_node = get_toplevel(&doc, "info")?;
         // let locale_node = get_toplevel(&doc, "locale")?;
         Ok(Style {
