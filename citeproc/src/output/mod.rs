@@ -1,10 +1,10 @@
 mod pandoc;
-mod markdown;
+// mod markdown;
 mod plain;
 
 pub use self::pandoc::Pandoc;
 pub use self::plain::PlainText;
-pub use self::markdown::Markdown;
+// pub use self::markdown::Markdown;
 
 use crate::style::element::Formatting;
 use serde::Serialize;
@@ -16,15 +16,18 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat<T, O: Serialize> {
+pub trait OutputFormat {
+    type Build: std::fmt::Debug + Clone;
+    type Output: Serialize;
     // affixes are not included in the formatting on a text node.
     // affixes are converted into text nodes themselves, with Formatting::default() passed.
     // http://docs.citationstyles.org/en/stable/specification.html#affixes
-    fn text_node(&self, s: &str, formatting: &Formatting) -> T;
-    fn group(&self, nodes: &[T], delimiter: &str, formatting: &Formatting) -> T;
-    fn output(&self, intermediate: T) -> O;
+    fn text_node(&self, s: &str, formatting: &Formatting) -> Self::Build;
+    fn group(&self, nodes: &[Self::Build], delimiter: &str, formatting: &Formatting)
+        -> Self::Build;
+    fn output(&self, intermediate: Self::Build) -> Self::Output;
 
-    fn plain(&self, s: &str) -> T {
+    fn plain(&self, s: &str) -> Self::Build {
         self.text_node(s, &Formatting::default())
     }
 }

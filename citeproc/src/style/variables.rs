@@ -9,10 +9,7 @@ pub enum Variable {
     Archive,
     /// storage location within an archive (e.g. a box and folder number)
     /// technically the spec says use an underscore, but that's probably a typo.
-    #[strum(
-        serialize = "archive_location",
-        serialize = "archive-location"
-    )]
+    #[strum(serialize = "archive_location", serialize = "archive-location")]
     ArchiveLocation,
     /// geographic location of the archive,
     ArchivePlace,

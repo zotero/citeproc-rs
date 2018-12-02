@@ -2,10 +2,10 @@
 // std::collections::HashMap does
 extern crate fnv;
 
-use fnv::FnvHashMap;
-use crate::style::element::{ CslType };
-use crate::style::variables::{ Variable, NumberVariable, DateVariable, NameVariable };
 use super::date::DateOrRange;
+use crate::style::element::CslType;
+use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable};
+use fnv::FnvHashMap;
 
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
@@ -44,4 +44,3 @@ impl<'r> Reference<'r> {
         }
     }
 }
-

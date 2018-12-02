@@ -15,7 +15,7 @@ impl CslVersion {
     pub fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
         let version = match *self {
             CslVersion::Csl101 => "csl101",
-            CslVersion::CslM => "cslM"
+            CslVersion::CslM => "cslM",
         };
         if let Some("0") = val.get_str(version) {
             return None;
@@ -23,4 +23,3 @@ impl CslVersion {
         Some(val)
     }
 }
-

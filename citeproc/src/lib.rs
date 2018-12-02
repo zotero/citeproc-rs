@@ -10,16 +10,23 @@ extern crate flamer;
 #[macro_use]
 extern crate nom;
 
+mod driver;
 pub mod input;
 pub mod output;
 pub mod style;
+pub use self::driver::Driver;
 mod utils;
+
+pub use self::style::error::StyleError;
 
 #[cfg_attr(feature = "flame_it", flame)]
 pub mod proc;
 
 #[macro_use]
 extern crate strum_macros;
+
+#[macro_use]
+extern crate rental;
 
 #[macro_use]
 extern crate serde_derive;
@@ -33,22 +40,25 @@ extern crate test;
 
 #[cfg(test)]
 mod tests {
-    use crate::style::drive_style;
+    use crate::driver::Driver;
+    use crate::output::*;
     use crate::test::Bencher;
+    use crate::StyleError;
     use std::fs::File;
     use std::io::prelude::*;
 
     #[bench]
-    fn bench_build_tree(b: &mut Bencher) {
+    fn bench_build_tree(b: &mut Bencher) -> Result<(), StyleError> {
         let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
+        let formatter = PlainText::new();
         f.read_to_string(&mut contents)
             .expect("something went wrong reading the file");
-        println!("hello?");
         b.iter(|| {
-            drive_style(path, &contents);
+            Driver::new(&contents, &formatter).unwrap();
         });
+        Ok(())
     }
 
     // #[bench]

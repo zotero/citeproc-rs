@@ -1,8 +1,8 @@
+use super::version::CslVersion;
 use crate::style::error::*;
 use roxmltree::Node;
 use std::str::FromStr;
 use strum::EnumProperty;
-use super::version::CslVersion;
 
 // Temporary
 pub const CSL_VERSION: CslVersion = CslVersion::Csl101;

@@ -2,7 +2,10 @@
 
 ### How it should work?
 
-#### Dead code elimination? Style optimization?
+#### Arena allocation to replace Vec in style.rs, elements.rs
+
+They are static. Don't need modification at all. So kill it.
+All the vec lengths can be computed by exhausting iterators.
 
 #### Multi-threaded?
 

@@ -1,13 +1,11 @@
-use crate::input::Reference;
 use crate::input::DateOrRange;
-use crate::style::element::Delimiter;
+use crate::input::Reference;
 use crate::output::OutputFormat;
+use crate::style::element::Delimiter;
 use crate::style::element::{
     Choose as ChooseEl, Date as DateEl, Element, Formatting, Layout as LayoutEl, Names as NamesEl,
     Style,
 };
-use serde::Serialize;
-use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'s> {
@@ -15,21 +13,19 @@ pub enum YearSuffixHook<'s> {
     Explicit(),
 }
 
+// Intermediate Representation
 #[derive(Debug)]
-pub enum Intermediate<'s, T>
-where
-    T: Debug,
-{
+pub enum IR<'s, O: OutputFormat> {
     // no (further) disambiguation possible
-    Rendered(Option<T>),
+    Rendered(Option<O::Build>),
     // the name block,
     // the current render
-    Names(&'s NamesEl, T),
-    // a single <if disambiguate="true"> means the whole <choose> is re-rendered in step 4
+    Names(&'s NamesEl, O::Build),
+
+    // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
-    // the current render
-    ConditionalDisamb(&'s ChooseEl, Vec<Intermediate<'s, T>>),
-    YearSuffix(YearSuffixHook<'s>, T),
+    ConditionalDisamb(&'s ChooseEl, Vec<IR<'s, O>>),
+    YearSuffix(YearSuffixHook<'s>, O::Build),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -44,17 +40,14 @@ where
     //     Rendered(..)
     // ]
     // // TODO: store delimiter and affixes for later
-    Seq(Vec<Intermediate<'s, T>>),
+    Seq(Vec<IR<'s, O>>),
 }
 
-impl<'s, T> Intermediate<'s, T> where T : Debug + Clone {
-    pub fn flatten<'r, O: Serialize>(
-        &self,
-        fmt: &impl OutputFormat<T, O>
-    ) -> T {
+impl<'s, O: OutputFormat> IR<'s, O> {
+    pub fn flatten<'r>(&'s self, fmt: &O) -> O::Build {
         // TODO: change fmt.group to accept iterators instead
-        let seq = |xs: &[Intermediate<'s, T>]| {
-            let v: Vec<T> = xs.iter().map(|i| i.flatten(fmt)).collect();
+        let seq = |xs: &[IR<'s, O>]| {
+            let v: Vec<O::Build> = xs.iter().map(|i| i.flatten(fmt)).collect();
             fmt.group(&v, "", &Formatting::default())
         };
         // must clone
@@ -69,7 +62,7 @@ impl<'s, T> Intermediate<'s, T> where T : Debug + Clone {
     }
 }
 
-use self::Intermediate::*;
+use self::IR::*;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
 // nodes are possibly disambiguate-able in year suffix mode and if such a node should be inserted
@@ -79,63 +72,44 @@ use self::Intermediate::*;
 
 // Levels 1-3 will also have to update the ConditionalDisamb's current render
 
-fn _disamb_1() {
-    unimplemented!()
-}
-
-fn _disamb_2() {
-    unimplemented!()
-}
-
-fn _disamb_3() {
-    unimplemented!()
-}
-
-fn _disamb_4() {
-    unimplemented!()
-}
-
-pub trait Proc {
+// 's: style
+// 'r: reference
+pub trait Proc<'s> {
     // TODO: include settings and reference and macro map
-    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
-        &'s self,
-        fmt: &impl OutputFormat<T, O>,
-        refr: &Reference<'r>
-    ) -> Intermediate<'s, T>;
+    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    where
+        O: OutputFormat;
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-impl Proc for Style {
-    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
-        &'s self,
-        fmt: &impl OutputFormat<T, O>,
-        refr: &Reference<'r>,
-        ) -> Intermediate<'s, T> {
+impl<'s> Proc<'s> for Style<'s> {
+    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    where
+        O: OutputFormat,
+    {
         let citation = &self.citation;
         let layout = &citation.layout;
-        layout.proc_intermediate(fmt, refr)
+        layout.intermediate(fmt, refr)
     }
 }
 
 // TODO: insert affixes into group before processing as a group
-impl Proc for LayoutEl {
+impl<'s> Proc<'s> for LayoutEl<'s> {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
-        &'s self,
-        fmt: &impl OutputFormat<T, O>,
-        refr: &Reference<'r>
-    ) -> Intermediate<'s, T> {
+    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    where
+        O: OutputFormat,
+    {
         sequence(fmt, refr, &self.formatting, &self.delimiter, &self.elements)
     }
 }
 
-impl Proc for Element {
+impl<'s> Proc<'s> for Element {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
-        &'s self,
-        fmt: &impl OutputFormat<T, O>,
-        refr: &Reference<'r>,
-    ) -> Intermediate<'s, T> {
+    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    where
+        O: OutputFormat,
+    {
         let null_f = Formatting::default();
         match *self {
             Element::Choose(ref _ch) => {
@@ -145,8 +119,7 @@ impl Proc for Element {
             Element::Macro(ref name, ref f, ref _af, ref _quo) => {
                 Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
             }
-            Element::Const(ref val, ref f, ref af, ref _quo) =>
-                Intermediate::Rendered(Some(fmt.group(
+            Element::Const(ref val, ref f, ref af, ref _quo) => IR::Rendered(Some(fmt.group(
                 &[
                     fmt.plain(&af.prefix),
                     fmt.text_node(&val, &f),
@@ -167,12 +140,14 @@ impl Proc for Element {
                         "",
                         &null_f,
                     ))
-                } else { None };
-                Intermediate::Rendered(content)
+                } else {
+                    None
+                };
+                IR::Rendered(content)
             }
 
             Element::Term(ref term, ref _form, ref f, ref af, ref _pl) => {
-                Intermediate::Rendered(Some(fmt.group(
+                IR::Rendered(Some(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
                         fmt.text_node(&format!("(term {})", term), &f),
@@ -183,7 +158,7 @@ impl Proc for Element {
                 )))
             }
             Element::Label(ref var, ref _form, ref f, ref af, ref _pl) => {
-                Intermediate::Rendered(Some(fmt.group(
+                IR::Rendered(Some(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
                         fmt.text_node(&format!("(label {})", var.as_ref()), &f),
@@ -204,35 +179,35 @@ impl Proc for Element {
                         "",
                         &null_f,
                     ))
-                } else { None };
-                Intermediate::Rendered(content)
+                } else {
+                    None
+                };
+                IR::Rendered(content)
             }
-            Element::Names(ref ns) => {
-                Intermediate::Names(ns, fmt.plain("names first-pass"))
-            }
-            Element::Group(ref f, ref d, ref els) => {
-                sequence(fmt, refr, f, d, els.as_ref())
-            }
+            Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
+            Element::Group(ref f, ref d, ref els) => sequence(fmt, refr, f, d, els.as_ref()),
             Element::Date(ref dt) => {
-                dt.proc_intermediate(fmt, refr)
-                // Intermediate::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
+                dt.intermediate(fmt, refr)
+                // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }
     }
 }
 
-fn sequence<'s, 'r, T: Debug, O: Serialize>(
-    fmt: &impl OutputFormat<T, O>,
+fn sequence<'s, 'r, O>(
+    fmt: &O,
     refr: &Reference<'r>,
     f: &Formatting,
     delim: &Delimiter,
-    els: &'s [Element]
-) -> Intermediate<'s, T> {
-
+    els: &'s [Element],
+) -> IR<'s, O>
+where
+    O: OutputFormat,
+{
     let mut dedup = vec![];
     let mut dups = vec![];
     for el in els.iter() {
-        let pr = el.proc_intermediate(fmt, refr);
+        let pr = el.intermediate(fmt, refr);
         if let Rendered(Some(r)) = pr {
             dups.push(r);
         } else if let Rendered(None) = pr {
@@ -256,22 +231,24 @@ fn sequence<'s, 'r, T: Debug, O: Serialize>(
     Seq(dedup)
 }
 
-impl Proc for DateEl {
+impl<'s> Proc<'s> for DateEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn proc_intermediate<'s, 'r, T: Debug, O: Serialize>(
-        &'s self,
-        fmt: &impl OutputFormat<T, O>,
-        refr: &Reference<'r>,
-    ) -> Intermediate<'s, T> {
-        let content = refr.date
+    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    where
+        O: OutputFormat,
+    {
+        let content = refr
+            .date
             .get(&self.variable)
             .and_then(|val| {
                 if let DateOrRange::Single(d) = val {
                     Some(d)
-                } else { None }
+                } else {
+                    None
+                }
             })
             .map(|val| {
-                let string = format!("{}-{}-{}",  val.year, val.month, val.day);
+                let string = format!("{}-{}-{}", val.year, val.month, val.day);
                 fmt.group(
                     &[
                         fmt.plain(&self.affixes.prefix),
@@ -282,22 +259,22 @@ impl Proc for DateEl {
                     &Formatting::default(),
                 )
             });
-        Intermediate::Rendered(content)
+        IR::Rendered(content)
     }
 }
 
 #[cfg(all(test, feature = "flame_it"))]
 mod test {
-    use std::str::FromStr;
     use super::Proc;
     use crate::input::*;
-    use crate::style::variables::*;
-    use crate::style::element::{ Style, CslType };
     use crate::output::PlainText;
     use crate::style::build_style;
+    use crate::style::element::{CslType, Style};
+    use crate::style::variables::*;
     use crate::test::Bencher;
     use std::fs::File;
     use std::io::prelude::*;
+    use std::str::FromStr;
 
     #[bench]
     fn bench_intermediate(b: &mut Bencher) {
@@ -311,10 +288,13 @@ mod test {
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
         refr.number.insert(NumberVariable::Number, 55);
-        refr.date.insert(DateVariable::Issued, DateOrRange::from_str("1998-01-04").unwrap());
+        refr.date.insert(
+            DateVariable::Issued,
+            DateOrRange::from_str("1998-01-04").unwrap(),
+        );
         if let Ok(style) = s {
             b.iter(|| {
-                style.proc_intermediate(&fmt, &refr);
+                style.intermediate(&fmt, &refr);
             });
         }
     }

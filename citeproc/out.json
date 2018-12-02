@@ -1,5 +1,0 @@
-{"blocks":[{"t":"Para","c":
-
-  [{"t":"Emph","c":[{"t":"Str","c":"TASCC"},{"t":"Space"},{"t":"Str","c":"&"},{"t":"Space"},{"t":"Str","c":"55"},{"t":"Space"},{"t":"Str","c":"&"},{"t":"Space"},{"t":"Span","c":[["",["csl-no-emph"],[]],[{"t":"Str","c":"1998-1-4"}]]},{"t":"Space"},{"t":"Str","c":"&"},{"t":"Space"},{"t":"Strong","c":[{"t":"Span","c":[["",["csl-no-emph"],[]],[{"t":"Str","c":"yeah"}]]}]},{"t":"Str","c":"-"},{"t":"Str","c":"the"},{"t":"Str","c":"-"},{"t":"Str","c":"boys"},{"t":"Space"},{"t":"Str","c":"&"},{"t":"Space"},{"t":"Str","c":"never"},{"t":"Str","c":"-"},{"t":"Str","c":"stop"},{"t":"Str","c":"-"},{"t":"Str","c":"never"},{"t":"Str","c":"-"},{"t":"Str","c":"stopping"}]},{"t":"Str","c":"citation"},{"t":"Str","c":"names"},{"t":"Space"},{"t":"Str","c":"first-pass"},{"t":"Str","c":"choose"}]
-
-}],"pandoc-api-version":[1,17,5,4],"meta":{}}

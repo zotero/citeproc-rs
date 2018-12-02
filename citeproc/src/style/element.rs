@@ -113,12 +113,12 @@ impl Default for Formatting {
 
 impl fmt::Debug for Affixes {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Affixes {{ ");
+        write!(f, "Affixes {{ ")?;
         if !self.prefix.is_empty() {
-            write!(f, "prefix: {:?}, ", self.prefix);
+            write!(f, "prefix: {:?}, ", self.prefix)?;
         }
         if !self.suffix.is_empty() {
-            write!(f, "suffix: {:?}, ", self.suffix);
+            write!(f, "suffix: {:?}, ", self.suffix)?;
         }
         write!(f, "}}")
     }
@@ -127,30 +127,30 @@ impl fmt::Debug for Affixes {
 impl fmt::Debug for Formatting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let default = Formatting::default();
-        write!(f, "Formatting {{ ");
+        write!(f, "Formatting {{ ")?;
         if self.font_style != default.font_style {
-            write!(f, "font_style: {:?}, ", self.font_style);
+            write!(f, "font_style: {:?}, ", self.font_style)?;
         }
         if self.font_variant != default.font_variant {
-            write!(f, "font_variant: {:?}, ", self.font_variant);
+            write!(f, "font_variant: {:?}, ", self.font_variant)?;
         }
         if self.font_weight != default.font_weight {
-            write!(f, "font_weight: {:?}, ", self.font_weight);
+            write!(f, "font_weight: {:?}, ", self.font_weight)?;
         }
         if self.text_decoration != default.text_decoration {
-            write!(f, "text_decoration: {:?}, ", self.text_decoration);
+            write!(f, "text_decoration: {:?}, ", self.text_decoration)?;
         }
         if self.vertical_alignment != default.vertical_alignment {
-            write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment);
+            write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment)?;
         }
         if self.display != default.display {
-            write!(f, "display: {:?}, ", self.display);
+            write!(f, "display: {:?}, ", self.display)?;
         }
         if self.strip_periods != default.strip_periods {
-            write!(f, "strip_periods: {:?}, ", self.strip_periods);
+            write!(f, "strip_periods: {:?}, ", self.strip_periods)?;
         }
         if self.hyperlink != default.hyperlink {
-            write!(f, "hyperlink: {:?}, ", self.hyperlink);
+            write!(f, "hyperlink: {:?}, ", self.hyperlink)?;
         }
         write!(f, "}}")
     }
@@ -484,20 +484,20 @@ impl Default for GivenNameDisambiguationRule {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Citation {
+pub struct Citation<'s> {
     pub disambiguate_add_names: bool,
     pub disambiguate_add_givenname: bool,
     pub givenname_disambiguation_rule: GivenNameDisambiguationRule,
     pub disambiguate_add_year_suffix: bool,
-    pub layout: Layout,
+    pub layout: Layout<'s>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Layout {
+pub struct Layout<'s> {
     pub formatting: Formatting,
     pub affixes: Affixes,
     pub delimiter: Delimiter,
-    pub elements: Vec<Element>,
+    pub elements: &'s [Element],
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -516,10 +516,10 @@ pub enum StyleClass {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Style {
+pub struct Style<'s> {
     pub class: StyleClass,
     pub macros: Vec<MacroMap>,
-    pub citation: Citation,
+    pub citation: Citation<'s>,
     pub info: Info,
 }
 

@@ -6,8 +6,9 @@ use crate::utils::{Intercalate, JoinMany};
 
 extern crate pandoc_types;
 use pandoc_types::definition::Inline::*;
-use pandoc_types::definition::*;
+use pandoc_types::definition::{Attr, Inline};
 
+#[derive(Debug)]
 pub struct Pandoc {}
 
 impl Pandoc {
@@ -55,7 +56,10 @@ impl Pandoc {
     }
 }
 
-impl OutputFormat<Vec<Inline>, Vec<Inline>> for Pandoc {
+impl OutputFormat for Pandoc {
+    type Build = Vec<Inline>;
+    type Output = Vec<Inline>;
+
     fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
@@ -104,6 +108,7 @@ fn flip_flop_inlines(inlines: &Vec<Inline>, state: &FlipFlopState) -> Vec<Inline
 }
 
 fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
+    use pandoc_types::definition::*;
     let fl = |ils, st| flip_flop_inlines(ils, st);
     match inline {
         Note(ref blocks) => {
