@@ -19,7 +19,7 @@ fn read<'s>(path: &str) -> String {
     contents
 }
 
-fn main() -> Result<(), StyleError> {
+fn main() {
     let matches = App::new("citeproc")
         .version("0.0.0")
         .author("Cormac Relf")
@@ -35,26 +35,29 @@ fn main() -> Result<(), StyleError> {
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
         let formatter = Pandoc::new();
-        let driver = Driver::new(&text, &formatter)?;
+        let driverR = Driver::new(&text, &formatter);
+        if let Ok(driver) = driverR {
+            let mut refr = Reference::empty("id", CslType::LegalCase);
+            refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+            refr.number.insert(NumberVariable::Number, 55);
+            refr.date.insert(
+                DateVariable::Issued,
+                DateOrRange::from_str("1998-01-04").unwrap(),
+            );
 
-        let mut refr = Reference::empty("id", CslType::LegalCase);
-        refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, 55);
-        refr.date.insert(
-            DateVariable::Issued,
-            DateOrRange::from_str("1998-01-04").unwrap(),
-        );
+            let serialized = driver.single(&refr);
+            driver.dump_style();
 
-        let serialized = driver.single(&refr);
-
-        driver.dump_ir(&refr);
-        println!("{}", serialized);
+            // driver.dump_ir(&refr);
+            // println!("{}", serialized);
 
         // let header = r#"{"blocks":[{"t":"Para","c":"#;
         // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
         // println!("{}{}{}", header, serialized, footer);
+        } else if let Err(e) = driverR {
+            citeproc::style::error::file_diagnostics(&e, &path, &text);
+        }
     }
-    Ok(())
 }
 
 // #[cfg(not(feature = "flame_it"))]

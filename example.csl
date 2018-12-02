@@ -56,7 +56,7 @@
           <name name-as-sort-order="all" />
         </names>
         <choose>
-          <if number="number">
+          <if is-numeric="number">
           </if>
           <else-if variable="number">
             <text value="printer" />

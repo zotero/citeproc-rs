@@ -2,7 +2,7 @@ use crate::input::*;
 use crate::output::*;
 use crate::proc::Proc;
 use crate::style::element::Style;
-use crate::style::error::StyleError;
+use crate::style::error::{ CslError, StyleError };
 use crate::style::FromNode;
 use roxmltree::Document;
 use typed_arena::Arena;
@@ -29,12 +29,11 @@ where
     formatter: &'a O,
 }
 
-use crate::style::error::InvalidCsl;
 use rental::RentalError;
 
-impl<T> From<RentalError<InvalidCsl, T>> for StyleError {
-    fn from(err: RentalError<InvalidCsl, T>) -> Self {
-        StyleError::from(err.0)
+impl<T> From<RentalError<CslError, T>> for StyleError {
+    fn from(err: RentalError<CslError, T>) -> Self {
+        StyleError::Invalid(err.0)
     }
 }
 
@@ -57,6 +56,10 @@ where
             let o = self.formatter.output(flat);
             serde_json::to_string(&o).unwrap()
         })
+    }
+
+    pub fn dump_style(&self) {
+        self.style.rent(|style| println!("{:?}", style))
     }
 
     pub fn dump_ir(&self, refr: &Reference) {

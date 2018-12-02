@@ -1,3 +1,5 @@
+use typed_arena::Arena;
+
 use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(feature = "thread")] {
@@ -53,3 +55,36 @@ impl<T: Clone> Intercalate<T> for [T] {
         result
     }
 }
+
+// pub struct PartitionErrors<'a, 'i, O, E>
+//     where
+//         I: Iterator<Item = Result<O, E>
+// {
+//     arena: &'a Arena<O>,
+//     inner: &'i mut I,
+// }
+
+pub trait PartitionArenaErrors<O, E> : Iterator<Item=Result<O, E>>
+    where O: Sized,
+          Self: Sized
+{
+    fn partition_results<'a>(self, arena: &'a Arena<O>) -> Result<&'a [O], Vec<E>>
+    {
+        let mut errors = Vec::new();
+        let oks = self.filter_map(|res| {
+            match res {
+                Ok(ok) => Some(ok),
+                Err(e) => { errors.push(e); None }
+            }
+        });
+        let oks = arena.alloc_extend(oks);
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(oks)
+        }
+    }
+}
+
+impl<O, E, I: Iterator<Item=Result<O, E>>> PartitionArenaErrors<O, E> for I {}
+

@@ -10,6 +10,9 @@ extern crate flamer;
 #[macro_use]
 extern crate nom;
 
+#[macro_use]
+extern crate failure;
+
 mod driver;
 pub mod input;
 pub mod output;

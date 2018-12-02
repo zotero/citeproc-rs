@@ -20,6 +20,7 @@ thread = []
 
 [dependencies]
 roxmltree = "0.3.0"
+xmlparser = "0.7.0"
 clap = { version = "2.32.0", optional = false }
 codespan = { version = "0.2.0", optional = false }
 codespan-reporting = { version = "0.2.0", optional = false }
@@ -38,3 +39,4 @@ fnv = "1.0.6"
 nom = "3"
 arrayvec = "0.4.8"
 rental = "0.5"
+failure = "0.1.3"
