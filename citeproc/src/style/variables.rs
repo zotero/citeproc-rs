@@ -3,21 +3,48 @@ use super::get_attribute::GetAttribute;
 
 #[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
-    Standard(Variable),
+    Ordinary(Variable),
     Name(NameVariable),
     Date(DateVariable),
     Number(NumberVariable),
 }
 
 impl GetAttribute for AnyVariable {
-    fn get_attr(s: &str, csl_version: super::version::CslVersion) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(
+        s: &str,
+        csl_version: super::version::CslVersion,
+    ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
         if let Ok(v) = Variable::get_attr(s, csl_version.clone()) {
-            return Ok(Standard(v));
+            return Ok(Ordinary(v));
         } else if let Ok(v) = NameVariable::get_attr(s, csl_version.clone()) {
             return Ok(Name(v));
         } else if let Ok(v) = DateVariable::get_attr(s, csl_version.clone()) {
             return Ok(Date(v));
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_version.clone()) {
+            return Ok(Number(v));
+        }
+        Err(UnknownAttributeValue::new(s))
+    }
+}
+
+// Contrary to the CSL-M spec, you can render Number variables with <text variable="..."/>
+// Because "number variables are a subset of the standard variables"
+// http://docs.citationstyles.org/en/stable/specification.html#number-variables
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub enum StandardVariable {
+    Ordinary(Variable),
+    Number(NumberVariable),
+}
+
+impl GetAttribute for StandardVariable {
+    fn get_attr(
+        s: &str,
+        csl_version: super::version::CslVersion,
+    ) -> Result<Self, UnknownAttributeValue> {
+        use self::StandardVariable::*;
+        if let Ok(v) = Variable::get_attr(s, csl_version.clone()) {
+            return Ok(Ordinary(v));
         } else if let Ok(v) = NumberVariable::get_attr(s, csl_version.clone()) {
             return Ok(Number(v));
         }

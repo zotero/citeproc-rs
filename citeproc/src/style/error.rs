@@ -80,9 +80,6 @@ impl NeedVarType {
             TextVariable => maybe_got.map(|got| {
                 use crate::style::variables::AnyVariable::*;
                 match got {
-                    Number(_) => (wrong_type,
-                                  format!("Hint: use <number variable=\"{}\" /> instead", var),
-                                  Severity::Error),
                     Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
                     Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
                     // this would be trying to print an error when the input was correct
@@ -93,7 +90,7 @@ impl NeedVarType {
             NumberVariable => maybe_got.map(|got| {
                 use crate::style::variables::AnyVariable::*;
                 match got {
-                    Standard(_) => (wrong_type,
+                    Ordinary(_) => (wrong_type,
                                     format!("Hint: use <text variable=\"{}\" /> instead", var),
                                     Severity::Error),
                     Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),

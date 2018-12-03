@@ -320,12 +320,13 @@ pub struct Condition {
 
 impl Condition {
     pub fn is_empty(&self) -> bool {
-        self.is_numeric.is_empty() &&
-        self.variable.is_empty() &&
-        self.position.is_empty() &&
-        self.csl_type.is_empty() &&
-        self.locator.is_empty() &&
-        self.is_uncertain_date.is_empty()
+        !self.disambiguate 
+            && self.is_numeric.is_empty()
+            && self.variable.is_empty()
+            && self.position.is_empty()
+            && self.csl_type.is_empty()
+            && self.locator.is_empty()
+            && self.is_uncertain_date.is_empty()
     }
 }
 
@@ -379,13 +380,13 @@ pub enum Element {
     // <cs:text>
     Const(String, Formatting, Affixes, Quotes),
     // <cs:text>
-    Variable(Variable, Formatting, Affixes, Form, Delimiter, Quotes),
+    Variable(StandardVariable, Formatting, Affixes, Form, Quotes),
     // <cs:term>
     Term(String, Form, Formatting, Affixes, bool), // bool is plural
     // <cs:label>
     Label(LabelVariable, Form, Formatting, Affixes, Plural),
     // <cs:number>
-    Number(NumberVariable, NumericForm, Formatting, Affixes, Plural),
+    Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
     // <cs:names>
     Names(Names),
     // <cs:group>

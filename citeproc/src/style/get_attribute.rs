@@ -5,7 +5,7 @@ use std::str::FromStr;
 use strum::EnumProperty;
 
 // Temporary
-pub const CSL_VERSION: CslVersion = CslVersion::CslM;
+pub const CSL_VERSION: CslVersion = CslVersion::Csl101;
 
 pub trait GetAttribute
 where
@@ -135,4 +135,3 @@ pub fn attribute_array_var<T: GetAttribute>(
         None => Ok(vec![]),
     }
 }
-

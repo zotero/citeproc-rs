@@ -4,7 +4,7 @@ extern crate fnv;
 
 use super::date::DateOrRange;
 use crate::style::element::CslType;
-use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable};
+use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable, AnyVariable};
 use fnv::FnvHashMap;
 
 // kebab-case here is the same as Strum's "kebab_case",
@@ -27,7 +27,8 @@ pub struct Reference<'r> {
     // and writing a Fn(Variable::Xxx) -> CslJson.xxx; would be O(n)
     // whereas these hashes are essentially O(1) for our purposes
     pub ordinary: FnvHashMap<Variable, &'r str>,
-    pub number: FnvHashMap<NumberVariable, i32>,
+    // we do the conversion on the input side, so is-numeric is just Result::ok
+    pub number: FnvHashMap<NumberVariable, Result<i32, &'r str>>,
     pub name: FnvHashMap<NameVariable, Vec<Name<'r>>>,
     pub date: FnvHashMap<DateVariable, DateOrRange>,
 }
@@ -43,4 +44,14 @@ impl<'r> Reference<'r> {
             date: FnvHashMap::default(),
         }
     }
+
+    pub fn has_variable(&self, var: &AnyVariable) -> bool {
+        match *var {
+            AnyVariable::Ordinary(ref v) => self.ordinary.contains_key(v),
+            AnyVariable::Number(ref v) => self.number.contains_key(v),
+            AnyVariable::Name(ref v) => self.name.contains_key(v),
+            AnyVariable::Date(ref v) => self.date.contains_key(v),
+        }
+    }
 }
+

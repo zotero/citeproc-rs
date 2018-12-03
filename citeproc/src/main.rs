@@ -33,27 +33,27 @@ fn main() {
         .get_matches();
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
-        let formatter = Pandoc::new();
+        let formatter = PlainText::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
             refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-            refr.number.insert(NumberVariable::Number, 55);
+            refr.number.insert(NumberVariable::Number, Ok(55));
             refr.date.insert(
                 DateVariable::Issued,
                 DateOrRange::from_str("1998-01-04").unwrap(),
             );
-
-            let serialized = driver.single(&refr);
+            //
             // driver.dump_style();
 
+            // let serialized = driver.single(&refr);
+            // println!("{}", serialized);
+
             driver.dump_ir(&refr);
-            println!("{}", serialized);
 
-            // let header = r#"{"blocks":[{"t":"Para","c":"#;
-            // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
-            // println!("{}{}{}", header, serialized, footer);
-
+        // let header = r#"{"blocks":[{"t":"Para","c":"#;
+        // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
+        // println!("{}{}{}", header, serialized, footer);
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }

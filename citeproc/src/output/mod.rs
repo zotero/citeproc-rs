@@ -6,7 +6,7 @@ pub use self::pandoc::Pandoc;
 pub use self::plain::PlainText;
 // pub use self::markdown::Markdown;
 
-use crate::style::element::Formatting;
+use crate::style::element::{Affixes, Formatting};
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,6 +29,19 @@ pub trait OutputFormat {
 
     fn plain(&self, s: &str) -> Self::Build {
         self.text_node(s, &Formatting::default())
+    }
+
+    fn affixed(&self, s: &str, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+        let null_f = Formatting::default();
+        self.group(
+            &[
+                self.text_node(&affixes.prefix, &null_f),
+                self.text_node(s, format_inner),
+                self.text_node(&affixes.suffix, &null_f),
+            ],
+            "",
+            &null_f,
+        )
     }
 }
 

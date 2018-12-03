@@ -168,7 +168,6 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
             formatting,
             affixes,
             attribute_optional(node, "form")?,
-            Delimiter::from_node(node)?,
             attribute_bool(node, "quotes", false)?,
         ));
     }
@@ -189,7 +188,10 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
             attribute_bool(node, "plural", false)?,
         ));
     };
-    Err(InvalidCsl::new(node, "<text> without a `variable`, `macro`, `term` or `value` is invalid"))?
+    Err(InvalidCsl::new(
+        node,
+        "<text> without a `variable`, `macro`, `term` or `value` is invalid",
+    ))?
 }
 
 fn label_el(node: &Node) -> Result<Element, CslError> {
@@ -294,7 +296,10 @@ impl Condition {
         // technically, only a match="..." on an <if> is ignored when a <conditions> block is
         // present, but that's ok
         if cond.is_empty() {
-            Err(ConditionError::Unconditional(InvalidCsl::new(node, "Unconditional <choose> branch")))
+            Err(ConditionError::Unconditional(InvalidCsl::new(
+                node,
+                "Unconditional <choose> branch",
+            )))
         } else {
             Ok(cond)
         }
@@ -324,11 +329,12 @@ impl FromNode for IfThen {
 
         // CSL 1.0.1 <if match="MMM" vvv ></if> equivalent to
         // CSL-M <if><conditions match="all"><condition match="MMM" vvv /></conditions></if>
-        let own_conditions: Result<Conditions, ConditionError> = Condition::from_node_custom(node)
-            .map(|c| Conditions(Match::All, vec![c]));
+        let own_conditions: Result<Conditions, ConditionError> =
+            Condition::from_node_custom(node).map(|c| Conditions(Match::All, vec![c]));
 
         // TODO: only accept <conditions> in head position
-        let sub_conditions: Result<Option<Conditions>, CslError> = max1_child(tag, "conditions", node.children());
+        let sub_conditions: Result<Option<Conditions>, CslError> =
+            max1_child(tag, "conditions", node.children());
 
         use self::ConditionError::*;
 
@@ -342,8 +348,16 @@ impl FromNode for IfThen {
             // no conds on if block, but <conditions> present
             (Err(Unconditional(_)), Ok(Some(sub))) => Ok(sub),
             // if block has conditions, and <conditions> was also present
-            (Err(Invalid(_)), Ok(Some(_))) | (Err(Invalid(_)), Err(_)) | (Ok(_), Ok(Some(_))) | (Ok(_), Err(_))
-                => Ok(Err(InvalidCsl::new(node, &format!("{} can only have its own conditions OR a <conditions> block", tag)))?),
+            (Err(Invalid(_)), Ok(Some(_)))
+            | (Err(Invalid(_)), Err(_))
+            | (Ok(_), Ok(Some(_)))
+            | (Ok(_), Err(_)) => Ok(Err(InvalidCsl::new(
+                node,
+                &format!(
+                    "{} can only have its own conditions OR a <conditions> block",
+                    tag
+                ),
+            ))?),
         })?;
         let elements = node
             .children()
@@ -406,8 +420,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
         }
     }
 
-    let _if = if_block
-        .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>"))?;
+    let _if = if_block.ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>"))?;
 
     Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
