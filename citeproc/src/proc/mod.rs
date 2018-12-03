@@ -6,8 +6,10 @@ use crate::style::variables::*;
 mod choose;
 mod date;
 mod helpers;
+mod cite_context;
 mod ir;
 use self::helpers::sequence;
+pub use self::cite_context::*;
 pub use self::ir::*;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
@@ -20,45 +22,46 @@ pub use self::ir::*;
 
 // 's: style
 // 'r: reference
-pub trait Proc<'s> {
+pub trait Proc<'c, 's: 'c> {
     // TODO: include settings and reference and macro map
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat;
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-impl<'s> Proc<'s> for Style {
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+impl<'c, 's: 'c> Proc<'c, 's> for Style {
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat,
     {
         let citation = &self.citation;
         let layout = &citation.layout;
-        layout.intermediate(fmt, refr)
+        layout.intermediate(ctx)
     }
 }
 
 // TODO: insert affixes into group before processing as a group
-impl<'s> Proc<'s> for LayoutEl {
+impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat,
     {
-        sequence(fmt, refr, &self.formatting, &self.delimiter, &self.elements)
+        sequence(ctx, &self.formatting, &self.delimiter, &self.elements)
     }
 }
 
-impl<'s> Proc<'s> for Element {
+impl<'c, 's: 'c> Proc<'c, 's> for Element {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat,
     {
+        let fmt = ctx.format;
         let null_f = Formatting::default();
         match *self {
-            Element::Choose(ref ch) => ch.intermediate(fmt, refr),
+            Element::Choose(ref ch) => ch.intermediate(ctx),
 
             Element::Macro(ref name, ref f, ref _af, ref _quo) => {
                 IR::Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
@@ -76,11 +79,10 @@ impl<'s> Proc<'s> for Element {
 
             Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
                 let content = match *var {
-                    StandardVariable::Ordinary(ref v) => refr
-                        .ordinary
+                    StandardVariable::Ordinary(ref v) => ctx.reference.ordinary
                         .get(v)
                         .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
-                    StandardVariable::Number(ref v) => refr.number.get(v).map(|val| match *val {
+                    StandardVariable::Number(ref v) => ctx.reference.number.get(v).map(|val| match *val {
                         Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
                         Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
                     }),
@@ -113,16 +115,16 @@ impl<'s> Proc<'s> for Element {
             }
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(refr.number.get(&var).map(|val| match *val {
+                IR::Rendered(ctx.reference.number.get(&var).map(|val| match *val {
                     Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
                     Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
                 }))
             }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
-            Element::Group(ref f, ref d, ref els) => sequence(fmt, refr, f, d, els.as_ref()),
+            Element::Group(ref f, ref d, ref els) => sequence(ctx, f, d, els.as_ref()),
             Element::Date(ref dt) => {
-                dt.intermediate(fmt, refr)
+                dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }

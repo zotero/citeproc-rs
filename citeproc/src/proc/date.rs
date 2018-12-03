@@ -4,15 +4,16 @@ use crate::input::DateOrRange;
 use crate::input::Reference;
 use crate::output::OutputFormat;
 use crate::style::element::{Date as DateEl, Formatting};
+use super::cite_context::*;
 
-impl<'s> Proc<'s> for DateEl {
+impl<'c, 's: 'c> Proc<'c, 's> for DateEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat,
     {
-        let content = refr
-            .date
+        let fmt = ctx.format;
+        let content = ctx.reference.date
             .get(&self.variable)
             .and_then(|val| {
                 if let DateOrRange::Single(d) = val {

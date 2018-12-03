@@ -18,7 +18,7 @@ pub struct Output<T> {
 
 pub trait OutputFormat {
     type Build: std::fmt::Debug + Clone;
-    type Output: Serialize;
+    type Output: Serialize + Clone;
     // affixes are not included in the formatting on a text node.
     // affixes are converted into text nodes themselves, with Formatting::default() passed.
     // http://docs.citationstyles.org/en/stable/specification.html#affixes

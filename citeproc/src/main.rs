@@ -46,10 +46,10 @@ fn main() {
             //
             // driver.dump_style();
 
-            // let serialized = driver.single(&refr);
-            // println!("{}", serialized);
+            let serialized = driver.single(&refr, &"".to_owned());
+            println!("{}", serialized);
 
-            driver.dump_ir(&refr);
+            // driver.dump_ir(&refr);
 
         // let header = r#"{"blocks":[{"t":"Para","c":"#;
         // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;

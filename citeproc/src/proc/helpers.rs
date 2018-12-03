@@ -3,6 +3,7 @@ use crate::input::Reference;
 use crate::output::OutputFormat;
 use crate::style::element::Delimiter;
 use crate::style::element::{Element, Formatting};
+use super::cite_context::*;
 
 /// Tests whether the given variables (Appendix IV - Variables) contain numeric content. Content is
 /// considered numeric if it solely consists of numbers. Numbers may have prefixes and suffixes
@@ -13,9 +14,8 @@ pub fn convert_numeric<'a>(value: &'a str) -> Result<i32, &'a str> {
     Ok(0)
 }
 
-pub fn sequence<'s, 'r, O>(
-    fmt: &O,
-    refr: &Reference<'r>,
+pub fn sequence<'c, 's, 'r, O>(
+    ctx: &CiteContext<'c, 'r, O>,
     f: &Formatting,
     delim: &Delimiter,
     els: &'s [Element],
@@ -23,10 +23,11 @@ pub fn sequence<'s, 'r, O>(
 where
     O: OutputFormat,
 {
+    let fmt = ctx.format;
     let mut dedup = vec![];
     let mut dups = vec![];
     for el in els.iter() {
-        let pr = el.intermediate(fmt, refr);
+        let pr = el.intermediate(ctx);
         if let IR::Rendered(Some(r)) = pr {
             dups.push(r);
         } else if let IR::Rendered(None) = pr {

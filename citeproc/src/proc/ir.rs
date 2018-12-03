@@ -1,5 +1,6 @@
 use crate::output::OutputFormat;
 use crate::style::element::{Choose as ChooseEl, Date as DateEl, Formatting, Names as NamesEl};
+use super::cite_context::*;
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'s> {

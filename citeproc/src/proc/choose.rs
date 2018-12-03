@@ -4,10 +4,11 @@ use super::Proc;
 use crate::input::Reference;
 use crate::output::OutputFormat;
 use crate::style::element::{Delimiter, Choose, Formatting, IfThen, Else, Conditions, Condition, Match};
+use super::cite_context::*;
 
-impl<'s> Proc<'s> for Choose {
+impl<'c, 's: 'c> Proc<'c, 's> for Choose {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, fmt: &O, refr: &Reference<'r>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
     where
         O: OutputFormat,
     {
@@ -16,7 +17,7 @@ impl<'s> Proc<'s> for Choose {
         let mut disamb = false;
         let mut found;
         {
-            let BranchEval { disambiguate, content } = eval_ifthen(head, fmt, refr);
+            let BranchEval { disambiguate, content } = eval_ifthen(head, ctx);
             found = content;
             disamb = disamb || disambiguate;
         }
@@ -30,7 +31,7 @@ impl<'s> Proc<'s> for Choose {
             let mut iter = rest.iter();
             while let Some(branch) = iter.next() {
                 if found.is_some() { break; }
-                let BranchEval { disambiguate, content } = eval_ifthen(branch, fmt, refr);
+                let BranchEval { disambiguate, content } = eval_ifthen(branch, ctx);
                 found = content;
                 disamb = disamb || disambiguate;
             }
@@ -43,7 +44,7 @@ impl<'s> Proc<'s> for Choose {
             }
         } else {
             let Else(ref els) = last;
-            sequence(fmt, refr, &Formatting::default(), &Delimiter("".into()), &els)
+            sequence(ctx, &Formatting::default(), &Delimiter("".into()), &els)
         }
     }
 }
@@ -54,19 +55,18 @@ struct BranchEval<'s, O: OutputFormat> {
     content: Option<IR<'s, O>>,
 }
 
-fn eval_ifthen<'s, 'r, O>(
+fn eval_ifthen<'c, 's: 'c, 'r, O>(
     branch: &'s IfThen,
-    fmt: &O,
-    refr: &Reference<'r>,
+    ctx: &CiteContext<'c, 'r, O>,
 ) -> BranchEval<'s, O>
 where
     O: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, disambiguate) = eval_conditions(conditions, refr);
+    let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true  => Some(sequence(fmt, refr, &Formatting::default(), &Delimiter("".into()), &elements))
+        true  => Some(sequence(ctx, &Formatting::default(), &Delimiter("".into()), &elements))
     };
     BranchEval {
         disambiguate,
@@ -76,27 +76,32 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'s, 'r>(
+fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
     conditions: &'s Conditions,
-    refr: &Reference<'r>,
+    ctx: &CiteContext<'c, 'r, O>,
 ) -> (bool, bool)
+    where
+        O: OutputFormat
 {
     let Conditions(ref match_type, ref conds) = *conditions;
-    let tests: Vec<_> = conds.iter().map(|c| eval_cond(c, refr)).collect();
+    let tests: Vec<_> = conds.iter().map(|c| eval_cond(c, ctx)).collect();
     let disambiguate = conds.iter().any(|c| c.disambiguate);
     (run_matcher(&tests, match_type), disambiguate)
 }
 
-fn eval_cond<'s, 'r>(cond: &'s Condition, refr: &Reference<'r>) -> bool {
+fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, 'r, O>) -> bool
+    where
+        O: OutputFormat
+{
     let mut tests = Vec::new();
     for var in cond.variable.iter() {
-        tests.push(refr.has_variable(var));
+        tests.push(ctx.reference.has_variable(var));
     }
     for var in cond.is_numeric.iter() {
-        tests.push(refr.number.get(var).map(|v| v.is_ok()).unwrap_or(false));
+        tests.push(ctx.reference.number.get(var).map(|v| v.is_ok()).unwrap_or(false));
     }
     for typ in cond.csl_type.iter() {
-        tests.push(refr.csl_type == *typ);
+        tests.push(ctx.reference.csl_type == *typ);
     }
     // TODO: pass down the current Cite to this point here so we can test positions and locators
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to

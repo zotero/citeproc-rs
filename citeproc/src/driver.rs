@@ -5,6 +5,8 @@ use crate::style::element::Style;
 use crate::style::error::{CslError, StyleError};
 use crate::style::FromNode;
 use roxmltree::Document;
+use crate::proc::CiteContext;
+use crate::style::element::Position;
 
 impl From<CslError> for StyleError {
     fn from(err: CslError) -> Self {
@@ -30,8 +32,16 @@ where
         Ok(Driver { style, formatter })
     }
 
-    pub fn single(&self, refr: &Reference) -> String {
-        let i = self.style.intermediate(self.formatter, &refr);
+    pub fn single(&self, refr: &Reference, prefix: &O::Output) -> String {
+        let ctx = CiteContext {
+            style: &self.style,
+            reference: refr,
+            cite: &Cite::basic("ok", prefix),
+            position: Position::First,
+            format: self.formatter,
+            citation_number: 1,
+        };
+        let i = self.style.intermediate(&ctx);
         let flat = i.flatten(self.formatter);
         let o = self.formatter.output(flat);
         serde_json::to_string(&o).unwrap()
@@ -41,8 +51,9 @@ where
         println!("{:?}", self.style)
     }
 
-    pub fn dump_ir(&self, refr: &Reference) {
-        let ir = self.style.intermediate(self.formatter, &refr);
-        println!("{:?}", ir);
-    }
+    // pub fn dump_ir(&self, refr: &Reference) {
+    //     let ir = self.style.intermediate(ctx: &CiteContext<'c, 'r>);
+    //     println!("{:?}", ir);
+    // }
+
 }
