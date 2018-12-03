@@ -518,6 +518,7 @@ pub struct Layout {
     pub elements: Vec<Element>,
 }
 
+// Not actually part of a style tree, just a useful place to implement FromNode.
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct MacroMap {
     pub name: String,
@@ -531,12 +532,14 @@ pub enum StyleClass {
     Note,
 }
 
+use fnv::FnvHashMap;
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
-    pub macros: Vec<MacroMap>,
+    pub macros: FnvHashMap<String, Vec<Element>>,
     pub citation: Citation,
     pub info: Info,
 }

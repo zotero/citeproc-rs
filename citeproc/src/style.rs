@@ -13,6 +13,7 @@ use self::error::*;
 use self::get_attribute::*;
 use crate::utils::PartitionArenaErrors;
 use roxmltree::{Children, Node};
+use fnv::FnvHashMap;
 
 pub trait IsOnNode
 where
@@ -587,7 +588,7 @@ impl FromNode for Element {
     }
 }
 
-pub fn get_toplevel<'a, 'd: 'a>(
+fn get_toplevel<'a, 'd: 'a>(
     root: &Node<'a, 'd>,
     nodename: &'static str,
 ) -> Result<Node<'a, 'd>, CslError> {
@@ -667,16 +668,20 @@ impl FromNode for Name {
 
 impl FromNode for Style {
     fn from_node(node: &Node) -> Result<Self, CslError> {
-        let macros: Result<Vec<_>, _> = node
+        let macro_maps = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el))
-            .collect();
+            .map(|el| MacroMap::from_node(&el));
+        let mut macros = FnvHashMap::default();
+        for mac_res in macro_maps {
+            let mac = mac_res?;
+            macros.insert(mac.name, mac.elements);
+        }
         let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
         // let info_node = get_toplevel(&doc, "info")?;
         // let locale_node = get_toplevel(&doc, "locale")?;
         Ok(Style {
-            macros: macros?,
+            macros,
             citation: citation?,
             info: Info {},
             class: StyleClass::Note,
