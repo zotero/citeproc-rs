@@ -66,7 +66,7 @@ pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T,
         },
         None => Err(InvalidCsl::new(
             node,
-            format!("Must have '{}' attribute", attr),
+            &format!("Must have '{}' attribute", attr),
         )),
     }
 }
@@ -91,7 +91,7 @@ pub fn attribute_var_type<T: GetAttribute>(
         },
         None => Err(InvalidCsl::new(
             node,
-            format!("Must have '{}' attribute", attr),
+            &format!("Must have '{}' attribute", attr),
         )),
     }
 }
@@ -136,16 +136,3 @@ pub fn attribute_array_var<T: GetAttribute>(
     }
 }
 
-pub fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T>, InvalidCsl> {
-    match node.attribute(attr) {
-        Some(a) => {
-            let split: Result<Vec<_>, _> =
-                a.split(' ').map(|a| T::get_attr(a, CSL_VERSION)).collect();
-            match split {
-                Ok(val) => Ok(val),
-                Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
-            }
-        }
-        None => Ok(vec![]),
-    }
-}

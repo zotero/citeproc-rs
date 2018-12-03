@@ -10,7 +10,7 @@ extern crate flamer;
 #[macro_use]
 extern crate nom;
 
-#[macro_use]
+// #[macro_use]
 extern crate failure;
 
 mod driver;
@@ -27,9 +27,6 @@ pub mod proc;
 
 #[macro_use]
 extern crate strum_macros;
-
-#[macro_use]
-extern crate rental;
 
 #[macro_use]
 extern crate serde_derive;

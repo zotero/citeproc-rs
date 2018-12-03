@@ -5,29 +5,12 @@ use crate::style::element::Style;
 use crate::style::error::{CslError, StyleError};
 use crate::style::FromNode;
 use roxmltree::Document;
-use typed_arena::Arena;
-// use serde::Serialize;
-
-// use rental::RentalError;
 
 impl From<CslError> for StyleError {
     fn from(err: CslError) -> Self {
         StyleError::Invalid(err)
     }
 }
-
-// rental! {
-//     mod rent_style {
-//         use crate::style::element::{ Style, Element };
-//         #[rental]
-//         pub struct RentStyle {
-//             arena: Box<typed_arena::Arena<Element>>,
-//             style: Style<'arena>,
-//         }
-//     }
-// }
-
-// use self::rent_style::RentStyle;
 
 pub struct Driver<'a, O>
 where

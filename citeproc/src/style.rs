@@ -6,8 +6,6 @@ pub mod terms;
 pub mod variables;
 pub mod version;
 
-use typed_arena::Arena;
-
 // mod take_while;
 // use self::take_while::*;
 use self::element::*;
@@ -191,7 +189,7 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
             attribute_bool(node, "plural", false)?,
         ));
     };
-    Err(InvalidCsl::new(node, "yeah".to_owned()))?
+    Err(InvalidCsl::new(node, "<text> without a `variable`, `macro`, `term` or `value` is invalid"))?
 }
 
 fn label_el(node: &Node) -> Result<Element, CslError> {
@@ -287,7 +285,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
         if tag == "if" || tag == "else-if" || tag == "else" {
             return Ok(Err(InvalidCsl::new(
                 el,
-                format!(
+                &format!(
                     "<choose> elements out of order; found <{}> in wrong position",
                     tag
                 ),
@@ -295,7 +293,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
         }
         Ok(Err(InvalidCsl::new(
             el,
-            format!("Unrecognised element {} in <choose>", tag),
+            &format!("Unrecognised element {} in <choose>", tag),
         ))?)
     };
 
@@ -363,7 +361,7 @@ fn max1_child<'s, T: FromNode>(
     if subst_els.len() > 1 {
         return Err(InvalidCsl::new(
             &subst_els[1],
-            format!(
+            &format!(
                 "There can only be one <{}> in a <{}> block.",
                 child_tag, parent_tag
             ),
@@ -428,7 +426,7 @@ fn disallow_default<'s, T: Default + FromNode + IsOnNode>(
         if !attrs.is_empty() {
             Err(InvalidCsl::new(
                 node,
-                format!("Disallowed attribute on node: {:?}", attrs),
+                &format!("Disallowed attribute on node: {:?}", attrs),
             ))?
         } else {
             Ok(T::default())
@@ -505,14 +503,14 @@ pub fn get_toplevel<'a, 'd: 'a>(
     if matches.len() > 1 {
         Ok(Err(InvalidCsl::new(
             &root,
-            format!("Cannot have more than one <{}>", nodename),
+            &format!("Cannot have more than one <{}>", nodename),
         ))?)
     } else {
         // move matches into its first item
         Ok(matches
             .into_iter()
             .nth(0)
-            .ok_or_else(|| InvalidCsl::new(&root, "Must have one <...>".to_owned()))?)
+            .ok_or_else(|| InvalidCsl::new(&root, "Must have one <...>"))?)
     }
 }
 
