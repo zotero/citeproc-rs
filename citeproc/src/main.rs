@@ -48,8 +48,8 @@ fn main() {
             let serialized = driver.single(&refr);
             driver.dump_style();
 
-            // driver.dump_ir(&refr);
-            // println!("{}", serialized);
+        // driver.dump_ir(&refr);
+        // println!("{}", serialized);
 
         // let header = r#"{"blocks":[{"t":"Para","c":"#;
         // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;

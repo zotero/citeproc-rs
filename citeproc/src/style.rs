@@ -13,8 +13,8 @@ use typed_arena::Arena;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
-use roxmltree::{Children, Node};
 use crate::utils::PartitionArenaErrors;
+use roxmltree::{Children, Node};
 
 pub trait IsOnNode
 where
@@ -166,7 +166,7 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
     }
     if let Some(_m) = node.attribute("variable") {
         return Ok(Variable(
-            attribute_required(node, "variable")?,
+            attribute_var_type(node, "variable", NeedVarType::TextVariable)?,
             formatting,
             affixes,
             attribute_optional(node, "form")?,
@@ -206,7 +206,7 @@ fn label_el(node: &Node) -> Result<Element, CslError> {
 
 fn number_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Number(
-        attribute_required(node, "variable")?,
+        attribute_var_type(node, "variable", NeedVarType::NumberVariable)?,
         attribute_optional(node, "form")?,
         Formatting::from_node(node)?,
         Affixes::from_node(node)?,
@@ -249,12 +249,16 @@ impl FromNode for Condition {
         Ok(Condition {
             match_type: Match::from_node(node)?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
-            is_numeric: attribute_array(node, "is-numeric")?,
-            variable: attribute_array(node, "variable")?,
-            position: attribute_array(node, "position")?,
-            is_uncertain_date: attribute_array(node, "is-uncertain-date")?,
-            csl_type: attribute_array(node, "type")?,
-            locator: attribute_array(node, "locator")?,
+            is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
+            variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
+            position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
+            is_uncertain_date: attribute_array_var(
+                node,
+                "is-uncertain-date",
+                NeedVarType::CondIsUncertainDate,
+            )?,
+            csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
+            locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
         })
     }
 }
@@ -390,7 +394,7 @@ fn names_el(node: &Node) -> Result<Element, CslError> {
     let substitute = max1_child("names", "substitute", node.children())?;
 
     Ok(Element::Names(Names(
-        attribute_array(node, "variable")?,
+        attribute_array_var(node, "variable", NeedVarType::Name)?,
         names,
         label,
         Formatting::from_node(node)?,
@@ -435,10 +439,7 @@ fn disallow_default<'s, T: Default + FromNode + IsOnNode>(
 }
 
 impl DatePart {
-    fn from_node_dp(
-        node: &Node,
-        full: bool,
-    ) -> Result<Self, CslError> {
+    fn from_node_dp(node: &Node, full: bool) -> Result<Self, CslError> {
         let name: DatePartName = attribute_required(node, "name")?;
         let form = match name {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form")?),
@@ -457,10 +458,7 @@ impl DatePart {
 }
 
 impl Date {
-    fn from_node_date(
-        node: &Node,
-        is_in_locale: bool,
-    ) -> Result<Self, CslError> {
+    fn from_node_date(node: &Node, is_in_locale: bool) -> Result<Self, CslError> {
         let form: DateForm = attribute_optional(node, "form")?;
         let not_set = form == DateForm::NotSet;
         let full = if is_in_locale { true } else { not_set };
@@ -470,7 +468,7 @@ impl Date {
             .map(|el| DatePart::from_node_dp(&el, full))
             .partition_results()?;
         Ok(Date {
-            variable: attribute_required(node, "variable")?,
+            variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
             form,
             date_parts: elements,
             date_parts_attr: attribute_optional(node, "date-parts")?,

@@ -648,31 +648,6 @@ pub struct Date {
     pub formatting: Formatting,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
-pub enum AnyVariable {
-    Standard(Variable),
-    Name(NameVariable),
-    Date(DateVariable),
-    Number(NumberVariable),
-}
-
-impl FromStr for AnyVariable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::AnyVariable::*;
-        if let Ok(v) = Variable::from_str(s) {
-            return Ok(Standard(v));
-        } else if let Ok(v) = NameVariable::from_str(s) {
-            return Ok(Name(v));
-        } else if let Ok(v) = DateVariable::from_str(s) {
-            return Ok(Date(v));
-        } else if let Ok(v) = NumberVariable::from_str(s) {
-            return Ok(Number(v));
-        }
-        Err(UnknownAttributeValue::new(s))
-    }
-}
-
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Position {

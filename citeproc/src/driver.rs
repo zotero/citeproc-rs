@@ -2,7 +2,7 @@ use crate::input::*;
 use crate::output::*;
 use crate::proc::Proc;
 use crate::style::element::Style;
-use crate::style::error::{ CslError, StyleError };
+use crate::style::error::{CslError, StyleError};
 use crate::style::FromNode;
 use roxmltree::Document;
 use typed_arena::Arena;

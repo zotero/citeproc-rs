@@ -31,7 +31,8 @@
     <layout suffix="." delimiter="; ">
       <group delimiter=" & " font-style="italic" >
         <text variable="container-title" />
-        <number variable="number" />
+        <text variable="number" />
+        <number variable="container-title" />
         <date variable="issued" delimiter=" " font-style="italic">
           <date-part name="day" range-delimiter="&#x2013;"/>
           <date-part name="month" range-delimiter=" &#x2013; "/>
@@ -43,10 +44,10 @@
           <text value="3" />
         </group>
         <group delimiter="-">
-          <text value="never" />
-          <text value="stop" />
-          <text value="never" />
-          <text value="stopping" />
+          <text variable="never" />
+          <text variable="stop" />
+          <text variable="never" />
+          <text variable="stopping" />
         </group>
       </group>
       <group delimiter=", ">
@@ -56,9 +57,9 @@
           <name name-as-sort-order="all" />
         </names>
         <choose>
-          <if is-numeric="number">
+          <if is-numeric="number printer">
           </if>
-          <else-if variable="number">
+          <else-if variable="number printer">
             <text value="printer" />
             <date variable="issued" delimiter=" ">
               <date-part name="day" range-delimiter="&#x2013;"/>

@@ -71,6 +71,31 @@ pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T,
     }
 }
 
+use super::variables::*;
+
+pub fn attribute_var_type<T: GetAttribute>(
+    node: &Node,
+    attr: &str,
+    need: NeedVarType,
+) -> Result<T, InvalidCsl> {
+    match node.attribute(attr) {
+        Some(a) => match T::get_attr(a, CSL_VERSION) {
+            Ok(val) => Ok(val),
+            Err(e) => Err(InvalidCsl::wrong_var_type(
+                node,
+                attr,
+                &e.value,
+                need,
+                AnyVariable::get_attr(a, CSL_VERSION).ok(),
+            )),
+        },
+        None => Err(InvalidCsl::new(
+            node,
+            format!("Must have '{}' attribute", attr),
+        )),
+    }
+}
+
 pub fn attribute_optional<T: Default + GetAttribute>(
     node: &Node,
     attr: &str,
@@ -81,6 +106,30 @@ pub fn attribute_optional<T: Default + GetAttribute>(
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
         None => Ok(T::default()),
+    }
+}
+
+pub fn attribute_array_var<T: GetAttribute>(
+    node: &Node,
+    attr: &str,
+    need: NeedVarType,
+) -> Result<Vec<T>, InvalidCsl> {
+    match node.attribute(attr) {
+        Some(a) => {
+            let split: Result<Vec<_>, _> =
+                a.split(' ').map(|a| T::get_attr(a, CSL_VERSION)).collect();
+            match split {
+                Ok(val) => Ok(val),
+                Err(e) => Err(InvalidCsl::wrong_var_type(
+                    node,
+                    attr,
+                    &e.value,
+                    need,
+                    AnyVariable::get_attr(a, CSL_VERSION).ok(),
+                )),
+            }
+        }
+        None => Ok(vec![]),
     }
 }
 

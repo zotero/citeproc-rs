@@ -1,9 +1,10 @@
+use super::variables::*;
 use codespan::{CodeMap, FileMap, Span};
 use codespan_reporting::termcolor::{ColorChoice, StandardStream};
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
+use failure::Fail;
 use roxmltree::{Error, Node, TextPos};
 use std::num::ParseIntError;
-use failure::Fail;
 
 #[derive(Debug, PartialEq)]
 pub struct UnknownAttributeValue {
@@ -20,9 +21,9 @@ impl UnknownAttributeValue {
 
 #[derive(Debug, Fail)]
 pub enum StyleError {
-    #[fail(display="TODO")]
+    #[fail(display = "TODO")]
     Invalid(CslError),
-    #[fail(display="TODO")]
+    #[fail(display = "TODO")]
     ParseError(#[fail(cause)] Error),
 }
 
@@ -30,12 +31,103 @@ pub enum StyleError {
 pub struct CslError(pub Vec<InvalidCsl>);
 
 #[derive(Fail, Debug, PartialEq, Clone)]
-#[fail(display="{}", message)]
+#[fail(display = "{}", message)]
 pub struct InvalidCsl {
     pub severity: Severity,
     pub text_pos: TextPos,
     pub len: usize,
     pub message: String,
+    pub hint: String,
+}
+
+#[derive(Debug, AsRefStr)]
+pub enum NeedVarType {
+    Any,
+    TextVariable,
+    NumberVariable,
+    Date,
+    // in condition matchers
+    CondIsUncertainDate,
+    CondIsNumeric,
+    CondType,
+    CondPosition,
+    CondLocator,
+    // in <name variable="">
+    Name,
+}
+
+// TODO: create a trait for producing hints
+impl NeedVarType {
+    pub fn hint(
+        &self,
+        attr: &str,
+        var: &str,
+        maybe_got: Option<AnyVariable>,
+    ) -> (String, String, Severity) {
+        use self::NeedVarType::*;
+        let wrong_type = format!("Wrong variable type for `{}`", attr);
+        let empty = format!("");
+        let unknown = (
+            format!("Unknown variable \"{}\"", var),
+            empty.clone(),
+            Severity::Error,
+        );
+        match *self {
+
+            Any => unknown,
+
+            TextVariable => maybe_got.map(|got| {
+                use crate::style::variables::AnyVariable::*;
+                match got {
+                    // so many styles do this, we're only going to warn about it.
+                    Number(_) => (wrong_type,
+                                  format!("Hint: use <number variable=\"{}\" /> instead", var),
+                                  Severity::Warning),
+                    Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
+                    Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
+                    // this would be trying to print an error when the input was correct
+                    _ => (empty, format!("???"), Severity::Warning),
+                }
+            }).unwrap_or(unknown),
+
+            NumberVariable => maybe_got.map(|got| {
+                use crate::style::variables::AnyVariable::*;
+                match got {
+                    Standard(_) => (wrong_type,
+                                    format!("Hint: use <text variable=\"{}\" /> instead", var),
+                                    Severity::Error),
+                    Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
+                    Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
+                    // this would be trying to print an error when the input was correct
+                    _ => (empty, format!("???"), Severity::Warning),
+                }
+            }).unwrap_or(unknown),
+
+            CondIsNumeric => {
+                maybe_got
+                    .map(|_| (wrong_type,
+                              format!("Hint: `is-numeric` can only match numeric variables"),
+                              Severity::Error))
+                    .unwrap_or(unknown)
+            }
+
+            CondIsUncertainDate => (wrong_type,
+                                    format!("Hint: `is-uncertain-date` can only match date variables"),
+                                    Severity::Error),
+
+            CondType => (wrong_type,
+                         format!("Hint: `type` can only match known types"),
+                         Severity::Error),
+
+            CondPosition => (wrong_type,
+                             format!("Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}"),
+                             Severity::Error),
+
+            CondLocator => (wrong_type, format!("Hint: `locator` only matches locator types"), Severity::Error),
+            Date => (wrong_type, format!("<date variable=\"...\"> can only render dates"), Severity::Error),
+            Name => (wrong_type, format!("Hint: <names> can only render name variables"), Severity::Error),
+        }
+    }
 }
 
 impl InvalidCsl {
@@ -46,6 +138,7 @@ impl InvalidCsl {
             text_pos: pos,
             len: node.tag_name().name().len(),
             severity: Severity::Error,
+            hint: format!(""),
             message,
         }
     }
@@ -57,6 +150,7 @@ impl InvalidCsl {
                 .unwrap_or_else(|| node.node_pos()),
             len: node.attribute("attr").map(|a| a.len()).unwrap_or_else(|| 1),
             message: format!("Invalid integer value for {}: {:?}", attr, uav),
+            hint: format!(""),
             severity: Severity::Error,
         }
     }
@@ -69,7 +163,28 @@ impl InvalidCsl {
                 .unwrap_or_else(|| node.node_pos()),
             len: full_val.map(|v| v.len()).unwrap_or(1),
             message: format!("Unknown attribute value for {}: \"{}\"", attr, uav),
+            hint: format!(""),
             severity: Severity::Error,
+        }
+    }
+
+    pub fn wrong_var_type(
+        node: &Node,
+        attr: &str,
+        uav: &str,
+        needed: NeedVarType,
+        got: Option<AnyVariable>,
+    ) -> Self {
+        let full_val = node.attribute(attr);
+        let (message, hint, severity) = needed.hint(attr, uav, got);
+        InvalidCsl {
+            text_pos: node
+                .attribute_value_pos(attr)
+                .unwrap_or_else(|| node.node_pos()),
+            len: full_val.map(|v| v.len()).unwrap_or(1),
+            message,
+            hint,
+            severity,
         }
     }
 
@@ -81,14 +196,10 @@ impl InvalidCsl {
             )
             .ok()?;
 
-        Some(
-            Diagnostic::new(self.severity, self.message.clone())
-            .with_label(
-                Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
-                .with_message("")
-                // .with_message(self.message.clone()),
-            ),
-        )
+        let label = Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
+            .with_message(format!("{}", self.hint));
+        let diag = Diagnostic::new(self.severity, self.message.clone()).with_label(label);
+        Some(diag)
     }
 }
 
@@ -138,7 +249,7 @@ fn get_pos(e: &Error) -> TextPos {
             XP::UnexpectedToken(_, pos) => pos,
             XP::UnknownToken(pos) => pos,
         },
-        _ => TextPos::new(1, 1)
+        _ => TextPos::new(1, 1),
     };
     // make sure, because 0 = panic further down
     TextPos {
@@ -151,9 +262,10 @@ impl Default for StyleError {
     fn default() -> Self {
         StyleError::Invalid(CslError(vec![InvalidCsl {
             severity: Severity::Error,
-            text_pos: TextPos::new(0, 0),
+            text_pos: TextPos::new(1, 1),
             len: 0,
-            message: String::from(""),
+            hint: format!(""),
+            message: format!(""),
         }]))
     }
 }
@@ -161,27 +273,26 @@ impl Default for StyleError {
 impl StyleError {
     pub fn diagnostics(&self, file_map: &FileMap) -> Vec<Result<Diagnostic, String>> {
         match *self {
-            StyleError::Invalid(ref invs) => invs.0.iter()
-                .map(|e| e.to_diagnostic(file_map)
-                          .ok_or(e.message.clone()))
+            StyleError::Invalid(ref invs) => invs
+                .0
+                .iter()
+                .map(|e| e.to_diagnostic(file_map).ok_or(e.message.clone()))
                 .collect(),
             StyleError::ParseError(ref e) => {
                 let pos = get_pos(&e);
 
-                let str_start = file_map
-                    .byte_index((pos.row - 1 as u32).into(), (pos.col - 1 as u32).into());
+                let str_start =
+                    file_map.byte_index((pos.row - 1 as u32).into(), (pos.col - 1 as u32).into());
 
                 if let Ok(start) = str_start {
-                    vec![
-                        Ok(Diagnostic::new(Severity::Error, format!("{}", e)).with_label(
+                    vec![Ok(Diagnostic::new(Severity::Error, format!("{}", e))
+                        .with_label(
                             Label::new_primary(Span::from_offset(start, (1 as i64).into()))
-                            .with_message(""),
-                            ))]
-
+                                .with_message(""),
+                        ))]
                 } else {
                     vec![]
                 }
-
             }
         }
     }

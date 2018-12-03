@@ -56,19 +56,22 @@ impl<T: Clone> Intercalate<T> for [T] {
     }
 }
 
-pub trait PartitionArenaErrors<O, E> : Iterator<Item=Result<O, E>>
-    where O: Sized,
-          Self: Sized
+pub trait PartitionArenaErrors<O, E>: Iterator<Item = Result<O, E>>
+where
+    O: Sized,
+    Self: Sized,
 {
-    fn partition_results<'a>(self) -> Result<Vec<O>, Vec<E>>
-    {
+    fn partition_results<'a>(self) -> Result<Vec<O>, Vec<E>> {
         let mut errors = Vec::new();
-        let oks = self.filter_map(|res| {
-            match res {
+        let oks = self
+            .filter_map(|res| match res {
                 Ok(ok) => Some(ok),
-                Err(e) => { errors.push(e); None }
-            }
-        }).collect();
+                Err(e) => {
+                    errors.push(e);
+                    None
+                }
+            })
+            .collect();
         if errors.len() > 0 {
             Err(errors)
         } else {
@@ -76,13 +79,13 @@ pub trait PartitionArenaErrors<O, E> : Iterator<Item=Result<O, E>>
         }
     }
 
-    fn partition_arena_results<'a>(self, arena: &'a Arena<O>) -> Result<&'a [O], Vec<E>>
-    {
+    fn partition_arena_results<'a>(self, arena: &'a Arena<O>) -> Result<&'a [O], Vec<E>> {
         let mut errors = Vec::new();
-        let oks = self.filter_map(|res| {
-            match res {
-                Ok(ok) => Some(ok),
-                Err(e) => { errors.push(e); None }
+        let oks = self.filter_map(|res| match res {
+            Ok(ok) => Some(ok),
+            Err(e) => {
+                errors.push(e);
+                None
             }
         });
         let oks = arena.alloc_extend(oks);
@@ -94,5 +97,4 @@ pub trait PartitionArenaErrors<O, E> : Iterator<Item=Result<O, E>>
     }
 }
 
-impl<O, E, I: Iterator<Item=Result<O, E>>> PartitionArenaErrors<O, E> for I {}
-
+impl<O, E, I: Iterator<Item = Result<O, E>>> PartitionArenaErrors<O, E> for I {}
