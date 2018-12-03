@@ -57,9 +57,9 @@
           <name name-as-sort-order="all" />
         </names>
         <choose>
-          <if is-numeric="number printer">
+          <if is-numeric="number" position="">
           </if>
-          <else-if variable="number printer">
+          <else-if variable="number printer" type="number">
             <text value="printer" />
             <date variable="issued" delimiter=" ">
               <date-part name="day" range-delimiter="&#x2013;"/>

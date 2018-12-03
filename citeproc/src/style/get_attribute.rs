@@ -115,9 +115,12 @@ pub fn attribute_array_var<T: GetAttribute>(
     need: NeedVarType,
 ) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => {
-            let split: Result<Vec<_>, _> =
-                a.split(' ').map(|a| T::get_attr(a, CSL_VERSION)).collect();
+        Some(array) => {
+            let split: Result<Vec<_>, _> = array
+                .split(' ')
+                .filter(|a| a.len() > 0)
+                .map(|a| T::get_attr(a, CSL_VERSION))
+                .collect();
             match split {
                 Ok(val) => Ok(val),
                 Err(e) => Err(InvalidCsl::wrong_var_type(
@@ -125,7 +128,7 @@ pub fn attribute_array_var<T: GetAttribute>(
                     attr,
                     &e.value,
                     need,
-                    AnyVariable::get_attr(a, CSL_VERSION).ok(),
+                    AnyVariable::get_attr(&e.value, CSL_VERSION).ok(),
                 )),
             }
         }

@@ -66,6 +66,7 @@ impl NeedVarType {
     ) -> (String, String, Severity) {
         use self::NeedVarType::*;
         let wrong_type = format!("Wrong variable type for `{}`", attr);
+        let wrong_type_var = format!("Wrong variable type for `{}`: \"{}\"", attr, var);
         let empty = format!("");
         let unknown = (
             format!("Unknown variable \"{}\"", var),
@@ -79,10 +80,9 @@ impl NeedVarType {
             TextVariable => maybe_got.map(|got| {
                 use crate::style::variables::AnyVariable::*;
                 match got {
-                    // so many styles do this, we're only going to warn about it.
                     Number(_) => (wrong_type,
                                   format!("Hint: use <number variable=\"{}\" /> instead", var),
-                                  Severity::Warning),
+                                  Severity::Error),
                     Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
                     Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
                     // this would be trying to print an error when the input was correct
@@ -105,33 +105,33 @@ impl NeedVarType {
 
             CondIsNumeric => {
                 maybe_got
-                    .map(|_| (wrong_type,
+                    .map(|_| (wrong_type_var,
                               format!("Hint: `is-numeric` can only match numeric variables"),
                               Severity::Error))
                     .unwrap_or(unknown)
             }
 
-            CondIsUncertainDate => (wrong_type,
+            CondIsUncertainDate => (wrong_type_var,
                                     format!("Hint: `is-uncertain-date` can only match date variables"),
                                     Severity::Error),
 
-            CondType => (wrong_type,
+            CondType => (wrong_type_var,
                          format!("Hint: `type` can only match known types"),
                          Severity::Error),
 
-            CondPosition => (wrong_type,
-                             format!("Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}"),
+            CondPosition => (wrong_type_var,
+                             format!("Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}*"),
                              Severity::Error),
 
-            CondLocator => (wrong_type, format!("Hint: `locator` only matches locator types"), Severity::Error),
-            Date => (wrong_type, format!("<date variable=\"...\"> can only render dates"), Severity::Error),
-            Name => (wrong_type, format!("Hint: <names> can only render name variables"), Severity::Error),
+            CondLocator => (wrong_type_var, format!("Hint: `locator` only matches locator types"), Severity::Error),
+            Date => (wrong_type_var, format!("<date variable=\"...\"> can only render dates"), Severity::Error),
+            Name => (wrong_type_var, format!("Hint: <names> can only render name variables"), Severity::Error),
         }
     }
 }
 
 impl InvalidCsl {
-    pub fn new(node: &Node, message: String) -> Self {
+    pub fn new(node: &Node, message: &str) -> Self {
         let mut pos = node.node_pos();
         pos.col += 1;
         InvalidCsl {
@@ -139,7 +139,7 @@ impl InvalidCsl {
             len: node.tag_name().name().len(),
             severity: Severity::Error,
             hint: format!(""),
-            message,
+            message: message.to_owned(),
         }
     }
 

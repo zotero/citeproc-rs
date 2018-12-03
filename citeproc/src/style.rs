@@ -109,7 +109,7 @@ impl FromNode for Citation {
         if layouts.len() != 1 {
             return Ok(Err(InvalidCsl::new(
                 node,
-                "<citation> must contain exactly one <layout>".into(),
+                "<citation> must contain exactly one <layout>",
             ))?);
         }
         let layout_node = layouts[0];
@@ -309,7 +309,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
             } else {
                 return Err(InvalidCsl::new(
                     &el,
-                    "<choose> blocks must begin with an <if>".into(),
+                    "<choose> blocks must begin with an <if>",
                 ))?;
             }
         } else if !seen_else {
@@ -327,7 +327,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
     }
 
     let _if = if_block
-        .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>".into()))?;
+        .ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>"))?;
 
     Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
@@ -489,7 +489,7 @@ impl FromNode for Element {
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(Date::from_node_date(node, false)?)),
-            _ => Err(InvalidCsl::new(node, "Unrecognised node.".into()))?,
+            _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
         }
     }
 }
@@ -528,7 +528,7 @@ impl FromNode for MacroMap {
             None => {
                 return Ok(Err(InvalidCsl::new(
                     node,
-                    "Macro must have a 'name' attribute.".into(),
+                    "Macro must have a 'name' attribute.",
                 ))?)
             }
         };
