@@ -1,6 +1,6 @@
 use strum::EnumProperty;
 
-#[derive(AsRefStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsRefStr, EnumString, Debug, PartialEq, Eq, Copy, Clone)]
 #[strum(serialize_all = "snake_case")]
 pub enum CslVersion {
     // these strums are for reading from the

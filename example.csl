@@ -25,7 +25,7 @@
     </terms>
   </locale>
   <macro name="SuperMacro">
-    <text variable="locator" font-style="italic" />
+    <!-- <text variable="locator" font&#45;style="italic" /> -->
   </macro>
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
@@ -44,10 +44,10 @@
           <text value="3" />
         </group>
         <group delimiter="-">
-          <text variable="never" />
-          <text variable="stop" />
-          <text variable="never" />
-          <text variable="stopping" />
+          <text value="never" />
+          <text value="stop" />
+          <text value="never" />
+          <text value="stopping" />
         </group>
       </group>
       <group delimiter=", ">
@@ -57,7 +57,11 @@
           <name name-as-sort-order="all" />
         </names>
         <choose>
-          <if is-numeric="number" position="">
+          <if>
+            <conditions match="nand">
+              <condition position="ibid" />
+              <condition/>
+            </conditions>
           </if>
           <else-if variable="number printer" type="number">
             <text value="printer" />

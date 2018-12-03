@@ -318,14 +318,27 @@ pub struct Condition {
     pub is_uncertain_date: Vec<DateVariable>,
 }
 
+impl Condition {
+    pub fn is_empty(&self) -> bool {
+        self.is_numeric.is_empty() &&
+        self.variable.is_empty() &&
+        self.position.is_empty() &&
+        self.csl_type.is_empty() &&
+        self.locator.is_empty() &&
+        self.is_uncertain_date.is_empty()
+    }
+}
+
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Match {
     Any,
     All,
     None,
-    // Nand,
+    #[strum(props(csl101 = "0", cslM = "1"))]
+    Nand,
 }
+
 impl Default for Match {
     fn default() -> Self {
         Match::Any
@@ -333,10 +346,17 @@ impl Default for Match {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct IfThen(pub Condition, pub Vec<Element>);
+// in CSL 1.0.1, conditions.len() == 1
+pub struct IfThen(pub Conditions, pub Vec<Element>);
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Conditions(pub Match, pub Vec<Condition>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Else(pub Vec<Element>);
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 
 type Quotes = bool;
 
@@ -349,9 +369,6 @@ pub struct Names(
     pub Delimiter,
     pub Option<Substitute>,
 );
-
-#[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {

@@ -1,5 +1,5 @@
 use super::error::*;
-use std::str::FromStr;
+use super::get_attribute::GetAttribute;
 
 #[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
@@ -9,17 +9,16 @@ pub enum AnyVariable {
     Number(NumberVariable),
 }
 
-impl FromStr for AnyVariable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl GetAttribute for AnyVariable {
+    fn get_attr(s: &str, csl_version: super::version::CslVersion) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
-        if let Ok(v) = Variable::from_str(s) {
+        if let Ok(v) = Variable::get_attr(s, csl_version.clone()) {
             return Ok(Standard(v));
-        } else if let Ok(v) = NameVariable::from_str(s) {
+        } else if let Ok(v) = NameVariable::get_attr(s, csl_version.clone()) {
             return Ok(Name(v));
-        } else if let Ok(v) = DateVariable::from_str(s) {
+        } else if let Ok(v) = DateVariable::get_attr(s, csl_version.clone()) {
             return Ok(Date(v));
-        } else if let Ok(v) = NumberVariable::from_str(s) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_version.clone()) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))

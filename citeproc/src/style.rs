@@ -242,9 +242,42 @@ impl FromNode for Match {
     }
 }
 
-impl FromNode for Condition {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
-        Ok(Condition {
+#[derive(Debug)]
+enum ConditionError {
+    Unconditional(InvalidCsl),
+    Invalid(CslError),
+}
+
+impl ConditionError {
+    fn into_inner(self) -> CslError {
+        match self {
+            ConditionError::Unconditional(e) => CslError(vec![e]),
+            ConditionError::Invalid(e) => e,
+        }
+    }
+}
+
+impl From<InvalidCsl> for ConditionError {
+    fn from(err: InvalidCsl) -> Self {
+        ConditionError::Invalid(CslError::from(err))
+    }
+}
+
+impl From<CslError> for ConditionError {
+    fn from(err: CslError) -> Self {
+        ConditionError::Invalid(err)
+    }
+}
+
+impl From<Vec<CslError>> for ConditionError {
+    fn from(err: Vec<CslError>) -> Self {
+        ConditionError::Invalid(CslError::from(err))
+    }
+}
+
+impl Condition {
+    fn from_node_custom(node: &Node) -> Result<Self, ConditionError> {
+        let cond = Condition {
             match_type: Match::from_node(node)?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
             is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
@@ -257,18 +290,67 @@ impl FromNode for Condition {
             )?,
             csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
             locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
-        })
+        };
+        // technically, only a match="..." on an <if> is ignored when a <conditions> block is
+        // present, but that's ok
+        if cond.is_empty() {
+            Err(ConditionError::Unconditional(InvalidCsl::new(node, "Unconditional <choose> branch")))
+        } else {
+            Ok(cond)
+        }
     }
 }
 
+impl FromNode for Conditions {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let match_type = attribute_required(node, "match")?;
+        let conds = node
+            .children()
+            .filter(|n| n.has_tag_name("condition"))
+            .map(|el| Condition::from_node_custom(&el).map_err(|e| e.into_inner()))
+            .partition_results()?;
+        if conds.is_empty() {
+            Err(InvalidCsl::new(node, "Unconditional <choose> branch").into())
+        } else {
+            Ok(Conditions(match_type, conds))
+        }
+    }
+}
+
+// TODO: need context to determine if the CSL-M syntax can be used
 impl FromNode for IfThen {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        let tag = "if or else-if";
+
+        // CSL 1.0.1 <if match="MMM" vvv ></if> equivalent to
+        // CSL-M <if><conditions match="all"><condition match="MMM" vvv /></conditions></if>
+        let own_conditions: Result<Conditions, ConditionError> = Condition::from_node_custom(node)
+            .map(|c| Conditions(Match::All, vec![c]));
+
+        // TODO: only accept <conditions> in head position
+        let sub_conditions: Result<Option<Conditions>, CslError> = max1_child(tag, "conditions", node.children());
+
+        use self::ConditionError::*;
+
+        let conditions: Conditions = (match (own_conditions, sub_conditions) {
+            // just an if block
+            (Ok(own), Ok(None)) => Ok(own),
+            // just an if block, that failed
+            (Err(e), Ok(None)) => Err(e.into_inner()),
+            // no conds on if block, but error in <conditions>
+            (Err(Unconditional(_)), Err(esub)) => Err(esub),
+            // no conds on if block, but <conditions> present
+            (Err(Unconditional(_)), Ok(Some(sub))) => Ok(sub),
+            // if block has conditions, and <conditions> was also present
+            (Err(Invalid(_)), Ok(Some(_))) | (Err(Invalid(_)), Err(_)) | (Ok(_), Ok(Some(_))) | (Ok(_), Err(_))
+                => Ok(Err(InvalidCsl::new(node, &format!("{} can only have its own conditions OR a <conditions> block", tag)))?),
+        })?;
         let elements = node
             .children()
-            .filter(|n| n.is_element())
+            .filter(|n| n.is_element() && !n.has_tag_name("conditions"))
             .map(|el| Element::from_node(&el))
             .partition_results()?;
-        Ok(IfThen(Condition::from_node(node)?, elements))
+        Ok(IfThen(conditions, elements))
     }
 }
 
