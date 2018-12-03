@@ -8,7 +8,7 @@ use super::cite_context::*;
 
 impl<'c, 's: 'c> Proc<'c, 's> for Choose {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -44,7 +44,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for Choose {
             }
         } else {
             let Else(ref els) = last;
-            sequence(ctx, &Formatting::default(), &Delimiter("".into()), &els)
+            sequence(ctx, &Formatting::default(), "", &els)
         }
     }
 }
@@ -58,7 +58,7 @@ struct BranchEval<'s, O: OutputFormat> {
 fn eval_ifthen<'c, 's: 'c, 'r, O>(
     branch: &'s IfThen,
     ctx: &CiteContext<'c, 'r, O>,
-) -> BranchEval<'s, O>
+) -> BranchEval<'c, O>
 where
     O: OutputFormat,
 {
@@ -66,7 +66,7 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true  => Some(sequence(ctx, &Formatting::default(), &Delimiter("".into()), &elements))
+        true  => Some(sequence(ctx, &Formatting::default(), "", &elements))
     };
     BranchEval {
         disambiguate,

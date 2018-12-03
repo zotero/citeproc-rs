@@ -38,6 +38,7 @@ fn main() {
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
             refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+            refr.ordinary.insert(Variable::Title, "Barnaby v Joyce");
             refr.number.insert(NumberVariable::Number, Ok(55));
             refr.date.insert(
                 DateVariable::Issued,

@@ -8,7 +8,7 @@ use super::cite_context::*;
 
 impl<'c, 's: 'c> Proc<'c, 's> for DateEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {

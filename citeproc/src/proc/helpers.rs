@@ -1,7 +1,6 @@
 use super::{Proc, IR};
 use crate::input::Reference;
 use crate::output::OutputFormat;
-use crate::style::element::Delimiter;
 use crate::style::element::{Element, Formatting};
 use super::cite_context::*;
 
@@ -17,9 +16,9 @@ pub fn convert_numeric<'a>(value: &'a str) -> Result<i32, &'a str> {
 pub fn sequence<'c, 's, 'r, O>(
     ctx: &CiteContext<'c, 'r, O>,
     f: &Formatting,
-    delim: &Delimiter,
-    els: &'s [Element],
-) -> IR<'s, O>
+    delim: &str,
+    els: &'c [Element],
+) -> IR<'c, O>
 where
     O: OutputFormat,
 {
@@ -33,7 +32,7 @@ where
         } else if let IR::Rendered(None) = pr {
         } else {
             if !dups.is_empty() {
-                let r = IR::Rendered(Some(fmt.group(&dups, &delim.0, &f)));
+                let r = IR::Rendered(Some(fmt.group(&dups, delim, &f)));
                 dedup.push(r);
                 dups.clear();
             }
@@ -41,7 +40,7 @@ where
         }
     }
     if !dups.is_empty() {
-        let r = IR::Rendered(Some(fmt.group(&dups, &delim.0, &f)));
+        let r = IR::Rendered(Some(fmt.group(&dups, delim, &f)));
         dedup.push(r);
         dups.clear();
     }

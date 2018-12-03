@@ -24,14 +24,14 @@ pub use self::ir::*;
 // 'r: reference
 pub trait Proc<'c, 's: 'c> {
     // TODO: include settings and reference and macro map
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat;
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
 impl<'c, 's: 'c> Proc<'c, 's> for Style {
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -44,17 +44,17 @@ impl<'c, 's: 'c> Proc<'c, 's> for Style {
 // TODO: insert affixes into group before processing as a group
 impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
-        sequence(ctx, &self.formatting, &self.delimiter, &self.elements)
+        sequence(ctx, &self.formatting, &self.delimiter.0, &self.elements)
     }
 }
 
 impl<'c, 's: 'c> Proc<'c, 's> for Element {
     #[cfg_attr(feature = "flame_it", flame)]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'s, O>
+    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -64,7 +64,10 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
             Element::Choose(ref ch) => ch.intermediate(ctx),
 
             Element::Macro(ref name, ref f, ref _af, ref _quo) => {
-                IR::Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
+                // TODO: be able to return errors
+                let macro_unsafe = ctx.style.macros.get(name).expect("macro errors unimplemented!");
+                sequence(ctx, &f, "", &macro_unsafe)
+                // IR::Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
             }
 
             Element::Const(ref val, ref f, ref af, ref _quo) => IR::Rendered(Some(fmt.group(
@@ -122,7 +125,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
             }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
-            Element::Group(ref f, ref d, ref els) => sequence(ctx, f, d, els.as_ref()),
+            Element::Group(ref f, ref d, ref els) => sequence(ctx, f, &d.0, els.as_ref()),
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
