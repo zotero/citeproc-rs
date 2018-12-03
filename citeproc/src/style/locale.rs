@@ -1,4 +1,4 @@
-use crate::style::element::{Date, Form};
+use crate::style::element::{LocaleDate, Form};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CslOption(String, String);
@@ -34,7 +34,7 @@ pub struct Locale {
     pub lang: String,
     pub options: Vec<CslOption>,
     pub terms: Vec<Term>,
-    pub date: Vec<Date>,
+    pub dates: Vec<LocaleDate>,
 }
 
 // pub fn merge_locales<'d, 'l: 'd>(_base: Locale<'d>, locales: Vec<Locale<'l>>) -> Vec<Locale<'l>> {

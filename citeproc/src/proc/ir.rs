@@ -1,10 +1,10 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Choose as ChooseEl, Date as DateEl, Formatting, Names as NamesEl};
+use crate::style::element::{Choose, LocalizedDate, LocaleDate, IndependentDate, Formatting, Names as NamesEl};
 use super::cite_context::*;
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'s> {
-    Date(&'s DateEl),
+    Date(&'s IndependentDate),
     Explicit(),
 }
 
@@ -19,7 +19,7 @@ pub enum IR<'s, O: OutputFormat> {
 
     // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
-    ConditionalDisamb(&'s ChooseEl, Box<IR<'s, O>>),
+    ConditionalDisamb(&'s Choose, Box<IR<'s, O>>),
     YearSuffix(YearSuffixHook<'s>, O::Build),
 
     // Think:

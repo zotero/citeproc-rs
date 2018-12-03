@@ -392,7 +392,7 @@ pub enum Element {
     // <cs:group>
     Group(Formatting, Delimiter, Vec<Element>), // done
     // <cs:date>
-    Date(Date),
+    Date(IndependentDate),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -632,13 +632,6 @@ impl Default for YearForm {
 pub enum DateForm {
     Text,
     Numeric,
-    #[strum(serialize = "")]
-    NotSet,
-}
-impl Default for DateForm {
-    fn default() -> Self {
-        DateForm::NotSet
-    }
 }
 
 #[derive(Debug, Display, Eq, Clone, PartialEq)]
@@ -651,7 +644,6 @@ pub enum DatePartForm {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct DatePart {
     pub form: DatePartForm,
-    pub name: DatePartName,
     pub affixes: Affixes,
     pub formatting: Formatting,
     pub text_case: TextCase,
@@ -659,14 +651,33 @@ pub struct DatePart {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Date {
+pub struct IndependentDate {
     pub variable: DateVariable,
-    pub form: DateForm,
-    pub date_parts_attr: DateParts,
+    pub parts_selector: DateParts,
+    // TODO: limit each <date-part name="XXX"> to one per?
     pub date_parts: Vec<DatePart>,
     pub delimiter: Delimiter,
     pub affixes: Affixes,
     pub formatting: Formatting,
+    pub text_case: TextCase,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct LocaleDate {
+    pub form: DateForm,
+    pub date_parts: Vec<DatePart>,
+    pub delimiter: Delimiter,
+    pub text_case: TextCase,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct LocalizedDate {
+    pub variable: DateVariable,
+    pub parts_selector: DateParts,
+    pub form: DateForm,
+    pub affixes: Affixes,
+    pub formatting: Formatting,
+    pub text_case: TextCase,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]

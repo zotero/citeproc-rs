@@ -60,6 +60,13 @@ impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
         DateOrRange::Single(Date { year, month, day })
     }
+    pub fn single(&self) -> Option<Date> {
+        if let DateOrRange::Single(ref d) = self {
+            Some(d.clone())
+        } else {
+            None
+        }
+    }
     pub fn from_parts(parts: &[&[i32]]) -> Option<Self> {
         if parts.is_empty() {
             None

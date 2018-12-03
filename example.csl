@@ -30,7 +30,7 @@
 
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
-      <group delimiter=" & " font-style="italic" >
+      <group delimiter=" & " >
         <!-- <text variable="container&#45;title" /> -->
         <!-- <number variable="number" /> -->
         <choose>
@@ -44,10 +44,15 @@
             <text value="else branch taken" />
           </else>
         </choose>
-        <date variable="issued" delimiter=" " font-style="italic">
+        <date variable="issued" delimiter=" ">
           <date-part name="day" range-delimiter="&#x2013;"/>
           <date-part name="month" range-delimiter=" &#x2013; "/>
           <date-part name="year" range-delimiter=" &#x2013; "/>
+        </date>
+        <date variable="issued" delimiter="-">
+          <date-part name="year" range-delimiter=" &#x2013; "/>
+          <date-part name="month" form="numeric-leading-zeros" range-delimiter=" &#x2013; "/>
+          <date-part name="day" form="numeric-leading-zeros" range-delimiter="&#x2013;"/>
         </date>
         <group delimiter="-">
           <text value="never" />

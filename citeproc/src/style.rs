@@ -541,34 +541,60 @@ impl DatePart {
             DatePartName::Day => DatePartForm::Day(attribute_optional(node, "form")?),
         };
         Ok(DatePart {
-            name,
             form,
+            // affixes not allowed in a locale date
             affixes: disallow_default(node, !full)?,
-            formatting: disallow_default(node, !full)?,
-            text_case: disallow_default(node, !full)?,
-            range_delimiter: disallow_default(node, !full)?,
+            formatting: Formatting::from_node(node)?,
+            text_case: TextCase::from_node(node)?,
+            range_delimiter: RangeDelimiter::from_node(node)?,
         })
     }
 }
 
-impl Date {
-    fn from_node_date(node: &Node, is_in_locale: bool) -> Result<Self, CslError> {
-        let form: DateForm = attribute_optional(node, "form")?;
-        let not_set = form == DateForm::NotSet;
-        let full = if is_in_locale { true } else { not_set };
+impl IndependentDate {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node_dp(&el, full))
+            .map(|el| DatePart::from_node_dp(&el, true))
             .partition_results()?;
-        Ok(Date {
+        Ok(IndependentDate {
             variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
-            form,
             date_parts: elements,
-            date_parts_attr: attribute_optional(node, "date-parts")?,
+            text_case: TextCase::from_node(node)?,
+            parts_selector: attribute_optional(node, "date-parts")?,
             affixes: Affixes::from_node(node)?,
             formatting: Formatting::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
+        })
+    }
+}
+
+impl LocaleDate {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let elements = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("date-part"))
+            .map(|el| DatePart::from_node_dp(&el, false))
+            .partition_results()?;
+        Ok(LocaleDate {
+            form: attribute_required(node, "form")?,
+            date_parts: elements,
+            delimiter: Delimiter::from_node(node)?,
+            text_case: TextCase::from_node(node)?,
+        })
+    }
+}
+
+impl LocalizedDate {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(LocalizedDate {
+            variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
+            parts_selector: attribute_optional(node, "date-parts")?,
+            form: attribute_required(node, "form")?,
+            affixes: Affixes::from_node(node)?,
+            formatting: Formatting::from_node(node)?,
+            text_case: TextCase::from_node(node)?,
         })
     }
 }
@@ -582,7 +608,7 @@ impl FromNode for Element {
             "number" => Ok(number_el(node)?),
             "names" => Ok(names_el(node)?),
             "choose" => Ok(choose_el(node)?),
-            "date" => Ok(Element::Date(Date::from_node_date(node, false)?)),
+            "date" => Ok(Element::Date(IndependentDate::from_node(node)?)),
             _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
         }
     }

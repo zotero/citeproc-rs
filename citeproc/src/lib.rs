@@ -84,7 +84,7 @@ mod tests {
         );
 
         b.iter(|| {
-            driver.single(&refr);
+            driver.single(&refr, &"".to_owned());
         });
         Ok(())
     }
