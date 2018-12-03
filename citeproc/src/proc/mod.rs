@@ -1,15 +1,14 @@
-use crate::input::Reference;
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting, Layout as LayoutEl, Style};
 use crate::style::variables::*;
 
 mod choose;
+mod cite_context;
 mod date;
 mod helpers;
-mod cite_context;
 mod ir;
-use self::helpers::sequence;
 pub use self::cite_context::*;
+use self::helpers::sequence;
 pub use self::ir::*;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
@@ -65,9 +64,12 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
 
             Element::Macro(ref name, ref f, ref _af, ref _quo) => {
                 // TODO: be able to return errors
-                let macro_unsafe = ctx.style.macros.get(name).expect("macro errors unimplemented!");
+                let macro_unsafe = ctx
+                    .style
+                    .macros
+                    .get(name)
+                    .expect("macro errors unimplemented!");
                 sequence(ctx, &f, "", &macro_unsafe)
-                // IR::Rendered(Some(fmt.text_node(&format!("(macro {})", name), &f)))
             }
 
             Element::Const(ref val, ref f, ref af, ref _quo) => IR::Rendered(Some(fmt.group(
@@ -82,13 +84,17 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
 
             Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
                 let content = match *var {
-                    StandardVariable::Ordinary(ref v) => ctx.reference.ordinary
+                    StandardVariable::Ordinary(ref v) => ctx
+                        .reference
+                        .ordinary
                         .get(v)
                         .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
-                    StandardVariable::Number(ref v) => ctx.reference.number.get(v).map(|val| match *val {
-                        Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
-                        Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                    }),
+                    StandardVariable::Number(ref v) => {
+                        ctx.reference.number.get(v).map(|val| match *val {
+                            Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
+                            Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
+                        })
+                    }
                 };
                 IR::Rendered(content)
             }

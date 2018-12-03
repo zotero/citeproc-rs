@@ -1,5 +1,5 @@
-use crate::style::terms::LocatorType;
 use super::Date;
+use crate::style::terms::LocatorType;
 
 // AffixType is generic to allow for any data in here;
 // could be MSWord stuff, or Pandoc Formatted = [Inline],
@@ -27,12 +27,14 @@ pub struct Cite<AffixType> {
     // TODO: allow suppression of any variables
     pub author_in_text: bool,
     pub suppress_author: bool,
-
     // Is this necessary?
     // citeHash       :: Int
 }
 
-impl<T> Cite<T> where T: Clone {
+impl<T> Cite<T>
+where
+    T: Clone,
+{
     pub fn basic(id: &str, prefix: &T) -> Self {
         Cite {
             id: id.to_owned(),

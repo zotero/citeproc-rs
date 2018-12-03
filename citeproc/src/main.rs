@@ -18,7 +18,7 @@ fn read<'s>(path: &str) -> String {
     contents
 }
 
-use pandoc_types::definition::Inline;
+// use pandoc_types::definition::Inline;
 
 fn main() {
     let matches = App::new("citeproc")
@@ -57,7 +57,6 @@ fn main() {
             let header = r#"{"blocks":[{"t":"Para","c":"#;
             let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
             println!("{}{}{}", header, serialized, footer);
-
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }

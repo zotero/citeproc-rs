@@ -1,15 +1,14 @@
+use super::cite_context::*;
 use super::{Proc, IR};
-use crate::input::Reference;
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting};
-use super::cite_context::*;
 
 /// Tests whether the given variables (Appendix IV - Variables) contain numeric content. Content is
 /// considered numeric if it solely consists of numbers. Numbers may have prefixes and suffixes
 /// (“D2”, “2b”, “L2d”), and may be separated by a comma, hyphen, or ampersand, with or without
 /// spaces (“2, 3”, “2-4”, “2 & 4”). For example, “2nd” tests “true” whereas “second” and “2nd
 /// edition” test “false”.
-pub fn convert_numeric<'a>(value: &'a str) -> Result<i32, &'a str> {
+pub fn convert_numeric<'a>(_value: &'a str) -> Result<i32, &'a str> {
     Ok(0)
 }
 
@@ -48,7 +47,7 @@ where
         return dedup.into_iter().nth(0).unwrap();
     }
     if dedup.len() == 0 {
-        return IR::Rendered(None)
+        return IR::Rendered(None);
     }
     IR::Seq(dedup)
 }

@@ -1,12 +1,12 @@
 use crate::input::*;
 use crate::output::*;
+use crate::proc::CiteContext;
 use crate::proc::Proc;
+use crate::style::element::Position;
 use crate::style::element::Style;
 use crate::style::error::{CslError, StyleError};
 use crate::style::FromNode;
 use roxmltree::Document;
-use crate::proc::CiteContext;
-use crate::style::element::Position;
 
 impl From<CslError> for StyleError {
     fn from(err: CslError) -> Self {
@@ -55,5 +55,4 @@ where
     //     let ir = self.style.intermediate(ctx: &CiteContext<'c, 'r>);
     //     println!("{:?}", ir);
     // }
-
 }

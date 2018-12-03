@@ -27,14 +27,11 @@ pub mod proc;
 
 #[macro_use]
 extern crate strum_macros;
-
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
-
 extern crate cfg_if;
-
 #[cfg(test)]
 extern crate test;
 
@@ -44,13 +41,13 @@ mod tests {
     use crate::output::*;
     use crate::style::element::CslType;
     use crate::style::variables::*;
-    use crate::StyleError;
     use crate::Driver;
+    use crate::StyleError;
 
-    use test::Bencher;
-    use std::str::FromStr;
     use std::fs::File;
     use std::io::prelude::*;
+    use std::str::FromStr;
+    use test::Bencher;
 
     #[bench]
     fn bench_build_tree(b: &mut Bencher) -> Result<(), StyleError> {

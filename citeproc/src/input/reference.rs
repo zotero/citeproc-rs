@@ -4,7 +4,7 @@ extern crate fnv;
 
 use super::date::DateOrRange;
 use crate::style::element::CslType;
-use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable, AnyVariable};
+use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;
 
 // kebab-case here is the same as Strum's "kebab_case",
@@ -54,4 +54,3 @@ impl<'r> Reference<'r> {
         }
     }
 }
-

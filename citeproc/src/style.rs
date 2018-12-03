@@ -12,8 +12,8 @@ use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
 use crate::utils::PartitionArenaErrors;
-use roxmltree::{Children, Node};
 use fnv::FnvHashMap;
+use roxmltree::{Children, Node};
 
 pub trait IsOnNode
 where
@@ -551,7 +551,7 @@ impl DatePart {
     }
 }
 
-impl IndependentDate {
+impl FromNode for IndependentDate {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         let elements = node
             .children()
@@ -570,7 +570,7 @@ impl IndependentDate {
     }
 }
 
-impl LocaleDate {
+impl FromNode for LocaleDate {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         let elements = node
             .children()

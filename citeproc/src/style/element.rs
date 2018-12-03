@@ -320,7 +320,7 @@ pub struct Condition {
 
 impl Condition {
     pub fn is_empty(&self) -> bool {
-        !self.disambiguate 
+        !self.disambiguate
             && self.is_numeric.is_empty()
             && self.variable.is_empty()
             && self.position.is_empty()

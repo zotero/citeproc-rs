@@ -1,6 +1,6 @@
 use crate::input::*;
-use crate::style::element::{ Style, Position };
 use crate::output::*;
+use crate::style::element::{Position, Style};
 
 // in Proc, 's has to live at least as long as 'c ('s: 'c)
 pub struct CiteContext<'c, 'r: 'c, O: OutputFormat> {

@@ -1,10 +1,9 @@
+use super::cite_context::*;
 use super::helpers::sequence;
 use super::ir::*;
 use super::Proc;
-use crate::input::Reference;
 use crate::output::OutputFormat;
-use crate::style::element::{Delimiter, Choose, Formatting, IfThen, Else, Conditions, Condition, Match};
-use super::cite_context::*;
+use crate::style::element::{Choose, Condition, Conditions, Else, Formatting, IfThen, Match};
 
 impl<'c, 's: 'c> Proc<'c, 's> for Choose {
     #[cfg_attr(feature = "flame_it", flame)]
@@ -17,7 +16,10 @@ impl<'c, 's: 'c> Proc<'c, 's> for Choose {
         let mut disamb = false;
         let mut found;
         {
-            let BranchEval { disambiguate, content } = eval_ifthen(head, ctx);
+            let BranchEval {
+                disambiguate,
+                content,
+            } = eval_ifthen(head, ctx);
             found = content;
             disamb = disamb || disambiguate;
         }
@@ -26,12 +28,17 @@ impl<'c, 's: 'c> Proc<'c, 's> for Choose {
                 IR::ConditionalDisamb(self, Box::new(content))
             } else {
                 content
-            }
+            };
         } else {
             let mut iter = rest.iter();
             while let Some(branch) = iter.next() {
-                if found.is_some() { break; }
-                let BranchEval { disambiguate, content } = eval_ifthen(branch, ctx);
+                if found.is_some() {
+                    break;
+                }
+                let BranchEval {
+                    disambiguate,
+                    content,
+                } = eval_ifthen(branch, ctx);
                 found = content;
                 disamb = disamb || disambiguate;
             }
@@ -41,7 +48,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for Choose {
                 IR::ConditionalDisamb(self, Box::new(content))
             } else {
                 content
-            }
+            };
         } else {
             let Else(ref els) = last;
             sequence(ctx, &Formatting::default(), "", &els)
@@ -66,7 +73,7 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true  => Some(sequence(ctx, &Formatting::default(), "", &elements))
+        true => Some(sequence(ctx, &Formatting::default(), "", &elements)),
     };
     BranchEval {
         disambiguate,
@@ -80,8 +87,8 @@ fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
     conditions: &'s Conditions,
     ctx: &CiteContext<'c, 'r, O>,
 ) -> (bool, bool)
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     let Conditions(ref match_type, ref conds) = *conditions;
     let tests: Vec<_> = conds.iter().map(|c| eval_cond(c, ctx)).collect();
@@ -90,15 +97,21 @@ fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
 }
 
 fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, 'r, O>) -> bool
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     let mut tests = Vec::new();
     for var in cond.variable.iter() {
         tests.push(ctx.reference.has_variable(var));
     }
     for var in cond.is_numeric.iter() {
-        tests.push(ctx.reference.number.get(var).map(|v| v.is_ok()).unwrap_or(false));
+        tests.push(
+            ctx.reference
+                .number
+                .get(var)
+                .map(|v| v.is_ok())
+                .unwrap_or(false),
+        );
     }
     for typ in cond.csl_type.iter() {
         tests.push(ctx.reference.csl_type == *typ);
@@ -112,10 +125,9 @@ fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, '
 
 fn run_matcher(bools: &[bool], match_type: &Match) -> bool {
     match *match_type {
-        Match::Any  => bools.iter().any(|b| *b),
+        Match::Any => bools.iter().any(|b| *b),
         Match::Nand => bools.iter().any(|b| !*b),
-        Match::All  => bools.iter().all(|b| *b),
+        Match::All => bools.iter().all(|b| *b),
         Match::None => bools.iter().all(|b| !*b),
     }
 }
-

@@ -1,6 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, LocalizedDate, LocaleDate, IndependentDate, Formatting, Names as NamesEl};
-use super::cite_context::*;
+use crate::style::element::{Choose, Formatting, IndependentDate, Names as NamesEl};
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'s> {

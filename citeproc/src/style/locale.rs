@@ -1,4 +1,4 @@
-use crate::style::element::{LocaleDate, Form};
+use crate::style::element::{Form, LocaleDate};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CslOption(String, String);
