@@ -69,7 +69,7 @@ impl DatePart {
 }
 
 impl<'c, 's: 'c> Proc<'c, 's> for IndependentDate {
-    #[cfg_attr(feature = "flame_it", flame)]
+    #[cfg_attr(feature = "flame_it", flame("Date"))]
     fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,

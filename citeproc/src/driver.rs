@@ -47,6 +47,34 @@ where
         serde_json::to_string(&o).unwrap()
     }
 
+    pub fn inter_bench(&self, refr: &Reference, prefix: &O::Output) {
+        let ctx = CiteContext {
+            style: &self.style,
+            reference: refr,
+            cite: &Cite::basic("ok", prefix),
+            position: Position::First,
+            format: self.formatter,
+            citation_number: 1,
+        };
+        let _i = self.style.intermediate(&ctx);
+    }
+
+    #[cfg(test)]
+    pub fn bench_flatten(&self, b: &mut test::Bencher, refr: &Reference, prefix: &O::Output) {
+        let ctx = CiteContext {
+            style: &self.style,
+            reference: refr,
+            cite: &Cite::basic("ok", prefix),
+            position: Position::First,
+            format: self.formatter,
+            citation_number: 1,
+        };
+        let i = self.style.intermediate(&ctx);
+        b.iter(|| {
+            i.flatten(self.formatter);
+        });
+    }
+
     pub fn dump_style(&self) {
         println!("{:?}", self.style)
     }

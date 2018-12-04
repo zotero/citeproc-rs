@@ -6,7 +6,7 @@ use crate::output::OutputFormat;
 use crate::style::element::{Choose, Condition, Conditions, Else, Formatting, IfThen, Match};
 
 impl<'c, 's: 'c> Proc<'c, 's> for Choose {
-    #[cfg_attr(feature = "flame_it", flame)]
+    #[cfg_attr(feature = "flame_it", flame("Choose"))]
     fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
@@ -62,6 +62,7 @@ struct BranchEval<'s, O: OutputFormat> {
     content: Option<IR<'s, O>>,
 }
 
+#[cfg_attr(feature = "flame_it", flame)]
 fn eval_ifthen<'c, 's: 'c, 'r, O>(
     branch: &'s IfThen,
     ctx: &CiteContext<'c, 'r, O>,
@@ -83,6 +84,7 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
+#[cfg_attr(feature = "flame_it", flame)]
 fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
     conditions: &'s Conditions,
     ctx: &CiteContext<'c, 'r, O>,
@@ -96,33 +98,31 @@ where
     (run_matcher(&tests, match_type), disambiguate)
 }
 
+#[cfg_attr(feature = "flame_it", flame)]
 fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, 'r, O>) -> bool
 where
     O: OutputFormat,
 {
-    let mut tests = Vec::new();
+    let mut tests = Vec::with_capacity(cond.variable.len() + cond.is_numeric.len() + cond.csl_type.len() + cond.position.len());
     for var in cond.variable.iter() {
-        tests.push(ctx.reference.has_variable(var));
+        tests.push(ctx.has_variable(var));
     }
     for var in cond.is_numeric.iter() {
-        tests.push(
-            ctx.reference
-                .number
-                .get(var)
-                .map(|v| v.is_ok())
-                .unwrap_or(false),
-        );
+        tests.push(ctx.is_numeric(var));
     }
     for typ in cond.csl_type.iter() {
         tests.push(ctx.reference.csl_type == *typ);
     }
-    // TODO: pass down the current Cite to this point here so we can test positions and locators
+    for pos in cond.position.iter() {
+        tests.push(ctx.position == *pos);
+    }
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
 
     run_matcher(&tests, &cond.match_type)
 }
 
+#[cfg_attr(feature = "flame_it", flame)]
 fn run_matcher(bools: &[bool], match_type: &Match) -> bool {
     match *match_type {
         Match::Any => bools.iter().any(|b| *b),

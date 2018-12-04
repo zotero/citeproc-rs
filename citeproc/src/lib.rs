@@ -22,7 +22,7 @@ mod utils;
 
 pub use self::style::error::StyleError;
 
-#[cfg_attr(feature = "flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame("proc"))]
 pub mod proc;
 
 #[macro_use]
@@ -81,8 +81,29 @@ mod tests {
         );
 
         b.iter(|| {
-            driver.single(&refr, &"".to_owned());
+            driver.inter_bench(&refr, &"".to_owned());
         });
+        Ok(())
+    }
+
+    #[bench]
+    fn bench_flatten(b: &mut Bencher) -> Result<(), StyleError> {
+        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let mut f = File::open(path).expect("no file at path");
+        let mut contents = String::new();
+        let formatter = PlainText::new();
+        f.read_to_string(&mut contents)
+            .expect("something went wrong reading the file");
+        let driver = Driver::new(&contents, &formatter)?;
+        let mut refr = Reference::empty("id", CslType::LegalCase);
+        refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+        refr.number.insert(NumberVariable::Number, Ok(55));
+        refr.date.insert(
+            DateVariable::Issued,
+            DateOrRange::from_str("1998-01-04").unwrap(),
+        );
+
+        driver.bench_flatten(b, &refr, &"".to_owned());
         Ok(())
     }
 

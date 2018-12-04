@@ -3,3 +3,6 @@ members = [
   "citeproc",
   "citeproc-wasm"
 ]
+
+[profile.release]
+lto = false

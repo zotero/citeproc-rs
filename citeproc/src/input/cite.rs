@@ -15,7 +15,7 @@ pub struct Cite<AffixType> {
     // they are 'variables'.
     // in CSL-M they are number variables. also review the rest of the
     // vars that are like this
-    pub locator: String,
+    pub locator: Option<Result<i32, String>>,
     // csl-m
     pub locator_extra: Option<String>,
     // csl-m
@@ -41,7 +41,7 @@ where
             prefix: prefix.clone(),
             suffix: prefix.clone(),
             label: LocatorType::Page,
-            locator: "5".to_owned(),
+            locator: None,
             locator_extra: None,
             locator_date: None,
             near_note: false,

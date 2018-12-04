@@ -12,6 +12,7 @@ pub fn convert_numeric<'a>(_value: &'a str) -> Result<i32, &'a str> {
     Ok(0)
 }
 
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn sequence<'c, 's, 'r, O>(
     ctx: &CiteContext<'c, 'r, O>,
     f: &Formatting,

@@ -27,10 +27,12 @@ pub trait OutputFormat {
         -> Self::Build;
     fn output(&self, intermediate: Self::Build) -> Self::Output;
 
+    #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
     fn plain(&self, s: &str) -> Self::Build {
         self.text_node(s, &Formatting::default())
     }
 
+    #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
     fn affixed(&self, s: &str, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
         let null_f = Formatting::default();
         self.group(

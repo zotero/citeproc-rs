@@ -35,7 +35,7 @@ fn main() {
         .get_matches();
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
-        let formatter = Pandoc::new();
+        let formatter = PlainText::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
@@ -50,13 +50,20 @@ fn main() {
             // driver.dump_style();
             // driver.dump_ir(&refr);
 
-            let serialized = driver.single(&refr, &vec![]);
+            let closure = || driver.single(&refr, &String::from(""));
 
-            // println!("{}", serialized);
+            #[cfg(feature = "flame_it")]
+            {
+                flame::span_of("intermediate", closure);
+                flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+            }
+            let serialized = closure();
 
-            let header = r#"{"blocks":[{"t":"Para","c":"#;
-            let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
-            println!("{}{}{}", header, serialized, footer);
+            println!("{}", serialized);
+
+            // let header = r#"{"blocks":[{"t":"Para","c":"#;
+            // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
+            // println!("{}{}{}", header, serialized, footer);
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }
@@ -79,6 +86,23 @@ fn main() {
 //         let fmt = PlainText::new();
 //         flame::span_of("bench_run", || {
 //             style.proc_intermediate(&fmt, &refr);
+//         });
+//         let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+//         let mut f = File::open(path).expect("no file at path");
+//         let mut contents = String::new();
+//         let formatter = PlainText::new();
+//         f.read_to_string(&mut contents)
+//             .expect("something went wrong reading the file");
+//         let driver = Driver::new(&contents, &formatter)?;
+//         let mut refr = Reference::empty("id", CslType::LegalCase);
+//         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+//         refr.number.insert(NumberVariable::Number, Ok(55));
+//         refr.date.insert(
+//             DateVariable::Issued,
+//             DateOrRange::from_str("1998-01-04").unwrap(),
+//         );
+//         b.iter(|| {
+//             driver.inter_bench(&refr, &"".to_owned());
 //         });
 //         // Dump the report to disk
 //         flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();

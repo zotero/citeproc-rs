@@ -28,7 +28,7 @@ pub trait Proc<'c, 's: 'c> {
         O: OutputFormat;
 }
 
-#[cfg_attr(feature = "flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame("Style"))]
 impl<'c, 's: 'c> Proc<'c, 's> for Style {
     fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
@@ -42,7 +42,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for Style {
 
 // TODO: insert affixes into group before processing as a group
 impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
-    #[cfg_attr(feature = "flame_it", flame)]
+    #[cfg_attr(feature = "flame_it", flame("Layout"))]
     fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
@@ -52,7 +52,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
 }
 
 impl<'c, 's: 'c> Proc<'c, 's> for Element {
-    #[cfg_attr(feature = "flame_it", flame)]
+    #[cfg_attr(feature = "flame_it", flame("Element"))]
     fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
@@ -131,6 +131,14 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
             }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
+
+            // TODO: cs:group implicitly acts as a conditional: cs:group and its child elements
+            // are suppressed if a) at least one rendering element in cs:group calls a variable
+            // (either directly or via a macro), and b) all variables that are called are
+            // empty. This accommodates descriptive cs:text elements.
+            //
+            // You're going to have to replace sequence() with something more complicated.
+            // And pass up information about .any(|v| used variables).
             Element::Group(ref f, ref d, ref els) => sequence(ctx, f, &d.0, els.as_ref()),
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
@@ -140,40 +148,3 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
     }
 }
 
-#[cfg(all(test, feature = "flame_it"))]
-mod test {
-    use super::Proc;
-    use crate::input::*;
-    use crate::output::PlainText;
-    use crate::style::build_style;
-    use crate::style::element::{CslType, Style};
-    use crate::style::variables::*;
-    use crate::test::Bencher;
-    use std::fs::File;
-    use std::io::prelude::*;
-    use std::str::FromStr;
-
-    #[bench]
-    fn bench_intermediate(b: &mut Bencher) {
-        let path = "/Users/cormac/git/citeproc-rs/example.csl";
-        let mut f = File::open(path).expect("no file at path");
-        let mut contents = String::new();
-        f.read_to_string(&mut contents)
-            .expect("something went wrong reading the file");
-        let s = build_style(&contents);
-        let fmt = PlainText::new();
-        let mut refr = Reference::empty("id", CslType::LegalCase);
-        refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, 55);
-        refr.date.insert(
-            DateVariable::Issued,
-            DateOrRange::from_str("1998-01-04").unwrap(),
-        );
-        if let Ok(style) = s {
-            b.iter(|| {
-                style.intermediate(&fmt, &refr);
-            });
-        }
-    }
-
-}
