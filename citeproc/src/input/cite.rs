@@ -1,12 +1,13 @@
 use super::Date;
 use crate::style::terms::LocatorType;
+use crate::input::NumericValue;
 
 // AffixType is generic to allow for any data in here;
 // could be MSWord stuff, or Pandoc Formatted = [Inline],
 // or someone's Markdown
 
-pub struct Cite<AffixType> {
-    pub id: String,
+pub struct Cite<'r, AffixType> {
+    pub id: &'r str,
     pub prefix: AffixType,
     pub suffix: AffixType,
     pub label: LocatorType,
@@ -15,9 +16,9 @@ pub struct Cite<AffixType> {
     // they are 'variables'.
     // in CSL-M they are number variables. also review the rest of the
     // vars that are like this
-    pub locator: Option<Result<i32, String>>,
+    pub locator: Option<NumericValue<'r>>,
     // csl-m
-    pub locator_extra: Option<String>,
+    pub locator_extra: Option<&'r str>,
     // csl-m
     pub locator_date: Option<Date>,
 
@@ -31,13 +32,13 @@ pub struct Cite<AffixType> {
     // citeHash       :: Int
 }
 
-impl<T> Cite<T>
+impl<'r, T> Cite<'r, T>
 where
     T: Clone,
 {
-    pub fn basic(id: &str, prefix: &T) -> Self {
+    pub fn basic(id: &'r str, prefix: &T) -> Self {
         Cite {
-            id: id.to_owned(),
+            id: id,
             prefix: prefix.clone(),
             suffix: prefix.clone(),
             label: LocatorType::Page,

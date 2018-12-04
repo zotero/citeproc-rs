@@ -41,7 +41,7 @@ fn main() {
             let mut refr = Reference::empty("id", CslType::LegalCase);
             refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
             refr.ordinary.insert(Variable::Title, "Barnaby v Joyce");
-            refr.number.insert(NumberVariable::Number, Ok(55));
+            refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
             refr.date.insert(
                 DateVariable::Issued,
                 DateOrRange::from_str("1998-01-04").unwrap(),

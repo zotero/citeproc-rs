@@ -90,10 +90,10 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
                         .get(v)
                         .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
                     StandardVariable::Number(ref v) => {
-                        ctx.reference.number.get(v).map(|val| match *val {
+                        ctx.reference.number.get(v).map(|val| fmt.affixed(&val.to_string(), &f, &af) /*match *val {
                             Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
                             Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                        })
+                        }*/)
                     }
                 };
                 IR::Rendered(content)
@@ -124,10 +124,10 @@ impl<'c, 's: 'c> Proc<'c, 's> for Element {
             }
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(ctx.reference.number.get(&var).map(|val| match *val {
+                IR::Rendered(ctx.reference.number.get(&var).map(|val| fmt.affixed(&val.to_string(), &f, &af) /*match *val {
                     Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
                     Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                }))
+                }*/))
             }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),

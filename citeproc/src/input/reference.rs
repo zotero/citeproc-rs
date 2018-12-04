@@ -7,6 +7,28 @@ use crate::style::element::CslType;
 use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;
 
+pub enum NumericValue<'r> {
+    // for values arriving as actual integers
+    Int(i32),
+    // for values that were originally strings, and maybe got parsed into numbers as an alternative
+    Parsed(&'r str, Option<i32>),
+}
+
+impl<'r> NumericValue<'r> {
+    pub fn numeric(&self) -> Option<i32> {
+        match *self {
+            NumericValue::Int(i) => Some(i),
+            NumericValue::Parsed(_, oi) => oi,
+        }
+    }
+    pub fn to_string(&self) -> String {
+        match *self {
+            NumericValue::Int(i) => format!("{}", i),
+            NumericValue::Parsed(s, _) => s.to_owned(),
+        }
+    }
+}
+
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -28,7 +50,7 @@ pub struct Reference<'r> {
     // whereas these hashes are essentially O(1) for our purposes
     pub ordinary: FnvHashMap<Variable, &'r str>,
     // we do the conversion on the input side, so is-numeric is just Result::ok
-    pub number: FnvHashMap<NumberVariable, Result<i32, &'r str>>,
+    pub number: FnvHashMap<NumberVariable, NumericValue<'r>>,
     pub name: FnvHashMap<NameVariable, Vec<Name<'r>>>,
     pub date: FnvHashMap<DateVariable, DateOrRange>,
 }
