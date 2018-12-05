@@ -3,12 +3,10 @@
   <info>
     <title>citeproc-rs test file</title>
     <title-short>citeproc-rs</title-short>
-    <id>http://www.zotero.org/styles/australian-guide-to-legal-citation</id>
-    <link href="http://www.zotero.org/styles/australian-guide-to-legal-citation" rel="self"/>
-    <link href="https://forums.zotero.org/discussion/4841/new-australian-legal-citation-style/?Focus=20831#Comment_20831" rel="documentation"/>
+    <id>http://www.zotero.org/styles/citeproc-rs-example</id>
     <author>
       <name>Genius Jones</name>
-      <email>antonh@lawtec.net</email>
+      <email>megalodon@example.com</email>
     </author>
     <contributor>
       <name>Greg McSly</name>
@@ -25,58 +23,68 @@
     </terms>
   </locale>
   <macro name="SuperMacro">
-    <!-- <text variable="locator" font&#45;style="italic" /> -->
+    <text variable="locator" font-style="italic" />
   </macro>
 
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
-      <group delimiter=" & " >
-        <!-- <text variable="container&#45;title" /> -->
-        <!-- <number variable="number" /> -->
-        <choose>
-          <if variable="number" match="none">
-            <text value="if branch taken" />
-          </if>
-          <else-if variable="issue">
-            <text value="else-if branch taken" />
-          </else-if>
-          <else>
-            <text value="else branch taken" />
-          </else>
-        </choose>
-        <date variable="issued" delimiter=" ">
-          <date-part name="day" range-delimiter="&#x2013;"/>
-          <date-part name="month" range-delimiter=" &#x2013; "/>
-          <date-part name="year" range-delimiter=" &#x2013; "/>
-        </date>
-        <date variable="issued" delimiter="-">
-          <date-part name="year" range-delimiter=" &#x2013; "/>
-          <date-part name="month" form="numeric-leading-zeros" range-delimiter=" &#x2013; "/>
-          <date-part name="day" form="numeric-leading-zeros" range-delimiter="&#x2013;"/>
-        </date>
-        <group delimiter="-">
-          <text value="never" />
-          <text value="stop" />
-          <text value="never" />
-          <text value="stopping" />
-        </group>
-      </group>
-      <group delimiter=", ">
-        <text value="citation" />
-        <number variable="issue" />
-        <!-- <names variable="editor"> -->
-        <!--   <name name&#45;as&#45;sort&#45;order="all" /> -->
-        <!-- </names> -->
-        <choose>
-          <if type="legal_case">
-            <date variable="issued" delimiter=" ">
-              <date-part name="day" range-delimiter="&#x2013;"/>
-              <date-part name="month" range-delimiter=" &#x2013; "/>
-              <date-part name="year" range-delimiter=" &#x2013; "/>
-            </date>
-          </if>
-        </choose>
-      </group>
+
+      <choose>
+        <if is-numeric="volume">
+          <text value="is-numeric: " />
+          <number variable="volume" form="ordinal" />
+        </if>
+        <else>
+          <text value="NOT numeric: " />
+          <text variable="volume" />
+        </else>
+      </choose>
+
+      <!-- <group delimiter=" &#38; " > -->
+      <!--   <choose> -->
+      <!--     <if variable="number" match="none"> -->
+      <!--       <text value="if branch taken" /> -->
+      <!--     </if> -->
+      <!--     <else&#45;if variable="issue"> -->
+      <!--       <text value="else&#45;if branch taken" /> -->
+      <!--     </else&#45;if> -->
+      <!--     <else> -->
+      <!--       <text value="else branch taken" /> -->
+      <!--     </else> -->
+      <!--   </choose> -->
+      <!--   <date variable="issued" delimiter=" "> -->
+      <!--     <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
+      <!--     <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--   </date> -->
+      <!--   <date variable="issued" delimiter="&#45;"> -->
+      <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--     <date&#45;part name="month" form="numeric&#45;leading&#45;zeros" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--     <date&#45;part name="day" form="numeric&#45;leading&#45;zeros" range&#45;delimiter="&#38;#x2013;"/> -->
+      <!--   </date> -->
+      <!--   <group delimiter="&#45;"> -->
+      <!--     <text value="never" /> -->
+      <!--     <text value="stop" /> -->
+      <!--     <text value="never" /> -->
+      <!--     <text value="stopping" /> -->
+      <!--   </group> -->
+      <!-- </group> -->
+      <!-- <group delimiter=", "> -->
+      <!--   <text value="citation" /> -->
+      <!--   <number variable="issue" /> -->
+      <!--   <!&#45;&#45; <names variable="editor"> &#45;&#45;> -->
+      <!--   <!&#45;&#45;   <name name&#38;#45;as&#38;#45;sort&#38;#45;order="all" /> &#45;&#45;> -->
+      <!--   <!&#45;&#45; </names> &#45;&#45;> -->
+      <!--   <choose> -->
+      <!--     <if type="legal_case"> -->
+      <!--       <date variable="issued" delimiter=" "> -->
+      <!--         <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
+      <!--         <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--         <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+      <!--       </date> -->
+      <!--     </if> -->
+      <!--   </choose> -->
+      <!-- </group> -->
     </layout>
   </citation>
 

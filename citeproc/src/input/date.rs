@@ -198,6 +198,7 @@ fn test_from_parts() {
 }
 
 // substantial portions of the following copied from
+// and kinda updated to nom v4
 // https://github.com/badboy/iso8601/blob/master/src/parsers.rs
 /*
 Copyright (c) 2015 Jan-Erik Rediger, Hendrik Sollich

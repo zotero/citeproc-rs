@@ -3,31 +3,10 @@
 extern crate fnv;
 
 use super::date::DateOrRange;
+use super::numeric::NumericValue;
 use crate::style::element::CslType;
 use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;
-
-pub enum NumericValue<'r> {
-    // for values arriving as actual integers
-    Int(i32),
-    // for values that were originally strings, and maybe got parsed into numbers as an alternative
-    Parsed(&'r str, Option<i32>),
-}
-
-impl<'r> NumericValue<'r> {
-    pub fn numeric(&self) -> Option<i32> {
-        match *self {
-            NumericValue::Int(i) => Some(i),
-            NumericValue::Parsed(_, oi) => oi,
-        }
-    }
-    pub fn to_string(&self) -> String {
-        match *self {
-            NumericValue::Int(i) => format!("{}", i),
-            NumericValue::Parsed(s, _) => s.to_owned(),
-        }
-    }
-}
 
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
@@ -40,6 +19,7 @@ pub struct Name<'r> {
     pub dropping_particle: Option<&'r str>,
     pub suffix: Option<&'r str>,
 }
+
 // We're saving copies and allocations by not using String here.
 pub struct Reference<'r> {
     pub id: &'r str,
