@@ -243,30 +243,7 @@ pub fn buf_to_i32(s: &[u8]) -> i32 {
     to_i32(to_string(s))
 }
 
-macro_rules! check(
-  ($input:expr, $submac:ident!( $($args:tt)* )) => (
-
-    {
-      let mut failed = false;
-      for &idx in $input {
-        if !$submac!(idx, $($args)*) {
-            failed = true;
-            break;
-        }
-      }
-      if failed {
-        nom::IResult::Error(nom::ErrorKind::Custom(20))
-      } else {
-        nom::IResult::Done(&b""[..], $input)
-      }
-    }
-  );
-  ($input:expr, $f:expr) => (
-    check!($input, call!($f));
-  );
-);
-
-named!(take_4_digits, flat_map!(take!(4), check!(is_digit)));
+named!(take_4_digits, take_while_m_n!(4, 4, is_digit));
 
 // year
 named!(year_prefix, alt!(tag!("+") | tag!("-")));
@@ -282,11 +259,12 @@ named!(
     )
 );
 
+// https://github.com/Geal/nom/blob/master/doc/how_nom_macros_work.md
 macro_rules! char_between(
     ($input:expr, $min:expr, $max:expr) => (
         {
         fn f(c: u8) -> bool { c >= ($min as u8) && c <= ($max as u8)}
-        flat_map!($input, take!(1), check!(f))
+        take_while_m_n!($input, 1, 1, f)
         }
     );
 );
@@ -384,9 +362,8 @@ named!(
     )
 );
 
-use nom::IResult::*;
 pub fn parse_range(string: &str) -> Result<DateOrRange, String> {
-    if let Done(_left_overs, parsed) = range(string.as_bytes()) {
+    if let Ok((_left_overs, parsed)) = range(string.as_bytes()) {
         Ok(parsed)
     } else {
         Err(format!("Date range parsing error: {}", string))

@@ -40,6 +40,7 @@ extern crate test;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "flame_it")]
     use crate::flame_span;
     use crate::input::*;
     use crate::output::*;
