@@ -32,8 +32,8 @@ impl<'c, 'r: 'c, O: OutputFormat> CiteContext<'c, 'r, O> {
     pub fn is_numeric(&self, var: &NumberVariable) -> bool {
         match var {
             // TODO: finish this list
-            NumberVariable::Locator => self.cite.locator.as_ref().map(|r| r.numeric().is_some()).unwrap_or(false),
-            _ => self.reference.number.get(var).map(|v| v.numeric().is_some()).unwrap_or(false),
+            NumberVariable::Locator => self.cite.locator.as_ref().map(|r| r.is_numeric()).unwrap_or(false),
+            _ => self.reference.number.get(var).map(|v| v.is_numeric()).unwrap_or(false),
         }
     }
 }

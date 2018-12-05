@@ -79,7 +79,7 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
+        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
@@ -96,7 +96,7 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
+        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
@@ -141,7 +141,7 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
+        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),

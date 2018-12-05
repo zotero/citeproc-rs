@@ -61,7 +61,7 @@ fn main() {
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
-            refr.number.insert(NumberVariable::Volume, NumericValue::Int(128));
+            refr.number.insert(NumberVariable::Volume, NumericValue::from("128th & 7-9, 17th"));
             // TODO: recognize requests for Page and PageFirst as number vars
             refr.ordinary.insert(Variable::Page, "194");
             refr.ordinary.insert(Variable::PageFirst, "194");

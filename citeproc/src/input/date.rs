@@ -92,6 +92,14 @@ impl FromStr for DateOrRange {
 #[test]
 fn test_date_parsing() {
     assert_eq!(
+        DateOrRange::from_str("-1998-09-21"),
+        Ok(DateOrRange::new(-1998, 09, 21))
+    );
+    assert_eq!(
+        DateOrRange::from_str("+1998-09-21"),
+        Ok(DateOrRange::new(1998, 09, 21))
+    );
+    assert_eq!(
         DateOrRange::from_str("1998-09-21"),
         Ok(DateOrRange::new(1998, 09, 21))
     );
@@ -198,7 +206,7 @@ fn test_from_parts() {
 }
 
 // substantial portions of the following copied from
-// and kinda updated to nom v4
+// and updated to nom v4
 // https://github.com/badboy/iso8601/blob/master/src/parsers.rs
 /*
 Copyright (c) 2015 Jan-Erik Rediger, Hendrik Sollich
