@@ -23,14 +23,14 @@ pub use self::ir::*;
 // 'r: reference
 pub trait Proc<'c, 's: 'c> {
     // TODO: include settings and reference and macro map
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat;
 }
 
 #[cfg_attr(feature = "flame_it", flame("Style"))]
 impl<'c, 's: 'c> Proc<'c, 's> for Style {
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -43,7 +43,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for Style {
 // TODO: insert affixes into group before processing as a group
 impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
     #[cfg_attr(feature = "flame_it", flame("Layout"))]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -53,7 +53,7 @@ impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
 
 impl<'c, 's: 'c> Proc<'c, 's> for Element {
     #[cfg_attr(feature = "flame_it", flame("Element"))]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {

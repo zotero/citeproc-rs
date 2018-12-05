@@ -7,7 +7,7 @@ use crate::style::element::{Choose, Condition, Conditions, Else, Formatting, IfT
 
 impl<'c, 's: 'c> Proc<'c, 's> for Choose {
     #[cfg_attr(feature = "flame_it", flame("Choose"))]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -65,7 +65,7 @@ struct BranchEval<'s, O: OutputFormat> {
 #[cfg_attr(feature = "flame_it", flame)]
 fn eval_ifthen<'c, 's: 'c, 'r, O>(
     branch: &'s IfThen,
-    ctx: &CiteContext<'c, 'r, O>,
+    ctx: &mut CiteContext<'c, 'r, O>,
 ) -> BranchEval<'c, O>
 where
     O: OutputFormat,
@@ -87,7 +87,7 @@ where
 #[cfg_attr(feature = "flame_it", flame)]
 fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
     conditions: &'s Conditions,
-    ctx: &CiteContext<'c, 'r, O>,
+    ctx: &mut CiteContext<'c, 'r, O>,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -100,7 +100,7 @@ where
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, 'r, O>) -> bool
+fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &mut CiteContext<'c, 'r, O>) -> bool
 where
     O: OutputFormat,
 {

@@ -20,6 +20,7 @@ pub mod style;
 pub use self::driver::Driver;
 mod utils;
 
+#[cfg(feature = "flame_it")]
 mod flame_span;
 
 pub use self::style::error::StyleError;

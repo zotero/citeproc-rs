@@ -3,18 +3,9 @@ use super::{Proc, IR};
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting};
 
-/// Tests whether the given variables (Appendix IV - Variables) contain numeric content. Content is
-/// considered numeric if it solely consists of numbers. Numbers may have prefixes and suffixes
-/// (“D2”, “2b”, “L2d”), and may be separated by a comma, hyphen, or ampersand, with or without
-/// spaces (“2, 3”, “2-4”, “2 & 4”). For example, “2nd” tests “true” whereas “second” and “2nd
-/// edition” test “false”.
-pub fn convert_numeric<'a>(_value: &'a str) -> Result<i32, &'a str> {
-    Ok(0)
-}
-
 #[cfg_attr(feature = "flame_it", flame)]
 pub fn sequence<'c, 's, 'r, O>(
-    ctx: &CiteContext<'c, 'r, O>,
+    ctx: &mut CiteContext<'c, 'r, O>,
     f: &Formatting,
     delim: &str,
     els: &'c [Element],

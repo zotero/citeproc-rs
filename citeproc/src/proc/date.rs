@@ -42,7 +42,7 @@ const MONTHS_LONG: &'static [&'static str] = &[
 impl DatePart {
     fn render<'c, 'r, O: OutputFormat>(
         &self,
-        ctx: &CiteContext<'c, 'r, O>,
+        ctx: &mut CiteContext<'c, 'r, O>,
         date: &Date,
     ) -> O::Build {
         let string = match self.form {
@@ -70,7 +70,7 @@ impl DatePart {
 
 impl<'c, 's: 'c> Proc<'c, 's> for IndependentDate {
     #[cfg_attr(feature = "flame_it", flame("Date"))]
-    fn intermediate<'r, O>(&'s self, ctx: &CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {

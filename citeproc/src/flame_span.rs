@@ -61,5 +61,5 @@ fn merge_spans(spans: &mut Vec<flame::Span>) {
 
 
 #[cfg(not(feature="flame_it"))]
-pub fn write_flamegraph(path: &str) {
+pub fn write_flamegraph(_path: &str) {
 }

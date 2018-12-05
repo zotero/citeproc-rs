@@ -33,7 +33,7 @@ where
     }
 
     pub fn single(&self, refr: &Reference) -> String {
-        let ctx = CiteContext {
+        let mut ctx = CiteContext {
             style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
@@ -41,7 +41,7 @@ where
             format: self.formatter,
             citation_number: 1,
         };
-        let i = self.style.intermediate(&ctx);
+        let i = self.style.intermediate(&mut ctx);
         let flat = i.flatten(self.formatter);
         let o = self.formatter.output(flat);
         serde_json::to_string(&o).unwrap()
@@ -49,7 +49,7 @@ where
 
     #[cfg(test)]
     pub fn bench_single(&self, b: &mut test::Bencher, refr: &Reference) {
-        let ctx = CiteContext {
+        let mut ctx = CiteContext {
             style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
@@ -58,7 +58,7 @@ where
             citation_number: 1,
         };
         b.iter(||{ 
-            let i = self.style.intermediate(&ctx);
+            let i = self.style.intermediate(&mut ctx);
             let flat = i.flatten(self.formatter);
             let o = self.formatter.output(flat);
         });
@@ -66,7 +66,7 @@ where
 
     #[cfg(test)]
     pub fn bench_intermediate(&self, b: &mut test::Bencher, refr: &Reference) {
-        let ctx = CiteContext {
+        let mut ctx = CiteContext {
             style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
@@ -74,12 +74,12 @@ where
             format: self.formatter,
             citation_number: 1,
         };
-        b.iter(|| self.style.intermediate(&ctx));
+        b.iter(|| self.style.intermediate(&mut ctx));
     }
 
     #[cfg(test)]
     pub fn bench_flatten(&self, b: &mut test::Bencher, refr: &Reference) {
-        let ctx = CiteContext {
+        let mut ctx = CiteContext {
             style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
@@ -87,7 +87,7 @@ where
             format: self.formatter,
             citation_number: 1,
         };
-        let i = self.style.intermediate(&ctx);
+        let i = self.style.intermediate(&mut ctx);
         b.iter(|| {
             i.flatten(self.formatter);
         });
@@ -98,7 +98,7 @@ where
     }
 
     // pub fn dump_ir(&self, refr: &Reference) {
-    //     let ir = self.style.intermediate(ctx: &CiteContext<'c, 'r>);
+    //     let ir = self.style.intermediate(ctx: &mut CiteContext<'c, 'r>);
     //     println!("{:?}", ir);
     // }
 }
