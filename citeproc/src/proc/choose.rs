@@ -93,9 +93,10 @@ where
     O: OutputFormat,
 {
     let Conditions(ref match_type, ref conds) = *conditions;
-    let tests: Vec<_> = conds.iter().map(|c| eval_cond(c, ctx)).collect();
+    let mut tests = conds.iter().map(|c| eval_cond(c, ctx));
     let disambiguate = conds.iter().any(|c| c.disambiguate);
-    (run_matcher(&tests, match_type), disambiguate)
+
+    (run_matcher(&mut tests, match_type), disambiguate)
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
@@ -103,31 +104,40 @@ fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &CiteContext<'c, '
 where
     O: OutputFormat,
 {
-    let mut tests = Vec::with_capacity(cond.variable.len() + cond.is_numeric.len() + cond.csl_type.len() + cond.position.len());
-    for var in cond.variable.iter() {
-        tests.push(ctx.has_variable(var));
-    }
-    for var in cond.is_numeric.iter() {
-        tests.push(ctx.is_numeric(var));
-    }
-    for typ in cond.csl_type.iter() {
-        tests.push(ctx.reference.csl_type == *typ);
-    }
-    for pos in cond.position.iter() {
-        tests.push(ctx.position == *pos);
-    }
+
+    let vars = cond.variable
+        .iter()
+        .map(|var| ctx.has_variable(var));
+
+    let nums = cond.is_numeric
+        .iter()
+        .map(|var| ctx.is_numeric(var));
+
+    let types = cond.csl_type
+        .iter()
+        .map(|typ| ctx.reference.csl_type == *typ);
+
+    let positions = cond.position
+        .iter()
+        .map(|pos| ctx.position == *pos);
+
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
 
-    run_matcher(&tests, &cond.match_type)
+    let mut chain = vars
+        .chain(nums)
+        .chain(types)
+        .chain(positions);
+
+    run_matcher(&mut chain, &cond.match_type)
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn run_matcher(bools: &[bool], match_type: &Match) -> bool {
+fn run_matcher<I: Iterator<Item=bool>>(bools: &mut I, match_type: &Match) -> bool {
     match *match_type {
-        Match::Any => bools.iter().any(|b| *b),
-        Match::Nand => bools.iter().any(|b| !*b),
-        Match::All => bools.iter().all(|b| *b),
-        Match::None => bools.iter().all(|b| !*b),
+        Match::Any => bools.any(|b| b),
+        Match::Nand => bools.any(|b| !b),
+        Match::All => bools.all(|b| b),
+        Match::None => bools.all(|b| !b),
     }
 }
