@@ -1,3 +1,15 @@
+use cfg_if::cfg_if;
+cfg_if!{
+    if #[cfg(feature="alloc_system")] {
+        use std::alloc::System;
+        #[global_allocator]
+        static A: System = System;
+    }
+}
+
+// #![cfg_attr(feature="flame_it", feature(plugin, custom_attribute))]
+// #![cfg_attr(feature="flame_it", plugin(flamer))]
+
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -9,6 +21,8 @@ use citeproc::style::variables::*;
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
+
+mod flame_span;
 
 fn read<'s>(path: &str) -> String {
     let mut f = File::open(path).expect("no file at path");
@@ -55,7 +69,9 @@ fn main() {
             #[cfg(feature = "flame_it")]
             {
                 flame::span_of("intermediate", closure);
-                flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+                self::flame_span::write_flamegraph("flame-intermediate.html");
+                // flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
+                // flame::dump_json(&mut File::create("flame-out.json").unwrap()).unwrap();
             }
             let serialized = closure();
 
@@ -70,41 +86,3 @@ fn main() {
     }
 }
 
-// #[cfg(not(feature = "flame_it"))]
-// mod flame_it {
-//     use citeproc::style::element::Style;
-//     pub fn flame_it(_style: &Style) {}
-// }
-
-// #[cfg(feature = "flame_it")]
-// mod flame_it {
-//     use citeproc::output::*;
-//     use citeproc::proc::*;
-//     use citeproc::style::element::Style;
-//     use std::fs::File;
-//     pub fn flame_it(style: &Style) {
-//         let fmt = PlainText::new();
-//         flame::span_of("bench_run", || {
-//             style.proc_intermediate(&fmt, &refr);
-//         });
-//         let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
-//         let mut f = File::open(path).expect("no file at path");
-//         let mut contents = String::new();
-//         let formatter = PlainText::new();
-//         f.read_to_string(&mut contents)
-//             .expect("something went wrong reading the file");
-//         let driver = Driver::new(&contents, &formatter)?;
-//         let mut refr = Reference::empty("id", CslType::LegalCase);
-//         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-//         refr.number.insert(NumberVariable::Number, Ok(55));
-//         refr.date.insert(
-//             DateVariable::Issued,
-//             DateOrRange::from_str("1998-01-04").unwrap(),
-//         );
-//         b.iter(|| {
-//             driver.inter_bench(&refr, &"".to_owned());
-//         });
-//         // Dump the report to disk
-//         flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
-//     }
-// }

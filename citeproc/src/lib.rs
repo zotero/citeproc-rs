@@ -20,6 +20,8 @@ pub mod style;
 pub use self::driver::Driver;
 mod utils;
 
+mod flame_span;
+
 pub use self::style::error::StyleError;
 
 #[cfg_attr(feature = "flame_it", flame("proc"))]
@@ -37,6 +39,7 @@ extern crate test;
 
 #[cfg(test)]
 mod tests {
+    use crate::flame_span;
     use crate::input::*;
     use crate::output::*;
     use crate::style::element::CslType;
@@ -48,6 +51,8 @@ mod tests {
     use std::io::prelude::*;
     use std::str::FromStr;
     use test::Bencher;
+
+    use pandoc_types::definition::Inline;
 
     #[bench]
     fn bench_build_tree(b: &mut Bencher) -> Result<(), StyleError> {
@@ -66,6 +71,7 @@ mod tests {
     #[bench]
     fn bench_single_ref(b: &mut Bencher) -> Result<(), StyleError> {
         let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        // let path = "../example.csl";
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
         let formatter = PlainText::new();
@@ -74,15 +80,18 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, Ok(55));
+        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
         );
 
-        b.iter(|| {
-            driver.inter_bench(&refr, &"".to_owned());
-        });
+        // flame::span_of("inter_bench", || {
+            b.iter(|| {
+                driver.inter_bench(&refr, &formatter.plain(""));
+            });
+        // });
+        // flame_span::write_flamegraph("flame-inter.html");
         Ok(())
     }
 
@@ -97,13 +106,13 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, Ok(55));
+        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
         );
 
-        driver.bench_flatten(b, &refr, &"".to_owned());
+        driver.bench_flatten( b, &refr, &"".to_owned());
         Ok(())
     }
 
