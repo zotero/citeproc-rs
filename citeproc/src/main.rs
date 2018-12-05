@@ -22,6 +22,7 @@ use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
 
+#[cfg(feature = "flame_it")]
 mod flame_span;
 
 fn read<'s>(path: &str) -> String {
@@ -40,6 +41,13 @@ fn main() {
         .author("Cormac Relf")
         .about("Processes citations")
         .arg(
+            Arg::with_name("format")
+                .short("f")
+                .long("format")
+                .value_name("FORMAT")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("csl")
                 .short("c")
                 .long("csl")
@@ -49,13 +57,17 @@ fn main() {
         .get_matches();
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
-        let formatter = PlainText::new();
+        let formatter = Pandoc::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
+            refr.number.insert(NumberVariable::Volume, NumericValue::Int(128));
+            // TODO: recognize requests for Page and PageFirst as number vars
+            refr.ordinary.insert(Variable::Page, "194");
+            refr.ordinary.insert(Variable::PageFirst, "194");
+            // refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
             refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
             refr.ordinary.insert(Variable::Title, "Barnaby v Joyce");
-            refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
             refr.date.insert(
                 DateVariable::Issued,
                 DateOrRange::from_str("1998-01-04").unwrap(),
@@ -64,22 +76,22 @@ fn main() {
             // driver.dump_style();
             // driver.dump_ir(&refr);
 
-            let closure = || driver.single(&refr, &String::from(""));
+            let closure = || driver.single(&refr);
 
+            let serialized = closure();
             #[cfg(feature = "flame_it")]
             {
-                flame::span_of("intermediate", closure);
                 self::flame_span::write_flamegraph("flame-intermediate.html");
                 // flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
                 // flame::dump_json(&mut File::create("flame-out.json").unwrap()).unwrap();
             }
-            let serialized = closure();
 
-            println!("{}", serialized);
+            // println!("{}", serialized);
 
-            // let header = r#"{"blocks":[{"t":"Para","c":"#;
-            // let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
-            // println!("{}{}{}", header, serialized, footer);
+            let header = r#"{"blocks":[{"t":"Para","c":"#;
+            let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
+            println!("{}{}{}", header, serialized, footer);
+
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }

@@ -32,11 +32,11 @@ where
         Ok(Driver { style, formatter })
     }
 
-    pub fn single(&self, refr: &Reference, prefix: &O::Output) -> String {
+    pub fn single(&self, refr: &Reference) -> String {
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", prefix),
+            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,
@@ -47,24 +47,42 @@ where
         serde_json::to_string(&o).unwrap()
     }
 
-    pub fn inter_bench(&self, refr: &Reference, prefix: &O::Output) {
+    #[cfg(test)]
+    pub fn bench_single(&self, b: &mut test::Bencher, refr: &Reference) {
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", prefix),
+            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,
         };
-        let _i = self.style.intermediate(&ctx);
+        b.iter(||{ 
+            let i = self.style.intermediate(&ctx);
+            let flat = i.flatten(self.formatter);
+            let o = self.formatter.output(flat);
+        });
     }
 
     #[cfg(test)]
-    pub fn bench_flatten(&self, b: &mut test::Bencher, refr: &Reference, prefix: &O::Output) {
+    pub fn bench_intermediate(&self, b: &mut test::Bencher, refr: &Reference) {
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", prefix),
+            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
+            position: Position::First,
+            format: self.formatter,
+            citation_number: 1,
+        };
+        b.iter(|| self.style.intermediate(&ctx));
+    }
+
+    #[cfg(test)]
+    pub fn bench_flatten(&self, b: &mut test::Bencher, refr: &Reference) {
+        let ctx = CiteContext {
+            style: &self.style,
+            reference: refr,
+            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,

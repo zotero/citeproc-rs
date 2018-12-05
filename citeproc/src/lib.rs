@@ -68,13 +68,10 @@ mod tests {
         Ok(())
     }
 
-    #[bench]
-    fn bench_single_ref(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
-        // let path = "../example.csl";
+    fn bench_single<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError>
+    {
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
-        let formatter = PlainText::new();
         f.read_to_string(&mut contents)
             .expect("something went wrong reading the file");
         let driver = Driver::new(&contents, &formatter)?;
@@ -85,22 +82,58 @@ mod tests {
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
         );
+        driver.bench_single(b, &refr);
+        Ok(())
+    }
 
-        // flame::span_of("inter_bench", || {
-            b.iter(|| {
-                driver.inter_bench(&refr, &formatter.plain(""));
-            });
-        // });
-        // flame_span::write_flamegraph("flame-inter.html");
+    fn bench_ir_gen<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError> {
+        let mut f = File::open(path).expect("no file at path");
+        let mut contents = String::new();
+        f.read_to_string(&mut contents)
+            .expect("something went wrong reading the file");
+        let driver = Driver::new(&contents, &formatter)?;
+        let mut refr = Reference::empty("id", CslType::LegalCase);
+        refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+        refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
+        refr.date.insert(
+            DateVariable::Issued,
+            DateOrRange::from_str("1998-01-04").unwrap(),
+        );
+        driver.bench_intermediate(b, &refr);
         Ok(())
     }
 
     #[bench]
-    fn bench_flatten(b: &mut Bencher) -> Result<(), StyleError> {
+    fn bench_ir_gen_plain(b: &mut Bencher) -> Result<(), StyleError> {
         let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let format = PlainText::new();
+        bench_ir_gen(b, path, format)
+    }
+
+    #[bench]
+    fn bench_ir_gen_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
+        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let format = Pandoc::new();
+        bench_ir_gen(b, path, format)
+    }
+
+    // #[bench]
+    // fn bench_single_plain(b: &mut Bencher) -> Result<(), StyleError> {
+    //     let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+    //     let format = PlainText::new();
+    //     bench_single(b, path, format)
+    // }
+
+    // #[bench]
+    // fn bench_single_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
+    //     let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+    //     let format = Pandoc::new();
+    //     bench_single(b, path, format)
+    // }
+
+    fn bench_flatten<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError> {
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
-        let formatter = PlainText::new();
         f.read_to_string(&mut contents)
             .expect("something went wrong reading the file");
         let driver = Driver::new(&contents, &formatter)?;
@@ -111,9 +144,22 @@ mod tests {
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
         );
-
-        driver.bench_flatten( b, &refr, &"".to_owned());
+        driver.bench_flatten(b, &refr);
         Ok(())
+    }
+
+    #[bench]
+    fn bench_flatten_plain(b: &mut Bencher) -> Result<(), StyleError> {
+        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let format = PlainText::new();
+        bench_flatten(b, path, format)
+    }
+
+    #[bench]
+    fn bench_flatten_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
+        let path = "/Users/cormac/Zotero/styles/australian-guide-to-legal-citation.csl";
+        let format = Pandoc::new();
+        bench_flatten(b, path, format)
     }
 
     // #[bench]
