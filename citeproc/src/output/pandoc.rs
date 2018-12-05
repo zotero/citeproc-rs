@@ -16,15 +16,16 @@ impl Pandoc {
         Pandoc {}
     }
 
-    fn fmt_vec(&self, inlines: Vec<Inline>, f: &Formatting) -> Option<Inline> {
-        let mut current: Result<Inline, Vec<Inline>> = Err(inlines);
+    fn fmt_vec(&self, inlines: &[Inline], f: &Formatting) -> Option<Inline> {
+
+        let mut current = None;
 
         let maybe = |cur| {
             match cur {
                 // first time
-                Err(v) => Ok(v),
+                None => Some(Vec::from(inlines)),
                 // rest
-                Ok(e) => Ok(vec![e]),
+                Some(e) => Some(vec![e]),
             }
         };
 
@@ -52,7 +53,7 @@ impl Pandoc {
             _ => current,
         };
 
-        current.ok()
+        current
     }
 }
 
@@ -63,20 +64,21 @@ impl OutputFormat for Pandoc {
     fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
-        fmts.intercalate(&Space)
+        let v: Vec<Inline> = fmts.intercalate(&Space)
             .into_iter()
             .filter_map(|t| match t {
-                Space => Some(t),
                 Str(ref s) if s == "" => None,
-                _ => Some(self.fmt_vec(vec![t.clone()], f).unwrap_or(t)),
+                _ => Some(t),
             })
-            .collect()
+            .collect();
+
+        self.fmt_vec(&v, f).map(|x| vec![x]).unwrap_or(v)
     }
 
     fn group(&self, nodes: &[Vec<Inline>], d: &str, f: &Formatting) -> Vec<Inline> {
         let delim = self.text_node(d, &Formatting::default());
         let joined = nodes.join_many(&delim);
-        self.fmt_vec(joined.clone(), f)
+        self.fmt_vec(&joined, f)
             .map(|single| vec![single])
             .unwrap_or(joined)
     }
