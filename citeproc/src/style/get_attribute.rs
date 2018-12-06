@@ -34,6 +34,15 @@ pub fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, In
     }
 }
 
+pub fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, InvalidCsl> {
+    match node.attribute(attr) {
+        Some("true") => Ok(Some(true)),
+        Some("false") => Ok(Some(false)),
+        None => Ok(None),
+        Some(s) => Err(InvalidCsl::attr_val(node, attr, s))?,
+    }
+}
+
 pub fn attribute_only_true(node: &Node, attr: &str) -> Result<bool, InvalidCsl> {
     match node.attribute(attr) {
         Some("true") => Ok(true),
@@ -42,13 +51,23 @@ pub fn attribute_only_true(node: &Node, attr: &str) -> Result<bool, InvalidCsl> 
     }
 }
 
-pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
+// pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
+//     match node.attribute(attr) {
+//         Some(s) => {
+//             let parsed = u32::from_str_radix(s, 10);
+//             parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
+//         }
+//         None => Ok(default),
+//     }
+// }
+
+pub fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s, 10);
-            parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
+            parsed.map(Some).map_err(|e| InvalidCsl::bad_int(node, attr, &e))
         }
-        None => Ok(default),
+        None => Ok(None),
     }
 }
 
@@ -56,6 +75,14 @@ pub fn attribute_string(node: &Node, attr: &str) -> String {
     node.attribute(attr)
         .map(String::from)
         .unwrap_or_else(|| String::from(""))
+}
+
+pub fn attribute_option_string(
+    node: &Node,
+    attr: &str,
+) -> Option<String> {
+    node.attribute(attr)
+        .map(String::from)
 }
 
 pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, InvalidCsl> {
@@ -93,6 +120,19 @@ pub fn attribute_var_type<T: GetAttribute>(
             node,
             &format!("Must have '{}' attribute", attr),
         )),
+    }
+}
+
+pub fn attribute_option<T: GetAttribute>(
+    node: &Node,
+    attr: &str,
+) -> Result<Option<T>, InvalidCsl> {
+    match node.attribute(attr) {
+        Some(a) => match T::get_attr(a, CSL_VERSION) {
+            Ok(val) => Ok(Some(val)),
+            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
+        },
+        None => Ok(None),
     }
 }
 

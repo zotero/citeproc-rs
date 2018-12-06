@@ -4,21 +4,10 @@ extern crate fnv;
 
 use super::date::DateOrRange;
 use super::numeric::NumericValue;
+use super::names::Name;
 use crate::style::element::CslType;
 use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;
-
-// kebab-case here is the same as Strum's "kebab_case",
-// but with a more accurate name
-#[derive(Serialize, Deserialize, Eq, PartialEq, Hash)]
-#[serde(rename_all = "kebab-case")]
-pub struct Name<'r> {
-    pub family: Option<&'r str>,
-    pub given: Option<&'r str>,
-    pub non_dropping_particle: Option<&'r str>,
-    pub dropping_particle: Option<&'r str>,
-    pub suffix: Option<&'r str>,
-}
 
 // We're saving copies and allocations by not using String here.
 pub struct Reference<'r> {

@@ -5,6 +5,30 @@ use crate::style::variables::*;
 use std::fmt;
 use std::str::FromStr;
 
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub enum Element {
+    // <cs:choose>
+    Choose(Choose),
+    // <cs:text>
+    Macro(String, Formatting, Affixes, Quotes),
+    // <cs:text>
+    Const(String, Formatting, Affixes, Quotes),
+    // <cs:text>
+    Variable(StandardVariable, Formatting, Affixes, Form, Quotes),
+    // <cs:term>
+    Term(String, Form, Formatting, Affixes, bool), // bool is plural
+    // <cs:label>
+    Label(LabelVariable, Form, Formatting, Affixes, Plural),
+    // <cs:number>
+    Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
+    // <cs:names>
+    Names(Names),
+    // <cs:group>
+    Group(Formatting, Delimiter, Vec<Element>), // done
+    // <cs:date>
+    Date(IndependentDate),
+}
+
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "snake_case")]
 pub enum Form {
@@ -362,37 +386,48 @@ pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Names(
-    pub Vec<NameVariable>,
-    pub Vec<Name>,
-    pub Option<NameLabel>,
-    pub Formatting,
-    pub Delimiter,
-    pub Option<Substitute>,
-);
+pub struct Names {
+    pub variables: Vec<NameVariable>,
+    pub name: Option<Name>,
+    pub label: Option<NameLabel>,
+    pub et_al: Option<EtAl>,
+    pub substitute: Option<Substitute>,
+    pub formatting: Formatting,
+    pub delimiter: Option<Delimiter>,
+}
 
-#[derive(Debug, Eq, Clone, PartialEq)]
-pub enum Element {
-    // <cs:choose>
-    Choose(Choose),
-    // <cs:text>
-    Macro(String, Formatting, Affixes, Quotes),
-    // <cs:text>
-    Const(String, Formatting, Affixes, Quotes),
-    // <cs:text>
-    Variable(StandardVariable, Formatting, Affixes, Form, Quotes),
-    // <cs:term>
-    Term(String, Form, Formatting, Affixes, bool), // bool is plural
-    // <cs:label>
-    Label(LabelVariable, Form, Formatting, Affixes, Plural),
-    // <cs:number>
-    Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
-    // <cs:names>
-    Names(Names),
-    // <cs:group>
-    Group(Formatting, Delimiter, Vec<Element>), // done
-    // <cs:date>
-    Date(IndependentDate),
+/// The available inheritable attributes for cs:name are and, delimiter-precedes-et-al,
+/// delimiter-precedes-last, et-al-min, et-al-use-first, et-al-use-last, et-al-subsequent-min,
+/// et-al-subsequent-use-first, initialize, initialize-with, name-as-sort-order and sort-separator.
+/// The attributes name-form and name-delimiter correspond to the form and delimiter attributes on
+/// cs:name. Similarly, names-delimiter corresponds to the delimiter attribute on cs:names.
+
+#[derive(Eq, Clone, PartialEq)]
+pub struct Name {
+    pub and: Option<String>,
+    pub delimiter: Option<Delimiter>,
+    pub delimiter_precedes_et_al: Option<DelimiterPrecedes>,
+    pub delimiter_precedes_last: Option<DelimiterPrecedes>,
+    pub et_al_min: Option<u32>,
+    pub et_al_use_first: Option<u32>,
+    pub et_al_use_last: Option<bool>, // default is false
+    pub et_al_subsequent_min: Option<u32>,
+    pub et_al_subsequent_use_first: Option<u32>,
+    pub form: Option<NameForm>,
+    pub initialize: Option<bool>, // default is true
+    pub initialize_with: Option<String>,
+    pub name_as_sort_order: Option<NameAsSortOrder>, 
+    pub sort_separator: Option<String>,
+    pub formatting: Formatting,
+    pub affixes: Affixes,
+    pub name_part_given: Option<NamePart>,
+    pub name_part_family: Option<NamePart>,
+}
+
+impl fmt::Debug for Name {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Name {{ .. }}")
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -401,6 +436,12 @@ pub struct NameLabel {
     pub formatting: Formatting,
     pub delimiter: Delimiter,
     pub plural: Plural,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EtAl {
+    pub term: String,
+    pub formatting: Formatting,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
@@ -437,37 +478,6 @@ pub enum NameAsSortOrder {
     First,
     All,
 }
-impl Default for NameAsSortOrder {
-    fn default() -> Self {
-        NameAsSortOrder::All
-    }
-}
-
-#[derive(Eq, Clone, PartialEq)]
-pub struct Name {
-    pub and: String,
-    pub delimiter: Delimiter,
-    pub delimiter_precedes_et_al: DelimiterPrecedes,
-    pub delimiter_precedes_last: DelimiterPrecedes,
-    pub et_al_min: u32,
-    pub et_al_use_first: u32,
-    pub et_al_subsequent_min: u32,
-    pub et_al_subsequent_use_first: u32,
-    pub et_al_use_last: bool, // default is false
-    pub form: NameForm,
-    pub initialize: bool, // default is true
-    pub initialize_with: String,
-    pub name_as_sort_order: NameAsSortOrder, // TODO: work out default
-    pub sort_separator: String,
-    pub formatting: Formatting,
-    pub affixes: Affixes,
-}
-
-impl fmt::Debug for Name {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Name {{ .. }}")
-    }
-}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -479,6 +489,7 @@ pub enum NamePartName {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamePart {
     pub name: NamePartName,
+    pub affixes: Affixes,
     pub text_case: TextCase,
     pub formatting: Formatting,
 }
@@ -508,6 +519,8 @@ pub struct Citation {
     pub givenname_disambiguation_rule: GivenNameDisambiguationRule,
     pub disambiguate_add_year_suffix: bool,
     pub layout: Layout,
+    pub name_inheritance: Name,
+    pub names_delimiter: Option<Delimiter>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -542,6 +555,8 @@ pub struct Style {
     pub macros: FnvHashMap<String, Vec<Element>>,
     pub citation: Citation,
     pub info: Info,
+    pub name_inheritance: Name,
+    pub names_delimiter: Option<Delimiter>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]

@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use nom::types::CompleteStr;
 use nom::{self, digit1, alpha0, alpha1};
 

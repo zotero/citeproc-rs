@@ -125,6 +125,11 @@ impl FromNode for Citation {
                 false,
             )?,
             layout: Layout::from_node(&layout_node)?,
+            name_inheritance: Name::from_node(&node)?,
+            names_delimiter: node
+                .attribute("names-delimiter")
+                .map(String::from)
+                .map(Delimiter),
         })
     }
 }
@@ -426,33 +431,12 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
 
-impl FromNode for NameLabel {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
-        Ok(NameLabel {
-            form: attribute_optional(node, "form")?,
-            formatting: Formatting::from_node(node)?,
-            delimiter: Delimiter::from_node(node)?,
-            plural: attribute_optional(node, "plural")?,
-        })
-    }
-}
-
-impl FromNode for Substitute {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
-        let els = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("name"))
-            .map(|el| Element::from_node(&el))
-            .partition_results()?;
-        Ok(Substitute(els))
-    }
-}
-
 fn max1_child<'s, T: FromNode>(
     parent_tag: &str,
     child_tag: &str,
     els: Children,
 ) -> Result<Option<T>, CslError> {
+    // TODO: remove the allocation here, with a cloned iterator
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
     if subst_els.len() > 1 {
         return Err(InvalidCsl::new(
@@ -469,32 +453,6 @@ fn max1_child<'s, T: FromNode>(
         .partition_results()?;
     let substitute = substs.into_iter().nth(0);
     Ok(substitute)
-}
-
-fn names_el(node: &Node) -> Result<Element, CslError> {
-    // let variable: Vec<String> = attribute_string(node, "variable")
-    //     .split(" ")
-    //     .filter(|s| s.len() > 0)
-    //     .map(|s| s.to_owned())
-    //     .collect();
-
-    let names = node
-        .children()
-        .filter(|n| n.has_tag_name("name"))
-        .map(|el| Name::from_node(&el))
-        .partition_results()?;
-
-    let label = max1_child("names", "label", node.children())?;
-    let substitute = max1_child("names", "substitute", node.children())?;
-
-    Ok(Element::Names(Names(
-        attribute_array_var(node, "variable", NeedVarType::Name)?,
-        names,
-        label,
-        Formatting::from_node(node)?,
-        Delimiter::from_node(node)?,
-        substitute,
-    )))
 }
 
 impl IsOnNode for TextCase {
@@ -606,7 +564,7 @@ impl FromNode for Element {
             "label" => Ok(label_el(node)?),
             "group" => Ok(group_el(node)?),
             "number" => Ok(number_el(node)?),
-            "names" => Ok(names_el(node)?),
+            "names" => Ok(Element::Names(Names::from_node(node)?)),
             "choose" => Ok(choose_el(node)?),
             "date" => Ok(Element::Date(IndependentDate::from_node(node)?)),
             _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
@@ -659,36 +617,115 @@ impl FromNode for MacroMap {
     }
 }
 
-impl FromNode for NamePart {
+impl FromNode for Names {
     fn from_node(node: &Node) -> Result<Self, CslError> {
-        Ok(NamePart {
-            name: attribute_required(node, "name")?,
-            text_case: TextCase::from_node(node)?,
+        // TODO: did I have Vec<Name> originally because some styles have more than one?
+        let name  = max1_child("names", "name", node.children())?;
+        let et_al = max1_child("names", "et-al", node.children())?;
+        let label = max1_child("names", "label", node.children())?;
+        let substitute = max1_child("names", "substitute", node.children())?;
+        Ok(Names {
+            variables: attribute_array_var(node, "variable", NeedVarType::Name)?,
+            name,
+            et_al,
+            label,
+            substitute,
             formatting: Formatting::from_node(node)?,
+            delimiter: node
+                .attribute("delimiter")
+                .map(String::from)
+                .map(Delimiter),
         })
     }
 }
 
 impl FromNode for Name {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        // for inheriting from cs:style/cs:citation/cs:bibliography
+        let mut delim_attr = "delimiter";
+        let mut form_attr = "form";
+        let mut name_part_given = None;
+        let mut name_part_family = None;
+        if node.tag_name().name().clone() != "name" {
+            delim_attr = "name-delimiter";
+            form_attr = "name-form";
+        } else {
+            let parts = move |val| {
+                node.children()
+                    .filter(move |el| el.is_element()
+                            && el.has_tag_name("name-part")
+                            && el.attribute("name") == Some(val))
+                    .map(|el| NamePart::from_node(&el))
+                    .filter_map(|np| np.ok())
+            };
+            name_part_given = parts("given").nth(0);
+            name_part_family = parts("family").nth(0);
+        }
         Ok(Name {
-            and: attribute_string(node, "and"),
-            delimiter: Delimiter::from_node(node)?,
-            delimiter_precedes_et_al: attribute_optional(node, "delimiter-precedes-et-al")?,
-            delimiter_precedes_last: attribute_optional(node, "delimiter-precedes-last")?,
-            et_al_min: attribute_int(node, "et-al-min", 0)?,
-            et_al_use_first: attribute_int(node, "et-al-use-first", 0)?,
-            et_al_subsequent_min: attribute_int(node, "et-al-subsequent-min", 0)?,
-            et_al_subsequent_use_first: attribute_int(node, "et-al-subsequent-use-first", 0)?,
-            et_al_use_last: attribute_bool(node, "et-al-use-last", false)?,
-            form: attribute_optional(node, "form")?,
-            initialize: attribute_bool(node, "initialize", true)?,
-            initialize_with: attribute_string(node, "initialize-with"),
-            name_as_sort_order: attribute_optional(node, "name-as-sort-order")?,
-            sort_separator: attribute_string(node, "sort-separator"),
+            and: attribute_option_string(node, "and"),
+            delimiter: node
+                .attribute(delim_attr)
+                .map(String::from)
+                .map(Delimiter),
+            delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al")?,
+            delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last")?,
+            et_al_min: attribute_option_int(node, "et-al-min")?,
+            et_al_use_last: attribute_option_bool(node, "et-al-use-last")?,
+            et_al_use_first: attribute_option_int(node, "et-al-use-first")?,
+            et_al_subsequent_min: attribute_option_int(node, "et-al-subsequent-min")?,
+            et_al_subsequent_use_first: attribute_option_int(node, "et-al-subsequent-use-first")?,
+            form: attribute_option(node, form_attr)?,
+            initialize: attribute_option_bool(node, "initialize")?,
+            initialize_with: attribute_option_string(node, "initialize-with"),
+            name_as_sort_order: attribute_option(node, "name-as-sort-order")?,
+            sort_separator: attribute_option_string(node, "sort-separator"),
+            formatting: Formatting::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
+            name_part_given,
+            name_part_family,
+        })
+    }
+}
+
+impl FromNode for EtAl {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(EtAl {
+            term: attribute_string(node, "term"),
+            formatting: Formatting::from_node(node)?,
+        })
+    }
+}
+
+impl FromNode for NamePart {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(NamePart {
+            name: attribute_required(node, "name")?,
+            text_case: TextCase::from_node(node)?,
             formatting: Formatting::from_node(node)?,
             affixes: Affixes::from_node(node)?,
         })
+    }
+}
+
+impl FromNode for NameLabel {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(NameLabel {
+            form: attribute_optional(node, "form")?,
+            formatting: Formatting::from_node(node)?,
+            delimiter: Delimiter::from_node(node)?,
+            plural: attribute_optional(node, "plural")?,
+        })
+    }
+}
+
+impl FromNode for Substitute {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let els = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("name"))
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
+        Ok(Substitute(els))
     }
 }
 
@@ -711,6 +748,11 @@ impl FromNode for Style {
             citation: citation?,
             info: Info {},
             class: StyleClass::Note,
+            name_inheritance: Name::from_node(&node)?,
+            names_delimiter: node
+                .attribute("names-delimiter")
+                .map(String::from)
+                .map(Delimiter),
         })
     }
 }

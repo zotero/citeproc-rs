@@ -55,13 +55,15 @@ fn main() {
                 .takes_value(true),
         )
         .get_matches();
+
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
         let formatter = Pandoc::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
-            refr.number.insert(NumberVariable::Volume, NumericValue::from("128th & 7-9, 17th"));
+            refr.number.insert(NumberVariable::Volume,
+                               NumericValue::from("128th & 7-9, 17th"));
             // TODO: recognize requests for Page and PageFirst as number vars
             refr.ordinary.insert(Variable::Page, "194");
             refr.ordinary.insert(Variable::PageFirst, "194");
@@ -76,9 +78,8 @@ fn main() {
             // driver.dump_style();
             // driver.dump_ir(&refr);
 
-            let closure = || driver.single(&refr);
+            let serialized = driver.single(&refr);
 
-            let serialized = closure();
             #[cfg(feature = "flame_it")]
             {
                 self::flame_span::write_flamegraph("flame-intermediate.html");

@@ -38,7 +38,6 @@ impl Date {
             day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
         })
     }
-    // fn invalid_default() {
     // it isn't possible to parse an invalid month, bad ones default to zero (see tests)
     // and cause the day not to parse as well.
     // so we only need to default days to zero when they are invalid.
@@ -46,6 +45,7 @@ impl Date {
     // of date math that isn't all that valuable (real publications don't make those
     // mistakes anyway, and users who don't know when months end... it's on them)
     // plus there is no non-numeric day output for CSL. So it doesn't matter.
+    // fn invalid_default() {
     // }
 }
 
