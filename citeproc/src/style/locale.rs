@@ -1,9 +1,9 @@
 use crate::style::element::{Form, LocaleDate};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CslOption(String, String);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Term {
     pub name: String,
     pub form: Form,
@@ -13,14 +13,14 @@ pub struct Term {
     pub ordinal_match: OrdinalMatch,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum OrdinalMatch {
     LastTwoDigits,
     WholeNumber,
 }
 
-#[derive(AsStaticStr, EnumString, Debug, PartialEq, Eq)]
+#[derive(AsStaticStr, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Gender {
     Masculine,
@@ -28,7 +28,7 @@ pub enum Gender {
     Neuter,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Locale {
     pub version: String,
     pub lang: String,

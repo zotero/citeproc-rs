@@ -1,3 +1,4 @@
+use super::locale::Locale;
 use crate::style::error::*;
 use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
@@ -523,6 +524,7 @@ pub struct Citation {
     pub names_delimiter: Option<Delimiter>,
 }
 
+// TODO: Multiple layouts in CSL-M with locale="en es de" etc
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
     pub formatting: Formatting,
@@ -549,6 +551,7 @@ use fnv::FnvHashMap;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Info {}
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
@@ -557,6 +560,7 @@ pub struct Style {
     pub info: Info,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
+    pub locale_overrides: FnvHashMap<String, Locale>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]

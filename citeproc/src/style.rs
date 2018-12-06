@@ -9,6 +9,7 @@ pub mod version;
 // mod take_while;
 // use self::take_while::*;
 use self::element::*;
+use self::locale::*;
 use self::error::*;
 use self::get_attribute::*;
 use crate::utils::PartitionArenaErrors;
@@ -729,22 +730,42 @@ impl FromNode for Substitute {
     }
 }
 
+impl FromNode for Locale {
+    fn from_node(_node: &Node) -> Result<Self, CslError> {
+        Ok(Locale {
+            version: "what".into(),
+            lang: "en-GB".into(),
+            options: vec![],
+            terms: vec![],
+            dates: vec![],
+        })
+    }
+}
+
 impl FromNode for Style {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        // let info_node = get_toplevel(&doc, "info")?;
+        let mut macros = FnvHashMap::default();
+        let mut locale_overrides = FnvHashMap::default();
+
+        let locales = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("locale"));
+        for el in locales {
+            let loc = Locale::from_node(&el)?;
+            locale_overrides.insert(loc.lang.clone(), loc);
+        }
         let macro_maps = node
             .children()
-            .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el));
-        let mut macros = FnvHashMap::default();
-        for mac_res in macro_maps {
-            let mac = mac_res?;
+            .filter(|n| n.is_element() && n.has_tag_name("macro"));
+        for el in macro_maps {
+            let mac = MacroMap::from_node(&el)?;
             macros.insert(mac.name, mac.elements);
         }
         let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
-        // let info_node = get_toplevel(&doc, "info")?;
-        // let locale_node = get_toplevel(&doc, "locale")?;
         Ok(Style {
             macros,
+            locale_overrides,
             citation: citation?,
             info: Info {},
             class: StyleClass::Note,
