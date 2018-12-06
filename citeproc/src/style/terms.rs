@@ -1,3 +1,5 @@
+use nom::types::CompleteStr;
+
 use crate::style::error::*;
 use std::str::FromStr;
 
@@ -149,22 +151,32 @@ impl FromStr for Ordinals {
             "long-ordinal-09" => Ok(LongOrdinal09),
             "long-ordinal-10" => Ok(LongOrdinal10),
             _ => {
-                let segments: Vec<&str> = s.split('-').collect();
-                match &segments[..] {
-                    ["ordinal", val] => {
-                        let n = val.parse::<u32>().unwrap_or(200);
-                        if n <= 99 {
-                            Ok(Ordinal00ThroughOrdinal99(n))
-                        } else {
-                            Err(UnknownAttributeValue::new(s))
-                        }
-                    }
-                    _ => Err(UnknownAttributeValue::new(s)),
+                if let Ok((CompleteStr(""), o))
+                    = zero_through_99(CompleteStr(s)) {
+                    Ok(o)
+                } else {
+                    Err(UnknownAttributeValue::new(s))
                 }
             }
         }
     }
 }
+
+fn is_digit(chr: char) -> bool {
+  chr as u8 >= 0x30 && chr as u8 <= 0x39
+}
+
+named!(two_digit_num<CompleteStr, u32>,
+    map_res!(
+        take_while_m_n!(2, 2, is_digit),
+        |s: CompleteStr| s.0.parse()
+    ));
+
+named!(zero_through_99<CompleteStr, Ordinals>,
+    map!(
+        preceded!(tag!("ordinal-"), call!(two_digit_num)),
+        |n| Ordinals::Ordinal00ThroughOrdinal99(n)
+    ));
 
 #[cfg(test)]
 #[test]
