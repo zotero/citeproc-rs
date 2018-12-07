@@ -1,5 +1,5 @@
 use nom::types::CompleteStr;
-use nom::{self, alpha0, alpha1, digit1};
+use nom::{self, digit1};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken<'r> {
@@ -139,22 +139,27 @@ fn sep_from<'s>(input: char) -> Result<NumericToken<'s>, ()> {
 named!(int<CompleteStr, u32>, map_res!(call!(digit1), from_digits));
 named!(num<CompleteStr, NumericToken>, map!(call!(int), NumericToken::Num));
 
+// Try to parse affixed versions first, because
+// 2b => Affixed("2b")
+// not   Num(2), Err("b")
+
+named!(num_pre<CompleteStr, CompleteStr>, is_not!(" ,&-01234567890"));
+named!(num_suf<CompleteStr, CompleteStr>, is_not!(" ,&-"));
+
 named!(prefix1<CompleteStr, NumericToken>,
     map!(
-        recognize!(tuple!(call!(alpha1), call!(digit1), call!(alpha0))),
-        to_affixed
-    )
-);
-named!(suffix1<CompleteStr, NumericToken>,
-    map!(
-        recognize!(tuple!(call!(alpha0), call!(digit1), call!(alpha1))),
+        recognize!(tuple!(many1!(call!(num_pre)), call!(digit1), many0!(call!(num_suf)))),
         to_affixed
     )
 );
 
-// Try to parse affixed versions first, because
-// 2b => Affixed("", 2, "b")
-// not   Num(2), Err("b")
+named!(suffix1<CompleteStr, NumericToken>,
+    map!(
+        recognize!(tuple!(many0!(call!(num_pre)), call!(digit1), many1!(call!(num_suf)))),
+        to_affixed
+    )
+);
+
 named!(num_ish<CompleteStr, NumericToken>,
        alt!(call!(prefix1) | call!(suffix1) | call!(num)));
 
@@ -229,6 +234,14 @@ fn test_numeric_value() {
     assert_eq!(
         NumericValue::from("2 - 5, 9, edition"),
         NumericValue::Str("2 - 5, 9, edition")
+    );
+    assert_eq!(
+        NumericValue::from("[1.2.3]"),
+        NumericValue::Tokens(vec![Affixed("[1.2.3]")])
+    );
+    assert_eq!(
+        NumericValue::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
+        NumericValue::Tokens(vec![Affixed("[3]"), Comma, Affixed("(5)"), Comma, Affixed("[17.1.89(4(1))(2)(a)(i)]")])
     );
 }
 
