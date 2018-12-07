@@ -11,13 +11,12 @@
 
 mod cite;
 mod date;
-mod reference;
-mod numeric;
 mod names;
+mod numeric;
+mod reference;
 
 pub use self::cite::*;
 pub use self::date::*;
-pub use self::reference::*;
-pub use self::numeric::*;
 pub use self::names::*;
-
+pub use self::numeric::*;
+pub use self::reference::*;

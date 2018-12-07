@@ -3,8 +3,8 @@
 extern crate fnv;
 
 use super::date::DateOrRange;
-use super::numeric::NumericValue;
 use super::names::Name;
+use super::numeric::NumericValue;
 use crate::style::element::CslType;
 use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;

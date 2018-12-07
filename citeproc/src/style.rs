@@ -9,9 +9,10 @@ pub mod version;
 // mod take_while;
 // use self::take_while::*;
 use self::element::*;
-use self::locale::*;
 use self::error::*;
 use self::get_attribute::*;
+use self::locale::*;
+use self::terms::*;
 use crate::utils::PartitionArenaErrors;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
@@ -157,6 +158,38 @@ impl FromNode for Layout {
     }
 }
 
+impl FromNode for TextTermSelector {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        use self::terms::AnyTermName::*;
+        // we already know term is on there
+        let t = attribute_required(node, "term")?;
+        match t {
+            Edition => Ok(TextTermSelector::Gendered(
+                GenderedTermSelector::Edition(TermForm::from_node(node)?)
+            )),
+            Month(t) => Ok(TextTermSelector::Gendered(
+                GenderedTermSelector::Month(t, TermForm::from_node(node)?)
+            )),
+            Loc(t) => Ok(TextTermSelector::Gendered(
+                GenderedTermSelector::Locator(t, TermForm::from_node(node)?)
+            )),
+            Misc(t) => Ok(TextTermSelector::Simple(
+                SimpleTermSelector::Misc(t, TermForm::from_node(node)?)
+            )),
+            Season(t) => Ok(TextTermSelector::Simple(
+                SimpleTermSelector::Season(t, TermForm::from_node(node)?)
+            )),
+            Quote(t) => Ok(TextTermSelector::Simple(
+                SimpleTermSelector::Quote(t, TermForm::from_node(node)?)
+            )),
+            Role(t) => Ok(TextTermSelector::Role(
+                RoleTermSelector(t, RoleTermForm::from_node(node)?)
+            )),
+            Ordinal(t) => Err(InvalidCsl::new(node, "you cannot render an ordinal term directly").into()),
+        }
+    }
+}
+
 fn text_el(node: &Node) -> Result<Element, CslError> {
     use self::element::Element::*;
     let formatting = Formatting::from_node(node)?;
@@ -186,10 +219,9 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
             attribute_bool(node, "quotes", false)?,
         ));
     }
-    if let Some(t) = node.attribute("term") {
+    if let Some(_) = node.attribute("term") {
         return Ok(Term(
-            t.to_owned(),
-            attribute_optional(node, "form")?,
+            TextTermSelector::from_node(node)?,
             formatting,
             affixes,
             attribute_bool(node, "plural", false)?,
@@ -621,7 +653,7 @@ impl FromNode for MacroMap {
 impl FromNode for Names {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         // TODO: did I have Vec<Name> originally because some styles have more than one?
-        let name  = max1_child("names", "name", node.children())?;
+        let name = max1_child("names", "name", node.children())?;
         let et_al = max1_child("names", "et-al", node.children())?;
         let label = max1_child("names", "label", node.children())?;
         let substitute = max1_child("names", "substitute", node.children())?;
@@ -632,10 +664,7 @@ impl FromNode for Names {
             label,
             substitute,
             formatting: Formatting::from_node(node)?,
-            delimiter: node
-                .attribute("delimiter")
-                .map(String::from)
-                .map(Delimiter),
+            delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
         })
     }
 }
@@ -653,9 +682,11 @@ impl FromNode for Name {
         } else {
             let parts = move |val| {
                 node.children()
-                    .filter(move |el| el.is_element()
+                    .filter(move |el| {
+                        el.is_element()
                             && el.has_tag_name("name-part")
-                            && el.attribute("name") == Some(val))
+                            && el.attribute("name") == Some(val)
+                    })
                     .map(|el| NamePart::from_node(&el))
                     .filter_map(|np| np.ok())
             };
@@ -664,10 +695,7 @@ impl FromNode for Name {
         }
         Ok(Name {
             and: attribute_option_string(node, "and"),
-            delimiter: node
-                .attribute(delim_attr)
-                .map(String::from)
-                .map(Delimiter),
+            delimiter: node.attribute(delim_attr).map(String::from).map(Delimiter),
             delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al")?,
             delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last")?,
             et_al_min: attribute_option_int(node, "et-al-min")?,
@@ -730,14 +758,157 @@ impl FromNode for Substitute {
     }
 }
 
+struct TextContent(Option<String>);
+
+impl FromNode for TextContent {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let opt_s = node.text().map(String::from);
+        Ok(TextContent(opt_s))
+    }
+}
+
+impl FromNode for TermPlurality {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let always: Option<String> = TextContent::from_node(node)?.0.map(|s| s.trim().into());
+        let single: Option<TextContent> = max1_child("term", "single", node.children())?;
+        let multiple: Option<TextContent> = max1_child("term", "multiple", node.children())?;
+        let msg = "<term> must contain either only text content or both <single> and <multiple>";
+        match (always, single, multiple) {
+            // empty term is valid
+            (None, None, None) => Ok(TermPlurality::Always("".into())),
+            // <term>plain text content</term>
+            (Some(a), None, None) => Ok(TermPlurality::Always(a)),
+            // <term> ANYTHING <single> s </single> <multiple> m </multiple></term>
+            (_, Some(s), Some(m)) => Ok(TermPlurality::Pluralized {
+                single: s.0.unwrap_or("".into()),
+                multiple: m.0.unwrap_or("".into()),
+            }),
+            // had one of <single> or <multiple>, but not the other
+            _ => Ok(Err(InvalidCsl::new(node, msg))?),
+        }
+    }
+}
+
+impl FromNode for OrdinalMatch {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(attribute_optional(node, "match")?)
+    }
+}
+
+impl FromNode for RoleTermForm {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(attribute_optional(node, "form")?)
+    }
+}
+
+impl FromNode for TermForm {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        Ok(attribute_optional(node, "form")?)
+    }
+}
+
+// Intermediate type for transforming a list of many terms into 4 different hashmaps
+enum TermEl {
+    Simple(SimpleTermSelector, TermPlurality),
+    Gendered(GenderedTermSelector, GenderedTerm),
+    Ordinal(OrdinalTermSelector, String),
+    Role(RoleTermSelector, TermPlurality),
+}
+
+impl FromNode for TermEl {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        use self::terms::AnyTermName::*;
+        let name: AnyTermName = attribute_required(node, "name")?;
+        let content = TermPlurality::from_node(node)?;
+        match name {
+            Edition => Ok(TermEl::Gendered(
+                GenderedTermSelector::Edition(TermForm::from_node(node)?),
+                GenderedTerm(content, attribute_optional(node, "gender")?),
+            )),
+            Month(mt) => Ok(TermEl::Gendered(
+                GenderedTermSelector::Month(mt, TermForm::from_node(node)?),
+                GenderedTerm(content, attribute_optional(node, "gender")?),
+            )),
+            Loc(lt) => Ok(TermEl::Gendered(
+                GenderedTermSelector::Locator(lt, TermForm::from_node(node)?),
+                GenderedTerm(content, attribute_optional(node, "gender")?),
+            )),
+            Misc(t) => Ok(TermEl::Simple(
+                SimpleTermSelector::Misc(t, TermForm::from_node(node)?),
+                content,
+            )),
+            Season(t) => Ok(TermEl::Simple(
+                SimpleTermSelector::Season(t, TermForm::from_node(node)?),
+                content,
+            )),
+            Quote(t) => Ok(TermEl::Simple(
+                SimpleTermSelector::Quote(t, TermForm::from_node(node)?),
+                content,
+            )),
+            Role(t) => Ok(TermEl::Role(
+                RoleTermSelector(t, RoleTermForm::from_node(node)?),
+                content,
+            )),
+            Ordinal(t) => match content {
+                TermPlurality::Always(a) => Ok(TermEl::Ordinal(
+                    OrdinalTermSelector(
+                        t,
+                        attribute_optional(node, "gender-form")?,
+                        OrdinalMatch::from_node(node)?,
+                    ),
+                    a,
+                )),
+                _ => Err(InvalidCsl::new(node, "ordinal terms cannot be pluralized").into()),
+            },
+        }
+    }
+}
+
 impl FromNode for Locale {
-    fn from_node(_node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        // TODO: make this an Option?
+        let lang = node.attribute(("xml", "lang")).unwrap_or("en-GB");
+
+        // TODO: one slot for each date form, avoid allocations?
+        let dates = node
+            .children()
+            .filter(|el| el.has_tag_name("date"))
+            .map(|el| LocaleDate::from_node(&el))
+            .partition_results()?;
+
+        let mut simple_terms = SimpleMapping::default();
+        let mut gendered_terms = GenderedMapping::default();
+        let mut ordinal_terms = OrdinalMapping::default();
+        let mut role_terms = RoleMapping::default();
+
+        let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
+        if let Some(tn) = terms_node {
+            for n in tn.children().filter(|el| el.has_tag_name("term")) {
+                match TermEl::from_node(&n)? {
+                    TermEl::Simple(sel, con) => {
+                        simple_terms.insert(sel, con);
+                    }
+                    TermEl::Gendered(sel, con) => {
+                        gendered_terms.insert(sel, con);
+                    }
+                    TermEl::Ordinal(sel, con) => {
+                        ordinal_terms.insert(sel, con);
+                    }
+                    TermEl::Role(sel, con) => {
+                        role_terms.insert(sel, con);
+                    }
+                }
+            }
+        }
         Ok(Locale {
-            version: "what".into(),
-            lang: "en-GB".into(),
+            version: "1.0".into(),
+            lang: lang.into(),
             options: vec![],
-            terms: vec![],
-            dates: vec![],
+            simple_terms,
+            gendered_terms,
+            ordinal_terms,
+            role_terms,
+            dates,
         })
     }
 }

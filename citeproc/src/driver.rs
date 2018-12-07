@@ -57,7 +57,7 @@ where
             format: self.formatter,
             citation_number: 1,
         };
-        b.iter(||{ 
+        b.iter(|| {
             let i = self.style.intermediate(&mut ctx);
             let flat = i.flatten(self.formatter);
             let o = self.formatter.output(flat);

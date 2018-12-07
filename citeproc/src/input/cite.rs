@@ -1,7 +1,7 @@
 use super::Date;
-use crate::style::terms::LocatorType;
 use crate::input::NumericValue;
 use crate::output::OutputFormat;
+use crate::style::terms::LocatorType;
 
 /// Represents one cite in someone's document, to exactly one reference.
 ///
@@ -28,7 +28,6 @@ pub struct Cite<'ci, O: OutputFormat> {
     // TODO: allow suppression of any variables
     pub author_in_text: bool,
     pub suppress_author: bool,
-
     // Is this necessary?
     // citeHash       :: Int
 }

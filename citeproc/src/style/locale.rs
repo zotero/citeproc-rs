@@ -1,6 +1,5 @@
-use fnv::FnvHashMap;
-// use crate::style::terms::{T};
-use crate::style::element::{LocaleDate};
+use crate::style::element::LocaleDate;
+use crate::style::terms::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CslOption(String, String);
@@ -10,7 +9,10 @@ pub struct Locale {
     pub version: String,
     pub lang: String,
     pub options: Vec<CslOption>,
-    pub terms: Vec<String>,
+    pub simple_terms: SimpleMapping,
+    pub gendered_terms: GenderedMapping,
+    pub ordinal_terms: OrdinalMapping,
+    pub role_terms: RoleMapping,
     pub dates: Vec<LocaleDate>,
 }
 

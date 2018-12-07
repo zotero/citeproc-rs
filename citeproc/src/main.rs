@@ -1,5 +1,5 @@
 use cfg_if::cfg_if;
-cfg_if!{
+cfg_if! {
     if #[cfg(feature="alloc_system")] {
         use std::alloc::System;
         #[global_allocator]
@@ -62,8 +62,14 @@ fn main() {
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
             let mut refr = Reference::empty("id", CslType::LegalCase);
-            refr.number.insert(NumberVariable::Volume,
-                               NumericValue::from("128th & 7-9, 17th"));
+            refr.number.insert(
+                NumberVariable::Edition,
+                NumericValue::from("1"),
+            );
+            refr.number.insert(
+                NumberVariable::Volume,
+                NumericValue::from("128th & 7-9, 17th"),
+            );
             // TODO: recognize requests for Page and PageFirst as number vars
             refr.ordinary.insert(Variable::Page, "194");
             refr.ordinary.insert(Variable::PageFirst, "194");
@@ -92,10 +98,8 @@ fn main() {
             let header = r#"{"blocks":[{"t":"Para","c":"#;
             let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
             println!("{}{}{}", header, serialized, footer);
-
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }
     }
 }
-

@@ -6,8 +6,8 @@ use crate::output::OutputFormat;
 use crate::style::element::{Choose, Condition, Conditions, Else, Formatting, IfThen, Match};
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Choose"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
@@ -107,36 +107,27 @@ fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &mut CiteContext<'c, 
 where
     O: OutputFormat,
 {
+    let vars = cond.variable.iter().map(|var| ctx.has_variable(var));
 
-    let vars = cond.variable
-        .iter()
-        .map(|var| ctx.has_variable(var));
+    let nums = cond.is_numeric.iter().map(|var| ctx.is_numeric(var));
 
-    let nums = cond.is_numeric
-        .iter()
-        .map(|var| ctx.is_numeric(var));
-
-    let types = cond.csl_type
+    let types = cond
+        .csl_type
         .iter()
         .map(|typ| ctx.reference.csl_type == *typ);
 
-    let positions = cond.position
-        .iter()
-        .map(|pos| ctx.position == *pos);
+    let positions = cond.position.iter().map(|pos| ctx.position == *pos);
 
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
 
-    let mut chain = vars
-        .chain(nums)
-        .chain(types)
-        .chain(positions);
+    let mut chain = vars.chain(nums).chain(types).chain(positions);
 
     run_matcher(&mut chain, &cond.match_type)
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn run_matcher<I: Iterator<Item=bool>>(bools: &mut I, match_type: &Match) -> bool {
+fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {
     match *match_type {
         Match::Any => bools.any(|b| b),
         Match::Nand => bools.any(|b| !b),

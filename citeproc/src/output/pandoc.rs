@@ -17,7 +17,6 @@ impl Pandoc {
     }
 
     fn fmt_vec(&self, inlines: &[Inline], f: &Formatting) -> Option<Inline> {
-
         let mut current = None;
 
         let maybe = |cur| {
@@ -64,7 +63,8 @@ impl OutputFormat for Pandoc {
     fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
-        let v: Vec<Inline> = fmts.intercalate(&Space)
+        let v: Vec<Inline> = fmts
+            .intercalate(&Space)
             .into_iter()
             .filter_map(|t| match t {
                 Str(ref s) if s == "" => None,

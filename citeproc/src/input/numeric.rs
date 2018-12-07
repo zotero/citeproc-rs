@@ -1,5 +1,5 @@
 use nom::types::CompleteStr;
-use nom::{self, digit1, alpha0, alpha1};
+use nom::{self, alpha0, alpha1, digit1};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken<'r> {
@@ -27,7 +27,6 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
     }
     s
 }
-
 
 /// Either a parsed vector of numeric tokens, or the raw string input.
 ///
@@ -100,7 +99,7 @@ fn sep_from<'s>(input: char) -> Result<NumericToken<'s>, ()> {
         ',' => Ok(Comma),
         '-' => Ok(Hyphen),
         '&' => Ok(Ampersand),
-        _ => Err(())
+        _ => Err(()),
     }
 }
 
@@ -126,7 +125,6 @@ named!(suffix1<CompleteStr, NumericToken>,
 named!(num_ish<CompleteStr, NumericToken>,
        alt!(call!(prefix1) | call!(suffix1) | call!(num)));
 
-
 named!(
     sep<CompleteStr, NumericToken>,
     map_res!(delimited!(
@@ -139,7 +137,7 @@ named!(
 named!(
     num_tokens<CompleteStr, Vec<NumericToken> >,
     map!(tuple!(
-        call!(num_ish), 
+        call!(num_ish),
         many0!(tuple!( call!(sep), call!(num_ish) ))
     ), |(n, rest)| {
         let mut new = Vec::with_capacity(rest.len() * 2);
@@ -152,7 +150,10 @@ named!(
 #[test]
 fn test_num_token_parser() {
     assert_eq!(num_ish(CompleteStr("2")), Ok((CompleteStr(""), Num(2))));
-    assert_eq!(num_ish(CompleteStr("2b")), Ok((CompleteStr(""), NumericToken::Affixed("2b"))));
+    assert_eq!(
+        num_ish(CompleteStr("2b")),
+        Ok((CompleteStr(""), NumericToken::Affixed("2b")))
+    );
     assert_eq!(sep(CompleteStr("- ")), Ok((CompleteStr(""), Hyphen)));
     assert_eq!(sep(CompleteStr(", ")), Ok((CompleteStr(""), Comma)));
     assert_eq!(
@@ -165,10 +166,12 @@ fn test_num_token_parser() {
     );
     assert_eq!(
         num_tokens(CompleteStr("2 - 5, 9, edition")),
-        Ok((CompleteStr(", edition"), vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
+        Ok((
+            CompleteStr(", edition"),
+            vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
+        ))
     );
 }
-
 
 impl<'r> From<&'r str> for NumericValue<'r> {
     fn from(input: &'r str) -> Self {
@@ -195,5 +198,3 @@ fn test_numeric_value() {
         NumericValue::Str("2 - 5, 9, edition")
     );
 }
-
-

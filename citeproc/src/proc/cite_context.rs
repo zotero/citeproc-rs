@@ -3,7 +3,6 @@ use crate::output::*;
 use crate::style::element::{Position, Style};
 use crate::style::variables::*;
 
-
 /// ## Lifetimes
 ///
 /// * `'c`: CiteContext umbrella to live longer than `'r` and `'ci`
@@ -35,14 +34,24 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
             // TODO: finish this list
             Ordinary(Variable::Locator) => self.cite.locator.is_some(),
             Number(NumberVariable::Locator) => self.cite.locator.is_some(),
-            _ => self.reference.has_variable(var)
+            _ => self.reference.has_variable(var),
         }
     }
     pub fn is_numeric(&self, var: &NumberVariable) -> bool {
         match var {
             // TODO: finish this list
-            NumberVariable::Locator => self.cite.locator.as_ref().map(|r| r.is_numeric()).unwrap_or(false),
-            _ => self.reference.number.get(var).map(|v| v.is_numeric()).unwrap_or(false),
+            NumberVariable::Locator => self
+                .cite
+                .locator
+                .as_ref()
+                .map(|r| r.is_numeric())
+                .unwrap_or(false),
+            _ => self
+                .reference
+                .number
+                .get(var)
+                .map(|v| v.is_numeric())
+                .unwrap_or(false),
         }
     }
 }

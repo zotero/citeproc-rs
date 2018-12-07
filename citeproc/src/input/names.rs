@@ -16,4 +16,3 @@ pub enum Name<'r> {
     // In CSL-M, this will represent an institution
     Literal(&'r str),
 }
-

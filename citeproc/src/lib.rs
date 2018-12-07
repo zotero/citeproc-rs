@@ -32,9 +32,9 @@ pub mod proc;
 extern crate strum_macros;
 #[macro_use]
 extern crate serde_derive;
+extern crate cfg_if;
 extern crate serde;
 extern crate serde_json;
-extern crate cfg_if;
 #[cfg(test)]
 extern crate test;
 
@@ -70,8 +70,11 @@ mod tests {
         Ok(())
     }
 
-    fn bench_single<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError>
-    {
+    fn bench_single<O: OutputFormat + std::fmt::Debug>(
+        b: &mut Bencher,
+        path: &str,
+        formatter: O,
+    ) -> Result<(), StyleError> {
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
         f.read_to_string(&mut contents)
@@ -79,7 +82,8 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
+        refr.number
+            .insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
@@ -88,7 +92,11 @@ mod tests {
         Ok(())
     }
 
-    fn bench_ir_gen<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError> {
+    fn bench_ir_gen<O: OutputFormat + std::fmt::Debug>(
+        b: &mut Bencher,
+        path: &str,
+        formatter: O,
+    ) -> Result<(), StyleError> {
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
         f.read_to_string(&mut contents)
@@ -96,7 +104,8 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
+        refr.number
+            .insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),
@@ -133,7 +142,11 @@ mod tests {
     //     bench_single(b, path, format)
     // }
 
-    fn bench_flatten<O: OutputFormat + std::fmt::Debug>(b: &mut Bencher, path: &str, formatter: O) -> Result<(), StyleError> {
+    fn bench_flatten<O: OutputFormat + std::fmt::Debug>(
+        b: &mut Bencher,
+        path: &str,
+        formatter: O,
+    ) -> Result<(), StyleError> {
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
         f.read_to_string(&mut contents)
@@ -141,7 +154,8 @@ mod tests {
         let driver = Driver::new(&contents, &formatter)?;
         let mut refr = Reference::empty("id", CslType::LegalCase);
         refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-        refr.number.insert(NumberVariable::Number, NumericValue::num(55));
+        refr.number
+            .insert(NumberVariable::Number, NumericValue::num(55));
         refr.date.insert(
             DateVariable::Issued,
             DateOrRange::from_str("1998-01-04").unwrap(),

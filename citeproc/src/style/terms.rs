@@ -1,10 +1,60 @@
 use crate::style::error::*;
 use fnv::FnvHashMap;
 
-use std::str::FromStr;
+use super::get_attribute::GetAttribute;
 use nom::types::CompleteStr;
+use std::str::FromStr;
 
-/// TermSelector is used 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TextTermSelector {
+    Simple(SimpleTermSelector),
+    Gendered(GenderedTermSelector),
+    Role(RoleTermSelector),
+    // You can't render ordinals using a <text> node, only using <number>
+}
+
+pub enum AnyTermName {
+    Edition,
+    Month(MonthTerm),
+    Loc(LocatorType),
+
+    Misc(MiscTerm),
+    Season(SeasonTerm),
+    Quote(QuoteTerm),
+
+    Role(RoleTerm),
+
+    Ordinal(OrdinalTerm),
+}
+
+impl GetAttribute for AnyTermName {
+    fn get_attr(
+        s: &str,
+        csl_version: super::version::CslVersion,
+    ) -> Result<Self, UnknownAttributeValue> {
+        use self::AnyTermName::*;
+        if let Ok(v) = MiscTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Misc(v));
+        } else if let Ok(v) = MonthTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Month(v));
+        } else if s == "edition" {
+            return Ok(Edition);
+        } else if let Ok(v) = LocatorType::get_attr(s, csl_version.clone()) {
+            return Ok(Loc(v));
+        } else if let Ok(v) = SeasonTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Season(v));
+        } else if let Ok(v) = QuoteTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Quote(v));
+        } else if let Ok(v) = RoleTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Role(v));
+        } else if let Ok(v) = OrdinalTerm::get_attr(s, csl_version.clone()) {
+            return Ok(Ordinal(v));
+        }
+        Err(UnknownAttributeValue::new(s))
+    }
+}
+
+/// TermSelector is used
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermForm),
@@ -26,10 +76,10 @@ pub enum GenderedTermSelector {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RoleTermSelector(pub RoleTerm, pub RoleTermForm);
 
-type GenderedMapping = FnvHashMap<GenderedTermSelector, GenderedTerm>;
-type OrdinalMapping = FnvHashMap<OrdinalTermSelector, String>;
-type RoleMapping = FnvHashMap<RoleTermSelector, TermPlurality>;
-type SimpleMapping = FnvHashMap<SimpleTermSelector, String>;
+pub type SimpleMapping = FnvHashMap<SimpleTermSelector, TermPlurality>;
+pub type GenderedMapping = FnvHashMap<GenderedTermSelector, GenderedTerm>;
+pub type OrdinalMapping = FnvHashMap<OrdinalTermSelector, String>;
+pub type RoleMapping = FnvHashMap<RoleTermSelector, TermPlurality>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenderedTerm(pub TermPlurality, pub Gender);
@@ -69,7 +119,16 @@ impl Default for RoleTermForm {
 #[strum(serialize_all = "kebab_case")]
 pub enum TermPlurality {
     Pluralized { single: String, multiple: String },
-    Always(String)
+    Always(String),
+}
+
+impl TermPlurality {
+    pub fn no_plural_allowed(self) -> Option<String> {
+        match self {
+            TermPlurality::Always(s) => Some(s),
+            _ => None,
+        }
+    }
 }
 
 /// Represents a gender for the purpose of *defining* or *selecting* a term.
@@ -107,7 +166,7 @@ pub enum TermPlurality {
 ///    2. `OrdinalTermSelector(Mod100(1), Feminine, LastTwoDigits)` and finds a match with content
 ///       `FFF`.
 ///
-#[derive(AsStaticStr, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Gender {
     Masculine,
@@ -116,9 +175,15 @@ pub enum Gender {
     Neuter,
 }
 
+impl Default for Gender {
+    fn default() -> Self {
+        Gender::Neuter
+    }
+}
+
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#ordinal-suffixes)
 /// LastTwoDigits is the default
-#[derive(AsStaticStr, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum OrdinalMatch {
     LastTwoDigits,
@@ -250,7 +315,7 @@ pub enum MonthTerm {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OrdinalTerm {
     Ordinal,
     Mod100(u32),
@@ -305,8 +370,7 @@ impl FromStr for OrdinalTerm {
             "long-ordinal-09" => Ok(LongOrdinal09),
             "long-ordinal-10" => Ok(LongOrdinal10),
             _ => {
-                if let Ok((CompleteStr(""), o))
-                    = zero_through_99(CompleteStr(s)) {
+                if let Ok((CompleteStr(""), o)) = zero_through_99(CompleteStr(s)) {
                     Ok(o)
                 } else {
                     Err(UnknownAttributeValue::new(s))
@@ -317,7 +381,7 @@ impl FromStr for OrdinalTerm {
 }
 
 fn is_digit(chr: char) -> bool {
-  chr as u8 >= 0x30 && chr as u8 <= 0x39
+    chr as u8 >= 0x30 && chr as u8 <= 0x39
 }
 
 named!(two_digit_num<CompleteStr, u32>,

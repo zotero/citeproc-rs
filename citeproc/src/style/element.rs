@@ -1,5 +1,5 @@
 use super::locale::Locale;
-use super::terms::{ TermForm, RoleTermForm };
+use super::terms::{RoleTermForm, TermForm, TextTermSelector};
 use crate::style::error::*;
 use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
@@ -18,7 +18,7 @@ pub enum Element {
     // <cs:text>
     Variable(StandardVariable, Formatting, Affixes, VariableForm, Quotes),
     // <cs:term>
-    Term(String, TermForm, Formatting, Affixes, bool), // bool is plural
+    Term(TextTermSelector, Formatting, Affixes, bool), // bool is plural
     // <cs:label>
     Label(LabelVariable, TermForm, Formatting, Affixes, Plural),
     // <cs:number>
@@ -398,7 +398,7 @@ pub struct Name {
     pub form: Option<NameForm>,
     pub initialize: Option<bool>, // default is true
     pub initialize_with: Option<String>,
-    pub name_as_sort_order: Option<NameAsSortOrder>, 
+    pub name_as_sort_order: Option<NameAsSortOrder>,
     pub sort_separator: Option<String>,
     pub formatting: Formatting,
     pub affixes: Affixes,

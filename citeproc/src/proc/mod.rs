@@ -27,16 +27,16 @@ pub use self::ir::*;
 //
 // [Style]: ../style/element/struct.Style.html
 // [Reference]: ../input/struct.Reference.html
-pub trait Proc<'c, 'r: 'c, 'ci: 'c, O> 
-    where
-        O: OutputFormat
+pub trait Proc<'c, 'r: 'c, 'ci: 'c, O>
+where
+    O: OutputFormat,
 {
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
 }
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Style"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
@@ -48,8 +48,8 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
 
 // TODO: insert affixes into group before processing as a group
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Layout"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
@@ -58,8 +58,8 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
 }
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
-    where
-        O: OutputFormat
+where
+    O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Element"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
@@ -96,20 +96,19 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
                         .get(v)
                         .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
                     StandardVariable::Number(ref v) => {
-                        ctx.reference.number.get(v).map(|val| fmt.affixed(&val.to_string(), &f, &af) /*match *val {
-                            Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
-                            Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                        }*/)
+                        ctx.reference.number.get(v).map(
+                            |val| fmt.affixed(&val.to_string(), &f, &af)
+                        )
                     }
                 };
                 IR::Rendered(content)
             }
 
-            Element::Term(ref term, ref _form, ref f, ref af, ref _pl) => {
+            Element::Term(ref term_selector, ref f, ref af, ref _pl) => {
                 IR::Rendered(Some(fmt.group(
                     &[
                         fmt.plain(&af.prefix),
-                        fmt.text_node(&format!("(term {})", term), &f),
+                        fmt.text_node(&format!("(term {:?})", term_selector), &f),
                         fmt.plain(&af.suffix),
                     ],
                     "",
@@ -130,10 +129,12 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
             }
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(ctx.reference.number.get(&var).map(|val| fmt.affixed(&val.to_string(), &f, &af) /*match *val {
-                    Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
-                    Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                }*/))
+                IR::Rendered(ctx.reference.number.get(&var).map(
+                    |val| fmt.affixed(&val.to_string(), &f, &af), /*match *val {
+                                                                      Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
+                                                                      Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
+                                                                  }*/
+                ))
             }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
@@ -153,4 +154,3 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
         }
     }
 }
-

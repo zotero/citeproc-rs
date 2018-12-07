@@ -65,7 +65,9 @@ pub fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, Inva
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s, 10);
-            parsed.map(Some).map_err(|e| InvalidCsl::bad_int(node, attr, &e))
+            parsed
+                .map(Some)
+                .map_err(|e| InvalidCsl::bad_int(node, attr, &e))
         }
         None => Ok(None),
     }
@@ -77,12 +79,8 @@ pub fn attribute_string(node: &Node, attr: &str) -> String {
         .unwrap_or_else(|| String::from(""))
 }
 
-pub fn attribute_option_string(
-    node: &Node,
-    attr: &str,
-) -> Option<String> {
-    node.attribute(attr)
-        .map(String::from)
+pub fn attribute_option_string(node: &Node, attr: &str) -> Option<String> {
+    node.attribute(attr).map(String::from)
 }
 
 pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, InvalidCsl> {
@@ -123,10 +121,7 @@ pub fn attribute_var_type<T: GetAttribute>(
     }
 }
 
-pub fn attribute_option<T: GetAttribute>(
-    node: &Node,
-    attr: &str,
-) -> Result<Option<T>, InvalidCsl> {
+pub fn attribute_option<T: GetAttribute>(node: &Node, attr: &str) -> Result<Option<T>, InvalidCsl> {
     match node.attribute(attr) {
         Some(a) => match T::get_attr(a, CSL_VERSION) {
             Ok(val) => Ok(Some(val)),

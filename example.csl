@@ -51,6 +51,7 @@
       <group delimiter=" ">
         <number variable="edition" form="ordinal" />
         <label variable="edition" />
+        <text term="edition" />
 
         <choose>
           <if is-numeric="volume">

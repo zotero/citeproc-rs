@@ -1,20 +1,18 @@
-#[cfg(feature="flame_it")]
+#[cfg(feature = "flame_it")]
 use std::mem;
 
-#[cfg(feature="flame_it")]
+#[cfg(feature = "flame_it")]
 use std::fs::File;
 
-
 /// Implementation as given by @ebarnard at: https://github.com/TyOverby/flame/issues/33#issuecomment-352312506
-#[cfg(feature="flame_it")]
+#[cfg(feature = "flame_it")]
 pub fn write_flamegraph(path: &str) {
     let mut spans = flame::threads().into_iter().next().unwrap().spans;
     merge_spans(&mut spans);
-    flame::dump_html_custom(&mut File::create(path).unwrap(), &spans)
-        .unwrap();
+    flame::dump_html_custom(&mut File::create(path).unwrap(), &spans).unwrap();
 }
 
-#[cfg(feature="flame_it")]
+#[cfg(feature = "flame_it")]
 fn merge_spans(spans: &mut Vec<flame::Span>) {
     if spans.is_empty() {
         return;
@@ -59,7 +57,5 @@ fn merge_spans(spans: &mut Vec<flame::Span>) {
     }
 }
 
-
-#[cfg(not(feature="flame_it"))]
-pub fn write_flamegraph(_path: &str) {
-}
+#[cfg(not(feature = "flame_it"))]
+pub fn write_flamegraph(_path: &str) {}
