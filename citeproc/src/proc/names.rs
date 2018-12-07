@@ -10,14 +10,14 @@ use crate::style::element::{
 // TODOS
 // [ ] "editor translator" && editor==translator
 // [ ] inherit name options from cs:style, cs:citation, and cs:bibliography
-//     http://docs.citationstyles.org/en/stable/specification.html#inheritable-name-options
+//     [Spec](https://docs.citationstyles.org/en/stable/specification.html#inheritable-name-options)
 
 impl NameEl {
     fn inherit_from(parent: &Self) -> Self {
     }
     fn render<'c, 'r, O: OutputFormat>(
         &self,
-        ctx: &mut CiteContext<'c, 'r, O>,
+        ctx: &mut CiteContext<'c, 'r, 'ci, O>,
         var: &NameVariable<'r>,
     ) -> O::Build {
         let names = 
@@ -49,9 +49,12 @@ impl NameEl {
     }
 }
 
-impl<'c, 's: 'c> Proc<'c, 's> for IndependentDate {
+impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for IndependentDate
+    where
+        O: OutputFormat
+{
     #[cfg_attr(feature = "flame_it", flame("Date"))]
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {

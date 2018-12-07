@@ -5,9 +5,12 @@ use super::Proc;
 use crate::output::OutputFormat;
 use crate::style::element::{Choose, Condition, Conditions, Else, Formatting, IfThen, Match};
 
-impl<'c, 's: 'c> Proc<'c, 's> for Choose {
+impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
+    where
+        O: OutputFormat
+{
     #[cfg_attr(feature = "flame_it", flame("Choose"))]
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -56,16 +59,16 @@ impl<'c, 's: 'c> Proc<'c, 's> for Choose {
     }
 }
 
-struct BranchEval<'s, O: OutputFormat> {
+struct BranchEval<'a, O: OutputFormat> {
     // the bools indicate if disambiguate was set
     disambiguate: bool,
-    content: Option<IR<'s, O>>,
+    content: Option<IR<'a, O>>,
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn eval_ifthen<'c, 's: 'c, 'r, O>(
-    branch: &'s IfThen,
-    ctx: &mut CiteContext<'c, 'r, O>,
+fn eval_ifthen<'c, 'r, 'ci, O>(
+    branch: &'c IfThen,
+    ctx: &mut CiteContext<'c, 'r, 'ci, O>,
 ) -> BranchEval<'c, O>
 where
     O: OutputFormat,
@@ -85,9 +88,9 @@ where
 // first bool is the match result
 // second bool is disambiguate=true
 #[cfg_attr(feature = "flame_it", flame)]
-fn eval_conditions<'c, 's: 'c, 'r: 'c, O>(
-    conditions: &'s Conditions,
-    ctx: &mut CiteContext<'c, 'r, O>,
+fn eval_conditions<'c, 'r: 'c, 'ci, O>(
+    conditions: &'c Conditions,
+    ctx: &mut CiteContext<'c, 'r, 'ci, O>,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -100,7 +103,7 @@ where
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn eval_cond<'c, 's: 'c, 'r: 'c, O>(cond: &'s Condition, ctx: &mut CiteContext<'c, 'r, O>) -> bool
+fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> bool
 where
     O: OutputFormat,
 {

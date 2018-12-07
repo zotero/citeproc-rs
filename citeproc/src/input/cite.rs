@@ -1,24 +1,24 @@
 use super::Date;
 use crate::style::terms::LocatorType;
 use crate::input::NumericValue;
+use crate::output::OutputFormat;
 
-// AffixType is generic to allow for any data in here;
-// could be MSWord stuff, or Pandoc Formatted = [Inline],
-// or someone's Markdown
-
-pub struct Cite<'r, AffixType> {
-    pub id: &'r str,
-    pub prefix: AffixType,
-    pub suffix: AffixType,
+/// Represents one cite in someone's document, to exactly one reference.
+///
+/// Prefixes and suffixes
+pub struct Cite<'ci, O: OutputFormat> {
+    pub id: &'ci str,
+    pub prefix: O::Output,
+    pub suffix: O::Output,
     pub label: LocatorType,
 
     // TODO: gotta be careful not to look up locators in the hashmap, even though
     // they are 'variables'.
     // in CSL-M they are number variables. also review the rest of the
     // vars that are like this
-    pub locator: Option<NumericValue<'r>>,
+    pub locator: Option<NumericValue<'ci>>,
     // csl-m
-    pub locator_extra: Option<&'r str>,
+    pub locator_extra: Option<&'ci str>,
     // csl-m
     pub locator_date: Option<Date>,
 
@@ -28,15 +28,13 @@ pub struct Cite<'r, AffixType> {
     // TODO: allow suppression of any variables
     pub author_in_text: bool,
     pub suppress_author: bool,
+
     // Is this necessary?
     // citeHash       :: Int
 }
 
-impl<'r, T> Cite<'r, T>
-where
-    T: Clone,
-{
-    pub fn basic(id: &'r str, prefix: &T) -> Self {
+impl<'r, O: OutputFormat> Cite<'r, O> {
+    pub fn basic(id: &'r str, prefix: &O::Output) -> Self {
         Cite {
             id: id,
             prefix: prefix.clone(),

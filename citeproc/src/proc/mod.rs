@@ -13,27 +13,33 @@ pub use self::ir::*;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
 // nodes are possibly disambiguate-able in year suffix mode and if such a node should be inserted
-// at the end of the layout block before the suffix.
+// at the end of the layout block before the suffix. (You would only insert an IR node, not in the
+// actual style, to keep it immutable and plain-&borrow-thread-shareable).
 // TODO: also to figure out which macros are needed
 // TODO: juris-m module loading in advance? probably in advance.
 
 // Levels 1-3 will also have to update the ConditionalDisamb's current render
 
-// 's: style
-// 'r: reference
-pub trait Proc<'c, 's: 'c> {
-    // TODO: include settings and reference and macro map
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+//
+// * `'c`: [Cite]
+// * `'ci`: [Cite]
+// * `'r`: [Reference][]
+//
+// [Style]: ../style/element/struct.Style.html
+// [Reference]: ../input/struct.Reference.html
+pub trait Proc<'c, 'r: 'c, 'ci: 'c, O> 
     where
-        O: OutputFormat;
+        O: OutputFormat
+{
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
 }
 
-#[cfg_attr(feature = "flame_it", flame("Style"))]
-impl<'c, 's: 'c> Proc<'c, 's> for Style {
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
     where
-        O: OutputFormat,
-    {
+        O: OutputFormat
+{
+    #[cfg_attr(feature = "flame_it", flame("Style"))]
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
         layout.intermediate(ctx)
@@ -41,22 +47,22 @@ impl<'c, 's: 'c> Proc<'c, 's> for Style {
 }
 
 // TODO: insert affixes into group before processing as a group
-impl<'c, 's: 'c> Proc<'c, 's> for LayoutEl {
-    #[cfg_attr(feature = "flame_it", flame("Layout"))]
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
     where
-        O: OutputFormat,
-    {
+        O: OutputFormat
+{
+    #[cfg_attr(feature = "flame_it", flame("Layout"))]
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         sequence(ctx, &self.formatting, &self.delimiter.0, &self.elements)
     }
 }
 
-impl<'c, 's: 'c> Proc<'c, 's> for Element {
-    #[cfg_attr(feature = "flame_it", flame("Element"))]
-    fn intermediate<'r, O>(&'s self, ctx: &mut CiteContext<'c, 'r, O>) -> IR<'c, O>
+impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
     where
-        O: OutputFormat,
-    {
+        O: OutputFormat
+{
+    #[cfg_attr(feature = "flame_it", flame("Element"))]
+    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let fmt = ctx.format;
         let null_f = Formatting::default();
         match *self {

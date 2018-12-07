@@ -4,11 +4,11 @@ use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting};
 
 #[cfg_attr(feature = "flame_it", flame)]
-pub fn sequence<'c, 's, 'r, O>(
-    ctx: &mut CiteContext<'c, 'r, O>,
+pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
+    ctx: &mut CiteContext<'c, 'r, 'ci, O>,
     f: &Formatting,
     delim: &str,
-    els: &'c [Element],
+    els: &'s [Element],
 ) -> IR<'c, O>
 where
     O: OutputFormat,

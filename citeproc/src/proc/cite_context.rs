@@ -3,22 +3,32 @@ use crate::output::*;
 use crate::style::element::{Position, Style};
 use crate::style::variables::*;
 
-pub struct CiteContext<'c, 'r: 'c, O: OutputFormat> {
+
+/// ## Lifetimes
+///
+/// * `'c`: CiteContext umbrella to live longer than `'r` and `'ci`
+/// * `'r`: [Reference][]
+/// * `'ci`: [Cite][]
+///
+/// [Reference]: ../input/struct.Reference.html
+/// [Cite]: ../input/struct.Cite.html
+
+pub struct CiteContext<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
     pub style: &'c Style,
     pub reference: &'c Reference<'r>,
-    pub cite: &'c Cite<'r, O::Output>,
+    pub cite: &'c Cite<'ci, O>,
     pub format: &'c O,
     pub position: Position,
     pub citation_number: u32,
 }
 
-pub struct Cluster<'a, 'c, 'r: 'a + 'c, O: OutputFormat> {
-    pub cites: &'a [CiteContext<'c, 'r, O>],
+pub struct Cluster<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
+    pub cites: Vec<CiteContext<'c, 'r, 'ci, O>>,
 }
 
 // helper methods to access both cite and reference properties via Variables
 
-impl<'c, 'r: 'c, O: OutputFormat> CiteContext<'c, 'r, O> {
+impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     pub fn has_variable(&self, var: &AnyVariable) -> bool {
         use crate::style::variables::AnyVariable::*;
         match *var {
