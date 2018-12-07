@@ -1,4 +1,5 @@
 use super::locale::Locale;
+use super::terms::{ TermForm, RoleTermForm };
 use crate::style::error::*;
 use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
@@ -15,11 +16,11 @@ pub enum Element {
     // <cs:text>
     Const(String, Formatting, Affixes, Quotes),
     // <cs:text>
-    Variable(StandardVariable, Formatting, Affixes, Form, Quotes),
+    Variable(StandardVariable, Formatting, Affixes, VariableForm, Quotes),
     // <cs:term>
-    Term(String, Form, Formatting, Affixes, bool), // bool is plural
+    Term(String, TermForm, Formatting, Affixes, bool), // bool is plural
     // <cs:label>
-    Label(LabelVariable, Form, Formatting, Affixes, Plural),
+    Label(LabelVariable, TermForm, Formatting, Affixes, Plural),
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
     // <cs:names>
@@ -30,37 +31,17 @@ pub enum Element {
     Date(IndependentDate),
 }
 
+/// e.g. for <text variable="title" form="short" />
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all = "snake_case")]
-pub enum Form {
+#[strum(serialize_all = "kebab_case")]
+pub enum VariableForm {
     Long,
     Short,
-    Count,
-    Symbol,
-    NotSet,
 }
 
-impl Default for Form {
+impl Default for VariableForm {
     fn default() -> Self {
-        Form::Long
-    }
-}
-
-#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
-#[strum(serialize_all = "snake_case")]
-pub enum NameLabelForm {
-    Long,
-    Short,
-    Count,
-    Verb,
-    VerbShort,
-    Symbol,
-    NotSet,
-}
-
-impl Default for NameLabelForm {
-    fn default() -> Self {
-        NameLabelForm::Long
+        VariableForm::Long
     }
 }
 
@@ -433,7 +414,7 @@ impl fmt::Debug for Name {
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
-    pub form: NameLabelForm,
+    pub form: RoleTermForm,
     pub formatting: Formatting,
     pub delimiter: Delimiter,
     pub plural: Plural,
@@ -709,7 +690,7 @@ pub enum Position {
     NearNote,
 }
 
-/// http://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats
+/// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum PageRangeFormat {

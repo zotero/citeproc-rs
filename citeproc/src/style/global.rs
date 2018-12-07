@@ -1,5 +1,5 @@
 
-/// http://docs.citationstyles.org/en/stable/specification.html#months
+/// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-i-categories)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, PartialEq, Eq)]
 #[strum(serialize_all="kebab_case")]
 pub enum Categories {

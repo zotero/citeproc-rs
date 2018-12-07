@@ -1,29 +1,9 @@
 use nom::types::CompleteStr;
 use nom::{self, digit1, alpha0, alpha1};
 
-/// Tests whether the given variables (Appendix IV - Variables) contain numeric content. Content is
-/// considered numeric if it solely consists of numbers. Numbers may have prefixes and suffixes
-/// (“D2”, “2b”, “L2d”), and may be separated by a comma, hyphen, or ampersand, with or without
-/// spaces (“2, 3”, “2-4”, “2 & 4”). For example, “2nd” tests “true” whereas “second” and “2nd
-/// edition” test “false”.
-
-// We want to parse:
-//
-// 2, 4         => Num(2) Comma Num(4)
-// 2-4, 5       => Num(2) Hyphen Num(4) Comma Num(5)
-// 2-4, 5       => Num(2) Hyphen Num(4) Comma Num(5)
-// 2nd          => Aff("",  2, "nd")
-// L2tp         => Aff("L", 2, "tp")
-// 2nd-4th      => Aff("",  2, "nd") Hyphen Aff("", 4, "th")
-//
-// We don't want to parse:
-//
-// 2nd edition  => Aff(2, "nd") ... Err("edition") -> not numeric
-// -5           => Err("-5") -> not numeric
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken<'r> {
-    Num(i32),
+    Num(u32),
     Affixed(&'r str),
     Comma,
     Hyphen,
@@ -48,6 +28,39 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
     s
 }
 
+
+/// Either a parsed vector of numeric tokens, or the raw string input.
+///
+/// Relevant parts of the Spec:
+///
+/// * [`<choose is-numeric="...">`](https://docs.citationstyles.org/en/stable/specification.html#choose)
+/// * [`<number>`](https://docs.citationstyles.org/en/stable/specification.html#number)
+///
+/// We parse:
+///
+/// ```
+/// "2, 4"         => Tokens([Num(2), Comma, Num(4)])
+/// "2-4, 5"       => Tokens([Num(2), Hyphen, Num(4), Comma, Num(5)])
+/// "2 -4    , 5"  => Tokens([Num(2), Hyphen, Num(4), Comma, Num(5)])
+/// "2nd"          => Tokens([Aff("",  2, "nd")])
+/// "L2"           => Tokens([Aff("L", 2, "")])
+/// "L2tp"         => Tokens([Aff("L", 2, "tp")])
+/// "2nd-4th"      => Tokens([Aff("",  2, "nd"), Hyphen, Aff("", 4, "th")])
+/// ```
+///
+/// We don't parse:
+///
+/// ```
+/// "2nd edition"  => Err("edition") -> not numeric -> Str("2nd edition")
+/// "-5"           => Err("-5") -> not numeric -> Str("-5")
+/// "5,,7"         => Err(",7") -> not numeric -> Str("5,,7")
+/// "5 7 9 11"     => Err("7 9 11") -> not numeric -> Str("5 7 9 11")
+/// "5,"           => Err("") -> not numeric -> Str("5,")
+/// ```
+///
+/// It's a number, then a { comma|hyphen|ampersand } with any whitespace, then another number, and
+/// so on. All numbers are unsigned.
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericValue<'r> {
     // for values arriving as actual integers
@@ -57,8 +70,7 @@ pub enum NumericValue<'r> {
 }
 
 impl<'r> NumericValue<'r> {
-    /// shorthand
-    pub fn num(i: i32) -> Self {
+    pub fn num(i: u32) -> Self {
         NumericValue::Tokens(vec![Num(i)])
     }
     pub fn is_numeric(&self) -> bool {
@@ -75,7 +87,7 @@ impl<'r> NumericValue<'r> {
     }
 }
 
-fn from_digits(input: CompleteStr) -> Result<i32, std::num::ParseIntError> {
+fn from_digits(input: CompleteStr) -> Result<u32, std::num::ParseIntError> {
     input.parse()
 }
 
@@ -92,7 +104,7 @@ fn sep_from<'s>(input: char) -> Result<NumericToken<'s>, ()> {
     }
 }
 
-named!(int<CompleteStr, i32>, map_res!(call!(digit1), from_digits));
+named!(int<CompleteStr, u32>, map_res!(call!(digit1), from_digits));
 named!(num<CompleteStr, NumericToken>, map!(call!(int), NumericToken::Num));
 
 named!(prefix1<CompleteStr, NumericToken>,

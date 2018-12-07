@@ -28,9 +28,11 @@ impl GetAttribute for AnyVariable {
     }
 }
 
-// Contrary to the CSL-M spec, you can render Number variables with <text variable="..."/>
-// Because "number variables are a subset of the standard variables"
-// http://docs.citationstyles.org/en/stable/specification.html#number-variables
+/// Contrary to the CSL-M spec's declaration that number variables in a regular `<text variable>`
+/// "should fail validation", that is perfectly valid, because "number variables are a subset of the
+/// standard variables":
+/// [Spec](https://docs.citationstyles.org/en/stable/specification.html#number-variables)
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum StandardVariable {
     Ordinary(Variable),
@@ -148,7 +150,7 @@ pub enum Variable {
     Title,
     /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
     TitleShort,
-    ///  URL (e.g. “http://aem.asm.org/cgi/content/full/74/9/2766”)
+    ///  URL (e.g. “https://aem.asm.org/cgi/content/full/74/9/2766”)
     #[strum(serialize = "URL")]
     URL,
     /// version of the item (e.g. “2.0.9” for a software program)
@@ -180,6 +182,7 @@ pub enum NumberVariable {
     NumberOfPages,
     NumberOfVolumes,
     Volume,
+
     #[strum(props(csl101 = "0", cslM = "1"))]
     Locator,
     #[strum(props(csl101 = "0", cslM = "1"))]

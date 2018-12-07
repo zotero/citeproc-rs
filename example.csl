@@ -20,6 +20,25 @@
   <locale>
     <terms>
       <term name="et-al">et al</term>
+      <term name="edition" gender="feminine">
+        <single>edition</single>
+        <multiple>edition</multiple>
+      </term>
+      <!-- ORDINALS -->
+      <term name="ordinal">ᵉ</term>
+      <term name="ordinal-01" gender-form="feminine" match="whole-number">ʳᵉ</term>
+      <term name="ordinal-01" gender-form="masculine" match="whole-number">ᵉʳ</term>
+      <!-- LONG ORDINALS -->
+      <term name="long-ordinal-01">premier</term>
+      <term name="long-ordinal-02">deuxième</term>
+      <term name="long-ordinal-03">troisième</term>
+      <term name="long-ordinal-04">quatrième</term>
+      <term name="long-ordinal-05">cinquième</term>
+      <term name="long-ordinal-06">sixième</term>
+      <term name="long-ordinal-07">septième</term>
+      <term name="long-ordinal-08">huitième</term>
+      <term name="long-ordinal-09">neuvième</term>
+      <term name="long-ordinal-10">dixième</term>
     </terms>
   </locale>
   <macro name="SuperMacro">
@@ -29,62 +48,67 @@
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
 
-      <choose>
-        <if is-numeric="volume">
-          <text value="is-numeric: " />
-          <number variable="volume" form="ordinal" />
-        </if>
-        <else>
-          <text value="NOT numeric: " />
-          <text variable="volume" />
-        </else>
-      </choose>
+      <group delimiter=" ">
+        <number variable="edition" form="ordinal" />
+        <label variable="edition" />
+
+        <choose>
+          <if is-numeric="volume">
+            <text value="is-numeric: " />
+            <number variable="volume" form="ordinal" />
+          </if>
+          <else>
+            <text value="NOT numeric: " />
+            <text variable="volume" />
+          </else>
+        </choose>
+      </group>
 
       <!-- <group delimiter=" &#38; " > -->
-      <!--   <choose> -->
-      <!--     <if variable="number" match="none"> -->
-      <!--       <text value="if branch taken" /> -->
-      <!--     </if> -->
-      <!--     <else&#45;if variable="issue"> -->
-      <!--       <text value="else&#45;if branch taken" /> -->
-      <!--     </else&#45;if> -->
-      <!--     <else> -->
-      <!--       <text value="else branch taken" /> -->
-      <!--     </else> -->
-      <!--   </choose> -->
-      <!--   <date variable="issued" delimiter=" "> -->
-      <!--     <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
-      <!--     <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--   </date> -->
-      <!--   <date variable="issued" delimiter="&#45;"> -->
-      <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--     <date&#45;part name="month" form="numeric&#45;leading&#45;zeros" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--     <date&#45;part name="day" form="numeric&#45;leading&#45;zeros" range&#45;delimiter="&#38;#x2013;"/> -->
-      <!--   </date> -->
-      <!--   <group delimiter="&#45;"> -->
-      <!--     <text value="never" /> -->
-      <!--     <text value="stop" /> -->
-      <!--     <text value="never" /> -->
-      <!--     <text value="stopping" /> -->
-      <!--   </group> -->
-      <!-- </group> -->
+        <!--   <choose> -->
+          <!--     <if variable="number" match="none"> -->
+            <!--       <text value="if branch taken" /> -->
+            <!--     </if> -->
+          <!--     <else&#45;if variable="issue"> -->
+            <!--       <text value="else&#45;if branch taken" /> -->
+            <!--     </else&#45;if> -->
+          <!--     <else> -->
+            <!--       <text value="else branch taken" /> -->
+            <!--     </else> -->
+          <!--   </choose> -->
+        <!--   <date variable="issued" delimiter=" "> -->
+          <!--     <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
+          <!--     <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
+          <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+          <!--   </date> -->
+        <!--   <date variable="issued" delimiter="&#45;"> -->
+          <!--     <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+          <!--     <date&#45;part name="month" form="numeric&#45;leading&#45;zeros" range&#45;delimiter=" &#38;#x2013; "/> -->
+          <!--     <date&#45;part name="day" form="numeric&#45;leading&#45;zeros" range&#45;delimiter="&#38;#x2013;"/> -->
+          <!--   </date> -->
+        <!--   <group delimiter="&#45;"> -->
+          <!--     <text value="never" /> -->
+          <!--     <text value="stop" /> -->
+          <!--     <text value="never" /> -->
+          <!--     <text value="stopping" /> -->
+          <!--   </group> -->
+        <!-- </group> -->
       <!-- <group delimiter=", "> -->
-      <!--   <text value="citation" /> -->
-      <!--   <number variable="issue" /> -->
-      <!--   <!&#45;&#45; <names variable="editor"> &#45;&#45;> -->
-      <!--   <!&#45;&#45;   <name name&#38;#45;as&#38;#45;sort&#38;#45;order="all" /> &#45;&#45;> -->
-      <!--   <!&#45;&#45; </names> &#45;&#45;> -->
-      <!--   <choose> -->
-      <!--     <if type="legal_case"> -->
-      <!--       <date variable="issued" delimiter=" "> -->
-      <!--         <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
-      <!--         <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--         <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
-      <!--       </date> -->
-      <!--     </if> -->
-      <!--   </choose> -->
-      <!-- </group> -->
+        <!--   <text value="citation" /> -->
+        <!--   <number variable="issue" /> -->
+        <!--   <!&#45;&#45; <names variable="editor"> &#45;&#45;> -->
+          <!--   <!&#45;&#45;   <name name&#38;#45;as&#38;#45;sort&#38;#45;order="all" /> &#45;&#45;> -->
+          <!--   <!&#45;&#45; </names> &#45;&#45;> -->
+        <!--   <choose> -->
+          <!--     <if type="legal_case"> -->
+            <!--       <date variable="issued" delimiter=" "> -->
+              <!--         <date&#45;part name="day" range&#45;delimiter="&#38;#x2013;"/> -->
+              <!--         <date&#45;part name="month" range&#45;delimiter=" &#38;#x2013; "/> -->
+              <!--         <date&#45;part name="year" range&#45;delimiter=" &#38;#x2013; "/> -->
+              <!--       </date> -->
+            <!--     </if> -->
+          <!--   </choose> -->
+        <!-- </group> -->
     </layout>
   </citation>
 
