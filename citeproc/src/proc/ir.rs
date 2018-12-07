@@ -2,24 +2,24 @@ use crate::output::OutputFormat;
 use crate::style::element::{Choose, Formatting, IndependentDate, Names as NamesEl};
 
 #[derive(Debug)]
-pub enum YearSuffixHook<'s> {
-    Date(&'s IndependentDate),
+pub enum YearSuffixHook<'c> {
+    Date(&'c IndependentDate),
     Explicit(),
 }
 
 // Intermediate Representation
 #[derive(Debug)]
-pub enum IR<'s, O: OutputFormat> {
+pub enum IR<'c, O: OutputFormat> {
     // no (further) disambiguation possible
     Rendered(Option<O::Build>),
     // the name block,
     // the current render
-    Names(&'s NamesEl, O::Build),
+    Names(&'c NamesEl, O::Build),
 
     // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
-    ConditionalDisamb(&'s Choose, Box<IR<'s, O>>),
-    YearSuffix(YearSuffixHook<'s>, O::Build),
+    ConditionalDisamb(&'c Choose, Box<IR<'c, O>>),
+    YearSuffix(YearSuffixHook<'c>, O::Build),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -34,13 +34,13 @@ pub enum IR<'s, O: OutputFormat> {
     //     Rendered(..)
     // ]
     // // TODO: store delimiter and affixes for later
-    Seq(Vec<IR<'s, O>>),
+    Seq(Vec<IR<'c, O>>),
 }
 
-impl<'s, O: OutputFormat> IR<'s, O> {
-    pub fn flatten<'r>(&'s self, fmt: &O) -> O::Build {
+impl<'c, O: OutputFormat> IR<'c, O> {
+    pub fn flatten(&self, fmt: &O) -> O::Build {
         // TODO: change fmt.group to accept iterators instead
-        let seq = |xs: &[IR<'s, O>]| {
+        let seq = |xs: &[IR<'c, O>]| {
             let v: Vec<O::Build> = xs.iter().map(|i| i.flatten(fmt)).collect();
             fmt.group(&v, "", &Formatting::default())
         };

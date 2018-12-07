@@ -312,6 +312,7 @@ pub enum Match {
     Any,
     All,
     None,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Nand,
 }
@@ -713,14 +714,19 @@ pub enum CslType {
     Treaty,
     Webpage,
 
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Classic,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Gazette,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Hearing,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Regulation,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Video,
 }

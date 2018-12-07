@@ -70,6 +70,7 @@ pub enum Variable {
     /// geographic location of the archive,
     ArchivePlace,
     /// issuing or judicial authority (e.g. “USPTO” for a patent, “Fairfax Circuit Court” for a legal case)
+    /// CSL-M only
     #[strum(props(csl101 = "1", cslM = "0"))]
     Authority,
     /// active={true} call number (to locate the item in a library)
@@ -150,14 +151,20 @@ pub enum Variable {
     YearSuffix,
 
     // CSL-M Additions
+
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Hereinafter,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     AvailableDate,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Dummy,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     LocatorExtra,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     VolumeTitle,
 }
@@ -185,12 +192,15 @@ pub enum NumberVariable {
     /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
     PageFirst,
 
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     PublicationNumber,
 
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Supplement,
 
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Authority,
 }
@@ -241,8 +251,10 @@ pub enum DateVariable {
     OriginalDate,
     /// date the item (e.g. a manuscript) has been submitted for publication
     Submitted,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     LocatorDate,
+    /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     PublicationDate,
 }

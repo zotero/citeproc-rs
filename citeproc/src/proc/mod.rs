@@ -32,6 +32,8 @@ pub trait Proc<'c, 'r: 'c, 'ci: 'c, O>
 where
     O: OutputFormat,
 {
+    /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
+    /// often borrow from self to be recomputed during disambiguation.
     fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
 }
 

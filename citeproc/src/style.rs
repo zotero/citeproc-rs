@@ -472,7 +472,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Choose(Choose(_if, elseifs, else_block)))
 }
 
-fn max1_child<'s, T: FromNode>(
+fn max1_child<T: FromNode>(
     parent_tag: &str,
     child_tag: &str,
     els: Children,
@@ -512,7 +512,7 @@ impl FromNode for TextCase {
     }
 }
 
-fn disallow_default<'s, T: Default + FromNode + IsOnNode>(
+fn disallow_default<T: Default + FromNode + IsOnNode>(
     node: &Node,
     disallow: bool,
 ) -> Result<T, CslError> {
