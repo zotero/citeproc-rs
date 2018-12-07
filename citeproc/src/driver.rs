@@ -65,7 +65,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn bench_intermediate<'s: 'c>(&'s self, b: &mut test::Bencher, refr: &Reference) {
+    pub fn bench_intermediate(&self, b: &mut test::Bencher, refr: &Reference) {
         let mut ctx = CiteContext {
             style: &self.style,
             reference: refr,

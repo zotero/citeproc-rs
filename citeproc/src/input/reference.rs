@@ -6,7 +6,7 @@ use super::date::DateOrRange;
 use super::names::Name;
 use super::numeric::NumericValue;
 use crate::style::element::CslType;
-use crate::style::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
+use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable};
 use fnv::FnvHashMap;
 
 // We're saving copies and allocations by not using String here.
@@ -33,15 +33,6 @@ impl<'r> Reference<'r> {
             number: FnvHashMap::default(),
             name: FnvHashMap::default(),
             date: FnvHashMap::default(),
-        }
-    }
-
-    pub fn has_variable(&self, var: &AnyVariable) -> bool {
-        match *var {
-            AnyVariable::Ordinary(ref v) => self.ordinary.contains_key(v),
-            AnyVariable::Number(ref v) => self.number.contains_key(v),
-            AnyVariable::Name(ref v) => self.name.contains_key(v),
-            AnyVariable::Date(ref v) => self.date.contains_key(v),
         }
     }
 }

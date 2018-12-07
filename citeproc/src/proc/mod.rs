@@ -1,5 +1,6 @@
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting, Layout as LayoutEl, Style};
+use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 
 mod choose;
@@ -95,47 +96,56 @@ where
                         .ordinary
                         .get(v)
                         .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
-                    StandardVariable::Number(ref v) => {
-                        ctx.reference.number.get(v).map(
-                            |val| fmt.affixed(&val.to_string(), &f, &af)
-                        )
-                    }
+                    StandardVariable::Number(ref v) => ctx
+                        .reference
+                        .number
+                        .get(v)
+                        .map(|val| fmt.affixed(&val.to_string(), &f, &af)),
                 };
                 IR::Rendered(content)
             }
 
-            Element::Term(ref term_selector, ref f, ref af, ref _pl) => {
-                IR::Rendered(Some(fmt.group(
-                    &[
-                        fmt.plain(&af.prefix),
-                        fmt.text_node(&format!("(term {:?})", term_selector), &f),
-                        fmt.plain(&af.suffix),
-                    ],
-                    "",
-                    &null_f,
-                )))
+            Element::Term(ref term_selector, ref f, ref af, pl) => {
+                let content = ctx
+                    .style
+                    .locale_overrides
+                    // TODO: support multiple locales!
+                    .get("en-GB")
+                    .unwrap()
+                    .get_text_term(term_selector, pl)
+                    .map(|val| fmt.affixed(val, &f, &af));
+                IR::Rendered(content)
             }
 
-            Element::Label(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(Some(fmt.group(
-                    &[
-                        fmt.plain(&af.prefix),
-                        fmt.text_node(&format!("(label {})", var.as_ref()), &f),
-                        fmt.plain(&af.suffix),
-                    ],
-                    "",
-                    &null_f,
-                )))
+            Element::Label(ref var, ref form, ref f, ref af, ref pl) => {
+                use crate::style::element::Plural;
+                let selector =
+                    GenderedTermSelector::from_number_variable(&ctx.cite.locator_type, var, form);
+                let num_val = ctx.get_number(var);
+                let plural = match (num_val, pl) {
+                    (None, _) => None,
+                    (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
+                    (Some(_), Plural::Always) => Some(true),
+                    (Some(_), Plural::Never) => Some(false),
+                };
+                let content = plural.and_then(|p| {
+                    selector.and_then(|sel| {
+                        ctx.style
+                            .locale_overrides
+                            // TODO: support multiple locales!
+                            .get("en-GB")
+                            .unwrap()
+                            .get_text_term(&TextTermSelector::Gendered(sel), p)
+                            .map(|val| fmt.affixed(val, &f, &af))
+                    })
+                });
+                IR::Rendered(content)
             }
 
-            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(ctx.reference.number.get(&var).map(
-                    |val| fmt.affixed(&val.to_string(), &f, &af), /*match *val {
-                                                                      Ok(int) => fmt.affixed(&format!("{}", int), &f, &af),
-                                                                      Err(st) => fmt.affixed(&format!("{}", st), &f, &af),
-                                                                  }*/
-                ))
-            }
+            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => IR::Rendered(
+                ctx.get_number(var)
+                    .map(|val| fmt.affixed(&val.to_string(), &f, &af)),
+            ),
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
 

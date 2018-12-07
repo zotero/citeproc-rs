@@ -1,7 +1,6 @@
 use super::locale::Locale;
 use super::terms::{RoleTermForm, TermForm, TextTermSelector};
 use crate::style::error::*;
-use crate::style::get_attribute::{GetAttribute, CSL_VERSION};
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 use std::fmt;
@@ -20,7 +19,7 @@ pub enum Element {
     // <cs:term>
     Term(TextTermSelector, Formatting, Affixes, bool), // bool is plural
     // <cs:label>
-    Label(LabelVariable, TermForm, Formatting, Affixes, Plural),
+    Label(NumberVariable, TermForm, Formatting, Affixes, Plural),
     // <cs:number>
     Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
     // <cs:names>
@@ -276,39 +275,10 @@ pub enum Plural {
     Always,
     Never,
 }
+
 impl Default for Plural {
     fn default() -> Self {
         Plural::Contextual
-    }
-}
-
-#[derive(Debug, EnumProperty, Eq, Clone, PartialEq)]
-pub enum LabelVariable {
-    Locator,
-    Page,
-    Number(NumberVariable),
-}
-
-impl FromStr for LabelVariable {
-    type Err = UnknownAttributeValue;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use self::LabelVariable::*;
-        match s {
-            "locator" => Ok(Locator),
-            "page" => Ok(Page),
-            x => Ok(Number(NumberVariable::get_attr(x, CSL_VERSION)?)),
-        }
-    }
-}
-
-impl AsRef<str> for LabelVariable {
-    fn as_ref(&self) -> &str {
-        use self::LabelVariable::*;
-        match *self {
-            Locator => "locator",
-            Page => "page",
-            Number(ref n) => n.as_ref(),
-        }
     }
 }
 

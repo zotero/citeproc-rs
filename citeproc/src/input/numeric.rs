@@ -12,6 +12,15 @@ pub enum NumericToken<'r> {
 
 use self::NumericToken::*;
 
+impl NumericToken<'_> {
+    fn get_num(&self) -> Option<u32> {
+        match *self {
+            Num(u) => Some(u),
+            _ => None,
+        }
+    }
+}
+
 fn tokens_to_string(ts: &[NumericToken]) -> String {
     let mut s = String::with_capacity(ts.len());
     for t in ts {
@@ -37,19 +46,19 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 ///
 /// We parse:
 ///
-/// ```
+/// ```text
 /// "2, 4"         => Tokens([Num(2), Comma, Num(4)])
 /// "2-4, 5"       => Tokens([Num(2), Hyphen, Num(4), Comma, Num(5)])
 /// "2 -4    , 5"  => Tokens([Num(2), Hyphen, Num(4), Comma, Num(5)])
-/// "2nd"          => Tokens([Aff("",  2, "nd")])
-/// "L2"           => Tokens([Aff("L", 2, "")])
-/// "L2tp"         => Tokens([Aff("L", 2, "tp")])
-/// "2nd-4th"      => Tokens([Aff("",  2, "nd"), Hyphen, Aff("", 4, "th")])
+/// "2nd"          => Tokens([Affixed("2nd")])
+/// "L2"           => Tokens([Affixed("L2")])
+/// "L2tp"         => Tokens([Affixed("L2tp")])
+/// "2nd-4th"      => Tokens([Affixed("2nd"), Hyphen, Affixed("4th")])
 /// ```
 ///
 /// We don't parse:
 ///
-/// ```
+/// ```text
 /// "2nd edition"  => Err("edition") -> not numeric -> Str("2nd edition")
 /// "-5"           => Err("-5") -> not numeric -> Str("-5")
 /// "5,,7"         => Err(",7") -> not numeric -> Str("5,,7")
@@ -72,9 +81,33 @@ impl<'r> NumericValue<'r> {
     pub fn num(i: u32) -> Self {
         NumericValue::Tokens(vec![Num(i)])
     }
+    pub fn page_first(&self) -> Option<NumericValue<'r>> {
+        self.first_num().map(|n| NumericValue::num(n))
+    }
+    fn first_num(&self) -> Option<u32> {
+        match *self {
+            NumericValue::Tokens(ref ts) => ts.iter().nth(0).and_then(|token| token.get_num()),
+            NumericValue::Str(_) => None,
+        }
+    }
     pub fn is_numeric(&self) -> bool {
         match *self {
             NumericValue::Tokens(_) => true,
+            NumericValue::Str(_) => false,
+        }
+    }
+    pub fn is_multiple(&self) -> bool {
+        match *self {
+            NumericValue::Tokens(ref ts) => ts.len() > 1,
+
+            // TODO: fallback interpretation of "multiple" to include unparsed numerics that have
+            // multiple numbers etc
+            //
+            // “contextual” - (default), the term plurality matches that of the variable content.
+            // Content is considered plural when it contains multiple numbers (e.g. “page 1”,
+            // “pages 1-3”, “volume 2”, “volumes 2 & 4”), or, in the case of the “number-of-pages”
+            // and “number-of-volumes” variables, when the number is higher than 1 (“1 volume” and
+            // “3 volumes”).
             NumericValue::Str(_) => false,
         }
     }
@@ -120,7 +153,7 @@ named!(suffix1<CompleteStr, NumericToken>,
 );
 
 // Try to parse affixed versions first, because
-// 2b => Aff("", 2, "b")
+// 2b => Affixed("", 2, "b")
 // not   Num(2), Err("b")
 named!(num_ish<CompleteStr, NumericToken>,
        alt!(call!(prefix1) | call!(suffix1) | call!(num)));
@@ -196,5 +229,13 @@ fn test_numeric_value() {
     assert_eq!(
         NumericValue::from("2 - 5, 9, edition"),
         NumericValue::Str("2 - 5, 9, edition")
+    );
+}
+
+#[test]
+fn test_page_first() {
+    assert_eq!(
+        NumericValue::from("2-5, 9").page_first().unwrap(),
+        NumericValue::Tokens(vec![Num(2)])
     );
 }

@@ -164,28 +164,36 @@ impl FromNode for TextTermSelector {
         // we already know term is on there
         let t = attribute_required(node, "term")?;
         match t {
-            Edition => Ok(TextTermSelector::Gendered(
-                GenderedTermSelector::Edition(TermForm::from_node(node)?)
-            )),
-            Month(t) => Ok(TextTermSelector::Gendered(
-                GenderedTermSelector::Month(t, TermForm::from_node(node)?)
-            )),
-            Loc(t) => Ok(TextTermSelector::Gendered(
-                GenderedTermSelector::Locator(t, TermForm::from_node(node)?)
-            )),
-            Misc(t) => Ok(TextTermSelector::Simple(
-                SimpleTermSelector::Misc(t, TermForm::from_node(node)?)
-            )),
-            Season(t) => Ok(TextTermSelector::Simple(
-                SimpleTermSelector::Season(t, TermForm::from_node(node)?)
-            )),
-            Quote(t) => Ok(TextTermSelector::Simple(
-                SimpleTermSelector::Quote(t, TermForm::from_node(node)?)
-            )),
-            Role(t) => Ok(TextTermSelector::Role(
-                RoleTermSelector(t, RoleTermForm::from_node(node)?)
-            )),
-            Ordinal(t) => Err(InvalidCsl::new(node, "you cannot render an ordinal term directly").into()),
+            Edition => Ok(TextTermSelector::Gendered(GenderedTermSelector::Edition(
+                TermForm::from_node(node)?,
+            ))),
+            Month(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Month(
+                t,
+                TermForm::from_node(node)?,
+            ))),
+            Loc(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Locator(
+                t,
+                TermForm::from_node(node)?,
+            ))),
+            Misc(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Misc(
+                t,
+                TermForm::from_node(node)?,
+            ))),
+            Season(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Season(
+                t,
+                TermForm::from_node(node)?,
+            ))),
+            Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(
+                t,
+                TermForm::from_node(node)?,
+            ))),
+            Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
+                t,
+                RoleTermForm::from_node(node)?,
+            ))),
+            Ordinal(_) => {
+                Err(InvalidCsl::new(node, "you cannot render an ordinal term directly").into())
+            }
         }
     }
 }

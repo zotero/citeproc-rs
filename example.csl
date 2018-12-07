@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only" default-locale="en-GB">
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.1mlz1" demote-non-dropping-particle="sort-only" default-locale="en-GB">
   <info>
     <title>citeproc-rs test file</title>
     <title-short>citeproc-rs</title-short>
@@ -17,12 +17,12 @@
     <updated>2018-09-03T17:14:48+00:00</updated>
     <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
   </info>
-  <locale>
+  <locale xml:lang="en-GB">
     <terms>
       <term name="et-al">et al</term>
       <term name="edition" gender="feminine">
         <single>edition</single>
-        <multiple>edition</multiple>
+        <multiple>editions</multiple>
       </term>
       <!-- ORDINALS -->
       <term name="ordinal">ᵉ</term>
@@ -50,17 +50,19 @@
 
       <group delimiter=" ">
         <number variable="edition" form="ordinal" />
-        <label variable="edition" />
-        <text term="edition" />
+        <label variable="edition" plural="contextual" />
+        <!-- <text term="edition" /> -->
+
+        <!-- <label variable="page" /> -->
 
         <choose>
-          <if is-numeric="volume">
+          <if is-numeric="page-first">
             <text value="is-numeric: " />
-            <number variable="volume" form="ordinal" />
+            <number variable="page-first" form="ordinal" />
           </if>
           <else>
             <text value="NOT numeric: " />
-            <text variable="volume" />
+            <text variable="page-first" />
           </else>
         </choose>
       </group>

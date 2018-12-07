@@ -16,6 +16,16 @@ pub struct Locale {
     pub dates: Vec<LocaleDate>,
 }
 
+impl Locale {
+    pub fn get_text_term<'l>(&'l self, sel: &TextTermSelector, plural: bool) -> Option<&'l str> {
+        use crate::style::terms::TextTermSelector::*;
+        match *sel {
+            Simple(ref ts) => self.simple_terms.get(ts).and_then(|r| r.get(plural)),
+            Gendered(ref ts) => self.gendered_terms.get(ts).and_then(|r| r.0.get(plural)),
+            Role(ref ts) => self.role_terms.get(ts).and_then(|r| r.get(plural)),
+        }
+    }
+}
 // pub fn merge_locales<'d, 'l: 'd>(_base: Locale<'d>, locales: Vec<Locale<'l>>) -> Vec<Locale<'l>> {
 //     locales
 // }

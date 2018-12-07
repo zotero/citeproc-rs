@@ -32,26 +32,49 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
         use crate::style::variables::AnyVariable::*;
         match *var {
             // TODO: finish this list
-            Ordinary(Variable::Locator) => self.cite.locator.is_some(),
             Number(NumberVariable::Locator) => self.cite.locator.is_some(),
+            // we need Page to exist and be numeric
+            Number(NumberVariable::PageFirst) => self.is_numeric(&NumberVariable::PageFirst),
             _ => self.reference.has_variable(var),
         }
     }
+
+    /// Tests whether a variable is numeric.
+    ///
+    /// There are a few deviations in other implementations, notably:
+    ///
+    /// * `citeproc-js` always returns `false` for "page-first", even if "page" is numeric
     pub fn is_numeric(&self, var: &NumberVariable) -> bool {
+        self.get_number(var)
+            .map(|r| r.is_numeric())
+            .unwrap_or(false)
+    }
+    pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue<'c>> {
         match var {
             // TODO: finish this list
-            NumberVariable::Locator => self
-                .cite
-                .locator
-                .as_ref()
-                .map(|r| r.is_numeric())
-                .unwrap_or(false),
-            _ => self
+            NumberVariable::Locator => self.cite.locator.clone(),
+            NumberVariable::PageFirst => self
                 .reference
                 .number
-                .get(var)
-                .map(|v| v.is_numeric())
-                .unwrap_or(false),
+                .get(&NumberVariable::Page)
+                .and_then(|pp| pp.page_first())
+                .clone(),
+            _ => self.reference.number.get(var).cloned(),
+        }
+    }
+}
+
+impl<'r> Reference<'r> {
+
+    // Implemented here privately so we don't use it by mistake.
+    // It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
+    // testing variables that only exist on the Cite.
+    fn has_variable(&self, var: &AnyVariable) -> bool {
+        match *var {
+            AnyVariable::Ordinary(ref v) => self.ordinary.contains_key(v),
+            AnyVariable::Number(ref v) => self.number.contains_key(v),
+            AnyVariable::Name(ref v) => self.name.contains_key(v),
+            AnyVariable::Date(ref v) => self.date.contains_key(v),
         }
     }
 }

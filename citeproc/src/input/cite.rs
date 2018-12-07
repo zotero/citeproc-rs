@@ -10,7 +10,7 @@ pub struct Cite<'ci, O: OutputFormat> {
     pub id: &'ci str,
     pub prefix: O::Output,
     pub suffix: O::Output,
-    pub label: LocatorType,
+    pub locator_type: Option<LocatorType>,
 
     // TODO: gotta be careful not to look up locators in the hashmap, even though
     // they are 'variables'.
@@ -38,8 +38,8 @@ impl<'r, O: OutputFormat> Cite<'r, O> {
             id: id,
             prefix: prefix.clone(),
             suffix: prefix.clone(),
-            label: LocatorType::Page,
             locator: None,
+            locator_type: None,
             locator_extra: None,
             locator_date: None,
             near_note: false,

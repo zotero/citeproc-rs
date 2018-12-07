@@ -2,6 +2,7 @@ use crate::style::error::*;
 use fnv::FnvHashMap;
 
 use super::get_attribute::GetAttribute;
+use super::variables::NumberVariable;
 use nom::types::CompleteStr;
 use std::str::FromStr;
 
@@ -73,6 +74,23 @@ pub enum GenderedTermSelector {
     Month(MonthTerm, TermForm),
 }
 
+impl GenderedTermSelector {
+    pub fn from_number_variable(
+        loc_type: &Option<LocatorType>,
+        var: &NumberVariable,
+        form: &TermForm,
+    ) -> Option<GenderedTermSelector> {
+        match *var {
+            NumberVariable::Locator => match *loc_type {
+                None => None,
+                Some(ref l) => Some(GenderedTermSelector::Locator(l.clone(), form.clone())),
+            },
+            NumberVariable::Edition => Some(GenderedTermSelector::Edition(form.clone())),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RoleTermSelector(pub RoleTerm, pub RoleTermForm);
 
@@ -123,9 +141,28 @@ pub enum TermPlurality {
 }
 
 impl TermPlurality {
-    pub fn no_plural_allowed(self) -> Option<String> {
+    pub fn get(&self, plural: bool) -> Option<&str> {
+        if plural {
+            self.plural()
+        } else {
+            self.singular()
+        }
+    }
+    pub fn plural(&self) -> Option<&str> {
         match self {
-            TermPlurality::Always(s) => Some(s),
+            TermPlurality::Always(s) => Some(&s),
+            TermPlurality::Pluralized { multiple, .. } => Some(&multiple),
+        }
+    }
+    pub fn singular(&self) -> Option<&str> {
+        match self {
+            TermPlurality::Always(s) => Some(&s),
+            TermPlurality::Pluralized { single, .. } => Some(&single),
+        }
+    }
+    pub fn no_plural_allowed(&self) -> Option<&str> {
+        match self {
+            TermPlurality::Always(s) => Some(&s),
             _ => None,
         }
     }

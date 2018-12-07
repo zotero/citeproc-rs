@@ -105,9 +105,6 @@ pub enum Variable {
     Jurisdiction,
     /// keyword(s) or tag(s) attached to the item
     Keyword,
-    /// a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
-    #[strum(props(csl101 = "1", cslM = "0"))]
-    Locator,
     /// medium description (e.g. “CD”, “DVD”, etc.)
     Medium,
     /// (short) inline note giving additional item details (e.g. a concise summary or commentary)
@@ -118,12 +115,6 @@ pub enum Variable {
     OriginalPublisherPlace,
     /// title of the original version (e.g. “Война и мир”, the untranslated Russian title of “War and Peace”)
     OriginalTitle,
-    /// range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-    #[strum(props(csl101 = "1", cslM = "0"))]
-    Page,
-    /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
-    #[strum(props(csl101 = "1", cslM = "0"))]
-    PageFirst,
     /// PubMed Central reference number
     #[strum(serialize = "PMCID")]
     PMCID,
@@ -183,11 +174,15 @@ pub enum NumberVariable {
     NumberOfVolumes,
     Volume,
 
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    /// Locator, Page and PageFirst: These three are technically meant to be standard variables in CSL 1.0.1, but the spec
+    /// requires us to treat them as numerics for `<label plural="contextual">` anyway.
+    ///
+    /// a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
     Locator,
-    #[strum(props(csl101 = "0", cslM = "1"))]
+
+    /// range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
     Page,
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
     PageFirst,
 
     #[strum(props(csl101 = "0", cslM = "1"))]
