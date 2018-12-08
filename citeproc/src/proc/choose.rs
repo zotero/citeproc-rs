@@ -10,7 +10,7 @@ where
     O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Choose"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -68,7 +68,7 @@ struct BranchEval<'a, O: OutputFormat> {
 #[cfg_attr(feature = "flame_it", flame)]
 fn eval_ifthen<'c, 'r, 'ci, O>(
     branch: &'c IfThen,
-    ctx: &mut CiteContext<'c, 'r, 'ci, O>,
+    ctx: &CiteContext<'c, 'r, 'ci, O>,
 ) -> BranchEval<'c, O>
 where
     O: OutputFormat,
@@ -90,7 +90,7 @@ where
 #[cfg_attr(feature = "flame_it", flame)]
 fn eval_conditions<'c, 'r: 'c, 'ci, O>(
     conditions: &'c Conditions,
-    ctx: &mut CiteContext<'c, 'r, 'ci, O>,
+    ctx: &CiteContext<'c, 'r, 'ci, O>,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -103,7 +103,7 @@ where
 }
 
 #[cfg_attr(feature = "flame_it", flame)]
-fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> bool
+fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &CiteContext<'c, 'r, 'ci, O>) -> bool
 where
     O: OutputFormat,
 {

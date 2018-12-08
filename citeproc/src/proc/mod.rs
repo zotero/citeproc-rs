@@ -34,7 +34,7 @@ where
 {
     /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
     /// often borrow from self to be recomputed during disambiguation.
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
 }
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
@@ -42,7 +42,7 @@ where
     O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Style"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
         layout.intermediate(ctx)
@@ -55,7 +55,7 @@ where
     O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Layout"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         sequence(ctx, &self.formatting, &self.delimiter.0, &self.elements)
     }
 }
@@ -65,7 +65,7 @@ where
     O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Element"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let fmt = ctx.format;
         let null_f = Formatting::default();
         match *self {
@@ -81,15 +81,7 @@ where
                 sequence(ctx, &f, "", &macro_unsafe)
             }
 
-            Element::Const(ref val, ref f, ref af, ref _quo) => IR::Rendered(Some(fmt.group(
-                &[
-                    fmt.plain(&af.prefix),
-                    fmt.text_node(&val, &f),
-                    fmt.plain(&af.suffix),
-                ],
-                "",
-                &null_f,
-            ))),
+            Element::Const(ref val, ref f, ref af, ref _quo) => IR::Rendered(Some(fmt.affixed(val.clone(), &f, &af))),
 
             Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
                 let content = match *var {
@@ -97,12 +89,12 @@ where
                         .reference
                         .ordinary
                         .get(v)
-                        .map(|val| fmt.affixed(&format!("{}", val), &f, &af)),
+                        .map(|val| fmt.affixed(format!("{}", val), &f, &af)),
                     StandardVariable::Number(ref v) => ctx
                         .reference
                         .number
                         .get(v)
-                        .map(|val| fmt.affixed(&val.to_string(), &f, &af)),
+                        .map(|val| fmt.affixed(val.to_string(), &f, &af)),
                 };
                 IR::Rendered(content)
             }
@@ -115,7 +107,7 @@ where
                     .get("en-GB")
                     .unwrap()
                     .get_text_term(term_selector, pl)
-                    .map(|val| fmt.affixed(val, &f, &af));
+                    .map(|val| fmt.affixed(val.to_owned(), &f, &af));
                 IR::Rendered(content)
             }
 
@@ -138,7 +130,7 @@ where
                             .get("en-GB")
                             .unwrap()
                             .get_text_term(&TextTermSelector::Gendered(sel), p)
-                            .map(|val| fmt.affixed(val, &f, &af))
+                            .map(|val| fmt.affixed(val.to_owned(), &f, &af))
                     })
                 });
                 IR::Rendered(content)
@@ -146,7 +138,7 @@ where
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => IR::Rendered(
                 ctx.get_number(var)
-                    .map(|val| fmt.affixed(&val.to_string(), &f, &af)),
+                    .map(|val| fmt.affixed(val.to_string(), &f, &af)),
             ),
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),

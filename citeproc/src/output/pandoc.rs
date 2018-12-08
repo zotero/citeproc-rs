@@ -16,6 +16,12 @@ impl Pandoc {
         Pandoc {}
     }
 
+    /// Wrap some nodes with formatting
+    ///
+    /// In pandoc, Emph, Strong and SmallCaps, Superscript and Subscript are all single-use styling
+    /// elements. So formatting with two of those styles at once requires wrapping twice, in any
+    /// order.
+
     fn fmt_vec(&self, inlines: &[Inline], f: &Formatting) -> Option<Inline> {
         let mut current = None;
 
@@ -32,7 +38,6 @@ impl Pandoc {
             FontStyle::Italic | FontStyle::Oblique => maybe(current).map(Emph),
             _ => current,
         };
-
         current = match f.font_weight {
             FontWeight::Bold => maybe(current).map(Strong),
             // Light => unimplemented!(),
@@ -60,7 +65,7 @@ impl OutputFormat for Pandoc {
     type Build = Vec<Inline>;
     type Output = Vec<Inline>;
 
-    fn text_node(&self, text: &str, f: &Formatting) -> Vec<Inline> {
+    fn text_node(&self, text: String, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
         let v: Vec<Inline> = fmts
@@ -73,10 +78,11 @@ impl OutputFormat for Pandoc {
             .collect();
 
         self.fmt_vec(&v, f).map(|x| vec![x]).unwrap_or(v)
+
     }
 
     fn group(&self, nodes: &[Vec<Inline>], d: &str, f: &Formatting) -> Vec<Inline> {
-        let delim = self.text_node(d, &Formatting::default());
+        let delim = self.plain(d);
         let joined = nodes.join_many(&delim);
         self.fmt_vec(&joined, f)
             .map(|single| vec![single])
@@ -210,7 +216,7 @@ mod test {
     fn test_flip_emph() {
         let f = Pandoc::new();
         let a = f.plain("normal");
-        let b = f.text_node("emph", &Formatting::italic());
+        let b = f.text_node("emph".into(), &Formatting::italic());
         let c = f.plain("normal");
         let group = f.group(&[a, b, c], " ", &Formatting::italic());
         let out = f.output(group.clone());

@@ -48,7 +48,12 @@
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
 
-      <group delimiter=" ">
+      <group delimiter=" | " prefix="{" suffix="}" >
+        <group delimiter=" + " prefix="(" suffix=")">
+          <text value="noice" />
+          <text value="goin" />
+          <text variable="container-title" />
+        </group>
         <number variable="edition" form="ordinal" />
         <label variable="edition" plural="contextual" />
         <!-- <text term="edition" /> -->

@@ -88,8 +88,8 @@ impl<'a> From<&'a Formatting> for MarkdownFormatting {
 }
 
 impl OutputFormat<MarkdownNode, String> for Markdown {
-    fn text_node(&self, s: &str, formatting: &Formatting) -> MarkdownNode {
-        MarkdownNode::Text(s.to_owned(), formatting.into())
+    fn text_node(&self, s: String, formatting: &Formatting) -> MarkdownNode {
+        MarkdownNode::Text(s, formatting.into())
     }
 
     fn group(
@@ -98,7 +98,7 @@ impl OutputFormat<MarkdownNode, String> for Markdown {
         delimiter: &str,
         formatting: &Formatting,
     ) -> MarkdownNode {
-        let delim = self.text_node(delimiter, &Formatting::default());
+        let delim = self.plain(delimiter);
         MarkdownNode::Group(nodes.intercalate(&delim), formatting.into())
     }
 

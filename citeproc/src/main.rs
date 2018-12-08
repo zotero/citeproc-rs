@@ -80,7 +80,7 @@ fn main() {
             );
 
             // driver.dump_style();
-            // driver.dump_ir(&refr);
+            driver.dump_ir(&refr);
 
             let serialized = driver.single(&refr);
 

@@ -42,7 +42,7 @@ const MONTHS_LONG: &'static [&'static str] = &[
 impl DatePart {
     fn render<'c, 'r, 'ci, O: OutputFormat>(
         &self,
-        ctx: &mut CiteContext<'c, 'r, 'ci, O>,
+        ctx: &CiteContext<'c, 'r, 'ci, O>,
         date: &Date,
     ) -> O::Build {
         let string = match self.form {
@@ -64,7 +64,7 @@ impl DatePart {
                 DayForm::Ordinal => format!("{:02}", date.day),
             },
         };
-        ctx.format.affixed(&string, &self.formatting, &self.affixes)
+        ctx.format.affixed(string, &self.formatting, &self.affixes)
     }
 }
 
@@ -73,7 +73,7 @@ where
     O: OutputFormat,
 {
     #[cfg_attr(feature = "flame_it", flame("Date"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -103,7 +103,7 @@ where
                 )
 
                 // let string = format!("{}-{}-{}", val.year, val.month, val.day);
-                // fmt.affixed(&string, &self.formatting, &self.affixes)
+                // fmt.affixed(string, &self.formatting, &self.affixes)
             });
         IR::Rendered(content)
     }

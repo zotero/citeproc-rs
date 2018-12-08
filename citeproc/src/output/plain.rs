@@ -13,8 +13,8 @@ impl OutputFormat for PlainText {
     type Build = String;
     type Output = String;
     #[cfg_attr(feature = "flame_it", flame("PlainText"))]
-    fn text_node(&self, s: &str, _: &Formatting) -> Self::Build {
-        s.to_owned()
+    fn text_node(&self, s: String, _: &Formatting) -> Self::Build {
+        s
     }
     #[cfg_attr(feature = "flame_it", flame("PlainText"))]
     fn group(&self, nodes: &[Self::Build], delim: &str, _: &Formatting) -> Self::Build {

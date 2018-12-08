@@ -1,6 +1,7 @@
 mod pandoc;
 // mod markdown;
 mod plain;
+use std::marker::{Send, Sync};
 
 pub use self::pandoc::Pandoc;
 pub use self::plain::PlainText;
@@ -16,15 +17,17 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat {
-    type Build: std::fmt::Debug + Clone;
-    type Output: Serialize + Clone;
+pub trait OutputFormat : Send + Sync {
+    type Build: std::fmt::Debug + Default + Clone + Send + Sync;
+    type Output: Serialize + Clone + Send + Sync;
 
     /// Affixes are not included in the formatting on a text node.
     /// They are converted into text nodes themselves, with Formatting::default() passed.
     ///
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
-    fn text_node(&self, s: &str, formatting: &Formatting) -> Self::Build;
+
+    // TODO: make formatting an Option<&Formatting>
+    fn text_node(&self, s: String, formatting: &Formatting) -> Self::Build;
 
     fn group(&self, nodes: &[Self::Build], delimiter: &str, formatting: &Formatting)
         -> Self::Build;
@@ -32,21 +35,35 @@ pub trait OutputFormat {
 
     #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
     fn plain(&self, s: &str) -> Self::Build {
-        self.text_node(s, &Formatting::default())
+        self.text_node(s.to_owned(), &Formatting::default())
     }
 
     #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
-    fn affixed(&self, s: &str, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+    fn affixed(&self, s: String, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+        let pre = affixes.prefix.is_empty();
+        let suf = affixes.suffix.is_empty();
         let null_f = Formatting::default();
-        self.group(
-            &[
-                self.text_node(&affixes.prefix, &null_f),
-                self.text_node(s, format_inner),
-                self.text_node(&affixes.suffix, &null_f),
-            ],
-            "",
-            &null_f,
-        )
+        match (pre, suf) {
+            (false, false) => self.text_node(s, format_inner),
+            (false, true) => self.group(&[
+                    self.text_node(s, format_inner),
+                    self.text_node(affixes.suffix.to_owned(), &null_f),
+                ],
+                "", &null_f),
+
+            (true, false) => self.group(&[
+                    self.text_node(affixes.prefix.to_owned(), &null_f),
+                    self.text_node(s, format_inner),
+                ],
+                "", &null_f),
+
+            (true, true) => self.group(&[
+                    self.text_node(affixes.prefix.to_owned(), &null_f),
+                    self.text_node(s, format_inner),
+                    self.text_node(affixes.suffix.to_owned(), &null_f),
+                ],
+                "", &null_f),
+        }
     }
 }
 
@@ -69,10 +86,10 @@ mod test {
     // }
 
     #[test]
-    fn plain() {
+    fn test_plain() {
         let f = PlainText::new();
-        let o = f.text_node("hi", &Formatting::italic());
-        let o2 = f.text_node("mom", &Formatting::default());
+        let o = f.text_node("hi".into(), &Formatting::italic());
+        let o2 = f.text_node("mom".into(), &Formatting::default());
         let o3 = f.group(&[o, o2], " ", &Formatting::italic());
         let serialized = serde_json::to_string(&o3).unwrap();
         assert_eq!(serialized, "\"hi mom\"");

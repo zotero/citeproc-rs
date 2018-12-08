@@ -17,7 +17,7 @@ impl NameEl {
     }
     fn render<'c, 'r, O: OutputFormat>(
         &self,
-        ctx: &mut CiteContext<'c, 'r, 'ci, O>,
+        ctx: &CiteContext<'c, 'r, 'ci, O>,
         var: &NameVariable<'r>,
     ) -> O::Build {
         let names = 
@@ -45,7 +45,7 @@ impl NameEl {
                 DayForm::Ordinal => format!("{:02}", date.day),
             },
         };
-        ctx.format.affixed(&string, &self.formatting, &self.affixes)
+        ctx.format.affixed(string, &self.formatting, &self.affixes)
     }
 }
 
@@ -54,7 +54,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for IndependentDate
         O: OutputFormat
 {
     #[cfg_attr(feature = "flame_it", flame("Date"))]
-    fn intermediate<'s: 'c>(&'s self, ctx: &mut CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -84,7 +84,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for IndependentDate
                 )
 
                 // let string = format!("{}-{}-{}", val.year, val.month, val.day);
-                // fmt.affixed(&string, &self.formatting, &self.affixes)
+                // fmt.affixed(string, &self.formatting, &self.affixes)
             });
         IR::Rendered(content)
     }

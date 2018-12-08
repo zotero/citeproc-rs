@@ -12,6 +12,7 @@ use crate::style::variables::*;
 /// [Reference]: ../input/struct.Reference.html
 /// [Cite]: ../input/struct.Cite.html
 
+#[derive(Clone)]
 pub struct CiteContext<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
     pub style: &'c Style,
     pub reference: &'c Reference<'r>,
