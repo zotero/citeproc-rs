@@ -1,5 +1,4 @@
 #![feature(test)]
-#![cfg_attr(feature = "flame_it", feature(proc_macro_hygiene))]
 
 extern crate cfg_if;
 use cfg_if::cfg_if;
@@ -10,12 +9,6 @@ cfg_if! {
         static A: System = System;
     }
 }
-
-#[cfg(feature = "flame_it")]
-extern crate flame;
-#[cfg(feature = "flame_it")]
-#[macro_use]
-extern crate flamer;
 
 #[macro_use]
 extern crate nom;
@@ -30,12 +23,8 @@ pub mod style;
 pub use self::driver::Driver;
 mod utils;
 
-#[cfg(feature = "flame_it")]
-mod flame_span;
-
 pub use self::style::error::StyleError;
 
-#[cfg_attr(feature = "flame_it", flame("proc"))]
 pub mod proc;
 
 #[macro_use]
@@ -49,8 +38,6 @@ extern crate test;
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "flame_it")]
-    use crate::flame_span;
     use crate::input::*;
     use crate::output::*;
     use crate::style::element::CslType;

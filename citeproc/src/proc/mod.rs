@@ -41,7 +41,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
 where
     O: OutputFormat,
 {
-    #[cfg_attr(feature = "flame_it", flame("Style"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
@@ -54,7 +53,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
 where
     O: OutputFormat,
 {
-    #[cfg_attr(feature = "flame_it", flame("Layout"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         sequence(ctx, &self.formatting, &self.delimiter.0, &self.elements)
     }
@@ -64,7 +62,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
 where
     O: OutputFormat,
 {
-    #[cfg_attr(feature = "flame_it", flame("Element"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let fmt = ctx.format;
         let null_f = Formatting::default();

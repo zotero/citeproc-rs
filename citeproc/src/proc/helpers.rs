@@ -6,7 +6,6 @@ use crate::style::element::{Element, Formatting};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-#[cfg_attr(feature = "flame_it", flame)]
 pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
     ctx: &CiteContext<'c, 'r, 'ci, O>,
     f: &Formatting,

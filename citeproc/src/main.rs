@@ -7,9 +7,6 @@ cfg_if! {
     }
 }
 
-// #![cfg_attr(feature="flame_it", feature(plugin, custom_attribute))]
-// #![cfg_attr(feature="flame_it", plugin(flamer))]
-
 use clap::{App, Arg};
 use std::str::FromStr;
 
@@ -21,9 +18,6 @@ use citeproc::style::variables::*;
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
-
-#[cfg(feature = "flame_it")]
-mod flame_span;
 
 fn read<'s>(path: &str) -> String {
     let mut f = File::open(path).expect("no file at path");
@@ -83,13 +77,6 @@ fn main() {
             driver.dump_ir(&refr);
 
             let serialized = driver.single(&refr);
-
-            #[cfg(feature = "flame_it")]
-            {
-                self::flame_span::write_flamegraph("flame-intermediate.html");
-                // flame::dump_html(&mut File::create("flame-graph.html").unwrap()).unwrap();
-                // flame::dump_json(&mut File::create("flame-out.json").unwrap()).unwrap();
-            }
 
             // println!("{}", serialized);
 

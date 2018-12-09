@@ -9,7 +9,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
 where
     O: OutputFormat,
 {
-    #[cfg_attr(feature = "flame_it", flame("Choose"))]
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
     where
         O: OutputFormat,
@@ -65,7 +64,6 @@ struct BranchEval<'a, O: OutputFormat> {
     content: Option<IR<'a, O>>,
 }
 
-#[cfg_attr(feature = "flame_it", flame)]
 fn eval_ifthen<'c, 'r, 'ci, O>(
     branch: &'c IfThen,
     ctx: &CiteContext<'c, 'r, 'ci, O>,
@@ -87,7 +85,6 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-#[cfg_attr(feature = "flame_it", flame)]
 fn eval_conditions<'c, 'r: 'c, 'ci, O>(
     conditions: &'c Conditions,
     ctx: &CiteContext<'c, 'r, 'ci, O>,
@@ -102,7 +99,6 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-#[cfg_attr(feature = "flame_it", flame)]
 fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &CiteContext<'c, 'r, 'ci, O>) -> bool
 where
     O: OutputFormat,
@@ -126,7 +122,6 @@ where
     run_matcher(&mut chain, &cond.match_type)
 }
 
-#[cfg_attr(feature = "flame_it", flame)]
 fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {
     match *match_type {
         Match::Any => bools.any(|b| b),
