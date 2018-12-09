@@ -1,5 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Element, Layout as LayoutEl, Style};
+use crate::style::element::{Element, Layout as LayoutEl, Style, Affixes};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 
@@ -53,13 +53,10 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
 where
     O: OutputFormat,
 {
+
+    /// Layout's delimiter and affixes are going to be applied later, when we join a cluster.
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
-        sequence(
-            ctx,
-            self.formatting.as_ref(),
-            &self.delimiter.0,
-            &self.elements,
-        )
+        sequence(ctx, &self.elements, "", None, Affixes::default())
     }
 }
 
@@ -72,14 +69,14 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
 
-            Element::Macro(ref name, ref f, ref _af, ref _quo) => {
+            Element::Macro(ref name, ref f, ref af, ref _quo) => {
                 // TODO: be able to return errors
                 let macro_unsafe = ctx
                     .style
                     .macros
                     .get(name)
                     .expect("macro errors unimplemented!");
-                sequence(ctx, f.as_ref(), "", &macro_unsafe)
+                sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
             }
 
             Element::Const(ref val, ref f, ref af, ref _quo) => {
@@ -153,7 +150,8 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref f, ref d, ref els) => sequence(ctx, f.as_ref(), &d.0, els.as_ref()),
+            Element::Group(ref f, ref d, ref af, ref els) =>
+                sequence(ctx, els.as_ref(), &d.0, f.as_ref(), af.clone()),
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))

@@ -1,10 +1,18 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, IndependentDate, Names as NamesEl};
+use crate::style::element::{Choose, IndependentDate, Names as NamesEl, Formatting, Affixes};
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'c> {
     Date(&'c IndependentDate),
     Explicit(),
+}
+
+#[derive(Debug)]
+pub struct IrSeq<'c, O: OutputFormat> {
+    pub contents: Vec<IR<'c, O>>,
+    pub formatting: Option<&'c Formatting>,
+    pub affixes: Affixes,
+    pub delimiter: &'c str,
 }
 
 // Intermediate Representation
@@ -34,14 +42,15 @@ pub enum IR<'c, O: OutputFormat> {
     //     Rendered(..)
     // ]
     // // TODO: store delimiter and affixes for later
-    Seq(Vec<IR<'c, O>>),
+    Seq(IrSeq<'c, O>),
 }
 
 impl<'c, O: OutputFormat> IR<'c, O> {
     pub fn flatten(&self, fmt: &O) -> O::Build {
-        let seq = |xs: &[IR<'c, O>]| {
-            let sq = xs.iter().map(|i| i.flatten(fmt));
-            fmt.seq(sq)
+        let flatten_seq = |seq: &IrSeq<'c, O>| {
+            let xs: Vec<_> = seq.contents.iter().map(|i| i.flatten(fmt)).collect();
+            let grp = fmt.group(xs, seq.delimiter, seq.formatting);
+            fmt.affixed(grp, &seq.affixes)
         };
         // must clone
         match self {
@@ -50,7 +59,7 @@ impl<'c, O: OutputFormat> IR<'c, O> {
             IR::Names(_, ref x) => x.clone(),
             IR::ConditionalDisamb(_, ref xs) => xs.clone().flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
-            IR::Seq(ref xs) => seq(xs),
+            IR::Seq(seq) => flatten_seq(seq),
         }
     }
 }

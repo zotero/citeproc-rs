@@ -283,6 +283,7 @@ fn group_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Group(
         Option::from_node(node)?,
         Delimiter::from_node(node)?,
+        Affixes::from_node(node)?,
         elements,
     ))
 }

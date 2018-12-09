@@ -17,7 +17,7 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat: Send + Sync {
+pub trait OutputFormat: Send + Sync + std::fmt::Debug {
     type Build: std::fmt::Debug + Default + Clone + Send + Sync;
     type Output: Serialize + Clone + Send + Sync;
 
@@ -59,19 +59,21 @@ pub trait OutputFormat: Send + Sync {
         let pre = affixes.prefix.is_empty();
         let suf = affixes.suffix.is_empty();
         match (pre, suf) {
-            (false, false) => b,
+            (true, true) => b,
 
-            (true, false) => self.seq(once(self.plain(&affixes.prefix)).chain(once(b))),
+            (false, true) => self.seq(once(self.plain(&affixes.prefix)).chain(once(b))),
 
-            (false, true) => self.seq(once(b).chain(once(self.plain(&affixes.suffix)))),
+            (true, false) => self.seq(once(b).chain(once(self.plain(&affixes.suffix)))),
 
-            (true, true) => self.seq(
+            (false, false) => self.seq(
                 once(self.plain(&affixes.prefix))
                     .chain(once(b))
                     .chain(once(self.plain(&affixes.suffix))),
             ),
         }
     }
+
+    fn with_format(&self, a: Self::Build, f: Option<&Formatting>) -> Self::Build;
 }
 
 #[cfg(test)]

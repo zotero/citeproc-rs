@@ -38,6 +38,10 @@ impl OutputFormat for PlainText {
         }
     }
 
+    fn with_format(&self, a: Self::Build, _f: Option<&Formatting>) -> Self::Build {
+        a
+    }
+
     fn group(
         &self,
         nodes: Vec<Self::Build>,

@@ -60,6 +60,7 @@ impl OutputFormat for Pandoc {
     type Build = Vec<Inline>;
     type Output = Vec<Inline>;
 
+    #[inline]
     fn plain(&self, s: &str) -> Self::Build {
         self.text_node(s.to_owned(), None)
     }
@@ -79,6 +80,7 @@ impl OutputFormat for Pandoc {
         self.fmt_vec(v, f)
     }
 
+    #[inline]
     fn seq(&self, nodes: impl Iterator<Item = Self::Build>) -> Self::Build {
         itertools::concat(nodes)
     }
@@ -99,6 +101,11 @@ impl OutputFormat for Pandoc {
             let delim = self.plain(delimiter);
             self.fmt_vec(nodes.join_many(&delim), formatting)
         }
+    }
+
+    #[inline]
+    fn with_format(&self, a: Self::Build, f: Option<&Formatting>) -> Self::Build {
+        self.fmt_vec(a, f)
     }
 
     fn output(&self, inter: Vec<Inline>) -> Vec<Inline> {

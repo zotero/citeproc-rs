@@ -1,21 +1,22 @@
 use super::cite_context::*;
-use super::{Proc, IR};
+use super::{Proc, IR, IrSeq};
 use crate::output::OutputFormat;
-use crate::style::element::{Element, Formatting};
+use crate::style::element::{Element, Formatting, Affixes};
+use super::ir::IR::*;
 
 pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
     ctx: &CiteContext<'c, 'r, 'ci, O>,
-    _f: Option<&Formatting>,
-    delim: &str,
     els: &'s [Element],
+    delimiter: &'c str,
+    formatting: Option<&'c Formatting>,
+    affixes: Affixes,
 ) -> IR<'c, O>
 where
     O: OutputFormat,
 {
-    //TODO: add delimiters to deferred IR::Seq
+    let fmt = &ctx.format;
 
     let fold_seq = |va: &mut Vec<IR<'c, O>>, other: IR<'c, O>| {
-        use super::ir::IR::*;
         match other {
             // this seq is another group with its own delimiter (possibly)
             b @ Seq(_) => {
@@ -27,7 +28,7 @@ where
                     if let Rendered(None) = last {
                         va.push(Rendered(Some(bb)))
                     } else if let Rendered(Some(aa)) = last {
-                        va.push(Rendered(Some(ctx.format.join_delim(aa, delim, bb))))
+                        va.push(Rendered(Some(fmt.join_delim(aa, delimiter, bb))))
                     } else {
                         va.push(last);
                         va.push(Rendered(Some(bb)));
@@ -57,19 +58,18 @@ where
     // <group><names>...</names></group> matches `(Rendered(None), b) => b` == Names(...)
 
     let folder = |left: IR<'c, O>, right: IR<'c, O>| {
-        use super::ir::IR::*;
         match (left, right) {
             (a, Rendered(None)) => a,
             (Rendered(None), b) => b,
             // aa,bb
             (Rendered(Some(aa)), Rendered(Some(bb))) => {
-                Rendered(Some(ctx.format.join_delim(aa, delim, bb)))
+                Rendered(Some(fmt.join_delim(aa, delimiter, bb)))
             }
-            (Seq(mut va), b) => {
-                fold_seq(&mut va, b);
-                Seq(va)
+            (Seq(mut s), b) => {
+                fold_seq(&mut s.contents, b);
+                Seq(s)
             }
-            (a, b) => Seq(vec![a, b]),
+            (a, b) => Seq(IrSeq { contents: vec![a, b], formatting: formatting.clone(), affixes: affixes.clone(), delimiter }),
         }
     };
 
@@ -80,12 +80,27 @@ where
     //         .reduce(|| IR::Rendered(None), folder)
     // }
     // #[cfg(not(feature = "rayon"))] {
-    els.iter()
-        .map(|el| el.intermediate(ctx))
-        .fold(IR::Rendered(None), folder)
     // }
 
-    // TODO: add formatting to groups
+    let inner = els.iter()
+        .map(|el| el.intermediate(ctx))
+        .fold(IR::Rendered(None), folder);
+
+    if let Rendered(None) = inner {
+        inner
+    } else if let Rendered(Some(x)) = inner {
+        Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes)))
+    } else if let Seq(_) = inner {
+        // no formatting necessary, Seq has it embedded
+        inner
+    } else {
+        Seq(IrSeq {
+            contents: vec![inner],
+            formatting,
+            affixes,
+            delimiter,
+        })
+    }
 }
 
 #[cfg(test)]

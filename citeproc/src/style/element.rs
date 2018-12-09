@@ -43,7 +43,7 @@ pub enum Element {
     // <cs:names>
     Names(Names),
     // <cs:group>
-    Group(Option<Formatting>, Delimiter, Vec<Element>), // done
+    Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>), // done
     // <cs:date>
     Date(IndependentDate),
 }

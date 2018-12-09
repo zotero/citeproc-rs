@@ -3,7 +3,7 @@ use super::helpers::sequence;
 use super::ir::*;
 use super::Proc;
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, Condition, Conditions, Else, IfThen, Match};
+use crate::style::element::{Choose, Condition, Conditions, Else, IfThen, Match, Affixes};
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
 where
@@ -53,7 +53,7 @@ where
             };
         } else {
             let Else(ref els) = last;
-            sequence(ctx, None, "", &els)
+            sequence(ctx, &els, "", None, Affixes::default())
         }
     }
 }
@@ -75,7 +75,7 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true => Some(sequence(ctx, None, "", &elements)),
+        true => Some(sequence(ctx, &elements, "", None, Affixes::default())),
     };
     BranchEval {
         disambiguate,
