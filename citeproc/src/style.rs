@@ -15,7 +15,7 @@ use self::locale::*;
 use self::terms::*;
 use crate::utils::PartitionArenaErrors;
 use fnv::FnvHashMap;
-use roxmltree::{Attribute, Children, Node};
+use roxmltree::{Children, Node};
 
 pub trait FromNode
 where

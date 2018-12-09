@@ -39,10 +39,9 @@ pub enum IR<'c, O: OutputFormat> {
 
 impl<'c, O: OutputFormat> IR<'c, O> {
     pub fn flatten(&self, fmt: &O) -> O::Build {
-        // TODO: change fmt.group to accept iterators instead
         let seq = |xs: &[IR<'c, O>]| {
-            let v: Vec<O::Build> = xs.iter().map(|i| i.flatten(fmt)).collect();
-            fmt.group(&v, "", None)
+            let sq = xs.iter().map(|i| i.flatten(fmt));
+            fmt.seq(sq)
         };
         // must clone
         match self {

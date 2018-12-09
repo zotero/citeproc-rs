@@ -3,12 +3,9 @@ use super::{Proc, IR};
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting};
 
-#[cfg(feature = "rayon")]
-use rayon::prelude::*;
-
 pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
     ctx: &CiteContext<'c, 'r, 'ci, O>,
-    f: Option<&Formatting>,
+    _f: Option<&Formatting>,
     delim: &str,
     els: &'s [Element],
 ) -> IR<'c, O>
@@ -30,7 +27,7 @@ where
                     if let Rendered(None) = last {
                         va.push(Rendered(Some(bb)))
                     } else if let Rendered(Some(aa)) = last {
-                        va.push(Rendered(Some(ctx.format.group(&[aa, bb], delim, f))))
+                        va.push(Rendered(Some(ctx.format.join_delim(aa, delim, bb))))
                     } else {
                         va.push(last);
                         va.push(Rendered(Some(bb)));
@@ -66,7 +63,7 @@ where
             (Rendered(None), b) => b,
             // aa,bb
             (Rendered(Some(aa)), Rendered(Some(bb))) => {
-                Rendered(Some(ctx.format.group(&[aa, bb], delim, f)))
+                Rendered(Some(ctx.format.join_delim(aa, delim, bb)))
             }
             (Seq(mut va), b) => {
                 fold_seq(&mut va, b);
@@ -77,6 +74,7 @@ where
     };
 
     // #[cfg(feature="rayon")] {
+    //     use rayon::prelude::*;
     //     els.par_iter()
     //         .map(|el| el.intermediate(ctx))
     //         .reduce(|| IR::Rendered(None), folder)
@@ -86,6 +84,8 @@ where
         .map(|el| el.intermediate(ctx))
         .fold(IR::Rendered(None), folder)
     // }
+
+    // TODO: add formatting to groups
 }
 
 #[cfg(test)]

@@ -21,8 +21,30 @@ impl OutputFormat for PlainText {
         s
     }
 
-    fn group(&self, nodes: &[Self::Build], delim: &str, _: Option<&Formatting>) -> Self::Build {
-        nodes.join(delim)
+    fn join_delim(&self, mut a: Self::Build, delim: &str, b: Self::Build) -> Self::Build {
+        a.push_str(&delim);
+        a.push_str(&b);
+        a
+    }
+
+    fn seq(&self, mut nodes: impl Iterator<Item = Self::Build>) -> Self::Build {
+        if let Some(first) = nodes.next() {
+            nodes.fold(first, |mut a, b| {
+                a.push_str(&b);
+                a
+            })
+        } else {
+            String::new()
+        }
+    }
+
+    fn group(
+        &self,
+        nodes: Vec<Self::Build>,
+        delimiter: &str,
+        _f: Option<&Formatting>,
+    ) -> Self::Build {
+        nodes.join(delimiter)
     }
 
     fn output(&self, intermediate: Self::Build) -> Self::Output {

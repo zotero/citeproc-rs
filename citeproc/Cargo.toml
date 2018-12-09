@@ -37,6 +37,7 @@ nom = "4"
 failure = "0.1.3"
 
 rayon = { version = "1.0.3", optional = true }
+itertools = "0.7.11"
 
 
 [dev-dependencies]

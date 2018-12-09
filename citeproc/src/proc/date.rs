@@ -4,7 +4,7 @@ use super::Proc;
 use crate::input::Date;
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DatePart, DatePartForm, DayForm, Formatting, IndependentDate, MonthForm, YearForm,
+    DatePart, DatePartForm, DayForm, IndependentDate, MonthForm, YearForm,
 };
 
 const MONTHS_SHORT: &'static [&'static str] = &[
@@ -92,18 +92,10 @@ where
                     .map(|dp| dp.render(ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
-                fmt.group(
-                    &[
-                        fmt.plain(&self.affixes.prefix),
-                        fmt.group(&each, delim, self.formatting.as_ref()),
-                        fmt.plain(&self.affixes.suffix),
-                    ],
-                    "",
-                    None,
+                fmt.affixed(
+                    fmt.group(each, delim, self.formatting.as_ref()),
+                    &self.affixes,
                 )
-
-                // let string = format!("{}-{}-{}", val.year, val.month, val.day);
-                // fmt.affixed_text(string, self.formatting.as_ref(), &self.affixes)
             });
         IR::Rendered(content)
     }
