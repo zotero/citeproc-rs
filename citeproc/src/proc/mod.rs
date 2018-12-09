@@ -1,5 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Element, Formatting, Layout as LayoutEl, Style};
+use crate::style::element::{Element, Layout as LayoutEl, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 
@@ -54,7 +54,12 @@ where
     O: OutputFormat,
 {
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
-        sequence(ctx, &self.formatting, &self.delimiter.0, &self.elements)
+        sequence(
+            ctx,
+            self.formatting.as_ref(),
+            &self.delimiter.0,
+            &self.elements,
+        )
     }
 }
 
@@ -64,7 +69,6 @@ where
 {
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         let fmt = ctx.format;
-        let null_f = Formatting::default();
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
 
@@ -75,11 +79,11 @@ where
                     .macros
                     .get(name)
                     .expect("macro errors unimplemented!");
-                sequence(ctx, &f, "", &macro_unsafe)
+                sequence(ctx, f.as_ref(), "", &macro_unsafe)
             }
 
             Element::Const(ref val, ref f, ref af, ref _quo) => {
-                IR::Rendered(Some(fmt.affixed_text(val.clone(), &f, &af)))
+                IR::Rendered(Some(fmt.affixed_text(val.clone(), f.as_ref(), &af)))
             }
 
             Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
@@ -88,12 +92,12 @@ where
                         .reference
                         .ordinary
                         .get(v)
-                        .map(|val| fmt.affixed_text(format!("{}", val), &f, &af)),
+                        .map(|val| fmt.affixed_text(format!("{}", val), f.as_ref(), &af)),
                     StandardVariable::Number(ref v) => ctx
                         .reference
                         .number
                         .get(v)
-                        .map(|val| fmt.affixed_text(val.to_string(), &f, &af)),
+                        .map(|val| fmt.affixed_text(val.to_string(), f.as_ref(), &af)),
                 };
                 IR::Rendered(content)
             }
@@ -106,7 +110,7 @@ where
                     .get("en-GB")
                     .unwrap()
                     .get_text_term(term_selector, pl)
-                    .map(|val| fmt.affixed_text(val.to_owned(), &f, &af));
+                    .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
                 IR::Rendered(content)
             }
 
@@ -129,7 +133,7 @@ where
                             .get("en-GB")
                             .unwrap()
                             .get_text_term(&TextTermSelector::Gendered(sel), p)
-                            .map(|val| fmt.affixed_text(val.to_owned(), &f, &af))
+                            .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))
                     })
                 });
                 IR::Rendered(content)
@@ -137,7 +141,7 @@ where
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => IR::Rendered(
                 ctx.get_number(var)
-                    .map(|val| fmt.affixed_text(val.to_string(), &f, &af)),
+                    .map(|val| fmt.affixed_text(val.to_string(), f.as_ref(), &af)),
             ),
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
@@ -149,7 +153,7 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref f, ref d, ref els) => sequence(ctx, f, &d.0, els.as_ref()),
+            Element::Group(ref f, ref d, ref els) => sequence(ctx, f.as_ref(), &d.0, els.as_ref()),
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))

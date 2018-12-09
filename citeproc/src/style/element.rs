@@ -11,21 +11,39 @@ pub enum Element {
     // <cs:choose>
     Choose(Choose),
     // <cs:text>
-    Macro(String, Formatting, Affixes, Quotes),
+    Macro(String, Option<Formatting>, Affixes, Quotes),
     // <cs:text>
-    Const(String, Formatting, Affixes, Quotes),
+    Const(String, Option<Formatting>, Affixes, Quotes),
     // <cs:text>
-    Variable(StandardVariable, Formatting, Affixes, VariableForm, Quotes),
+    Variable(
+        StandardVariable,
+        Option<Formatting>,
+        Affixes,
+        VariableForm,
+        Quotes,
+    ),
     // <cs:term>
-    Term(TextTermSelector, Formatting, Affixes, bool), // bool is plural
+    Term(TextTermSelector, Option<Formatting>, Affixes, bool), // bool is plural
     // <cs:label>
-    Label(NumberVariable, TermForm, Formatting, Affixes, Plural),
+    Label(
+        NumberVariable,
+        TermForm,
+        Option<Formatting>,
+        Affixes,
+        Plural,
+    ),
     // <cs:number>
-    Number(NumberVariable, NumericForm, Formatting, Affixes, TextCase),
+    Number(
+        NumberVariable,
+        NumericForm,
+        Option<Formatting>,
+        Affixes,
+        TextCase,
+    ),
     // <cs:names>
     Names(Names),
     // <cs:group>
-    Group(Formatting, Delimiter, Vec<Element>), // done
+    Group(Option<Formatting>, Delimiter, Vec<Element>), // done
     // <cs:date>
     Date(IndependentDate),
 }
@@ -345,7 +363,7 @@ pub struct Names {
     pub label: Option<NameLabel>,
     pub et_al: Option<EtAl>,
     pub substitute: Option<Substitute>,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub delimiter: Option<Delimiter>,
 }
 
@@ -371,7 +389,7 @@ pub struct Name {
     pub initialize_with: Option<String>,
     pub name_as_sort_order: Option<NameAsSortOrder>,
     pub sort_separator: Option<String>,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub name_part_given: Option<NamePart>,
     pub name_part_family: Option<NamePart>,
@@ -386,7 +404,7 @@ impl fmt::Debug for Name {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
     pub form: RoleTermForm,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub delimiter: Delimiter,
     pub plural: Plural,
 }
@@ -394,7 +412,7 @@ pub struct NameLabel {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EtAl {
     pub term: String,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
@@ -444,7 +462,7 @@ pub struct NamePart {
     pub name: NamePartName,
     pub affixes: Affixes,
     pub text_case: TextCase,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -479,7 +497,7 @@ pub struct Citation {
 // TODO: Multiple layouts in CSL-M with locale="en es de" etc
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub delimiter: Delimiter,
     pub elements: Vec<Element>,
@@ -616,7 +634,7 @@ pub enum DatePartForm {
 pub struct DatePart {
     pub form: DatePartForm,
     pub affixes: Affixes,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub text_case: TextCase,
     pub range_delimiter: RangeDelimiter,
 }
@@ -629,7 +647,7 @@ pub struct IndependentDate {
     pub date_parts: Vec<DatePart>,
     pub delimiter: Delimiter,
     pub affixes: Affixes,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub text_case: TextCase,
 }
 
@@ -647,7 +665,7 @@ pub struct LocalizedDate {
     pub parts_selector: DateParts,
     pub form: DateForm,
     pub affixes: Affixes,
-    pub formatting: Formatting,
+    pub formatting: Option<Formatting>,
     pub text_case: TextCase,
 }
 

@@ -17,11 +17,11 @@ impl OutputFormat for PlainText {
         s.to_owned()
     }
 
-    fn text_node(&self, s: String, _: &Formatting) -> Self::Build {
+    fn text_node(&self, s: String, _: Option<&Formatting>) -> Self::Build {
         s
     }
 
-    fn group(&self, nodes: &[Self::Build], delim: &str, _: &Formatting) -> Self::Build {
+    fn group(&self, nodes: &[Self::Build], delim: &str, _: Option<&Formatting>) -> Self::Build {
         nodes.join(delim)
     }
 

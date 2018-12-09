@@ -27,32 +27,41 @@ pub trait OutputFormat: Send + Sync {
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
 
     // TODO: make formatting an Option<&Formatting>
-    fn text_node(&self, s: String, formatting: &Formatting) -> Self::Build;
+    fn text_node(&self, s: String, formatting: Option<&Formatting>) -> Self::Build;
 
-    fn group(&self, nodes: &[Self::Build], delimiter: &str, formatting: &Formatting)
-        -> Self::Build;
+    fn group(
+        &self,
+        nodes: &[Self::Build],
+        delimiter: &str,
+        formatting: Option<&Formatting>,
+    ) -> Self::Build;
+
     fn output(&self, intermediate: Self::Build) -> Self::Output;
 
     fn plain(&self, s: &str) -> Self::Build;
 
-    fn affixed_text(&self, s: String, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+    fn affixed_text(
+        &self,
+        s: String,
+        format_inner: Option<&Formatting>,
+        affixes: &Affixes,
+    ) -> Self::Build {
         self.affixed(self.text_node(s, format_inner), affixes)
     }
 
     fn affixed(&self, b: Self::Build, affixes: &Affixes) -> Self::Build {
         let pre = affixes.prefix.is_empty();
         let suf = affixes.suffix.is_empty();
-        let null_f = Formatting::default();
         match (pre, suf) {
             (false, false) => b,
-            (false, true) => self.group(&[b, self.plain(&affixes.suffix)], "", &null_f),
+            (false, true) => self.group(&[b, self.plain(&affixes.suffix)], "", None),
 
-            (true, false) => self.group(&[self.plain(&affixes.prefix), b], "", &null_f),
+            (true, false) => self.group(&[self.plain(&affixes.prefix), b], "", None),
 
             (true, true) => self.group(
                 &[self.plain(&affixes.prefix), b, self.plain(&affixes.suffix)],
                 "",
-                &null_f,
+                None,
             ),
         }
     }
@@ -79,9 +88,9 @@ mod test {
     #[test]
     fn test_plain() {
         let f = PlainText::new();
-        let o = f.text_node("hi".into(), &Formatting::italic());
-        let o2 = f.text_node("mom".into(), &Formatting::default());
-        let o3 = f.group(&[o, o2], " ", &Formatting::italic());
+        let o = f.text_node("hi".into(), Some(&Formatting::italic()));
+        let o2 = f.text_node("mom".into(), None);
+        let o3 = f.group(&[o, o2], " ", Some(&Formatting::italic()));
         let serialized = serde_json::to_string(&o3).unwrap();
         assert_eq!(serialized, "\"hi mom\"");
     }

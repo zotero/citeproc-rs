@@ -53,7 +53,7 @@ where
             };
         } else {
             let Else(ref els) = last;
-            sequence(ctx, &Formatting::default(), "", &els)
+            sequence(ctx, None, "", &els)
         }
     }
 }
@@ -75,7 +75,7 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true => Some(sequence(ctx, &Formatting::default(), "", &elements)),
+        true => Some(sequence(ctx, None, "", &elements)),
     };
     BranchEval {
         disambiguate,

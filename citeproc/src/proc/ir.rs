@@ -1,5 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, Formatting, IndependentDate, Names as NamesEl};
+use crate::style::element::{Choose, IndependentDate, Names as NamesEl};
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'c> {
@@ -42,7 +42,7 @@ impl<'c, O: OutputFormat> IR<'c, O> {
         // TODO: change fmt.group to accept iterators instead
         let seq = |xs: &[IR<'c, O>]| {
             let v: Vec<O::Build> = xs.iter().map(|i| i.flatten(fmt)).collect();
-            fmt.group(&v, "", &Formatting::default())
+            fmt.group(&v, "", None)
         };
         // must clone
         match self {

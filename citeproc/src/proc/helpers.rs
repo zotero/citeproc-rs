@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
     ctx: &CiteContext<'c, 'r, 'ci, O>,
-    f: &Formatting,
+    f: Option<&Formatting>,
     delim: &str,
     els: &'s [Element],
 ) -> IR<'c, O>
@@ -30,7 +30,7 @@ where
                     if let Rendered(None) = last {
                         va.push(Rendered(Some(bb)))
                     } else if let Rendered(Some(aa)) = last {
-                        va.push(Rendered(Some(ctx.format.group(&[aa, bb], delim, &f))))
+                        va.push(Rendered(Some(ctx.format.group(&[aa, bb], delim, f))))
                     } else {
                         va.push(last);
                         va.push(Rendered(Some(bb)));
@@ -55,7 +55,7 @@ where
     // child elements is a disambiguation-participant IR node like Names, Seq, Choose. But we
     // prefer to stay with Rendered as long as possible, so the smallest output is mzero, then
     // Rendered(Some(xxx)). If there is only a single item in the sequence, it should end up as
-    // the only output, so
+    // the only output.
     //
     // <group><names>...</names></group> matches `(Rendered(None), b) => b` == Names(...)
 
@@ -66,7 +66,7 @@ where
             (Rendered(None), b) => b,
             // aa,bb
             (Rendered(Some(aa)), Rendered(Some(bb))) => {
-                Rendered(Some(ctx.format.group(&[aa, bb], delim, &f)))
+                Rendered(Some(ctx.format.group(&[aa, bb], delim, f)))
             }
             (Seq(mut va), b) => {
                 fold_seq(&mut va, b);

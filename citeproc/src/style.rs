@@ -15,20 +15,59 @@ use self::locale::*;
 use self::terms::*;
 use crate::utils::PartitionArenaErrors;
 use fnv::FnvHashMap;
-use roxmltree::{Children, Node};
-
-pub trait IsOnNode
-where
-    Self: Sized,
-{
-    fn is_on_node(node: &Node) -> Vec<String>;
-}
+use roxmltree::{Attribute, Children, Node};
 
 pub trait FromNode
 where
     Self: Sized,
 {
     fn from_node(node: &Node) -> Result<Self, CslError>;
+}
+
+pub trait IsOnNode
+where
+    Self: Sized,
+{
+    fn filter_attribute(attr: &str) -> bool;
+    fn is_on_node<'a>(node: &'a Node) -> bool {
+        node.attributes()
+            .iter()
+            .filter(|a| Self::filter_attribute(a.name()))
+            .next()
+            != None
+    }
+    fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
+        node.attributes()
+            .iter()
+            .filter(|a| Self::filter_attribute(a.name()))
+            .map(|a| String::from(a.name()))
+            .collect()
+    }
+}
+
+impl IsOnNode for Formatting {
+    fn filter_attribute(attr: &str) -> bool {
+        attr == "font-style"
+            || attr == "font-variant"
+            || attr == "font-weight"
+            || attr == "text-decoration"
+            || attr == "vertical-alignment"
+            || attr == "display"
+            || attr == "strip-periods"
+    }
+}
+
+impl<T> FromNode for Option<T>
+where
+    T: IsOnNode + FromNode,
+{
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        if T::is_on_node(node) {
+            Ok(Some(T::from_node(node)?))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl FromNode for Affixes {
@@ -47,22 +86,14 @@ impl FromNode for RangeDelimiter {
 }
 
 impl IsOnNode for RangeDelimiter {
-    fn is_on_node(node: &Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| a.name() == "range-delimiter")
-            .map(|a| a.name().to_owned())
-            .collect()
+    fn filter_attribute(attr: &str) -> bool {
+        attr == "range-delimiter"
     }
 }
 
 impl IsOnNode for Affixes {
-    fn is_on_node(node: &Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| a.name() == "prefix" || a.name() == "suffix")
-            .map(|a| a.name().to_owned())
-            .collect()
+    fn filter_attribute(attr: &str) -> bool {
+        attr == "prefix" || attr == "suffix"
     }
 }
 
@@ -80,24 +111,6 @@ impl FromNode for Formatting {
             // TODO: carry options from root
             hyperlink: String::from(""),
         })
-    }
-}
-
-impl IsOnNode for Formatting {
-    fn is_on_node(node: &Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| {
-                a.name() == "font-style"
-                    || a.name() == "font-variant"
-                    || a.name() == "font-weight"
-                    || a.name() == "text-decoration"
-                    || a.name() == "vertical-alignment"
-                    || a.name() == "display"
-                    || a.name() == "strip-periods"
-            })
-            .map(|a| a.name().to_owned())
-            .collect()
     }
 }
 
@@ -150,7 +163,7 @@ impl FromNode for Layout {
             .map(|el| Element::from_node(&el))
             .partition_results()?;
         Ok(Layout {
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             elements,
@@ -200,7 +213,7 @@ impl FromNode for TextTermSelector {
 
 fn text_el(node: &Node) -> Result<Element, CslError> {
     use self::element::Element::*;
-    let formatting = Formatting::from_node(node)?;
+    let formatting = Option::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
     if let Some(m) = node.attribute("macro") {
         return Ok(Macro(
@@ -245,7 +258,7 @@ fn label_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Label(
         attribute_required(node, "variable")?,
         attribute_optional(node, "form")?,
-        Formatting::from_node(node)?,
+        Option::from_node(node)?,
         Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
@@ -255,7 +268,7 @@ fn number_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Number(
         attribute_var_type(node, "variable", NeedVarType::NumberVariable)?,
         attribute_optional(node, "form")?,
-        Formatting::from_node(node)?,
+        Option::from_node(node)?,
         Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
@@ -268,7 +281,7 @@ fn group_el(node: &Node) -> Result<Element, CslError> {
         .map(|el| Element::from_node(&el))
         .partition_results()?;
     Ok(Element::Group(
-        Formatting::from_node(node)?,
+        Option::from_node(node)?,
         Delimiter::from_node(node)?,
         elements,
     ))
@@ -497,12 +510,8 @@ fn max1_child<T: FromNode>(
 }
 
 impl IsOnNode for TextCase {
-    fn is_on_node(node: &Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| a.name() == "text-case")
-            .map(|a| a.name().to_owned())
-            .collect()
+    fn filter_attribute(attr: &str) -> bool {
+        attr == "text-case"
     }
 }
 
@@ -517,11 +526,13 @@ fn disallow_default<T: Default + FromNode + IsOnNode>(
     disallow: bool,
 ) -> Result<T, CslError> {
     if disallow {
-        let attrs = T::is_on_node(node);
-        if !attrs.is_empty() {
+        if T::is_on_node(node) {
             Err(InvalidCsl::new(
                 node,
-                &format!("Disallowed attribute on node: {:?}", attrs),
+                &format!(
+                    "Disallowed attribute on node: {:?}",
+                    T::relevant_attrs(node)
+                ),
             ))?
         } else {
             Ok(T::default())
@@ -543,7 +554,7 @@ impl DatePart {
             form,
             // affixes not allowed in a locale date
             affixes: disallow_default(node, !full)?,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             text_case: TextCase::from_node(node)?,
             range_delimiter: RangeDelimiter::from_node(node)?,
         })
@@ -563,7 +574,7 @@ impl FromNode for IndependentDate {
             text_case: TextCase::from_node(node)?,
             parts_selector: attribute_optional(node, "date-parts")?,
             affixes: Affixes::from_node(node)?,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
         })
     }
@@ -592,7 +603,7 @@ impl LocalizedDate {
             parts_selector: attribute_optional(node, "date-parts")?,
             form: attribute_required(node, "form")?,
             affixes: Affixes::from_node(node)?,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             text_case: TextCase::from_node(node)?,
         })
     }
@@ -671,7 +682,7 @@ impl FromNode for Names {
             et_al,
             label,
             substitute,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
         })
     }
@@ -716,7 +727,7 @@ impl FromNode for Name {
             initialize_with: attribute_option_string(node, "initialize-with"),
             name_as_sort_order: attribute_option(node, "name-as-sort-order")?,
             sort_separator: attribute_option_string(node, "sort-separator"),
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             name_part_given,
             name_part_family,
@@ -728,7 +739,7 @@ impl FromNode for EtAl {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(EtAl {
             term: attribute_string(node, "term"),
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
         })
     }
 }
@@ -738,7 +749,7 @@ impl FromNode for NamePart {
         Ok(NamePart {
             name: attribute_required(node, "name")?,
             text_case: TextCase::from_node(node)?,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             affixes: Affixes::from_node(node)?,
         })
     }
@@ -748,7 +759,7 @@ impl FromNode for NameLabel {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(NameLabel {
             form: attribute_optional(node, "form")?,
-            formatting: Formatting::from_node(node)?,
+            formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             plural: attribute_optional(node, "plural")?,
         })

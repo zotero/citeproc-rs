@@ -45,7 +45,7 @@ impl NameEl {
                 DayForm::Ordinal => format!("{:02}", date.day),
             },
         };
-        ctx.format.affixed(string, &self.formatting, &self.affixes)
+        ctx.format.affixed(string, self.formatting.as_ref(), &self.affixes)
     }
 }
 
@@ -75,15 +75,15 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for IndependentDate
                 fmt.group(
                     &[
                         fmt.plain(&self.affixes.prefix),
-                        fmt.group(&each, delim, &self.formatting),
+                        fmt.group(&each, delim, self.formatting.as_ref()),
                         fmt.plain(&self.affixes.suffix),
                     ],
                     "",
-                    &Formatting::default(),
+                    None,
                 )
 
                 // let string = format!("{}-{}-{}", val.year, val.month, val.day);
-                // fmt.affixed(string, &self.formatting, &self.affixes)
+                // fmt.affixed(string, self.formatting.as_ref(), &self.affixes)
             });
         IR::Rendered(content)
     }

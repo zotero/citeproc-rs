@@ -22,7 +22,8 @@ impl Pandoc {
     /// elements. So formatting with two of those styles at once requires wrapping twice, in any
     /// order.
 
-    fn fmt_vec(&self, inlines: &[Inline], f: &Formatting) -> Option<Inline> {
+    fn fmt_vec(&self, inlines: &[Inline], formatting: Option<&Formatting>) -> Option<Inline> {
+        let f = formatting?;
         let mut current = None;
 
         let maybe = |cur| {
@@ -66,10 +67,10 @@ impl OutputFormat for Pandoc {
     type Output = Vec<Inline>;
 
     fn plain(&self, s: &str) -> Self::Build {
-        vec![Str(s.to_owned())]
+        self.text_node(s.to_owned(), None)
     }
 
-    fn text_node(&self, text: String, f: &Formatting) -> Vec<Inline> {
+    fn text_node(&self, text: String, f: Option<&Formatting>) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
         let v: Vec<Inline> = fmts
@@ -84,7 +85,7 @@ impl OutputFormat for Pandoc {
         self.fmt_vec(&v, f).map(|x| vec![x]).unwrap_or(v)
     }
 
-    fn group(&self, nodes: &[Vec<Inline>], d: &str, f: &Formatting) -> Vec<Inline> {
+    fn group(&self, nodes: &[Vec<Inline>], d: &str, f: Option<&Formatting>) -> Vec<Inline> {
         let delim = self.plain(d);
         let joined = nodes.join_many(&delim);
         self.fmt_vec(&joined, f)
@@ -219,9 +220,9 @@ mod test {
     fn test_flip_emph() {
         let f = Pandoc::new();
         let a = f.plain("normal");
-        let b = f.text_node("emph".into(), &Formatting::italic());
+        let b = f.text_node("emph".into(), Some(&Formatting::italic()));
         let c = f.plain("normal");
-        let group = f.group(&[a, b, c], " ", &Formatting::italic());
+        let group = f.group(&[a, b, c], " ", Some(&Formatting::italic()));
         let out = f.output(group.clone());
         assert_ne!(group, out);
     }
