@@ -65,6 +65,10 @@ impl OutputFormat for Pandoc {
     type Build = Vec<Inline>;
     type Output = Vec<Inline>;
 
+    fn plain(&self, s: &str) -> Self::Build {
+        vec![Str(s.to_owned())]
+    }
+
     fn text_node(&self, text: String, f: &Formatting) -> Vec<Inline> {
         let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
 
@@ -78,7 +82,6 @@ impl OutputFormat for Pandoc {
             .collect();
 
         self.fmt_vec(&v, f).map(|x| vec![x]).unwrap_or(v)
-
     }
 
     fn group(&self, nodes: &[Vec<Inline>], d: &str, f: &Formatting) -> Vec<Inline> {

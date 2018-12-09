@@ -17,12 +17,12 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat : Send + Sync {
+pub trait OutputFormat: Send + Sync {
     type Build: std::fmt::Debug + Default + Clone + Send + Sync;
     type Output: Serialize + Clone + Send + Sync;
 
-    /// Affixes are not included in the formatting on a text node.
-    /// They are converted into text nodes themselves, with Formatting::default() passed.
+    /// Affixes are not included in the formatting on a text node. They are converted into text
+    /// nodes themselves, with no formatting except whatever is applied by a parent group.
     ///
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
 
@@ -33,36 +33,27 @@ pub trait OutputFormat : Send + Sync {
         -> Self::Build;
     fn output(&self, intermediate: Self::Build) -> Self::Output;
 
-    #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
-    fn plain(&self, s: &str) -> Self::Build {
-        self.text_node(s.to_owned(), &Formatting::default())
+    fn plain(&self, s: &str) -> Self::Build;
+
+    fn affixed_text(&self, s: String, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+        self.affixed(self.text_node(s, format_inner), affixes)
     }
 
-    #[cfg_attr(feature = "flame_it", flame("OutputFormat"))]
-    fn affixed(&self, s: String, format_inner: &Formatting, affixes: &Affixes) -> Self::Build {
+    fn affixed(&self, b: Self::Build, affixes: &Affixes) -> Self::Build {
         let pre = affixes.prefix.is_empty();
         let suf = affixes.suffix.is_empty();
         let null_f = Formatting::default();
         match (pre, suf) {
-            (false, false) => self.text_node(s, format_inner),
-            (false, true) => self.group(&[
-                    self.text_node(s, format_inner),
-                    self.text_node(affixes.suffix.to_owned(), &null_f),
-                ],
-                "", &null_f),
+            (false, false) => b,
+            (false, true) => self.group(&[b, self.plain(&affixes.suffix)], "", &null_f),
 
-            (true, false) => self.group(&[
-                    self.text_node(affixes.prefix.to_owned(), &null_f),
-                    self.text_node(s, format_inner),
-                ],
-                "", &null_f),
+            (true, false) => self.group(&[self.plain(&affixes.prefix), b], "", &null_f),
 
-            (true, true) => self.group(&[
-                    self.text_node(affixes.prefix.to_owned(), &null_f),
-                    self.text_node(s, format_inner),
-                    self.text_node(affixes.suffix.to_owned(), &null_f),
-                ],
-                "", &null_f),
+            (true, true) => self.group(
+                &[self.plain(&affixes.prefix), b, self.plain(&affixes.suffix)],
+                "",
+                &null_f,
+            ),
         }
     }
 }

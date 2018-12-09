@@ -151,7 +151,6 @@ pub enum Variable {
     YearSuffix,
 
     // CSL-M Additions
-
     /// CSL-M only
     #[strum(props(csl101 = "0", cslM = "1"))]
     Hereinafter,

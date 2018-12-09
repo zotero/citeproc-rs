@@ -3,7 +3,7 @@ use super::{Proc, IR};
 use crate::output::OutputFormat;
 use crate::style::element::{Element, Formatting};
 
-#[cfg(feature="rayon")]
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 #[cfg_attr(feature = "flame_it", flame)]
@@ -22,7 +22,9 @@ where
         use super::ir::IR::*;
         match other {
             // this seq is another group with its own delimiter (possibly)
-            b@Seq(_) => { va.push(b); }
+            b @ Seq(_) => {
+                va.push(b);
+            }
             Rendered(None) => {}
             Rendered(Some(bb)) => {
                 if let Some(last) = va.pop() {
@@ -38,7 +40,9 @@ where
                     va.push(Rendered(Some(bb)));
                 }
             }
-            o => { va.push(o); }
+            o => {
+                va.push(o);
+            }
         }
     };
 
@@ -69,7 +73,7 @@ where
                 fold_seq(&mut va, b);
                 Seq(va)
             }
-            (a, b) => { Seq(vec![a, b]) }
+            (a, b) => Seq(vec![a, b]),
         }
     };
 
@@ -79,19 +83,18 @@ where
     //         .reduce(|| IR::Rendered(None), folder)
     // }
     // #[cfg(not(feature = "rayon"))] {
-        els.iter()
-            .map(|el| el.intermediate(ctx))
-            .fold(IR::Rendered(None), folder)
+    els.iter()
+        .map(|el| el.intermediate(ctx))
+        .fold(IR::Rendered(None), folder)
     // }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use super::super::Proc;
     use super::super::ir::IR::*;
+    use super::super::Proc;
+    use super::*;
 
     #[test]
-    fn associative() {
-    }
+    fn associative() {}
 }

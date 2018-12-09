@@ -96,40 +96,47 @@ where
     #[cfg(test)]
     pub fn bench_intermediate_multi(&self, b: &mut test::Bencher, refr: &Reference) {
         let cite = Cite::basic("ok", &self.formatter.output(self.formatter.plain("")));
-        let contexts: Vec<_> = std::iter::repeat(0).map(|_| {
-            CiteContext {
-            style: &self.style,
-            reference: refr,
-            cite: &cite,
-            position: Position::First,
-            format: self.formatter,
-            citation_number: 1,
+        let contexts: Vec<_> = std::iter::repeat(0)
+            .map(|_| CiteContext {
+                style: &self.style,
+                reference: refr,
+                cite: &cite,
+                position: Position::First,
+                format: self.formatter,
+                citation_number: 1,
+            })
+            .take(1000)
+            .collect();
+        #[cfg(feature = "rayon")]
+        {
+            use rayon::prelude::*;
+            b.iter(|| {
+                contexts
+                    .par_iter()
+                    .map(|ctx| self.style.intermediate(ctx))
+                    .any(|ir| {
+                        if let crate::proc::IR::Rendered(None) = ir {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+            });
         }
-        }).take(1000).collect();
-        #[cfg(feature = "rayon")] {
-        use rayon::prelude::*;
-        b.iter(|| {
-            contexts
-                .par_iter()
-                .map(|ctx| self.style.intermediate(ctx))
-                .any(|ir| if let crate::proc::IR::Rendered(None) = ir {
-                    true
-                } else {
-                    false
-                })
-        });
-        }
-        #[cfg(not(feature = "rayon"))] {
-        b.iter(|| {
-            contexts
-                .iter()
-                .map(|ctx| self.style.intermediate(ctx))
-                .any(|ir| if let crate::proc::IR::Rendered(None) = ir {
-                    true
-                } else {
-                    false
-                })
-        });
+        #[cfg(not(feature = "rayon"))]
+        {
+            b.iter(|| {
+                contexts
+                    .iter()
+                    .map(|ctx| self.style.intermediate(ctx))
+                    .any(|ir| {
+                        if let crate::proc::IR::Rendered(None) = ir {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+            });
         }
     }
 
@@ -149,5 +156,4 @@ where
         let ir = self.style.intermediate(&ctx);
         eprintln!("{:?}", ir);
     }
-
 }

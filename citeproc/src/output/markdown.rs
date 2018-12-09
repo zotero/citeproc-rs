@@ -88,6 +88,10 @@ impl<'a> From<&'a Formatting> for MarkdownFormatting {
 }
 
 impl OutputFormat<MarkdownNode, String> for Markdown {
+    fn plain(&self, s: &str) -> MarkdownNode {
+        MarkdownNode::Text(s.to_owned(), MarkdownFormatting::None)
+    }
+
     fn text_node(&self, s: String, formatting: &Formatting) -> MarkdownNode {
         MarkdownNode::Text(s, formatting.into())
     }

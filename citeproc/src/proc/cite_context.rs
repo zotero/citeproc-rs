@@ -66,7 +66,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
 }
 
 impl<'r> Reference<'r> {
-
     // Implemented here privately so we don't use it by mistake.
     // It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
     // testing variables that only exist on the Cite.

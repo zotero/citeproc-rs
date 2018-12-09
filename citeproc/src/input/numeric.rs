@@ -241,7 +241,13 @@ fn test_numeric_value() {
     );
     assert_eq!(
         NumericValue::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
-        NumericValue::Tokens(vec![Affixed("[3]"), Comma, Affixed("(5)"), Comma, Affixed("[17.1.89(4(1))(2)(a)(i)]")])
+        NumericValue::Tokens(vec![
+            Affixed("[3]"),
+            Comma,
+            Affixed("(5)"),
+            Comma,
+            Affixed("[17.1.89(4(1))(2)(a)(i)]")
+        ])
     );
 }
 

@@ -64,7 +64,8 @@ impl DatePart {
                 DayForm::Ordinal => format!("{:02}", date.day),
             },
         };
-        ctx.format.affixed(string, &self.formatting, &self.affixes)
+        ctx.format
+            .affixed_text(string, &self.formatting, &self.affixes)
     }
 }
 
@@ -103,7 +104,7 @@ where
                 )
 
                 // let string = format!("{}-{}-{}", val.year, val.month, val.day);
-                // fmt.affixed(string, &self.formatting, &self.affixes)
+                // fmt.affixed_text(string, &self.formatting, &self.affixes)
             });
         IR::Rendered(content)
     }
