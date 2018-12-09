@@ -48,7 +48,6 @@ where
     }
 }
 
-// TODO: insert affixes into group before processing as a group
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
 where
     O: OutputFormat,
@@ -143,10 +142,6 @@ where
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
 
-            // TODO: cs:group implicitly acts as a conditional: cs:group and its child elements
-            // are suppressed if a) at least one rendering element in cs:group calls a variable
-            // (either directly or via a macro), and b) all variables that are called are
-            // empty. This accommodates descriptive cs:text elements.
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).

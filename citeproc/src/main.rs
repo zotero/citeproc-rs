@@ -73,7 +73,7 @@ fn main() {
                 DateOrRange::from_str("1998-01-04").unwrap(),
             );
 
-            driver.dump_macro("issued-year");
+            // driver.dump_macro("issued-year");
             // driver.dump_ir(&refr);
 
             let serialized = driver.single(&refr);

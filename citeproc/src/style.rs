@@ -910,8 +910,6 @@ impl FromNode for Locale {
         let mut ordinal_terms = OrdinalMapping::default();
         let mut role_terms = RoleMapping::default();
 
-        eprintln!("DATES {:?}", dates);
-
         let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
         if let Some(tn) = terms_node {
             for n in tn.children().filter(|el| el.has_tag_name("term")) {
