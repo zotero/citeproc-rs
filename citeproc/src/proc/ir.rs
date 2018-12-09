@@ -1,9 +1,9 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, IndependentDate, Names as NamesEl, Formatting, Affixes};
+use crate::style::element::{Choose, BodyDate, Names as NamesEl, Formatting, Affixes};
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'c> {
-    Date(&'c IndependentDate),
+    Date(&'c BodyDate),
     Explicit(),
 }
 

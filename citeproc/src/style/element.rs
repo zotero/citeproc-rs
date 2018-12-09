@@ -43,9 +43,15 @@ pub enum Element {
     // <cs:names>
     Names(Names),
     // <cs:group>
-    Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>), // done
+    Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>),
     // <cs:date>
-    Date(IndependentDate),
+    Date(BodyDate),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BodyDate {
+    Indep(IndependentDate),
+    Local(LocalizedDate),
 }
 
 /// e.g. for <text variable="title" form="short" />
@@ -642,7 +648,6 @@ pub struct DatePart {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct IndependentDate {
     pub variable: DateVariable,
-    pub parts_selector: DateParts,
     // TODO: limit each <date-part name="XXX"> to one per?
     pub date_parts: Vec<DatePart>,
     pub delimiter: Delimiter,

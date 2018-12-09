@@ -573,7 +573,6 @@ impl FromNode for IndependentDate {
             variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
             date_parts: elements,
             text_case: TextCase::from_node(node)?,
-            parts_selector: attribute_optional(node, "date-parts")?,
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
@@ -597,7 +596,7 @@ impl FromNode for LocaleDate {
     }
 }
 
-impl LocalizedDate {
+impl FromNode for LocalizedDate {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(LocalizedDate {
             variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
@@ -610,6 +609,16 @@ impl LocalizedDate {
     }
 }
 
+impl FromNode for BodyDate {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        if node.has_attribute("form") {
+            Ok(BodyDate::Local(LocalizedDate::from_node(node)?))
+        } else {
+            Ok(BodyDate::Indep(IndependentDate::from_node(node)?))
+        }
+    }
+}
+
 impl FromNode for Element {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         match node.tag_name().name() {
@@ -619,7 +628,7 @@ impl FromNode for Element {
             "number" => Ok(number_el(node)?),
             "names" => Ok(Element::Names(Names::from_node(node)?)),
             "choose" => Ok(choose_el(node)?),
-            "date" => Ok(Element::Date(IndependentDate::from_node(node)?)),
+            "date" => Ok(Element::Date(BodyDate::from_node(node)?)),
             _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
         }
     }
@@ -900,6 +909,8 @@ impl FromNode for Locale {
         let mut gendered_terms = GenderedMapping::default();
         let mut ordinal_terms = OrdinalMapping::default();
         let mut role_terms = RoleMapping::default();
+
+        eprintln!("DATES {:?}", dates);
 
         let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
         if let Some(tn) = terms_node {

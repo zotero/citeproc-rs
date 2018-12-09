@@ -140,6 +140,10 @@ where
         }
     }
 
+    pub fn dump_macro(&self, s: &str) {
+        eprintln!("{:?}", self.style.macros.get(s))
+    }
+
     pub fn dump_style(&self) {
         eprintln!("{:?}", self.style)
     }

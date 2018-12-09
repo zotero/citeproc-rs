@@ -20,6 +20,7 @@ pub struct CiteContext<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
     pub format: &'c O,
     pub position: Position,
     pub citation_number: u32,
+    // TODO: keep track of which variables have so far been substituted
 }
 
 pub struct Cluster<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
