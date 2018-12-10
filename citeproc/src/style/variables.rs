@@ -12,16 +12,16 @@ pub enum AnyVariable {
 impl GetAttribute for AnyVariable {
     fn get_attr(
         s: &str,
-        csl_version: super::version::CslVersion,
+        csl_variant: super::version::CslVariant,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_version.clone()) {
+        if let Ok(v) = Variable::get_attr(s, csl_variant.clone()) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NameVariable::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = NameVariable::get_attr(s, csl_variant.clone()) {
             return Ok(Name(v));
-        } else if let Ok(v) = DateVariable::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = DateVariable::get_attr(s, csl_variant.clone()) {
             return Ok(Date(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant.clone()) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))
@@ -42,12 +42,12 @@ pub enum StandardVariable {
 impl GetAttribute for StandardVariable {
     fn get_attr(
         s: &str,
-        csl_version: super::version::CslVersion,
+        csl_variant: super::version::CslVariant,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::StandardVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_version.clone()) {
+        if let Ok(v) = Variable::get_attr(s, csl_variant.clone()) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant.clone()) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))
@@ -71,7 +71,7 @@ pub enum Variable {
     ArchivePlace,
     /// issuing or judicial authority (e.g. “USPTO” for a patent, “Fairfax Circuit Court” for a legal case)
     /// CSL-M only
-    #[strum(props(csl101 = "1", cslM = "0"))]
+    #[strum(props(csl = "1", cslM = "0"))]
     Authority,
     /// active={true} call number (to locate the item in a library)
     CallNumber,
@@ -154,19 +154,19 @@ pub enum Variable {
 
     // CSL-M Additions
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Hereinafter,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     AvailableDate,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Dummy,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     LocatorExtra,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     VolumeTitle,
 }
 
@@ -194,15 +194,15 @@ pub enum NumberVariable {
     PageFirst,
 
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     PublicationNumber,
 
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Supplement,
 
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Authority,
 }
 
@@ -253,9 +253,9 @@ pub enum DateVariable {
     /// date the item (e.g. a manuscript) has been submitted for publication
     Submitted,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     LocatorDate,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     PublicationDate,
 }

@@ -1,10 +1,11 @@
 use crate::style::error::*;
 use fnv::FnvHashMap;
+use std::str::FromStr;
 
 use super::get_attribute::GetAttribute;
 use super::variables::NumberVariable;
 use nom::types::CompleteStr;
-use std::str::FromStr;
+use nom::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextTermSelector {
@@ -31,24 +32,24 @@ pub enum AnyTermName {
 impl GetAttribute for AnyTermName {
     fn get_attr(
         s: &str,
-        csl_version: super::version::CslVersion,
+        csl_variant: super::version::CslVariant,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyTermName::*;
-        if let Ok(v) = MiscTerm::get_attr(s, csl_version.clone()) {
+        if let Ok(v) = MiscTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Misc(v));
-        } else if let Ok(v) = MonthTerm::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = MonthTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Month(v));
         } else if s == "edition" {
             return Ok(Edition);
-        } else if let Ok(v) = LocatorType::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = LocatorType::get_attr(s, csl_variant.clone()) {
             return Ok(Loc(v));
-        } else if let Ok(v) = SeasonTerm::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = SeasonTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Season(v));
-        } else if let Ok(v) = QuoteTerm::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = QuoteTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Quote(v));
-        } else if let Ok(v) = RoleTerm::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = RoleTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Role(v));
-        } else if let Ok(v) = OrdinalTerm::get_attr(s, csl_version.clone()) {
+        } else if let Ok(v) = OrdinalTerm::get_attr(s, csl_variant.clone()) {
             return Ok(Ordinal(v));
         }
         Err(UnknownAttributeValue::new(s))

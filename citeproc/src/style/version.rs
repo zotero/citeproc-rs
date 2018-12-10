@@ -1,21 +1,35 @@
+use lazy_static::lazy_static;
+use semver::{Version, VersionReq};
 use strum::EnumProperty;
 
-#[derive(AsRefStr, EnumString, Debug, PartialEq, Eq, Copy, Clone)]
-#[strum(serialize_all = "snake_case")]
-pub enum CslVersion {
-    // these strums are for reading from the
-    // <style> element
-    #[strum(serialize = "1.0")]
-    Csl101,
-    #[strum(serialize = "1.1mlz1")]
+lazy_static! {
+    pub static ref COMPILED_VERSION: Version = { Version::parse("1.0.1").unwrap() };
+    pub static ref COMPILED_VERSION_M: Version = { Version::parse("1.1.0").unwrap() };
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CslVersionReq(pub CslVariant, pub VersionReq);
+
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, PartialEq, Eq, Copy, Clone)]
+pub enum CslVariant {
+    // these strums are for reading from the <style> element
+    #[strum(serialize = "csl")]
+    Csl,
+    #[strum(serialize = "csl-m")]
     CslM,
 }
 
-impl CslVersion {
+impl Default for CslVariant {
+    fn default() -> Self {
+        CslVariant::Csl
+    }
+}
+
+impl CslVariant {
     pub fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
         let version = match *self {
-            CslVersion::Csl101 => "csl101",
-            CslVersion::CslM => "cslM",
+            CslVariant::Csl => "csl",
+            CslVariant::CslM => "cslM",
         };
         if let Some("0") = val.get_str(version) {
             return None;

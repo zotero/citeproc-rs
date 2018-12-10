@@ -4,7 +4,8 @@ use super::Proc;
 use crate::input::Date;
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DatePart, DateParts, DatePartForm, DayForm, BodyDate, IndependentDate, LocalizedDate, MonthForm, YearForm,
+    BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
+    MonthForm, YearForm,
 };
 
 const MONTHS_SHORT: &'static [&'static str] = &[
@@ -39,7 +40,6 @@ const MONTHS_LONG: &'static [&'static str] = &[
     "December",
 ];
 
-
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for BodyDate
 where
     O: OutputFormat,
@@ -65,26 +65,28 @@ where
         O: OutputFormat,
     {
         let fmt = ctx.format;
-        let locale = ctx.style.locale_overrides
-            .get("en-GB").unwrap();
+        let locale = ctx.style.locale_overrides.get("en-GB").unwrap();
         let locale_date = locale.dates.iter().find(|d| d.form == self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase
-        let date = ctx.reference.date.get(&self.variable).and_then(|d| d.single());
-        let content = date
-            .map(|val| {
-                let each: Vec<_> = locale_date
-                    .date_parts
-                    .iter()
-                    .filter(|d| d.matches(self.parts_selector.clone()))
-                    .map(|dp| dp.render(ctx, &val))
-                    .collect();
-                let delim = &locale_date.delimiter.0;
-                fmt.affixed(
-                    fmt.group(each, delim, self.formatting.as_ref()),
-                    &self.affixes,
-                )
-            });
+        let date = ctx
+            .reference
+            .date
+            .get(&self.variable)
+            .and_then(|d| d.single());
+        let content = date.map(|val| {
+            let each: Vec<_> = locale_date
+                .date_parts
+                .iter()
+                .filter(|d| d.matches(self.parts_selector.clone()))
+                .map(|dp| dp.render(ctx, &val))
+                .collect();
+            let delim = &locale_date.delimiter.0;
+            fmt.affixed(
+                fmt.group(each, delim, self.formatting.as_ref()),
+                &self.affixes,
+            )
+        });
         IR::Rendered(content)
     }
 }
@@ -156,4 +158,3 @@ impl DatePart {
             .affixed_text(string, self.formatting.as_ref(), &self.affixes)
     }
 }
-

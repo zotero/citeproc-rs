@@ -1,5 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Element, Layout as LayoutEl, Style, Affixes};
+use crate::style::element::{Affixes, Element, Layout as LayoutEl, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 
@@ -52,7 +52,6 @@ impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
 where
     O: OutputFormat,
 {
-
     /// Layout's delimiter and affixes are going to be applied later, when we join a cluster.
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
         sequence(ctx, &self.elements, "", None, Affixes::default())
@@ -145,8 +144,9 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref f, ref d, ref af, ref els) =>
-                sequence(ctx, els.as_ref(), &d.0, f.as_ref(), af.clone()),
+            Element::Group(ref f, ref d, ref af, ref els) => {
+                sequence(ctx, els.as_ref(), &d.0, f.as_ref(), af.clone())
+            }
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))

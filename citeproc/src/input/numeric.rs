@@ -1,5 +1,5 @@
 use nom::types::CompleteStr;
-use nom::{self, digit1};
+use nom::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken<'r> {

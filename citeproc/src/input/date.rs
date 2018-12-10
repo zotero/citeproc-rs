@@ -1,3 +1,5 @@
+use nom::*;
+
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
 // then we'd just use chrono::DateTime and support ISO input
 #[derive(Debug, Deserialize, Clone, Eq, PartialEq)]
@@ -232,7 +234,6 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use nom::{self, is_digit};
 use std::str::{from_utf8_unchecked, FromStr};
 
 pub fn to_string(s: &[u8]) -> &str {

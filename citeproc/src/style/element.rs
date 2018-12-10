@@ -3,6 +3,7 @@ use super::terms::{RoleTermForm, TermForm, TextTermSelector};
 use crate::style::error::*;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
+use crate::style::version::CslVersionReq;
 use std::fmt;
 use std::str::FromStr;
 
@@ -337,7 +338,7 @@ pub enum Match {
     All,
     None,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Nand,
 }
 
@@ -537,6 +538,7 @@ pub struct Style {
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
     pub locale_overrides: FnvHashMap<String, Locale>,
+    pub version_req: CslVersionReq,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -739,18 +741,18 @@ pub enum CslType {
     Webpage,
 
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Classic,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Gazette,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Hearing,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Regulation,
     /// CSL-M only
-    #[strum(props(csl101 = "0", cslM = "1"))]
+    #[strum(props(csl = "0", cslM = "1"))]
     Video,
 }

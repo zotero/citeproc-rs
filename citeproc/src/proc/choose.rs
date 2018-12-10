@@ -3,7 +3,7 @@ use super::helpers::sequence;
 use super::ir::*;
 use super::Proc;
 use crate::output::OutputFormat;
-use crate::style::element::{Choose, Condition, Conditions, Else, IfThen, Match, Affixes};
+use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
 where

@@ -13,9 +13,11 @@ use self::error::*;
 use self::get_attribute::*;
 use self::locale::*;
 use self::terms::*;
+use self::version::*;
 use crate::utils::PartitionArenaErrors;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
+use semver::VersionReq;
 
 pub trait FromNode
 where
@@ -949,8 +951,49 @@ impl FromNode for Locale {
     }
 }
 
+impl FromNode for CslVersionReq {
+    fn from_node(node: &Node) -> Result<Self, CslError> {
+        let version = attribute_string(node, "version");
+        let variant: CslVariant;
+        let req = if version.ends_with("mlz1") {
+            variant = CslVariant::CslM;
+            VersionReq::parse(version.trim_end_matches("mlz1")).map_err(|_| {
+                InvalidCsl::new(
+                node,
+                &format!(
+r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x", for example)"#)
+                )
+            })?
+        } else {
+            // TODO: bootstrap attribute_optional with a dummy CslVariant::Csl
+            variant = attribute_optional(node, "variant")?;
+            VersionReq::parse(&version).map_err(|_| {
+                InvalidCsl::new(
+                    node,
+                    &format!("could not parse version string \"{}\"", &version),
+                )
+            })?
+        };
+        let supported = match &variant {
+            CslVariant::Csl => &*COMPILED_VERSION,
+            CslVariant::CslM => &*COMPILED_VERSION_M,
+        };
+        if !req.matches(supported) {
+            return Err(InvalidCsl::new(
+                    node,
+                    &format!(
+                        "Unsupported version for variant {:?}: \"{}\". This engine supports {} and later.",
+                            variant,
+                            req,
+                            supported)).into());
+        }
+        Ok(CslVersionReq(variant, req))
+    }
+}
+
 impl FromNode for Style {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        let version_req = CslVersionReq::from_node(node)?;
         // let info_node = get_toplevel(&doc, "info")?;
         let mut macros = FnvHashMap::default();
         let mut locale_overrides = FnvHashMap::default();
@@ -972,6 +1015,7 @@ impl FromNode for Style {
         let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
         Ok(Style {
             macros,
+            version_req,
             locale_overrides,
             citation: citation?,
             info: Info {},

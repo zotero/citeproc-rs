@@ -1,23 +1,23 @@
-use super::version::CslVersion;
+use super::version::CslVariant;
 use crate::style::error::*;
 use roxmltree::Node;
 use std::str::FromStr;
 use strum::EnumProperty;
 
 // Temporary
-pub const CSL_VERSION: CslVersion = CslVersion::Csl101;
+pub const CSL_VARIANT: CslVariant = CslVariant::Csl;
 
 pub trait GetAttribute
 where
     Self: Sized,
 {
-    fn get_attr(s: &str, csl_version: CslVersion) -> Result<Self, UnknownAttributeValue>;
+    fn get_attr(s: &str, csl_variant: CslVariant) -> Result<Self, UnknownAttributeValue>;
 }
 
 impl<T: FromStr + EnumProperty> GetAttribute for T {
-    fn get_attr(s: &str, csl_version: CslVersion) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, csl_variant: CslVariant) -> Result<Self, UnknownAttributeValue> {
         match T::from_str(s) {
-            Ok(a) => csl_version
+            Ok(a) => csl_variant
                 .filter_arg(a)
                 .ok_or_else(|| UnknownAttributeValue::new(s)),
             Err(_) => Err(UnknownAttributeValue::new(s)),
@@ -85,7 +85,7 @@ pub fn attribute_option_string(node: &Node, attr: &str) -> Option<String> {
 
 pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VERSION) {
+        Some(a) => match T::get_attr(a, CSL_VARIANT) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
@@ -104,14 +104,14 @@ pub fn attribute_var_type<T: GetAttribute>(
     need: NeedVarType,
 ) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VERSION) {
+        Some(a) => match T::get_attr(a, CSL_VARIANT) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::wrong_var_type(
                 node,
                 attr,
                 &e.value,
                 need,
-                AnyVariable::get_attr(a, CSL_VERSION).ok(),
+                AnyVariable::get_attr(a, CSL_VARIANT).ok(),
             )),
         },
         None => Err(InvalidCsl::new(
@@ -123,7 +123,7 @@ pub fn attribute_var_type<T: GetAttribute>(
 
 pub fn attribute_option<T: GetAttribute>(node: &Node, attr: &str) -> Result<Option<T>, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VERSION) {
+        Some(a) => match T::get_attr(a, CSL_VARIANT) {
             Ok(val) => Ok(Some(val)),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
@@ -136,7 +136,7 @@ pub fn attribute_optional<T: Default + GetAttribute>(
     attr: &str,
 ) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VERSION) {
+        Some(a) => match T::get_attr(a, CSL_VARIANT) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
@@ -154,7 +154,7 @@ pub fn attribute_array_var<T: GetAttribute>(
             let split: Result<Vec<_>, _> = array
                 .split(' ')
                 .filter(|a| a.len() > 0)
-                .map(|a| T::get_attr(a, CSL_VERSION))
+                .map(|a| T::get_attr(a, CSL_VARIANT))
                 .collect();
             match split {
                 Ok(val) => Ok(val),
@@ -163,7 +163,7 @@ pub fn attribute_array_var<T: GetAttribute>(
                     attr,
                     &e.value,
                     need,
-                    AnyVariable::get_attr(&e.value, CSL_VERSION).ok(),
+                    AnyVariable::get_attr(&e.value, CSL_VARIANT).ok(),
                 )),
             }
         }

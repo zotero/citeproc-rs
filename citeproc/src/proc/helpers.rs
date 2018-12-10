@@ -1,8 +1,8 @@
 use super::cite_context::*;
-use super::{Proc, IR, IrSeq};
-use crate::output::OutputFormat;
-use crate::style::element::{Element, Formatting, Affixes};
 use super::ir::IR::*;
+use super::{IrSeq, Proc, IR};
+use crate::output::OutputFormat;
+use crate::style::element::{Affixes, Element, Formatting};
 
 pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
     ctx: &CiteContext<'c, 'r, 'ci, O>,
@@ -69,7 +69,12 @@ where
                 fold_seq(&mut s.contents, b);
                 Seq(s)
             }
-            (a, b) => Seq(IrSeq { contents: vec![a, b], formatting: formatting.clone(), affixes: affixes.clone(), delimiter }),
+            (a, b) => Seq(IrSeq {
+                contents: vec![a, b],
+                formatting: formatting.clone(),
+                affixes: affixes.clone(),
+                delimiter,
+            }),
         }
     };
 
@@ -82,7 +87,8 @@ where
     // #[cfg(not(feature = "rayon"))] {
     // }
 
-    let inner = els.iter()
+    let inner = els
+        .iter()
         .map(|el| el.intermediate(ctx))
         .fold(IR::Rendered(None), folder);
 
