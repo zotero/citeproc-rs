@@ -65,7 +65,6 @@ impl NeedVarType {
         maybe_got: Option<AnyVariable>,
     ) -> (String, String, Severity) {
         use self::NeedVarType::*;
-        let wrong_type = format!("Wrong variable type for `{}`", attr);
         let wrong_type_var = format!("Wrong variable type for `{}`: \"{}\"", attr, var);
         let empty = format!("");
         let unknown = (
@@ -78,6 +77,7 @@ impl NeedVarType {
             Any => unknown,
 
             TextVariable => maybe_got.map(|got| {
+                let wrong_type = format!("Wrong variable type for <text>");
                 use crate::style::variables::AnyVariable::*;
                 match got {
                     Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
@@ -88,6 +88,7 @@ impl NeedVarType {
             }).unwrap_or(unknown),
 
             NumberVariable => maybe_got.map(|got| {
+                let wrong_type = format!("Wrong variable type for <number>");
                 use crate::style::variables::AnyVariable::*;
                 match got {
                     Ordinary(_) => (wrong_type,
