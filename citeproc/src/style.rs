@@ -585,7 +585,7 @@ impl FromNode for LocaleDate {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node_dp(&el, false))
+            .map(|el| DatePart::from_node_dp(&el, true))
             .partition_results()?;
         Ok(LocaleDate {
             form: attribute_required(node, "form")?,
@@ -598,9 +598,16 @@ impl FromNode for LocaleDate {
 
 impl FromNode for LocalizedDate {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        let elements = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("date-part"))
+            // no affixes if you're calling a locale date
+            .map(|el| DatePart::from_node_dp(&el, false))
+            .partition_results()?;
         Ok(LocalizedDate {
             variable: attribute_var_type(node, "variable", NeedVarType::Date)?,
             parts_selector: attribute_optional(node, "date-parts")?,
+            date_parts: elements,
             form: attribute_required(node, "form")?,
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,

@@ -250,6 +250,8 @@ pub enum LocatorType {
     Paragraph,
     Part,
     Section,
+    // hyphenated is when it's a variable matcher, spaced is as a term name
+    #[strum(serialize = "sub-verbo", serialize = "sub verbo")]
     SubVerbo,
     Verse,
     Volume,
@@ -266,11 +268,15 @@ pub enum QuoteTerm {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
-#[strum(serialize_all = "kebab_case")]
+// Strum's auto kebab_case doesn't hyphenate to "season-01", so manual it is
 pub enum SeasonTerm {
+    #[strum(serialize = "season-01")]
     Season01,
+    #[strum(serialize = "season-02")]
     Season02,
+    #[strum(serialize = "season-03")]
     Season03,
+    #[strum(serialize = "season-04")]
     Season04,
 }
 
@@ -306,9 +312,11 @@ pub enum MiscTerm {
     Accessed,
     Ad,
     And,
+    #[strum(serialize = "and others")]
     AndOthers,
     Anonymous,
     At,
+    #[strum(serialize = "available at")]
     AvailableAt,
     Bc,
     By,
@@ -320,34 +328,51 @@ pub enum MiscTerm {
     From,
     Ibid,
     In,
+    #[strum(serialize = "in press")]
     InPress,
     Internet,
     Interview,
     Letter,
+    #[strum(serialize = "no date")]
     NoDate,
     Online,
+    #[strum(serialize = "presented at")]
     PresentedAt,
     Reference,
     Retrieved,
     Scale,
     Version,
+
+    // not in the list:
+    PageRangeDelimiter,
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#months)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
-#[strum(serialize_all = "kebab_case")]
 pub enum MonthTerm {
+    #[strum(serialize = "month-01")]
     Month01,
+    #[strum(serialize = "month-02")]
     Month02,
+    #[strum(serialize = "month-03")]
     Month03,
+    #[strum(serialize = "month-04")]
     Month04,
+    #[strum(serialize = "month-05")]
     Month05,
+    #[strum(serialize = "month-06")]
     Month06,
+    #[strum(serialize = "month-07")]
     Month07,
+    #[strum(serialize = "month-08")]
     Month08,
+    #[strum(serialize = "month-09")]
     Month00,
+    #[strum(serialize = "month-10")]
     Month10,
+    #[strum(serialize = "month-11")]
     Month11,
+    #[strum(serialize = "month-12")]
     Month12,
 }
 

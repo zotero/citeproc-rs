@@ -99,8 +99,10 @@ pub enum Variable {
     /// class, type or genre of the item (e.g. “adventure” for an adventure movie, “PhD dissertation” for a PhD thesis)
     Genre,
     /// International Standard Book Number
+    #[strum(serialize = "ISBN")]
     ISBN,
     /// International Standard Serial Number
+    #[strum(serialize = "ISSN")]
     ISSN,
     /// geographic scope of relevance (e.g. “US” for a US patent)
     Jurisdiction,

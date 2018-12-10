@@ -668,6 +668,7 @@ pub struct LocaleDate {
 pub struct LocalizedDate {
     pub variable: DateVariable,
     pub parts_selector: DateParts,
+    pub date_parts: Vec<DatePart>,
     pub form: DateForm,
     pub affixes: Affixes,
     pub formatting: Option<Formatting>,
