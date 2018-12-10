@@ -8,9 +8,7 @@ a Firefox/Chromium-based application like Zotero. It consists of a WebAssembly
 wrapper for that binary. If your programming language can link to C libraries 
 either natively or through FFI, it is preferable to use that instead.
 
-The wrapper consists of:
-
-* A JS class to wrap `citeproc::Driver`. The core processing code is 
+The wrapper consists of: * A JS class to wrap `citeproc::Driver`. The core processing code is 
   synchronous, but it will be sufficiently fast to run in any interactive 
   context.
 * A JS interface for library consumers to asynchronously fetch locales and 
@@ -62,3 +60,25 @@ different.
 
 Drop-in API compatibility will not be a goal, and given that, the whole 
 interface may as well be improved.
+
+
+
+# 🦀🕸️ Usage with `wasm-pack`
+
+### 🛠️ Build with `wasm-pack build`
+
+```
+wasm-pack build
+```
+
+### 🔬 Test in Headless Browsers with `wasm-pack test`
+
+```
+wasm-pack test --headless --firefox
+```
+
+### 🎁 Publish to NPM with `wasm-pack publish`
+
+```
+wasm-pack publish
+```
