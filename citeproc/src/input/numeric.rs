@@ -71,9 +71,8 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericValue<'r> {
-    // for values arriving as actual integers
     Tokens(Vec<NumericToken<'r>>),
-    // for values that were originally strings, and maybe got parsed into numbers as an alternative
+    /// For values that could not be parsed.
     Str(&'r str),
 }
 
