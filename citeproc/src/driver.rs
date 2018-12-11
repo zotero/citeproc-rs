@@ -1,7 +1,6 @@
 use crate::input::*;
 use crate::output::*;
-use crate::proc::CiteContext;
-use crate::proc::Proc;
+use crate::proc::{ CiteContext, Proc };
 use crate::style::element::Position;
 use crate::style::element::Style;
 use crate::style::error::{CslError, StyleError};
@@ -47,96 +46,59 @@ where
         serde_json::to_string(&o).unwrap()
     }
 
-    #[cfg(test)]
-    pub fn bench_single(&self, b: &mut test::Bencher, refr: &Reference) {
+    pub fn pair<'ci>(&self, cite: &Cite<'ci, O>, refr: &Reference) {
         let ctx = CiteContext {
             style: &self.style,
+            cite,
             reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,
         };
-        b.iter(|| {
-            let i = self.style.intermediate(&ctx);
-            let flat = i.flatten(self.formatter);
-            let o = self.formatter.output(flat);
-        });
+        self.style.intermediate(&ctx);
     }
 
-    #[cfg(test)]
-    pub fn bench_intermediate(&self, b: &mut test::Bencher, refr: &Reference) {
-        let ctx = CiteContext {
-            style: &self.style,
-            reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
-            position: Position::First,
-            format: self.formatter,
-            citation_number: 1,
-        };
-        b.iter(|| self.style.intermediate(&ctx));
-    }
-
-    #[cfg(test)]
-    pub fn bench_flatten(&self, b: &mut test::Bencher, refr: &Reference) {
-        let ctx = CiteContext {
-            style: &self.style,
-            reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
-            position: Position::First,
-            format: self.formatter,
-            citation_number: 1,
-        };
-        let i = self.style.intermediate(&ctx);
-        b.iter(|| {
-            i.flatten(self.formatter);
-        });
-    }
-
-    #[cfg(test)]
-    pub fn bench_intermediate_multi(&self, b: &mut test::Bencher, refr: &Reference) {
-        let cite = Cite::basic("ok", &self.formatter.output(self.formatter.plain("")));
-        let contexts: Vec<_> = std::iter::repeat(0)
-            .map(|_| CiteContext {
-                style: &self.style,
-                reference: refr,
-                cite: &cite,
-                position: Position::First,
-                format: self.formatter,
-                citation_number: 1,
-            })
-            .take(1000)
-            .collect();
+    pub fn multiple<'ci, 'r>(&self, pairs: &[(&Cite<'ci, O>, &Reference<'r>)]) -> bool {
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
-            b.iter(|| {
-                contexts
-                    .par_iter()
-                    .map(|ctx| self.style.intermediate(ctx))
-                    .any(|ir| {
-                        if let crate::proc::IR::Rendered(None) = ir {
-                            true
-                        } else {
-                            false
-                        }
-                    })
-            });
+            pairs
+                .par_iter()
+                .map(|pair| self.style.intermediate(&CiteContext {
+                    style: &self.style,
+                    cite: pair.0,
+                    reference: pair.1,
+                    position: Position::First,
+                    format: self.formatter,
+                    citation_number: 1,
+                }))
+                .any(|ir| {
+                    if let crate::proc::IR::Rendered(None) = ir {
+                        true
+                    } else {
+                        false
+                    }
+                })
         }
         #[cfg(not(feature = "rayon"))]
         {
-            b.iter(|| {
-                contexts
-                    .iter()
-                    .map(|ctx| self.style.intermediate(ctx))
-                    .any(|ir| {
-                        if let crate::proc::IR::Rendered(None) = ir {
-                            true
-                        } else {
-                            false
-                        }
-                    })
-            });
+            pairs
+                .iter()
+                .map(|pair| self.style.intermediate(&CiteContext {
+                    style: &self.style,
+                    cite: pair.0,
+                    reference: pair.1,
+                    position: Position::First,
+                    format: self.formatter,
+                    citation_number: 1,
+                }))
+                .any(|ir| {
+                    if let crate::proc::IR::Rendered(None) = ir {
+                        true
+                    } else {
+                        false
+                    }
+                })
         }
     }
 
