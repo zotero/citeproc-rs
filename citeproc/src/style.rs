@@ -959,9 +959,9 @@ impl FromNode for CslVersionReq {
             variant = CslVariant::CslM;
             VersionReq::parse(version.trim_end_matches("mlz1")).map_err(|_| {
                 InvalidCsl::new(
-                node,
-                &format!(
-r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x", for example)"#)
+                    node,
+                    &format!(
+r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x", for example)"#),
                 )
             })?
         } else {

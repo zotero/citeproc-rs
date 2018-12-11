@@ -1,6 +1,6 @@
 use crate::input::*;
 use crate::output::*;
-use crate::proc::{ CiteContext, Proc };
+use crate::proc::{CiteContext, Proc};
 use crate::style::element::Position;
 use crate::style::element::Style;
 use crate::style::error::{CslError, StyleError};
@@ -64,14 +64,16 @@ where
             use rayon::prelude::*;
             pairs
                 .par_iter()
-                .map(|pair| self.style.intermediate(&CiteContext {
-                    style: &self.style,
-                    cite: pair.0,
-                    reference: pair.1,
-                    position: Position::First,
-                    format: self.formatter,
-                    citation_number: 1,
-                }))
+                .map(|pair| {
+                    self.style.intermediate(&CiteContext {
+                        style: &self.style,
+                        cite: pair.0,
+                        reference: pair.1,
+                        position: Position::First,
+                        format: self.formatter,
+                        citation_number: 1,
+                    })
+                })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
                         true
@@ -84,14 +86,16 @@ where
         {
             pairs
                 .iter()
-                .map(|pair| self.style.intermediate(&CiteContext {
-                    style: &self.style,
-                    cite: pair.0,
-                    reference: pair.1,
-                    position: Position::First,
-                    format: self.formatter,
-                    citation_number: 1,
-                }))
+                .map(|pair| {
+                    self.style.intermediate(&CiteContext {
+                        style: &self.style,
+                        cite: pair.0,
+                        reference: pair.1,
+                        position: Position::First,
+                        format: self.formatter,
+                        citation_number: 1,
+                    })
+                })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
                         true

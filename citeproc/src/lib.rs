@@ -1,10 +1,5 @@
-#![feature(test)]
-
-// #[macro_use]
-extern crate failure;
-
-mod utils;
 mod driver;
+mod utils;
 pub use self::driver::Driver;
 pub mod input;
 pub mod output;
@@ -16,6 +11,5 @@ pub mod proc;
 extern crate strum_macros;
 #[macro_use]
 extern crate serde_derive;
-#[cfg(test)]
-extern crate test;
-
+// #[macro_use]
+// extern crate failure;

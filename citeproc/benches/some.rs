@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate criterion;
 
-use criterion::{ Criterion, Bencher };
+use criterion::{Bencher, Criterion};
 
 use citeproc::input::*;
 use citeproc::output::*;
@@ -15,9 +15,11 @@ use std::str::FromStr;
 
 fn bench_build_tree(c: &mut Criterion) {
     let formatter = PlainText::new();
-    c.bench_function("Driver::new", move |b| b.iter(|| {
-        Driver::new(&aglc(), &formatter).unwrap();
-    }));
+    c.bench_function("Driver::new", move |b| {
+        b.iter(|| {
+            Driver::new(&aglc(), &formatter).unwrap();
+        })
+    });
 }
 
 fn common_reference() -> Reference<'static> {
@@ -28,7 +30,7 @@ fn common_reference() -> Reference<'static> {
     refr.date.insert(
         DateVariable::Issued,
         DateOrRange::from_str("1998-01-04").unwrap(),
-        );
+    );
     refr
 }
 
@@ -66,14 +68,22 @@ fn bench_ir_gen_multi<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: 
 
 fn bench_pandoc(c: &mut Criterion) {
     // c.bench_function("flatten", |b| bench_flatten(b, format));
-    c.bench_function("pandoc_ir_gen", |b| bench_ir_gen(b, &aglc(), &Pandoc::new()));
-    c.bench_function("pandoc_ir_gen_multi", |b| bench_ir_gen_multi(b, &aglc(), &Pandoc::new()));
+    c.bench_function("pandoc_ir_gen", |b| {
+        bench_ir_gen(b, &aglc(), &Pandoc::new())
+    });
+    c.bench_function("pandoc_ir_gen_multi", |b| {
+        bench_ir_gen_multi(b, &aglc(), &Pandoc::new())
+    });
 }
 
 fn bench_plain(c: &mut Criterion) {
     // c.bench_function("flatten", |b| bench_flatten(b, format));
-    c.bench_function("plain_ir_gen", |b| bench_ir_gen(b, &aglc(), &PlainText::new()));
-    c.bench_function("plain_ir_gen_multi", |b| bench_ir_gen_multi(b, &aglc(), &PlainText::new()));
+    c.bench_function("plain_ir_gen", |b| {
+        bench_ir_gen(b, &aglc(), &PlainText::new())
+    });
+    c.bench_function("plain_ir_gen_multi", |b| {
+        bench_ir_gen_multi(b, &aglc(), &PlainText::new())
+    });
 }
 
 criterion_group!(tree, bench_build_tree);
