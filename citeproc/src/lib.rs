@@ -28,8 +28,6 @@ pub mod proc;
 extern crate strum_macros;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
 #[cfg(test)]
 extern crate test;
 
@@ -51,7 +49,7 @@ mod tests {
 
     #[bench]
     fn bench_build_tree(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let mut f = File::open(path).expect("no file at path");
         let mut contents = String::new();
         let formatter = PlainText::new();
@@ -109,14 +107,14 @@ mod tests {
 
     #[bench]
     fn bench_ir_gen_plain(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = PlainText::new();
         bench_ir_gen(b, path, format)
     }
 
     #[bench]
     fn bench_ir_gen_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = Pandoc::new();
         bench_ir_gen(b, path, format)
     }
@@ -145,28 +143,28 @@ mod tests {
 
     #[bench]
     fn bench_ir_gen_pandoc_multi(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = Pandoc::new();
         bench_ir_gen_multi(b, path, format)
     }
 
     #[bench]
     fn bench_ir_gen_plain_multi(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = PlainText::new();
         bench_ir_gen_multi(b, path, format)
     }
 
     // #[bench]
     // fn bench_single_plain(b: &mut Bencher) -> Result<(), StyleError> {
-    //     let path = "./australian-guide-to-legal-citation.csl";
+    //     let path = "./benches/data/australian-guide-to-legal-citation.csl";
     //     let format = PlainText::new();
     //     bench_single(b, path, format)
     // }
 
     // #[bench]
     // fn bench_single_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
-    //     let path = "./australian-guide-to-legal-citation.csl";
+    //     let path = "./benches/data/australian-guide-to-legal-citation.csl";
     //     let format = Pandoc::new();
     //     bench_single(b, path, format)
     // }
@@ -195,14 +193,14 @@ mod tests {
 
     #[bench]
     fn bench_flatten_plain(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = PlainText::new();
         bench_flatten(b, path, format)
     }
 
     #[bench]
     fn bench_flatten_pandoc(b: &mut Bencher) -> Result<(), StyleError> {
-        let path = "./australian-guide-to-legal-citation.csl";
+        let path = "./benches/data/australian-guide-to-legal-citation.csl";
         let format = Pandoc::new();
         bench_flatten(b, path, format)
     }

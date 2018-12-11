@@ -48,8 +48,10 @@
   <citation et-al-min="4" et-al-use-first="1">
     <layout suffix="." delimiter="; ">
 
-      <group font-style="italic" prefix="outer " suffix=" outer">
-        <text font-style="italic" value="inner" />
+      <group font-style="italic">
+        <group font-style="italic" prefix="outer " suffix=" outer">
+          <text font-style="italic" value="inner" prefix="inner-grp " suffix=" inner-grp"/>
+        </group>
       </group>
 
       <group delimiter=" | " prefix="{" suffix="}" >
