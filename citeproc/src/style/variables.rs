@@ -15,13 +15,13 @@ impl GetAttribute for AnyVariable {
         csl_variant: super::version::CslVariant,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_variant.clone()) {
+        if let Ok(v) = Variable::get_attr(s, csl_variant) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NameVariable::get_attr(s, csl_variant.clone()) {
+        } else if let Ok(v) = NameVariable::get_attr(s, csl_variant) {
             return Ok(Name(v));
-        } else if let Ok(v) = DateVariable::get_attr(s, csl_variant.clone()) {
+        } else if let Ok(v) = DateVariable::get_attr(s, csl_variant) {
             return Ok(Date(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant.clone()) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))
@@ -45,9 +45,9 @@ impl GetAttribute for StandardVariable {
         csl_variant: super::version::CslVariant,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::StandardVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_variant.clone()) {
+        if let Ok(v) = Variable::get_attr(s, csl_variant) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant.clone()) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))

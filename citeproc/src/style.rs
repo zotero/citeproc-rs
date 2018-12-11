@@ -242,7 +242,7 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
             attribute_bool(node, "quotes", false)?,
         ));
     }
-    if let Some(_) = node.attribute("term") {
+    if node.attribute("term").is_some() {
         return Ok(Term(
             TextTermSelector::from_node(node)?,
             formatting,
@@ -457,6 +457,8 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
     };
 
     for el in els.into_iter() {
+        // TODO: figure out why doing this without a clone causes 'borrowed value does not
+        // live long enough' problems.
         let tn = el.tag_name();
         let tag = tn.name().to_owned();
         if !seen_if {
@@ -714,7 +716,7 @@ impl FromNode for Name {
         let mut form_attr = "form";
         let mut name_part_given = None;
         let mut name_part_family = None;
-        if node.tag_name().name().clone() != "name" {
+        if node.tag_name().name() != "name" {
             delim_attr = "name-delimiter";
             form_attr = "name-form";
         } else {
@@ -818,8 +820,8 @@ impl FromNode for TermPlurality {
             (Some(a), None, None) => Ok(TermPlurality::Always(a)),
             // <term> ANYTHING <single> s </single> <multiple> m </multiple></term>
             (_, Some(s), Some(m)) => Ok(TermPlurality::Pluralized {
-                single: s.0.unwrap_or("".into()),
-                multiple: m.0.unwrap_or("".into()),
+                single: s.0.unwrap_or_else(|| "".into()),
+                multiple: m.0.unwrap_or_else(|| "".into()),
             }),
             // had one of <single> or <multiple>, but not the other
             _ => Ok(Err(InvalidCsl::new(node, msg))?),

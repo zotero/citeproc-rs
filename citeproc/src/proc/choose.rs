@@ -32,8 +32,7 @@ where
                 content
             };
         } else {
-            let mut iter = rest.iter();
-            while let Some(branch) = iter.next() {
+            for branch in rest.iter() {
                 if found.is_some() {
                     break;
                 }

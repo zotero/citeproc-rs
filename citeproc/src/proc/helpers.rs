@@ -71,7 +71,7 @@ where
             }
             (a, b) => Seq(IrSeq {
                 contents: vec![a, b],
-                formatting: formatting.clone(),
+                formatting,
                 affixes: affixes.clone(),
                 delimiter,
             }),

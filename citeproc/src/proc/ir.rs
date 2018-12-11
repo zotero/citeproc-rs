@@ -57,7 +57,7 @@ impl<'c, O: OutputFormat> IR<'c, O> {
             IR::Rendered(None) => fmt.plain(""),
             IR::Rendered(Some(ref x)) => x.clone(),
             IR::Names(_, ref x) => x.clone(),
-            IR::ConditionalDisamb(_, ref xs) => xs.clone().flatten(fmt),
+            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(seq) => flatten_seq(seq),
         }

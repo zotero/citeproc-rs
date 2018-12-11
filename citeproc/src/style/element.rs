@@ -563,7 +563,7 @@ impl FromStr for RangeDelimiter {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DateParts {
     YearMonthDay,
@@ -577,7 +577,7 @@ impl Default for DateParts {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DatePartName {
     Day,
@@ -585,7 +585,7 @@ pub enum DatePartName {
     Year,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DayForm {
     Numeric,
@@ -598,7 +598,7 @@ impl Default for DayForm {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum MonthForm {
     Long,
@@ -612,7 +612,7 @@ impl Default for MonthForm {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum YearForm {
     Long,
@@ -624,14 +624,14 @@ impl Default for YearForm {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DateForm {
     Text,
     Numeric,
 }
 
-#[derive(Debug, Display, Eq, Clone, PartialEq)]
+#[derive(Debug, Display, Eq, Copy, Clone, PartialEq)]
 pub enum DatePartForm {
     Day(DayForm),
     Month(MonthForm),

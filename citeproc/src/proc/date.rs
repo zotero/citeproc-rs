@@ -8,7 +8,7 @@ use crate::style::element::{
     MonthForm, YearForm,
 };
 
-const MONTHS_SHORT: &'static [&'static str] = &[
+const MONTHS_SHORT: &[&str] = &[
     "undefined",
     "Jan",
     "Feb",
@@ -24,7 +24,7 @@ const MONTHS_SHORT: &'static [&'static str] = &[
     "Dec",
 ];
 
-const MONTHS_LONG: &'static [&'static str] = &[
+const MONTHS_LONG: &[&str] = &[
     "undefined",
     "January",
     "February",
@@ -142,8 +142,8 @@ impl DatePart {
             },
             DatePartForm::Month(ref form) => match form {
                 // TODO: locale getter for months
-                MonthForm::Long => format!("{}", MONTHS_LONG[date.month as usize]),
-                MonthForm::Short => format!("{}", MONTHS_SHORT[date.month as usize]),
+                MonthForm::Long => MONTHS_LONG[date.month as usize].to_string(),
+                MonthForm::Short => MONTHS_SHORT[date.month as usize].to_string(),
                 MonthForm::Numeric => format!("{}", date.month),
                 MonthForm::NumericLeadingZeros => format!("{:02}", date.month),
             },

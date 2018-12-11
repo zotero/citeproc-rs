@@ -66,7 +66,7 @@ impl NeedVarType {
     ) -> (String, String, Severity) {
         use self::NeedVarType::*;
         let wrong_type_var = format!("Wrong variable type for `{}`: \"{}\"", attr, var);
-        let empty = format!("");
+        let empty = "".to_string();
         let unknown = (
             format!("Unknown variable \"{}\"", var),
             empty.clone(),
@@ -77,53 +77,53 @@ impl NeedVarType {
             Any => unknown,
 
             TextVariable => maybe_got.map(|got| {
-                let wrong_type = format!("Wrong variable type for <text>");
+                let wrong_type = "Wrong variable type for <text>".to_string();
                 use crate::style::variables::AnyVariable::*;
                 match got {
-                    Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
-                    Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
+                    Name(_) => (wrong_type, "Hint: use <names> instead".to_string(), Severity::Error),
+                    Date(_) => (wrong_type, "Hint: use <date> instead".to_string(), Severity::Error),
                     // this would be trying to print an error when the input was correct
-                    _ => (empty, format!("???"), Severity::Warning),
+                    _ => (empty, "???".to_string(), Severity::Warning),
                 }
             }).unwrap_or(unknown),
 
             NumberVariable => maybe_got.map(|got| {
-                let wrong_type = format!("Wrong variable type for <number>");
+                let wrong_type = "Wrong variable type for <number>".to_string();
                 use crate::style::variables::AnyVariable::*;
                 match got {
                     Ordinary(_) => (wrong_type,
                                     format!("Hint: use <text variable=\"{}\" /> instead", var),
                                     Severity::Error),
-                    Name(_) => (wrong_type, format!("Hint: use <names> instead"), Severity::Error),
-                    Date(_) => (wrong_type, format!("Hint: use <date> instead"), Severity::Error),
+                    Name(_) => (wrong_type, "Hint: use <names> instead".to_string(), Severity::Error),
+                    Date(_) => (wrong_type, "Hint: use <date> instead".to_string(), Severity::Error),
                     // this would be trying to print an error when the input was correct
-                    _ => (empty, format!("???"), Severity::Warning),
+                    _ => (empty, "???".to_string(), Severity::Warning),
                 }
             }).unwrap_or(unknown),
 
             CondIsNumeric => {
                 maybe_got
                     .map(|_| (wrong_type_var,
-                              format!("Hint: `is-numeric` can only match numeric variables"),
+                              "Hint: `is-numeric` can only match numeric variables".to_string(),
                               Severity::Error))
                     .unwrap_or(unknown)
             }
 
             CondIsUncertainDate => (wrong_type_var,
-                                    format!("Hint: `is-uncertain-date` can only match date variables"),
+                                    "Hint: `is-uncertain-date` can only match date variables".to_string(),
                                     Severity::Error),
 
             CondType => (wrong_type_var,
-                         format!("Hint: `type` can only match known types"),
+                         "Hint: `type` can only match known types".to_string(),
                          Severity::Error),
 
             CondPosition => (wrong_type_var,
-                             format!("Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}*"),
+                             "Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}*".to_string(),
                              Severity::Error),
 
-            CondLocator => (wrong_type_var, format!("Hint: `locator` only matches locator types"), Severity::Error),
-            Date => (wrong_type_var, format!("<date variable=\"...\"> can only render dates"), Severity::Error),
-            Name => (wrong_type_var, format!("Hint: <names> can only render name variables"), Severity::Error),
+            CondLocator => (wrong_type_var, "Hint: `locator` only matches locator types".to_string(), Severity::Error),
+            Date => (wrong_type_var, "<date variable=\"...\"> can only render dates".to_string(), Severity::Error),
+            Name => (wrong_type_var, "Hint: <names> can only render name variables".to_string(), Severity::Error),
         }
     }
 }
@@ -136,7 +136,7 @@ impl InvalidCsl {
             text_pos: pos,
             len: node.tag_name().name().len(),
             severity: Severity::Error,
-            hint: format!(""),
+            hint: "".to_string(),
             message: message.to_owned(),
         }
     }
@@ -148,7 +148,7 @@ impl InvalidCsl {
                 .unwrap_or_else(|| node.node_pos()),
             len: node.attribute("attr").map(|a| a.len()).unwrap_or_else(|| 1),
             message: format!("Invalid integer value for {}: {:?}", attr, uav),
-            hint: format!(""),
+            hint: "".to_string(),
             severity: Severity::Error,
         }
     }
@@ -161,7 +161,7 @@ impl InvalidCsl {
                 .unwrap_or_else(|| node.node_pos()),
             len: full_val.map(|v| v.len()).unwrap_or(1),
             message: format!("Unknown attribute value for {}: \"{}\"", attr, uav),
-            hint: format!(""),
+            hint: "".to_string(),
             severity: Severity::Error,
         }
     }
@@ -195,7 +195,7 @@ impl InvalidCsl {
             .ok()?;
 
         let label = Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
-            .with_message(format!("{}", self.hint));
+            .with_message(self.hint.to_string());
         let diag = Diagnostic::new(self.severity, self.message.clone()).with_label(label);
         Some(diag)
     }
@@ -262,8 +262,8 @@ impl Default for StyleError {
             severity: Severity::Error,
             text_pos: TextPos::new(1, 1),
             len: 0,
-            hint: format!(""),
-            message: format!(""),
+            hint: "".to_string(),
+            message: "".to_string(),
         }]))
     }
 }

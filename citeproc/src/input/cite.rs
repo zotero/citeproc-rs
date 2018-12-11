@@ -35,7 +35,7 @@ pub struct Cite<'ci, O: OutputFormat> {
 impl<'r, O: OutputFormat> Cite<'r, O> {
     pub fn basic(id: &'r str, prefix: &O::Output) -> Self {
         Cite {
-            id: id,
+            id,
             prefix: prefix.clone(),
             suffix: prefix.clone(),
             locator: None,

@@ -19,10 +19,12 @@ CSL evolution more nimble.
 [CSL-M]: https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html
 [Rust]: https://rust-lang.org/
 
-Currently, it's probably not worthwhile trying to contribute; the codebase is 
-evolving rapidly and if you submit a PR, chances are I've either already done 
-it or made a change that breaks the subsystem you were working on. Or 
-force-pushed on master. There will be stability in time, just not yet.
+Currently, the codebase is evolving rapidly and if you submit a PR, chances are 
+I've either already done it or made a change that breaks the subsystem you were 
+working on. Or force-pushed on master. If you really want to contribute, let me 
+know and we can sort something out.
+
+[Status tracker issue here](https://github.com/cormacrelf/citeproc-rs/issues/1).
 
 ## Technology overview
 
@@ -42,8 +44,7 @@ later, or a nightly compiler. You should install it with
 ## Try it out!
 
 Currently it just parses a style, and runs a single predefined small 
-reference/cite against it, with output in Pandoc JSON format. [Status tracker 
-issue here](https://github.com/cormacrelf/citeproc-rs/issues/1).
+reference/cite against it, with output in Pandoc JSON format.
 
 ```
 git clone https://github.com/cormacrelf/citeproc-rs
