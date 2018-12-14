@@ -1,8 +1,12 @@
 [workspace]
 members = [
   "citeproc",
-  "citeproc-wasm"
+  "citeproc-wasm",
+  "pandoc-ffi-bridge",
 ]
 
 [profile.release]
 lto = false
+
+# [profile.dev]
+# rpath = true
