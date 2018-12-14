@@ -1,4 +1,3 @@
-use std::fs::read_dir;
 use std::process::Command;
 use std::str;
 
@@ -16,8 +15,9 @@ fn stack_dylib_output_dir() -> String {
 }
 
 fn main() {
-    println!("cargo:rustc-link-search=native={}", &stack_dylib_output_dir());
-    println!("cargo:rustc-link-lib=dylib=panbridge");
+    println!(
+        "cargo:rustc-link-search=native={}",
+        &stack_dylib_output_dir()
+    );
+    println!("cargo:rustc-link-lib=dylib=pandoc-ffi-bridge");
 }
-
-

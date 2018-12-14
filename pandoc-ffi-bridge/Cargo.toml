@@ -1,5 +1,5 @@
 [package]
-name = "tester"
+name = "ffi-bridge"
 version = "0.1.0"
 authors = ["Cormac Relf <web@cormacrelf.net>"]
 edition = "2018"
