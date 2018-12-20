@@ -47,11 +47,12 @@ pub enum NeedVarType {
     NumberVariable,
     Date,
     // in condition matchers
-    CondIsUncertainDate,
+    CondDate,
     CondIsNumeric,
     CondType,
     CondPosition,
     CondLocator,
+    CondIsPlural,
     // in <name variable="">
     Name,
 }
@@ -109,8 +110,8 @@ impl NeedVarType {
                     .unwrap_or(unknown)
             }
 
-            CondIsUncertainDate => (wrong_type_var,
-                                    "Hint: `is-uncertain-date` can only match date variables".to_string(),
+            CondDate => (wrong_type_var,
+                                    format!("Hint: `{}` can only match date variables", attr),
                                     Severity::Error),
 
             CondType => (wrong_type_var,
@@ -122,6 +123,7 @@ impl NeedVarType {
                              Severity::Error),
 
             CondLocator => (wrong_type_var, "Hint: `locator` only matches locator types".to_string(), Severity::Error),
+            CondIsPlural => (wrong_type_var, "Hint: `is-plural` only matches name variables".to_string(), Severity::Error),
             Date => (wrong_type_var, "<date variable=\"...\"> can only render dates".to_string(), Severity::Error),
             Name => (wrong_type_var, "Hint: <names> can only render name variables".to_string(), Severity::Error),
         }
@@ -209,6 +211,7 @@ impl From<Error> for StyleError {
 
 impl From<Vec<CslError>> for CslError {
     fn from(errs: Vec<CslError>) -> CslError {
+        // concat all of the sub-vecs into one
         let mut collect = Vec::with_capacity(errs.len());
         for err in errs {
             collect.extend_from_slice(&err.0);

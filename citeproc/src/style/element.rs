@@ -1,5 +1,5 @@
 use super::locale::Locale;
-use super::terms::{RoleTermForm, TermForm, TextTermSelector};
+use super::terms::{TermFormExtended, TermForm, TextTermSelector};
 use crate::style::error::*;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
@@ -317,6 +317,16 @@ pub struct Condition {
     pub csl_type: Vec<CslType>,
     pub locator: Vec<LocatorType>,
     pub is_uncertain_date: Vec<DateVariable>,
+    // TODO: do not populate in plain CSL mode
+    pub jurisdiction: Option<String>,
+    pub subjurisdictions: Option<u32>,
+    // undocumented CSL-M features
+    // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L599-L627
+    pub is_plural: Vec<NameVariable>,
+    pub has_year_only: Vec<DateVariable>,
+    pub has_day: Vec<DateVariable>,
+    pub has_month_or_season: Vec<DateVariable>,
+    // are there are more of these lurking in the citeproc-js codebase?
 }
 
 impl Condition {
@@ -328,6 +338,12 @@ impl Condition {
             && self.csl_type.is_empty()
             && self.locator.is_empty()
             && self.is_uncertain_date.is_empty()
+            && self.has_year_only.is_empty()
+            && self.has_day.is_empty()
+            && self.has_month_or_season.is_empty()
+            && self.jurisdiction.is_none()
+            && self.subjurisdictions.is_none()
+            && self.is_plural.is_empty()
     }
 }
 
@@ -410,7 +426,7 @@ impl fmt::Debug for Name {
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
-    pub form: RoleTermForm,
+    pub form: TermFormExtended,
     pub formatting: Option<Formatting>,
     pub delimiter: Delimiter,
     pub plural: Plural,

@@ -5,7 +5,7 @@ use std::str::FromStr;
 use strum::EnumProperty;
 
 // Temporary
-pub const CSL_VARIANT: CslVariant = CslVariant::Csl;
+pub const CSL_VARIANT: CslVariant = CslVariant::CslM;
 
 pub trait GetAttribute
 where

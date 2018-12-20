@@ -59,7 +59,7 @@ impl GetAttribute for AnyTermName {
 /// TermSelector is used
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
-    Misc(MiscTerm, TermForm),
+    Misc(MiscTerm, TermFormExtended),
     Season(SeasonTerm, TermForm),
     Quote(QuoteTerm, TermForm),
 }
@@ -93,7 +93,7 @@ impl GenderedTermSelector {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RoleTermSelector(pub RoleTerm, pub RoleTermForm);
+pub struct RoleTermSelector(pub RoleTerm, pub TermFormExtended);
 
 pub type SimpleMapping = FnvHashMap<SimpleTermSelector, TermPlurality>;
 pub type GenderedMapping = FnvHashMap<GenderedTermSelector, GenderedTerm>;
@@ -120,7 +120,7 @@ impl Default for TermForm {
 /// Includes the extra Verb and VerbShort variants
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
-pub enum RoleTermForm {
+pub enum TermFormExtended {
     Long,
     Short,
     Symbol,
@@ -128,10 +128,9 @@ pub enum RoleTermForm {
     VerbShort,
 }
 
-impl Default for RoleTermForm {
+impl Default for TermFormExtended {
     fn default() -> Self {
-        RoleTermForm::Long
-    }
+        TermFormExtended::Long }
 }
 
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
@@ -256,6 +255,23 @@ pub enum LocatorType {
     SubVerbo,
     Verse,
     Volume,
+
+    #[strum(props(csl = "0", cslM = "1"))]
+    Article,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Subparagraph,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Rule,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Subsection,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Schedule,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Title,
+
+    // Not documented but in use?
+    #[strum(props(csl = "0", cslM = "1"))]
+    Supplement,
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
@@ -344,8 +360,12 @@ pub enum MiscTerm {
     Scale,
     Version,
 
-    // not in the list:
+    // not technically in the list in either spec:
+
+    // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/util_number.js#L522-L545
+    // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/node_datepart.js#L164-L176
     PageRangeDelimiter,
+    YearRangeDelimiter,
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#months)

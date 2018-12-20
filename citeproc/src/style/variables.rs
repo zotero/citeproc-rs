@@ -235,6 +235,8 @@ pub enum NameVariable {
     ReviewedAuthor,
     /// translator
     Translator,
+    #[strum(props(csl = "0", cslM = "1"))]
+    Authority,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
@@ -258,4 +260,7 @@ pub enum DateVariable {
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     PublicationDate,
+
+    #[strum(props(csl = "0", cslM = "1"))]
+    Available,
 }

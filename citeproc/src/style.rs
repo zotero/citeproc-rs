@@ -192,7 +192,7 @@ impl FromNode for TextTermSelector {
             ))),
             Misc(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Misc(
                 t,
-                TermForm::from_node(node)?,
+                TermFormExtended::from_node(node)?,
             ))),
             Season(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Season(
                 t,
@@ -204,7 +204,7 @@ impl FromNode for TextTermSelector {
             ))),
             Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
                 t,
-                RoleTermForm::from_node(node)?,
+                TermFormExtended::from_node(node)?,
             ))),
             Ordinal(_) => {
                 Err(InvalidCsl::new(node, "you cannot render an ordinal term directly").into())
@@ -351,8 +351,14 @@ impl Condition {
             is_uncertain_date: attribute_array_var(
                 node,
                 "is-uncertain-date",
-                NeedVarType::CondIsUncertainDate,
+                NeedVarType::Date,
             )?,
+            jurisdiction: attribute_option_string(node, "jurisdiction"),
+            subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
+            is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural)?,
+            has_year_only: attribute_array_var(node, "has-year-only", NeedVarType::CondDate)?,
+            has_day: attribute_array_var(node, "has-day", NeedVarType::CondDate)?,
+            has_month_or_season: attribute_array_var(node, "has-month-or-season", NeedVarType::CondDate)?,
             csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
             locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
         };
@@ -835,7 +841,7 @@ impl FromNode for OrdinalMatch {
     }
 }
 
-impl FromNode for RoleTermForm {
+impl FromNode for TermFormExtended {
     fn from_node(node: &Node) -> Result<Self, CslError> {
         Ok(attribute_optional(node, "form")?)
     }
@@ -874,7 +880,7 @@ impl FromNode for TermEl {
                 GenderedTerm(content, attribute_optional(node, "gender")?),
             )),
             Misc(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Misc(t, TermForm::from_node(node)?),
+                SimpleTermSelector::Misc(t, TermFormExtended::from_node(node)?),
                 content,
             )),
             Season(t) => Ok(TermEl::Simple(
@@ -886,7 +892,7 @@ impl FromNode for TermEl {
                 content,
             )),
             Role(t) => Ok(TermEl::Role(
-                RoleTermSelector(t, RoleTermForm::from_node(node)?),
+                RoleTermSelector(t, TermFormExtended::from_node(node)?),
                 content,
             )),
             Ordinal(t) => match content {
@@ -999,22 +1005,50 @@ impl FromNode for Style {
         // let info_node = get_toplevel(&doc, "info")?;
         let mut macros = FnvHashMap::default();
         let mut locale_overrides = FnvHashMap::default();
+        let mut errors: Vec<CslError> = Vec::new();
 
-        let locales = node
+        let locales_res = node
             .children()
-            .filter(|n| n.is_element() && n.has_tag_name("locale"));
-        for el in locales {
-            let loc = Locale::from_node(&el)?;
-            locale_overrides.insert(loc.lang.clone(), loc);
+            .filter(|n| n.is_element() && n.has_tag_name("locale"))
+            .map(|el| Locale::from_node(&el))
+            .partition_results();
+        match locales_res {
+            Ok(locales) => {
+                for loc in locales {
+                    locale_overrides.insert(loc.lang.clone(), loc);
+                }
+            }
+            Err(mut errs) => {
+                errors.append(&mut errs);
+            }
         }
-        let macro_maps = node
+        // TODO: output errors from macros, locales as well as citation and bibliography, if there are errors in
+        // all
+        let macro_res = node
             .children()
-            .filter(|n| n.is_element() && n.has_tag_name("macro"));
-        for el in macro_maps {
-            let mac = MacroMap::from_node(&el)?;
-            macros.insert(mac.name, mac.elements);
+            .filter(|n| n.is_element() && n.has_tag_name("macro"))
+            .map(|el| MacroMap::from_node(&el))
+            .partition_results();
+        match macro_res {
+            Ok(macro_maps) => {
+                for mac in macro_maps {
+                    macros.insert(mac.name, mac.elements);
+                }
+            }
+            Err(mut errs) => {
+                errors.append(&mut errs);
+            }
         }
-        let citation = Citation::from_node(&get_toplevel(&node, "citation")?);
+        let citation = match Citation::from_node(&get_toplevel(&node, "citation")?) {
+            Ok(cit) => Ok(cit),
+            Err(err) => {
+                errors.push(err);
+                Err(CslError(Vec::new()))
+            },
+        };
+        if errors.len() > 0 {
+            return Err(errors.into());
+        }
         Ok(Style {
             macros,
             version_req,

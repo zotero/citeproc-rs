@@ -46,6 +46,10 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     /// There are a few deviations in other implementations, notably:
     ///
     /// * `citeproc-js` always returns `false` for "page-first", even if "page" is numeric
+    /// * `citeproc-js` represents version numbers as numerics, which differs from the spec. I'm
+    ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
+    ///   are literal hyphens, not number ranges.
+    ///   By not representing them as numbers, `is-numeric="version"` won't work.
     pub fn is_numeric(&self, var: &NumberVariable) -> bool {
         self.get_number(var)
             .map(|r| r.is_numeric())

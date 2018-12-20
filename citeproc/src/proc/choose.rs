@@ -115,6 +115,7 @@ where
 
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
+    // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
 
     let mut chain = vars.chain(nums).chain(types).chain(positions);
 
