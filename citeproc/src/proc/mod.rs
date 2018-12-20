@@ -87,12 +87,17 @@ where
                         .reference
                         .ordinary
                         .get(v)
-                        .map(|val| fmt.affixed_text(format!("{}", val), f.as_ref(), &af)),
-                    StandardVariable::Number(ref v) => ctx
-                        .reference
-                        .number
-                        .get(v)
-                        .map(|val| fmt.affixed_text(val.verbatim(), f.as_ref(), &af)),
+                        .map(|val| {
+                             let s = if v.should_replace_hyphens() {
+                                 val.replace('-', "\u{2013}")
+                             } else {
+                                 val.clone().into_owned()
+                             };
+                             fmt.affixed_text(s, f.as_ref(), &af)
+                         }),
+                    StandardVariable::Number(ref v) => ctx.reference.number.get(v).map(|val| {
+                        fmt.affixed_text(val.verbatim(v.should_replace_hyphens()), f.as_ref(), &af)
+                    }),
                 };
                 IR::Rendered(content)
             }
@@ -134,10 +139,11 @@ where
                 IR::Rendered(content)
             }
 
-            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => IR::Rendered(
-                ctx.get_number(var)
-                    .map(|val| fmt.affixed_text(val.as_number(), f.as_ref(), &af)),
-            ),
+            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
+                IR::Rendered(ctx.get_number(var).map(|val| {
+                    fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f.as_ref(), &af)
+                }))
+            }
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
 

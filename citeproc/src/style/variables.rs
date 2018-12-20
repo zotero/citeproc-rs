@@ -205,6 +205,12 @@ pub enum Variable {
     Language,
 }
 
+impl Variable {
+    pub(crate) fn should_replace_hyphens(self) -> bool {
+        false
+    }
+}
+
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NumberVariable {
@@ -239,6 +245,12 @@ pub enum NumberVariable {
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     Authority,
+}
+
+impl NumberVariable {
+    pub(crate) fn should_replace_hyphens(self) -> bool {
+        self == NumberVariable::Locator
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]

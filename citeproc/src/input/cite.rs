@@ -1,8 +1,8 @@
-use std::borrow::Cow;
 use super::DateOrRange;
 use crate::input::NumericValue;
 use crate::output::OutputFormat;
 use crate::style::terms::LocatorType;
+use std::borrow::Cow;
 
 /// Represents one cite in someone's document, to exactly one reference.
 ///

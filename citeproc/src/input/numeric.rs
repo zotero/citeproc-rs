@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use nom::types::CompleteStr;
 use nom::*;
+use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken {
@@ -111,16 +111,26 @@ impl<'r> NumericValue<'r> {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn verbatim(&self) -> String {
-        match self {
-            NumericValue::Tokens(verb, _) => verb.clone().into_owned(),
-            NumericValue::Str(s) => s.clone().into_owned(),
+    pub fn verbatim(&self, replace_hyphens: bool) -> String {
+        let s = match self {
+            NumericValue::Tokens(verb, _) => verb,
+            NumericValue::Str(s) => s,
+        };
+        if replace_hyphens {
+            s.replace('-', "\u{2013}")
+        } else {
+            s.clone().into_owned()
         }
     }
-    pub fn as_number(&self) -> String {
+
+    pub fn as_number(&self, replace_hyphens: bool) -> String {
         match self {
             NumericValue::Tokens(_, ts) => tokens_to_string(ts),
-            NumericValue::Str(s) => s.clone().into_owned(),
+            NumericValue::Str(s) => if replace_hyphens {
+                s.replace('-', "\u{2013}")
+            } else {
+                s.clone().into_owned()
+            }
         }
     }
 }
@@ -256,19 +266,22 @@ fn test_numeric_value() {
         NumericValue::Tokens(
             Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
             vec![
-            Affixed("[3]".to_string()),
-            Comma,
-            Affixed("(5)".to_string()),
-            Comma,
-            Affixed("[17.1.89(4(1))(2)(a)(i)]".to_string())
-        ])
+                Affixed("[3]".to_string()),
+                Comma,
+                Affixed("(5)".to_string()),
+                Comma,
+                Affixed("[17.1.89(4(1))(2)(a)(i)]".to_string())
+            ]
+        )
     );
 }
 
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2-5, 9")).page_first().unwrap(),
+        NumericValue::from(Cow::Borrowed("2-5, 9"))
+            .page_first()
+            .unwrap(),
         NumericValue::num(2)
     );
 }
