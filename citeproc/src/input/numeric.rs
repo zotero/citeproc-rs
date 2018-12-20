@@ -72,33 +72,33 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericValue<'r> {
-    Tokens(Vec<NumericToken>),
+    Tokens(Cow<'r, str>, Vec<NumericToken>),
     /// For values that could not be parsed.
     Str(Cow<'r, str>),
 }
 
 impl<'r> NumericValue<'r> {
     pub fn num(i: u32) -> Self {
-        NumericValue::Tokens(vec![Num(i)])
+        NumericValue::Tokens(Cow::Owned(format!("{}", i)), vec![Num(i)])
     }
     pub fn page_first(&self) -> Option<NumericValue<'r>> {
         self.first_num().map(|n| NumericValue::num(n))
     }
     fn first_num(&self) -> Option<u32> {
         match *self {
-            NumericValue::Tokens(ref ts) => ts.iter().nth(0).and_then(|token| token.get_num()),
+            NumericValue::Tokens(_, ref ts) => ts.iter().nth(0).and_then(|token| token.get_num()),
             NumericValue::Str(_) => None,
         }
     }
     pub fn is_numeric(&self) -> bool {
         match *self {
-            NumericValue::Tokens(_) => true,
+            NumericValue::Tokens(_, _) => true,
             NumericValue::Str(_) => false,
         }
     }
     pub fn is_multiple(&self) -> bool {
         match *self {
-            NumericValue::Tokens(ref ts) => ts.len() > 1,
+            NumericValue::Tokens(_, ref ts) => ts.len() > 1,
 
             // TODO: fallback interpretation of "multiple" to include unparsed numerics that have
             // multiple numbers etc
@@ -111,9 +111,15 @@ impl<'r> NumericValue<'r> {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn to_string(&self) -> String {
+    pub fn verbatim(&self) -> String {
         match self {
-            NumericValue::Tokens(ts) => tokens_to_string(ts),
+            NumericValue::Tokens(verb, _) => verb.clone().into_owned(),
+            NumericValue::Str(s) => s.clone().into_owned(),
+        }
+    }
+    pub fn as_number(&self) -> String {
+        match self {
+            NumericValue::Tokens(_, ts) => tokens_to_string(ts),
             NumericValue::Str(s) => s.clone().into_owned(),
         }
     }
@@ -215,7 +221,7 @@ impl<'r> From<Cow<'r, str>> for NumericValue<'r> {
     fn from(input: Cow<'r, str>) -> Self {
         if let Ok((remainder, parsed)) = num_tokens(CompleteStr(&input)) {
             if remainder.is_empty() {
-                NumericValue::Tokens(parsed)
+                NumericValue::Tokens(input, parsed)
             } else {
                 NumericValue::Str(input)
             }
@@ -228,20 +234,28 @@ impl<'r> From<Cow<'r, str>> for NumericValue<'r> {
 #[test]
 fn test_numeric_value() {
     assert_eq!(
-        NumericValue::from("2-5, 9"),
-        NumericValue::Tokens(vec![Num(2), Hyphen, Num(5), Comma, Num(9)])
+        NumericValue::from(Cow::Borrowed("2-5, 9")),
+        NumericValue::Tokens(
+            Cow::Borrowed("2-5, 9"),
+            vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
+        )
     );
     assert_eq!(
-        NumericValue::from("2 - 5, 9, edition"),
-        NumericValue::Str("2 - 5, 9, edition")
+        NumericValue::from(Cow::Borrowed("2 - 5, 9, edition")),
+        NumericValue::Str("2 - 5, 9, edition".into())
     );
     assert_eq!(
-        NumericValue::from("[1.2.3]"),
-        NumericValue::Tokens(vec![Affixed("[1.2.3]".to_string())])
+        NumericValue::from(Cow::Borrowed("[1.2.3]")),
+        NumericValue::Tokens(
+            Cow::Borrowed("[1.2.3]"),
+            vec![Affixed("[1.2.3]".to_string())]
+        )
     );
     assert_eq!(
-        NumericValue::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
-        NumericValue::Tokens(vec![
+        NumericValue::from(Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
+        NumericValue::Tokens(
+            Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
+            vec![
             Affixed("[3]".to_string()),
             Comma,
             Affixed("(5)".to_string()),
@@ -254,7 +268,7 @@ fn test_numeric_value() {
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::from("2-5, 9").page_first().unwrap(),
-        NumericValue::Tokens(vec![Num(2)])
+        NumericValue::from(Cow::Borrowed("2-5, 9")).page_first().unwrap(),
+        NumericValue::num(2)
     );
 }

@@ -92,7 +92,7 @@ where
                         .reference
                         .number
                         .get(v)
-                        .map(|val| fmt.affixed_text(val.to_string(), f.as_ref(), &af)),
+                        .map(|val| fmt.affixed_text(val.verbatim(), f.as_ref(), &af)),
                 };
                 IR::Rendered(content)
             }
@@ -136,7 +136,7 @@ where
 
             Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => IR::Rendered(
                 ctx.get_number(var)
-                    .map(|val| fmt.affixed_text(val.to_string(), f.as_ref(), &af)),
+                    .map(|val| fmt.affixed_text(val.as_number(), f.as_ref(), &af)),
             ),
 
             Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
