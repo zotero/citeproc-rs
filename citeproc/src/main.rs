@@ -60,8 +60,8 @@ fn main() {
         {
             "id": "quagmire2018",
             "type": "legal_case",
-            "edition": "2, 4",
-            "volume": "128th & 7-9, 17th",
+            "volume": "2, 4",
+            "edition": "128th & 7-9, 17th",
             "page": "1-5",
             "container-title": "TASCC",
             "title": "Solomon v Garrity",

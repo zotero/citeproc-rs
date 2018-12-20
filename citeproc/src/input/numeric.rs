@@ -30,8 +30,8 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
             Num(i) => s.push_str(&format!("{}", i)),
             Affixed(a) => s.push_str(&a),
             Comma => s.push_str(", "),
-            // TODO: en-dash? from locale. yeah.
-            Hyphen => s.push_str("-"),
+            // en-dash
+            Hyphen => s.push_str("\u{2013}"),
             Ampersand => s.push_str(" & "),
         }
     }
