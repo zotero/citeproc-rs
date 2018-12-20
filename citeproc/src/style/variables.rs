@@ -1,7 +1,7 @@
 use super::error::*;
 use super::get_attribute::GetAttribute;
 
-#[derive(Debug, Eq, Clone, PartialEq, EnumProperty)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
     Ordinary(Variable),
     Name(NameVariable),
@@ -33,7 +33,7 @@ impl GetAttribute for AnyVariable {
 /// standard variables":
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#number-variables)
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum StandardVariable {
     Ordinary(Variable),
     Number(NumberVariable),
@@ -54,7 +54,7 @@ impl GetAttribute for StandardVariable {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Variable {
     /// abstract of the item (e.g. the abstract of a journal article)
@@ -134,7 +134,8 @@ pub enum Variable {
     ReviewedTitle,
     /// scale of e.g. a map
     Scale,
-    /// container section holding the item (e.g. “politics” for a newspaper article)
+    /// container section holding the item (e.g. “politics” for a newspaper article).
+    /// TODO: CSL-M appears to interpret this as a number variable?
     Section,
     /// from whence the item originates (e.g. a library catalog or database)
     Source,
@@ -152,9 +153,12 @@ pub enum Variable {
     /// disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”)
     YearSuffix,
 
-    // CSL-M Additions
     /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
+    // Intercept Hereinafter at CiteContext, as it isn't known at Reference-time.
+    // Global-per-document config should be its own thing separate from references.
+    // TODO: delete any noRef="true" and replace with serde directives not to read from
+    // CSL-JSON.
+    #[strum(props(csl = "0", cslM = "1", noRef = "true"))]
     Hereinafter,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
@@ -197,9 +201,11 @@ pub enum Variable {
     #[strum(props(csl = "0", cslM = "1"))]
     GazetteFlag,
 
+    // TODO: should not be accessible in condition blocks
+    Language,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NumberVariable {
     ChapterNumber,
@@ -235,7 +241,7 @@ pub enum NumberVariable {
     Authority,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameVariable {
     /// author
@@ -269,7 +275,7 @@ pub enum NameVariable {
     Authority,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DateVariable {
     /// date the item has been accessed

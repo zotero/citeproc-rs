@@ -10,6 +10,7 @@
 //! [Reference]: struct.Reference.html
 
 mod cite;
+mod csl_json;
 mod date;
 mod names;
 mod numeric;

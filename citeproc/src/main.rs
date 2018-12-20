@@ -8,13 +8,10 @@ cfg_if! {
 }
 
 use clap::{App, Arg};
-use std::str::FromStr;
 
 extern crate citeproc;
 use citeproc::input::*;
 use citeproc::output::*;
-use citeproc::style::element::CslType;
-use citeproc::style::variables::*;
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
@@ -42,6 +39,13 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("library")
+                .short("l")
+                .long("library")
+                .value_name("FILE.json")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("csl")
                 .short("c")
                 .long("csl")
@@ -50,39 +54,47 @@ fn main() {
         )
         .get_matches();
 
+    let mut lib_text = String::from(
+        r#"
+    [
+        {
+            "id": "quagmire2018",
+            "type": "legal_case",
+            "edition": "2, 4",
+            "volume": "128th & 7-9, 17th",
+            "page": "1-5",
+            "container-title": "TASCC",
+            "title": "Solomon v Garrity",
+            "author": [
+                {"family": "Paul", "given": "John", "suffix": "II"}
+            ],
+            "issued": {"raw": "1995-03-01"}
+        }
+    ]
+    "#,
+    );
+    if let Some(library_path) = matches.value_of("library") {
+        lib_text = read(&library_path);
+    }
+    let library: Vec<Reference> = serde_json::from_str(&lib_text).unwrap();
+    // println!("{:?}", library);
+    let refr = library.get(0).unwrap();
+
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
         let formatter = Pandoc::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
-            let mut refr = Reference::empty("id", CslType::LegalCase);
-            refr.number
-                .insert(NumberVariable::Edition, NumericValue::from("2, 4"));
-            refr.number.insert(
-                NumberVariable::Volume,
-                NumericValue::from("128th & 7-9, 17th"),
-            );
-            // TODO: recognize requests for Page and PageFirst as number vars
-            refr.number
-                .insert(NumberVariable::Page, NumericValue::from("1-5"));
-            // refr.number.insert(NumberVariable::Number, NumericValue::Int(55));
-            refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
-            refr.ordinary.insert(Variable::Title, "Barnaby v Joyce");
-            refr.date.insert(
-                DateVariable::Issued,
-                DateOrRange::from_str("1998-01-04").unwrap(),
-            );
-
             // driver.dump_macro("issued-year");
             // driver.dump_ir(&refr);
 
             let serialized = driver.single(&refr);
 
-            // println!("{}", serialized);
+        // println!("{}", serialized);
 
-            let header = r#"{"blocks":[{"t":"Para","c":"#;
-            let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
-            println!("{}{}{}", header, serialized, footer);
+        let header = r#"{"blocks":[{"t":"Para","c":"#;
+        let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
+        println!("{}{}{}", header, serialized, footer);
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &path, &text);
         }

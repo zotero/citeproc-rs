@@ -1,5 +1,5 @@
 use super::locale::Locale;
-use super::terms::{TermFormExtended, TermForm, TextTermSelector};
+use super::terms::{TermForm, TermFormExtended, TextTermSelector};
 use crate::style::error::*;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
@@ -313,6 +313,7 @@ pub struct Condition {
 
     /// TODO: apparently CSL-M has disambiguate="check-ambiguity-and-backreference" as an
     /// option here. Frank alone knows what that means.
+    /// https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L17-L46
     pub disambiguate: bool,
 
     pub is_numeric: Vec<NumberVariable>,

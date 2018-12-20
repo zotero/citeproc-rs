@@ -1,6 +1,6 @@
 pub mod element;
 pub mod error;
-mod get_attribute;
+pub(crate) mod get_attribute;
 pub mod locale;
 pub mod terms;
 pub mod variables;
@@ -348,17 +348,17 @@ impl Condition {
             is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
             variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
             position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
-            is_uncertain_date: attribute_array_var(
-                node,
-                "is-uncertain-date",
-                NeedVarType::Date,
-            )?,
+            is_uncertain_date: attribute_array_var(node, "is-uncertain-date", NeedVarType::Date)?,
             jurisdiction: attribute_option_string(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural)?,
             has_year_only: attribute_array_var(node, "has-year-only", NeedVarType::CondDate)?,
             has_day: attribute_array_var(node, "has-day", NeedVarType::CondDate)?,
-            has_month_or_season: attribute_array_var(node, "has-month-or-season", NeedVarType::CondDate)?,
+            has_month_or_season: attribute_array_var(
+                node,
+                "has-month-or-season",
+                NeedVarType::CondDate,
+            )?,
             csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
             locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
         };
@@ -1044,7 +1044,7 @@ impl FromNode for Style {
             Err(err) => {
                 errors.push(err);
                 Err(CslError(Vec::new()))
-            },
+            }
         };
         if errors.len() > 0 {
             return Err(errors.into());

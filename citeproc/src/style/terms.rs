@@ -130,7 +130,8 @@ pub enum TermFormExtended {
 
 impl Default for TermFormExtended {
     fn default() -> Self {
-        TermFormExtended::Long }
+        TermFormExtended::Long
+    }
 }
 
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
