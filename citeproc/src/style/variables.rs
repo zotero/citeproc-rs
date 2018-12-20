@@ -168,6 +168,35 @@ pub enum Variable {
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     VolumeTitle,
+
+    /// CSL-M only
+    ///
+    /// Not documented in the CSL-M spec.
+    #[strum(props(csl = "0", cslM = "1"))]
+    Committee,
+
+    /// CSL-M only
+    ///
+    /// Not documented in the CSL-M spec. See [Indigo Book][ib] section 'R26. Short Form
+    /// Citation for Court Documents' for its intended use case, and the Juris-M [US cheat
+    /// sheet][uscs]
+    ///
+    /// [uscs]: https://juris-m.github.io/cheat-sheets/us.pdf
+    ///
+    /// [ib]: https://law.resource.org/pub/us/code/blue/IndigoBook.html
+    #[strum(props(csl = "0", cslM = "1"))]
+    DocumentName,
+
+    /// CSL-M only
+    ///
+    /// Not documented in the CSL-M spec.
+    ///
+    /// TODO: I think variable="gazette-flag" may have been superseded by type="gazette",
+    /// but clearly you can still tick the "Gazette Ref" checkbox in Juris-M on a statute.
+    /// Ask Frank. See also https://juris-m.github.io/cheat-sheets/us.pdf
+    #[strum(props(csl = "0", cslM = "1"))]
+    GazetteFlag,
+
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
@@ -235,6 +264,7 @@ pub enum NameVariable {
     ReviewedAuthor,
     /// translator
     Translator,
+
     #[strum(props(csl = "0", cslM = "1"))]
     Authority,
 }

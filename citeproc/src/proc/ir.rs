@@ -26,6 +26,7 @@ pub enum IR<'c, O: OutputFormat> {
 
     // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
+    // Should also include `if variable="year-suffix"` because that could change.
     ConditionalDisamb(&'c Choose, Box<IR<'c, O>>),
     YearSuffix(YearSuffixHook<'c>, O::Build),
 

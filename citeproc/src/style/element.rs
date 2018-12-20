@@ -310,7 +310,11 @@ impl Default for Plural {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Condition {
     pub match_type: Match,
+
+    /// TODO: apparently CSL-M has disambiguate="check-ambiguity-and-backreference" as an
+    /// option here. Frank alone knows what that means.
     pub disambiguate: bool,
+
     pub is_numeric: Vec<NumberVariable>,
     pub variable: Vec<AnyVariable>,
     pub position: Vec<Position>,
@@ -701,6 +705,8 @@ pub enum Position {
     IbidWithLocator,
     Subsequent,
     NearNote,
+    #[strum(props(csl = "0", cslM = "1"))]
+    FarNote,
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats)

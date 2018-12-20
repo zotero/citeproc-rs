@@ -119,7 +119,7 @@ impl NeedVarType {
                          Severity::Error),
 
             CondPosition => (wrong_type_var,
-                             "Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note }}*".to_string(),
+                             "Hint: `position` matches {{ first | ibid | ibid-with-locator | subsequent | near-note | far-note }}*".to_string(),
                              Severity::Error),
 
             CondLocator => (wrong_type_var, "Hint: `locator` only matches locator types".to_string(), Severity::Error),
