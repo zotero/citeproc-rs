@@ -35,7 +35,7 @@ where
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
+            cite: &Cite::basic("ok", &self.formatter.plain("")),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,
@@ -118,7 +118,7 @@ where
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
+            cite: &Cite::basic("ok", &self.formatter.plain("")),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,

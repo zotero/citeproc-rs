@@ -235,8 +235,9 @@ impl Default for OrdinalMatch {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#locators)
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[serde(rename_all = "kebab-case")]
 pub enum LocatorType {
     Book,
     Chapter,
@@ -253,6 +254,7 @@ pub enum LocatorType {
     Section,
     // hyphenated is when it's a variable matcher, spaced is as a term name
     #[strum(serialize = "sub-verbo", serialize = "sub verbo")]
+    #[serde(rename = "sub-verbo")]
     SubVerbo,
     Verse,
     Volume,

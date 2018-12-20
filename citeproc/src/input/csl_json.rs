@@ -187,11 +187,18 @@ impl<'a, 'de: 'a> Deserialize<'de> for NumericValue<'a> {
                 formatter.write_str("an integer between 0 and 2^32, or a string")
             }
 
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(NumericValue::from(Cow::Owned(value)))
+            }
+
             fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                Ok(NumericValue::from(value))
+                Ok(NumericValue::from(Cow::Borrowed(value)))
             }
 
             fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
@@ -347,7 +354,7 @@ impl<'de> Deserialize<'de> for Date {
     }
 }
 
-impl<'de> Deserialize<'de> for DateParts<'de> {
+impl<'a, 'de: 'a> Deserialize<'de> for DateParts<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -378,7 +385,7 @@ impl<'de> Deserialize<'de> for DateParts<'de> {
 }
 
 /// TODO:implement seasons
-impl<'de> Deserialize<'de> for DateOrRange<'de> {
+impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,

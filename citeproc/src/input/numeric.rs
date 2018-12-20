@@ -1,10 +1,11 @@
+use std::borrow::Cow;
 use nom::types::CompleteStr;
 use nom::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum NumericToken<'r> {
+pub enum NumericToken {
     Num(u32),
-    Affixed(&'r str),
+    Affixed(String),
     Comma,
     Hyphen,
     Ampersand,
@@ -12,7 +13,7 @@ pub enum NumericToken<'r> {
 
 use self::NumericToken::*;
 
-impl NumericToken<'_> {
+impl NumericToken {
     fn get_num(&self) -> Option<u32> {
         match *self {
             Num(u) => Some(u),
@@ -27,7 +28,7 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
         match t {
             // TODO: ordinals, etc
             Num(i) => s.push_str(&format!("{}", i)),
-            Affixed(a) => s.push_str(a),
+            Affixed(a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // TODO: en-dash? from locale. yeah.
             Hyphen => s.push_str("-"),
@@ -71,9 +72,9 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericValue<'r> {
-    Tokens(Vec<NumericToken<'r>>),
+    Tokens(Vec<NumericToken>),
     /// For values that could not be parsed.
-    Str(&'r str),
+    Str(Cow<'r, str>),
 }
 
 impl<'r> NumericValue<'r> {
@@ -113,7 +114,7 @@ impl<'r> NumericValue<'r> {
     pub fn to_string(&self) -> String {
         match self {
             NumericValue::Tokens(ts) => tokens_to_string(ts),
-            NumericValue::Str(s) => (*s).into(),
+            NumericValue::Str(s) => s.clone().into_owned(),
         }
     }
 }
@@ -122,11 +123,11 @@ fn from_digits(input: CompleteStr) -> Result<u32, std::num::ParseIntError> {
     input.parse()
 }
 
-fn to_affixed<'s>(input: CompleteStr<'s>) -> NumericToken<'s> {
-    NumericToken::Affixed(input.0)
+fn to_affixed(input: CompleteStr) -> NumericToken {
+    NumericToken::Affixed(input.0.to_string())
 }
 
-fn sep_from<'s>(input: char) -> Result<NumericToken<'s>, ()> {
+fn sep_from<'s>(input: char) -> Result<NumericToken, ()> {
     match input {
         ',' => Ok(Comma),
         '-' => Ok(Hyphen),
@@ -189,7 +190,7 @@ fn test_num_token_parser() {
     assert_eq!(num_ish(CompleteStr("2")), Ok((CompleteStr(""), Num(2))));
     assert_eq!(
         num_ish(CompleteStr("2b")),
-        Ok((CompleteStr(""), NumericToken::Affixed("2b")))
+        Ok((CompleteStr(""), NumericToken::Affixed("2b".to_string())))
     );
     assert_eq!(sep(CompleteStr("- ")), Ok((CompleteStr(""), Hyphen)));
     assert_eq!(sep(CompleteStr(", ")), Ok((CompleteStr(""), Comma)));
@@ -210,9 +211,9 @@ fn test_num_token_parser() {
     );
 }
 
-impl<'r> From<&'r str> for NumericValue<'r> {
-    fn from(input: &'r str) -> Self {
-        if let Ok((remainder, parsed)) = num_tokens(CompleteStr(input)) {
+impl<'r> From<Cow<'r, str>> for NumericValue<'r> {
+    fn from(input: Cow<'r, str>) -> Self {
+        if let Ok((remainder, parsed)) = num_tokens(CompleteStr(&input)) {
             if remainder.is_empty() {
                 NumericValue::Tokens(parsed)
             } else {
@@ -236,16 +237,16 @@ fn test_numeric_value() {
     );
     assert_eq!(
         NumericValue::from("[1.2.3]"),
-        NumericValue::Tokens(vec![Affixed("[1.2.3]")])
+        NumericValue::Tokens(vec![Affixed("[1.2.3]".to_string())])
     );
     assert_eq!(
         NumericValue::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
         NumericValue::Tokens(vec![
-            Affixed("[3]"),
+            Affixed("[3]".to_string()),
             Comma,
-            Affixed("(5)"),
+            Affixed("(5)".to_string()),
             Comma,
-            Affixed("[17.1.89(4(1))(2)(a)(i)]")
+            Affixed("[17.1.89(4(1))(2)(a)(i)]".to_string())
         ])
     );
 }

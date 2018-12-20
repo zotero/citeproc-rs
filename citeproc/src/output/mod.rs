@@ -8,7 +8,7 @@ pub use self::plain::PlainText;
 // pub use self::markdown::Markdown;
 
 use crate::style::element::{Affixes, Formatting};
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Output<T> {
@@ -18,7 +18,7 @@ pub struct Output<T> {
 }
 
 pub trait OutputFormat: Send + Sync + std::fmt::Debug {
-    type Build: std::fmt::Debug + Default + Clone + Send + Sync;
+    type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync;
     type Output: Serialize + Clone + Send + Sync;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
