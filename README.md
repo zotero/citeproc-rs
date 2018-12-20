@@ -43,11 +43,28 @@ later, or a nightly compiler. You should install it with
 
 ## Try it out!
 
-Currently it just parses a style, and runs a single predefined small 
-reference/cite against it, with output in Pandoc JSON format.
+Currently it can:
 
-```
+* parse a CSL style (ignoring `<info>`, `<style-options>`, and 
+  `<bibliography>`) with built-in validation, type-checking, error reporting, 
+  and semantic versioning,
+* parse a CSL-M style (ignoring `<info>`, `<style-options>`, and 
+  `<bibliography>`, missing many undocumented `citeproc-js` extensions to the 
+  spec),
+* parse a CSL-JSON file
+* pluck out the first reference, and execute the style against only that one
+* output valid Pandoc JSON that can be converted to HTML
+
+```sh
 git clone https://github.com/cormacrelf/citeproc-rs
+cd citeproc-rs/citeproc
+cargo run -- --csl ../example.csl # runs on a predefined single ref
+cargo run -- --csl ../example.csl --library path/to/csl-json/file.json
+```
+
+To test it across the entire styles repo:
+
+```sh
 cd citeproc-rs/citeproc
 cargo install --path . --force
 cd ../..

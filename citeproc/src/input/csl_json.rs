@@ -315,7 +315,6 @@ impl<'de> Deserialize<'de> for Date {
     {
         struct SingleDatePartVisitor;
 
-        // TODO: support strings in this position?
         impl<'de> Visitor<'de> for SingleDatePartVisitor {
             type Value = Date;
 
