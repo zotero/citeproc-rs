@@ -5,6 +5,7 @@ An early-stage work-in-progress implementation of [CSL][] and [CSL-M][] in
 
 * replacing `citeproc-js` by providing WebAssembly bindings such that it could 
   be embedded in Zotero or fulfil any other JavaScript-based use;
+* replacing much of `pandoc-citeproc`, by running as a Pandoc Filter;
 * providing a compiled static library to replace other divergent or incomplete 
   implementations and make it easy to integrate citeproc into document 
   processing pipelines and web services; and
