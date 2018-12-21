@@ -12,6 +12,18 @@ use crate::style::element::{
 };
 use crate::utils::Intercalate;
 
+use crate::input::is_latin_cyrillic;
+
+impl PersonName<'_> {
+    fn is_latin_cyrillic(&self) -> bool {
+        self.family.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
+        self.given.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
+        self.suffix.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
+        self.non_dropping_particle.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
+        self.dropping_particle.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true)
+    }
+}
+
 #[derive(Eq, PartialEq, Clone)]
 enum NameToken<'a, 'b: 'a> {
     Name(&'b Name<'a>),
@@ -168,7 +180,7 @@ impl NameEl {
                 NameToken::Name(Name::Person(ref pn)) => {
                     let naso = self.naso(seen_one);
                     let order = get_display_order(
-                        true,
+                        pn.is_latin_cyrillic(),
                         self.form == Some(NameForm::Long),
                         naso,
                         // TODO: dynamic

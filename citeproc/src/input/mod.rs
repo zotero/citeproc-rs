@@ -15,6 +15,8 @@ mod date;
 mod names;
 mod numeric;
 mod reference;
+mod unicode;
+pub use self::unicode::is_latin_cyrillic;
 
 pub use self::cite::*;
 pub use self::date::*;
