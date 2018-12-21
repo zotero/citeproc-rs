@@ -1,5 +1,5 @@
 use super::OutputFormat;
-use crate::utils::Intercalate;
+use crate::utils::{IntercalateExact};
 
 use crate::style::element::{FontStyle, FontWeight, Formatting};
 
@@ -103,7 +103,7 @@ impl OutputFormat<MarkdownNode, String> for Markdown {
         formatting: &Formatting,
     ) -> MarkdownNode {
         let delim = self.plain(delimiter);
-        MarkdownNode::Group(nodes.intercalate(&delim), formatting.into())
+        MarkdownNode::Group(nodes.iter().intercalate_exact(&delim), formatting.into())
     }
 
     fn output(&self, intermediate: MarkdownNode) -> String {

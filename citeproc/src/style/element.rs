@@ -434,7 +434,6 @@ pub struct Name {
 }
 
 impl Name {
-
     /// All properties on a Name may be inherited from elsewhere. Therefore while the
     /// `Default::default()` implementation will give you lots of `None`s, you need to define what
     /// those Nones should default to absent a parent giving a concrete definition.
@@ -478,33 +477,31 @@ impl Name {
     ///
     pub fn merge(&self, overrider: &Self) -> Self {
         Name {
-            and: overrider.and.clone()
-                .or(self.and.clone()),
-            delimiter: overrider.delimiter.clone()
-                .or(self.delimiter.clone()),
-            delimiter_precedes_et_al: overrider.delimiter_precedes_et_al
+            and: overrider.and.clone().or(self.and.clone()),
+            delimiter: overrider.delimiter.clone().or(self.delimiter.clone()),
+            delimiter_precedes_et_al: overrider
+                .delimiter_precedes_et_al
                 .or(self.delimiter_precedes_et_al),
-            delimiter_precedes_last: overrider.delimiter_precedes_last
+            delimiter_precedes_last: overrider
+                .delimiter_precedes_last
                 .or(self.delimiter_precedes_last),
-            et_al_min: overrider.et_al_min
-                .or(self.et_al_min),
-            et_al_use_first: overrider.et_al_use_first
-                .or(self.et_al_use_first),
-            et_al_use_last: overrider.et_al_use_last
-                .or(self.et_al_use_last),
-            et_al_subsequent_min: overrider.et_al_subsequent_min
-                .or(self.et_al_subsequent_min),
-            et_al_subsequent_use_first: overrider.et_al_subsequent_use_first
+            et_al_min: overrider.et_al_min.or(self.et_al_min),
+            et_al_use_first: overrider.et_al_use_first.or(self.et_al_use_first),
+            et_al_use_last: overrider.et_al_use_last.or(self.et_al_use_last),
+            et_al_subsequent_min: overrider.et_al_subsequent_min.or(self.et_al_subsequent_min),
+            et_al_subsequent_use_first: overrider
+                .et_al_subsequent_use_first
                 .or(self.et_al_subsequent_use_first),
-            form: overrider.form
-                .or(self.form),
-            initialize: overrider.initialize
-                .or(self.initialize.clone()),
-            initialize_with: overrider.initialize_with.clone()
+            form: overrider.form.or(self.form),
+            initialize: overrider.initialize.or(self.initialize.clone()),
+            initialize_with: overrider
+                .initialize_with
+                .clone()
                 .or(self.initialize_with.clone()),
-            name_as_sort_order: overrider.name_as_sort_order
-                .or(self.name_as_sort_order),
-            sort_separator: overrider.sort_separator.clone()
+            name_as_sort_order: overrider.name_as_sort_order.or(self.name_as_sort_order),
+            sort_separator: overrider
+                .sort_separator
+                .clone()
                 .or(self.sort_separator.clone()),
 
             // these four aren't inherited
@@ -521,7 +518,6 @@ impl fmt::Debug for Name {
         write!(f, "Name {{ .. }}")
     }
 }
-
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {

@@ -4,13 +4,13 @@ use std::borrow::Cow;
 use super::cite_context::*;
 use super::ir::*;
 use super::Proc;
-use crate::input::{ Name, PersonName };
+use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
-use crate::utils::Intercalate;
 use crate::style::element::{
-    Position,
-    DemoteNonDroppingParticle, Name as NameEl, NameAsSortOrder, NameForm, Names,
+    DemoteNonDroppingParticle, Name as NameEl, NameAsSortOrder, NameForm, Names, Position,
+    DelimiterPrecedes
 };
+use crate::utils::Intercalate;
 
 #[derive(Eq, PartialEq, Clone)]
 enum NameToken<'a, 'b: 'a> {
@@ -19,6 +19,7 @@ enum NameToken<'a, 'b: 'a> {
     Ellipsis,
     Delimiter,
     And,
+    Space,
 }
 
 impl NameEl {
@@ -79,13 +80,18 @@ impl NameEl {
             .fold(Vec::with_capacity(len), |mut acc, token| {
                 use self::ord::NamePartToken::*;
                 match (acc.last(), token) {
-                    (None, Space) => {},
-                    (None, SortSeparator) => {},
-                    (Some(Space), Space) => {},
-                    (Some(Space), SortSeparator) => { acc.pop(); acc.push(SortSeparator); },
-                    (Some(SortSeparator), Space) => {},
-                    (Some(SortSeparator), SortSeparator) => {},
-                    (_, t) => { acc.push(t); },
+                    (None, Space) => {}
+                    (None, SortSeparator) => {}
+                    (Some(Space), Space) => {}
+                    (Some(Space), SortSeparator) => {
+                        acc.pop();
+                        acc.push(SortSeparator);
+                    }
+                    (Some(SortSeparator), Space) => {}
+                    (Some(SortSeparator), SortSeparator) => {}
+                    (_, t) => {
+                        acc.push(t);
+                    }
                 }
                 acc
             })
@@ -96,7 +102,6 @@ impl NameEl {
         ctx: &CiteContext<'c, 'r, 'ci, O>,
         names_slice: &[Name],
     ) -> O::Build {
-        use std::iter::once;
         // TODO: NameForm::Count
         let mut seen_one = false;
         let name_count = names_slice.len();
@@ -112,32 +117,60 @@ impl NameEl {
                     .intercalate(&NameToken::Delimiter);
                 nms.push(NameToken::Delimiter);
                 nms.push(NameToken::Ellipsis);
+                nms.push(NameToken::Space);
                 nms.push(NameToken::Name(last));
                 nms
             } else {
                 // TODO: et-al
-                let nms = names_slice
+                let mut nms = names_slice
                     .iter()
                     .map(NameToken::Name)
+                    .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
+                nms.push(NameToken::Delimiter);
+                nms.push(NameToken::EtAl);
                 nms
             }
         } else {
-                let nms = names_slice
-                    .iter()
-                    .map(NameToken::Name)
-                    .intercalate(&NameToken::Delimiter);
-                nms
+            let mut nms = names_slice
+                .iter()
+                .map(NameToken::Name)
+                .intercalate(&NameToken::Delimiter);
+            // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
+            // because it only has any effect when "and" is set.
+            if let Some(ref and) = self.and {
+                if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
+                    let dpl = self.delimiter_precedes_last.unwrap_or(DelimiterPrecedes::Contextual);
+                    let insert = match dpl {
+                        DelimiterPrecedes::Contextual => name_count >= 3,
+                        // anticipate whether name_as_sort_order would kick in for the
+                        // (n-1)th name
+                        DelimiterPrecedes::AfterInvertedName => self.naso(name_count > 1),
+                        DelimiterPrecedes::Always => true,
+                        DelimiterPrecedes::Never => false,
+                    };
+                    if insert {
+                        nms.insert(last_delim + 1, NameToken::And);
+                        nms.insert(last_delim + 2, NameToken::Space);
+                    } else {
+                        nms[last_delim] = NameToken::Space;
+                        nms.insert(last_delim + 1, NameToken::And);
+                        nms.insert(last_delim + 2, NameToken::Space);
+                    }
+                }
+            }
+            nms
         };
 
         let st = names
             .iter()
             .map(|n| match n {
                 NameToken::Name(Name::Person(ref pn)) => {
+                    let naso = self.naso(seen_one);
                     let order = get_display_order(
                         true,
                         self.form == Some(NameForm::Long),
-                        self.naso(seen_one),
+                        naso,
                         // TODO: dynamic
                         DemoteNonDroppingParticle::DisplayAndSort,
                     );
@@ -163,8 +196,9 @@ impl NameEl {
                 }
                 NameToken::Delimiter => Cow::Borrowed(", "),
                 NameToken::EtAl => Cow::Borrowed("et al"),
-                NameToken::Ellipsis => Cow::Borrowed("… "),
-                NameToken::And => Cow::Borrowed("and "),
+                NameToken::Ellipsis => Cow::Borrowed("…"),
+                NameToken::Space => Cow::Borrowed(" "),
+                NameToken::And => Cow::Borrowed("and"),
             })
             // TODO: and, et-al, et cetera
             .join("");
@@ -174,7 +208,7 @@ impl NameEl {
     }
 }
 
-use self::ord::{NameOrdering, get_display_order, get_sort_order, NamePartToken};
+use self::ord::{get_display_order, get_sort_order, NameOrdering, NamePartToken};
 
 mod ord {
     //! Latin here means latin or cyrillic.

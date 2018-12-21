@@ -78,15 +78,23 @@
         </choose>
 
         <names variable="author">
-          <name name-as-sort-order="all" et-al-min="1000" et-al-use-first="1"/>
-        </names>
-
-        <names variable="author">
           <name et-al-min="0" et-al-use-first="1"/>
         </names>
 
         <names variable="editor">
+          <name name-as-sort-order="all" et-al-min="1000" et-al-use-first="1"/>
+        </names>
+
+        <names variable="editor">
+          <name form="short" name-as-sort-order="all" et-al-min="0" et-al-use-first="1" />
+        </names>
+
+        <names variable="editor">
           <name et-al-min="0" et-al-use-first="1" et-al-use-last="true" />
+        </names>
+
+        <names variable="editor">
+          <name and="text" delimiter-precedes-last="never" form="short" name-as-sort-order="all" et-al-min="10000" />
         </names>
 
       </group>
