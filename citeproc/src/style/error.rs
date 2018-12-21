@@ -232,33 +232,6 @@ impl From<InvalidCsl> for StyleError {
     }
 }
 
-fn get_pos(e: &Error) -> TextPos {
-    use xmlparser::Error as XP;
-    let pos = match *e {
-        Error::InvalidXmlPrefixUri(pos) => pos,
-        Error::UnexpectedXmlUri(pos) => pos,
-        Error::UnexpectedXmlnsUri(pos) => pos,
-        Error::InvalidElementNamePrefix(pos) => pos,
-        Error::DuplicatedNamespace(ref _name, pos) => pos,
-        Error::UnexpectedCloseTag { pos, .. } => pos,
-        Error::UnexpectedEntityCloseTag(pos) => pos,
-        Error::UnknownEntityReference(ref _name, pos) => pos,
-        Error::EntityReferenceLoop(pos) => pos,
-        Error::DuplicatedAttribute(ref _name, pos) => pos,
-        Error::ParserError(ref err) => match *err {
-            XP::InvalidToken(_, pos, _) => pos,
-            XP::UnexpectedToken(_, pos) => pos,
-            XP::UnknownToken(pos) => pos,
-        },
-        _ => TextPos::new(1, 1),
-    };
-    // make sure, because 0 = panic further down
-    TextPos {
-        row: if pos.row < 1 { 1 } else { pos.row },
-        col: if pos.col < 1 { 1 } else { pos.col },
-    }
-}
-
 impl Default for StyleError {
     fn default() -> Self {
         StyleError::Invalid(CslError(vec![InvalidCsl {
@@ -280,7 +253,7 @@ impl StyleError {
                 .map(|e| e.to_diagnostic(file_map).ok_or(e.message.clone()))
                 .collect(),
             StyleError::ParseError(ref e) => {
-                let pos = get_pos(&e);
+                let pos = e.pos();
 
                 let str_start =
                     file_map.byte_index((pos.row - 1 as u32).into(), (pos.col - 1 as u32).into());

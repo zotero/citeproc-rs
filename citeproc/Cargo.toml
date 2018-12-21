@@ -19,8 +19,7 @@ parallel = ["rayon"]
 # cli = ["clap"]
 
 [dependencies]
-roxmltree = "0.3.0"
-xmlparser = "0.7.0"
+roxmltree = "0.4.0"
 clap = { version = "2.32.0", optional = false }
 codespan = { version = "0.2.0", optional = false }
 codespan-reporting = { version = "0.2.0", optional = false }
