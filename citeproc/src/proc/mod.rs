@@ -8,6 +8,7 @@ mod cite_context;
 mod date;
 mod helpers;
 mod ir;
+mod names;
 pub use self::cite_context::*;
 use self::helpers::sequence;
 pub use self::ir::*;
@@ -83,18 +84,14 @@ where
 
             Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
                 let content = match *var {
-                    StandardVariable::Ordinary(ref v) => ctx
-                        .reference
-                        .ordinary
-                        .get(v)
-                        .map(|val| {
-                             let s = if v.should_replace_hyphens() {
-                                 val.replace('-', "\u{2013}")
-                             } else {
-                                 val.clone().into_owned()
-                             };
-                             fmt.affixed_text(s, f.as_ref(), &af)
-                         }),
+                    StandardVariable::Ordinary(ref v) => ctx.reference.ordinary.get(v).map(|val| {
+                        let s = if v.should_replace_hyphens() {
+                            val.replace('-', "\u{2013}")
+                        } else {
+                            val.clone().into_owned()
+                        };
+                        fmt.affixed_text(s, f.as_ref(), &af)
+                    }),
                     StandardVariable::Number(ref v) => ctx.reference.number.get(v).map(|val| {
                         fmt.affixed_text(val.verbatim(v.should_replace_hyphens()), f.as_ref(), &af)
                     }),
@@ -145,7 +142,7 @@ where
                 }))
             }
 
-            Element::Names(ref ns) => IR::Names(ns, fmt.plain("names first-pass")),
+            Element::Names(ref ns) => ns.intermediate(ctx),
 
             //
             // You're going to have to replace sequence() with something more complicated.

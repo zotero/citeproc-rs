@@ -126,10 +126,12 @@ impl<'r> NumericValue<'r> {
     pub fn as_number(&self, replace_hyphens: bool) -> String {
         match self {
             NumericValue::Tokens(_, ts) => tokens_to_string(ts),
-            NumericValue::Str(s) => if replace_hyphens {
-                s.replace('-', "\u{2013}")
-            } else {
-                s.clone().into_owned()
+            NumericValue::Str(s) => {
+                if replace_hyphens {
+                    s.replace('-', "\u{2013}")
+                } else {
+                    s.clone().into_owned()
+                }
             }
         }
     }

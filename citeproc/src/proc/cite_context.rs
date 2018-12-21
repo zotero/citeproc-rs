@@ -55,6 +55,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
             .map(|r| r.is_numeric())
             .unwrap_or(false)
     }
+
     pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue<'c>> {
         match var {
             // TODO: finish this list
@@ -67,6 +68,10 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
                 .clone(),
             _ => self.reference.number.get(var).cloned(),
         }
+    }
+
+    pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name<'r>>> {
+        self.reference.name.get(var)
     }
 }
 

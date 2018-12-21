@@ -66,7 +66,12 @@ fn main() {
             "container-title": "TASCC",
             "title": "Solomon v Garrity",
             "author": [
-                {"family": "Paul", "given": "John", "suffix": "II"}
+                {"family": "Beethoven", "dropping-particle": "van", "given": "Ludwig"}
+            ],
+            "editor": [
+                {"family": "Paul", "given": "John", "suffix": "II"},
+                {"family": "Mozart", "given": "Wolfgang Amadeus"},
+                {"family": "Beethoven", "dropping-particle": "van", "given": "Ludwig"}
             ],
             "issued": {"raw": "1995-03-01"}
         }

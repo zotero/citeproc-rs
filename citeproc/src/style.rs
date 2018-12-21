@@ -709,6 +709,7 @@ impl FromNode for Names {
             et_al,
             label,
             substitute,
+            affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
             delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
         })
@@ -740,7 +741,7 @@ impl FromNode for Name {
             name_part_family = parts("family").nth(0);
         }
         Ok(Name {
-            and: attribute_option_string(node, "and"),
+            and: attribute_option(node, "and")?,
             delimiter: node.attribute(delim_attr).map(String::from).map(Delimiter),
             delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al")?,
             delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last")?,

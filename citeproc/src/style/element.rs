@@ -386,13 +386,16 @@ type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Names {
+    // inheritable.
+    pub delimiter: Option<Delimiter>,
+    // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
     pub label: Option<NameLabel>,
     pub et_al: Option<EtAl>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
-    pub delimiter: Option<Delimiter>,
+    pub affixes: Affixes,
 }
 
 /// The available inheritable attributes for cs:name are and, delimiter-precedes-et-al,
@@ -401,9 +404,16 @@ pub struct Names {
 /// The attributes name-form and name-delimiter correspond to the form and delimiter attributes on
 /// cs:name. Similarly, names-delimiter corresponds to the delimiter attribute on cs:names.
 
-#[derive(Eq, Clone, PartialEq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum NameAnd {
+    Text,
+    Symbol,
+}
+
+#[derive(Eq, Clone, PartialEq, Default)]
 pub struct Name {
-    pub and: Option<String>,
+    pub and: Option<NameAnd>,
     pub delimiter: Option<Delimiter>,
     pub delimiter_precedes_et_al: Option<DelimiterPrecedes>,
     pub delimiter_precedes_last: Option<DelimiterPrecedes>,
@@ -423,11 +433,95 @@ pub struct Name {
     pub name_part_family: Option<NamePart>,
 }
 
+impl Name {
+
+    /// All properties on a Name may be inherited from elsewhere. Therefore while the
+    /// `Default::default()` implementation will give you lots of `None`s, you need to define what
+    /// those Nones should default to absent a parent giving a concrete definition.
+    ///
+    /// This follows how [citeproc-js][defaults] sets the defaults, because this is not specified
+    /// in the spec(s).
+    ///
+    /// [defaults]: https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/state.js#L103-L121
+    pub fn root_default() -> Self {
+        Name {
+            and: None,
+            delimiter: Some(Delimiter(",".to_string())),
+            delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
+            delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
+            et_al_min: Some(0),
+            et_al_use_first: Some(1),
+            et_al_use_last: Some(false),
+            et_al_subsequent_min: None, // must fall back to et_al_min
+            et_al_subsequent_use_first: None, // must fall back to et_al_use_first
+            // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/util_names_render.js#L710
+            form: Some(NameForm::Long),
+            initialize: Some(true),
+            // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/util_names_render.js#L739
+            initialize_with: Some("".to_string()),
+            name_as_sort_order: None,
+            sort_separator: Some(", ".to_string()),
+            // these four aren't inherited
+            formatting: None,
+            affixes: Default::default(),
+            name_part_given: None,
+            name_part_family: None,
+        }
+    }
+
+    /// Takes an upstream Name definition, and merges it with a more local one that will
+    /// override any fields set.
+    ///
+    /// Currently, also, it is not possible to override properties that don't accept a
+    /// "none"/"default" option back to their default after setting it on a parent element.
+    /// Like, once you set "name-as-sort-order", you cannot go back to Firstname Lastname.
+    ///
+    pub fn merge(&self, overrider: &Self) -> Self {
+        Name {
+            and: overrider.and.clone()
+                .or(self.and.clone()),
+            delimiter: overrider.delimiter.clone()
+                .or(self.delimiter.clone()),
+            delimiter_precedes_et_al: overrider.delimiter_precedes_et_al
+                .or(self.delimiter_precedes_et_al),
+            delimiter_precedes_last: overrider.delimiter_precedes_last
+                .or(self.delimiter_precedes_last),
+            et_al_min: overrider.et_al_min
+                .or(self.et_al_min),
+            et_al_use_first: overrider.et_al_use_first
+                .or(self.et_al_use_first),
+            et_al_use_last: overrider.et_al_use_last
+                .or(self.et_al_use_last),
+            et_al_subsequent_min: overrider.et_al_subsequent_min
+                .or(self.et_al_subsequent_min),
+            et_al_subsequent_use_first: overrider.et_al_subsequent_use_first
+                .or(self.et_al_subsequent_use_first),
+            form: overrider.form
+                .or(self.form),
+            initialize: overrider.initialize
+                .or(self.initialize.clone()),
+            initialize_with: overrider.initialize_with.clone()
+                .or(self.initialize_with.clone()),
+            name_as_sort_order: overrider.name_as_sort_order
+                .or(self.name_as_sort_order),
+            sort_separator: overrider.sort_separator.clone()
+                .or(self.sort_separator.clone()),
+
+            // these four aren't inherited
+            formatting: overrider.formatting.clone(),
+            affixes: overrider.affixes.clone(),
+            name_part_given: overrider.name_part_given.clone(),
+            name_part_family: overrider.name_part_family.clone(),
+        }
+    }
+}
+
 impl fmt::Debug for Name {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Name {{ .. }}")
     }
 }
+
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
@@ -443,7 +537,21 @@ pub struct EtAl {
     pub formatting: Option<Formatting>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum DemoteNonDroppingParticle {
+    Never,
+    SortOnly,
+    DisplayAndSort,
+}
+
+impl Default for DemoteNonDroppingParticle {
+    fn default() -> Self {
+        DemoteNonDroppingParticle::Never
+    }
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
@@ -458,27 +566,22 @@ impl Default for DelimiterPrecedes {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameForm {
     Long,
     Short,
     Count,
 }
-impl Default for NameForm {
-    fn default() -> Self {
-        NameForm::Long
-    }
-}
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAsSortOrder {
     First,
     All,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NamePartName {
     Given,
@@ -496,7 +599,7 @@ pub struct NamePart {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Substitute(pub Vec<Element>);
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum GivenNameDisambiguationRule {
     AllNames,
@@ -698,7 +801,7 @@ pub struct LocalizedDate {
     pub text_case: TextCase,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Position {
     First,

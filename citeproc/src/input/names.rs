@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PersonName<'r> {
     pub family: Option<Cow<'r, str>>,
@@ -12,7 +12,7 @@ pub struct PersonName<'r> {
     pub suffix: Option<Cow<'r, str>>,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum Name<'r> {
     Person(PersonName<'r>),

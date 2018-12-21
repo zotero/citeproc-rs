@@ -11,10 +11,6 @@ cfg_if! {
     }
 }
 
-pub trait Intercalate<T> {
-    fn intercalate(&self, sep: &T) -> Vec<T>;
-}
-
 pub trait JoinMany<T> {
     fn join_many(&self, sep: &[T]) -> Vec<T>;
 }
@@ -38,14 +34,21 @@ impl<T: Clone> JoinMany<T> for [Vec<T>] {
     }
 }
 
-impl<T: Clone> Intercalate<T> for [T] {
-    fn intercalate(&self, sep: &T) -> Vec<T> {
-        let mut iter = self.iter();
+pub trait Intercalate<T> {
+    fn intercalate(self, sep: &T) -> Vec<T>;
+}
+
+impl<T, I> Intercalate<T> for I
+where T : Clone,
+      I : IntoIterator<Item=T>,
+{
+    fn intercalate(self, sep: &T) -> Vec<T> {
+        let mut iter = self.into_iter();
         let first = match iter.next() {
             Some(first) => first,
             None => return vec![],
         };
-        let mut result: Vec<T> = Vec::with_capacity(self.len() * 2 - 1);
+        let mut result: Vec<T> = Vec::new();
         result.push(first.clone());
 
         for v in iter {
