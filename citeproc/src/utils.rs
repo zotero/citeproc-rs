@@ -70,7 +70,7 @@ pub trait IntercalateExact<T> {
 impl<T, I> IntercalateExact<T> for I
 where
     T: Clone,
-    I: ExactSizeIterator<Item=T>
+    I: ExactSizeIterator<Item = T>,
 {
     fn intercalate_exact(self, sep: &T) -> Vec<T> {
         let count = self.len();

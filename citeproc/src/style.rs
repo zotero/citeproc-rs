@@ -19,11 +19,13 @@ use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
 
+pub type FromNodeResult<T> = Result<T, CslError>;
+
 pub trait FromNode
 where
     Self: Sized,
 {
-    fn from_node(node: &Node) -> Result<Self, CslError>;
+    fn from_node(node: &Node) -> FromNodeResult<Self>;
 }
 
 pub trait IsOnNode
@@ -63,7 +65,7 @@ impl<T> FromNode for Option<T>
 where
     T: IsOnNode + FromNode,
 {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         if T::is_on_node(node) {
             Ok(Some(T::from_node(node)?))
         } else {
@@ -73,7 +75,7 @@ where
 }
 
 impl FromNode for Affixes {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(Affixes {
             prefix: attribute_string(node, "prefix"),
             suffix: attribute_string(node, "suffix"),
@@ -82,7 +84,7 @@ impl FromNode for Affixes {
 }
 
 impl FromNode for RangeDelimiter {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(RangeDelimiter(attribute_string(node, "range-delimiter")))
     }
 }
@@ -100,7 +102,7 @@ impl IsOnNode for Affixes {
 }
 
 impl FromNode for Formatting {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(Formatting {
             font_style: attribute_optional(node, "font-style")?,
             font_variant: attribute_optional(node, "font-variant")?,
@@ -117,7 +119,7 @@ impl FromNode for Formatting {
 }
 
 impl FromNode for Citation {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: remove collect() using Peekable
         let layouts: Vec<_> = node
             .children()
@@ -153,13 +155,13 @@ impl FromNode for Citation {
 }
 
 impl FromNode for Delimiter {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(Delimiter(attribute_string(node, "delimiter")))
     }
 }
 
 impl FromNode for Layout {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element())
@@ -175,7 +177,7 @@ impl FromNode for Layout {
 }
 
 impl FromNode for TextTermSelector {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         use self::terms::AnyTermName::*;
         // we already know term is on there
         let t = attribute_required(node, "term")?;
@@ -292,7 +294,7 @@ fn group_el(node: &Node) -> Result<Element, CslError> {
 }
 
 impl FromNode for Else {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element())
@@ -303,7 +305,7 @@ impl FromNode for Else {
 }
 
 impl FromNode for Match {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "match")?)
     }
 }
@@ -345,23 +347,27 @@ impl Condition {
     fn from_node_custom(node: &Node) -> Result<Self, ConditionError> {
         let cond = Condition {
             match_type: Match::from_node(node)?,
-            disambiguate: attribute_only_true(node, "disambiguate")?,
-            is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
-            variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
-            position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
-            is_uncertain_date: attribute_array_var(node, "is-uncertain-date", NeedVarType::Date)?,
             jurisdiction: attribute_option_string(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
+            disambiguate: attribute_only_true(node, "disambiguate")?,
+            variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
+            position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural)?,
+            csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
+            locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
             has_year_only: attribute_array_var(node, "has-year-only", NeedVarType::CondDate)?,
             has_day: attribute_array_var(node, "has-day", NeedVarType::CondDate)?,
+            is_uncertain_date: attribute_array_var(
+                node,
+                "is-uncertain-date",
+                NeedVarType::CondDate,
+            )?,
+            is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
             has_month_or_season: attribute_array_var(
                 node,
                 "has-month-or-season",
                 NeedVarType::CondDate,
             )?,
-            csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
-            locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
         };
         // technically, only a match="..." on an <if> is ignored when a <conditions> block is
         // present, but that's ok
@@ -377,7 +383,7 @@ impl Condition {
 }
 
 impl FromNode for Conditions {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let match_type = attribute_required(node, "match")?;
         let conds = node
             .children()
@@ -394,7 +400,7 @@ impl FromNode for Conditions {
 
 // TODO: need context to determine if the CSL-M syntax can be used
 impl FromNode for IfThen {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let tag = "if or else-if";
 
         // CSL 1.0.1 <if match="MMM" vvv ></if> equivalent to
@@ -526,7 +532,7 @@ impl IsOnNode for TextCase {
 }
 
 impl FromNode for TextCase {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "text-case")?)
     }
 }
@@ -553,7 +559,7 @@ fn disallow_default<T: Default + FromNode + IsOnNode>(
 }
 
 impl DatePart {
-    fn from_node_dp(node: &Node, full: bool) -> Result<Self, CslError> {
+    fn from_node_dp(node: &Node, full: bool) -> FromNodeResult<Self> {
         let name: DatePartName = attribute_required(node, "name")?;
         let form = match name {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form")?),
@@ -572,7 +578,7 @@ impl DatePart {
 }
 
 impl FromNode for IndependentDate {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
@@ -590,7 +596,7 @@ impl FromNode for IndependentDate {
 }
 
 impl FromNode for LocaleDate {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
@@ -606,7 +612,7 @@ impl FromNode for LocaleDate {
 }
 
 impl FromNode for LocalizedDate {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
@@ -626,7 +632,7 @@ impl FromNode for LocalizedDate {
 }
 
 impl FromNode for BodyDate {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         if node.has_attribute("form") {
             Ok(BodyDate::Local(LocalizedDate::from_node(node)?))
         } else {
@@ -636,7 +642,7 @@ impl FromNode for BodyDate {
 }
 
 impl FromNode for Element {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         match node.tag_name().name() {
             "text" => Ok(text_el(node)?),
             "label" => Ok(label_el(node)?),
@@ -674,7 +680,7 @@ fn get_toplevel<'a, 'd: 'a>(
 }
 
 impl FromNode for MacroMap {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: remove collect()
         let elements: Result<Vec<_>, _> = node
             .children()
@@ -698,7 +704,7 @@ impl FromNode for MacroMap {
 }
 
 impl FromNode for Names {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: did I have Vec<Name> originally because some styles have more than one?
         let name = max1_child("names", "name", node.children())?;
         let et_al = max1_child("names", "et-al", node.children())?;
@@ -718,7 +724,7 @@ impl FromNode for Names {
 }
 
 impl FromNode for Name {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         // for inheriting from cs:style/cs:citation/cs:bibliography
         let mut delim_attr = "delimiter";
         let mut form_attr = "form";
@@ -765,7 +771,7 @@ impl FromNode for Name {
 }
 
 impl FromNode for EtAl {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(EtAl {
             term: attribute_string(node, "term"),
             formatting: Option::from_node(node)?,
@@ -774,7 +780,7 @@ impl FromNode for EtAl {
 }
 
 impl FromNode for NamePart {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(NamePart {
             name: attribute_required(node, "name")?,
             text_case: TextCase::from_node(node)?,
@@ -785,7 +791,7 @@ impl FromNode for NamePart {
 }
 
 impl FromNode for NameLabel {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(NameLabel {
             form: attribute_optional(node, "form")?,
             formatting: Option::from_node(node)?,
@@ -796,7 +802,7 @@ impl FromNode for NameLabel {
 }
 
 impl FromNode for Substitute {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let els = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("name"))
@@ -809,14 +815,14 @@ impl FromNode for Substitute {
 struct TextContent(Option<String>);
 
 impl FromNode for TextContent {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let opt_s = node.text().map(String::from);
         Ok(TextContent(opt_s))
     }
 }
 
 impl FromNode for TermPlurality {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let always: Option<String> = TextContent::from_node(node)?.0.map(|s| s.trim().into());
         let single: Option<TextContent> = max1_child("term", "single", node.children())?;
         let multiple: Option<TextContent> = max1_child("term", "multiple", node.children())?;
@@ -838,19 +844,19 @@ impl FromNode for TermPlurality {
 }
 
 impl FromNode for OrdinalMatch {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "match")?)
     }
 }
 
 impl FromNode for TermFormExtended {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "form")?)
     }
 }
 
 impl FromNode for TermForm {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "form")?)
     }
 }
@@ -864,7 +870,7 @@ enum TermEl {
 }
 
 impl FromNode for TermEl {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         use self::terms::AnyTermName::*;
         let name: AnyTermName = attribute_required(node, "name")?;
         let content = TermPlurality::from_node(node)?;
@@ -913,7 +919,7 @@ impl FromNode for TermEl {
 }
 
 impl FromNode for Locale {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: make this an Option?
         let lang = node.attribute(("xml", "lang")).unwrap_or("en-GB");
 
@@ -962,7 +968,7 @@ impl FromNode for Locale {
 }
 
 impl FromNode for CslVersionReq {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let version = attribute_string(node, "version");
         let variant: CslVariant;
         let req = if version.ends_with("mlz1") {
@@ -1002,7 +1008,7 @@ r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x"
 }
 
 impl FromNode for Style {
-    fn from_node(node: &Node) -> Result<Self, CslError> {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node)?;
         // let info_node = get_toplevel(&doc, "info")?;
         let mut macros = FnvHashMap::default();

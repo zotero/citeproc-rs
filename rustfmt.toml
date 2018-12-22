@@ -1,0 +1,8 @@
+ignore = [
+  "citeproc/src/input/unicode/script.rs",
+]
+
+# report_todo = "Unnumbered"
+# report_fixme = "Unnumbered"
+# struct_field_align_threshold = 20
+# overflow_delimited_expr = true

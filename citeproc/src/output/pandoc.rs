@@ -2,7 +2,7 @@ use super::OutputFormat;
 use crate::style::element::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
-use crate::utils::{Intercalate, IntercalateExact, JoinMany};
+use crate::utils::{Intercalate, JoinMany};
 
 extern crate pandoc_types;
 use pandoc_types::definition::Inline::*;

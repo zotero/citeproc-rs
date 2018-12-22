@@ -1,12 +1,10 @@
-pub mod script;
-use self::script::{COMMON, LATIN, CYRILLIC};
+#[allow(dead_code)]
+mod script;
+use self::script::{COMMON, CYRILLIC, LATIN};
 
 pub fn is_latin_cyrillic(s: &str) -> bool {
-    s.chars().all(|c| {
-        LATIN.contains_char(c) ||
-            CYRILLIC.contains_char(c) ||
-            COMMON.contains_char(c)
-    })
+    s.chars()
+        .all(|c| LATIN.contains_char(c) || CYRILLIC.contains_char(c) || COMMON.contains_char(c))
 }
 
 #[test]

@@ -7,8 +7,8 @@ use super::Proc;
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DemoteNonDroppingParticle, Name as NameEl, NameAsSortOrder, NameForm, Names, Position,
-    DelimiterPrecedes
+    DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAsSortOrder, NameForm, Names,
+    Position,
 };
 use crate::utils::Intercalate;
 
@@ -16,11 +16,30 @@ use crate::input::is_latin_cyrillic;
 
 impl PersonName<'_> {
     fn is_latin_cyrillic(&self) -> bool {
-        self.family.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
-        self.given.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
-        self.suffix.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
-        self.non_dropping_particle.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true) &&
-        self.dropping_particle.as_ref().map(|s| is_latin_cyrillic(s)).unwrap_or(true)
+        self.family
+            .as_ref()
+            .map(|s| is_latin_cyrillic(s))
+            .unwrap_or(true)
+            && self
+                .given
+                .as_ref()
+                .map(|s| is_latin_cyrillic(s))
+                .unwrap_or(true)
+            && self
+                .suffix
+                .as_ref()
+                .map(|s| is_latin_cyrillic(s))
+                .unwrap_or(true)
+            && self
+                .non_dropping_particle
+                .as_ref()
+                .map(|s| is_latin_cyrillic(s))
+                .unwrap_or(true)
+            && self
+                .dropping_particle
+                .as_ref()
+                .map(|s| is_latin_cyrillic(s))
+                .unwrap_or(true)
     }
 }
 
@@ -35,7 +54,6 @@ enum NameToken<'a, 'b: 'a> {
 }
 
 impl NameEl {
-
     fn naso(&self, seen_one: bool) -> bool {
         match self.name_as_sort_order {
             None => false,
@@ -63,7 +81,7 @@ impl NameEl {
     }
 
     fn filtered_parts<'a>(pn: &PersonName, order: &'static [NamePartToken]) -> Vec<NamePartToken> {
-        let mut parts: Vec<NamePartToken> = order
+        let parts: Vec<NamePartToken> = order
             .iter()
             .cloned()
             .filter_map(|nt| match nt {
@@ -150,9 +168,11 @@ impl NameEl {
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
             // because it only has any effect when "and" is set.
-            if let Some(ref and) = self.and {
+            if let Some(ref _and) = self.and {
                 if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
-                    let dpl = self.delimiter_precedes_last.unwrap_or(DelimiterPrecedes::Contextual);
+                    let dpl = self
+                        .delimiter_precedes_last
+                        .unwrap_or(DelimiterPrecedes::Contextual);
                     let insert = match dpl {
                         DelimiterPrecedes::Contextual => name_count >= 3,
                         // anticipate whether name_as_sort_order would kick in for the
@@ -220,8 +240,9 @@ impl NameEl {
     }
 }
 
-use self::ord::{get_display_order, get_sort_order, NameOrdering, NamePartToken};
+use self::ord::{get_display_order, NamePartToken};
 
+#[allow(dead_code)]
 mod ord {
     //! Latin here means latin or cyrillic.
     //! TODO: use the regex crate with \\p{Cyrillic} and \\p{Latin}
@@ -229,7 +250,6 @@ mod ord {
     use crate::style::element::DemoteNonDroppingParticle as DNDP;
 
     pub type NameOrdering = &'static [NamePartToken];
-    pub type SortOrdering = &'static [SortToken];
 
     #[derive(Clone, Copy, PartialEq)]
     pub enum NamePartToken {
@@ -251,6 +271,8 @@ mod ord {
             }
         }
     }
+
+    pub type SortOrdering = &'static [SortToken];
 
     #[derive(PartialEq)]
     pub enum SortToken {
