@@ -2,7 +2,6 @@
 members = [
   "citeproc",
   "citeproc-wasm",
-  "pandoc-ffi-bridge",
 ]
 
 [profile.release]
