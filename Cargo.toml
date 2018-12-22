@@ -4,8 +4,11 @@ members = [
   "citeproc-wasm",
 ]
 
+[profile.bench]
+lto = true
+
 [profile.release]
-lto = false
+lto = true
 
 # [profile.dev]
 # rpath = true
