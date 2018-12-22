@@ -8,15 +8,15 @@ matrix:
 
   - rust: stable
     env: RUST_BACKTRACE=1
-    addons:
-      firefox: latest
+    # addons:
+    #   firefox: latest
       # chrome: stable
-    before_script:
-      - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+    # before_script:
+    #   - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
     script:
       - cargo test --all
-      # - cd citeproc-wasm && wasm-pack build
-      # - cd citeproc-wasm && wasm-pack test --firefox --headless
+      # - (cd citeproc-wasm && wasm-pack build)
+      # - (cd citeproc-wasm && wasm-pack test --firefox --headless)
 
   # # Builds with wasm-pack.
   # - rust: beta

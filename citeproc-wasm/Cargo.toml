@@ -9,8 +9,10 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # wasm-pack has no way of selecting feature sets, so this is wasm's
-default = ["console_error_panic_hook"]
-# default = []
+
+# uncomment for development.
+# don't leave this here when you commit
+# default = ["console_error_panic_hook"]
 
 [dependencies]
 citeproc = { path = "../citeproc" }
