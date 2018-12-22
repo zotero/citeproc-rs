@@ -118,6 +118,7 @@ impl FromNode for Formatting {
 
 impl FromNode for Citation {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        // TODO: remove collect() using Peekable
         let layouts: Vec<_> = node
             .children()
             .filter(|n| n.has_tag_name("layout"))
@@ -438,8 +439,6 @@ impl FromNode for IfThen {
 }
 
 fn choose_el(node: &Node) -> Result<Element, CslError> {
-    let els: Vec<Node> = node.children().filter(|n| n.is_element()).collect();
-
     let mut if_block: Option<IfThen> = None;
     let mut elseifs = vec![];
     let mut else_block = Else(vec![]);
@@ -462,7 +461,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
         ))?)
     };
 
-    for el in els.into_iter() {
+    for el in node.children().filter(|n| n.is_element()) {
         // TODO: figure out why doing this without a clone causes 'borrowed value does not
         // live long enough' problems.
         let tn = el.tag_name();
@@ -501,7 +500,7 @@ fn max1_child<T: FromNode>(
     child_tag: &str,
     els: Children,
 ) -> Result<Option<T>, CslError> {
-    // TODO: remove the allocation here, with a cloned iterator
+    // TODO: remove the allocation here, with a cloned iterator / peekable
     let subst_els: Vec<_> = els.filter(|n| n.has_tag_name(child_tag)).collect();
     if subst_els.len() > 1 {
         return Err(InvalidCsl::new(
@@ -655,6 +654,7 @@ fn get_toplevel<'a, 'd: 'a>(
     root: &Node<'a, 'd>,
     nodename: &'static str,
 ) -> Result<Node<'a, 'd>, CslError> {
+    // TODO: remove collect()
     let matches = root
         .children()
         .filter(|n| n.has_tag_name(nodename))
@@ -675,6 +675,7 @@ fn get_toplevel<'a, 'd: 'a>(
 
 impl FromNode for MacroMap {
     fn from_node(node: &Node) -> Result<Self, CslError> {
+        // TODO: remove collect()
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())

@@ -2,7 +2,7 @@ use super::OutputFormat;
 use crate::style::element::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
-use crate::utils::{IntercalateExact, JoinMany};
+use crate::utils::{Intercalate, IntercalateExact, JoinMany};
 
 extern crate pandoc_types;
 use pandoc_types::definition::Inline::*;
@@ -66,11 +66,11 @@ impl OutputFormat for Pandoc {
     }
 
     fn text_node(&self, text: String, f: Option<&Formatting>) -> Vec<Inline> {
-        let fmts: Vec<Inline> = text.split(' ').map(|s| Str(s.to_owned())).collect();
-
-        let v: Vec<Inline> = fmts
-            .into_iter()
-            .intercalate_exact(&Space)
+        let v: Vec<Inline> = text
+            // TODO: write a nom tokenizer, don't use split/intercalate
+            .split(' ')
+            .map(|s| Str(s.to_owned()))
+            .intercalate(&Space)
             .into_iter()
             .filter_map(|t| match t {
                 Str(ref s) if s == "" => None,
