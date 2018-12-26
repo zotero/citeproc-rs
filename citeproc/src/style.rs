@@ -28,7 +28,7 @@ where
     fn from_node(node: &Node) -> FromNodeResult<Self>;
 }
 
-pub trait IsOnNode
+pub trait AttrChecker
 where
     Self: Sized,
 {
@@ -49,7 +49,7 @@ where
     }
 }
 
-impl IsOnNode for Formatting {
+impl AttrChecker for Formatting {
     fn filter_attribute(attr: &str) -> bool {
         attr == "font-style"
             || attr == "font-variant"
@@ -63,7 +63,7 @@ impl IsOnNode for Formatting {
 
 impl<T> FromNode for Option<T>
 where
-    T: IsOnNode + FromNode,
+    T: AttrChecker + FromNode,
 {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         if T::is_on_node(node) {
@@ -89,13 +89,13 @@ impl FromNode for RangeDelimiter {
     }
 }
 
-impl IsOnNode for RangeDelimiter {
+impl AttrChecker for RangeDelimiter {
     fn filter_attribute(attr: &str) -> bool {
         attr == "range-delimiter"
     }
 }
 
-impl IsOnNode for Affixes {
+impl AttrChecker for Affixes {
     fn filter_attribute(attr: &str) -> bool {
         attr == "prefix" || attr == "suffix"
     }
@@ -279,18 +279,21 @@ fn number_el(node: &Node) -> Result<Element, CslError> {
     ))
 }
 
-fn group_el(node: &Node) -> Result<Element, CslError> {
-    let elements = node
-        .children()
-        .filter(|n| n.is_element())
-        .map(|el| Element::from_node(&el))
-        .partition_results()?;
-    Ok(Element::Group(
-        Option::from_node(node)?,
-        Delimiter::from_node(node)?,
-        Affixes::from_node(node)?,
-        elements,
-    ))
+impl FromNode for Group {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        let elements = node
+            .children()
+            .filter(|n| n.is_element())
+            .map(|el| Element::from_node(&el))
+            .partition_results()?;
+        Ok(Group {
+            elements,
+            formatting: Option::from_node(node)?,
+            delimiter: Delimiter::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
+            is_parallel: attribute_bool(node, "is-parallel", false)?,
+        })
+    }
 }
 
 impl FromNode for Else {
@@ -525,7 +528,7 @@ fn max1_child<T: FromNode>(
     Ok(substitute)
 }
 
-impl IsOnNode for TextCase {
+impl AttrChecker for TextCase {
     fn filter_attribute(attr: &str) -> bool {
         attr == "text-case"
     }
@@ -537,7 +540,7 @@ impl FromNode for TextCase {
     }
 }
 
-fn disallow_default<T: Default + FromNode + IsOnNode>(
+fn disallow_default<T: Default + FromNode + AttrChecker>(
     node: &Node,
     disallow: bool,
 ) -> Result<T, CslError> {
@@ -646,7 +649,7 @@ impl FromNode for Element {
         match node.tag_name().name() {
             "text" => Ok(text_el(node)?),
             "label" => Ok(label_el(node)?),
-            "group" => Ok(group_el(node)?),
+            "group" => Ok(Element::Group(Group::from_node(node)?)),
             "number" => Ok(number_el(node)?),
             "names" => Ok(Element::Names(Names::from_node(node)?)),
             "choose" => Ok(choose_el(node)?),

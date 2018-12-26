@@ -44,9 +44,20 @@ pub enum Element {
     // <cs:names>
     Names(Names),
     // <cs:group>
-    Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>),
+    // Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>),
+    Group(Group),
     // <cs:date>
     Date(BodyDate),
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Group {
+    pub formatting: Option<Formatting>,
+    pub delimiter: Delimiter,
+    pub affixes: Affixes,
+    pub elements: Vec<Element>,
+    /// CSL-M only
+    pub is_parallel: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

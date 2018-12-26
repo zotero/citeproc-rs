@@ -147,9 +147,13 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref f, ref d, ref af, ref els) => {
-                sequence(ctx, els.as_ref(), &d.0, f.as_ref(), af.clone())
-            }
+            Element::Group(ref g) => sequence(
+                ctx,
+                g.elements.as_ref(),
+                &g.delimiter.0,
+                g.formatting.as_ref(),
+                g.affixes.clone(),
+            ),
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))

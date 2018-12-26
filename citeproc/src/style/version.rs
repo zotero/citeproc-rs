@@ -13,9 +13,9 @@ pub struct CslVersionReq(pub CslVariant, pub VersionReq);
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum CslVariant {
     // these strums are for reading from the <style> element
-    #[strum(serialize = "csl")]
+    #[strum(serialize = "csl", serialize = "CSL")]
     Csl,
-    #[strum(serialize = "csl-m")]
+    #[strum(serialize = "csl-m", serialize = "CSL-M")]
     CslM,
 }
 
