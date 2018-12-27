@@ -283,8 +283,17 @@ pub enum NameVariable {
     /// translator
     Translator,
 
+    /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     Authority,
+
+    /// CSL-M only
+    ///
+    /// The dummy name variable is always empty. Use it to force all name variables called through
+    /// a cs:names node to render through cs:substitute, and so suppress whichever is chosen for
+    /// rendering to be suppressed through the remainder of the current cite.
+    #[strum(props(csl = "0", cslM = "1"))]
+    Dummy,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]

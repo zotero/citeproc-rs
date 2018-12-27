@@ -33,6 +33,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     pub fn has_variable(&self, var: &AnyVariable) -> bool {
         use crate::style::variables::AnyVariable::*;
         match *var {
+            Name(NameVariable::Dummy) => false,
             // TODO: finish this list
             Number(NumberVariable::Locator) => self.cite.locator.is_some(),
             // we need Page to exist and be numeric
@@ -71,7 +72,10 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     }
 
     pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name<'r>>> {
-        self.reference.name.get(var)
+        match var {
+            NameVariable::Dummy => None,
+            _ => self.reference.name.get(var)
+        }
     }
 }
 
