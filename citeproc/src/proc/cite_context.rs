@@ -37,7 +37,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
             // TODO: finish this list
             Number(NumberVariable::Locator) => self.cite.locator.is_some(),
             // we need Page to exist and be numeric
-            Number(NumberVariable::PageFirst) => self.is_numeric(&NumberVariable::PageFirst),
+            Number(NumberVariable::PageFirst) => self.is_numeric(var),
             _ => self.reference.has_variable(var),
         }
     }
@@ -51,10 +51,15 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
     ///   are literal hyphens, not number ranges.
     ///   By not representing them as numbers, `is-numeric="version"` won't work.
-    pub fn is_numeric(&self, var: &NumberVariable) -> bool {
-        self.get_number(var)
-            .map(|r| r.is_numeric())
-            .unwrap_or(false)
+    pub fn is_numeric(&self, var: &AnyVariable) -> bool {
+        match var {
+            AnyVariable::Number(num) => self.get_number(num)
+                .map(|r| r.is_numeric())
+                .unwrap_or(false),
+
+            // TODO: this isn't very useful
+            _ => false
+        }
     }
 
     pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue<'c>> {

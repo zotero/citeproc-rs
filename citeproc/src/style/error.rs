@@ -48,7 +48,6 @@ pub enum NeedVarType {
     Date,
     // in condition matchers
     CondDate,
-    CondIsNumeric,
     CondType,
     CondPosition,
     CondLocator,
@@ -101,14 +100,6 @@ impl NeedVarType {
                     _ => (empty, "???".to_string(), Severity::Warning),
                 }
             }).unwrap_or(unknown),
-
-            CondIsNumeric => {
-                maybe_got
-                    .map(|_| (wrong_type_var,
-                              "Hint: `is-numeric` can only match numeric variables".to_string(),
-                              Severity::Error))
-                    .unwrap_or(unknown)
-            }
 
             CondDate => (wrong_type_var,
                                     format!("Hint: `{}` can only match date variables", attr),

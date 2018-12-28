@@ -365,7 +365,7 @@ impl Condition {
                 "is-uncertain-date",
                 NeedVarType::CondDate,
             )?,
-            is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::CondIsNumeric)?,
+            is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::Any)?,
             has_month_or_season: attribute_array_var(
                 node,
                 "has-month-or-season",

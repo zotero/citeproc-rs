@@ -318,6 +318,9 @@ impl Default for Plural {
     }
 }
 
+/// [spec][]
+///
+/// [spec]: https://docs.citationstyles.org/en/stable/specification.html#choose
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Condition {
     pub match_type: Match,
@@ -327,7 +330,9 @@ pub struct Condition {
     /// https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L17-L46
     pub disambiguate: bool,
 
-    pub is_numeric: Vec<NumberVariable>,
+    /// It doesn't make much sense to test non-numeric variables, but the spec definitely says you
+    /// can do it.
+    pub is_numeric: Vec<AnyVariable>,
     pub variable: Vec<AnyVariable>,
     pub position: Vec<Position>,
     pub csl_type: Vec<CslType>,
@@ -816,6 +821,12 @@ pub enum Position {
     IbidWithLocator,
     Subsequent,
     NearNote,
+
+    /// CSL-M only
+    ///
+    /// It [would
+    /// appear](https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L165-L172)
+    /// this means `subsequent && NOT near-note`, but it is not defined in any specification.
     #[strum(props(csl = "0", cslM = "1"))]
     FarNote,
 }
