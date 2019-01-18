@@ -21,14 +21,17 @@ pub fn initialize<'n>(given_name: &str, initialize: bool, with: &str, initial_hy
     let mut process_token = |token: GivenNameToken| {
         match token {
             Name(ref n) => {
-                if !first {
-                    build.push(' ');
-                }
                 if initialize {
+                    if !first && !last_was_initial {
+                        build.push(' ');
+                    }
                     build.push(n.chars().nth(0).unwrap());
                     build.push_str(with);
                     last_was_initial = true;
                 } else {
+                    if !first {
+                        build.push(' ');
+                    }
                     build.push_str(n);
                     last_was_initial = false;
                 }
@@ -64,7 +67,10 @@ pub fn initialize<'n>(given_name: &str, initialize: bool, with: &str, initial_hy
             }
         }
         first = false;
+        // slightly hacky, but you may want to disable adding extra spaces so
+        // initialize-with=". " doesn't produce "W. A.  Mozart"
     };
+
     for word in given_name.split(&[' ', '.'][..]) {
         if word == "" {
 
