@@ -13,7 +13,12 @@ enum GivenNameToken<'n> {
 
 use self::GivenNameToken::*;
 
-pub fn initialize<'n>(given_name: &str, initialize: bool, with: &str, initial_hyphens: bool) -> String {
+pub fn initialize<'n>(
+    given_name: &str,
+    initialize: bool,
+    with: &str,
+    initial_hyphens: bool,
+) -> String {
     let mut build = String::new();
     let mut first = true;
     let mut last_was_initial = false;
@@ -57,7 +62,7 @@ pub fn initialize<'n>(given_name: &str, initialize: bool, with: &str, initial_hy
                     build.push_str(n);
                     last_was_initial = false;
                 }
-            },
+            }
             Other(ref n) => {
                 if !first {
                     build.push_str(" ");
@@ -117,4 +122,3 @@ fn test_initialize_normal() {
     assert_eq!(init("John R.L."), "John R.L.");
     assert_eq!(init("John R L de Bortoli"), "John R.L. de Bortoli");
 }
-

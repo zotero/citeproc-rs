@@ -696,7 +696,7 @@ impl FromNode for MacroMap {
                 return Ok(Err(InvalidCsl::new(
                     node,
                     "Macro must have a 'name' attribute.",
-                ))?)
+                ))?);
             }
         };
         Ok(MacroMap {

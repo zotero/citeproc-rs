@@ -53,12 +53,13 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     ///   By not representing them as numbers, `is-numeric="version"` won't work.
     pub fn is_numeric(&self, var: &AnyVariable) -> bool {
         match var {
-            AnyVariable::Number(num) => self.get_number(num)
+            AnyVariable::Number(num) => self
+                .get_number(num)
                 .map(|r| r.is_numeric())
                 .unwrap_or(false),
 
             // TODO: this isn't very useful
-            _ => false
+            _ => false,
         }
     }
 
@@ -79,7 +80,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name<'r>>> {
         match var {
             NameVariable::Dummy => None,
-            _ => self.reference.name.get(var)
+            _ => self.reference.name.get(var),
         }
     }
 }

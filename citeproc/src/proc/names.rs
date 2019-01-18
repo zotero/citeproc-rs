@@ -7,8 +7,7 @@ use super::Proc;
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DelimiterPrecedes, Name as NameEl, NameAsSortOrder, NameForm, Names,
-    Position,
+    DelimiterPrecedes, Name as NameEl, NameAsSortOrder, NameForm, Names, Position,
 };
 use crate::utils::Intercalate;
 
@@ -101,7 +100,6 @@ impl PersonName<'_> {
                 acc
             })
     }
-
 }
 
 impl DelimiterPrecedes {
@@ -128,7 +126,6 @@ enum NameToken<'a, 'b: 'a> {
 }
 
 impl NameEl {
-
     #[inline]
     fn naso(&self, seen_one: bool) -> bool {
         match self.name_as_sort_order {
@@ -185,7 +182,9 @@ impl NameEl {
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
-                let dpea = self.delimiter_precedes_et_al.unwrap_or(DelimiterPrecedes::Contextual);
+                let dpea = self
+                    .delimiter_precedes_et_al
+                    .unwrap_or(DelimiterPrecedes::Contextual);
                 if dpea.should_delimit_after(self, ea_use_first) {
                     nms.push(NameToken::Delimiter);
                 } else {
@@ -231,11 +230,14 @@ impl NameEl {
         if self.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
                 NameToken::Name(_) => acc + 1,
-                _ => acc
+                _ => acc,
             });
             // This isn't sort-mode, you can render NameForm::Count as text.
-            return ctx.format
-                .affixed_text(format!("{}", count), self.formatting.as_ref(), &self.affixes);
+            return ctx.format.affixed_text(
+                format!("{}", count),
+                self.formatting.as_ref(),
+                &self.affixes,
+            );
         }
 
         let st = name_tokens
@@ -253,18 +255,27 @@ impl NameEl {
                     for part in pn.filtered_parts(order) {
                         // We already tested is_some() for all these Some::unwrap() calls
                         match part {
-                            NamePartToken::Given => if let Some(ref given) = pn.given {
-                                // TODO: parametrize for disambiguation
-                                build.push_str(&initialize(
-                                    &given,
-                                    self.initialize.unwrap_or(true),
-                                    self.initialize_with.as_ref().map(|s| s.as_str()).unwrap_or(""),
-                                    ctx.style.initialize_with_hyphen
-                                ))
-                            },
+                            NamePartToken::Given => {
+                                if let Some(ref given) = pn.given {
+                                    // TODO: parametrize for disambiguation
+                                    build.push_str(&initialize(
+                                        &given,
+                                        self.initialize.unwrap_or(true),
+                                        self.initialize_with
+                                            .as_ref()
+                                            .map(|s| s.as_str())
+                                            .unwrap_or(""),
+                                        ctx.style.initialize_with_hyphen,
+                                    ))
+                                }
+                            }
                             NamePartToken::Family => build.push_str(&pn.family.as_ref().unwrap()),
-                            NamePartToken::NonDroppingParticle => build.push_str(&pn.non_dropping_particle.as_ref().unwrap()),
-                            NamePartToken::DroppingParticle => build.push_str(&pn.dropping_particle.as_ref().unwrap()),
+                            NamePartToken::NonDroppingParticle => {
+                                build.push_str(&pn.non_dropping_particle.as_ref().unwrap())
+                            }
+                            NamePartToken::DroppingParticle => {
+                                build.push_str(&pn.dropping_particle.as_ref().unwrap())
+                            }
                             NamePartToken::Suffix => build.push_str(&pn.suffix.as_ref().unwrap()),
                             NamePartToken::Space => build.push_str(" "),
                             NamePartToken::SortSeparator => build.push_str(", "),
@@ -290,7 +301,7 @@ impl NameEl {
     }
 }
 
-use self::ord::{DisplayOrdering, get_display_order, NamePartToken};
+use self::ord::{get_display_order, DisplayOrdering, NamePartToken};
 
 #[allow(dead_code)]
 mod ord {
