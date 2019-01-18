@@ -97,6 +97,10 @@
           <name and="text" delimiter-precedes-last="never" form="short" name-as-sort-order="all" et-al-min="10000" />
         </names>
 
+        <names variable="editor">
+          <name and="text" form="count" et-al-min="10000" />
+        </names>
+
       </group>
 
       <!-- <group delimiter=" &#38; " > -->

@@ -7,7 +7,7 @@ use super::Proc;
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAsSortOrder, NameForm, Names,
+    DelimiterPrecedes, Name as NameEl, NameAsSortOrder, NameForm, Names,
     Position,
 };
 use crate::utils::Intercalate;
@@ -41,60 +41,27 @@ impl PersonName<'_> {
                 .map(|s| is_latin_cyrillic(s))
                 .unwrap_or(true)
     }
-}
 
-#[derive(Eq, PartialEq, Clone)]
-enum NameToken<'a, 'b: 'a> {
-    Name(&'b Name<'a>),
-    EtAl,
-    Ellipsis,
-    Delimiter,
-    And,
-    Space,
-}
-
-impl NameEl {
-    fn naso(&self, seen_one: bool) -> bool {
-        match self.name_as_sort_order {
-            None => false,
-            Some(NameAsSortOrder::First) => !seen_one,
-            Some(NameAsSortOrder::All) => true,
-        }
-    }
-
-    fn ea_min(&self, pos: Position) -> usize {
-        let first = self.et_al_min.unwrap_or(0);
-        if pos == Position::First {
-            first as usize
-        } else {
-            self.et_al_subsequent_min.unwrap_or(first) as usize
-        }
-    }
-
-    fn ea_use_first(&self, pos: Position) -> usize {
-        let first = self.et_al_use_first.unwrap_or(1);
-        if pos == Position::First {
-            first as usize
-        } else {
-            self.et_al_subsequent_use_first.unwrap_or(first) as usize
-        }
-    }
-
-    fn filtered_parts<'a>(pn: &PersonName, order: &'static [NamePartToken]) -> Vec<NamePartToken> {
+    /// For a given display order, not all the name parts will have data in them at the end. So for
+    /// this PersonName, reduce the DisplayOrdering to include only those parts that will end up
+    /// with content.
+    ///
+    /// For example, for a last-name-only name like "Megalodon", `NamePartToken::Given` is removed,
+    /// which for `&[Family, SortSeparator, Given]` would leave `&[Family, SortSeparator]` and
+    /// render "Megalodon, ", so SortSeparator also has to be removed.
+    pub fn filtered_parts<'a>(&self, order: DisplayOrdering) -> Vec<NamePartToken> {
         let parts: Vec<NamePartToken> = order
             .iter()
             .cloned()
-            .filter_map(|nt| match nt {
-                NamePartToken::Given => pn.given.as_ref().map(|_| nt),
-                NamePartToken::Family => pn.family.as_ref().map(|_| nt),
-                NamePartToken::NonDroppingParticle => pn.non_dropping_particle.as_ref().map(|_| nt),
-                NamePartToken::DroppingParticle => pn.dropping_particle.as_ref().map(|_| nt),
-                NamePartToken::Suffix => pn.suffix.as_ref().map(|_| nt),
-                NamePartToken::Space => Some(nt),
-                NamePartToken::SortSeparator => Some(nt),
+            .filter(|npt| match npt {
+                NamePartToken::Given => self.given.is_some(),
+                NamePartToken::Family => self.family.is_some(),
+                NamePartToken::NonDroppingParticle => self.non_dropping_particle.is_some(),
+                NamePartToken::DroppingParticle => self.dropping_particle.is_some(),
+                NamePartToken::Suffix => self.suffix.is_some(),
+                NamePartToken::Space => true,
+                NamePartToken::SortSeparator => true,
             })
-            // remove doubled up spaces or delimiters
-            .dedup()
             .collect();
 
         // don't include leading or trailing spaces or delimiters
@@ -104,6 +71,9 @@ impl NameEl {
         } else {
             len
         };
+        // We may have dropped some of the namey name parts, leaving some stylistic tokens that
+        // are incorrect or redundant. So we need to drop stuff like 'two spaces in a row'.
+        // It *could* be done without a new Vec, but this is easier.
         parts
             .into_iter()
             .take(take)
@@ -114,6 +84,8 @@ impl NameEl {
                     (None, SortSeparator) => {}
                     (Some(Space), Space) => {}
                     (Some(Space), SortSeparator) => {
+                        // recall that separator includes a space
+                        // "Doe , John" is wrong
                         acc.pop();
                         acc.push(SortSeparator);
                     }
@@ -127,19 +99,60 @@ impl NameEl {
             })
     }
 
-    fn render<'c, 'r, 'ci, O: OutputFormat>(
+}
+
+#[derive(Eq, PartialEq, Clone)]
+enum NameToken<'a, 'b: 'a> {
+    Name(&'b Name<'a>),
+    EtAl,
+    Ellipsis,
+    Delimiter,
+    And,
+    Space,
+}
+
+impl NameEl {
+
+    #[inline]
+    fn naso(&self, seen_one: bool) -> bool {
+        match self.name_as_sort_order {
+            None => false,
+            Some(NameAsSortOrder::First) => !seen_one,
+            Some(NameAsSortOrder::All) => true,
+        }
+    }
+
+    #[inline]
+    fn ea_min(&self, pos: Position) -> usize {
+        let first = self.et_al_min.unwrap_or(0);
+        if pos == Position::First {
+            first as usize
+        } else {
+            self.et_al_subsequent_min.unwrap_or(first) as usize
+        }
+    }
+
+    #[inline]
+    fn ea_use_first(&self, pos: Position) -> usize {
+        let first = self.et_al_use_first.unwrap_or(1);
+        if pos == Position::First {
+            first as usize
+        } else {
+            self.et_al_subsequent_use_first.unwrap_or(first) as usize
+        }
+    }
+
+    fn name_tokens<'s, 'n>(
         &self,
-        ctx: &CiteContext<'c, 'r, 'ci, O>,
-        names_slice: &[Name],
-    ) -> O::Build {
-        // TODO: NameForm::Count
-        let mut seen_one = false;
+        position: Position,
+        names_slice: &'s [Name<'n>],
+    ) -> Vec<NameToken<'s, 'n>> {
         let name_count = names_slice.len();
-        let ea_min = self.ea_min(ctx.position);
-        let ea_use_first = self.ea_use_first(ctx.position);
-        let names = if name_count >= ea_min {
+        let ea_min = self.ea_min(position);
+        let ea_use_first = self.ea_use_first(position);
+        if name_count >= ea_min {
             if self.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
-                let last = names_slice.iter().last().unwrap();
+                let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
                     .iter()
                     .map(NameToken::Name)
@@ -192,25 +205,42 @@ impl NameEl {
                 }
             }
             nms
-        };
+        }
+    }
 
-        let st = names
+    fn render<'c, 'r, 'ci, O: OutputFormat>(
+        &self,
+        ctx: &CiteContext<'c, 'r, 'ci, O>,
+        names_slice: &[Name],
+    ) -> O::Build {
+        let mut seen_one = false;
+        let name_tokens = self.name_tokens(ctx.position, names_slice);
+
+        if self.form == Some(NameForm::Count) {
+            let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
+                NameToken::Name(_) => acc + 1,
+                _ => acc
+            });
+            // This isn't sort-mode, you can render NameForm::Count as text.
+            return ctx.format
+                .affixed_text(format!("{}", count), self.formatting.as_ref(), &self.affixes);
+        }
+
+        let st = name_tokens
             .iter()
             .map(|n| match n {
                 NameToken::Name(Name::Person(ref pn)) => {
-                    let naso = self.naso(seen_one);
                     let order = get_display_order(
                         pn.is_latin_cyrillic(),
                         self.form == Some(NameForm::Long),
-                        naso,
-                        // TODO: dynamic
-                        DemoteNonDroppingParticle::DisplayAndSort,
+                        self.naso(seen_one),
+                        ctx.style.demote_non_dropping_particle,
                     );
                     seen_one = true;
-                    let parts = Self::filtered_parts(pn, order);
-                    let out = parts
+                    let out = pn
+                        .filtered_parts(order)
                         .iter()
-                        .filter_map(|nt| match nt {
+                        .filter_map(|npt| match npt {
                             NamePartToken::Given => pn.given.as_ref(),
                             NamePartToken::Family => pn.family.as_ref(),
                             NamePartToken::NonDroppingParticle => pn.non_dropping_particle.as_ref(),
@@ -240,7 +270,7 @@ impl NameEl {
     }
 }
 
-use self::ord::{get_display_order, NamePartToken};
+use self::ord::{DisplayOrdering, get_display_order, NamePartToken};
 
 #[allow(dead_code)]
 mod ord {
@@ -249,7 +279,7 @@ mod ord {
 
     use crate::style::element::DemoteNonDroppingParticle as DNDP;
 
-    pub type NameOrdering = &'static [NamePartToken];
+    pub type DisplayOrdering = &'static [NamePartToken];
 
     #[derive(Clone, Copy, PartialEq)]
     pub enum NamePartToken {
@@ -283,7 +313,7 @@ mod ord {
     use self::NamePartToken::*;
     use self::SortToken::*;
 
-    pub fn get_display_order(latin: bool, long: bool, naso: bool, demote: DNDP) -> NameOrdering {
+    pub fn get_display_order(latin: bool, long: bool, naso: bool, demote: DNDP) -> DisplayOrdering {
         match (latin, long, naso, demote) {
             (false, long, ..) => {
                 if long {
@@ -323,7 +353,7 @@ mod ord {
         }
     }
 
-    static LATIN_LONG: NameOrdering = &[
+    static LATIN_LONG: DisplayOrdering = &[
         Given,
         Space,
         DroppingParticle,
@@ -334,7 +364,7 @@ mod ord {
         Space,
         Suffix,
     ];
-    static LATIN_LONG_NASO: NameOrdering = &[
+    static LATIN_LONG_NASO: DisplayOrdering = &[
         NonDroppingParticle,
         Space,
         Family,
@@ -345,7 +375,7 @@ mod ord {
         SortSeparator,
         Suffix,
     ];
-    static LATIN_LONG_NASO_DEMOTED: NameOrdering = &[
+    static LATIN_LONG_NASO_DEMOTED: DisplayOrdering = &[
         Family,
         SortSeparator,
         Given,
@@ -356,7 +386,7 @@ mod ord {
         SortSeparator,
         Suffix,
     ];
-    static LATIN_SHORT: NameOrdering = &[NonDroppingParticle, Space, Family];
+    static LATIN_SHORT: DisplayOrdering = &[NonDroppingParticle, Space, Family];
 
     static LATIN_SORT_NEVER: SortOrdering = &[
         Two(NonDroppingParticle, Family),
@@ -372,13 +402,14 @@ mod ord {
         One(Suffix),
     ];
 
-    static NON_LATIN_LONG: NameOrdering = &[
+    static NON_LATIN_LONG: DisplayOrdering = &[
         Family, // TODO: how do we determine if spaces are required?
         Given,
     ];
-    static NON_LATIN_SHORT: NameOrdering = &[Family];
+    static NON_LATIN_SHORT: DisplayOrdering = &[Family];
     static NON_LATIN_SORT_LONG: SortOrdering = &[One(Family), One(Given)];
     static NON_LATIN_SORT_SHORT: SortOrdering = &[One(Family)];
+
 }
 
 impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Names

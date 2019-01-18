@@ -559,7 +559,7 @@ pub enum DemoteNonDroppingParticle {
 
 impl Default for DemoteNonDroppingParticle {
     fn default() -> Self {
-        DemoteNonDroppingParticle::Never
+        DemoteNonDroppingParticle::DisplayAndSort
     }
 }
 
@@ -675,6 +675,7 @@ pub struct Style {
     pub names_delimiter: Option<Delimiter>,
     pub locale_overrides: FnvHashMap<String, Locale>,
     pub version_req: CslVersionReq,
+    pub demote_non_dropping_particle: DemoteNonDroppingParticle,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
