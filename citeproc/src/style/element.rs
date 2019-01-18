@@ -676,6 +676,7 @@ pub struct Style {
     pub locale_overrides: FnvHashMap<String, Locale>,
     pub version_req: CslVersionReq,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
+    pub initialize_with_hyphen: bool, // default is true
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]

@@ -14,6 +14,9 @@ use crate::utils::Intercalate;
 
 use crate::input::is_latin_cyrillic;
 
+mod initials;
+use self::initials::initialize;
+
 impl PersonName<'_> {
     fn is_latin_cyrillic(&self) -> bool {
         self.family
@@ -246,20 +249,28 @@ impl NameEl {
                         ctx.style.demote_non_dropping_particle,
                     );
                     seen_one = true;
-                    let out = pn
-                        .filtered_parts(order)
-                        .iter()
-                        .filter_map(|npt| match npt {
-                            NamePartToken::Given => pn.given.as_ref(),
-                            NamePartToken::Family => pn.family.as_ref(),
-                            NamePartToken::NonDroppingParticle => pn.non_dropping_particle.as_ref(),
-                            NamePartToken::DroppingParticle => pn.dropping_particle.as_ref(),
-                            NamePartToken::Suffix => pn.suffix.as_ref(),
-                            NamePartToken::Space => Some(Cow::Borrowed(" ")).as_ref(),
-                            NamePartToken::SortSeparator => Some(Cow::Borrowed(", ")).as_ref(),
-                        })
-                        .join("");
-                    Cow::Owned(out.trim().to_string())
+                    let mut build = String::new();
+                    for part in pn.filtered_parts(order) {
+                        // We already tested is_some() for all these Some::unwrap() calls
+                        match part {
+                            NamePartToken::Given => if let Some(ref given) = pn.given {
+                                // TODO: parametrize for disambiguation
+                                build.push_str(&initialize(
+                                    &given,
+                                    self.initialize.unwrap_or(true),
+                                    self.initialize_with.as_ref().map(|s| s.as_str()).unwrap_or(""),
+                                    ctx.style.initialize_with_hyphen
+                                ))
+                            },
+                            NamePartToken::Family => build.push_str(&pn.family.as_ref().unwrap()),
+                            NamePartToken::NonDroppingParticle => build.push_str(&pn.non_dropping_particle.as_ref().unwrap()),
+                            NamePartToken::DroppingParticle => build.push_str(&pn.dropping_particle.as_ref().unwrap()),
+                            NamePartToken::Suffix => build.push_str(&pn.suffix.as_ref().unwrap()),
+                            NamePartToken::Space => build.push_str(" "),
+                            NamePartToken::SortSeparator => build.push_str(", "),
+                        }
+                    }
+                    Cow::Owned(build.trim().to_string())
                 }
                 NameToken::Name(Name::Literal { ref literal }) => {
                     seen_one = true;

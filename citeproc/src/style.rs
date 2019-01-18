@@ -1069,6 +1069,7 @@ impl FromNode for Style {
             class: StyleClass::Note,
             name_inheritance: Name::from_node(&node)?,
             demote_non_dropping_particle: attribute_optional(node, "demote-non-dropping-particle")?,
+            initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
             names_delimiter: node
                 .attribute("names-delimiter")
                 .map(String::from)

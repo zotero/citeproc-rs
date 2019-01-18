@@ -105,6 +105,10 @@
           <name and="text" form="count" et-al-min="10000" />
         </names>
 
+        <names variable="editor">
+          <name and="text" initialize="true" initialize-with="." et-al-min="10000" />
+        </names>
+
       </group>
 
       <!-- <group delimiter=" &#38; " > -->
