@@ -101,6 +101,19 @@ impl PersonName<'_> {
 
 }
 
+impl DelimiterPrecedes {
+    fn should_delimit_after(&self, name: &NameEl, count_before_spot: usize) -> bool {
+        match self {
+            DelimiterPrecedes::Contextual => count_before_spot >= 2,
+            // anticipate whether name_as_sort_order would kick in for the
+            // name just before the delimiter would go
+            DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
+            DelimiterPrecedes::Always => true,
+            DelimiterPrecedes::Never => false,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Clone)]
 enum NameToken<'a, 'b: 'a> {
     Name(&'b Name<'a>),
@@ -164,13 +177,17 @@ impl NameEl {
                 nms.push(NameToken::Name(last));
                 nms
             } else {
-                // TODO: et-al
                 let mut nms = names_slice
                     .iter()
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
-                nms.push(NameToken::Delimiter);
+                let dpea = self.delimiter_precedes_et_al.unwrap_or(DelimiterPrecedes::Contextual);
+                if dpea.should_delimit_after(self, ea_use_first) {
+                    nms.push(NameToken::Delimiter);
+                } else {
+                    nms.push(NameToken::Space);
+                }
                 nms.push(NameToken::EtAl);
                 nms
             }
@@ -186,15 +203,7 @@ impl NameEl {
                     let dpl = self
                         .delimiter_precedes_last
                         .unwrap_or(DelimiterPrecedes::Contextual);
-                    let insert = match dpl {
-                        DelimiterPrecedes::Contextual => name_count >= 3,
-                        // anticipate whether name_as_sort_order would kick in for the
-                        // (n-1)th name
-                        DelimiterPrecedes::AfterInvertedName => self.naso(name_count > 1),
-                        DelimiterPrecedes::Always => true,
-                        DelimiterPrecedes::Never => false,
-                    };
-                    if insert {
+                    if dpl.should_delimit_after(self, name_count - 1) {
                         nms.insert(last_delim + 1, NameToken::And);
                         nms.insert(last_delim + 2, NameToken::Space);
                     } else {
