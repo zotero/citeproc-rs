@@ -12,9 +12,8 @@ use clap::{App, Arg, SubCommand};
 extern crate citeproc;
 use citeproc::input::*;
 use citeproc::output::*;
-use citeproc::style::locale::{Filesystem, Lang, LocaleFetcher, LocaleSource};
+use citeproc::style::locale::{Filesystem, Lang, LocaleFetcher};
 use citeproc::Driver;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -25,8 +24,6 @@ fn read<'s>(path: &str) -> String {
         .expect("something went wrong reading the file");
     contents
 }
-
-// use pandoc_types::definition::Inline;
 
 fn main() {
     let matches = App::new("citeproc")
@@ -41,6 +38,11 @@ fn main() {
                         .short("l")
                         .long("lang")
                         .takes_value(true),
+                ).arg(
+                    Arg::with_name("locales")
+                    .long("locales")
+                    .value_name("DIR")
+                    .takes_value(true)
                 ),
         )
         .arg(
@@ -91,14 +93,25 @@ fn main() {
     "#,
     );
 
+    use directories::ProjectDirs;
+    use std::path::PathBuf;
+
     if let Some(matches) = matches.subcommand_matches("locale") {
         use std::str::FromStr;
+        let locales = matches
+            .value_of("locales")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs").expect("No home directory found.");
+                pd.cache_dir().to_owned()
+            });
         let lang = matches
             .value_of("lang")
             .and_then(|l| Lang::from_str(l).ok())
             .unwrap_or(Lang::en_us());
-        let mut fsf = Filesystem::new("/Users/cormac/git/locales");
-        fsf.fetch_cli(&lang);
+        let mut fsf = Filesystem::new(dbg!(locales));
+        let locale = fsf.fetch_cli(&lang);
+        dbg!(locale);
         return;
     }
 
