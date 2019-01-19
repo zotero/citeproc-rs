@@ -137,7 +137,7 @@ impl Default for TermFormExtended {
 #[strum(serialize_all = "kebab_case")]
 pub enum TermPlurality {
     Pluralized { single: String, multiple: String },
-    Always(String),
+    Invariant(String),
 }
 
 impl TermPlurality {
@@ -150,19 +150,19 @@ impl TermPlurality {
     }
     pub fn plural(&self) -> Option<&str> {
         match self {
-            TermPlurality::Always(s) => Some(&s),
+            TermPlurality::Invariant(s) => Some(&s),
             TermPlurality::Pluralized { multiple, .. } => Some(&multiple),
         }
     }
     pub fn singular(&self) -> Option<&str> {
         match self {
-            TermPlurality::Always(s) => Some(&s),
+            TermPlurality::Invariant(s) => Some(&s),
             TermPlurality::Pluralized { single, .. } => Some(&single),
         }
     }
     pub fn no_plural_allowed(&self) -> Option<&str> {
         match self {
-            TermPlurality::Always(s) => Some(&s),
+            TermPlurality::Invariant(s) => Some(&s),
             _ => None,
         }
     }
@@ -196,7 +196,7 @@ impl TermPlurality {
 /// 1. `cs:number` wants to render the number `1` as an ordinal, so it needs to know the underlying
 ///    gender of the variable's associated noun.
 /// 2. `cs:number` looks up `GenderedTermSelector::Locator(LocatorType::Issue, TermForm::Long)` and
-///    gets back `GenderedTerm(TermPlurality::Always("issue"), Gender::Feminine)`
+///    gets back `GenderedTerm(TermPlurality::Invariant("issue"), Gender::Feminine)`
 /// 3. It then needs an ordinal to match `Gender::Feminine`, so it looks up, in order:
 ///
 ///    1. `OrdinalTermSelector(Mod100(1), Feminine, WholeNumber)` and finds no match;

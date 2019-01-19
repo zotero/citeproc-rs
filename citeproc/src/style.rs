@@ -833,9 +833,9 @@ impl FromNode for TermPlurality {
         let msg = "<term> must contain either only text content or both <single> and <multiple>";
         match (always, single, multiple) {
             // empty term is valid
-            (None, None, None) => Ok(TermPlurality::Always("".into())),
+            (None, None, None) => Ok(TermPlurality::Invariant("".into())),
             // <term>plain text content</term>
-            (Some(a), None, None) => Ok(TermPlurality::Always(a)),
+            (Some(a), None, None) => Ok(TermPlurality::Invariant(a)),
             // <term> ANYTHING <single> s </single> <multiple> m </multiple></term>
             (_, Some(s), Some(m)) => Ok(TermPlurality::Pluralized {
                 single: s.0.unwrap_or_else(|| "".into()),
@@ -908,7 +908,7 @@ impl FromNode for TermEl {
                 content,
             )),
             Ordinal(t) => match content {
-                TermPlurality::Always(a) => Ok(TermEl::Ordinal(
+                TermPlurality::Invariant(a) => Ok(TermEl::Ordinal(
                     OrdinalTermSelector(
                         t,
                         attribute_optional(node, "gender-form")?,
