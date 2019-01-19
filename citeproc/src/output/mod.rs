@@ -75,33 +75,3 @@ pub trait OutputFormat: Send + Sync + std::fmt::Debug {
 
     fn with_format(&self, a: Self::Build, f: Option<&Formatting>) -> Self::Build;
 }
-
-#[cfg(test)]
-mod test {
-
-    use crate::style::element::Formatting;
-
-    use super::OutputFormat;
-    use super::PlainText;
-
-    // #[test]
-    // fn markdown() {
-    //     let f = Markdown::new();
-    //     let o = f.text_node("hi", &Formatting::italic());
-    //     let o2 = f.text_node("mom", &Formatting::bold());
-    //     let o3 = f.group(&[o, o2], " ", &Formatting::italic());
-    //     let serialized = serde_json::to_string(&o3).unwrap();
-    //     assert_eq!(serialized, "\"_hi **mom**_\"");
-    // }
-
-    // #[test]
-    // fn test_plain() {
-    //     let f = PlainText::new();
-    //     let o = f.text_node("hi".into(), Some(&Formatting::italic()));
-    //     let o2 = f.text_node("mom".into(), None);
-    //     let o3 = f.group(&[o, o2], " ", Some(&Formatting::italic()));
-    //     let serialized = serde_json::to_string(&o3).unwrap();
-    //     assert_eq!(serialized, "\"hi mom\"");
-    // }
-
-}

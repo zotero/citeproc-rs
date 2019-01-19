@@ -100,6 +100,19 @@ pub fn initialize<'n>(
 #[test]
 fn test_initialize_full() {
     fn init(given_name: &str) -> String {
+        initialize(given_name, true, "", false)
+    }
+    assert_eq!(init("John R L"), "JRL");
+    assert_eq!(init("Jean-Luc K"), "JLK");
+    assert_eq!(init("R. L."), "RL");
+    assert_eq!(init("R L"), "RL");
+    assert_eq!(init("John R.L."), "JRL");
+    assert_eq!(init("John R L de Bortoli"), "JRL de B");
+}
+
+#[test]
+fn test_initialize_hyphen() {
+    fn init(given_name: &str) -> String {
         initialize(given_name, true, ".", true)
     }
     assert_eq!(init("John R L"), "J.R.L.");
@@ -108,6 +121,7 @@ fn test_initialize_full() {
     assert_eq!(init("R L"), "R.L.");
     assert_eq!(init("John R.L."), "J.R.L.");
     assert_eq!(init("John R L de Bortoli"), "J.R.L. de B.");
+    assert_eq!(init("好 好"), "好 好");
 }
 
 #[test]
@@ -121,4 +135,5 @@ fn test_initialize_normal() {
     assert_eq!(init("R L"), "R.L.");
     assert_eq!(init("John R.L."), "John R.L.");
     assert_eq!(init("John R L de Bortoli"), "John R.L. de Bortoli");
+    assert_eq!(init("好 好"), "好 好");
 }

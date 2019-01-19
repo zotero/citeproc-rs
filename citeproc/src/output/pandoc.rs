@@ -220,27 +220,27 @@ fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
 mod test {
     use super::*;
 
-    // #[test]
-    // fn test_space() {
-    //     let f = Pandoc::new();
-    //     assert_eq!(f.plain(" ")[0], Space);
-    //     assert_eq!(f.plain("  "), &[Space, Space]);
-    //     assert_eq!(f.plain(" h "), &[Space, Str("h".into()), Space]);
-    //     assert_eq!(
-    //         f.plain("  hello "),
-    //         &[Space, Space, Str("hello".into()), Space]
-    //     );
-    // }
+    #[test]
+    fn test_space() {
+        let f = Pandoc::new();
+        assert_eq!(f.plain(" ")[0], Space);
+        assert_eq!(f.plain("  "), &[Space, Space]);
+        assert_eq!(f.plain(" h "), &[Space, Str("h".into()), Space]);
+        assert_eq!(
+            f.plain("  hello "),
+            &[Space, Space, Str("hello".into()), Space]
+        );
+    }
 
-    // #[test]
-    // fn test_flip_emph() {
-    //     let f = Pandoc::new();
-    //     let a = f.plain("normal");
-    //     let b = f.text_node("emph".into(), Some(&Formatting::italic()));
-    //     let c = f.plain("normal");
-    //     let group = f.group(&[a, b, c], " ", Some(&Formatting::italic()));
-    //     let out = f.output(group.clone());
-    //     assert_ne!(group, out);
-    // }
+    #[test]
+    fn test_flip_emph() {
+        let f = Pandoc::new();
+        let a = f.plain("normal");
+        let b = f.text_node("emph".into(), Some(&Formatting::italic()));
+        let c = f.plain("normal");
+        let group = f.group(vec![a, b, c], " ", Some(&Formatting::italic()));
+        let out = f.output(group.clone());
+        assert_ne!(group, out);
+    }
 
 }

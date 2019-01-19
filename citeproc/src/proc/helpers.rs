@@ -108,13 +108,3 @@ where
         })
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::super::ir::IR::*;
-    use super::super::Proc;
-    use super::*;
-
-    #[test]
-    fn associative() {}
-}
