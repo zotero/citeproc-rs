@@ -182,7 +182,8 @@ impl FromNode for TextTermSelector {
         // we already know term is on there
         let t = attribute_required(node, "term")?;
         match t {
-            Edition => Ok(TextTermSelector::Gendered(GenderedTermSelector::Edition(
+            Number(v) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Number(
+                v,
                 TermForm::from_node(node)?,
             ))),
             Month(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Month(
@@ -878,8 +879,8 @@ impl FromNode for TermEl {
         let name: AnyTermName = attribute_required(node, "name")?;
         let content = TermPlurality::from_node(node)?;
         match name {
-            Edition => Ok(TermEl::Gendered(
-                GenderedTermSelector::Edition(TermForm::from_node(node)?),
+            Number(v) => Ok(TermEl::Gendered(
+                GenderedTermSelector::Number(v, TermForm::from_node(node)?),
                 GenderedTerm(content, attribute_optional(node, "gender")?),
             )),
             Month(mt) => Ok(TermEl::Gendered(

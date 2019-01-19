@@ -16,7 +16,7 @@ pub enum TextTermSelector {
 }
 
 pub enum AnyTermName {
-    Edition,
+    Number(NumberVariable),
     Month(MonthTerm),
     Loc(LocatorType),
 
@@ -39,8 +39,8 @@ impl GetAttribute for AnyTermName {
             return Ok(Misc(v));
         } else if let Ok(v) = MonthTerm::get_attr(s, csl_variant) {
             return Ok(Month(v));
-        } else if s == "edition" {
-            return Ok(Edition);
+        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
+            return Ok(Number(v));
         } else if let Ok(v) = LocatorType::get_attr(s, csl_variant) {
             return Ok(Loc(v));
         } else if let Ok(v) = SeasonTerm::get_attr(s, csl_variant) {
@@ -70,7 +70,7 @@ pub struct OrdinalTermSelector(pub OrdinalTerm, pub Gender, pub OrdinalMatch);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GenderedTermSelector {
     /// Edition is the only MiscTerm that can have a gender, so it's here instead
-    Edition(TermForm),
+    Number(NumberVariable, TermForm),
     Locator(LocatorType, TermForm),
     Month(MonthTerm, TermForm),
 }
@@ -86,8 +86,7 @@ impl GenderedTermSelector {
                 None => None,
                 Some(ref l) => Some(GenderedTermSelector::Locator(l.clone(), form.clone())),
             },
-            NumberVariable::Edition => Some(GenderedTermSelector::Edition(form.clone())),
-            _ => None,
+            v => Some(GenderedTermSelector::Number(v, form.clone())),
         }
     }
 }
