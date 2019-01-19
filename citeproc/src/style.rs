@@ -924,7 +924,7 @@ impl FromNode for TermEl {
 impl FromNode for Locale {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: make this an Option?
-        let lang = node.attribute(("xml", "lang")).unwrap_or("en-GB");
+        let lang = attribute_option(node, ("xml", "lang"))?;
 
         // TODO: one slot for each date form, avoid allocations?
         let dates = node
@@ -959,7 +959,7 @@ impl FromNode for Locale {
         }
         Ok(Locale {
             version: "1.0".into(),
-            lang: lang.into(),
+            lang,
             options: vec![],
             simple_terms,
             gendered_terms,
@@ -1064,6 +1064,7 @@ impl FromNode for Style {
             macros,
             version_req,
             locale_overrides,
+            default_locale: attribute_option(node, "default-locale")?,
             citation: citation?,
             info: Info {},
             class: StyleClass::Note,

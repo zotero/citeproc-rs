@@ -1,6 +1,6 @@
 use super::version::CslVariant;
 use crate::style::error::*;
-use roxmltree::Node;
+use roxmltree::{ExpandedName, Node};
 use std::str::FromStr;
 use strum::EnumProperty;
 
@@ -121,11 +121,18 @@ pub fn attribute_var_type<T: GetAttribute>(
     }
 }
 
-pub fn attribute_option<T: GetAttribute>(node: &Node, attr: &str) -> Result<Option<T>, InvalidCsl> {
-    match node.attribute(attr) {
+pub fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
+    node: &Node<'a, 'd>,
+    attr: impl Into<ExpandedName<'a>> + Clone,
+) -> Result<Option<T>, InvalidCsl> {
+    match node.attribute(attr.clone()) {
         Some(a) => match T::get_attr(a, CSL_VARIANT) {
             Ok(val) => Ok(Some(val)),
-            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
+            Err(e) => Err(InvalidCsl::attr_val(
+                node,
+                &format!("{:?}", attr.into()),
+                &e.value,
+            )),
         },
         None => Ok(None),
     }

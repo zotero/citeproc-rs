@@ -1,4 +1,4 @@
-use super::locale::Locale;
+use super::locale::{Lang, Locale};
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
 use crate::style::error::*;
 use crate::style::terms::LocatorType;
@@ -673,7 +673,9 @@ pub struct Style {
     pub info: Info,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
-    pub locale_overrides: FnvHashMap<String, Locale>,
+    /// `None` is the 'override everything' locale.
+    pub locale_overrides: FnvHashMap<Option<Lang>, Locale>,
+    pub default_locale: Option<Lang>,
     pub version_req: CslVersionReq,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool, // default is true

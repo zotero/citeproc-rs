@@ -3,15 +3,9 @@ use crate::output::*;
 use crate::proc::{CiteContext, Proc};
 use crate::style::element::Position;
 use crate::style::element::Style;
-use crate::style::error::{CslError, StyleError};
+use crate::style::error::StyleError;
 use crate::style::FromNode;
 use roxmltree::Document;
-
-impl From<CslError> for StyleError {
-    fn from(err: CslError) -> Self {
-        StyleError::Invalid(err)
-    }
-}
 
 pub struct Driver<'a, O>
 where

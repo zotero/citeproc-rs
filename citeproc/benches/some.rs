@@ -12,6 +12,7 @@ use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
 use std::str::FromStr;
+use std::borrow::Cow;
 
 fn bench_build_tree(c: &mut Criterion) {
     let formatter = PlainText::new();
@@ -24,7 +25,7 @@ fn bench_build_tree(c: &mut Criterion) {
 
 fn common_reference() -> Reference<'static> {
     let mut refr = Reference::empty("id", CslType::LegalCase);
-    refr.ordinary.insert(Variable::ContainerTitle, "TASCC");
+    refr.ordinary.insert(Variable::ContainerTitle, Cow::Borrowed("TASCC"));
     refr.number
         .insert(NumberVariable::Number, NumericValue::num(55));
     refr.date.insert(
@@ -52,14 +53,14 @@ fn aglc() -> String {
 // }
 
 fn bench_ir_gen<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic("ok", &formatter.output(formatter.plain("")));
+    let cite = Cite::basic("ok", &formatter.plain(""));
     let refr = common_reference();
     let driver = Driver::new(style, formatter).unwrap();
     b.iter(move || driver.pair(&cite, &refr))
 }
 
 fn bench_ir_gen_multi<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic("ok", &formatter.output(formatter.plain("")));
+    let cite = Cite::basic("ok", &formatter.plain(""));
     let refr = common_reference();
     let pairs: Vec<_> = std::iter::repeat((&cite, &refr)).take(40).collect();
     let driver = Driver::new(style, formatter).unwrap();

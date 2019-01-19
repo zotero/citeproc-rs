@@ -7,12 +7,14 @@ cfg_if! {
     }
 }
 
-use clap::{App, Arg};
+use clap::{App, Arg, SubCommand};
 
 extern crate citeproc;
 use citeproc::input::*;
 use citeproc::output::*;
+use citeproc::style::locale::{Filesystem, Lang, LocaleFetcher, LocaleSource};
 use citeproc::Driver;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -31,6 +33,16 @@ fn main() {
         .version("0.0.0")
         .author("Cormac Relf")
         .about("Processes citations")
+        .subcommand(
+            SubCommand::with_name("locale")
+                .about("parses a locale file just because it can")
+                .arg(
+                    Arg::with_name("lang")
+                        .short("l")
+                        .long("lang")
+                        .takes_value(true),
+                ),
+        )
         .arg(
             Arg::with_name("format")
                 .short("f")
@@ -78,6 +90,18 @@ fn main() {
     ]
     "#,
     );
+
+    if let Some(matches) = matches.subcommand_matches("locale") {
+        use std::str::FromStr;
+        let lang = matches
+            .value_of("lang")
+            .and_then(|l| Lang::from_str(l).ok())
+            .unwrap_or(Lang::en_us());
+        let mut fsf = Filesystem::new("/Users/cormac/git/locales");
+        fsf.fetch_cli(&lang);
+        return;
+    }
+
     if let Some(library_path) = matches.value_of("library") {
         lib_text = read(&library_path);
     }

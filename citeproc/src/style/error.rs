@@ -200,6 +200,12 @@ impl From<Error> for StyleError {
     }
 }
 
+impl From<CslError> for StyleError {
+    fn from(err: CslError) -> StyleError {
+        StyleError::Invalid(err)
+    }
+}
+
 impl From<Vec<CslError>> for CslError {
     fn from(errs: Vec<CslError>) -> CslError {
         // concat all of the sub-vecs into one

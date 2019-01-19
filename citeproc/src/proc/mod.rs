@@ -104,7 +104,7 @@ where
                     .style
                     .locale_overrides
                     // TODO: support multiple locales!
-                    .get("en-GB")
+                    .get(&None)
                     .unwrap()
                     .get_text_term(term_selector, pl)
                     .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
@@ -127,7 +127,7 @@ where
                         ctx.style
                             .locale_overrides
                             // TODO: support multiple locales!
-                            .get("en-GB")
+                            .get(&None)
                             .unwrap()
                             .get_text_term(&TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))

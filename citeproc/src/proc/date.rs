@@ -65,7 +65,7 @@ where
         O: OutputFormat,
     {
         let fmt = ctx.format;
-        let locale = ctx.style.locale_overrides.get("en-GB").unwrap();
+        let locale = ctx.style.locale_overrides.get(&None).unwrap();
         let locale_date = locale.dates.iter().find(|d| d.form == self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase
