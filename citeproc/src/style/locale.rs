@@ -14,14 +14,54 @@ use std::sync::Arc;
 
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CslOption(String, String);
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
+pub struct LocaleOptionsNode {
+    pub limit_ordinals_to_day_1: Option<bool>,
+    pub punctuation_in_quote: Option<bool>,
+}
+
+impl LocaleOptionsNode {
+    fn merge(&mut self, other: &Self) {
+        self.limit_ordinals_to_day_1 = other.limit_ordinals_to_day_1
+            .or(self.limit_ordinals_to_day_1);
+        self.punctuation_in_quote = other.punctuation_in_quote
+            .or(self.punctuation_in_quote);
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct LocaleOptions {
+    pub limit_ordinals_to_day_1: bool,
+    pub punctuation_in_quote: bool,
+}
+
+impl LocaleOptions {
+    fn from_merged(node: &LocaleOptionsNode) -> Self {
+        let mut this = Self::default();
+        if let Some(x) = node.limit_ordinals_to_day_1 {
+            this.limit_ordinals_to_day_1 = x;
+        }
+        if let Some(x) = node.punctuation_in_quote {
+            this.punctuation_in_quote = x;
+        }
+        this
+    }
+}
+
+impl Default for LocaleOptions {
+    fn default() -> Self{
+        LocaleOptions {
+            limit_ordinals_to_day_1: false,
+            punctuation_in_quote: false,
+        }
+    }
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Locale {
     pub version: String,
     pub lang: Option<Lang>,
-    pub options: Vec<CslOption>,
+    pub options_node: LocaleOptionsNode,
     pub simple_terms: SimpleMapping,
     pub gendered_terms: GenderedMapping,
     pub ordinal_terms: OrdinalMapping,
@@ -65,6 +105,7 @@ impl Locale {
         // replace the whole ordinals configuration
         self.ordinal_terms = with.ordinal_terms.clone();
         self.dates = with.dates.clone();
+        self.options_node.merge(&with.options_node);
     }
 }
 
@@ -90,6 +131,7 @@ trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
     fn locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
     fn merged_locale(&self, key: Lang) -> Arc<Locale>;
+    fn locale_options(&self, key: Lang) -> Arc<LocaleOptions>;
 }
 
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
@@ -119,6 +161,11 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
     } else {
         Arc::new(Locale::default())
     }
+}
+
+fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
+    let merged = &db.merged_locale(key).options_node;
+    Arc::new(LocaleOptions::from_merged(merged))
 }
 
 struct LocaleDbImpl {
@@ -163,6 +210,7 @@ salsa::database_storage! {
             fn locale_xml() for LocaleXmlQuery;
             fn locale() for LocaleQuery;
             fn merged_locale() for MergedLocaleQuery;
+            fn locale_options() for LocaleOptionsQuery;
         }
     }
 }

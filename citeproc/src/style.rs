@@ -922,9 +922,17 @@ impl FromNode for TermEl {
     }
 }
 
+impl FromNode for LocaleOptionsNode {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        Ok(LocaleOptionsNode {
+            limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
+            punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
+        })
+    }
+}
+
 impl FromNode for Locale {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        // TODO: make this an Option?
         let lang = attribute_option(node, ("xml", "lang"))?;
 
         // TODO: one slot for each date form, avoid allocations?
@@ -938,6 +946,10 @@ impl FromNode for Locale {
         let mut gendered_terms = GenderedMapping::default();
         let mut ordinal_terms = OrdinalMapping::default();
         let mut role_terms = RoleMapping::default();
+
+        let options_node = node.children().filter(|el| el.has_tag_name("style-options")).nth(0)
+            .map(|o_node| LocaleOptionsNode::from_node(&o_node))
+            .unwrap_or_else(|| Ok(LocaleOptionsNode::default()))?;
 
         let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
         if let Some(tn) = terms_node {
@@ -958,10 +970,11 @@ impl FromNode for Locale {
                 }
             }
         }
+
         Ok(Locale {
             version: "1.0".into(),
             lang,
-            options: vec![],
+            options_node,
             simple_terms,
             gendered_terms,
             ordinal_terms,
