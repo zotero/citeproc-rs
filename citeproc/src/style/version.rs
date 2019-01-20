@@ -10,6 +10,12 @@ lazy_static! {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CslVersionReq(pub CslVariant, pub VersionReq);
 
+impl CslVersionReq {
+    pub(crate) fn current_csl() -> Self {
+        CslVersionReq(CslVariant::Csl, VersionReq::exact(&*COMPILED_VERSION))
+    }
+}
+
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum CslVariant {
     // these strums are for reading from the <style> element

@@ -38,11 +38,12 @@ fn main() {
                         .short("l")
                         .long("lang")
                         .takes_value(true),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("locales")
-                    .long("locales")
-                    .value_name("DIR")
-                    .takes_value(true)
+                        .long("locales")
+                        .value_name("DIR")
+                        .takes_value(true),
                 ),
         )
         .arg(
@@ -102,7 +103,8 @@ fn main() {
             .value_of("locales")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs").expect("No home directory found.");
+                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
+                    .expect("No home directory found.");
                 pd.cache_dir().to_owned()
             });
         let lang = matches

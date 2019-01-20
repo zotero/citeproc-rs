@@ -4,9 +4,13 @@ use crate::style::element::LocaleDate;
 use crate::style::terms::*;
 
 mod fetcher;
-pub use self::fetcher::{Filesystem, LocaleFetcher, LocaleCache};
-use std::collections::HashSet;
+pub use self::fetcher::{Filesystem, LocaleFetcher};
 use fnv::FnvHashMap;
+use std::collections::HashSet;
+
+use crate::style::Style;
+use salsa::Database;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CslOption(String, String);
@@ -33,7 +37,10 @@ impl Locale {
         }
     }
     fn merge(&mut self, with: &Self) {
-        fn extend<K : Clone + Eq + std::hash::Hash, V : Clone>(map: &mut FnvHashMap<K, V>, other: &FnvHashMap<K, V>) {
+        fn extend<K: Clone + Eq + std::hash::Hash, V: Clone>(
+            map: &mut FnvHashMap<K, V>,
+            other: &FnvHashMap<K, V>,
+        ) {
             map.extend(other.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
         self.lang = with.lang.clone();
@@ -46,11 +53,6 @@ impl Locale {
     }
 }
 
-use std::sync::Arc;
-
-
-use crate::style::Style;
-
 #[salsa::query_group]
 trait StyleDatabase: salsa::Database {
     #[salsa::input]
@@ -61,7 +63,11 @@ trait StyleDatabase: salsa::Database {
 }
 
 fn inline_locale(db: &impl StyleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
-    db.style(()).locale_overrides.get(&key).cloned().map(Arc::new)
+    db.style(())
+        .locale_overrides
+        .get(&key)
+        .cloned()
+        .map(Arc::new)
 }
 
 #[salsa::query_group]
@@ -71,42 +77,49 @@ trait LocaleDatabase: salsa::Database + StyleDatabase {
     fn merged_locale(&self, key: Lang) -> Arc<Locale>;
 }
 
-fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
+fn locale_xml(_: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
     let fsf = Filesystem::new("/Users/cormac/git/locales");
     fsf.fetch_string(&key).ok().map(Arc::new)
 }
 
 fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
     match key {
-        LocaleSource::File(ref lang) =>  {
+        LocaleSource::File(ref lang) => {
             let string = db.locale_xml(lang.clone());
             string.and_then(|s| Locale::from_str(&s).ok()).map(Arc::new)
         }
-        LocaleSource::Inline(ref lang) => {
-            db.inline_locale(lang.clone())
-        }
+        LocaleSource::Inline(ref lang) => db.inline_locale(lang.clone()),
     }
 }
 
 fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
-    // TODO: implement merging
-    let mut locales: Vec<_> = key.iter().filter_map(|ls| db.locale(ls)).collect();
+    let locales: Vec<_> = key.iter().filter_map(|ls| db.locale(ls)).collect();
     if locales.len() >= 1 {
         // could fold, but we only need to clone the base
         let mut base = (*locales[locales.len() - 1]).clone();
         for nxt in locales.into_iter().rev().skip(1) {
             base.merge(&nxt);
-        };
+        }
         Arc::new(base)
     } else {
         Arc::new(Locale::default())
     }
 }
 
-#[derive(Default)]
 struct LocaleDbImpl {
-     runtime: salsa::Runtime<LocaleDbImpl>,
-     // fetcher: Box<F>
+    runtime: salsa::Runtime<LocaleDbImpl>,
+    // fetcher: Box<F>
+}
+
+impl Default for LocaleDbImpl {
+    fn default() -> Self {
+        let mut db = LocaleDbImpl {
+            runtime: Default::default(),
+        };
+        db.query_mut(StyleTextQuery).set((), Default::default());
+        db.query_mut(StyleQuery).set((), Default::default());
+        db
+    }
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -134,13 +147,17 @@ salsa::database_storage! {
 #[test]
 fn test_locale_db() {
     let db = LocaleDbImpl::default();
-    let locale = db.merged_locale(Lang::en_us());
+    // use AU so it has to do fallback
+    let locale = db.merged_locale(Lang::en_au());
     eprintln!("{:?}", locale);
-    if let Some(loc) = locale.as_ref() {
-        use crate::style::terms::*;
-        assert!(loc.simple_terms.get(&SimpleTermSelector::Misc(MiscTerm::Accessed, TermFormExtended::Long)).is_some())
-    }
-    assert!(locale.is_some());
+    use crate::style::terms::*;
+    assert!(locale
+        .simple_terms
+        .get(&SimpleTermSelector::Misc(
+            MiscTerm::Accessed,
+            TermFormExtended::Long
+        ))
+        .is_some())
 }
 
 // #[allow(dead_code)]
@@ -258,6 +275,9 @@ pub enum Lang {
 impl Lang {
     pub fn en_us() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::US))
+    }
+    pub fn en_au() -> Self {
+        Lang::Iso(IsoLang::English, Some(IsoCountry::AU))
     }
     pub fn iter(&self) -> impl Iterator<Item = LocaleSource> {
         use std::iter::once;

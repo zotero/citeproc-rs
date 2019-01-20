@@ -1,9 +1,8 @@
-use super::{Lang, Locale, LocaleSource};
+use super::{Lang, Locale};
 use crate::style::error::StyleError;
 use crate::style::FromNode;
 
 use roxmltree::Document;
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -48,8 +47,6 @@ impl From<StyleError> for LocaleFetchError {
     }
 }
 
-type LocaleFetchResult = Result<Locale, LocaleFetchError>;
-
 pub struct Filesystem {
     root: PathBuf,
 }
@@ -76,47 +73,5 @@ impl LocaleFetcher for Filesystem {
         let mut path = self.root.clone();
         path.push(&format!("locales-{}.xml", lang));
         fs::read_to_string(path)
-    }
-}
-
-impl LocaleSource {
-    pub fn get<'a, F: LocaleFetcher>(
-        &self,
-        inlines: &'a HashMap<Option<Lang>, Locale>,
-        cache: &mut LocaleCache<F>,
-    ) -> Option<Locale> {
-        match self {
-            LocaleSource::Inline(ref key) => inlines.get(key).cloned(),
-            LocaleSource::File(ref key) => cache.fetch(key),
-        }
-    }
-}
-
-pub struct LocaleCache<F: LocaleFetcher> {
-    cache: HashMap<Lang, Locale>,
-    inner: Box<F>,
-}
-
-impl<F: LocaleFetcher> LocaleCache<F> {
-    pub fn new(inner_fetcher: F) -> Self {
-        LocaleCache {
-            cache: HashMap::default(),
-            inner: Box::new(inner_fetcher),
-        }
-    }
-}
-
-impl<F: LocaleFetcher> LocaleFetcher for LocaleCache<F> {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, io::Error> {
-        Ok(String::new(), )
-    }
-    fn fetch(&mut self, lang: &Lang) -> Option<Locale> {
-        let got = self.inner.fetch(lang);
-        if let Some(ref locale) = &got {
-            self.cache.insert(lang.clone(), locale.clone());
-        } else {
-            self.cache.remove(lang);
-        }
-        got
     }
 }

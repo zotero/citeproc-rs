@@ -9,10 +9,10 @@ use citeproc::style::element::CslType;
 use citeproc::style::variables::*;
 use citeproc::Driver;
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::prelude::*;
 use std::str::FromStr;
-use std::borrow::Cow;
 
 fn bench_build_tree(c: &mut Criterion) {
     let formatter = PlainText::new();
@@ -25,7 +25,8 @@ fn bench_build_tree(c: &mut Criterion) {
 
 fn common_reference() -> Reference<'static> {
     let mut refr = Reference::empty("id", CslType::LegalCase);
-    refr.ordinary.insert(Variable::ContainerTitle, Cow::Borrowed("TASCC"));
+    refr.ordinary
+        .insert(Variable::ContainerTitle, Cow::Borrowed("TASCC"));
     refr.number
         .insert(NumberVariable::Number, NumericValue::num(55));
     refr.date.insert(

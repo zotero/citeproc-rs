@@ -301,7 +301,7 @@ impl Default for VerticalAlignment {
     }
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Delimiter(pub String);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
@@ -637,8 +637,22 @@ pub struct Citation {
     pub names_delimiter: Option<Delimiter>,
 }
 
+impl Default for Citation {
+    fn default() -> Self {
+        Citation {
+            disambiguate_add_names: false,
+            disambiguate_add_givenname: false,
+            givenname_disambiguation_rule: Default::default(),
+            disambiguate_add_year_suffix: false,
+            layout: Default::default(),
+            name_inheritance: Default::default(),
+            names_delimiter: None,
+        }
+    }
+}
+
 // TODO: Multiple layouts in CSL-M with locale="en es de" etc
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
     pub formatting: Option<Formatting>,
     pub affixes: Affixes,
@@ -662,7 +676,7 @@ pub enum StyleClass {
 
 use fnv::FnvHashMap;
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Info {}
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -679,6 +693,24 @@ pub struct Style {
     pub version_req: CslVersionReq,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool, // default is true
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Style {
+            class: StyleClass::Note,
+            macros: Default::default(),
+            citation: Default::default(),
+            info: Default::default(),
+            name_inheritance: Default::default(),
+            names_delimiter: None,
+            locale_overrides: Default::default(),
+            default_locale: None,
+            version_req: CslVersionReq::current_csl(),
+            demote_non_dropping_particle: Default::default(),
+            initialize_with_hyphen: true,
+        }
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
