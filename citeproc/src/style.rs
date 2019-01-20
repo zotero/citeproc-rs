@@ -936,18 +936,26 @@ impl FromNode for Locale {
         let lang = attribute_option(node, ("xml", "lang"))?;
 
         // TODO: one slot for each date form, avoid allocations?
-        let dates = node
+        let dates_vec = node
             .children()
             .filter(|el| el.has_tag_name("date"))
             .map(|el| LocaleDate::from_node(&el))
             .partition_results()?;
+
+        let mut dates = FnvHashMap::default();
+        for date in dates_vec.into_iter() {
+            dates.insert(date.form, date);
+        }
 
         let mut simple_terms = SimpleMapping::default();
         let mut gendered_terms = GenderedMapping::default();
         let mut ordinal_terms = OrdinalMapping::default();
         let mut role_terms = RoleMapping::default();
 
-        let options_node = node.children().filter(|el| el.has_tag_name("style-options")).nth(0)
+        let options_node = node
+            .children()
+            .filter(|el| el.has_tag_name("style-options"))
+            .nth(0)
             .map(|o_node| LocaleOptionsNode::from_node(&o_node))
             .unwrap_or_else(|| Ok(LocaleOptionsNode::default()))?;
 

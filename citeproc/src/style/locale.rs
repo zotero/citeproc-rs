@@ -1,12 +1,11 @@
 use std::fmt;
 
-use crate::style::element::LocaleDate;
+use crate::style::element::{DateForm, LocaleDate};
 use crate::style::terms::*;
 
 mod fetcher;
 pub use self::fetcher::{Filesystem, LocaleFetcher};
 use fnv::FnvHashMap;
-use std::collections::HashSet;
 
 use crate::style::Style;
 use salsa::Database;
@@ -22,10 +21,10 @@ pub struct LocaleOptionsNode {
 
 impl LocaleOptionsNode {
     fn merge(&mut self, other: &Self) {
-        self.limit_ordinals_to_day_1 = other.limit_ordinals_to_day_1
+        self.limit_ordinals_to_day_1 = other
+            .limit_ordinals_to_day_1
             .or(self.limit_ordinals_to_day_1);
-        self.punctuation_in_quote = other.punctuation_in_quote
-            .or(self.punctuation_in_quote);
+        self.punctuation_in_quote = other.punctuation_in_quote.or(self.punctuation_in_quote);
     }
 }
 
@@ -49,13 +48,15 @@ impl LocaleOptions {
 }
 
 impl Default for LocaleOptions {
-    fn default() -> Self{
+    fn default() -> Self {
         LocaleOptions {
             limit_ordinals_to_day_1: false,
             punctuation_in_quote: false,
         }
     }
 }
+
+pub type DateMapping = FnvHashMap<DateForm, LocaleDate>;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Locale {
@@ -66,7 +67,7 @@ pub struct Locale {
     pub gendered_terms: GenderedMapping,
     pub ordinal_terms: OrdinalMapping,
     pub role_terms: RoleMapping,
-    pub dates: Vec<LocaleDate>,
+    pub dates: DateMapping,
 }
 
 impl Locale {
@@ -102,9 +103,9 @@ impl Locale {
         extend(&mut self.simple_terms, &with.simple_terms);
         extend(&mut self.gendered_terms, &with.gendered_terms);
         extend(&mut self.role_terms, &with.role_terms);
+        extend(&mut self.dates, &with.dates);
         // replace the whole ordinals configuration
         self.ordinal_terms = with.ordinal_terms.clone();
-        self.dates = with.dates.clone();
         self.options_node.merge(&with.options_node);
     }
 }
@@ -128,9 +129,18 @@ fn inline_locale(db: &impl StyleDatabase, key: Option<Lang>) -> Option<Arc<Local
 
 #[salsa::query_group]
 trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
+    /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
+
+    /// A locale object, which may be `Default::default()`
     fn locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
+
+    /// Derives the full lang inheritance chain, and merges them into one
     fn merged_locale(&self, key: Lang) -> Arc<Locale>;
+
+    /// Even though we already have a merged `LocaleOptionsNode` struct, all its fields are
+    /// `Option`. To avoid having to unwrap each field later on, we merge whatever options did
+    /// get provided into a non-`Option` defaults struct.
     fn locale_options(&self, key: Lang) -> Arc<LocaleOptions>;
 }
 
@@ -443,7 +453,7 @@ mod test {
         )
     }
 
-    fn predef_terms(pairs: &[(Lang, &str)]) -> Predefined {
+    fn predefined_xml(pairs: &[(Lang, &str)]) -> Predefined {
         let mut map = HashMap::new();
         for (lang, ts) in pairs {
             map.insert(lang.clone(), terms(ts));
@@ -456,7 +466,7 @@ mod test {
     }
 
     fn test_simple_term(term: SimpleTermSelector, langs: &[(Lang, &str)], expect: Option<&str>) {
-        let db = LocaleDbImpl::new(Box::new(predef_terms(langs)));
+        let db = LocaleDbImpl::new(Box::new(predefined_xml(langs)));
         // use en-AU so it has to do fallback to en-US
         let locale = db.merged_locale(Lang::en_au());
         assert_eq!(
