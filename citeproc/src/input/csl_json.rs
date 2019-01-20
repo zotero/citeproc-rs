@@ -43,7 +43,7 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     }
 }
 
-impl<'a, 'de: 'a> Deserialize<'de> for Reference<'a> {
+impl<'de> Deserialize<'de> for Reference {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -87,13 +87,13 @@ impl<'a, 'de: 'a> Deserialize<'de> for Reference<'a> {
         struct ReferenceVisitor;
 
         impl<'de> Visitor<'de> for ReferenceVisitor {
-            type Value = Reference<'de>;
+            type Value = Reference;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("struct Reference")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Reference<'de>, V::Error>
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -173,7 +173,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for Reference<'a> {
     }
 }
 
-impl<'a, 'de: 'a> Deserialize<'de> for NumericValue<'a> {
+impl<'de> Deserialize<'de> for NumericValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -181,7 +181,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for NumericValue<'a> {
         struct NumericVisitor;
 
         impl<'de> Visitor<'de> for NumericVisitor {
-            type Value = NumericValue<'de>;
+            type Value = NumericValue;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("an integer between 0 and 2^32, or a string")
@@ -240,7 +240,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for NumericValue<'a> {
 }
 
 // newtype these so we can have a different implementation
-struct DateParts<'a>(DateOrRange<'a>);
+struct DateParts(DateOrRange);
 struct DateInt(i32);
 
 impl<'de> Deserialize<'de> for DateInt {
@@ -354,14 +354,14 @@ impl<'de> Deserialize<'de> for Date {
     }
 }
 
-impl<'a, 'de: 'a> Deserialize<'de> for DateParts<'a> {
+impl<'de> Deserialize<'de> for DateParts {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct DatePartsVisitor;
         impl<'de> Visitor<'de> for DatePartsVisitor {
-            type Value = DateParts<'de>;
+            type Value = DateParts;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a date-parts block, e.g. [[2004,8,19]]")
@@ -385,7 +385,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for DateParts<'a> {
 }
 
 /// TODO:implement seasons
-impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
+impl<'de> Deserialize<'de> for DateOrRange {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -403,7 +403,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
         struct DateVisitor;
 
         impl<'de> Visitor<'de> for DateVisitor {
-            type Value = DateOrRange<'de>;
+            type Value = DateOrRange;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a date")
@@ -413,14 +413,14 @@ impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
             where
                 E: de::Error,
             {
-                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(Cow::Borrowed(value))))
+                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string())))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(Cow::Owned(value))))
+                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value)))
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
@@ -434,7 +434,7 @@ impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
                             let v: Cow<'de, str> = map.next_value()?;
                             found = Some(
                                 DateOrRange::from_str(&v)
-                                    .unwrap_or_else(|_| DateOrRange::Literal(v)),
+                                    .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
                             )
                         }
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),

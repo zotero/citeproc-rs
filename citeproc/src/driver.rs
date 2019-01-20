@@ -29,7 +29,7 @@ where
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.plain("")),
+            cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,
@@ -40,7 +40,7 @@ where
         serde_json::to_string(&o).unwrap()
     }
 
-    pub fn pair<'ci>(&self, cite: &Cite<'ci, O>, refr: &Reference) {
+    pub fn pair(&self, cite: &Cite<O>, refr: &Reference) {
         let ctx = CiteContext {
             style: &self.style,
             cite,
@@ -52,7 +52,7 @@ where
         self.style.intermediate(&ctx);
     }
 
-    pub fn multiple<'ci, 'r>(&self, pairs: &[(&Cite<'ci, O>, &Reference<'r>)]) -> bool {
+    pub fn multiple(&self, pairs: &[(&Cite<O>, &Reference)]) -> bool {
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
@@ -112,7 +112,7 @@ where
         let ctx = CiteContext {
             style: &self.style,
             reference: refr,
-            cite: &Cite::basic("ok", &self.formatter.plain("")),
+            cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
             position: Position::First,
             format: self.formatter,
             citation_number: 1,

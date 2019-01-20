@@ -16,7 +16,7 @@ use crate::input::is_latin_cyrillic;
 mod initials;
 use self::initials::initialize;
 
-impl PersonName<'_> {
+impl PersonName {
     fn is_latin_cyrillic(&self) -> bool {
         self.family
             .as_ref()
@@ -116,8 +116,8 @@ impl DelimiterPrecedes {
 }
 
 #[derive(Eq, PartialEq, Clone)]
-enum NameToken<'a, 'b: 'a> {
-    Name(&'b Name<'a>),
+enum NameToken<'a> {
+    Name(&'a Name),
     EtAl,
     Ellipsis,
     Delimiter,
@@ -155,11 +155,11 @@ impl NameEl {
         }
     }
 
-    fn name_tokens<'s, 'n>(
+    fn name_tokens<'s>(
         &self,
         position: Position,
-        names_slice: &'s [Name<'n>],
-    ) -> Vec<NameToken<'s, 'n>> {
+        names_slice: &'s [Name],
+    ) -> Vec<NameToken<'s>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
@@ -219,9 +219,9 @@ impl NameEl {
         }
     }
 
-    fn render<'c, 'r, 'ci, O: OutputFormat>(
+    fn render<'c, O: OutputFormat>(
         &self,
-        ctx: &CiteContext<'c, 'r, 'ci, O>,
+        ctx: &CiteContext<'c, O>,
         names_slice: &[Name],
     ) -> O::Build {
         let mut seen_one = false;
@@ -285,7 +285,7 @@ impl NameEl {
                 }
                 NameToken::Name(Name::Literal { ref literal }) => {
                     seen_one = true;
-                    literal.clone()
+                    Cow::Borrowed(literal.as_str())
                 }
                 NameToken::Delimiter => Cow::Borrowed(", "),
                 NameToken::EtAl => Cow::Borrowed("et al"),
@@ -443,11 +443,11 @@ mod ord {
 
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Names
+impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {

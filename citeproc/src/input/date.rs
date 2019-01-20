@@ -1,6 +1,5 @@
 use nom::*;
 /// TODO: parse 2018-3-17 as if it were '03'
-use std::borrow::Cow;
 
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
 // then we'd just use chrono::DateTime and support ISO input
@@ -56,13 +55,13 @@ impl Date {
 
 // TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day }
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum DateOrRange<'r> {
+pub enum DateOrRange {
     Single(Date),
     Range(Date, Date),
-    Literal(Cow<'r, str>),
+    Literal(String),
 }
 
-impl<'r> DateOrRange<'r> {
+impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
         DateOrRange::Single(Date { year, month, day })
     }
@@ -87,7 +86,7 @@ impl<'r> DateOrRange<'r> {
     }
 }
 
-impl FromStr for DateOrRange<'static> {
+impl FromStr for DateOrRange {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         parse_range(s)
@@ -364,7 +363,7 @@ named!(
 named!(and_ymd<Date>, do_parse!(tag!("/") >> d: ymd_date >> (d)));
 
 named!(
-    range<DateOrRange<'static>>,
+    range<DateOrRange>,
     do_parse!(
         d1: ymd_date
             >> d2o: opt!(complete!(and_ymd))
@@ -375,7 +374,7 @@ named!(
     )
 );
 
-pub fn parse_range(string: &str) -> Result<DateOrRange<'static>, ()> {
+pub fn parse_range(string: &str) -> Result<DateOrRange, ()> {
     if let Ok((_left_overs, parsed)) = range(string.as_bytes()) {
         Ok(parsed)
     } else {

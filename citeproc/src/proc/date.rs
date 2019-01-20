@@ -40,11 +40,11 @@ const MONTHS_LONG: &[&str] = &[
     "December",
 ];
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for BodyDate
+impl<'c, O> Proc<'c, O> for BodyDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -56,11 +56,11 @@ where
     }
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LocalizedDate
+impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -91,11 +91,11 @@ where
     }
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for IndependentDate
+impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -130,9 +130,9 @@ impl DatePart {
             DatePartForm::Year(_) => true,
         }
     }
-    fn render<'c, 'r, 'ci, O: OutputFormat>(
+    fn render<'c, O: OutputFormat>(
         &self,
-        ctx: &CiteContext<'c, 'r, 'ci, O>,
+        ctx: &CiteContext<'c, O>,
         date: &Date,
     ) -> O::Build {
         let string = match self.form {

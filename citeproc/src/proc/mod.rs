@@ -29,41 +29,41 @@ pub use self::ir::*;
 //
 // [Style]: ../style/element/struct.Style.html
 // [Reference]: ../input/struct.Reference.html
-pub trait Proc<'c, 'r: 'c, 'ci: 'c, O>
+pub trait Proc<'c, O>
 where
     O: OutputFormat,
 {
     /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
     /// often borrow from self to be recomputed during disambiguation.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>;
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>;
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Style
+impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
         layout.intermediate(ctx)
     }
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for LayoutEl
+impl<'c, O> Proc<'c, O> for LayoutEl
 where
     O: OutputFormat,
 {
     /// Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
         sequence(ctx, &self.elements, "", None, Affixes::default())
     }
 }
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Element
+impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
         let fmt = ctx.format;
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
@@ -88,7 +88,7 @@ where
                         let s = if v.should_replace_hyphens() {
                             val.replace('-', "\u{2013}")
                         } else {
-                            val.clone().into_owned()
+                            val.clone()
                         };
                         fmt.affixed_text(s, f.as_ref(), &af)
                     }),

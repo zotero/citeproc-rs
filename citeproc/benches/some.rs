@@ -23,7 +23,7 @@ fn bench_build_tree(c: &mut Criterion) {
     });
 }
 
-fn common_reference() -> Reference<'static> {
+fn common_reference() -> Reference {
     let mut refr = Reference::empty("id", CslType::LegalCase);
     refr.ordinary
         .insert(Variable::ContainerTitle, Cow::Borrowed("TASCC"));

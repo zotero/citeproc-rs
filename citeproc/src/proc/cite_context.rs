@@ -13,23 +13,23 @@ use crate::style::variables::*;
 /// [Cite]: ../input/struct.Cite.html
 
 #[derive(Clone)]
-pub struct CiteContext<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
+pub struct CiteContext<'c, O: OutputFormat> {
     pub style: &'c Style,
-    pub reference: &'c Reference<'r>,
-    pub cite: &'c Cite<'ci, O>,
+    pub reference: &'c Reference,
+    pub cite: &'c Cite<O>,
     pub format: &'c O,
     pub position: Position,
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
 }
 
-pub struct Cluster<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> {
-    pub cites: Vec<CiteContext<'c, 'r, 'ci, O>>,
+pub struct Cluster<'c, O: OutputFormat> {
+    pub cites: Vec<CiteContext<'c, O>>,
 }
 
 // helper methods to access both cite and reference properties via Variables
 
-impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
+impl<'c, O: OutputFormat> CiteContext<'c, O> {
     pub fn has_variable(&self, var: &AnyVariable) -> bool {
         use crate::style::variables::AnyVariable::*;
         match *var {
@@ -63,7 +63,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
         }
     }
 
-    pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue<'c>> {
+    pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue> {
         match var {
             // TODO: finish this list
             NumberVariable::Locator => self.cite.locator.clone(),
@@ -77,7 +77,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
         }
     }
 
-    pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name<'r>>> {
+    pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name>> {
         match var {
             NameVariable::Dummy => None,
             _ => self.reference.name.get(var),
@@ -85,7 +85,7 @@ impl<'c, 'r: 'c, 'ci: 'c, O: OutputFormat> CiteContext<'c, 'r, 'ci, O> {
     }
 }
 
-impl<'r> Reference<'r> {
+impl Reference {
     // Implemented here privately so we don't use it by mistake.
     // It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
     // testing variables that only exist on the Cite.

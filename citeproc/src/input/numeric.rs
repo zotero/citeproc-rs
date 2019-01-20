@@ -1,6 +1,6 @@
+use std::borrow::Cow;
 use nom::types::CompleteStr;
 use nom::*;
-use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken {
@@ -71,17 +71,17 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 /// so on. All numbers are unsigned.
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum NumericValue<'r> {
-    Tokens(Cow<'r, str>, Vec<NumericToken>),
+pub enum NumericValue {
+    Tokens(String, Vec<NumericToken>),
     /// For values that could not be parsed.
-    Str(Cow<'r, str>),
+    Str(String),
 }
 
-impl<'r> NumericValue<'r> {
+impl NumericValue {
     pub fn num(i: u32) -> Self {
-        NumericValue::Tokens(Cow::Owned(format!("{}", i)), vec![Num(i)])
+        NumericValue::Tokens(format!("{}", i), vec![Num(i)])
     }
-    pub fn page_first(&self) -> Option<NumericValue<'r>> {
+    pub fn page_first(&self) -> Option<NumericValue> {
         self.first_num().map(|n| NumericValue::num(n))
     }
     fn first_num(&self) -> Option<u32> {
@@ -119,7 +119,7 @@ impl<'r> NumericValue<'r> {
         if replace_hyphens {
             s.replace('-', "\u{2013}")
         } else {
-            s.clone().into_owned()
+            s.clone()
         }
     }
 
@@ -130,7 +130,7 @@ impl<'r> NumericValue<'r> {
                 if replace_hyphens {
                     s.replace('-', "\u{2013}")
                 } else {
-                    s.clone().into_owned()
+                    s.clone()
                 }
             }
         }
@@ -229,16 +229,16 @@ fn test_num_token_parser() {
     );
 }
 
-impl<'r> From<Cow<'r, str>> for NumericValue<'r> {
+impl<'r> From<Cow<'r, str>> for NumericValue {
     fn from(input: Cow<'r, str>) -> Self {
         if let Ok((remainder, parsed)) = num_tokens(CompleteStr(&input)) {
             if remainder.is_empty() {
-                NumericValue::Tokens(input, parsed)
+                NumericValue::Tokens(input.into_owned(), parsed)
             } else {
-                NumericValue::Str(input)
+                NumericValue::Str(input.into_owned())
             }
         } else {
-            NumericValue::Str(input)
+            NumericValue::Str(input.into_owned())
         }
     }
 }
@@ -246,27 +246,27 @@ impl<'r> From<Cow<'r, str>> for NumericValue<'r> {
 #[test]
 fn test_numeric_value() {
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2-5, 9")),
+        NumericValue::from(String::from("2-5, 9")),
         NumericValue::Tokens(
-            Cow::Borrowed("2-5, 9"),
+            String::from("2-5, 9"),
             vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
         )
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2 - 5, 9, edition")),
+        NumericValue::from(String::from("2 - 5, 9, edition")),
         NumericValue::Str("2 - 5, 9, edition".into())
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("[1.2.3]")),
+        NumericValue::from(String::from("[1.2.3]")),
         NumericValue::Tokens(
-            Cow::Borrowed("[1.2.3]"),
+            String::from("[1.2.3]"),
             vec![Affixed("[1.2.3]".to_string())]
         )
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
+        NumericValue::from(String::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
         NumericValue::Tokens(
-            Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
+            String::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
             vec![
                 Affixed("[3]".to_string()),
                 Comma,
@@ -281,7 +281,7 @@ fn test_numeric_value() {
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2-5, 9"))
+        NumericValue::from(String::from("2-5, 9"))
             .page_first()
             .unwrap(),
         NumericValue::num(2)

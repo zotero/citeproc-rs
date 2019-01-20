@@ -4,8 +4,8 @@ use super::{IrSeq, Proc, IR};
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
 
-pub fn sequence<'c, 's: 'c, 'r, 'ci, O>(
-    ctx: &CiteContext<'c, 'r, 'ci, O>,
+pub fn sequence<'c, 's: 'c, O>(
+    ctx: &CiteContext<'c, O>,
     els: &'s [Element],
     delimiter: &'c str,
     formatting: Option<&'c Formatting>,

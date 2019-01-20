@@ -5,11 +5,11 @@ use super::Proc;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 
-impl<'c, 'r: 'c, 'ci: 'c, O> Proc<'c, 'r, 'ci, O> for Choose
+impl<'c, O> Proc<'c, O> for Choose
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, 'r, 'ci, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
     where
         O: OutputFormat,
     {
@@ -63,9 +63,9 @@ struct BranchEval<'a, O: OutputFormat> {
     content: Option<IR<'a, O>>,
 }
 
-fn eval_ifthen<'c, 'r, 'ci, O>(
+fn eval_ifthen<'c, O>(
     branch: &'c IfThen,
-    ctx: &CiteContext<'c, 'r, 'ci, O>,
+    ctx: &CiteContext<'c, O>,
 ) -> BranchEval<'c, O>
 where
     O: OutputFormat,
@@ -84,9 +84,9 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, 'r: 'c, 'ci, O>(
+fn eval_conditions<'c, O>(
     conditions: &'c Conditions,
-    ctx: &CiteContext<'c, 'r, 'ci, O>,
+    ctx: &CiteContext<'c, O>,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -98,7 +98,7 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_cond<'c, 'r: 'c, 'ci, O>(cond: &'c Condition, ctx: &CiteContext<'c, 'r, 'ci, O>) -> bool
+fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>) -> bool
 where
     O: OutputFormat,
 {

@@ -2,15 +2,15 @@ use super::DateOrRange;
 use crate::input::NumericValue;
 use crate::output::OutputFormat;
 use crate::style::terms::LocatorType;
-use std::borrow::Cow;
+
+use crate::Atom;
 
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
 #[derive(Deserialize)]
-pub struct Cite<'ci, O: OutputFormat> {
-    #[serde(borrow)]
-    pub id: Cow<'ci, str>,
+pub struct Cite<O: OutputFormat> {
+    pub id: Atom,
     pub prefix: O::Build,
     pub suffix: O::Build,
     pub locator_type: Option<LocatorType>,
@@ -19,15 +19,12 @@ pub struct Cite<'ci, O: OutputFormat> {
     // they are 'variables'.
     // in CSL-M they are number variables. also review the rest of the
     // vars that are like this
-    #[serde(borrow)]
-    pub locator: Option<NumericValue<'ci>>,
+    pub locator: Option<NumericValue>,
     // TODO: parse these out of the locator
     // CSL-M only
-    #[serde(borrow)]
-    pub locator_extra: Option<Cow<'ci, str>>,
+    pub locator_extra: Option<String>,
     // CSL-M only
-    #[serde(borrow)]
-    pub locator_date: Option<DateOrRange<'ci>>,
+    pub locator_date: Option<DateOrRange>,
 
     // pub note_number: u32,
     pub near_note: bool,
@@ -39,10 +36,10 @@ pub struct Cite<'ci, O: OutputFormat> {
     // citeHash       :: Int
 }
 
-impl<'r, O: OutputFormat> Cite<'r, O> {
-    pub fn basic(id: &'r str, prefix: &O::Build) -> Self {
+impl<O: OutputFormat> Cite<O> {
+    pub fn basic(id: Atom, prefix: &O::Build) -> Self {
         Cite {
-            id: Cow::Borrowed(id),
+            id,
             prefix: prefix.clone(),
             suffix: prefix.clone(),
             locator: None,
