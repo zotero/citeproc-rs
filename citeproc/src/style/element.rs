@@ -1,5 +1,5 @@
-use super::locale::{Lang, Locale};
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
+use crate::locale::{Lang, Locale};
 use crate::style::error::*;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;

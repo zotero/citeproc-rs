@@ -5,6 +5,7 @@ pub use self::driver::Driver;
 pub mod input;
 pub mod output;
 pub mod style;
+pub mod locale;
 pub use self::style::error::StyleError;
 pub mod proc;
 

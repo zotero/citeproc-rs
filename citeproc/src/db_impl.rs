@@ -1,7 +1,7 @@
 use salsa::Database;
 
 use crate::style::db::*;
-use crate::style::locale::{
+use crate::locale::{
     LocaleFetcher,
     Lang,
     db::*,

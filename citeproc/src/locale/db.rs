@@ -4,6 +4,7 @@ use std::str::FromStr;
 use super::*;
 use crate::style::db::*;
 
+/// Salsa interface to locales, including merging.
 #[salsa::query_group]
 pub trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
     /// Backed by the LocaleFetcher implementation

@@ -1,7 +1,8 @@
+//! Describes the `<style>` element and all its children, and parses it from an XML tree.
+
 pub mod element;
 pub mod error;
 pub(crate) mod get_attribute;
-pub mod locale;
 pub mod terms;
 pub mod variables;
 pub mod version;
@@ -11,9 +12,9 @@ pub mod version;
 use self::element::*;
 use self::error::*;
 use self::get_attribute::*;
-use self::locale::*;
 use self::terms::*;
 use self::version::*;
+use crate::locale::*;
 use crate::utils::PartitionArenaErrors;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};

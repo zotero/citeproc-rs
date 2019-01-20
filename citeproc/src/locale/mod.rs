@@ -1,3 +1,5 @@
+//! Describes `<locale>` elements inline or in standalone files.
+
 use fnv::FnvHashMap;
 
 use crate::style::element::{DateForm, LocaleDate};

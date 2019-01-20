@@ -12,7 +12,7 @@ use clap::{App, Arg, SubCommand};
 extern crate citeproc;
 use citeproc::input::*;
 use citeproc::output::*;
-use citeproc::style::locale::{Filesystem, Lang, LocaleFetcher};
+use citeproc::locale::{Filesystem, Lang, LocaleFetcher};
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;

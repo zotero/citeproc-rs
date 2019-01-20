@@ -3,9 +3,8 @@ use std::collections::HashMap;
 
 use super::fetcher::Predefined;
 use super::*;
-use crate::style::terms::*;
 use crate::db_impl::RootDatabase;
-use crate::style::locale::db::LocaleDatabase;
+use crate::locale::db::LocaleDatabase;
 
 fn terms(xml: &str) -> String {
     format!(
