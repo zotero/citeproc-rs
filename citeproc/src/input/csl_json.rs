@@ -416,6 +416,13 @@ impl<'a, 'de: 'a> Deserialize<'de> for DateOrRange<'a> {
                 FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(Cow::Borrowed(value))))
             }
 
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(Cow::Owned(value))))
+            }
+
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
             where
                 V: MapAccess<'de>,
