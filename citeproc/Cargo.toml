@@ -42,6 +42,7 @@ lazy_static = "1.2.0"
 ucd-trie = "0.1.1"
 directories = "1.0.2"
 salsa = "0.10.0-alpha1"
+string_cache = "0.7.3"
 
 [dev-dependencies]
 criterion = "0.2"

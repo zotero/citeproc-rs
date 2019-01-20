@@ -1,4 +1,5 @@
 mod driver;
+mod db;
 mod db_impl;
 mod utils;
 pub use self::driver::Driver;
@@ -15,3 +16,5 @@ extern crate strum_macros;
 extern crate serde_derive;
 // #[macro_use]
 // extern crate failure;
+
+pub(crate) use string_cache::DefaultAtom as Atom;

@@ -1,5 +1,6 @@
 use salsa::Database;
 
+use crate::db::*;
 use crate::style::db::*;
 use crate::locale::{
     LocaleFetcher,
@@ -18,7 +19,6 @@ impl RootDatabase {
             runtime: Default::default(),
             fetcher,
         };
-        db.query_mut(StyleTextQuery).set((), Default::default());
         db.query_mut(StyleQuery).set((), Default::default());
         db
     }
@@ -40,13 +40,16 @@ impl salsa::Database for RootDatabase {
 
 salsa::database_storage! {
     pub struct DatabaseImplStorage for RootDatabase {
+        impl ReferenceDatabase {
+            fn reference() for ReferenceQuery;
+            fn citekeys() for CitekeysQuery;
+        }
         impl StyleDatabase {
-            fn style_text() for StyleTextQuery;
             fn style() for StyleQuery;
-            fn inline_locale() for InlineLocaleQuery;
         }
         impl LocaleDatabase {
             fn locale_xml() for LocaleXmlQuery;
+            fn inline_locale() for InlineLocaleQuery;
             fn locale() for LocaleQuery;
             fn merged_locale() for MergedLocaleQuery;
             fn locale_options() for LocaleOptionsQuery;
@@ -54,3 +57,7 @@ salsa::database_storage! {
     }
 }
 
+impl RootDatabase {
+    fn add_references(&mut self, json_str: &str) {
+    }
+}

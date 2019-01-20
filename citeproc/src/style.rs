@@ -1111,8 +1111,6 @@ pub(crate) mod db {
     #[salsa::query_group]
     pub trait StyleDatabase: salsa::Database {
         #[salsa::input]
-        fn style_text(&self, key: ()) -> Arc<String>;
-        #[salsa::input]
         fn style(&self, key: ()) -> Arc<Style>;
     }
 }
