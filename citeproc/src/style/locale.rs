@@ -30,18 +30,21 @@ pub struct Locale {
 }
 
 impl Locale {
-    pub fn get_text_term<'l>(&'l self, sel: &TextTermSelector, plural: bool) -> Option<&'l str> {
+    pub fn get_text_term<'l>(&'l self, sel: TextTermSelector, plural: bool) -> Option<&'l str> {
         use crate::style::terms::TextTermSelector::*;
-        match *sel {
-            Simple(ref ts) => ts.fallback()
+        match sel {
+            Simple(ref ts) => ts
+                .fallback()
                 .filter_map(|sel| self.simple_terms.get(&sel))
                 .next()
                 .and_then(|r| r.get(plural)),
-            Gendered(ref ts) => ts.fallback()
+            Gendered(ref ts) => ts
+                .fallback()
                 .filter_map(|sel| self.gendered_terms.get(&sel))
                 .next()
                 .and_then(|r| r.0.get(plural)),
-            Role(ref ts) => ts.fallback()
+            Role(ref ts) => ts
+                .fallback()
                 .filter_map(|sel| self.role_terms.get(&sel))
                 .next()
                 .and_then(|r| r.get(plural)),
@@ -120,7 +123,7 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
 
 struct LocaleDbImpl {
     runtime: salsa::Runtime<LocaleDbImpl>,
-    fetcher: Box<LocaleFetcher>
+    fetcher: Box<LocaleFetcher>,
 }
 
 impl LocaleDbImpl {
@@ -378,15 +381,18 @@ impl Iterator for InlineIter {
 #[cfg(test)]
 mod test {
 
-    use super::*;
     use super::fetcher::Predefined;
+    use super::*;
     use crate::style::terms::*;
     use std::collections::HashMap;
 
     fn terms(xml: &str) -> String {
-        format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
         <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
-        <terms>{}</terms></locale>"#, xml)
+        <terms>{}</terms></locale>"#,
+            xml
+        )
     }
 
     fn predef_terms(pairs: &[(Lang, &str)]) -> Predefined {
@@ -398,22 +404,15 @@ mod test {
     }
 
     fn term_and(form: TermFormExtended) -> SimpleTermSelector {
-        SimpleTermSelector::Misc(
-            MiscTerm::And,
-            form
-        )
+        SimpleTermSelector::Misc(MiscTerm::And, form)
     }
 
-    fn test_simple_term(
-        term: SimpleTermSelector,
-        langs: &[(Lang, &str)],
-        expect: Option<&TermPlurality>
-    ) {
+    fn test_simple_term(term: SimpleTermSelector, langs: &[(Lang, &str)], expect: Option<&str>) {
         let db = LocaleDbImpl::new(Box::new(predef_terms(langs)));
         // use en-AU so it has to do fallback to en-US
         let locale = db.merged_locale(Lang::en_au());
         assert_eq!(
-            locale.simple_terms.get(&term),
+            locale.get_text_term(TextTermSelector::Simple(term), false),
             expect
         )
     }
@@ -426,7 +425,7 @@ mod test {
                 (Lang::en_us(), r#"<term name="and">USA</term>"#),
                 (Lang::en_au(), r#"<term name="and">Australia</term>"#),
             ],
-            Some(&TermPlurality::Invariant("Australia".into()))
+            Some("Australia"),
         )
     }
 
@@ -436,29 +435,70 @@ mod test {
             term_and(TermFormExtended::Long),
             &[
                 (Lang::en_us(), r#"<term name="and">USA</term>"#),
-                (Lang::en_au(), r#"<term name="and" form="short">Australia</term>"#),
+                (
+                    Lang::en_au(),
+                    r#"<term name="and" form="short">Australia</term>"#,
+                ),
             ],
-            Some(&TermPlurality::Invariant("USA".into()))
+            Some("USA"),
         );
         test_simple_term(
             term_and(TermFormExtended::Short),
             &[
                 (Lang::en_us(), r#"<term name="and">USA</term>"#),
-                (Lang::en_au(), r#"<term name="and" form="short">Australia</term>"#),
+                (
+                    Lang::en_au(),
+                    r#"<term name="and" form="short">Australia</term>"#,
+                ),
             ],
-            Some(&TermPlurality::Invariant("Australia".into()))
+            Some("Australia"),
         );
     }
 
     #[test]
-    fn term_fallback() {
+    fn term_form_fallback() {
+        test_simple_term(
+            term_and(TermFormExtended::Short),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (Lang::en_au(), r#"<term name="and">Australia</term>"#),
+            ],
+            Some("Australia"),
+        );
+        test_simple_term(
+            // short falls back to long and skips the "symbol" in a later locale
+            term_and(TermFormExtended::Short),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (
+                    Lang::en_au(),
+                    r#"<term name="and" form="symbol">Australia</term>"#,
+                ),
+            ],
+            Some("USA"),
+        );
+        test_simple_term(
+            term_and(TermFormExtended::VerbShort),
+            &[
+                (Lang::en_us(), r#"<term name="and" form="long">USA</term>"#),
+                (
+                    Lang::en_au(),
+                    r#"<term name="and" form="symbol">Australia</term>"#,
+                ),
+            ],
+            Some("USA"),
+        );
+    }
+
+    #[test]
+    fn term_locale_fallback() {
         test_simple_term(
             term_and(TermFormExtended::Long),
             &[
                 (Lang::en_us(), r#"<term name="and">USA</term>"#),
                 (Lang::en_au(), r#""#),
             ],
-            Some(&TermPlurality::Invariant("USA".into()))
+            Some("USA"),
         )
     }
 

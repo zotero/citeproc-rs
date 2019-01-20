@@ -81,8 +81,12 @@ pub struct Predefined(pub HashMap<Lang, String>);
 #[cfg(test)]
 impl LocaleFetcher for Predefined {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        Ok(self.0.get(lang).cloned().unwrap_or_else(|| String::from(r#"<?xml version="1.0" encoding="utf-8"?>
+        Ok(self.0.get(lang).cloned().unwrap_or_else(|| {
+            String::from(
+                r#"<?xml version="1.0" encoding="utf-8"?>
         <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
-        </locale>"#)))
+        </locale>"#,
+            )
+        }))
     }
 }

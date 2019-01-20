@@ -7,7 +7,7 @@ use super::variables::NumberVariable;
 use nom::types::CompleteStr;
 use nom::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TextTermSelector {
     Simple(SimpleTermSelector),
     Gendered(GenderedTermSelector),
@@ -70,12 +70,14 @@ impl SimpleTermSelector {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
             }
-            SimpleTermSelector::Season(t, form) => {
-                Box::new(form.fallback().map(move |x| SimpleTermSelector::Season(t, x)))
-            }
-            SimpleTermSelector::Quote(t, form) => {
-                Box::new(form.fallback().map(move |x| SimpleTermSelector::Quote(t, x)))
-            }
+            SimpleTermSelector::Season(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| SimpleTermSelector::Season(t, x)),
+            ),
+            SimpleTermSelector::Quote(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| SimpleTermSelector::Quote(t, x)),
+            ),
         }
     }
 }
@@ -107,18 +109,20 @@ impl GenderedTermSelector {
     }
     pub fn fallback(self) -> Box<Iterator<Item = Self>> {
         match self {
-            GenderedTermSelector::Number(t, form) => {
-                Box::new(form.fallback().map(move |x| GenderedTermSelector::Number(t, x)))
-            }
-            GenderedTermSelector::Locator(t, form) => {
-                Box::new(form.fallback().map(move |x| GenderedTermSelector::Locator(t, x)))
-            }
-            GenderedTermSelector::Month(t, form) => {
-                Box::new(form.fallback().map(move |x| GenderedTermSelector::Month(t, x)))
-            }
+            GenderedTermSelector::Number(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| GenderedTermSelector::Number(t, x)),
+            ),
+            GenderedTermSelector::Locator(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| GenderedTermSelector::Locator(t, x)),
+            ),
+            GenderedTermSelector::Month(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| GenderedTermSelector::Month(t, x)),
+            ),
         }
     }
-
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -315,7 +319,9 @@ impl Default for OrdinalMatch {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#locators)
-#[derive(Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(
+    Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash,
+)]
 #[strum(serialize_all = "kebab_case")]
 #[serde(rename_all = "kebab-case")]
 pub enum LocatorType {

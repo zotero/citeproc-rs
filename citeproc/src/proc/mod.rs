@@ -99,7 +99,7 @@ where
                 IR::Rendered(content)
             }
 
-            Element::Term(ref term_selector, ref f, ref af, pl) => {
+            Element::Term(term_selector, ref f, ref af, pl) => {
                 let content = ctx
                     .style
                     .locale_overrides
@@ -129,7 +129,7 @@ where
                             // TODO: support multiple locales!
                             .get(&None)
                             .unwrap()
-                            .get_text_term(&TextTermSelector::Gendered(sel), p)
+                            .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))
                     })
                 });
