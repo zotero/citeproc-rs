@@ -8,7 +8,7 @@ use crate::style::terms::*;
 pub(crate) mod db;
 mod fetcher;
 mod lang;
-pub use self::fetcher::{Filesystem, LocaleFetcher};
+pub use self::fetcher::{LocaleFetcher};
 pub use self::lang::{Lang, IsoLang, IsoCountry};
 #[cfg(test)]
 mod test;

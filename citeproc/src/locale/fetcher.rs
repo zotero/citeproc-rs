@@ -3,8 +3,6 @@ use crate::style::error::StyleError;
 use crate::style::FromNode;
 
 use roxmltree::Document;
-use std::fs;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 pub trait LocaleFetcher {
@@ -49,26 +47,6 @@ impl FromStr for Locale {
         let doc = Document::parse(&xml)?;
         let locale = Locale::from_node(&doc.root_element())?;
         Ok(locale)
-    }
-}
-
-pub struct Filesystem {
-    root: PathBuf,
-}
-
-impl Filesystem {
-    pub fn new(repo_dir: impl Into<PathBuf>) -> Self {
-        Filesystem {
-            root: repo_dir.into(),
-        }
-    }
-}
-
-impl LocaleFetcher for Filesystem {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        let mut path = self.root.clone();
-        path.push(&format!("locales-{}.xml", lang));
-        fs::read_to_string(path)
     }
 }
 

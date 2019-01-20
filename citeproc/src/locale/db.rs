@@ -26,7 +26,6 @@ pub trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
 }
 
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
-    // let fsf = Filesystem::new("/Users/cormac/git/locales");
     db.fetch_string(&key).ok().map(Arc::new)
 }
 

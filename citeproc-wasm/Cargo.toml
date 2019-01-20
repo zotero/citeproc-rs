@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 # default = ["console_error_panic_hook"]
 
 [dependencies]
-citeproc = { path = "../citeproc" }
+citeproc = { path = "../citeproc", default-features = false }
 cfg-if = "0.1.2"
 wasm-bindgen = "0.2.29"
 

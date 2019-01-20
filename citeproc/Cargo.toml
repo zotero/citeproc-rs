@@ -10,17 +10,17 @@ crate-type = ["rlib", "staticlib"]
 [[bin]]
 name = "citeproc-rs"
 path = "src/main.rs"
-# required-features = ["cli"]
+required-features = ["cli"]
 
 [features]
-default = []
-alloc_system = []
+default = ["cli", "parallel", "jemalloc"]
+jemalloc = ["jemallocator"]
 parallel = ["rayon"]
-# cli = ["clap"]
+cli = ["clap", "directories"]
 
 [dependencies]
 roxmltree = "0.4.1"
-clap = { version = "2.32.0", optional = false }
+clap = { version = "2.32.0", optional = true }
 codespan = { version = "0.2.0", optional = false }
 codespan-reporting = { version = "0.2.0", optional = false }
 strum = "0.11.0"
@@ -40,9 +40,10 @@ itertools = "0.7.11"
 semver = "0.9.0"
 lazy_static = "1.2.0"
 ucd-trie = "0.1.1"
-directories = "1.0.2"
+directories = { version = "1.0.2", optional = true }
 salsa = "0.10.0-alpha1"
 string_cache = "0.7.3"
+jemallocator = { version = "0.1.9", optional = true }
 
 [dev-dependencies]
 criterion = "0.2"

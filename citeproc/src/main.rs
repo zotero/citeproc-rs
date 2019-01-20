@@ -1,9 +1,13 @@
 use cfg_if::cfg_if;
 cfg_if! {
-    if #[cfg(feature="alloc_system")] {
-        use std::alloc::System;
+    if #[cfg(feature="jemalloc")] {
+        use jemallocator::Jemalloc;
         #[global_allocator]
-        static A: System = System;
+        static A: Jemalloc = Jemalloc;
+    } else {
+        use std::alloc::system;
+        #[global_allocator]
+        static a: system = system;
     }
 }
 
@@ -11,7 +15,7 @@ use clap::{App, Arg, SubCommand};
 
 extern crate citeproc;
 use citeproc::output::*;
-use citeproc::locale::{Filesystem, Lang, LocaleFetcher};
+use citeproc::locale::{Lang, LocaleFetcher};
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
@@ -120,7 +124,7 @@ fn main() {
             .value_of("lang")
             .and_then(|l| Lang::from_str(l).ok())
             .unwrap_or(Lang::en_us());
-        let mut fsf = Filesystem::new(dbg!(locales));
+        let mut fsf = Filesystem::new(locales);
         let locale = fsf.fetch_cli(&lang);
         dbg!(locale);
         return;
@@ -154,3 +158,27 @@ fn main() {
         }
     }
 }
+
+use std::fs;
+use std::path::PathBuf;
+pub struct Filesystem {
+    root: PathBuf,
+}
+
+impl Filesystem {
+    pub fn new(repo_dir: impl Into<PathBuf>) -> Self {
+        Filesystem {
+            root: repo_dir.into(),
+        }
+    }
+}
+
+impl LocaleFetcher for Filesystem {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        let mut path = self.root.clone();
+        path.push(&format!("locales-{}.xml", lang));
+        fs::read_to_string(path)
+    }
+}
+
+
