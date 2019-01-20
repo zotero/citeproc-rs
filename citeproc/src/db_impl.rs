@@ -1,5 +1,10 @@
+use std::sync::Arc;
+use std::collections::HashSet;
+use serde_json;
 use salsa::Database;
 
+use crate::Atom;
+use crate::input::Reference;
 use crate::db::*;
 use crate::style::db::*;
 use crate::locale::{
@@ -41,8 +46,9 @@ impl salsa::Database for RootDatabase {
 salsa::database_storage! {
     pub struct DatabaseImplStorage for RootDatabase {
         impl ReferenceDatabase {
-            fn reference() for ReferenceQuery;
+            fn reference_input() for ReferenceInputQuery;
             fn citekeys() for CitekeysQuery;
+            fn reference() for ReferenceQuery;
         }
         impl StyleDatabase {
             fn style() for StyleQuery;
@@ -58,6 +64,12 @@ salsa::database_storage! {
 }
 
 impl RootDatabase {
-    fn add_references(&mut self, json_str: &str) {
+    pub fn add_references(&mut self, json_str: &str) {
+        let refs: Vec<Reference> = serde_json::from_str(json_str).unwrap();
+        let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
+        for r in refs {
+            self.query_mut(ReferenceInputQuery).set(r.id.clone(), Arc::new(r));
+        }
+        self.query_mut(CitekeysQuery).set((), Arc::new(keys));
     }
 }

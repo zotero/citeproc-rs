@@ -12,7 +12,7 @@ use crate::style::element::CslType;
 use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable};
 
 // We're saving copies and allocations by not using String here.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Reference {
     pub id: Atom,
     pub csl_type: CslType,

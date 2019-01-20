@@ -1,6 +1,6 @@
 mod driver;
-mod db;
-mod db_impl;
+pub mod db;
+pub mod db_impl;
 mod utils;
 pub use self::driver::Driver;
 pub mod input;
@@ -17,4 +17,4 @@ extern crate serde_derive;
 // #[macro_use]
 // extern crate failure;
 
-pub(crate) use string_cache::DefaultAtom as Atom;
+pub use string_cache::DefaultAtom as Atom;

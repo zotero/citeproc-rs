@@ -10,12 +10,14 @@ cfg_if! {
 use clap::{App, Arg, SubCommand};
 
 extern crate citeproc;
-use citeproc::input::*;
 use citeproc::output::*;
 use citeproc::locale::{Filesystem, Lang, LocaleFetcher};
 use citeproc::Driver;
 use std::fs::File;
 use std::io::prelude::*;
+
+use citeproc::db_impl::RootDatabase;
+use citeproc::db::ReferenceDatabase;
 
 fn read<'s>(path: &str) -> String {
     let mut f = File::open(path).expect("no file at path");
@@ -65,6 +67,13 @@ fn main() {
                 .short("c")
                 .long("csl")
                 .value_name("FILE")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("key")
+                .short("k")
+                .long("key")
+                .value_name("CITEKEY")
                 .takes_value(true),
         )
         .get_matches();
@@ -120,9 +129,10 @@ fn main() {
     if let Some(library_path) = matches.value_of("library") {
         lib_text = read(&library_path);
     }
-    let library: Vec<Reference> = serde_json::from_str(&lib_text).unwrap();
-    // println!("{:?}", library);
-    let refr = library.get(0).unwrap();
+    let mut db = RootDatabase::new(Box::new(Filesystem::new("/Users/cormac/git/locales")));
+    db.add_references(&lib_text);
+    let key = matches.value_of("key").map(citeproc::Atom::from).unwrap_or("quagmire2018".into());
+    let refr = db.reference(key).expect("Citekey not present in library");
 
     if let Some(path) = matches.value_of("csl") {
         let text = read(&path);
