@@ -80,6 +80,12 @@ fn main() {
                 .value_name("CITEKEY")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("locales")
+                .long("locales")
+                .value_name("DIR")
+                .takes_value(true),
+        )
         .get_matches();
 
     let mut lib_text = String::from(
@@ -110,30 +116,37 @@ fn main() {
     use directories::ProjectDirs;
     use std::path::PathBuf;
 
-    if let Some(matches) = matches.subcommand_matches("locale") {
-        use std::str::FromStr;
-        let locales = matches
+    let mut filesystem_fetcher = {
+        let locales_dir = matches
             .value_of("locales")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
                     .expect("No home directory found.");
-                pd.cache_dir().to_owned()
+                let mut locales_dir = pd.cache_dir().to_owned();
+                locales_dir.push("locales");
+                dbg!(locales_dir)
             });
+        Box::new(Filesystem::new(locales_dir))
+    };
+
+    if let Some(matches) = matches.subcommand_matches("locale") {
+        use std::str::FromStr;
         let lang = matches
             .value_of("lang")
             .and_then(|l| Lang::from_str(l).ok())
             .unwrap_or(Lang::en_us());
-        let mut fsf = Filesystem::new(locales);
-        let locale = fsf.fetch_cli(&lang);
+        let locale = filesystem_fetcher.fetch_cli(&lang);
+        let locale_fallbacks: Vec<_> = lang.iter().collect();
         dbg!(locale);
+        dbg!(locale_fallbacks);
         return;
     }
 
     if let Some(library_path) = matches.value_of("library") {
         lib_text = read(&library_path);
     }
-    let mut db = RootDatabase::new(Box::new(Filesystem::new("/Users/cormac/git/locales")));
+    let mut db = RootDatabase::new(filesystem_fetcher);
     db.add_references(&lib_text);
     let key = matches.value_of("key").map(citeproc::Atom::from).unwrap_or("quagmire2018".into());
     let refr = db.reference(key).expect("Citekey not present in library");
