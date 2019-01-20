@@ -4,12 +4,14 @@ use crate::style::element::LocaleDate;
 use crate::style::terms::*;
 
 mod fetcher;
-pub use self::fetcher::{Filesystem, LocaleFetcher};
+pub use self::fetcher::{Filesystem, LocaleFetcher, LocaleCache};
+use std::collections::HashSet;
+use fnv::FnvHashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CslOption(String, String);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Locale {
     pub version: String,
     pub lang: Option<Lang>,
@@ -30,11 +32,116 @@ impl Locale {
             Role(ref ts) => self.role_terms.get(ts).and_then(|r| r.get(plural)),
         }
     }
+    fn merge(&mut self, with: &Self) {
+        fn extend<K : Clone + Eq + std::hash::Hash, V : Clone>(map: &mut FnvHashMap<K, V>, other: &FnvHashMap<K, V>) {
+            map.extend(other.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+        self.lang = with.lang.clone();
+        extend(&mut self.simple_terms, &with.simple_terms);
+        extend(&mut self.gendered_terms, &with.gendered_terms);
+        extend(&mut self.role_terms, &with.role_terms);
+        // replace the whole ordinals configuration
+        self.ordinal_terms = with.ordinal_terms.clone();
+        self.dates = with.dates.clone();
+    }
 }
 
-// pub fn merge_locales<'d, 'l: 'd>(_base: Locale<'d>, locales: Vec<Locale<'l>>) -> Vec<Locale<'l>> {
-//     locales
-// }
+use std::sync::Arc;
+
+
+use crate::style::Style;
+
+#[salsa::query_group]
+trait StyleDatabase: salsa::Database {
+    #[salsa::input]
+    fn style_text(&self, key: ()) -> Arc<String>;
+    #[salsa::input]
+    fn style(&self, key: ()) -> Arc<Style>;
+    fn inline_locale(&self, key: Option<Lang>) -> Option<Arc<Locale>>;
+}
+
+fn inline_locale(db: &impl StyleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
+    db.style(()).locale_overrides.get(&key).cloned().map(Arc::new)
+}
+
+#[salsa::query_group]
+trait LocaleDatabase: salsa::Database + StyleDatabase {
+    fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
+    fn locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
+    fn merged_locale(&self, key: Lang) -> Arc<Locale>;
+}
+
+fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
+    let fsf = Filesystem::new("/Users/cormac/git/locales");
+    fsf.fetch_string(&key).ok().map(Arc::new)
+}
+
+fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
+    match key {
+        LocaleSource::File(ref lang) =>  {
+            let string = db.locale_xml(lang.clone());
+            string.and_then(|s| Locale::from_str(&s).ok()).map(Arc::new)
+        }
+        LocaleSource::Inline(ref lang) => {
+            db.inline_locale(lang.clone())
+        }
+    }
+}
+
+fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
+    // TODO: implement merging
+    let mut locales: Vec<_> = key.iter().filter_map(|ls| db.locale(ls)).collect();
+    if locales.len() >= 1 {
+        // could fold, but we only need to clone the base
+        let mut base = (*locales[locales.len() - 1]).clone();
+        for nxt in locales.into_iter().rev().skip(1) {
+            base.merge(&nxt);
+        };
+        Arc::new(base)
+    } else {
+        Arc::new(Locale::default())
+    }
+}
+
+#[derive(Default)]
+struct LocaleDbImpl {
+     runtime: salsa::Runtime<LocaleDbImpl>,
+     // fetcher: Box<F>
+}
+
+/// This impl tells salsa where to find the salsa runtime.
+impl salsa::Database for LocaleDbImpl {
+    fn salsa_runtime(&self) -> &salsa::Runtime<LocaleDbImpl> {
+        &self.runtime
+    }
+}
+
+salsa::database_storage! {
+    pub struct DatabaseImplStorage for LocaleDbImpl {
+        impl StyleDatabase {
+            fn style_text() for StyleTextQuery;
+            fn style() for StyleQuery;
+            fn inline_locale() for InlineLocaleQuery;
+        }
+        impl LocaleDatabaase {
+            fn locale_xml() for LocaleXmlQuery;
+            fn locale() for LocaleQuery;
+            fn merged_locale() for MergedLocaleQuery;
+        }
+    }
+}
+
+#[test]
+fn test_locale_db() {
+    let db = LocaleDbImpl::default();
+    let locale = db.merged_locale(Lang::en_us());
+    eprintln!("{:?}", locale);
+    if let Some(loc) = locale.as_ref() {
+        use crate::style::terms::*;
+        assert!(loc.simple_terms.get(&SimpleTermSelector::Misc(MiscTerm::Accessed, TermFormExtended::Long)).is_some())
+    }
+    assert!(locale.is_some());
+}
 
 // #[allow(dead_code)]
 // fn has_ordinals(ls: Vec<Locale>) -> bool {
@@ -135,6 +242,7 @@ impl fmt::Display for IsoCountry {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum LocaleSource {
     Inline(Option<Lang>),
     File(Lang),

@@ -10,6 +10,8 @@ use std::str::FromStr;
 
 pub trait LocaleFetcher {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+    /// This is mut so that caching fetchers can still implement it, and they are the only useful
+    /// ones.
     fn fetch(&mut self, lang: &Lang) -> Option<Locale> {
         Locale::from_str(&self.fetch_string(lang).ok()?).ok()
     }
@@ -78,31 +80,43 @@ impl LocaleFetcher for Filesystem {
 }
 
 impl LocaleSource {
-    pub fn get<'a>(
+    pub fn get<'a, F: LocaleFetcher>(
         &self,
         inlines: &'a HashMap<Option<Lang>, Locale>,
-        fetcher: &mut impl LocaleFetcher,
+        cache: &mut LocaleCache<F>,
     ) -> Option<Locale> {
         match self {
             LocaleSource::Inline(ref key) => inlines.get(key).cloned(),
-            LocaleSource::File(ref key) => fetcher.fetch(key),
+            LocaleSource::File(ref key) => cache.fetch(key),
         }
     }
 }
 
-pub struct CachingFetcher<F: LocaleFetcher> {
+pub struct LocaleCache<F: LocaleFetcher> {
     cache: HashMap<Lang, Locale>,
     inner: Box<F>,
 }
 
-// impl<F: LocaleFetcher> LocaleFetcher for CachingFetcher<F> {
-//     fn fetch(&mut self, lang: &Lang) -> Option<Locale> {
-//         let got = self.inner.fetch(lang);
-//         if let Some(ref locale) = &got {
-//             self.cache.insert(lang.clone(), locale.clone());
-//         } else {
-//             self.cache.remove(lang);
-//         }
-//         got
-//     }
-// }
+impl<F: LocaleFetcher> LocaleCache<F> {
+    pub fn new(inner_fetcher: F) -> Self {
+        LocaleCache {
+            cache: HashMap::default(),
+            inner: Box::new(inner_fetcher),
+        }
+    }
+}
+
+impl<F: LocaleFetcher> LocaleFetcher for LocaleCache<F> {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, io::Error> {
+        Ok(String::new(), )
+    }
+    fn fetch(&mut self, lang: &Lang) -> Option<Locale> {
+        let got = self.inner.fetch(lang);
+        if let Some(ref locale) = &got {
+            self.cache.insert(lang.clone(), locale.clone());
+        } else {
+            self.cache.remove(lang);
+        }
+        got
+    }
+}
