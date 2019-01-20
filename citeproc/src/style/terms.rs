@@ -57,17 +57,33 @@ impl GetAttribute for AnyTermName {
 }
 
 /// TermSelector is used
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermFormExtended),
     Season(SeasonTerm, TermForm),
     Quote(QuoteTerm, TermForm),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl SimpleTermSelector {
+    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+        match self {
+            SimpleTermSelector::Misc(t, form) => {
+                Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
+            }
+            SimpleTermSelector::Season(t, form) => {
+                Box::new(form.fallback().map(move |x| SimpleTermSelector::Season(t, x)))
+            }
+            SimpleTermSelector::Quote(t, form) => {
+                Box::new(form.fallback().map(move |x| SimpleTermSelector::Quote(t, x)))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct OrdinalTermSelector(pub OrdinalTerm, pub Gender, pub OrdinalMatch);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum GenderedTermSelector {
     /// Edition is the only MiscTerm that can have a gender, so it's here instead
     Number(NumberVariable, TermForm),
@@ -89,10 +105,30 @@ impl GenderedTermSelector {
             v => Some(GenderedTermSelector::Number(v, form.clone())),
         }
     }
+    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+        match self {
+            GenderedTermSelector::Number(t, form) => {
+                Box::new(form.fallback().map(move |x| GenderedTermSelector::Number(t, x)))
+            }
+            GenderedTermSelector::Locator(t, form) => {
+                Box::new(form.fallback().map(move |x| GenderedTermSelector::Locator(t, x)))
+            }
+            GenderedTermSelector::Month(t, form) => {
+                Box::new(form.fallback().map(move |x| GenderedTermSelector::Month(t, x)))
+            }
+        }
+    }
+
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct RoleTermSelector(pub RoleTerm, pub TermFormExtended);
+
+impl RoleTermSelector {
+    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+        Box::new(self.1.fallback().map(move |x| RoleTermSelector(self.0, x)))
+    }
+}
 
 pub type SimpleMapping = FnvHashMap<SimpleTermSelector, TermPlurality>;
 pub type GenderedMapping = FnvHashMap<GenderedTermSelector, GenderedTerm>;
@@ -102,7 +138,7 @@ pub type RoleMapping = FnvHashMap<RoleTermSelector, TermPlurality>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenderedTerm(pub TermPlurality, pub Gender);
 
-#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TermForm {
     Long,
@@ -116,8 +152,28 @@ impl Default for TermForm {
     }
 }
 
+pub struct TermFallbackIter(Option<TermForm>);
+
+impl TermForm {
+    pub fn fallback(self) -> TermFallbackIter {
+        TermFallbackIter(Some(self))
+    }
+}
+
+impl Iterator for TermFallbackIter {
+    type Item = TermForm;
+    fn next(&mut self) -> Option<TermForm> {
+        use self::TermForm::*;
+        let next = match self.0 {
+            Some(Symbol) => Some(Short),
+            Some(Short) => Some(Long),
+            _ => None,
+        };
+        mem::replace(&mut self.0, next)
+    }
+}
 /// Includes the extra Verb and VerbShort variants
-#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TermFormExtended {
     Long,
@@ -130,6 +186,31 @@ pub enum TermFormExtended {
 impl Default for TermFormExtended {
     fn default() -> Self {
         TermFormExtended::Long
+    }
+}
+
+pub struct TermFallbackExtendedIter(Option<TermFormExtended>);
+
+impl TermFormExtended {
+    pub fn fallback(self) -> TermFallbackExtendedIter {
+        TermFallbackExtendedIter(Some(self))
+    }
+}
+
+use std::mem;
+
+impl Iterator for TermFallbackExtendedIter {
+    type Item = TermFormExtended;
+    fn next(&mut self) -> Option<TermFormExtended> {
+        use self::TermFormExtended::*;
+        let next = match self.0 {
+            Some(VerbShort) => Some(Verb),
+            Some(Symbol) => Some(Short),
+            Some(Verb) => Some(Long),
+            Some(Short) => Some(Long),
+            _ => None,
+        };
+        mem::replace(&mut self.0, next)
     }
 }
 
@@ -203,7 +284,7 @@ impl TermPlurality {
 ///    2. `OrdinalTermSelector(Mod100(1), Feminine, LastTwoDigits)` and finds a match with content
 ///       `FFF`.
 ///
-#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Gender {
     Masculine,
@@ -220,7 +301,7 @@ impl Default for Gender {
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#ordinal-suffixes)
 /// LastTwoDigits is the default
-#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsStaticStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum OrdinalMatch {
     LastTwoDigits,
@@ -234,7 +315,7 @@ impl Default for OrdinalMatch {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#locators)
-#[derive(Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 #[serde(rename_all = "kebab-case")]
 pub enum LocatorType {
@@ -277,7 +358,7 @@ pub enum LocatorType {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum QuoteTerm {
     OpenQuote,
@@ -286,7 +367,7 @@ pub enum QuoteTerm {
     CloseInnerQuote,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 // Strum's auto kebab_case doesn't hyphenate to "season-01", so manual it is
 pub enum SeasonTerm {
     #[strum(serialize = "season-01")]
@@ -301,7 +382,7 @@ pub enum SeasonTerm {
 
 /// Yes, this differs slightly from NameVariable.
 /// It includes "editortranslator" for the names special case.
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum RoleTerm {
     Author,
@@ -325,7 +406,7 @@ pub enum RoleTerm {
 /// that matches "terms accompanying the number variables" in [option (a)
 /// here](https://docs.citationstyles.org/en/stable/specification.html#gender-specific-ordinals)
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum MiscTerm {
     Accessed,
@@ -371,7 +452,7 @@ pub enum MiscTerm {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#months)
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MonthTerm {
     #[strum(serialize = "month-01")]
     Month01,
@@ -400,7 +481,7 @@ pub enum MonthTerm {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
-#[derive(EnumProperty, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum OrdinalTerm {
     Ordinal,
     Mod100(u32),

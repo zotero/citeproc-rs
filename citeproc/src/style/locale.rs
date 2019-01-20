@@ -33,9 +33,18 @@ impl Locale {
     pub fn get_text_term<'l>(&'l self, sel: &TextTermSelector, plural: bool) -> Option<&'l str> {
         use crate::style::terms::TextTermSelector::*;
         match *sel {
-            Simple(ref ts) => self.simple_terms.get(ts).and_then(|r| r.get(plural)),
-            Gendered(ref ts) => self.gendered_terms.get(ts).and_then(|r| r.0.get(plural)),
-            Role(ref ts) => self.role_terms.get(ts).and_then(|r| r.get(plural)),
+            Simple(ref ts) => ts.fallback()
+                .filter_map(|sel| self.simple_terms.get(&sel))
+                .next()
+                .and_then(|r| r.get(plural)),
+            Gendered(ref ts) => ts.fallback()
+                .filter_map(|sel| self.gendered_terms.get(&sel))
+                .next()
+                .and_then(|r| r.0.get(plural)),
+            Role(ref ts) => ts.fallback()
+                .filter_map(|sel| self.role_terms.get(&sel))
+                .next()
+                .and_then(|r| r.get(plural)),
         }
     }
 
