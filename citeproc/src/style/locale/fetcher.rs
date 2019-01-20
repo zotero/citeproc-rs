@@ -9,11 +9,7 @@ use std::str::FromStr;
 
 pub trait LocaleFetcher {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
-    /// This is mut so that caching fetchers can still implement it, and they are the only useful
-    /// ones.
-    fn fetch(&mut self, lang: &Lang) -> Option<Locale> {
-        Locale::from_str(&self.fetch_string(lang).ok()?).ok()
-    }
+
     fn fetch_cli(&mut self, lang: &Lang) -> Option<Locale> {
         let string = self.fetch_string(lang).ok()?;
         let with_errors = |s: &str| Ok(Locale::from_str(s)?);
@@ -47,10 +43,6 @@ impl From<StyleError> for LocaleFetchError {
     }
 }
 
-pub struct Filesystem {
-    root: PathBuf,
-}
-
 impl FromStr for Locale {
     type Err = StyleError;
     fn from_str(xml: &str) -> Result<Self, Self::Err> {
@@ -58,6 +50,10 @@ impl FromStr for Locale {
         let locale = Locale::from_node(&doc.root_element())?;
         Ok(locale)
     }
+}
+
+pub struct Filesystem {
+    root: PathBuf,
 }
 
 impl Filesystem {
@@ -73,5 +69,17 @@ impl LocaleFetcher for Filesystem {
         let mut path = self.root.clone();
         path.push(&format!("locales-{}.xml", lang));
         fs::read_to_string(path)
+    }
+}
+
+use std::collections::HashMap;
+
+pub struct Predefined(pub HashMap<Lang, String>);
+
+impl LocaleFetcher for Predefined {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        Ok(self.0.get(lang).cloned().unwrap_or_else(|| String::from(r#"<?xml version="1.0" encoding="utf-8"?>
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        </locale>"#)))
     }
 }

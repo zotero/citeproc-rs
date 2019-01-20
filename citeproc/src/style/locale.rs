@@ -12,6 +12,8 @@ use crate::style::Style;
 use salsa::Database;
 use std::sync::Arc;
 
+use std::str::FromStr;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CslOption(String, String);
 
@@ -36,6 +38,7 @@ impl Locale {
             Role(ref ts) => self.role_terms.get(ts).and_then(|r| r.get(plural)),
         }
     }
+
     fn merge(&mut self, with: &Self) {
         fn extend<K: Clone + Eq + std::hash::Hash, V: Clone>(
             map: &mut FnvHashMap<K, V>,
@@ -71,15 +74,15 @@ fn inline_locale(db: &impl StyleDatabase, key: Option<Lang>) -> Option<Arc<Local
 }
 
 #[salsa::query_group]
-trait LocaleDatabase: salsa::Database + StyleDatabase {
+trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
     fn locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
     fn merged_locale(&self, key: Lang) -> Arc<Locale>;
 }
 
-fn locale_xml(_: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
-    let fsf = Filesystem::new("/Users/cormac/git/locales");
-    fsf.fetch_string(&key).ok().map(Arc::new)
+fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
+    // let fsf = Filesystem::new("/Users/cormac/git/locales");
+    db.fetch_string(&key).ok().map(Arc::new)
 }
 
 fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
@@ -108,17 +111,25 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
 
 struct LocaleDbImpl {
     runtime: salsa::Runtime<LocaleDbImpl>,
-    // fetcher: Box<F>
+    fetcher: Box<LocaleFetcher>
 }
 
-impl Default for LocaleDbImpl {
-    fn default() -> Self {
+impl LocaleDbImpl {
+    fn new(fetcher: Box<LocaleFetcher>) -> Self {
         let mut db = LocaleDbImpl {
             runtime: Default::default(),
+            fetcher,
         };
         db.query_mut(StyleTextQuery).set((), Default::default());
         db.query_mut(StyleQuery).set((), Default::default());
         db
+    }
+}
+
+impl LocaleFetcher for LocaleDbImpl {
+    #[inline]
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        self.fetcher.fetch_string(lang)
     }
 }
 
@@ -136,28 +147,12 @@ salsa::database_storage! {
             fn style() for StyleQuery;
             fn inline_locale() for InlineLocaleQuery;
         }
-        impl LocaleDatabaase {
+        impl LocaleDatabase {
             fn locale_xml() for LocaleXmlQuery;
             fn locale() for LocaleQuery;
             fn merged_locale() for MergedLocaleQuery;
         }
     }
-}
-
-#[test]
-fn test_locale_db() {
-    let db = LocaleDbImpl::default();
-    // use AU so it has to do fallback
-    let locale = db.merged_locale(Lang::en_au());
-    eprintln!("{:?}", locale);
-    use crate::style::terms::*;
-    assert!(locale
-        .simple_terms
-        .get(&SimpleTermSelector::Misc(
-            MiscTerm::Accessed,
-            TermFormExtended::Long
-        ))
-        .is_some())
 }
 
 // #[allow(dead_code)]
@@ -371,25 +366,127 @@ impl Iterator for InlineIter {
     }
 }
 
-#[test]
-fn test_file_iter() {
-    let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
-    let de_de = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::DE));
-    let en_us = Lang::Iso(IsoLang::English, Some(IsoCountry::US));
-    assert_eq!(
-        de_at.file_iter().collect::<Vec<_>>(),
-        &[de_at, de_de, en_us]
-    );
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use super::fetcher::Predefined;
+    use crate::style::terms::*;
+    use std::collections::HashMap;
+
+    fn terms(xml: &str) -> String {
+        format!(r#"<?xml version="1.0" encoding="utf-8"?>
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        <terms>{}</terms></locale>"#, xml)
+    }
+
+    fn predef_terms(pairs: &[(Lang, &str)]) -> Predefined {
+        let mut map = HashMap::new();
+        for (lang, ts) in pairs {
+            map.insert(lang.clone(), terms(ts));
+        }
+        Predefined(map)
+    }
+
+    fn term_and(form: TermFormExtended) -> SimpleTermSelector {
+        SimpleTermSelector::Misc(
+            MiscTerm::And,
+            form
+        )
+    }
+
+    fn test_simple_term(
+        term: SimpleTermSelector,
+        langs: &[(Lang, &str)],
+        expect: Option<&TermPlurality>
+    ) {
+        let db = LocaleDbImpl::new(Box::new(predef_terms(langs)));
+        // use en-AU so it has to do fallback to en-US
+        let locale = db.merged_locale(Lang::en_au());
+        assert_eq!(
+            locale.simple_terms.get(&term),
+            expect
+        )
+    }
+
+    #[test]
+    fn term_override() {
+        test_simple_term(
+            term_and(TermFormExtended::Long),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (Lang::en_au(), r#"<term name="and">Australia</term>"#),
+            ],
+            Some(&TermPlurality::Invariant("Australia".into()))
+        )
+    }
+
+    #[test]
+    fn term_form_refine() {
+        test_simple_term(
+            term_and(TermFormExtended::Long),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (Lang::en_au(), r#"<term name="and" form="short">Australia</term>"#),
+            ],
+            Some(&TermPlurality::Invariant("USA".into()))
+        );
+        test_simple_term(
+            term_and(TermFormExtended::Short),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (Lang::en_au(), r#"<term name="and" form="short">Australia</term>"#),
+            ],
+            Some(&TermPlurality::Invariant("Australia".into()))
+        );
+    }
+
+    #[test]
+    fn term_fallback() {
+        test_simple_term(
+            term_and(TermFormExtended::Long),
+            &[
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (Lang::en_au(), r#""#),
+            ],
+            Some(&TermPlurality::Invariant("USA".into()))
+        )
+    }
+
+    #[test]
+    fn test_inline_iter() {
+        let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
+        let de = Lang::Iso(IsoLang::Deutsch, None);
+        assert_eq!(de_at.inline_iter().collect::<Vec<_>>(), &[de_at, de]);
+    }
+
+    #[test]
+    fn file_iter() {
+        let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
+        let de_de = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::DE));
+        let en_us = Lang::Iso(IsoLang::English, Some(IsoCountry::US));
+        assert_eq!(
+            de_at.file_iter().collect::<Vec<_>>(),
+            &[de_at, de_de, en_us]
+        );
+    }
+
+    #[test]
+    fn lang_from_str() {
+        let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
+        let de = Lang::Iso(IsoLang::Deutsch, None);
+        let iana = Lang::Iana("Navajo".to_string());
+        let unofficial = Lang::Unofficial("Newspeak".to_string());
+        assert_eq!(Lang::from_str("de-AT"), Ok(de_at));
+        assert_eq!(Lang::from_str("de"), Ok(de));
+        assert_eq!(Lang::from_str("i-Navajo"), Ok(iana));
+        assert_eq!(Lang::from_str("x-Newspeak"), Ok(unofficial));
+    }
+
 }
 
-#[test]
-fn test_inline_iter() {
-    let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
-    let de = Lang::Iso(IsoLang::Deutsch, None);
-    assert_eq!(de_at.inline_iter().collect::<Vec<_>>(), &[de_at, de]);
-}
-
-use std::str::FromStr;
+use nom::types::CompleteStr;
+use nom::*;
 
 impl FromStr for Lang {
     type Err = ();
@@ -405,21 +502,6 @@ impl FromStr for Lang {
         }
     }
 }
-
-#[test]
-fn test_lang_from_str() {
-    let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
-    let de = Lang::Iso(IsoLang::Deutsch, None);
-    let iana = Lang::Iana("Navajo".to_string());
-    let unofficial = Lang::Unofficial("Newspeak".to_string());
-    assert_eq!(Lang::from_str("de-AT"), Ok(de_at));
-    assert_eq!(Lang::from_str("de"), Ok(de));
-    assert_eq!(Lang::from_str("i-Navajo"), Ok(iana));
-    assert_eq!(Lang::from_str("x-Newspeak"), Ok(unofficial));
-}
-
-use nom::types::CompleteStr;
-use nom::*;
 
 named!(
     iso_lang<CompleteStr, IsoLang>,
