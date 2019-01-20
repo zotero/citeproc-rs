@@ -1101,12 +1101,17 @@ impl FromNode for Style {
     }
 }
 
-// pub fn drive_style(path: &str, text: &str) -> String {
-//     match build_style(text) {
-//         Ok(_style) => "done!".to_string(),
-//         Err(e) => {
-//             file_diagnostics(&[e], path, text);
-//             "failed".into()
-//         }
-//     }
-// }
+pub(crate) mod db {
+    use std::sync::Arc;
+
+    use super::Style;
+
+    /// Salsa interface to a CSL style.
+    #[salsa::query_group]
+    pub trait StyleDatabase: salsa::Database {
+        #[salsa::input]
+        fn style_text(&self, key: ()) -> Arc<String>;
+        #[salsa::input]
+        fn style(&self, key: ()) -> Arc<Style>;
+    }
+}
