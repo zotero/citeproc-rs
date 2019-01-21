@@ -12,24 +12,16 @@ cfg_if! {
 }
 
 use clap::{App, Arg, SubCommand};
+use directories::ProjectDirs;
+use std::fs;
+use std::path::PathBuf;
+use std::str::FromStr;
 
-extern crate citeproc;
-use citeproc::output::*;
-use citeproc::locale::{Lang, LocaleFetcher};
-use citeproc::Driver;
-use std::fs::File;
-use std::io::prelude::*;
-
-use citeproc::db_impl::RootDatabase;
 use citeproc::db::ReferenceDatabase;
-
-fn read<'s>(path: &str) -> String {
-    let mut f = File::open(path).expect("no file at path");
-    let mut contents = String::new();
-    f.read_to_string(&mut contents)
-        .expect("something went wrong reading the file");
-    contents
-}
+use citeproc::db_impl::RootDatabase;
+use citeproc::locale::{Lang, LocaleFetcher};
+use citeproc::output::*;
+use citeproc::Driver;
 
 fn main() {
     let matches = App::new("citeproc")
@@ -113,9 +105,6 @@ fn main() {
     "#,
     );
 
-    use directories::ProjectDirs;
-    use std::path::PathBuf;
-
     let mut filesystem_fetcher = {
         let locales_dir = matches
             .value_of("locales")
@@ -131,11 +120,19 @@ fn main() {
     };
 
     if let Some(matches) = matches.subcommand_matches("locale") {
-        use std::str::FromStr;
-        let lang = matches
-            .value_of("lang")
-            .and_then(|l| Lang::from_str(l).ok())
-            .unwrap_or(Lang::en_us());
+        let lang = if let Some(lan) = matches.value_of("lang") {
+            if let Ok(l) = Lang::from_str(lan) {
+                l
+            } else {
+                eprintln!(
+                    "`{}` is not a valid language",
+                    matches.value_of("lang").unwrap_or("")
+                );
+                return;
+            }
+        } else {
+            Lang::en_us()
+        };
         let locale = filesystem_fetcher.fetch_cli(&lang);
         let locale_fallbacks: Vec<_> = lang.iter().collect();
         dbg!(locale);
@@ -144,15 +141,18 @@ fn main() {
     }
 
     if let Some(library_path) = matches.value_of("library") {
-        lib_text = read(&library_path);
+        lib_text = fs::read_to_string(&library_path).expect("No library found at that path");
     }
     let mut db = RootDatabase::new(filesystem_fetcher);
     db.add_references(&lib_text);
-    let key = matches.value_of("key").map(citeproc::Atom::from).unwrap_or("quagmire2018".into());
+    let key = matches
+        .value_of("key")
+        .map(citeproc::Atom::from)
+        .unwrap_or("quagmire2018".into());
     let refr = db.reference(key).expect("Citekey not present in library");
 
-    if let Some(path) = matches.value_of("csl") {
-        let text = read(&path);
+    if let Some(csl_path) = matches.value_of("csl") {
+        let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
         let formatter = Pandoc::new();
         let driver_r = Driver::new(&text, &formatter);
         if let Ok(driver) = driver_r {
@@ -167,13 +167,11 @@ fn main() {
             let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
             println!("{}{}{}", header, serialized, footer);
         } else if let Err(e) = driver_r {
-            citeproc::style::error::file_diagnostics(&e, &path, &text);
+            citeproc::style::error::file_diagnostics(&e, &csl_path, &text);
         }
     }
 }
 
-use std::fs;
-use std::path::PathBuf;
 pub struct Filesystem {
     root: PathBuf,
 }
@@ -193,5 +191,3 @@ impl LocaleFetcher for Filesystem {
         fs::read_to_string(path)
     }
 }
-
-

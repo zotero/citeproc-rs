@@ -130,11 +130,7 @@ impl DatePart {
             DatePartForm::Year(_) => true,
         }
     }
-    fn render<'c, O: OutputFormat>(
-        &self,
-        ctx: &CiteContext<'c, O>,
-        date: &Date,
-    ) -> O::Build {
+    fn render<'c, O: OutputFormat>(&self, ctx: &CiteContext<'c, O>, date: &Date) -> O::Build {
         let string = match self.form {
             DatePartForm::Year(ref form) => match form {
                 YearForm::Long => format!("{}", date.year),

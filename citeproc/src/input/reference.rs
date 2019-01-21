@@ -4,12 +4,12 @@ extern crate fnv;
 
 use fnv::FnvHashMap;
 
-use crate::Atom;
 use super::date::DateOrRange;
 use super::names::Name;
 use super::numeric::NumericValue;
 use crate::style::element::CslType;
 use crate::style::variables::{DateVariable, NameVariable, NumberVariable, Variable};
+use crate::Atom;
 
 // We're saving copies and allocations by not using String here.
 #[derive(Debug, PartialEq, Eq)]

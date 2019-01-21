@@ -155,11 +155,7 @@ impl NameEl {
         }
     }
 
-    fn name_tokens<'s>(
-        &self,
-        position: Position,
-        names_slice: &'s [Name],
-    ) -> Vec<NameToken<'s>> {
+    fn name_tokens<'s>(&self, position: Position, names_slice: &'s [Name]) -> Vec<NameToken<'s>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);

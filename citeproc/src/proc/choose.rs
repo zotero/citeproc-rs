@@ -63,10 +63,7 @@ struct BranchEval<'a, O: OutputFormat> {
     content: Option<IR<'a, O>>,
 }
 
-fn eval_ifthen<'c, O>(
-    branch: &'c IfThen,
-    ctx: &CiteContext<'c, O>,
-) -> BranchEval<'c, O>
+fn eval_ifthen<'c, O>(branch: &'c IfThen, ctx: &CiteContext<'c, O>) -> BranchEval<'c, O>
 where
     O: OutputFormat,
 {
@@ -84,10 +81,7 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, O>(
-    conditions: &'c Conditions,
-    ctx: &CiteContext<'c, O>,
-) -> (bool, bool)
+fn eval_conditions<'c, O>(conditions: &'c Conditions, ctx: &CiteContext<'c, O>) -> (bool, bool)
 where
     O: OutputFormat,
 {

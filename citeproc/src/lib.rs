@@ -1,12 +1,12 @@
-mod driver;
 pub mod db;
 pub mod db_impl;
+mod driver;
 mod utils;
 pub use self::driver::Driver;
 pub mod input;
+pub mod locale;
 pub mod output;
 pub mod style;
-pub mod locale;
 pub use self::style::error::StyleError;
 pub mod proc;
 

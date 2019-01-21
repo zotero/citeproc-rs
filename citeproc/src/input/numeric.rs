@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 use nom::types::CompleteStr;
 use nom::*;
+use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum NumericToken {

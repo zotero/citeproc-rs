@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 
-use crate::Atom;
 use crate::input::Reference;
+use crate::Atom;
 
 #[salsa::query_group]
 pub trait ReferenceDatabase: salsa::Database {
@@ -21,5 +21,3 @@ fn reference(db: &impl ReferenceDatabase, key: Atom) -> Option<Arc<Reference>> {
         None
     }
 }
-
-

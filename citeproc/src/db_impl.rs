@@ -1,17 +1,13 @@
-use std::sync::Arc;
-use std::collections::HashSet;
-use serde_json;
 use salsa::Database;
+use serde_json;
+use std::collections::HashSet;
+use std::sync::Arc;
 
-use crate::Atom;
-use crate::input::Reference;
 use crate::db::*;
+use crate::input::Reference;
+use crate::locale::{db::*, Lang, LocaleFetcher};
 use crate::style::db::*;
-use crate::locale::{
-    LocaleFetcher,
-    Lang,
-    db::*,
-};
+use crate::Atom;
 
 pub struct RootDatabase {
     runtime: salsa::Runtime<Self>,
@@ -68,7 +64,8 @@ impl RootDatabase {
         let refs: Vec<Reference> = serde_json::from_str(json_str).unwrap();
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
-            self.query_mut(ReferenceInputQuery).set(r.id.clone(), Arc::new(r));
+            self.query_mut(ReferenceInputQuery)
+                .set(r.id.clone(), Arc::new(r));
         }
         self.query_mut(CitekeysQuery).set((), Arc::new(keys));
     }

@@ -8,8 +8,8 @@ use crate::style::terms::*;
 pub(crate) mod db;
 mod fetcher;
 mod lang;
-pub use self::fetcher::{LocaleFetcher};
-pub use self::lang::{Lang, IsoLang, IsoCountry};
+pub use self::fetcher::LocaleFetcher;
+pub use self::lang::{IsoCountry, IsoLang, Lang};
 #[cfg(test)]
 mod test;
 
@@ -115,4 +115,3 @@ impl Locale {
         self.options_node.merge(&with.options_node);
     }
 }
-

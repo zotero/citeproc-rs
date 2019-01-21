@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use super::*;
 use crate::style::db::*;

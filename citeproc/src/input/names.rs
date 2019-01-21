@@ -1,4 +1,3 @@
-
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
 #[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
@@ -16,5 +15,7 @@ pub struct PersonName {
 pub enum Name {
     Person(PersonName),
     /// In CSL-M, this will represent an institution
-    Literal { literal: String },
+    Literal {
+        literal: String,
+    },
 }
