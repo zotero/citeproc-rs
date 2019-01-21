@@ -144,7 +144,7 @@ fn main() {
         lib_text = fs::read_to_string(&library_path).expect("No library found at that path");
     }
     let mut db = RootDatabase::new(filesystem_fetcher);
-    db.add_references(&lib_text);
+    db.add_references(&lib_text).expect("Coult not parse JSON");
     let key = matches
         .value_of("key")
         .map(citeproc::Atom::from)

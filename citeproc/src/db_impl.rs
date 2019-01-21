@@ -60,13 +60,14 @@ salsa::database_storage! {
 }
 
 impl RootDatabase {
-    pub fn add_references(&mut self, json_str: &str) {
-        let refs: Vec<Reference> = serde_json::from_str(json_str).unwrap();
+    pub fn add_references(&mut self, json_str: &str) -> Result<(), serde_json::error::Error> {
+        let refs: Vec<Reference> = serde_json::from_str(json_str)?;
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
             self.query_mut(ReferenceInputQuery)
                 .set(r.id.clone(), Arc::new(r));
         }
         self.query_mut(CitekeysQuery).set((), Arc::new(keys));
+        Ok(())
     }
 }
