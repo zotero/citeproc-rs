@@ -330,16 +330,35 @@ pub struct Condition {
     pub csl_type: Vec<CslType>,
     pub locator: Vec<LocatorType>,
     pub is_uncertain_date: Vec<DateVariable>,
+
     // TODO: do not populate in plain CSL mode
+
     pub jurisdiction: Option<String>,
     pub subjurisdictions: Option<u32>,
+
+    /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-year-only-extension
+    pub has_year_only: Vec<DateVariable>,
+    /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-day-extension
+    pub has_day: Vec<DateVariable>,
+    /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-to-month-or-season-extension
+    ///
+    /// I have no idea why "to-" is in there.
+    pub has_to_month_or_season: Vec<DateVariable>,
+    pub context: Option<Context>,
+
     // undocumented CSL-M features
+    // are there are more of these lurking in the citeproc-js codebase?
+
     // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L599-L627
     pub is_plural: Vec<NameVariable>,
-    pub has_year_only: Vec<DateVariable>,
-    pub has_day: Vec<DateVariable>,
-    pub has_month_or_season: Vec<DateVariable>,
-    // are there are more of these lurking in the citeproc-js codebase?
+}
+
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Context {
+    Citation,
+    Bibliography,
 }
 
 impl Condition {
@@ -353,10 +372,11 @@ impl Condition {
             && self.is_uncertain_date.is_empty()
             && self.has_year_only.is_empty()
             && self.has_day.is_empty()
-            && self.has_month_or_season.is_empty()
+            && self.has_to_month_or_season.is_empty()
             && self.jurisdiction.is_none()
             && self.subjurisdictions.is_none()
             && self.is_plural.is_empty()
+            && self.context.is_none()
     }
 }
 
@@ -413,7 +433,7 @@ pub struct Names {
 /// The attributes name-form and name-delimiter correspond to the form and delimiter attributes on
 /// cs:name. Similarly, names-delimiter corresponds to the delimiter attribute on cs:names.
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAnd {
     Text,

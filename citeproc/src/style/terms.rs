@@ -148,6 +148,7 @@ pub enum TermForm {
     Long,
     Short,
     Symbol,
+    // XXX form="static", e.g. in jm-oscola, for CSL-M only
 }
 
 impl Default for TermForm {

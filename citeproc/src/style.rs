@@ -448,6 +448,7 @@ impl Condition {
             match_type: Match::from_node(node)?,
             jurisdiction: attribute_option_string(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
+            context: attribute_option(node, "context")?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
             variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
             position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
@@ -462,9 +463,9 @@ impl Condition {
                 NeedVarType::CondDate,
             )?,
             is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::Any)?,
-            has_month_or_season: attribute_array_var(
+            has_to_month_or_season: attribute_array_var(
                 node,
-                "has-month-or-season",
+                "has-to-month-or-season",
                 NeedVarType::CondDate,
             )?,
         };
