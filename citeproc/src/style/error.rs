@@ -146,6 +146,10 @@ impl InvalidCsl {
         }
     }
 
+    pub fn missing(node: &Node, attr: &str) -> Self {
+        InvalidCsl::new(node, &format!("Must have `{}` attribute", attr))
+    }
+
     pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
         let full_val = node.attribute(attr);
         InvalidCsl {
@@ -153,7 +157,7 @@ impl InvalidCsl {
                 .attribute_value_pos(attr)
                 .unwrap_or_else(|| node.node_pos()),
             len: full_val.map(|v| v.len()).unwrap_or(1),
-            message: format!("Unknown attribute value for {}: \"{}\"", attr, uav),
+            message: format!("Unknown attribute value for `{}`: \"{}\"", attr, uav),
             hint: "".to_string(),
             severity: Severity::Error,
         }

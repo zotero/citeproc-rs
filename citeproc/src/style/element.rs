@@ -397,8 +397,10 @@ pub struct Names {
     // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
+    pub institution: Option<Institution>,
     pub label: Option<NameLabel>,
-    pub et_al: Option<EtAl>,
+    pub et_al: Option<NameEtAl>,
+    pub with: Option<NameWith>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
@@ -416,6 +418,86 @@ pub struct Names {
 pub enum NameAnd {
     Text,
     Symbol,
+}
+
+/// It is not entirely clear which attributes `<cs:with>` supports.
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
+pub struct NameWith {
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
+pub struct Institution {
+    pub and: Option<NameAnd>,
+    pub delimiter: Option<Delimiter>,
+    pub use_first: Option<InstitutionUseFirst>,
+    /// This is different from the `*_use_last` on a Name, which is a boolean to activate `one,
+    /// two,... last`.
+    ///
+    /// Instead, it plucks institution segments from the end in the same way use_first pulls from
+    /// the start.
+    pub use_last: Option<u32>,
+    /// default is false
+    pub reverse_order: bool,
+    pub parts_selector: InstitutionParts,
+    pub institution_parts: Vec<InstitutionPart>,
+    // Not clearly part of the spec, but may be necessary.
+    // pub formatting: Option<Formatting>,
+    // pub affixes: Affixes,
+
+    // TODO: suppress-min
+}
+
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
+pub struct InstitutionPart {
+    pub name: InstitutionPartName,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    // TODO: is this better achieved using initialize-with?
+    pub strip_periods: StripPeriods,
+}
+
+type IfShort = bool;
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum InstitutionPartName {
+    Long(IfShort),
+    Short,
+}
+
+impl Default for InstitutionPartName {
+    fn default() -> Self {
+        InstitutionPartName::Long(false)
+    }
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum InstitutionParts {
+    Long,
+    Short,
+    ShortLong,
+    LongShort,
+}
+
+impl Default for InstitutionParts {
+    fn default() -> Self {
+        InstitutionParts::Long
+    }
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum InstitutionUseFirst {
+    /// Set with `use-first="1"`
+    Normal(u32),
+    /// Set with `substitute-use-first="1"`
+    ///
+    /// The substitute-use-first attribute includes the leading (smallest) subunit if and only if
+    /// no personal names are associated with the organization.
+    Substitute(u32),
 }
 
 #[derive(Eq, Clone, PartialEq, Default)]
@@ -536,7 +618,7 @@ pub struct NameLabel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EtAl {
+pub struct NameEtAl {
     pub term: String,
     pub formatting: Option<Formatting>,
 }

@@ -812,12 +812,16 @@ impl FromNode for Names {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: did I have Vec<Name> originally because some styles have more than one?
         let name = max1_child("names", "name", node.children())?;
+        let institution = max1_child("names", "institution", node.children())?;
         let et_al = max1_child("names", "et-al", node.children())?;
         let label = max1_child("names", "label", node.children())?;
+        let with = max1_child("names", "with", node.children())?;
         let substitute = max1_child("names", "substitute", node.children())?;
         Ok(Names {
             variables: attribute_array_var(node, "variable", NeedVarType::Name)?,
             name,
+            institution,
+            with,
             et_al,
             label,
             substitute,
@@ -826,6 +830,61 @@ impl FromNode for Names {
             display: attribute_option(node, "display")?,
             delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
         })
+    }
+}
+
+impl FromNode for Institution {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        use crate::style::element::InstitutionUseFirst::*;
+        let uf = node.attribute("use-first");
+        let suf = node.attribute("substitute-use-first");
+        let invalid = "<institution> may only use one of `use-first` or `substitute-use-first`";
+        let use_first = match (uf, suf) {
+            (Some(_), None) => Some(Normal(attribute_int(node, "use-first", 1)?)),
+            (None, Some(_)) => Some(Substitute(attribute_int(node, "substitute-use-first", 1)?)),
+            (None, None) => None,
+            _ => return Err(InvalidCsl::new(node, invalid).into()),
+        };
+
+        let institution_parts = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("institution-part"))
+            .map(|el| InstitutionPart::from_node(&el))
+            .partition_results()?;
+
+        Ok(Institution {
+            and: attribute_option(node, "and")?,
+            delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
+            use_first,
+            use_last: attribute_option_int(node, "use-last")?,
+            reverse_order: attribute_bool(node, "reverse-order", false)?,
+            parts_selector: attribute_optional(node, "institution-parts")?,
+            institution_parts,
+        })
+    }
+}
+
+impl FromNode for InstitutionPart {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        Ok(InstitutionPart {
+            name: InstitutionPartName::from_node(node)?,
+            formatting: Option::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
+            strip_periods: attribute_bool(node, "strip-periods", false)?,
+        })
+    }
+}
+
+impl FromNode for InstitutionPartName {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        match node.attribute("name") {
+            Some("long") => Ok(InstitutionPartName::Long(attribute_bool(
+                node, "if-short", false,
+            )?)),
+            Some("short") => Ok(InstitutionPartName::Short),
+            Some(ref val) => Err(InvalidCsl::attr_val(node, "name", val).into()),
+            None => Err(InvalidCsl::missing(node, "name").into()),
+        }
     }
 }
 
@@ -876,11 +935,20 @@ impl FromNode for Name {
     }
 }
 
-impl FromNode for EtAl {
+impl FromNode for NameEtAl {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        Ok(EtAl {
+        Ok(NameEtAl {
             term: attribute_string(node, "term"),
             formatting: Option::from_node(node)?,
+        })
+    }
+}
+
+impl FromNode for NameWith {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        Ok(NameWith {
+            formatting: Option::from_node(node)?,
+            affixes: Affixes::from_node(node)?,
         })
     }
 }

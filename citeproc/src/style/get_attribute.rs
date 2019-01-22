@@ -89,10 +89,7 @@ pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T,
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
-        None => Err(InvalidCsl::new(
-            node,
-            &format!("Must have '{}' attribute", attr),
-        )),
+        None => Err(InvalidCsl::missing(node, attr)),
     }
 }
 
