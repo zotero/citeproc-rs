@@ -57,7 +57,6 @@ impl AttrChecker for Formatting {
             || attr == "font-weight"
             || attr == "text-decoration"
             || attr == "vertical-alignment"
-            || attr == "display"
             || attr == "strip-periods"
     }
 }
@@ -110,7 +109,6 @@ impl FromNode for Formatting {
             font_weight: attribute_optional(node, "font-weight")?,
             text_decoration: attribute_optional(node, "text-decoration")?,
             vertical_alignment: attribute_optional(node, "vertical-alignment")?,
-            display: attribute_optional(node, "display")?,
             strip_periods: attribute_bool(node, "strip-periods", false)?,
 
             // TODO: carry options from root
@@ -186,7 +184,11 @@ impl FromNode for SortSource {
         let err = "<key> must have either a `macro` or `variable` attribute";
         match (macro_, variable) {
             (Some(mac), None) => Ok(SortSource::Macro(mac.to_string())),
-            (None, Some(_)) => Ok(SortSource::Variable(attribute_required(node, "variable")?)),
+            (None, Some(_)) => Ok(SortSource::Variable(attribute_var_type(
+                node,
+                "variable",
+                NeedVarType::Any,
+            )?)),
             _ => Err(InvalidCsl::new(node, err).into()),
         }
     }
@@ -311,54 +313,44 @@ impl FromNode for TextTermSelector {
 }
 
 fn text_el(node: &Node) -> Result<Element, CslError> {
-    use self::element::Element::*;
+    let macro_ = node.attribute("macro");
+    let value = node.attribute("value");
+    let variable = node.attribute("variable");
+    let term = node.attribute("term");
+    let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
+
+    let source = match (macro_, value, variable, term) {
+        (Some(mac), None, None, None) => TextSource::Macro(mac.to_string()),
+        (None, Some(val), None, None) => TextSource::Value(val.to_string()),
+        (None, None, Some(___), None) => TextSource::Variable(
+            attribute_var_type(node, "variable", NeedVarType::TextVariable)?,
+            attribute_optional(node, "form")?,
+        ),
+        (None, None, None, Some(___)) => TextSource::Term(
+            TextTermSelector::from_node(node)?,
+            attribute_bool(node, "plural", false)?,
+        ),
+        _ => return Err(InvalidCsl::new(node, invalid).into()),
+    };
+
     let formatting = Option::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
-    if let Some(m) = node.attribute("macro") {
-        return Ok(Macro(
-            m.to_owned(),
-            formatting,
-            affixes,
-            attribute_bool(node, "quotes", false)?,
-        ));
-    }
-    if let Some(_m) = node.attribute("variable") {
-        return Ok(Variable(
-            attribute_var_type(node, "variable", NeedVarType::TextVariable)?,
-            formatting,
-            affixes,
-            attribute_optional(node, "form")?,
-            attribute_bool(node, "quotes", false)?,
-        ));
-    }
-    if let Some(v) = node.attribute("value") {
-        return Ok(Const(
-            v.to_owned(),
-            formatting,
-            affixes,
-            attribute_bool(node, "quotes", false)?,
-        ));
-    }
-    if node.attribute("term").is_some() {
-        return Ok(Term(
-            TextTermSelector::from_node(node)?,
-            formatting,
-            affixes,
-            attribute_bool(node, "plural", false)?,
-        ));
-    };
-    Err(InvalidCsl::new(
-        node,
-        "<text> without a `variable`, `macro`, `term` or `value` is invalid",
-    ))?
+    let quotes = attribute_bool(node, "quotes", false)?;
+    let text_case = TextCase::from_node(node)?;
+    let display = attribute_option(node, "display")?;
+
+    Ok(Element::Text(
+        source, formatting, affixes, quotes, text_case, display,
+    ))
 }
 
 fn label_el(node: &Node) -> Result<Element, CslError> {
     Ok(Element::Label(
-        attribute_required(node, "variable")?,
+        attribute_var_type(node, "variable", NeedVarType::NumberVariable)?,
         attribute_optional(node, "form")?,
         Option::from_node(node)?,
         Affixes::from_node(node)?,
+        TextCase::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
 }
@@ -370,6 +362,7 @@ fn number_el(node: &Node) -> Result<Element, CslError> {
         Option::from_node(node)?,
         Affixes::from_node(node)?,
         attribute_optional(node, "plural")?,
+        attribute_option(node, "display")?,
     ))
 }
 
@@ -385,6 +378,8 @@ impl FromNode for Group {
             formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             affixes: Affixes::from_node(node)?,
+            display: attribute_option(node, "display")?,
+            // TODO: CSL-M only
             is_parallel: attribute_bool(node, "is-parallel", false)?,
         })
     }
@@ -687,6 +682,7 @@ impl FromNode for IndependentDate {
             text_case: TextCase::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
+            display: attribute_option(node, "display")?,
             delimiter: Delimiter::from_node(node)?,
         })
     }
@@ -702,6 +698,7 @@ impl FromNode for LocaleDate {
         Ok(LocaleDate {
             form: attribute_required(node, "form")?,
             date_parts: elements,
+            formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             text_case: TextCase::from_node(node)?,
         })
@@ -723,6 +720,7 @@ impl FromNode for LocalizedDate {
             form: attribute_required(node, "form")?,
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
+            display: attribute_option(node, "display")?,
             text_case: TextCase::from_node(node)?,
         })
     }
@@ -815,6 +813,7 @@ impl FromNode for Names {
             substitute,
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
+            display: attribute_option(node, "display")?,
             delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
         })
     }

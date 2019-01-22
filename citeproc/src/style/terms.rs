@@ -96,10 +96,10 @@ pub enum GenderedTermSelector {
 impl GenderedTermSelector {
     pub fn from_number_variable(
         loc_type: &Option<LocatorType>,
-        var: &NumberVariable,
-        form: &TermForm,
+        var: NumberVariable,
+        form: TermForm,
     ) -> Option<GenderedTermSelector> {
-        match *var {
+        match var {
             NumberVariable::Locator => match *loc_type {
                 None => None,
                 Some(ref l) => Some(GenderedTermSelector::Locator(l.clone(), form.clone())),

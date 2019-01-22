@@ -8,45 +8,52 @@ use std::fmt;
 use std::str::FromStr;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
+pub enum TextSource {
+    Macro(String),
+    Value(String),
+    Variable(StandardVariable, VariableForm),
+    /// The bool is for plural
+    Term(TextTermSelector, bool),
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
-    // <cs:choose>
+    /// <cs:choose>
     Choose(Choose),
-    // <cs:text>
-    Macro(String, Option<Formatting>, Affixes, Quotes),
-    // <cs:text>
-    Const(String, Option<Formatting>, Affixes, Quotes),
-    // <cs:text>
-    Variable(
-        StandardVariable,
+    /// <cs:text>
+    Text(
+        TextSource,
         Option<Formatting>,
         Affixes,
-        VariableForm,
         Quotes,
+        // XXX StripPeriods
+        TextCase,
+        Option<DisplayMode>,
     ),
-    // <cs:term>
-    Term(TextTermSelector, Option<Formatting>, Affixes, bool), // bool is plural
-    // <cs:label>
+    /// <cs:label>
     Label(
         NumberVariable,
         TermForm,
         Option<Formatting>,
         Affixes,
+        // XXX StripPeriods
+        TextCase,
         Plural,
     ),
-    // <cs:number>
+    /// <cs:number>
     Number(
         NumberVariable,
         NumericForm,
         Option<Formatting>,
         Affixes,
         TextCase,
+        Option<DisplayMode>,
     ),
-    // <cs:names>
+    /// <cs:names>
     Names(Names),
-    // <cs:group>
-    // Group(Option<Formatting>, Delimiter, Affixes, Vec<Element>),
+    /// <cs:group>
     Group(Group),
-    // <cs:date>
+    /// <cs:date>
     Date(BodyDate),
 }
 
@@ -56,6 +63,7 @@ pub struct Group {
     pub delimiter: Delimiter,
     pub affixes: Affixes,
     pub elements: Vec<Element>,
+    pub display: Option<DisplayMode>,
     /// CSL-M only
     pub is_parallel: bool,
 }
@@ -67,7 +75,7 @@ pub enum BodyDate {
 }
 
 /// e.g. for <text variable="title" form="short" />
-#[derive(AsRefStr, EnumString, EnumProperty, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum VariableForm {
     Long,
@@ -80,7 +88,7 @@ impl Default for VariableForm {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NumericForm {
     Numeric,
@@ -118,8 +126,6 @@ pub struct Formatting {
     pub vertical_alignment: VerticalAlignment,
     pub text_decoration: TextDecoration,
     // TODO: refactor
-    pub display: FormattingDisplay,
-    // TODO: refactor
     pub strip_periods: bool,
     pub hyperlink: String,
 }
@@ -145,7 +151,6 @@ impl Default for Formatting {
             font_weight: FontWeight::default(),
             text_decoration: TextDecoration::default(),
             vertical_alignment: VerticalAlignment::default(),
-            display: FormattingDisplay::default(),
             strip_periods: false,
             hyperlink: "".to_owned(),
         }
@@ -184,9 +189,6 @@ impl fmt::Debug for Formatting {
         if self.vertical_alignment != default.vertical_alignment {
             write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment)?;
         }
-        if self.display != default.display {
-            write!(f, "display: {:?}, ", self.display)?;
-        }
         if self.strip_periods != default.strip_periods {
             write!(f, "strip_periods: {:?}, ", self.strip_periods)?;
         }
@@ -197,23 +199,16 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
-pub enum FormattingDisplay {
-    None,
+pub enum DisplayMode {
     Block,
     LeftMargin,
     RightInline,
     Indent,
 }
 
-impl Default for FormattingDisplay {
-    fn default() -> Self {
-        FormattingDisplay::None
-    }
-}
-
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TextCase {
     None,
@@ -411,6 +406,7 @@ pub struct Names {
     pub et_al: Option<EtAl>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
+    pub display: Option<DisplayMode>,
     pub affixes: Affixes,
 }
 
@@ -724,8 +720,9 @@ impl Default for SortDirection {
 // TODO: Multiple layouts in CSL-M with locale="en es de" etc
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
-    pub formatting: Option<Formatting>,
     pub affixes: Affixes,
+    pub formatting: Option<Formatting>,
+    // TODO: only allow inside <citation>
     pub delimiter: Delimiter,
     pub elements: Vec<Element>,
 }
@@ -893,6 +890,8 @@ pub struct DatePart {
     pub range_delimiter: RangeDelimiter,
 }
 
+/// A date element that fully defines its own output.
+/// It is 'independent' of any localization.
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct IndependentDate {
     pub variable: DateVariable,
@@ -901,17 +900,11 @@ pub struct IndependentDate {
     pub delimiter: Delimiter,
     pub affixes: Affixes,
     pub formatting: Option<Formatting>,
+    pub display: Option<DisplayMode>,
     pub text_case: TextCase,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
-pub struct LocaleDate {
-    pub form: DateForm,
-    pub date_parts: Vec<DatePart>,
-    pub delimiter: Delimiter,
-    pub text_case: TextCase,
-}
-
+/// A date element in the main body of a style that refers to a `LocaleDate`
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct LocalizedDate {
     pub variable: DateVariable,
@@ -920,7 +913,18 @@ pub struct LocalizedDate {
     pub form: DateForm,
     pub affixes: Affixes,
     pub formatting: Option<Formatting>,
+    pub display: Option<DisplayMode>,
     pub text_case: TextCase,
+}
+
+/// A date element defined inside a `<cs:locale>`
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct LocaleDate {
+    pub form: DateForm,
+    pub date_parts: Vec<DatePart>,
+    pub delimiter: Delimiter,
+    pub text_case: TextCase,
+    pub formatting: Option<Formatting>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]

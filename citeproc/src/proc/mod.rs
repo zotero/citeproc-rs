@@ -68,54 +68,64 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
 
-            Element::Macro(ref name, ref f, ref af, ref _quo) => {
-                // TODO: be able to return errors
-                let macro_unsafe = ctx
-                    .style
-                    .macros
-                    .get(name)
-                    .expect("macro errors unimplemented!");
-                sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
-            }
-
-            Element::Const(ref val, ref f, ref af, ref _quo) => {
-                IR::Rendered(Some(fmt.affixed_text(val.clone(), f.as_ref(), &af)))
-            }
-
-            Element::Variable(ref var, ref f, ref af, ref _form, ref _quo) => {
-                let content = match *var {
-                    StandardVariable::Ordinary(ref v) => ctx.reference.ordinary.get(v).map(|val| {
-                        let s = if v.should_replace_hyphens() {
-                            val.replace('-', "\u{2013}")
-                        } else {
-                            val.clone()
+            Element::Text(ref source, ref f, ref af, ref _quo, ref _tc, _disp) => {
+                use crate::style::element::TextSource::*;
+                match *source {
+                    Macro(ref name) => {
+                        // TODO: be able to return errors
+                        let macro_unsafe = ctx
+                            .style
+                            .macros
+                            .get(name)
+                            .expect("macro errors not implemented!");
+                        sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
+                    }
+                    Value(ref value) => {
+                        IR::Rendered(Some(fmt.affixed_text(value.clone(), f.as_ref(), &af)))
+                    }
+                    Variable(var, _form) => {
+                        let content = match var {
+                            StandardVariable::Ordinary(ref v) => {
+                                ctx.reference.ordinary.get(v).map(|val| {
+                                    let s = if v.should_replace_hyphens() {
+                                        val.replace('-', "\u{2013}")
+                                    } else {
+                                        val.clone()
+                                    };
+                                    fmt.affixed_text(s, f.as_ref(), &af)
+                                })
+                            }
+                            StandardVariable::Number(ref v) => {
+                                ctx.reference.number.get(v).map(|val| {
+                                    fmt.affixed_text(
+                                        val.verbatim(v.should_replace_hyphens()),
+                                        f.as_ref(),
+                                        &af,
+                                    )
+                                })
+                            }
                         };
-                        fmt.affixed_text(s, f.as_ref(), &af)
-                    }),
-                    StandardVariable::Number(ref v) => ctx.reference.number.get(v).map(|val| {
-                        fmt.affixed_text(val.verbatim(v.should_replace_hyphens()), f.as_ref(), &af)
-                    }),
-                };
-                IR::Rendered(content)
+                        IR::Rendered(content)
+                    }
+                    Term(term_selector, plural) => {
+                        let content = ctx
+                            .style
+                            .locale_overrides
+                            // TODO: support multiple locales!
+                            .get(&None)
+                            .unwrap()
+                            .get_text_term(term_selector, plural)
+                            .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
+                        IR::Rendered(content)
+                    }
+                }
             }
 
-            Element::Term(term_selector, ref f, ref af, pl) => {
-                let content = ctx
-                    .style
-                    .locale_overrides
-                    // TODO: support multiple locales!
-                    .get(&None)
-                    .unwrap()
-                    .get_text_term(term_selector, pl)
-                    .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
-                IR::Rendered(content)
-            }
-
-            Element::Label(ref var, ref form, ref f, ref af, ref pl) => {
+            Element::Label(var, form, ref f, ref af, ref _tc, ref pl) => {
                 use crate::style::element::Plural;
                 let selector =
                     GenderedTermSelector::from_number_variable(&ctx.cite.locator_type, var, form);
-                let num_val = ctx.get_number(var);
+                let num_val = ctx.get_number(&var);
                 let plural = match (num_val, pl) {
                     (None, _) => None,
                     (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
@@ -136,8 +146,8 @@ where
                 IR::Rendered(content)
             }
 
-            Element::Number(ref var, ref _form, ref f, ref af, ref _pl) => {
-                IR::Rendered(ctx.get_number(var).map(|val| {
+            Element::Number(var, _form, ref f, ref af, ref _tc, _disp) => {
+                IR::Rendered(ctx.get_number(&var).map(|val| {
                     fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f.as_ref(), &af)
                 }))
             }
