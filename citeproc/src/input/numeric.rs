@@ -246,25 +246,25 @@ impl<'r> From<Cow<'r, str>> for NumericValue {
 #[test]
 fn test_numeric_value() {
     assert_eq!(
-        NumericValue::from(String::from("2-5, 9")),
+        NumericValue::from(Cow::Borrowed("2-5, 9")),
         NumericValue::Tokens(
             String::from("2-5, 9"),
             vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
         )
     );
     assert_eq!(
-        NumericValue::from(String::from("2 - 5, 9, edition")),
+        NumericValue::from(Cow::Borrowed("2 - 5, 9, edition")),
         NumericValue::Str("2 - 5, 9, edition".into())
     );
     assert_eq!(
-        NumericValue::from(String::from("[1.2.3]")),
+        NumericValue::from(Cow::Borrowed("[1.2.3]")),
         NumericValue::Tokens(
             String::from("[1.2.3]"),
             vec![Affixed("[1.2.3]".to_string())]
         )
     );
     assert_eq!(
-        NumericValue::from(String::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
+        NumericValue::from(Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
         NumericValue::Tokens(
             String::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
             vec![
@@ -281,7 +281,7 @@ fn test_numeric_value() {
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::from(String::from("2-5, 9"))
+        NumericValue::from(Cow::Borrowed("2-5, 9"))
             .page_first()
             .unwrap(),
         NumericValue::num(2)
