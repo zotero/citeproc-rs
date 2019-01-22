@@ -51,15 +51,15 @@ pub fn attribute_only_true(node: &Node, attr: &str) -> Result<bool, InvalidCsl> 
     }
 }
 
-// pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
-//     match node.attribute(attr) {
-//         Some(s) => {
-//             let parsed = u32::from_str_radix(s, 10);
-//             parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
-//         }
-//         None => Ok(default),
-//     }
-// }
+pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
+    match node.attribute(attr) {
+        Some(s) => {
+            let parsed = u32::from_str_radix(s, 10);
+            parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
+        }
+        None => Ok(default),
+    }
+}
 
 pub fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
     match node.attribute(attr) {

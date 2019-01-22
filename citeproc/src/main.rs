@@ -114,7 +114,7 @@ fn main() {
                     .expect("No home directory found.");
                 let mut locales_dir = pd.cache_dir().to_owned();
                 locales_dir.push("locales");
-                dbg!(locales_dir)
+                locales_dir
             });
         Box::new(Filesystem::new(locales_dir))
     };

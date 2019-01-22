@@ -155,6 +155,98 @@ impl FromNode for Citation {
     }
 }
 
+impl FromNode for Sort {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        Ok(Sort {
+            keys: node
+                .children()
+                .filter(|n| n.has_tag_name("key"))
+                .map(|node| SortKey::from_node(&node))
+                .partition_results()?,
+        })
+    }
+}
+
+impl FromNode for SortKey {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        Ok(SortKey {
+            sort_source: SortSource::from_node(node)?,
+            names_min: attribute_option_int(node, "names-min")?,
+            names_use_first: attribute_option_int(node, "names-min")?,
+            names_use_last: attribute_option_int(node, "names-min")?,
+            sort: attribute_option(node, "sort")?,
+        })
+    }
+}
+
+impl FromNode for SortSource {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        let macro_ = node.attribute("macro");
+        let variable = node.attribute("variable");
+        let err = "<key> must have either a `macro` or `variable` attribute";
+        match (macro_, variable) {
+            (Some(mac), None) => Ok(SortSource::Macro(mac.to_string())),
+            (None, Some(_)) => Ok(SortSource::Variable(attribute_required(node, "variable")?)),
+            _ => Err(InvalidCsl::new(node, err).into()),
+        }
+    }
+}
+
+impl FromNode for Bibliography {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        // TODO: layouts matching locales in CSL-M mode
+        let layouts: Vec<_> = node
+            .children()
+            .filter(|n| n.has_tag_name("layout"))
+            .collect();
+        if layouts.len() != 1 {
+            return Ok(Err(InvalidCsl::new(
+                node,
+                "<citation> must contain exactly one <layout>",
+            ))?);
+        }
+        let layout_node = layouts[0];
+        let line_spaces = attribute_int(node, "line-spaces", 1)?;
+        if line_spaces < 1 {
+            return Err(InvalidCsl::new(node, "line-spaces must be >= 1").into());
+        }
+        let entry_spacing = attribute_int(node, "entry-spacing", 1)?;
+        let sorts: Vec<_> = node.children().filter(|n| n.has_tag_name("sort")).collect();
+        if sorts.len() > 1 {
+            return Ok(Err(InvalidCsl::new(
+                node,
+                "<bibliography> can only contain one <sort>",
+            ))?);
+        }
+        let sort = if sorts.len() == 0 {
+            None
+        } else {
+            Some(Sort::from_node(&sorts[0])?)
+        };
+        Ok(Bibliography {
+            sort,
+            layout: Layout::from_node(&layout_node)?,
+            hanging_indent: attribute_bool(node, "hanging-indent", false)?,
+            second_field_align: attribute_option(node, "second-field-align")?,
+            line_spaces,
+            entry_spacing,
+            name_inheritance: Name::from_node(&node)?,
+            subsequent_author_substitute: attribute_option_string(
+                node,
+                "subsequent-author-substitute",
+            ),
+            subsequent_author_substitute_rule: attribute_optional(
+                node,
+                "subsequent-author-substitute-rule",
+            )?,
+            names_delimiter: node
+                .attribute("names-delimiter")
+                .map(String::from)
+                .map(Delimiter),
+        })
+    }
+}
+
 impl FromNode for Delimiter {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(Delimiter(attribute_string(node, "delimiter")))
@@ -666,10 +758,10 @@ fn get_toplevel<'a, 'd: 'a>(
     nodename: &'static str,
 ) -> Result<Node<'a, 'd>, CslError> {
     // TODO: remove collect()
-    let matches = root
+    let matches: Vec<_> = root
         .children()
         .filter(|n| n.has_tag_name(nodename))
-        .collect::<Vec<Node<'a, 'd>>>();
+        .collect();
     if matches.len() > 1 {
         Ok(Err(InvalidCsl::new(
             &root,
@@ -1080,18 +1172,52 @@ impl FromNode for Style {
                 Err(CslError(Vec::new()))
             }
         };
+
+        let matches: Vec<_> = node
+            .children()
+            .filter(|n| n.has_tag_name("bibliography"))
+            .collect();
+        let bib_node = if matches.len() > 1 {
+            Ok(Err(InvalidCsl::new(
+                &node,
+                "Cannot have more than one <bibliography>",
+            ))?)
+        } else {
+            // move matches into its first item
+            Ok(matches.into_iter().nth(0))
+        };
+
+        // TODO: push instead of bubble?
+        let bibliography = match bib_node {
+            Ok(Some(node)) => match Bibliography::from_node(&node) {
+                Ok(bib) => Some(bib),
+                Err(err) => {
+                    errors.push(err);
+                    None
+                }
+            },
+            Ok(None) => None,
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
         if errors.len() > 0 {
             return Err(errors.into());
         }
+
         Ok(Style {
             macros,
             version_req,
             locale_overrides,
             default_locale: attribute_option(node, "default-locale")?,
             citation: citation?,
+            bibliography,
             info: Info {},
-            class: StyleClass::Note,
+            class: attribute_required(node, "class")?,
             name_inheritance: Name::from_node(&node)?,
+            page_range_format: attribute_option(node, "page-range-format")?,
             demote_non_dropping_particle: attribute_optional(node, "demote-non-dropping-particle")?,
             initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
             names_delimiter: node

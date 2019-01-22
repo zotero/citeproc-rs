@@ -651,6 +651,76 @@ impl Default for Citation {
     }
 }
 
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Bibliography {
+    pub sort: Option<Sort>,
+    pub layout: Layout,
+    pub hanging_indent: bool, // default is false
+    pub second_field_align: Option<SecondFieldAlign>,
+    pub line_spaces: u32,   // >= 1 only. default is 1
+    pub entry_spacing: u32, // >= 0. default is 1
+    pub name_inheritance: Name,
+    pub subsequent_author_substitute: Option<String>,
+    pub subsequent_author_substitute_rule: SubstituteAuthorSubstituteRule,
+    pub names_delimiter: Option<Delimiter>,
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum SecondFieldAlign {
+    Flush,
+    Margin,
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum SubstituteAuthorSubstituteRule {
+    CompleteAll,
+    CompleteEach,
+    PartialEach,
+    PartialFirst,
+}
+
+impl Default for SubstituteAuthorSubstituteRule {
+    fn default() -> Self {
+        SubstituteAuthorSubstituteRule::CompleteAll
+    }
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct Sort {
+    pub keys: Vec<SortKey>,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct SortKey {
+    pub sort_source: SortSource,
+    pub names_min: Option<u32>,
+    pub names_use_first: Option<u32>,
+    pub names_use_last: Option<u32>,
+    pub sort: Option<SortDirection>,
+}
+
+/// You must sort on either a variable or a macro
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SortSource {
+    Variable(AnyVariable),
+    Macro(String),
+}
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+impl Default for SortDirection {
+    fn default() -> Self {
+        SortDirection::Ascending
+    }
+}
+
 // TODO: Multiple layouts in CSL-M with locale="en es de" etc
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
@@ -684,6 +754,7 @@ pub struct Style {
     pub class: StyleClass,
     pub macros: FnvHashMap<String, Vec<Element>>,
     pub citation: Citation,
+    pub bibliography: Option<Bibliography>,
     pub info: Info,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
@@ -691,6 +762,7 @@ pub struct Style {
     pub locale_overrides: FnvHashMap<Option<Lang>, Locale>,
     pub default_locale: Option<Lang>,
     pub version_req: CslVersionReq,
+    pub page_range_format: Option<PageRangeFormat>,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool, // default is true
 }
@@ -701,12 +773,14 @@ impl Default for Style {
             class: StyleClass::Note,
             macros: Default::default(),
             citation: Default::default(),
+            bibliography: Default::default(),
             info: Default::default(),
             name_inheritance: Default::default(),
             names_delimiter: None,
             locale_overrides: Default::default(),
             default_locale: None,
             version_req: CslVersionReq::current_csl(),
+            page_range_format: None,
             demote_non_dropping_particle: Default::default(),
             initialize_with_hyphen: true,
         }
