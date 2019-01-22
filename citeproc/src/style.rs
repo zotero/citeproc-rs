@@ -109,7 +109,6 @@ impl FromNode for Formatting {
             font_weight: attribute_optional(node, "font-weight")?,
             text_decoration: attribute_optional(node, "text-decoration")?,
             vertical_alignment: attribute_optional(node, "vertical-alignment")?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
 
             // TODO: carry options from root
             hyperlink: String::from(""),
@@ -336,11 +335,18 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
     let formatting = Option::from_node(node)?;
     let affixes = Affixes::from_node(node)?;
     let quotes = attribute_bool(node, "quotes", false)?;
+    let strip_periods = attribute_bool(node, "strip-periods", false)?;
     let text_case = TextCase::from_node(node)?;
     let display = attribute_option(node, "display")?;
 
     Ok(Element::Text(
-        source, formatting, affixes, quotes, text_case, display,
+        source,
+        formatting,
+        affixes,
+        quotes,
+        strip_periods,
+        text_case,
+        display,
     ))
 }
 
@@ -350,6 +356,7 @@ fn label_el(node: &Node) -> Result<Element, CslError> {
         attribute_optional(node, "form")?,
         Option::from_node(node)?,
         Affixes::from_node(node)?,
+        attribute_bool(node, "strip-periods", false)?,
         TextCase::from_node(node)?,
         attribute_optional(node, "plural")?,
     ))
@@ -655,7 +662,10 @@ impl DatePart {
         let name: DatePartName = attribute_required(node, "name")?;
         let form = match name {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form")?),
-            DatePartName::Month => DatePartForm::Month(attribute_optional(node, "form")?),
+            DatePartName::Month => DatePartForm::Month(
+                attribute_optional(node, "form")?,
+                attribute_bool(node, "strip-periods", false)?,
+            ),
             DatePartName::Day => DatePartForm::Day(attribute_optional(node, "form")?),
         };
         Ok(DatePart {
@@ -893,6 +903,7 @@ impl FromNode for NameLabel {
             formatting: Option::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
             plural: attribute_optional(node, "plural")?,
+            strip_periods: attribute_bool(node, "strip-periods", false)?,
         })
     }
 }

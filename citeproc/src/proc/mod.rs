@@ -68,7 +68,7 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
 
-            Element::Text(ref source, ref f, ref af, ref _quo, ref _tc, _disp) => {
+            Element::Text(ref source, ref f, ref af, _quo, _sp, _tc, _disp) => {
                 use crate::style::element::TextSource::*;
                 match *source {
                     Macro(ref name) => {
@@ -121,7 +121,7 @@ where
                 }
             }
 
-            Element::Label(var, form, ref f, ref af, ref _tc, ref pl) => {
+            Element::Label(var, form, ref f, ref af, _tc, _sp, pl) => {
                 use crate::style::element::Plural;
                 let selector =
                     GenderedTermSelector::from_number_variable(&ctx.cite.locator_type, var, form);

@@ -126,24 +126,24 @@ impl DatePart {
     fn matches(&self, selector: DateParts) -> bool {
         match self.form {
             DatePartForm::Day(_) => selector == DateParts::YearMonthDay,
-            DatePartForm::Month(_) => selector != DateParts::Year,
+            DatePartForm::Month(..) => selector != DateParts::Year,
             DatePartForm::Year(_) => true,
         }
     }
     fn render<'c, O: OutputFormat>(&self, ctx: &CiteContext<'c, O>, date: &Date) -> O::Build {
         let string = match self.form {
-            DatePartForm::Year(ref form) => match form {
+            DatePartForm::Year(form) => match form {
                 YearForm::Long => format!("{}", date.year),
                 YearForm::Short => format!("{:02}", date.year % 100),
             },
-            DatePartForm::Month(ref form) => match form {
+            DatePartForm::Month(form, _strip_periods) => match form {
                 // TODO: locale getter for months
                 MonthForm::Long => MONTHS_LONG[date.month as usize].to_string(),
                 MonthForm::Short => MONTHS_SHORT[date.month as usize].to_string(),
                 MonthForm::Numeric => format!("{}", date.month),
                 MonthForm::NumericLeadingZeros => format!("{:02}", date.month),
             },
-            DatePartForm::Day(ref form) => match form {
+            DatePartForm::Day(form) => match form {
                 DayForm::Numeric => format!("{}", date.day),
                 DayForm::NumericLeadingZeros => format!("{:02}", date.day),
                 // TODO: implement ordinals

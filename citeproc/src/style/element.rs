@@ -7,13 +7,16 @@ use crate::style::version::CslVersionReq;
 use std::fmt;
 use std::str::FromStr;
 
+type TermPlural = bool;
+type StripPeriods = bool;
+type Quotes = bool;
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum TextSource {
     Macro(String),
     Value(String),
     Variable(StandardVariable, VariableForm),
-    /// The bool is for plural
-    Term(TextTermSelector, bool),
+    Term(TextTermSelector, TermPlural),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -26,7 +29,7 @@ pub enum Element {
         Option<Formatting>,
         Affixes,
         Quotes,
-        // XXX StripPeriods
+        StripPeriods,
         TextCase,
         Option<DisplayMode>,
     ),
@@ -36,7 +39,7 @@ pub enum Element {
         TermForm,
         Option<Formatting>,
         Affixes,
-        // XXX StripPeriods
+        StripPeriods,
         TextCase,
         Plural,
     ),
@@ -125,8 +128,6 @@ pub struct Formatting {
     pub font_weight: FontWeight,
     pub vertical_alignment: VerticalAlignment,
     pub text_decoration: TextDecoration,
-    // TODO: refactor
-    pub strip_periods: bool,
     pub hyperlink: String,
 }
 
@@ -151,7 +152,6 @@ impl Default for Formatting {
             font_weight: FontWeight::default(),
             text_decoration: TextDecoration::default(),
             vertical_alignment: VerticalAlignment::default(),
-            strip_periods: false,
             hyperlink: "".to_owned(),
         }
     }
@@ -188,9 +188,6 @@ impl fmt::Debug for Formatting {
         }
         if self.vertical_alignment != default.vertical_alignment {
             write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment)?;
-        }
-        if self.strip_periods != default.strip_periods {
-            write!(f, "strip_periods: {:?}, ", self.strip_periods)?;
         }
         if self.hyperlink != default.hyperlink {
             write!(f, "hyperlink: {:?}, ", self.hyperlink)?;
@@ -299,7 +296,7 @@ impl Default for VerticalAlignment {
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Delimiter(pub String);
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Plural {
     Contextual,
@@ -392,8 +389,6 @@ pub struct Else(pub Vec<Element>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
-
-type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Names {
@@ -537,6 +532,7 @@ pub struct NameLabel {
     pub formatting: Option<Formatting>,
     pub delimiter: Delimiter,
     pub plural: Plural,
+    pub strip_periods: StripPeriods,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -822,7 +818,8 @@ impl Default for DateParts {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
-pub enum DatePartName {
+/// Strictly used for parsing day/month/year
+pub(crate) enum DatePartName {
     Day,
     Month,
     Year,
@@ -877,7 +874,7 @@ pub enum DateForm {
 #[derive(Debug, Display, Eq, Copy, Clone, PartialEq)]
 pub enum DatePartForm {
     Day(DayForm),
-    Month(MonthForm),
+    Month(MonthForm, StripPeriods),
     Year(YearForm),
 }
 
