@@ -7,8 +7,6 @@ pub mod terms;
 pub mod variables;
 pub mod version;
 
-// mod take_while;
-// use self::take_while::*;
 use self::attr::*;
 use self::element::*;
 use self::error::*;
@@ -16,6 +14,7 @@ use self::terms::*;
 use self::version::*;
 use crate::locale::*;
 use crate::utils::PartitionArenaErrors;
+use crate::Atom;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
@@ -77,15 +76,19 @@ where
 impl FromNode for Affixes {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         Ok(Affixes {
-            prefix: attribute_string(node, "prefix"),
-            suffix: attribute_string(node, "suffix"),
+            prefix: attribute_atom(node, "prefix"),
+            suffix: attribute_atom(node, "suffix"),
         })
     }
 }
 
 impl FromNode for RangeDelimiter {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        Ok(RangeDelimiter(attribute_string(node, "range-delimiter")))
+        Ok(RangeDelimiter(attribute_atom_default(
+            node,
+            "range-delimiter",
+            "\u{2013}".into(),
+        )))
     }
 }
 
@@ -146,7 +149,7 @@ impl FromNode for Citation {
             name_inheritance: Name::from_node(&node)?,
             names_delimiter: node
                 .attribute("names-delimiter")
-                .map(String::from)
+                .map(Atom::from)
                 .map(Delimiter),
         })
     }
@@ -182,7 +185,7 @@ impl FromNode for SortSource {
         let variable = node.attribute("variable");
         let err = "<key> must have either a `macro` or `variable` attribute";
         match (macro_, variable) {
-            (Some(mac), None) => Ok(SortSource::Macro(mac.to_string())),
+            (Some(mac), None) => Ok(SortSource::Macro(mac.into())),
             (None, Some(_)) => Ok(SortSource::Variable(attribute_var_type(
                 node,
                 "variable",
@@ -234,7 +237,7 @@ impl FromNode for Bibliography {
             line_spaces,
             entry_spacing,
             name_inheritance: Name::from_node(&node)?,
-            subsequent_author_substitute: attribute_option_string(
+            subsequent_author_substitute: attribute_option_atom(
                 node,
                 "subsequent-author-substitute",
             ),
@@ -244,7 +247,7 @@ impl FromNode for Bibliography {
             )?,
             names_delimiter: node
                 .attribute("names-delimiter")
-                .map(String::from)
+                .map(Atom::from)
                 .map(Delimiter),
         })
     }
@@ -252,7 +255,7 @@ impl FromNode for Bibliography {
 
 impl FromNode for Delimiter {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        Ok(Delimiter(attribute_string(node, "delimiter")))
+        Ok(Delimiter(attribute_atom(node, "delimiter")))
     }
 }
 
@@ -322,8 +325,8 @@ fn text_el(node: &Node) -> Result<Element, CslError> {
     let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
 
     let source = match (macro_, value, variable, term) {
-        (Some(mac), None, None, None) => TextSource::Macro(mac.to_string()),
-        (None, Some(val), None, None) => TextSource::Value(val.to_string()),
+        (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
+        (None, Some(val), None, None) => TextSource::Value(val.into()),
         (None, None, Some(___), None) => TextSource::Variable(
             attribute_var_type(node, "variable", NeedVarType::TextVariable)?,
             attribute_optional(node, "form")?,
@@ -449,7 +452,7 @@ impl Condition {
     fn from_node_custom(node: &Node) -> Result<Self, ConditionError> {
         let cond = Condition {
             match_type: Match::from_node(node)?,
-            jurisdiction: attribute_option_string(node, "jurisdiction"),
+            jurisdiction: attribute_option_atom(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
             context: attribute_option(node, "context")?,
             disambiguate: attribute_only_true(node, "disambiguate")?,
@@ -806,7 +809,7 @@ impl FromNode for MacroMap {
             }
         };
         Ok(MacroMap {
-            name: name.to_owned(),
+            name: name.into(),
             elements: elements?,
         })
     }
@@ -832,7 +835,7 @@ impl FromNode for Names {
             affixes: Affixes::from_node(node)?,
             formatting: Option::from_node(node)?,
             display: attribute_option(node, "display")?,
-            delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
+            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
         })
     }
 }
@@ -858,7 +861,7 @@ impl FromNode for Institution {
 
         Ok(Institution {
             and: attribute_option(node, "and")?,
-            delimiter: node.attribute("delimiter").map(String::from).map(Delimiter),
+            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
             use_first,
             use_last: attribute_option_int(node, "use-last")?,
             reverse_order: attribute_bool(node, "reverse-order", false)?,
@@ -918,7 +921,7 @@ impl FromNode for Name {
         }
         Ok(Name {
             and: attribute_option(node, "and")?,
-            delimiter: node.attribute(delim_attr).map(String::from).map(Delimiter),
+            delimiter: node.attribute(delim_attr).map(Atom::from).map(Delimiter),
             delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al")?,
             delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last")?,
             et_al_min: attribute_option_int(node, "et-al-min")?,
@@ -928,9 +931,9 @@ impl FromNode for Name {
             et_al_subsequent_use_first: attribute_option_int(node, "et-al-subsequent-use-first")?,
             form: attribute_option(node, form_attr)?,
             initialize: attribute_option_bool(node, "initialize")?,
-            initialize_with: attribute_option_string(node, "initialize-with"),
+            initialize_with: attribute_option_atom(node, "initialize-with"),
             name_as_sort_order: attribute_option(node, "name-as-sort-order")?,
-            sort_separator: attribute_option_string(node, "sort-separator"),
+            sort_separator: attribute_option_atom(node, "sort-separator"),
             formatting: Option::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             name_part_given,
@@ -1304,7 +1307,7 @@ impl FromNode for Style {
             initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
             names_delimiter: node
                 .attribute("names-delimiter")
-                .map(String::from)
+                .map(Atom::from)
                 .map(Delimiter),
         })
     }

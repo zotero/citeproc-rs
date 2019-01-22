@@ -4,6 +4,7 @@ use crate::style::error::*;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 use crate::style::version::CslVersionReq;
+use crate::Atom;
 use std::fmt;
 use std::str::FromStr;
 
@@ -13,8 +14,8 @@ type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum TextSource {
-    Macro(String),
-    Value(String),
+    Macro(Atom),
+    Value(Atom),
     Variable(StandardVariable, VariableForm),
     Term(TextTermSelector, TermPlural),
 }
@@ -108,8 +109,8 @@ impl Default for NumericForm {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Affixes {
-    pub prefix: String,
-    pub suffix: String,
+    pub prefix: Atom,
+    pub suffix: Atom,
 }
 
 impl Default for Affixes {
@@ -294,7 +295,7 @@ impl Default for VerticalAlignment {
 }
 
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
-pub struct Delimiter(pub String);
+pub struct Delimiter(pub Atom);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -332,7 +333,7 @@ pub struct Condition {
     pub is_uncertain_date: Vec<DateVariable>,
 
     // TODO: do not populate in plain CSL mode
-    pub jurisdiction: Option<String>,
+    pub jurisdiction: Option<Atom>,
     pub subjurisdictions: Option<u32>,
 
     /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-year-only-extension
@@ -531,9 +532,9 @@ pub struct Name {
     pub et_al_subsequent_use_first: Option<u32>,
     pub form: Option<NameForm>,
     pub initialize: Option<bool>, // default is true
-    pub initialize_with: Option<String>,
+    pub initialize_with: Option<Atom>,
     pub name_as_sort_order: Option<NameAsSortOrder>,
-    pub sort_separator: Option<String>,
+    pub sort_separator: Option<Atom>,
     pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub name_part_given: Option<NamePart>,
@@ -552,7 +553,7 @@ impl Name {
     pub fn root_default() -> Self {
         Name {
             and: None,
-            delimiter: Some(Delimiter(",".to_string())),
+            delimiter: Some(Delimiter(",".into())),
             delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
             delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
             et_al_min: Some(0),
@@ -564,9 +565,9 @@ impl Name {
             form: Some(NameForm::Long),
             initialize: Some(true),
             // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/util_names_render.js#L739
-            initialize_with: Some("".to_string()),
+            initialize_with: Some("".into()),
             name_as_sort_order: None,
-            sort_separator: Some(", ".to_string()),
+            sort_separator: Some(", ".into()),
             // these four aren't inherited
             formatting: None,
             affixes: Default::default(),
@@ -637,6 +638,7 @@ pub struct NameLabel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameEtAl {
+    // TODO: only accept "et-al" or "and others"
     pub term: String,
     pub formatting: Option<Formatting>,
 }
@@ -752,7 +754,7 @@ pub struct Bibliography {
     pub line_spaces: u32,   // >= 1 only. default is 1
     pub entry_spacing: u32, // >= 0. default is 1
     pub name_inheritance: Name,
-    pub subsequent_author_substitute: Option<String>,
+    pub subsequent_author_substitute: Option<Atom>,
     pub subsequent_author_substitute_rule: SubstituteAuthorSubstituteRule,
     pub names_delimiter: Option<Delimiter>,
 }
@@ -827,7 +829,7 @@ pub struct Layout {
 // Not actually part of a style tree, just a useful place to implement FromNode.
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct MacroMap {
-    pub name: String,
+    pub name: Atom,
     pub elements: Vec<Element>,
 }
 
@@ -846,7 +848,7 @@ pub struct Info {}
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
-    pub macros: FnvHashMap<String, Vec<Element>>,
+    pub macros: FnvHashMap<Atom, Vec<Element>>,
     pub citation: Citation,
     pub bibliography: Option<Bibliography>,
     pub info: Info,
@@ -882,11 +884,11 @@ impl Default for Style {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct RangeDelimiter(pub String);
+pub struct RangeDelimiter(pub Atom);
 
 impl Default for RangeDelimiter {
     fn default() -> Self {
-        RangeDelimiter("".to_owned())
+        RangeDelimiter("\u{2013}".into())
     }
 }
 
@@ -899,7 +901,7 @@ impl std::convert::AsRef<str> for RangeDelimiter {
 impl FromStr for RangeDelimiter {
     type Err = UnknownAttributeValue;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(RangeDelimiter(s.to_owned()))
+        Ok(RangeDelimiter(s.into()))
     }
 }
 

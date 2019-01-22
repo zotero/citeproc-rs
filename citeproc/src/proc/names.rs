@@ -259,7 +259,7 @@ impl NameEl {
                                         self.initialize.unwrap_or(true),
                                         self.initialize_with
                                             .as_ref()
-                                            .map(|s| s.as_str())
+                                            .map(|s| s.as_ref())
                                             .unwrap_or(""),
                                         ctx.style.initialize_with_hyphen,
                                     ))

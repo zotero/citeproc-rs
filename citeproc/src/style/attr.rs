@@ -1,5 +1,6 @@
 use super::version::CslVariant;
 use crate::style::error::*;
+use crate::Atom;
 use roxmltree::{ExpandedName, Node};
 use std::str::FromStr;
 use strum::EnumProperty;
@@ -79,8 +80,18 @@ pub fn attribute_string(node: &Node, attr: &str) -> String {
         .unwrap_or_else(|| String::from(""))
 }
 
-pub fn attribute_option_string(node: &Node, attr: &str) -> Option<String> {
-    node.attribute(attr).map(String::from)
+pub fn attribute_atom(node: &Node, attr: &str) -> Atom {
+    node.attribute(attr)
+        .map(Atom::from)
+        .unwrap_or_else(|| Atom::from(""))
+}
+
+pub fn attribute_atom_default(node: &Node, attr: &str, default: Atom) -> Atom {
+    node.attribute(attr).map(Atom::from).unwrap_or(default)
+}
+
+pub fn attribute_option_atom(node: &Node, attr: &str) -> Option<Atom> {
+    node.attribute(attr).map(Atom::from)
 }
 
 pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, InvalidCsl> {

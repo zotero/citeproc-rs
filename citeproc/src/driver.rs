@@ -5,6 +5,7 @@ use crate::style::element::Position;
 use crate::style::element::Style;
 use crate::style::error::StyleError;
 use crate::style::FromNode;
+use crate::Atom;
 use roxmltree::Document;
 
 pub struct Driver<'a, O>
@@ -100,8 +101,8 @@ where
         }
     }
 
-    pub fn dump_macro(&self, s: &str) {
-        eprintln!("{:?}", self.style.macros.get(s))
+    pub fn dump_macro(&self, s: Atom) {
+        eprintln!("{:?}", self.style.macros.get(&s))
     }
 
     pub fn dump_style(&self) {

@@ -81,7 +81,7 @@ where
                         sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
                     }
                     Value(ref value) => {
-                        IR::Rendered(Some(fmt.affixed_text(value.clone(), f.as_ref(), &af)))
+                        IR::Rendered(Some(fmt.affixed_text(value.to_string(), f.as_ref(), &af)))
                     }
                     Variable(var, _form) => {
                         let content = match var {
