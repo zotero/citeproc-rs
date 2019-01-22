@@ -14,7 +14,7 @@ use std::str::FromStr;
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
 use crate::input::reference::Reference;
-use crate::style::get_attribute::GetAttribute;
+use crate::style::attr::GetAttribute;
 use crate::style::variables::AnyVariable;
 use crate::style::version::CslVariant;
 

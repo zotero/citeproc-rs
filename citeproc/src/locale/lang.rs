@@ -43,6 +43,15 @@ impl Lang {
     }
 }
 
+use crate::style::attr::GetAttribute;
+use crate::style::error::UnknownAttributeValue;
+use crate::style::version::CslVariant;
+impl GetAttribute for Lang {
+    fn get_attr(s: &str, _: CslVariant) -> Result<Self, UnknownAttributeValue> {
+        Lang::from_str(s).map_err(|_| UnknownAttributeValue::new(s))
+    }
+}
+
 #[test]
 fn test_inline_iter() {
     let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
@@ -68,18 +77,6 @@ impl fmt::Display for Lang {
             Lang::Iso(l, Some(c)) => write!(f, "{}-{}", l, c),
             Lang::Iana(u) => write!(f, "i-{}", u),
             Lang::Unofficial(u) => write!(f, "x-{}", u),
-        }
-    }
-}
-
-impl crate::style::get_attribute::GetAttribute for Lang {
-    fn get_attr(
-        s: &str,
-        _: crate::style::version::CslVariant,
-    ) -> Result<Self, crate::style::error::UnknownAttributeValue> {
-        match Lang::from_str(s) {
-            Ok(a) => Ok(a),
-            Err(_) => Err(crate::style::error::UnknownAttributeValue::new(s)),
         }
     }
 }

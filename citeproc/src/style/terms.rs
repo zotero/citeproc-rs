@@ -2,7 +2,7 @@ use crate::style::error::*;
 use fnv::FnvHashMap;
 use std::str::FromStr;
 
-use super::get_attribute::GetAttribute;
+use super::attr::GetAttribute;
 use super::variables::NumberVariable;
 use nom::types::CompleteStr;
 use nom::*;

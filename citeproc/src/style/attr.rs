@@ -174,3 +174,20 @@ pub fn attribute_array_var<T: GetAttribute>(
         None => Ok(vec![]),
     }
 }
+
+pub fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T>, InvalidCsl> {
+    match node.attribute(attr) {
+        Some(array) => {
+            let split: Result<Vec<_>, _> = array
+                .split(' ')
+                .filter(|a| a.len() > 0)
+                .map(|a| T::get_attr(a, CSL_VARIANT))
+                .collect();
+            match split {
+                Ok(val) => Ok(val),
+                Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
+            }
+        }
+        None => Ok(vec![]),
+    }
+}

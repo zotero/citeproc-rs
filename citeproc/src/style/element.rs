@@ -332,7 +332,6 @@ pub struct Condition {
     pub is_uncertain_date: Vec<DateVariable>,
 
     // TODO: do not populate in plain CSL mode
-
     pub jurisdiction: Option<String>,
     pub subjurisdictions: Option<u32>,
 
@@ -352,7 +351,6 @@ pub struct Condition {
     // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L599-L627
     pub is_plural: Vec<NameVariable>,
 }
-
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -820,9 +818,10 @@ impl Default for SortDirection {
 pub struct Layout {
     pub affixes: Affixes,
     pub formatting: Option<Formatting>,
-    // TODO: only allow inside <citation>
+    // TODO: only allow delimiter inside <citation>
     pub delimiter: Delimiter,
     pub elements: Vec<Element>,
+    pub locale: Vec<Lang>,
 }
 
 // Not actually part of a style tree, just a useful place to implement FromNode.

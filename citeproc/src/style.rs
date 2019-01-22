@@ -1,17 +1,17 @@
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
+pub(crate) mod attr;
 pub mod element;
 pub mod error;
-pub(crate) mod get_attribute;
 pub mod terms;
 pub mod variables;
 pub mod version;
 
 // mod take_while;
 // use self::take_while::*;
+use self::attr::*;
 use self::element::*;
 use self::error::*;
-use self::get_attribute::*;
 use self::terms::*;
 use self::version::*;
 use crate::locale::*;
@@ -196,6 +196,8 @@ impl FromNode for SortSource {
 impl FromNode for Bibliography {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         // TODO: layouts matching locales in CSL-M mode
+        // TODO: make sure that all elements are under the control of a display attribute
+        //       if any of them are
         let layouts: Vec<_> = node
             .children()
             .filter(|n| n.has_tag_name("layout"))
@@ -265,6 +267,7 @@ impl FromNode for Layout {
             formatting: Option::from_node(node)?,
             affixes: Affixes::from_node(node)?,
             delimiter: Delimiter::from_node(node)?,
+            locale: attribute_array(node, "locale")?,
             elements,
         })
     }

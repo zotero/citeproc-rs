@@ -1,5 +1,5 @@
+use super::attr::GetAttribute;
 use super::error::*;
-use super::get_attribute::GetAttribute;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
