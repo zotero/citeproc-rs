@@ -1,3 +1,16 @@
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(feature="jemalloc")] {
+        use jemallocator::Jemalloc;
+        #[global_allocator]
+        static A: Jemalloc = Jemalloc;
+    } else {
+        use std::alloc::System;
+        #[global_allocator]
+        static A: System = System;
+    }
+}
+
 #[macro_use]
 extern crate criterion;
 
@@ -9,7 +22,6 @@ use citeproc::style::element::CslType;
 use citeproc::style::variables::*;
 use citeproc::Driver;
 
-use std::borrow::Cow;
 use std::fs::File;
 use std::io::prelude::*;
 use std::str::FromStr;
@@ -24,9 +36,9 @@ fn bench_build_tree(c: &mut Criterion) {
 }
 
 fn common_reference() -> Reference {
-    let mut refr = Reference::empty("id", CslType::LegalCase);
+    let mut refr = Reference::empty("id".into(), CslType::LegalCase);
     refr.ordinary
-        .insert(Variable::ContainerTitle, Cow::Borrowed("TASCC"));
+        .insert(Variable::ContainerTitle, String::from("TASCC"));
     refr.number
         .insert(NumberVariable::Number, NumericValue::num(55));
     refr.date.insert(
@@ -54,14 +66,14 @@ fn aglc() -> String {
 // }
 
 fn bench_ir_gen<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic("ok", &formatter.plain(""));
+    let cite = Cite::basic("ok".into(), &formatter.plain(""));
     let refr = common_reference();
     let driver = Driver::new(style, formatter).unwrap();
     b.iter(move || driver.pair(&cite, &refr))
 }
 
 fn bench_ir_gen_multi<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic("ok", &formatter.plain(""));
+    let cite = Cite::basic("ok".into(), &formatter.plain(""));
     let refr = common_reference();
     let pairs: Vec<_> = std::iter::repeat((&cite, &refr)).take(40).collect();
     let driver = Driver::new(style, formatter).unwrap();
@@ -97,7 +109,7 @@ criterion_main!(tree, plain, pandoc);
 //     let ctx = CiteContext {
 //         style: &self.style,
 //         reference: refr,
-//         cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
+//         cite: &Cite::basic("ok".into(), &self.formatter.output(self.formatter.plain(""))),
 //         position: Position::First,
 //         format: self.formatter,
 //         citation_number: 1,

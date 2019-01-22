@@ -5,9 +5,9 @@ cfg_if! {
         #[global_allocator]
         static A: Jemalloc = Jemalloc;
     } else {
-        use std::alloc::system;
+        use std::alloc::System;
         #[global_allocator]
-        static a: system = system;
+        static A: System = System;
     }
 }
 
