@@ -246,7 +246,7 @@ impl Default for StyleError {
 }
 
 impl StyleError {
-    pub fn diagnostics(&self, file_map: &FileMap) -> Vec<Result<Diagnostic, String>> {
+    pub(crate) fn diagnostics(&self, file_map: &FileMap) -> Vec<Result<Diagnostic, String>> {
         match *self {
             StyleError::Invalid(ref invs) => invs
                 .0

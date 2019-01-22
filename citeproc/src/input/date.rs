@@ -89,7 +89,11 @@ impl DateOrRange {
 impl FromStr for DateOrRange {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_range(s)
+        if let Ok((_left_overs, parsed)) = range(s.as_bytes()) {
+            Ok(parsed)
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -238,20 +242,20 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::str::{from_utf8_unchecked, FromStr};
 
-pub fn to_string(s: &[u8]) -> &str {
+fn to_string(s: &[u8]) -> &str {
     unsafe { from_utf8_unchecked(s) }
 }
-pub fn to_i32(s: &str) -> i32 {
+fn to_i32(s: &str) -> i32 {
     FromStr::from_str(s).unwrap()
 }
-pub fn to_u32(s: &str) -> u32 {
+fn to_u32(s: &str) -> u32 {
     FromStr::from_str(s).unwrap()
 }
 
-pub fn buf_to_u32(s: &[u8]) -> u32 {
+fn buf_to_u32(s: &[u8]) -> u32 {
     to_u32(to_string(s))
 }
-pub fn buf_to_i32(s: &[u8]) -> i32 {
+fn buf_to_i32(s: &[u8]) -> i32 {
     to_i32(to_string(s))
 }
 
@@ -373,11 +377,3 @@ named!(
             })
     )
 );
-
-pub fn parse_range(string: &str) -> Result<DateOrRange, ()> {
-    if let Ok((_left_overs, parsed)) = range(string.as_bytes()) {
-        Ok(parsed)
-    } else {
-        Err(())
-    }
-}

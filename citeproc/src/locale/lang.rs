@@ -1,12 +1,25 @@
 use std::fmt;
 use std::str::FromStr;
 
-use super::LocaleSource;
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum LocaleSource {
+    Inline(Option<Lang>),
+    File(Lang),
+}
 
+/// A parsable representation of `xml:lang`.
+///
+/// See http://www.datypic.com/sc/xsd/t-xsd_language.html
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Lang {
+    /// ISO 639 language code, + optional hyphen and 2-letter ISO 3166 country code.
+    ///
+    /// i.e. `en` or `en-US`
     Iso(IsoLang, Option<IsoCountry>),
+    /// IANA-assigned language codes
     Iana(String),
+    /// Agreed upon language ID (max 8 characters). You'll absolutely have to provide your own
+    /// locale file.
     Unofficial(String),
 }
 
@@ -14,6 +27,7 @@ impl Lang {
     pub fn en_us() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::US))
     }
+    #[cfg(test)]
     pub fn en_au() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::AU))
     }
@@ -35,7 +49,10 @@ impl Lang {
             current: Some(self.clone()),
         }
     }
-    pub fn is_english(&self) -> bool {
+
+    /// Useful for title-casing.
+    #[allow(dead_code)]
+    pub(crate) fn is_english(&self) -> bool {
         match self {
             Lang::Iso(IsoLang::English, _) => true,
             _ => false,
@@ -81,7 +98,9 @@ impl fmt::Display for Lang {
     }
 }
 
-// The 3-character codes are ISO 693-3.
+/// Language codes for `Lang::Iso`.
+///
+/// The 3-character codes are ISO 639-3.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, EnumString)]
 pub enum IsoLang {
     #[strum(serialize = "en", serialize = "eng")]
@@ -124,6 +143,8 @@ impl fmt::Display for IsoLang {
     }
 }
 
+/// Countries for use `Lang::Iso` dialects.
+///
 /// These countries are used to do dialect fallback. Countries not used in that can be represented
 /// as `IsoCountry::Other`. If a country is in the list, you don't need to allocate to refer to it,
 /// so there are some non-participating countries in the list simply because it's faster.

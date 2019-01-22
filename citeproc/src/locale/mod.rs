@@ -58,12 +58,6 @@ impl Default for LocaleOptions {
 
 pub type DateMapping = FnvHashMap<DateForm, LocaleDate>;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum LocaleSource {
-    Inline(Option<Lang>),
-    File(Lang),
-}
-
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Locale {
     pub version: String,

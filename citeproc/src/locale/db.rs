@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use super::lang::LocaleSource;
 use super::*;
 use crate::style::db::*;
 
