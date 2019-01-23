@@ -1,5 +1,5 @@
 use crate::output::OutputFormat;
-use crate::style::element::{Affixes, Element, Layout as LayoutEl, Style};
+use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 
@@ -16,6 +16,11 @@ pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
 use group::GroupVars;
+
+#[derive(Debug)]
+pub struct IrState {
+    tokens: HashSet<DisambToken>,
+}
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
 // nodes are possibly disambiguate-able in year suffix mode and if such a node should be inserted
@@ -49,17 +54,8 @@ where
     fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
-        layout.intermediate(ctx)
-    }
-}
-
-impl<'c, O> Proc<'c, O> for LayoutEl
-where
-    O: OutputFormat,
-{
-    /// Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
-        sequence(ctx, &self.elements, "", None, Affixes::default())
+        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
+        sequence(ctx, &layout.elements, "", None, Affixes::default())
     }
 }
 
@@ -190,3 +186,4 @@ where
         }
     }
 }
+
