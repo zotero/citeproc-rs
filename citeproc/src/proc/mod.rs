@@ -6,10 +6,12 @@ use crate::style::variables::*;
 mod choose;
 mod cite_context;
 mod date;
+mod disamb;
 mod helpers;
 mod ir;
 mod names;
 pub use self::cite_context::*;
+pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
 

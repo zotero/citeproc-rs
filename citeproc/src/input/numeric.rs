@@ -2,7 +2,7 @@ use nom::types::CompleteStr;
 use nom::*;
 use std::borrow::Cow;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub enum NumericToken {
     Num(u32),
     Affixed(String),
@@ -70,7 +70,7 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 /// It's a number, then a { comma|hyphen|ampersand } with any whitespace, then another number, and
 /// so on. All numbers are unsigned.
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub enum NumericValue {
     Tokens(String, Vec<NumericToken>),
     /// For values that could not be parsed.

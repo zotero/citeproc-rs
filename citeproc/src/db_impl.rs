@@ -45,6 +45,8 @@ salsa::database_storage! {
             fn reference_input() for ReferenceInputQuery;
             fn citekeys() for CitekeysQuery;
             fn reference() for ReferenceQuery;
+            fn disamb_tokens() for DisambTokensQuery;
+            fn inverted_index() for InvertedIndexQuery;
         }
         impl StyleDatabase {
             fn style() for StyleQuery;

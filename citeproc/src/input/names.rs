@@ -14,8 +14,9 @@ pub struct PersonName {
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum Name {
     Person(PersonName),
-    /// In CSL-M, this will represent an institution
+    /// TODO: represent an institution in CSL-M?
     Literal {
+        // the untagged macro uses the field names on Literal { literal } instead of the discriminant, so don't change that
         literal: String,
     },
 }

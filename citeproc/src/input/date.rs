@@ -3,7 +3,7 @@ use nom::*;
 
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
 // then we'd just use chrono::DateTime and support ISO input
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Date {
     /// think 10,000 BC; it's a signed int
     /// "not present" is expressed by not having a date in the first place
@@ -54,7 +54,7 @@ impl Date {
 }
 
 // TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day }
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum DateOrRange {
     Single(Date),
     Range(Date, Date),

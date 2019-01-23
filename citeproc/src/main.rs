@@ -38,6 +38,10 @@ fn main() {
                         .takes_value(true),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("disamb-index")
+                .about("Prints the inverted disambiguation index for the reference library"),
+        )
         // .arg(
         //     Arg::with_name("format")
         //         .short("f")
@@ -143,8 +147,21 @@ fn main() {
     if let Some(library_path) = matches.value_of("library") {
         lib_text = fs::read_to_string(&library_path).expect("No library found at that path");
     }
+
     let mut db = RootDatabase::new(filesystem_fetcher);
     db.add_references(&lib_text).expect("Coult not parse JSON");
+
+    if let Some(_) = matches.subcommand_matches("disamb-index") {
+        for (tok, ids) in db.inverted_index(()).iter() {
+            // if ids.len() > 1 {
+            let token = tok.clone();
+            let citekeys: Vec<_> = ids.iter().map(|atom| atom.to_string()).collect();
+            dbg!((token, citekeys));
+            // }
+        }
+        return;
+    }
+
     let key = matches
         .value_of("key")
         .map(citeproc::Atom::from)
