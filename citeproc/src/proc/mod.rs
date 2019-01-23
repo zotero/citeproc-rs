@@ -21,7 +21,7 @@ use group::GroupVars;
 
 #[derive(Debug)]
 pub struct IrState {
-    tokens: HashSet<DisambToken>,
+    pub tokens: HashSet<DisambToken>,
 }
 
 impl IrState {
@@ -113,14 +113,24 @@ where
                             .expect("macro errors not implemented!");
                         sequence(db, state, ctx, &macro_unsafe, "", f.as_ref(), af.clone())
                     }
-                    Value(ref value) => (
-                        IR::Rendered(Some(fmt.affixed_text(value.to_string(), f.as_ref(), &af))),
-                        GroupVars::new(),
-                    ),
+                    Value(ref value) => {
+                        state.tokens.insert(DisambToken::Str(value.clone()));
+                        (
+                            IR::Rendered(Some(fmt.affixed_text(
+                                value.to_string(),
+                                f.as_ref(),
+                                &af,
+                            ))),
+                            GroupVars::new(),
+                        )
+                    }
                     Variable(var, _form) => {
                         let content = match var {
                             StandardVariable::Ordinary(ref v) => {
                                 ctx.reference.ordinary.get(v).map(|val| {
+                                    // TODO: ignore locators/stuff that doesn't come from a
+                                    // reference
+                                    state.tokens.insert(DisambToken::Str(val.as_str().into()));
                                     let s = if v.should_replace_hyphens() {
                                         val.replace('-', "\u{2013}")
                                     } else {
@@ -131,6 +141,8 @@ where
                             }
                             StandardVariable::Number(ref v) => {
                                 ctx.reference.number.get(v).map(|val| {
+                                    // TODO: ignore locators/stuff that doesn't come from a
+                                    state.tokens.insert(DisambToken::Num(val.clone()));
                                     fmt.affixed_text(
                                         val.verbatim(v.should_replace_hyphens()),
                                         f.as_ref(),

@@ -1,4 +1,5 @@
 use super::cite_context::*;
+use super::disamb::AddDisambTokens;
 use super::group::GroupVars;
 use super::ir::*;
 use super::{IrState, Proc};
@@ -82,11 +83,10 @@ where
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase
-        let date = ctx
-            .reference
-            .date
-            .get(&self.variable)
-            .and_then(|d| d.single());
+        let date = ctx.reference.date.get(&self.variable).and_then(|d| {
+            d.add_disamb_tokens(&mut state.tokens);
+            d.single()
+        });
         let content = date.map(|val| {
             let each: Vec<_> = locale_date
                 .date_parts
@@ -124,7 +124,10 @@ where
             .date
             .get(&self.variable)
             // TODO: render date ranges
-            .and_then(|d| d.single())
+            .and_then(|d| {
+                d.add_disamb_tokens(&mut state.tokens);
+                d.single()
+            })
             .map(|val| {
                 let each: Vec<_> = self
                     .date_parts

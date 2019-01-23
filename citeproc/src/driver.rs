@@ -1,3 +1,4 @@
+use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
@@ -7,6 +8,7 @@ use crate::style::error::StyleError;
 use crate::style::FromNode;
 use crate::Atom;
 use roxmltree::Document;
+use std::collections::HashSet;
 
 use crate::db_impl::RootDatabase;
 
@@ -44,6 +46,23 @@ where
         };
         let mut state = IrState::new();
         let (i, _) = self.style.intermediate(&self.db, &mut state, &ctx);
+        let index = self.db.inverted_index(());
+        let mut matching_ids = HashSet::new();
+        for tok in state.tokens.iter() {
+            // ignore tokens which matched NO references; they are just part of the style,
+            // like <text value="xxx"/>. Of course:
+            //   - <text value="xxx"/> WILL match any references that have a field with
+            //     "xxx" in it.
+            //   - You have to make sure all text is transformed equivalently.
+            //   So TODO: make all text ASCII uppercase first!
+            if let Some(ids) = index.get(tok) {
+                for x in ids {
+                    matching_ids.insert(x.clone());
+                }
+            }
+        }
+        // dbg!(state);
+        // dbg!(matching_ids);
         let flat = i.flatten(self.formatter);
         let o = self.formatter.output(flat);
         serde_json::to_string(&o).unwrap()
