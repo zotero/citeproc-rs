@@ -78,17 +78,17 @@ impl Locale {
                 .fallback()
                 .filter_map(|sel| self.simple_terms.get(&sel))
                 .next()
-                .and_then(|r| r.get(plural)),
+                .map(|r| r.get(plural)),
             Gendered(ref ts) => ts
                 .fallback()
                 .filter_map(|sel| self.gendered_terms.get(&sel))
                 .next()
-                .and_then(|r| r.0.get(plural)),
+                .map(|r| r.0.get(plural)),
             Role(ref ts) => ts
                 .fallback()
                 .filter_map(|sel| self.role_terms.get(&sel))
                 .next()
-                .and_then(|r| r.get(plural)),
+                .map(|r| r.get(plural)),
         }
     }
 

@@ -155,11 +155,12 @@ impl DatePart {
     }
     fn render<'c, O: OutputFormat>(
         &self,
-        _db: &impl ReferenceDatabase,
+        db: &impl ReferenceDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         date: &Date,
     ) -> O::Build {
+        let locale = db.merged_locale(ctx.style.default_locale.clone());
         let string = match self.form {
             DatePartForm::Year(form) => match form {
                 YearForm::Long => format!("{}", date.year),
@@ -167,10 +168,32 @@ impl DatePart {
             },
             DatePartForm::Month(form, _strip_periods) => match form {
                 // TODO: locale getter for months
-                MonthForm::Long => MONTHS_LONG[date.month as usize].to_string(),
-                MonthForm::Short => MONTHS_SHORT[date.month as usize].to_string(),
                 MonthForm::Numeric => format!("{}", date.month),
                 MonthForm::NumericLeadingZeros => format!("{:02}", date.month),
+                _ => {
+                    use crate::style::terms::*;
+                    let term_form = match form {
+                        MonthForm::Long => TermForm::Long,
+                        MonthForm::Short => TermForm::Short,
+                        _ => TermForm::Long,
+                    };
+                    let sel = GenderedTermSelector::Month(
+                        MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
+                        term_form,
+                    );
+                    locale
+                        .gendered_terms
+                        .get(&sel)
+                        .map(|gt| gt.0.singular().to_string())
+                        .unwrap_or_else(|| {
+                            let fallback = if term_form == TermForm::Short {
+                                MONTHS_SHORT
+                            } else {
+                                MONTHS_LONG
+                            };
+                            fallback[date.month as usize].to_string()
+                        })
+                }
             },
             DatePartForm::Day(form) => match form {
                 DayForm::Numeric => format!("{}", date.day),

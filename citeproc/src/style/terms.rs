@@ -227,23 +227,23 @@ pub enum TermPlurality {
 }
 
 impl TermPlurality {
-    pub fn get(&self, plural: bool) -> Option<&str> {
+    pub fn get(&self, plural: bool) -> &str {
         if plural {
             self.plural()
         } else {
             self.singular()
         }
     }
-    pub fn plural(&self) -> Option<&str> {
+    pub fn plural(&self) -> &str {
         match self {
-            TermPlurality::Invariant(s) => Some(&s),
-            TermPlurality::Pluralized { multiple, .. } => Some(&multiple),
+            TermPlurality::Invariant(s) => &s,
+            TermPlurality::Pluralized { multiple, .. } => &multiple,
         }
     }
-    pub fn singular(&self) -> Option<&str> {
+    pub fn singular(&self) -> &str {
         match self {
-            TermPlurality::Invariant(s) => Some(&s),
-            TermPlurality::Pluralized { single, .. } => Some(&single),
+            TermPlurality::Invariant(s) => &s,
+            TermPlurality::Pluralized { single, .. } => &single,
         }
     }
     pub fn no_plural_allowed(&self) -> Option<&str> {
@@ -478,13 +478,34 @@ pub enum MonthTerm {
     #[strum(serialize = "month-08")]
     Month08,
     #[strum(serialize = "month-09")]
-    Month00,
+    Month09,
     #[strum(serialize = "month-10")]
     Month10,
     #[strum(serialize = "month-11")]
     Month11,
     #[strum(serialize = "month-12")]
     Month12,
+}
+
+impl MonthTerm {
+    pub fn from_u32(m: u32) -> Option<Self> {
+        use self::MonthTerm::*;
+        match m {
+            1 => Some(Month01),
+            2 => Some(Month02),
+            3 => Some(Month03),
+            4 => Some(Month04),
+            5 => Some(Month05),
+            6 => Some(Month06),
+            7 => Some(Month07),
+            8 => Some(Month08),
+            9 => Some(Month09),
+            10 => Some(Month10),
+            11 => Some(Month11),
+            12 => Some(Month12),
+            _ => None,
+        }
+    }
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
