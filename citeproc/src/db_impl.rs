@@ -45,6 +45,7 @@ salsa::database_storage! {
         }
         impl StyleDatabase {
             fn style() for StyleQuery;
+            fn name_citation() for NameCitationQuery;
         }
         impl LocaleDatabase {
             fn locale_xml() for LocaleXmlQuery;

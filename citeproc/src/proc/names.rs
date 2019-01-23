@@ -488,8 +488,9 @@ where
         O: OutputFormat,
     {
         let fmt = ctx.format;
-        let name_el =
-            NameEl::root_default().merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+        let name_el = db
+            .name_citation(())
+            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
         let rendered: Vec<_> = self
             .variables
             .iter()
@@ -498,6 +499,9 @@ where
             .filter_map(|var| ctx.get_name(var))
             .map(|val| name_el.render(db, state, ctx, val))
             .collect();
+        if rendered.is_empty() {
+            return (IR::Rendered(None), GroupVars::new());
+        }
         let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
         let content = Some(fmt.affixed(
             fmt.group(rendered, delim, self.formatting.as_ref()),

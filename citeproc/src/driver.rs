@@ -2,13 +2,16 @@ use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
+use crate::style::db::StyleQuery;
 use crate::style::element::Position;
 use crate::style::element::Style;
 use crate::style::error::StyleError;
 use crate::style::FromNode;
 use crate::Atom;
 use roxmltree::Document;
+use salsa::Database;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::db_impl::RootDatabase;
 
@@ -16,7 +19,7 @@ pub struct Driver<'a, O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    style: Style,
+    style: Arc<Style>,
     formatter: &'a O,
     db: RootDatabase,
 }
@@ -25,9 +28,14 @@ impl<'a, O> Driver<'a, O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    pub fn new(style_string: &str, formatter: &'a O, db: RootDatabase) -> Result<Self, StyleError> {
+    pub fn new(
+        style_string: &str,
+        formatter: &'a O,
+        mut db: RootDatabase,
+    ) -> Result<Self, StyleError> {
         let doc = Document::parse(&style_string)?;
-        let style = Style::from_node(&doc.root_element())?;
+        let style = Arc::new(Style::from_node(&doc.root_element())?);
+        db.query_mut(StyleQuery).set((), style.clone());
         Ok(Driver {
             style,
             formatter,
