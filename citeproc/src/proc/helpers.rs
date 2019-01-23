@@ -1,8 +1,9 @@
 use super::cite_context::*;
 use super::ir::IR::*;
-use super::{IrSeq, Proc, IR};
+use super::{IrSeq, Proc, IR, IrSum};
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
+use super::group::GroupVars;
 
 pub fn sequence<'c, 's: 'c, O>(
     ctx: &CiteContext<'c, O>,
@@ -10,19 +11,23 @@ pub fn sequence<'c, 's: 'c, O>(
     delimiter: &'c str,
     formatting: Option<&'c Formatting>,
     affixes: Affixes,
-) -> IR<'c, O>
+) -> IrSum<'c, O>
 where
     O: OutputFormat,
 {
     let fmt = &ctx.format;
 
-    let fold_seq = |va: &mut Vec<IR<'c, O>>, other: IR<'c, O>| {
+    let fold_seq = |(va, gva): (&mut Vec<IR<'c, O>>, GroupVars), (other, gvb): IrSum<'c, O>| {
         match other {
             // this seq is another group with its own delimiter (possibly)
             b @ Seq(_) => {
                 va.push(b);
             }
-            Rendered(None) => {}
+            // say b was TextSource::Variable; not rendering it makes (Rendered(None), OnlyEmpty)
+            // so you do have to handle it. We do (below).
+            // You do have to make sure that if it was a group that did not
+            // end up producing output, it has a correct gv = NoneSeen.
+            Rendered(None) => {},
             Rendered(Some(bb)) => {
                 if let Some(last) = va.pop() {
                     if let Rendered(None) = last {
@@ -41,6 +46,7 @@ where
                 va.push(o);
             }
         }
+        gva.neighbour(gvb)
     };
 
     // This reduction has to be associative, because Rayon's `reduce` does not run in-order.
@@ -57,24 +63,24 @@ where
     //
     // <group><names>...</names></group> matches `(Rendered(None), b) => b` == Names(...)
 
-    let folder = |left: IR<'c, O>, right: IR<'c, O>| {
+    let folder = |left: IrSum<'c, O>, right: IrSum<'c, O>| {
         match (left, right) {
-            (a, Rendered(None)) => a,
-            (Rendered(None), b) => b,
+            ((a, gva), (Rendered(None), gvb)) => (a, gva.neighbour(gvb)),
+            ((Rendered(None), gva), (b, gvb)) => (b, gva.neighbour(gvb)),
             // aa,bb
-            (Rendered(Some(aa)), Rendered(Some(bb))) => {
-                Rendered(Some(fmt.join_delim(aa, delimiter, bb)))
+            ((Rendered(Some(aa)), gva), (Rendered(Some(bb)), gvb)) => {
+                (Rendered(Some(fmt.join_delim(aa, delimiter, bb))), gva.neighbour(gvb))
             }
-            (Seq(mut s), b) => {
-                fold_seq(&mut s.contents, b);
-                Seq(s)
+            ((Seq(mut s), gva), b) => {
+                let gvc = fold_seq((&mut s.contents, gva), b);
+                (Seq(s), gvc)
             }
-            (a, b) => Seq(IrSeq {
+            ((a, gva), (b, gvb)) => (Seq(IrSeq {
                 contents: vec![a, b],
                 formatting,
                 affixes: affixes.clone(),
                 delimiter,
-            }),
+            }), gva.neighbour(gvb)),
         }
     };
 
@@ -87,24 +93,24 @@ where
     // #[cfg(not(feature = "rayon"))] {
     // }
 
-    let inner = els
+    let (inner, gv) = els
         .iter()
         .map(|el| el.intermediate(ctx))
-        .fold(IR::Rendered(None), folder);
+        .fold((IR::Rendered(None), GroupVars::new()), folder);
 
     if let Rendered(None) = inner {
-        inner
+        (inner, gv)
     } else if let Rendered(Some(x)) = inner {
-        Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes)))
+        (Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes))), gv)
     } else if let Seq(_) = inner {
         // no formatting necessary, Seq has it embedded
-        inner
+        (inner, gv)
     } else {
-        Seq(IrSeq {
+        (Seq(IrSeq {
             contents: vec![inner],
             formatting,
             affixes,
             delimiter,
-        })
+        }), gv)
     }
 }

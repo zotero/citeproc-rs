@@ -10,10 +10,12 @@ mod disamb;
 mod helpers;
 mod ir;
 mod names;
+mod group;
 pub use self::cite_context::*;
 pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
+use group::GroupVars;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
 // nodes are possibly disambiguate-able in year suffix mode and if such a node should be inserted
@@ -37,14 +39,14 @@ where
 {
     /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
     /// often borrow from self to be recomputed during disambiguation.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>;
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>;
 }
 
 impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
         layout.intermediate(ctx)
@@ -56,7 +58,7 @@ where
     O: OutputFormat,
 {
     /// Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
         sequence(ctx, &self.elements, "", None, Affixes::default())
     }
 }
@@ -65,7 +67,7 @@ impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O> {
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
         let fmt = ctx.format;
         match *self {
             Element::Choose(ref ch) => ch.intermediate(ctx),
@@ -82,9 +84,10 @@ where
                             .expect("macro errors not implemented!");
                         sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
                     }
-                    Value(ref value) => {
-                        IR::Rendered(Some(fmt.affixed_text(value.to_string(), f.as_ref(), &af)))
-                    }
+                    Value(ref value) => (
+                        IR::Rendered(Some(fmt.affixed_text(value.to_string(), f.as_ref(), &af))),
+                        GroupVars::new(),
+                    ),
                     Variable(var, _form) => {
                         let content = match var {
                             StandardVariable::Ordinary(ref v) => {
@@ -107,7 +110,8 @@ where
                                 })
                             }
                         };
-                        IR::Rendered(content)
+                        let gv = GroupVars::rendered_if(content.is_some());
+                        (IR::Rendered(content), gv)
                     }
                     Term(term_selector, plural) => {
                         let content = ctx
@@ -118,7 +122,7 @@ where
                             .unwrap()
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
-                        IR::Rendered(content)
+                        (IR::Rendered(content), GroupVars::new())
                     }
                 }
             }
@@ -145,13 +149,15 @@ where
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))
                     })
                 });
-                IR::Rendered(content)
+                (IR::Rendered(content), GroupVars::new())
             }
 
             Element::Number(var, _form, ref f, ref af, ref _tc, _disp) => {
-                IR::Rendered(ctx.get_number(&var).map(|val| {
+                let content = ctx.get_number(&var).map(|val| {
                     fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f.as_ref(), &af)
-                }))
+                });
+                let gv = GroupVars::rendered_if(content.is_some());
+                (IR::Rendered(content), gv)
             }
 
             Element::Names(ref ns) => ns.intermediate(ctx),

@@ -1,5 +1,13 @@
+use super::group::GroupVars;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, BodyDate, Choose, Formatting, Names as NamesEl};
+
+// /// Just exists to make it easier to add other tree-folded summary data.
+// /// Even if it's only `GroupVars` for now.
+// #[derive(Debug)]
+// pub struct Summary(GroupVars);
+
+pub type IrSum<'c, O> = (IR<'c, O>, GroupVars);
 
 #[derive(Debug)]
 pub enum YearSuffixHook<'c> {

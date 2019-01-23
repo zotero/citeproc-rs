@@ -35,7 +35,7 @@ where
             format: self.formatter,
             citation_number: 1,
         };
-        let i = self.style.intermediate(&ctx);
+        let (i, _) = self.style.intermediate(&ctx);
         let flat = i.flatten(self.formatter);
         let o = self.formatter.output(flat);
         serde_json::to_string(&o).unwrap()
@@ -70,7 +70,7 @@ where
                     })
                 })
                 .any(|ir| {
-                    if let crate::proc::IR::Rendered(None) = ir {
+                    if let crate::proc::IR::Rendered(None) = ir.0 {
                         true
                     } else {
                         false

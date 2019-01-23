@@ -3,6 +3,7 @@ use super::ir::*;
 use super::Proc;
 use crate::input::Date;
 use crate::output::OutputFormat;
+use super::group::GroupVars;
 use crate::style::element::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
@@ -44,7 +45,7 @@ impl<'c, O> Proc<'c, O> for BodyDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
@@ -60,7 +61,7 @@ impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
@@ -87,7 +88,8 @@ where
                 &self.affixes,
             )
         });
-        IR::Rendered(content)
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
     }
 }
 
@@ -95,7 +97,7 @@ impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
@@ -118,7 +120,8 @@ where
                     &self.affixes,
                 )
             });
-        IR::Rendered(content)
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
     }
 }
 

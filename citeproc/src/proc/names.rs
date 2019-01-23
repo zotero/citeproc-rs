@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use std::borrow::Cow;
 
+use super::group::GroupVars;
 use super::cite_context::*;
 use super::ir::*;
 use super::Proc;
@@ -443,7 +444,7 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
@@ -463,6 +464,7 @@ where
             fmt.group(rendered, delim, self.formatting.as_ref()),
             &self.affixes,
         ));
-        IR::Rendered(content)
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
     }
 }

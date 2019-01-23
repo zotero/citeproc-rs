@@ -9,11 +9,10 @@ impl<'c, O> Proc<'c, O> for Choose
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IR<'c, O>
+    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
-        // TODO: work out if disambiguate appears on the conditions
         let Choose(ref head, ref rest, ref last) = *self;
         let mut disamb = false;
         let mut found;
@@ -25,11 +24,11 @@ where
             found = content;
             disamb = disamb || disambiguate;
         }
-        if let Some(content) = found {
+        if let Some((content, gv)) = found {
             return if disamb {
-                IR::ConditionalDisamb(self, Box::new(content))
+                (IR::ConditionalDisamb(self, Box::new(content)), gv)
             } else {
-                content
+                (content, gv)
             };
         } else {
             for branch in rest.iter() {
@@ -44,11 +43,11 @@ where
                 disamb = disamb || disambiguate;
             }
         }
-        if let Some(content) = found {
+        if let Some((content, gv)) = found {
             return if disamb {
-                IR::ConditionalDisamb(self, Box::new(content))
+                (IR::ConditionalDisamb(self, Box::new(content)), gv)
             } else {
-                content
+                (content, gv)
             };
         } else {
             let Else(ref els) = last;
@@ -60,7 +59,7 @@ where
 struct BranchEval<'a, O: OutputFormat> {
     // the bools indicate if disambiguate was set
     disambiguate: bool,
-    content: Option<IR<'a, O>>,
+    content: Option<IrSum<'a, O>>,
 }
 
 fn eval_ifthen<'c, O>(branch: &'c IfThen, ctx: &CiteContext<'c, O>) -> BranchEval<'c, O>
