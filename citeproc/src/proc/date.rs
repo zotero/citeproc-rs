@@ -1,9 +1,9 @@
 use super::cite_context::*;
+use super::group::GroupVars;
 use super::ir::*;
 use super::Proc;
 use crate::input::Date;
 use crate::output::OutputFormat;
-use super::group::GroupVars;
 use crate::style::element::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,

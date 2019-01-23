@@ -55,6 +55,17 @@
         </group>
       </group>
 
+      <text value="group suppression: {" />
+      <group>
+        <text value="tag " />
+        <text variable="archive" />
+      </group>
+      <text value="} group with no vars: {" />
+      <group>
+        <text value="tag" />
+      </group>
+      <text value="}" />
+
       <group delimiter=" | " prefix="{" suffix="}" >
         <group delimiter=" + " prefix="(" suffix=")">
           <text value="noice" />

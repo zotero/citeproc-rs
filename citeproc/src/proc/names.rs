@@ -1,8 +1,8 @@
 use itertools::Itertools;
 use std::borrow::Cow;
 
-use super::group::GroupVars;
 use super::cite_context::*;
+use super::group::GroupVars;
 use super::ir::*;
 use super::Proc;
 use crate::input::{Name, PersonName};

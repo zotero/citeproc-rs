@@ -7,10 +7,10 @@ mod choose;
 mod cite_context;
 mod date;
 mod disamb;
+mod group;
 mod helpers;
 mod ir;
 mod names;
-mod group;
 pub use self::cite_context::*;
 pub use self::disamb::*;
 use self::helpers::sequence;
@@ -165,13 +165,24 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref g) => sequence(
-                ctx,
-                g.elements.as_ref(),
-                &g.delimiter.0,
-                g.formatting.as_ref(),
-                g.affixes.clone(),
-            ),
+            Element::Group(ref g) => {
+                let (seq, group_vars) = sequence(
+                    ctx,
+                    g.elements.as_ref(),
+                    &g.delimiter.0,
+                    g.formatting.as_ref(),
+                    g.affixes.clone(),
+                );
+                if group_vars.should_render_tree() {
+                    // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
+                    // render the NoneSeen part. Groups shouldn't look inside inner
+                    // groups.
+                    (seq, group_vars)
+                } else {
+                    // Don't render the group!
+                    (IR::Rendered(None), GroupVars::NoneSeen)
+                }
+            }
             Element::Date(ref dt) => {
                 dt.intermediate(ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))

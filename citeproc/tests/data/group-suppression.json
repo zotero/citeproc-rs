@@ -1,0 +1,11 @@
+[
+  {
+    "id": "normal",
+    "archive": "var",
+    "type": "book"
+  },
+  {
+    "id": "suppress",
+    "type": "book"
+  }
+]

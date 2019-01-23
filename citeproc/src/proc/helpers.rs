@@ -1,9 +1,9 @@
 use super::cite_context::*;
+use super::group::GroupVars;
 use super::ir::IR::*;
-use super::{IrSeq, Proc, IR, IrSum};
+use super::{IrSeq, IrSum, Proc, IR};
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
-use super::group::GroupVars;
 
 pub fn sequence<'c, 's: 'c, O>(
     ctx: &CiteContext<'c, O>,
@@ -27,7 +27,7 @@ where
             // so you do have to handle it. We do (below).
             // You do have to make sure that if it was a group that did not
             // end up producing output, it has a correct gv = NoneSeen.
-            Rendered(None) => {},
+            Rendered(None) => {}
             Rendered(Some(bb)) => {
                 if let Some(last) = va.pop() {
                     if let Rendered(None) = last {
@@ -68,19 +68,23 @@ where
             ((a, gva), (Rendered(None), gvb)) => (a, gva.neighbour(gvb)),
             ((Rendered(None), gva), (b, gvb)) => (b, gva.neighbour(gvb)),
             // aa,bb
-            ((Rendered(Some(aa)), gva), (Rendered(Some(bb)), gvb)) => {
-                (Rendered(Some(fmt.join_delim(aa, delimiter, bb))), gva.neighbour(gvb))
-            }
+            ((Rendered(Some(aa)), gva), (Rendered(Some(bb)), gvb)) => (
+                Rendered(Some(fmt.join_delim(aa, delimiter, bb))),
+                gva.neighbour(gvb),
+            ),
             ((Seq(mut s), gva), b) => {
                 let gvc = fold_seq((&mut s.contents, gva), b);
                 (Seq(s), gvc)
             }
-            ((a, gva), (b, gvb)) => (Seq(IrSeq {
-                contents: vec![a, b],
-                formatting,
-                affixes: affixes.clone(),
-                delimiter,
-            }), gva.neighbour(gvb)),
+            ((a, gva), (b, gvb)) => (
+                Seq(IrSeq {
+                    contents: vec![a, b],
+                    formatting,
+                    affixes: affixes.clone(),
+                    delimiter,
+                }),
+                gva.neighbour(gvb),
+            ),
         }
     };
 
@@ -101,16 +105,22 @@ where
     if let Rendered(None) = inner {
         (inner, gv)
     } else if let Rendered(Some(x)) = inner {
-        (Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes))), gv)
+        (
+            Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes))),
+            gv,
+        )
     } else if let Seq(_) = inner {
         // no formatting necessary, Seq has it embedded
         (inner, gv)
     } else {
-        (Seq(IrSeq {
-            contents: vec![inner],
-            formatting,
-            affixes,
-            delimiter,
-        }), gv)
+        (
+            Seq(IrSeq {
+                contents: vec![inner],
+                formatting,
+                affixes,
+                delimiter,
+            }),
+            gv,
+        )
     }
 }

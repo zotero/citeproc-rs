@@ -13,6 +13,7 @@ where
     where
         O: OutputFormat,
     {
+        // XXX: should you treat conditional evaluations as a "variable test"?
         let Choose(ref head, ref rest, ref last) = *self;
         let mut disamb = false;
         let mut found;

@@ -35,7 +35,7 @@ impl GroupVars {
     pub fn did_not_render(self) -> Self {
         match self {
             DidRender => DidRender,
-            _ => OnlyEmpty
+            _ => OnlyEmpty,
         }
     }
 
