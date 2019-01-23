@@ -149,7 +149,7 @@ fn main() {
     }
 
     let mut db = RootDatabase::new(filesystem_fetcher);
-    db.add_references(&lib_text).expect("Coult not parse JSON");
+    db.set_references(&lib_text).expect("Coult not parse JSON");
 
     if let Some(_) = matches.subcommand_matches("disamb-index") {
         for (tok, ids) in db.inverted_index(()).iter() {

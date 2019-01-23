@@ -44,6 +44,7 @@ salsa::database_storage! {
         impl ReferenceDatabase {
             fn reference_input() for ReferenceInputQuery;
             fn citekeys() for CitekeysQuery;
+            fn uncited() for UncitedQuery;
             fn reference() for ReferenceQuery;
             fn disamb_tokens() for DisambTokensQuery;
             fn inverted_index() for InvertedIndexQuery;
@@ -62,7 +63,7 @@ salsa::database_storage! {
 }
 
 impl RootDatabase {
-    pub fn add_references(&mut self, json_str: &str) -> Result<(), serde_json::error::Error> {
+    pub fn set_references(&mut self, json_str: &str) -> Result<(), serde_json::error::Error> {
         let refs: Vec<Reference> = serde_json::from_str(json_str)?;
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
@@ -71,5 +72,10 @@ impl RootDatabase {
         }
         self.query_mut(CitekeysQuery).set((), Arc::new(keys));
         Ok(())
+    }
+    pub fn set_uncited(&mut self, uncited: HashSet<Atom>) {
+        // make sure there are no keys we wouldn't recognise
+        let merged = self.citekeys(()).intersection(&uncited).cloned().collect();
+        self.query_mut(UncitedQuery).set((), Arc::new(merged));
     }
 }

@@ -10,8 +10,12 @@ use crate::Atom;
 pub trait ReferenceDatabase: salsa::Database {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
+
     #[salsa::input]
     fn citekeys(&self, key: ()) -> Arc<HashSet<Atom>>;
+
+    #[salsa::input]
+    fn uncited(&self, key: ()) -> Arc<HashSet<Atom>>;
 
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
@@ -41,6 +45,7 @@ fn inverted_index(
     _: (),
 ) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
     let mut index = FnvHashMap::default();
+    // TODO: build index from (cited U uncited), not ALL keys.
     for key in db.citekeys(()).iter() {
         for tok in db.disamb_tokens(key.clone()).iter() {
             let ids = index.entry(tok.clone()).or_insert_with(|| HashSet::new());
