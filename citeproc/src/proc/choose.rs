@@ -1,7 +1,8 @@
 use super::cite_context::*;
 use super::helpers::sequence;
 use super::ir::*;
-use super::Proc;
+use super::{IrState, Proc};
+use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 
@@ -9,7 +10,12 @@ impl<'c, O> Proc<'c, O> for Choose
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
+    fn intermediate<'s: 'c>(
+        &'s self,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
@@ -21,7 +27,7 @@ where
             let BranchEval {
                 disambiguate,
                 content,
-            } = eval_ifthen(head, ctx);
+            } = eval_ifthen(head, db, state, ctx);
             found = content;
             disamb = disamb || disambiguate;
         }
@@ -39,7 +45,7 @@ where
                 let BranchEval {
                     disambiguate,
                     content,
-                } = eval_ifthen(branch, ctx);
+                } = eval_ifthen(branch, db, state, ctx);
                 found = content;
                 disamb = disamb || disambiguate;
             }
@@ -52,7 +58,7 @@ where
             };
         } else {
             let Else(ref els) = last;
-            sequence(ctx, &els, "", None, Affixes::default())
+            sequence(db, state, ctx, &els, "", None, Affixes::default())
         }
     }
 }
@@ -63,7 +69,12 @@ struct BranchEval<'a, O: OutputFormat> {
     content: Option<IrSum<'a, O>>,
 }
 
-fn eval_ifthen<'c, O>(branch: &'c IfThen, ctx: &CiteContext<'c, O>) -> BranchEval<'c, O>
+fn eval_ifthen<'c, O>(
+    branch: &'c IfThen,
+    db: &impl ReferenceDatabase,
+    state: &mut IrState,
+    ctx: &CiteContext<'c, O>,
+) -> BranchEval<'c, O>
 where
     O: OutputFormat,
 {
@@ -71,7 +82,15 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = match matched {
         false => None,
-        true => Some(sequence(ctx, &elements, "", None, Affixes::default())),
+        true => Some(sequence(
+            db,
+            state,
+            ctx,
+            &elements,
+            "",
+            None,
+            Affixes::default(),
+        )),
     };
     BranchEval {
         disambiguate,

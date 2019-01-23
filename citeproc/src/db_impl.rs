@@ -1,34 +1,28 @@
-use salsa::Database;
+use salsa::{Database, ParallelDatabase, Snapshot};
 use serde_json;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::db::*;
 use crate::input::Reference;
-use crate::locale::{db::*, Lang, LocaleFetcher};
+use crate::locale::db::HasFetcher;
+use crate::locale::{db::*, LocaleFetcher};
 use crate::style::db::*;
 use crate::Atom;
 
 pub struct RootDatabase {
     runtime: salsa::Runtime<Self>,
-    fetcher: Box<LocaleFetcher>,
+    fetcher: Arc<LocaleFetcher>,
 }
 
 impl RootDatabase {
-    pub fn new(fetcher: Box<LocaleFetcher>) -> Self {
+    pub fn new(fetcher: Arc<LocaleFetcher>) -> Self {
         let mut db = RootDatabase {
             runtime: Default::default(),
             fetcher,
         };
         db.query_mut(StyleQuery).set((), Default::default());
         db
-    }
-}
-
-impl LocaleFetcher for RootDatabase {
-    #[inline]
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        self.fetcher.fetch_string(lang)
     }
 }
 
@@ -59,6 +53,21 @@ salsa::database_storage! {
             fn merged_locale() for MergedLocaleQuery;
             fn locale_options() for LocaleOptionsQuery;
         }
+    }
+}
+
+impl ParallelDatabase for RootDatabase {
+    fn snapshot(&self) -> Snapshot<Self> {
+        Snapshot::new(RootDatabase {
+            runtime: self.runtime.snapshot(self),
+            fetcher: self.fetcher.clone(),
+        })
+    }
+}
+
+impl HasFetcher for RootDatabase {
+    fn get_fetcher(&self) -> Arc<LocaleFetcher> {
+        self.fetcher.clone()
     }
 }
 

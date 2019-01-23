@@ -5,9 +5,13 @@ use super::lang::LocaleSource;
 use super::*;
 use crate::style::db::*;
 
+pub trait HasFetcher {
+    fn get_fetcher(&self) -> Arc<LocaleFetcher>;
+}
+
 /// Salsa interface to locales, including merging.
 #[salsa::query_group]
-pub trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
+pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
     /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
 
@@ -27,7 +31,7 @@ pub trait LocaleDatabase: salsa::Database + StyleDatabase + LocaleFetcher {
 }
 
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
-    db.fetch_string(&key).ok().map(Arc::new)
+    db.get_fetcher().fetch_string(&key).ok().map(Arc::new)
 }
 
 fn inline_locale(db: &impl LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {

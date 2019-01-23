@@ -16,6 +16,7 @@ use directories::ProjectDirs;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;
@@ -107,7 +108,7 @@ fn main() {
     "#,
     );
 
-    let mut filesystem_fetcher = {
+    let filesystem_fetcher = {
         let locales_dir = matches
             .value_of("locales-dir")
             .map(PathBuf::from)
@@ -122,7 +123,7 @@ fn main() {
             let locales_dir = locales_dir.clone();
             dbg!(locales_dir);
         }
-        Box::new(Filesystem::new(locales_dir))
+        Arc::new(Filesystem::new(locales_dir))
     };
 
     if let Some(matches) = matches.subcommand_matches("parse-locale") {
@@ -171,7 +172,7 @@ fn main() {
     if let Some(csl_path) = matches.value_of("csl") {
         let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
         let formatter = Pandoc::new();
-        let driver_r = Driver::new(&text, &formatter);
+        let driver_r = Driver::new(&text, &formatter, db);
         if let Ok(driver) = driver_r {
             // driver.dump_macro("issued-year");
             // driver.dump_ir(&refr);

@@ -1,7 +1,9 @@
+use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
+use std::collections::HashSet;
 
 mod choose;
 mod cite_context;
@@ -20,6 +22,14 @@ use group::GroupVars;
 #[derive(Debug)]
 pub struct IrState {
     tokens: HashSet<DisambToken>,
+}
+
+impl IrState {
+    pub fn new() -> Self {
+        IrState {
+            tokens: HashSet::new(),
+        }
+    }
 }
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
@@ -44,18 +54,36 @@ where
 {
     /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
     /// often borrow from self to be recomputed during disambiguation.
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>;
+    fn intermediate<'s: 'c>(
+        &'s self,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<'c, O>;
 }
 
 impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
+    fn intermediate<'s: 'c>(
+        &'s self,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<'c, O> {
         let citation = &self.citation;
         let layout = &citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence(ctx, &layout.elements, "", None, Affixes::default())
+        sequence(
+            db,
+            state,
+            ctx,
+            &layout.elements,
+            "",
+            None,
+            Affixes::default(),
+        )
     }
 }
 
@@ -63,10 +91,15 @@ impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O> {
+    fn intermediate<'s: 'c>(
+        &'s self,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<'c, O> {
         let fmt = ctx.format;
         match *self {
-            Element::Choose(ref ch) => ch.intermediate(ctx),
+            Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref source, ref f, ref af, _quo, _sp, _tc, _disp) => {
                 use crate::style::element::TextSource::*;
@@ -78,7 +111,7 @@ where
                             .macros
                             .get(name)
                             .expect("macro errors not implemented!");
-                        sequence(ctx, &macro_unsafe, "", f.as_ref(), af.clone())
+                        sequence(db, state, ctx, &macro_unsafe, "", f.as_ref(), af.clone())
                     }
                     Value(ref value) => (
                         IR::Rendered(Some(fmt.affixed_text(value.to_string(), f.as_ref(), &af))),
@@ -156,13 +189,15 @@ where
                 (IR::Rendered(content), gv)
             }
 
-            Element::Names(ref ns) => ns.intermediate(ctx),
+            Element::Names(ref ns) => ns.intermediate(db, state, ctx),
 
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => {
                 let (seq, group_vars) = sequence(
+                    db,
+                    state,
                     ctx,
                     g.elements.as_ref(),
                     &g.delimiter.0,
@@ -180,10 +215,9 @@ where
                 }
             }
             Element::Date(ref dt) => {
-                dt.intermediate(ctx)
+                dt.intermediate(db, state, ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }
     }
 }
-

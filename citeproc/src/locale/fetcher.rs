@@ -5,10 +5,10 @@ use crate::style::FromNode;
 use roxmltree::Document;
 use std::str::FromStr;
 
-pub trait LocaleFetcher {
+pub trait LocaleFetcher: Send + Sync {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
 
-    fn fetch_cli(&mut self, lang: &Lang) -> Option<Locale> {
+    fn fetch_cli(&self, lang: &Lang) -> Option<Locale> {
         let string = self.fetch_string(lang).ok()?;
         let with_errors = |s: &str| Ok(Locale::from_str(s)?);
         match with_errors(&string) {

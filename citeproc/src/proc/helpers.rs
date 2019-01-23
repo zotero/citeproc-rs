@@ -1,11 +1,14 @@
 use super::cite_context::*;
 use super::group::GroupVars;
 use super::ir::IR::*;
-use super::{IrSeq, IrSum, Proc, IR};
+use super::{IrSeq, IrState, IrSum, Proc, IR};
+use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
 
 pub fn sequence<'c, 's: 'c, O>(
+    db: &impl ReferenceDatabase,
+    state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &'s [Element],
     delimiter: &'c str,
@@ -91,7 +94,7 @@ where
     // #[cfg(feature="rayon")] {
     //     use rayon::prelude::*;
     //     els.par_iter()
-    //         .map(|el| el.intermediate(ctx))
+    //         .map(|el| el.intermediate(db, state, ctx))
     //         .reduce(|| IR::Rendered(None), folder)
     // }
     // #[cfg(not(feature = "rayon"))] {
@@ -99,7 +102,7 @@ where
 
     let (inner, gv) = els
         .iter()
-        .map(|el| el.intermediate(ctx))
+        .map(|el| el.intermediate(db, state, ctx))
         .fold((IR::Rendered(None), GroupVars::new()), folder);
 
     if let Rendered(None) = inner {

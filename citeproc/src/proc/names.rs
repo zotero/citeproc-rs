@@ -4,7 +4,8 @@ use std::borrow::Cow;
 use super::cite_context::*;
 use super::group::GroupVars;
 use super::ir::*;
-use super::Proc;
+use super::{IrState, Proc};
+use crate::db::ReferenceDatabase;
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
@@ -444,7 +445,12 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(&'s self, ctx: &CiteContext<'c, O>) -> IrSum<'c, O>
+    fn intermediate<'s: 'c>(
+        &'s self,
+        _db: &impl ReferenceDatabase,
+        _state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<'c, O>
     where
         O: OutputFormat,
     {
