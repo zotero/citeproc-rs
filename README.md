@@ -46,14 +46,14 @@ later, or a nightly compiler. You should install it with
 
 Currently it can:
 
-* parse a CSL style (ignoring `<info>`, `<style-options>`, and 
-  `<bibliography>`) with built-in validation, type-checking, error reporting, 
-  and semantic versioning,
-* parse a CSL-M style (ignoring `<info>`, `<style-options>`, and 
-  `<bibliography>`, missing many undocumented `citeproc-js` extensions to the 
-  spec),
-* parse a CSL-JSON file
-* pluck out the first reference, and execute the style against only that one
+* parse a CSL style (ignoring `<info>`) with built-in validation, 
+  type-checking, error reporting, and semantic versioning,
+* parse a CSL-M style (ignoring `<info>`, probably still missing many 
+  undocumented `citeproc-js` extensions to the spec),
+* parse locale files and perform locale fallback and merging for 
+  terms/dates/etc inside it
+* parse a CSL-JSON file into references
+* pluck out a particular reference, and execute the style against only that one
 * output valid Pandoc JSON that can be converted to HTML
 
 ```sh
@@ -74,9 +74,22 @@ for style in styles/*.csl; do citeproc-rs --csl $style | pandoc -f json -t html;
 ```
 
 * Some styles in the repo are possibly invalid (mostly for using terms that 
-  aren't actually listed in the terms in the spec, namely number variables).
+  don't exist).
 * Some will successfully output HTML!
 * Many styles will panic when accessing locales, as most locale lookups are 
   just `.get("en-GB").unwrap()` on the inline locales instead of using a merged 
   locale.
+
+You can also parse a locale to check for errors. It can find a locale in a 
+locales directory assuming it is structured like [the official CSL locales 
+repo](https://github.com/citation-style-language/locales), using e.g. 
+`$HOME/Library/Caches/net.cormacrelf.citeproc-rs/locales` on a Mac, or 
+`$HOME/.cache/citeproc-rs/locales` on Linux. It's best to just clone that repo 
+into place.
+See the [directories](https://docs.rs/directories) crate for more.
+
+```sh
+git clone https://github.com/citation-style-language/locales $DIR_FROM_ABOVE
+cargo run -- parse-locale --lang en-GB
+```
 

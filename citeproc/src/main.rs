@@ -29,33 +29,28 @@ fn main() {
         .author("Cormac Relf")
         .about("Processes citations")
         .subcommand(
-            SubCommand::with_name("locale")
-                .about("parses a locale file just because it can")
+            SubCommand::with_name("parse-locale")
+                .about("Parses a locale file (without performing fallback)")
                 .arg(
                     Arg::with_name("lang")
                         .short("l")
                         .long("lang")
                         .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("locales")
-                        .long("locales")
-                        .value_name("DIR")
-                        .takes_value(true),
                 ),
         )
-        .arg(
-            Arg::with_name("format")
-                .short("f")
-                .long("format")
-                .value_name("FORMAT")
-                .takes_value(true),
-        )
+        // .arg(
+        //     Arg::with_name("format")
+        //         .short("f")
+        //         .long("format")
+        //         .value_name("FORMAT")
+        //         .takes_value(true),
+        // )
         .arg(
             Arg::with_name("library")
                 .short("l")
                 .long("library")
                 .value_name("FILE.json")
+                .help("A CSL-JSON file")
                 .takes_value(true),
         )
         .arg(
@@ -63,6 +58,7 @@ fn main() {
                 .short("c")
                 .long("csl")
                 .value_name("FILE")
+                .help("A CSL style")
                 .takes_value(true),
         )
         .arg(
@@ -70,12 +66,14 @@ fn main() {
                 .short("k")
                 .long("key")
                 .value_name("CITEKEY")
+                .help("Run against a specific citekey")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("locales")
-                .long("locales")
+            Arg::with_name("locales-dir")
+                .long("locales-dir")
                 .value_name("DIR")
+                .help("Directory with locales-xx-XX.xml files in it")
                 .takes_value(true),
         )
         .get_matches();
@@ -107,7 +105,7 @@ fn main() {
 
     let mut filesystem_fetcher = {
         let locales_dir = matches
-            .value_of("locales")
+            .value_of("locales-dir")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
                 let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
@@ -116,10 +114,14 @@ fn main() {
                 locales_dir.push("locales");
                 locales_dir
             });
+        if matches.subcommand_matches("parse-locale").is_some() {
+            let locales_dir = locales_dir.clone();
+            dbg!(locales_dir);
+        }
         Box::new(Filesystem::new(locales_dir))
     };
 
-    if let Some(matches) = matches.subcommand_matches("locale") {
+    if let Some(matches) = matches.subcommand_matches("parse-locale") {
         let lang = if let Some(lan) = matches.value_of("lang") {
             if let Ok(l) = Lang::from_str(lan) {
                 l
@@ -134,9 +136,7 @@ fn main() {
             Lang::en_us()
         };
         let locale = filesystem_fetcher.fetch_cli(&lang);
-        let locale_fallbacks: Vec<_> = lang.iter().collect();
         dbg!(locale);
-        dbg!(locale_fallbacks);
         return;
     }
 
