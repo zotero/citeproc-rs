@@ -72,8 +72,7 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<'c, O> {
-        let citation = &self.citation;
-        let layout = &citation.layout;
+        let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence(
             db,

@@ -817,7 +817,6 @@ impl FromNode for MacroMap {
 
 impl FromNode for Names {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        // TODO: did I have Vec<Name> originally because some styles have more than one?
         let name = max1_child("names", "name", node.children())?;
         let institution = max1_child("names", "institution", node.children())?;
         let et_al = max1_child("names", "et-al", node.children())?;

@@ -519,7 +519,7 @@ pub enum InstitutionUseFirst {
     Substitute(u32),
 }
 
-#[derive(Eq, Clone, PartialEq, Default)]
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Name {
     pub and: Option<NameAnd>,
     pub delimiter: Option<Delimiter>,
@@ -618,12 +618,6 @@ impl Name {
             name_part_given: overrider.name_part_given.clone(),
             name_part_family: overrider.name_part_family.clone(),
         }
-    }
-}
-
-impl fmt::Debug for Name {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Name {{ .. }}")
     }
 }
 
