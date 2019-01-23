@@ -84,7 +84,7 @@ where
         // TODO: render date ranges
         // TODO: TextCase
         let date = ctx.reference.date.get(&self.variable).and_then(|d| {
-            d.add_disamb_tokens(&mut state.tokens);
+            d.add_tokens(&mut state.tokens);
             d.single()
         });
         let content = date.map(|val| {
@@ -125,7 +125,7 @@ where
             .get(&self.variable)
             // TODO: render date ranges
             .and_then(|d| {
-                d.add_disamb_tokens(&mut state.tokens);
+                d.add_tokens(&mut state.tokens);
                 d.single()
             })
             .map(|val| {

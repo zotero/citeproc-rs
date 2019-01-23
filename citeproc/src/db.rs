@@ -37,7 +37,7 @@ fn reference(db: &impl ReferenceDatabase, key: Atom) -> Option<Arc<Reference>> {
 fn disamb_tokens(db: &impl ReferenceDatabase, key: Atom) -> Arc<HashSet<DisambToken>> {
     let refr = db.reference_input(key);
     let mut set = HashSet::new();
-    refr.add_disamb_tokens(&mut set);
+    refr.add_tokens_index(&mut set);
     Arc::new(set)
 }
 
