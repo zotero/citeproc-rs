@@ -3,11 +3,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::input::Reference;
+use crate::locale::db::LocaleDatabase;
 use crate::proc::{AddDisambTokens, DisambToken};
 use crate::Atom;
 
 #[salsa::query_group]
-pub trait ReferenceDatabase: salsa::Database {
+pub trait ReferenceDatabase: salsa::Database + LocaleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
 

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use super::fetcher::Predefined;
 use super::*;
@@ -28,7 +29,7 @@ fn term_and(form: TermFormExtended) -> SimpleTermSelector {
 }
 
 fn test_simple_term(term: SimpleTermSelector, langs: &[(Lang, &str)], expect: Option<&str>) {
-    let db = RootDatabase::new(Box::new(predefined_xml(langs)));
+    let db = RootDatabase::new(Arc::new(predefined_xml(langs)));
     // use en-AU so it has to do fallback to en-US
     let locale = db.merged_locale(Lang::en_au());
     assert_eq!(
@@ -126,8 +127,8 @@ fn term_locale_fallback() {
 fn lang_from_str() {
     let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
     let de = Lang::Iso(IsoLang::Deutsch, None);
-    let iana = Lang::Iana("Navajo".to_string());
-    let unofficial = Lang::Unofficial("Newspeak".to_string());
+    let iana = Lang::Iana("Navajo".into());
+    let unofficial = Lang::Unofficial("Newspeak".into());
     assert_eq!(Lang::from_str("de-AT"), Ok(de_at));
     assert_eq!(Lang::from_str("de"), Ok(de));
     assert_eq!(Lang::from_str("i-Navajo"), Ok(iana));

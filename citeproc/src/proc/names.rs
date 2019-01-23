@@ -9,7 +9,7 @@ use crate::db::ReferenceDatabase;
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
-    DelimiterPrecedes, Name as NameEl, NameAsSortOrder, NameForm, Names, Position,
+    DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameForm, Names, Position,
 };
 use crate::utils::Intercalate;
 
@@ -198,7 +198,7 @@ impl NameEl {
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
             // because it only has any effect when "and" is set.
-            if let Some(ref _and) = self.and {
+            if let Some(_) = self.and {
                 if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
                     let dpl = self
                         .delimiter_precedes_last
@@ -219,11 +219,14 @@ impl NameEl {
 
     fn render<'c, O: OutputFormat>(
         &self,
+        db: &impl ReferenceDatabase,
+        _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         names_slice: &[Name],
     ) -> O::Build {
         let mut seen_one = false;
         let name_tokens = self.name_tokens(ctx.position, names_slice);
+        let locale = db.merged_locale(ctx.style.default_locale.clone());
 
         if self.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -286,10 +289,40 @@ impl NameEl {
                     Cow::Borrowed(literal.as_str())
                 }
                 NameToken::Delimiter => Cow::Borrowed(", "),
-                NameToken::EtAl => Cow::Borrowed("et al"),
+                // TODO: parse cs:et-al element to get this, and refactor to let it do its own
+                // formatting
+                NameToken::EtAl => {
+                    use crate::style::terms::*;
+                    Cow::Borrowed(
+                        locale
+                            .get_text_term(
+                                TextTermSelector::Simple(SimpleTermSelector::Misc(
+                                    MiscTerm::EtAl,
+                                    TermFormExtended::Long,
+                                )),
+                                false,
+                            )
+                            .unwrap_or("et al"),
+                    )
+                }
                 NameToken::Ellipsis => Cow::Borrowed("…"),
                 NameToken::Space => Cow::Borrowed(" "),
-                NameToken::And => Cow::Borrowed("and"),
+                NameToken::And => {
+                    use crate::style::terms::*;
+                    let select = |form: TermFormExtended| {
+                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
+                    };
+                    // If an And token shows up, we already know self.and is Some.
+                    let form = match self.and {
+                        Some(NameAnd::Symbol) => locale
+                            .get_text_term(select(TermFormExtended::Symbol), false)
+                            .unwrap_or("&"),
+                        _ => locale
+                            .get_text_term(select(TermFormExtended::Long), false)
+                            .unwrap_or("and"),
+                    };
+                    Cow::Borrowed(form)
+                }
             })
             // TODO: and, et-al, et cetera
             .join("");
@@ -447,8 +480,8 @@ where
 {
     fn intermediate<'s: 'c>(
         &'s self,
-        _db: &impl ReferenceDatabase,
-        _state: &mut IrState,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<'c, O>
     where
@@ -463,7 +496,7 @@ where
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
             .filter_map(|var| ctx.get_name(var))
-            .map(|val| name_el.render(ctx, val))
+            .map(|val| name_el.render(db, state, ctx, val))
             .collect();
         let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
         let content = Some(fmt.affixed(

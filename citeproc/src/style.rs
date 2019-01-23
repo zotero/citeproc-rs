@@ -1296,7 +1296,7 @@ impl FromNode for Style {
             macros,
             version_req,
             locale_overrides,
-            default_locale: attribute_option(node, "default-locale")?,
+            default_locale: attribute_optional(node, "default-locale")?,
             citation: citation?,
             bibliography,
             info: Info {},

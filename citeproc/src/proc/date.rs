@@ -77,7 +77,8 @@ where
         O: OutputFormat,
     {
         let fmt = ctx.format;
-        let locale = ctx.style.locale_overrides.get(&None).unwrap();
+        let locale = db.merged_locale(ctx.style.default_locale.clone());
+        // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase

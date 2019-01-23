@@ -25,6 +25,7 @@ pub struct Reference {
     pub number: FnvHashMap<NumberVariable, NumericValue>,
     pub name: FnvHashMap<NameVariable, Vec<Name>>,
     pub date: FnvHashMap<DateVariable, DateOrRange>,
+    // TODO: language field
 }
 
 impl Reference {

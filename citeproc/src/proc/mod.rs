@@ -143,12 +143,8 @@ where
                         (IR::Rendered(content), gv)
                     }
                     Term(term_selector, plural) => {
-                        let content = ctx
-                            .style
-                            .locale_overrides
-                            // TODO: support multiple locales!
-                            .get(&None)
-                            .unwrap()
+                        let locale = db.merged_locale(ctx.style.default_locale.clone());
+                        let content = locale
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
                         (IR::Rendered(content), GroupVars::new())
@@ -169,11 +165,8 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        ctx.style
-                            .locale_overrides
-                            // TODO: support multiple locales!
-                            .get(&None)
-                            .unwrap()
+                        let locale = db.merged_locale(ctx.style.default_locale.clone());
+                        locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))
                     })

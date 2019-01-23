@@ -856,7 +856,7 @@ pub struct Style {
     pub names_delimiter: Option<Delimiter>,
     /// `None` is the 'override everything' locale.
     pub locale_overrides: FnvHashMap<Option<Lang>, Locale>,
-    pub default_locale: Option<Lang>,
+    pub default_locale: Lang,
     pub version_req: CslVersionReq,
     pub page_range_format: Option<PageRangeFormat>,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
@@ -874,7 +874,7 @@ impl Default for Style {
             name_inheritance: Default::default(),
             names_delimiter: None,
             locale_overrides: Default::default(),
-            default_locale: None,
+            default_locale: Default::default(),
             version_req: CslVersionReq::current_csl(),
             page_range_format: None,
             demote_non_dropping_particle: Default::default(),

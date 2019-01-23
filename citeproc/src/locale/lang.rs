@@ -1,3 +1,4 @@
+use crate::Atom;
 use std::fmt;
 use std::str::FromStr;
 
@@ -17,10 +18,16 @@ pub enum Lang {
     /// i.e. `en` or `en-US`
     Iso(IsoLang, Option<IsoCountry>),
     /// IANA-assigned language codes
-    Iana(String),
+    Iana(Atom),
     /// Agreed upon language ID (max 8 characters). You'll absolutely have to provide your own
     /// locale file.
-    Unofficial(String),
+    Unofficial(Atom),
+}
+
+impl Default for Lang {
+    fn default() -> Self {
+        Lang::en_us()
+    }
 }
 
 impl Lang {
@@ -123,7 +130,7 @@ pub enum IsoLang {
     ///
     /// Also we save allocations for some popular languages!
     #[strum(default = "true")]
-    Other(String),
+    Other(Atom),
 }
 
 impl fmt::Display for IsoLang {
@@ -179,7 +186,7 @@ pub enum IsoCountry {
     /// Canada
     CA,
     #[strum(default = "true")]
-    Other(String),
+    Other(Atom),
 }
 
 impl fmt::Display for IsoCountry {
@@ -274,7 +281,7 @@ named!(
         tag!("i-"),
         take_while!(|_| true)
     ), |lang| {
-        Lang::Iana(lang.to_string())
+        Lang::Iana(Atom::from(lang.as_ref()))
     })
 );
 
@@ -284,7 +291,7 @@ named!(
         tag!("x-"),
         take_while_m_n!(1, 8, char::is_alphanumeric)
     ), |lang| {
-        Lang::Unofficial(lang.to_string())
+        Lang::Unofficial(Atom::from(lang.as_ref()))
     })
 );
 
