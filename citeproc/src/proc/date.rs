@@ -1,10 +1,10 @@
 use super::cite_context::*;
-use super::disamb::AddDisambTokens;
+use super::disamb::{AddDisambTokens, DisambToken};
 use super::group::GroupVars;
 use super::ir::*;
 use super::{IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::Date;
+use crate::input::{Date, DateOrRange};
 use crate::output::OutputFormat;
 use crate::style::element::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
@@ -83,9 +83,9 @@ where
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase
-        let date = ctx.reference.date.get(&self.variable).and_then(|d| {
-            d.add_tokens(&mut state.tokens);
-            d.single()
+        let date = ctx.reference.date.get(&self.variable).and_then(|r| {
+            mask_range(r, &self.date_parts, state);
+            r.single()
         });
         let content = date.map(|val| {
             let each: Vec<_> = locale_date
@@ -102,6 +102,41 @@ where
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)
+    }
+}
+
+type DatePartAcc = (bool, bool, bool);
+
+fn dp_fold(mut a: DatePartAcc, form: DatePartForm) -> DatePartAcc {
+    match form {
+        DatePartForm::Year(..) => {a.0 = true}
+        DatePartForm::Month(..) => {a.1 = true}
+        DatePartForm::Day(..) => {a.2 = true}
+    }
+    a
+}
+
+fn mask(d: Date, date_parts: &[DatePart]) -> Date {
+    let a = date_parts.iter().map(|dp| dp.form).fold((false, false, false), dp_fold);
+    Date {
+        year: if a.0 { d.year } else { 0 },
+        month: if a.1 { d.month } else { 0 },
+        day: if a.2 { d.day } else { 0 },
+    }
+}
+
+fn mask_range(r: &DateOrRange, date_parts: &[DatePart], state: &mut IrState) {
+    match *r {
+        DateOrRange::Single(d) => {
+            mask(d, date_parts).add_tokens(&mut state.tokens);
+        }
+        DateOrRange::Range(d1, d2) => {
+            mask(d1, date_parts).add_tokens(&mut state.tokens);
+            mask(d2, date_parts).add_tokens(&mut state.tokens);
+        }
+        DateOrRange::Literal(ref lit) => {
+            state.tokens.insert(DisambToken::Str(lit.as_str().into()));
+        }
     }
 }
 
@@ -124,9 +159,9 @@ where
             .date
             .get(&self.variable)
             // TODO: render date ranges
-            .and_then(|d| {
-                d.add_tokens(&mut state.tokens);
-                d.single()
+            .and_then(|r| {
+                mask_range(r, &self.date_parts, state);
+                r.single()
             })
             .map(|val| {
                 let each: Vec<_> = self
