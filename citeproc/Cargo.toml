@@ -13,7 +13,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "jemalloc"]
+default = ["cli", "parallel", "jemalloc"]
 jemalloc = ["jemallocator"]
 parallel = ["rayon"]
 cli = ["clap", "directories"]

@@ -24,6 +24,17 @@ where
     db: RootDatabase,
 }
 
+
+// need a Clone impl for map_with
+// thanks to rust-analyzer for the tip
+struct Snap(salsa::Snapshot<RootDatabase>);
+impl Clone for Snap {
+    fn clone(&self) -> Self {
+        use salsa::ParallelDatabase;
+        Snap(self.0.snapshot())
+    }
+}
+
 impl<'a, O> Driver<'a, O>
 where
     O: OutputFormat + std::fmt::Debug,
@@ -90,26 +101,26 @@ where
     }
 
     pub fn multiple(&self, pairs: &[(&Cite<O>, &Reference)]) -> bool {
-        // Feature disabled for now, because using Rayon's threadpool might deadlock the
-        // database
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
             use salsa::ParallelDatabase;
-            let snapshot = self.db.snapshot();
+            let snap = Snap(self.db.snapshot());
+            let style = Arc::new(&self.style);
+            let formatter = Arc::new(&self.formatter);
             pairs
                 .par_iter()
-                .map(|pair| {
+                .map_with(snap, |db, pair| {
                     let ctx = CiteContext {
-                        style: &self.style,
+                        style: *style,
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
-                        format: self.formatter,
+                        format: *formatter,
                         citation_number: 1,
                     };
                     let mut state = IrState::new();
-                    self.style.intermediate(&snapshot, &mut state, &ctx).0
+                    style.intermediate(&*db.0, &mut state, &ctx).0
                 })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
