@@ -1,6 +1,6 @@
 use super::{DateOrRange, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
-use crate::style::element::{Position, Style};
+use crate::style::element::Position;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 
@@ -63,9 +63,6 @@ impl<O: OutputFormat> Cite<O> {
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat> {
-    // *could* get this from db if every element was an Arc for IR to hold it
-    // OR you reused the lifetime from &impl Databse
-    pub style: &'c Style,
     // can get this from db
     pub reference: &'c Reference,
     // could pull one out of thin air! all the useful formatters are ZSTs.

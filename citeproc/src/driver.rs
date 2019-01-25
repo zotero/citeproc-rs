@@ -2,6 +2,7 @@ use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{IrState, Proc};
+use crate::style::db::StyleDatabase;
 use crate::style::db::StyleQuery;
 use crate::style::element::Position;
 use crate::style::element::Style;
@@ -19,9 +20,8 @@ pub struct Driver<'a, O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    style: Arc<Style>,
-    formatter: &'a O,
     db: RootDatabase,
+    formatter: &'a O,
 }
 
 // need a Clone impl for map_with
@@ -45,17 +45,12 @@ where
     ) -> Result<Self, StyleError> {
         let doc = Document::parse(&style_string)?;
         let style = Arc::new(Style::from_node(&doc.root_element())?);
-        db.query_mut(StyleQuery).set((), style.clone());
-        Ok(Driver {
-            style,
-            formatter,
-            db,
-        })
+        db.query_mut(StyleQuery).set((), style);
+        Ok(Driver { formatter, db })
     }
 
     pub fn single(&self, refr: &Reference) -> String {
         let ctx = CiteContext {
-            style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
             position: Position::First,
@@ -63,7 +58,7 @@ where
             citation_number: 1,
         };
         let mut state = IrState::new();
-        let (i, _) = self.style.intermediate(&self.db, &mut state, &ctx);
+        let (i, _) = self.db.style(()).intermediate(&self.db, &mut state, &ctx);
         let index = self.db.inverted_index(());
         let mut matching_ids = HashSet::new();
         for tok in state.tokens.iter() {
@@ -88,7 +83,6 @@ where
 
     pub fn pair(&self, cite: &Cite<O>, refr: &Reference) {
         let ctx = CiteContext {
-            style: &self.style,
             cite,
             reference: refr,
             position: Position::First,
@@ -96,7 +90,7 @@ where
             citation_number: 1,
         };
         let mut state = IrState::new();
-        self.style.intermediate(&self.db, &mut state, &ctx);
+        self.db.style(()).intermediate(&self.db, &mut state, &ctx);
     }
 
     pub fn multiple(&self, pairs: &[(&Cite<O>, &Reference)]) -> bool {
@@ -105,13 +99,12 @@ where
             use rayon::prelude::*;
             use salsa::ParallelDatabase;
             let snap = Snap(self.db.snapshot());
-            let style = Arc::new(&self.style);
             let formatter = Arc::new(&self.formatter);
             pairs
                 .par_iter()
-                .map_with(snap, |db, pair| {
+                .map_with(snap, |snap, pair| {
+                    let db = &*snap.0;
                     let ctx = CiteContext {
-                        style: *style,
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
@@ -119,7 +112,7 @@ where
                         citation_number: 1,
                     };
                     let mut state = IrState::new();
-                    style.intermediate(&*db.0, &mut state, &ctx).0
+                    db.style(()).intermediate(db, &mut state, &ctx).0
                 })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
@@ -135,7 +128,6 @@ where
                 .iter()
                 .map(|pair| {
                     let ctx = CiteContext {
-                        style: &self.style,
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
@@ -143,7 +135,7 @@ where
                         citation_number: 1,
                     };
                     let mut state = IrState::new();
-                    self.style.intermediate(&self.db, &mut state, &ctx).0
+                    db.style(()).intermediate(&self.db, &mut state, &ctx).0
                 })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
@@ -156,16 +148,15 @@ where
     }
 
     pub fn dump_macro(&self, s: Atom) {
-        eprintln!("{:?}", self.style.macros.get(&s))
+        eprintln!("{:?}", self.db.style(()).macros.get(&s))
     }
 
     pub fn dump_style(&self) {
-        eprintln!("{:?}", self.style)
+        eprintln!("{:?}", self.db.style(()))
     }
 
     pub fn dump_ir(&self, refr: &Reference) {
         let ctx = CiteContext {
-            style: &self.style,
             reference: refr,
             cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
             position: Position::First,
@@ -173,7 +164,7 @@ where
             citation_number: 1,
         };
         let mut state = IrState::new();
-        let ir = self.style.intermediate(&self.db, &mut state, &ctx).0;
+        let ir = self.db.style(()).intermediate(&self.db, &mut state, &ctx).0;
         eprintln!("{:?}", ir);
     }
 }
