@@ -17,7 +17,7 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat: Send + Sync + std::fmt::Debug {
+pub trait OutputFormat: Send + Sync + Default + std::fmt::Debug {
     type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync;
     type Output: Serialize + Clone + Send + Sync;
 

@@ -4,11 +4,13 @@ use crate::style::element::Formatting;
 
 #[derive(Debug)]
 pub struct PlainText {}
-impl PlainText {
-    pub fn new() -> Self {
+
+impl Default for PlainText {
+    fn default() -> Self {
         PlainText {}
     }
 }
+
 impl OutputFormat for PlainText {
     type Build = String;
     type Output = String;

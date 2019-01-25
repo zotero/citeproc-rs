@@ -11,11 +11,13 @@ use pandoc_types::definition::{Attr, Inline};
 #[derive(Debug)]
 pub struct Pandoc {}
 
-impl Pandoc {
-    pub fn new() -> Self {
+impl Default for Pandoc {
+    fn default() -> Self {
         Pandoc {}
     }
+}
 
+impl Pandoc {
     /// Wrap some nodes with formatting
     ///
     /// In pandoc, Emph, Strong and SmallCaps, Superscript and Subscript are all single-use styling

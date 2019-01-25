@@ -171,8 +171,7 @@ fn main() {
 
     if let Some(csl_path) = matches.value_of("csl") {
         let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
-        let formatter = Pandoc::new();
-        let driver_r = Driver::new(&text, &formatter, db);
+        let driver_r: Result<Driver<Pandoc>, _> = Driver::new(&text, db);
         if let Ok(driver) = driver_r {
             // driver.dump_macro("issued-year");
             // driver.dump_ir(&refr);

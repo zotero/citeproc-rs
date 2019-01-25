@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use crate::db_impl::RootDatabase;
 
-pub struct Driver<'a, O>
+pub struct Driver<O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
     db: RootDatabase,
-    formatter: &'a O,
+    o: std::marker::PhantomData<O>,
 }
 
 // need a Clone impl for map_with
@@ -34,27 +34,27 @@ impl Clone for Snap {
     }
 }
 
-impl<'a, O> Driver<'a, O>
+impl<O> Driver<O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    pub fn new(
-        style_string: &str,
-        formatter: &'a O,
-        mut db: RootDatabase,
-    ) -> Result<Self, StyleError> {
+    pub fn new(style_string: &str, mut db: RootDatabase) -> Result<Self, StyleError> {
         let doc = Document::parse(&style_string)?;
         let style = Arc::new(Style::from_node(&doc.root_element())?);
         db.query_mut(StyleQuery).set((), style);
-        Ok(Driver { formatter, db })
+        Ok(Driver {
+            db,
+            o: Default::default(),
+        })
     }
 
     pub fn single(&self, refr: &Reference) -> String {
+        let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
+            cite: &Cite::basic("ok".into(), &fmt.plain("")),
             position: Position::First,
-            format: self.formatter,
+            format: &fmt,
             citation_number: 1,
         };
         let mut state = IrState::new();
@@ -76,17 +76,18 @@ where
         }
         // dbg!(state);
         // dbg!(matching_ids);
-        let flat = i.flatten(self.formatter);
-        let o = self.formatter.output(flat);
+        let flat = i.flatten(&fmt);
+        let o = fmt.output(flat);
         serde_json::to_string(&o).unwrap()
     }
 
     pub fn pair(&self, cite: &Cite<O>, refr: &Reference) {
+        let fmt = O::default();
         let ctx = CiteContext {
             cite,
             reference: refr,
             position: Position::First,
-            format: self.formatter,
+            format: &fmt,
             citation_number: 1,
         };
         let mut state = IrState::new();
@@ -99,16 +100,16 @@ where
             use rayon::prelude::*;
             use salsa::ParallelDatabase;
             let snap = Snap(self.db.snapshot());
-            let formatter = Arc::new(&self.formatter);
             pairs
                 .par_iter()
                 .map_with(snap, |snap, pair| {
+                    let fmt = O::default();
                     let db = &*snap.0;
                     let ctx = CiteContext {
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
-                        format: *formatter,
+                        format: &fmt,
                         citation_number: 1,
                     };
                     let mut state = IrState::new();
@@ -127,11 +128,12 @@ where
             pairs
                 .iter()
                 .map(|pair| {
+                    let fmt = O::default();
                     let ctx = CiteContext {
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
-                        format: self.formatter,
+                        format: &fmt,
                         citation_number: 1,
                     };
                     let mut state = IrState::new();
@@ -156,11 +158,12 @@ where
     }
 
     pub fn dump_ir(&self, refr: &Reference) {
+        let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic("ok".into(), &self.formatter.plain("")),
+            cite: &Cite::basic("ok".into(), &fmt.plain("")),
             position: Position::First,
-            format: self.formatter,
+            format: &fmt,
             citation_number: 1,
         };
         let mut state = IrState::new();
