@@ -10,7 +10,7 @@ pub trait HasFetcher {
 }
 
 /// Salsa interface to locales, including merging.
-#[salsa::query_group]
+#[salsa::query_group(LocaleDatabaseStorage)]
 pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
     /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;

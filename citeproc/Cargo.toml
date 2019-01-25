@@ -41,7 +41,7 @@ semver = "0.9.0"
 lazy_static = "1.2.0"
 ucd-trie = "0.1.1"
 directories = { version = "1.0.2", optional = true }
-salsa = "0.10.0-alpha1"
+salsa = "0.10.0-alpha4"
 string_cache = "0.7.3"
 jemallocator = { version = "0.1.9", optional = true }
 

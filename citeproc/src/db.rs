@@ -9,7 +9,7 @@ use crate::proc::{AddDisambTokens, DisambToken};
 use crate::Atom;
 // use crate::output::Pandoc;
 
-#[salsa::query_group]
+#[salsa::query_group(ReferenceDatabaseStorage)]
 pub trait ReferenceDatabase: salsa::Database + LocaleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;

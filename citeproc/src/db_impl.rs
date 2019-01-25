@@ -10,6 +10,7 @@ use crate::locale::{db::*, LocaleFetcher};
 use crate::style::db::*;
 use crate::Atom;
 
+#[salsa::database(StyleDatabaseStorage, LocaleDatabaseStorage, ReferenceDatabaseStorage)]
 pub struct RootDatabase {
     runtime: salsa::Runtime<Self>,
     fetcher: Arc<LocaleFetcher>,
@@ -30,30 +31,6 @@ impl RootDatabase {
 impl salsa::Database for RootDatabase {
     fn salsa_runtime(&self) -> &salsa::Runtime<RootDatabase> {
         &self.runtime
-    }
-}
-
-salsa::database_storage! {
-    pub struct DatabaseImplStorage for RootDatabase {
-        impl ReferenceDatabase {
-            fn reference_input() for ReferenceInputQuery;
-            fn citekeys() for CitekeysQuery;
-            fn uncited() for UncitedQuery;
-            fn reference() for ReferenceQuery;
-            fn disamb_tokens() for DisambTokensQuery;
-            fn inverted_index() for InvertedIndexQuery;
-        }
-        impl StyleDatabase {
-            fn style() for StyleQuery;
-            fn name_citation() for NameCitationQuery;
-        }
-        impl LocaleDatabase {
-            fn locale_xml() for LocaleXmlQuery;
-            fn inline_locale() for InlineLocaleQuery;
-            fn locale() for LocaleQuery;
-            fn merged_locale() for MergedLocaleQuery;
-            fn locale_options() for LocaleOptionsQuery;
-        }
     }
 }
 

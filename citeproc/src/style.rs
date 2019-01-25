@@ -1319,7 +1319,7 @@ pub(crate) mod db {
     use super::{Name, Style};
 
     /// Salsa interface to a CSL style.
-    #[salsa::query_group]
+    #[salsa::query_group(StyleDatabaseStorage)]
     pub trait StyleDatabase: salsa::Database {
         #[salsa::input]
         fn style(&self, key: ()) -> Arc<Style>;
