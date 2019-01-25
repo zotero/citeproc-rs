@@ -1,4 +1,5 @@
 use crate::db::ReferenceDatabase;
+use crate::input::CiteContext;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
@@ -6,14 +7,12 @@ use crate::style::variables::*;
 use std::collections::HashSet;
 
 mod choose;
-mod cite_context;
 mod date;
 mod disamb;
 mod group;
 mod helpers;
 mod ir;
 mod names;
-pub use self::cite_context::*;
 pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
@@ -115,11 +114,7 @@ where
                     Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
                         (
-                            IR::Rendered(Some(fmt.affixed_text(
-                                value.to_string(),
-                                f,
-                                &af,
-                            ))),
+                            IR::Rendered(Some(fmt.affixed_text(value.to_string(), f, &af))),
                             GroupVars::new(),
                         )
                     }

@@ -1,12 +1,11 @@
 use itertools::Itertools;
 use std::borrow::Cow;
 
-use super::cite_context::*;
 use super::group::GroupVars;
 use super::ir::*;
 use super::{IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::{Name, PersonName};
+use crate::input::{CiteContext, Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameForm, Names, Position,
@@ -234,11 +233,9 @@ impl NameEl {
                 _ => acc,
             });
             // This isn't sort-mode, you can render NameForm::Count as text.
-            return ctx.format.affixed_text(
-                format!("{}", count),
-                self.formatting,
-                &self.affixes,
-            );
+            return ctx
+                .format
+                .affixed_text(format!("{}", count), self.formatting, &self.affixes);
         }
 
         let st = name_tokens
@@ -327,8 +324,7 @@ impl NameEl {
             // TODO: and, et-al, et cetera
             .join("");
 
-        ctx.format
-            .affixed_text(st, self.formatting, &self.affixes)
+        ctx.format.affixed_text(st, self.formatting, &self.affixes)
     }
 }
 
@@ -502,11 +498,12 @@ where
         if rendered.is_empty() {
             return (IR::Rendered(None), GroupVars::new());
         }
-        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("".into());
-        let content = Some(fmt.affixed(
-            fmt.group(rendered, delim, self.formatting),
-            &self.affixes,
-        ));
+        let delim = self
+            .delimiter
+            .as_ref()
+            .map(|d| d.0.as_ref())
+            .unwrap_or("".into());
+        let content = Some(fmt.affixed(fmt.group(rendered, delim, self.formatting), &self.affixes));
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)
     }

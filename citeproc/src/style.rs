@@ -114,7 +114,6 @@ impl FromNode for Formatting {
             font_weight: attribute_optional(node, "font-weight")?,
             text_decoration: attribute_optional(node, "text-decoration")?,
             vertical_alignment: attribute_optional(node, "vertical-alignment")?,
-
             // TODO: carry options from root
             // hyperlink: String::from(""),
         })

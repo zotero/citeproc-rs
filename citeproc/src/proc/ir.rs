@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use crate::Atom;
 use super::group::GroupVars;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, BodyDate, Choose, Formatting, Names as NamesEl};
+use crate::Atom;
+use std::sync::Arc;
 
 // /// Just exists to make it easier to add other tree-folded summary data.
 // /// Even if it's only `GroupVars` for now.

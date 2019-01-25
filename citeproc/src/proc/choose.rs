@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use super::cite_context::*;
 use super::helpers::sequence;
 use super::ir::*;
 use super::{IrState, Proc};
 use crate::db::ReferenceDatabase;
+use crate::input::CiteContext;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
+use std::sync::Arc;
 
 impl<'c, O> Proc<'c, O> for Arc<Choose>
 where
@@ -75,7 +75,7 @@ fn eval_ifthen<'c, O>(
     db: &impl ReferenceDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
-) -> BranchEval< O>
+) -> BranchEval<O>
 where
     O: OutputFormat,
 {

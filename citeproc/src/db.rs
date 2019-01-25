@@ -2,7 +2,7 @@ use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::{Reference};
+use crate::input::Reference;
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::proc::{AddDisambTokens, DisambToken};

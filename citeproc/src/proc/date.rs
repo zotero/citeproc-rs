@@ -1,10 +1,9 @@
-use super::cite_context::*;
 use super::disamb::{AddDisambTokens, DisambToken};
 use super::group::GroupVars;
 use super::ir::*;
 use super::{IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::{Date, DateOrRange};
+use crate::input::{CiteContext, Date, DateOrRange};
 use crate::output::OutputFormat;
 use crate::style::element::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
@@ -95,10 +94,7 @@ where
                 .map(|dp| dp.render(db, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
-            fmt.affixed(
-                fmt.group(each, delim, self.formatting),
-                &self.affixes,
-            )
+            fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)
@@ -109,15 +105,18 @@ type DatePartAcc = (bool, bool, bool);
 
 fn dp_fold(mut a: DatePartAcc, form: DatePartForm) -> DatePartAcc {
     match form {
-        DatePartForm::Year(..) => {a.0 = true}
-        DatePartForm::Month(..) => {a.1 = true}
-        DatePartForm::Day(..) => {a.2 = true}
+        DatePartForm::Year(..) => a.0 = true,
+        DatePartForm::Month(..) => a.1 = true,
+        DatePartForm::Day(..) => a.2 = true,
     }
     a
 }
 
 fn mask(d: Date, date_parts: &[DatePart]) -> Date {
-    let a = date_parts.iter().map(|dp| dp.form).fold((false, false, false), dp_fold);
+    let a = date_parts
+        .iter()
+        .map(|dp| dp.form)
+        .fold((false, false, false), dp_fold);
     Date {
         year: if a.0 { d.year } else { 0 },
         month: if a.1 { d.month } else { 0 },
@@ -170,10 +169,7 @@ where
                     .map(|dp| dp.render(db, state, ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
-                fmt.affixed(
-                    fmt.group(each, delim, self.formatting),
-                    &self.affixes,
-                )
+                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
             });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)

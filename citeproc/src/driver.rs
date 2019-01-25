@@ -1,7 +1,7 @@
 use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
-use crate::proc::{CiteContext, IrState, Proc};
+use crate::proc::{IrState, Proc};
 use crate::style::db::StyleQuery;
 use crate::style::element::Position;
 use crate::style::element::Style;
@@ -23,7 +23,6 @@ where
     formatter: &'a O,
     db: RootDatabase,
 }
-
 
 // need a Clone impl for map_with
 // thanks to rust-analyzer for the tip
