@@ -1,5 +1,7 @@
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
+use std::sync::Arc;
+
 pub(crate) mod attr;
 pub mod element;
 pub mod error;
@@ -114,7 +116,7 @@ impl FromNode for Formatting {
             vertical_alignment: attribute_optional(node, "vertical-alignment")?,
 
             // TODO: carry options from root
-            hyperlink: String::from(""),
+            // hyperlink: String::from(""),
         })
     }
 }
@@ -604,7 +606,7 @@ fn choose_el(node: &Node) -> Result<Element, CslError> {
 
     let _if = if_block.ok_or_else(|| InvalidCsl::new(node, "<choose> blocks must have an <if>"))?;
 
-    Ok(Element::Choose(Choose(_if, elseifs, else_block)))
+    Ok(Element::Choose(Arc::new(Choose(_if, elseifs, else_block))))
 }
 
 fn max1_child<T: FromNode>(
@@ -760,9 +762,9 @@ impl FromNode for Element {
             "label" => Ok(label_el(node)?),
             "group" => Ok(Element::Group(Group::from_node(node)?)),
             "number" => Ok(number_el(node)?),
-            "names" => Ok(Element::Names(Names::from_node(node)?)),
+            "names" => Ok(Element::Names(Arc::new(Names::from_node(node)?))),
             "choose" => Ok(choose_el(node)?),
-            "date" => Ok(Element::Date(BodyDate::from_node(node)?)),
+            "date" => Ok(Element::Date(Arc::new(BodyDate::from_node(node)?))),
             _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
         }
     }

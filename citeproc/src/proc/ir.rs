@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use crate::Atom;
 use super::group::GroupVars;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, BodyDate, Choose, Formatting, Names as NamesEl};
@@ -7,36 +9,36 @@ use crate::style::element::{Affixes, BodyDate, Choose, Formatting, Names as Name
 // #[derive(Debug)]
 // pub struct Summary(GroupVars);
 
-pub type IrSum<'c, O> = (IR<'c, O>, GroupVars);
+pub type IrSum<O> = (IR<O>, GroupVars);
 
 #[derive(Debug)]
-pub enum YearSuffixHook<'c> {
-    Date(&'c BodyDate),
+pub enum YearSuffixHook {
+    Date(Arc<BodyDate>),
     Explicit(),
 }
 
 #[derive(Debug)]
-pub struct IrSeq<'c, O: OutputFormat> {
-    pub contents: Vec<IR<'c, O>>,
-    pub formatting: Option<&'c Formatting>,
+pub struct IrSeq<O: OutputFormat> {
+    pub contents: Vec<IR<O>>,
+    pub formatting: Option<Formatting>,
     pub affixes: Affixes,
-    pub delimiter: &'c str,
+    pub delimiter: Atom,
 }
 
 // Intermediate Representation
 #[derive(Debug)]
-pub enum IR<'c, O: OutputFormat> {
+pub enum IR<O: OutputFormat> {
     // no (further) disambiguation possible
     Rendered(Option<O::Build>),
     // the name block,
     // the current render
-    Names(&'c NamesEl, O::Build),
+    Names(Arc<NamesEl>, O::Build),
 
     // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     // or <choose><if><conditions><condition>
     // Should also include `if variable="year-suffix"` because that could change.
-    ConditionalDisamb(&'c Choose, Box<IR<'c, O>>),
-    YearSuffix(YearSuffixHook<'c>, O::Build),
+    ConditionalDisamb(Arc<Choose>, Box<IR<O>>),
+    YearSuffix(YearSuffixHook, O::Build),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -51,14 +53,14 @@ pub enum IR<'c, O: OutputFormat> {
     //     Rendered(..)
     // ]
     // // TODO: store delimiter and affixes for later
-    Seq(IrSeq<'c, O>),
+    Seq(IrSeq<O>),
 }
 
-impl<'c, O: OutputFormat> IR<'c, O> {
+impl<O: OutputFormat> IR<O> {
     pub fn flatten(&self, fmt: &O) -> O::Build {
-        let flatten_seq = |seq: &IrSeq<'c, O>| {
+        let flatten_seq = |seq: &IrSeq<O>| {
             let xs: Vec<_> = seq.contents.iter().map(|i| i.flatten(fmt)).collect();
-            let grp = fmt.group(xs, seq.delimiter, seq.formatting);
+            let grp = fmt.group(xs, &seq.delimiter, seq.formatting);
             fmt.affixed(grp, &seq.affixes)
         };
         // must clone

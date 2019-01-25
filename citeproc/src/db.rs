@@ -2,10 +2,12 @@ use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::Reference;
+use crate::input::{Reference};
+// use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::proc::{AddDisambTokens, DisambToken};
 use crate::Atom;
+// use crate::output::Pandoc;
 
 #[salsa::query_group]
 pub trait ReferenceDatabase: salsa::Database + LocaleDatabase {
@@ -23,6 +25,12 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase {
     fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
 
     fn inverted_index(&self, key: ()) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
+
+    // TODO: add support for other formats
+    // fn clusters(&self, key: ()) -> Arc<Vec<Cluster<Pandoc>>>;
+
+    // TODO: add support for other formats
+    // fn cites(&self, key: ()) -> Arc<Vec<Cite<Pandoc>>>;
 }
 
 fn reference(db: &impl ReferenceDatabase, key: Atom) -> Option<Arc<Reference>> {

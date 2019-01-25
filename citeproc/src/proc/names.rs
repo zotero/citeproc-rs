@@ -226,7 +226,7 @@ impl NameEl {
     ) -> O::Build {
         let mut seen_one = false;
         let name_tokens = self.name_tokens(ctx.position, names_slice);
-        let locale = db.merged_locale(ctx.style.default_locale.clone());
+        let locale = db.merged_locale(db.style(()).default_locale.clone());
 
         if self.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -236,7 +236,7 @@ impl NameEl {
             // This isn't sort-mode, you can render NameForm::Count as text.
             return ctx.format.affixed_text(
                 format!("{}", count),
-                self.formatting.as_ref(),
+                self.formatting,
                 &self.affixes,
             );
         }
@@ -249,7 +249,7 @@ impl NameEl {
                         pn.is_latin_cyrillic(),
                         self.form == Some(NameForm::Long),
                         self.naso(seen_one),
-                        ctx.style.demote_non_dropping_particle,
+                        db.style(()).demote_non_dropping_particle,
                     );
                     seen_one = true;
                     let mut build = String::new();
@@ -266,7 +266,7 @@ impl NameEl {
                                             .as_ref()
                                             .map(|s| s.as_ref())
                                             .unwrap_or(""),
-                                        ctx.style.initialize_with_hyphen,
+                                        db.style(()).initialize_with_hyphen,
                                     ))
                                 }
                             }
@@ -328,7 +328,7 @@ impl NameEl {
             .join("");
 
         ctx.format
-            .affixed_text(st, self.formatting.as_ref(), &self.affixes)
+            .affixed_text(st, self.formatting, &self.affixes)
     }
 }
 
@@ -478,12 +478,12 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -502,9 +502,9 @@ where
         if rendered.is_empty() {
             return (IR::Rendered(None), GroupVars::new());
         }
-        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
+        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("".into());
         let content = Some(fmt.affixed(
-            fmt.group(rendered, delim, self.formatting.as_ref()),
+            fmt.group(rendered, delim, self.formatting),
             &self.affixes,
         ));
         let gv = GroupVars::rendered_if(content.is_some());

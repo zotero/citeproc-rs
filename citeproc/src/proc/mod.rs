@@ -54,24 +54,24 @@ where
 {
     /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
     /// often borrow from self to be recomputed during disambiguation.
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>;
+    ) -> IrSum<O>;
 }
 
 impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O> {
+    ) -> IrSum<O> {
         let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence(
@@ -79,7 +79,7 @@ where
             state,
             ctx,
             &layout.elements,
-            "",
+            "".into(),
             None,
             Affixes::default(),
         )
@@ -90,34 +90,34 @@ impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O> {
+    ) -> IrSum<O> {
         let fmt = ctx.format;
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
-            Element::Text(ref source, ref f, ref af, _quo, _sp, _tc, _disp) => {
+            Element::Text(ref source, f, ref af, _quo, _sp, _tc, _disp) => {
                 use crate::style::element::TextSource::*;
                 match *source {
                     Macro(ref name) => {
                         // TODO: be able to return errors
-                        let macro_unsafe = ctx
-                            .style
+                        let style = db.style(());
+                        let macro_unsafe = style
                             .macros
                             .get(name)
                             .expect("macro errors not implemented!");
-                        sequence(db, state, ctx, &macro_unsafe, "", f.as_ref(), af.clone())
+                        sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone())
                     }
                     Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
                         (
                             IR::Rendered(Some(fmt.affixed_text(
                                 value.to_string(),
-                                f.as_ref(),
+                                f,
                                 &af,
                             ))),
                             GroupVars::new(),
@@ -135,7 +135,7 @@ where
                                     } else {
                                         val.clone()
                                     };
-                                    fmt.affixed_text(s, f.as_ref(), &af)
+                                    fmt.affixed_text(s, f, &af)
                                 })
                             }
                             StandardVariable::Number(ref v) => {
@@ -144,7 +144,7 @@ where
                                     state.tokens.insert(DisambToken::Num(val.clone()));
                                     fmt.affixed_text(
                                         val.verbatim(v.should_replace_hyphens()),
-                                        f.as_ref(),
+                                        f,
                                         &af,
                                     )
                                 })
@@ -154,16 +154,16 @@ where
                         (IR::Rendered(content), gv)
                     }
                     Term(term_selector, plural) => {
-                        let locale = db.merged_locale(ctx.style.default_locale.clone());
+                        let locale = db.merged_locale(db.style(()).default_locale.clone());
                         let content = locale
                             .get_text_term(term_selector, plural)
-                            .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af));
+                            .map(|val| fmt.affixed_text(val.to_owned(), f, &af));
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }
             }
 
-            Element::Label(var, form, ref f, ref af, _tc, _sp, pl) => {
+            Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 use crate::style::element::Plural;
                 let selector =
                     GenderedTermSelector::from_number_variable(&ctx.cite.locator_type, var, form);
@@ -176,18 +176,18 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        let locale = db.merged_locale(ctx.style.default_locale.clone());
+                        let locale = db.merged_locale(db.style(()).default_locale.clone());
                         locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
-                            .map(|val| fmt.affixed_text(val.to_owned(), f.as_ref(), &af))
+                            .map(|val| fmt.affixed_text(val.to_owned(), f, &af))
                     })
                 });
                 (IR::Rendered(content), GroupVars::new())
             }
 
-            Element::Number(var, _form, ref f, ref af, ref _tc, _disp) => {
+            Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
                 let content = ctx.get_number(&var).map(|val| {
-                    fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f.as_ref(), &af)
+                    fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
                 });
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
@@ -204,8 +204,8 @@ where
                     state,
                     ctx,
                     g.elements.as_ref(),
-                    &g.delimiter.0,
-                    g.formatting.as_ref(),
+                    g.delimiter.0.clone(),
+                    g.formatting,
                     g.affixes.clone(),
                 );
                 if group_vars.should_render_tree() {

@@ -92,7 +92,7 @@ impl OutputFormat<MarkdownNode, String> for Markdown {
         MarkdownNode::Text(s.to_owned(), MarkdownFormatting::None)
     }
 
-    fn text_node(&self, s: String, formatting: &Formatting) -> MarkdownNode {
+    fn text_node(&self, s: String, formatting: Formatting) -> MarkdownNode {
         MarkdownNode::Text(s, formatting.into())
     }
 
@@ -100,7 +100,7 @@ impl OutputFormat<MarkdownNode, String> for Markdown {
         &self,
         nodes: &[MarkdownNode],
         delimiter: &str,
-        formatting: &Formatting,
+        formatting: Formatting,
     ) -> MarkdownNode {
         let delim = self.plain(delimiter);
         MarkdownNode::Group(nodes.iter().intercalate_exact(&delim), formatting.into())

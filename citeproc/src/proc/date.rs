@@ -47,12 +47,12 @@ impl<'c, O> Proc<'c, O> for BodyDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -68,17 +68,17 @@ impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         let fmt = ctx.format;
-        let locale = db.merged_locale(ctx.style.default_locale.clone());
+        let locale = db.merged_locale(db.style(()).default_locale.clone());
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
@@ -96,7 +96,7 @@ where
                 .collect();
             let delim = &locale_date.delimiter.0;
             fmt.affixed(
-                fmt.group(each, delim, self.formatting.as_ref()),
+                fmt.group(each, delim, self.formatting),
                 &self.affixes,
             )
         });
@@ -144,12 +144,12 @@ impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -171,7 +171,7 @@ where
                     .collect();
                 let delim = &self.delimiter.0;
                 fmt.affixed(
-                    fmt.group(each, delim, self.formatting.as_ref()),
+                    fmt.group(each, delim, self.formatting),
                     &self.affixes,
                 )
             });
@@ -195,7 +195,7 @@ impl DatePart {
         ctx: &CiteContext<'c, O>,
         date: &Date,
     ) -> O::Build {
-        let locale = db.merged_locale(ctx.style.default_locale.clone());
+        let locale = db.merged_locale(db.style(()).default_locale.clone());
         let string = match self.form {
             DatePartForm::Year(form) => match form {
                 YearForm::Long => format!("{}", date.year),
@@ -238,6 +238,6 @@ impl DatePart {
             },
         };
         ctx.format
-            .affixed_text(string, self.formatting.as_ref(), &self.affixes)
+            .affixed_text(string, self.formatting, &self.affixes)
     }
 }

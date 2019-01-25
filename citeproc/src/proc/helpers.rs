@@ -1,3 +1,4 @@
+use crate::Atom;
 use super::cite_context::*;
 use super::group::GroupVars;
 use super::ir::IR::*;
@@ -6,21 +7,21 @@ use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
 
-pub fn sequence<'c, 's: 'c, O>(
+pub fn sequence<'c, O>(
     db: &impl ReferenceDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
-    els: &'s [Element],
-    delimiter: &'c str,
-    formatting: Option<&'c Formatting>,
+    els: &[Element],
+    delimiter: Atom,
+    formatting: Option<Formatting>,
     affixes: Affixes,
-) -> IrSum<'c, O>
+) -> IrSum<O>
 where
     O: OutputFormat,
 {
     let fmt = &ctx.format;
 
-    let fold_seq = |(va, gva): (&mut Vec<IR<'c, O>>, GroupVars), (other, gvb): IrSum<'c, O>| {
+    let fold_seq = |(va, gva): (&mut Vec<IR<O>>, GroupVars), (other, gvb): IrSum<O>| {
         match other {
             // this seq is another group with its own delimiter (possibly)
             b @ Seq(_) => {
@@ -36,7 +37,7 @@ where
                     if let Rendered(None) = last {
                         va.push(Rendered(Some(bb)))
                     } else if let Rendered(Some(aa)) = last {
-                        va.push(Rendered(Some(fmt.join_delim(aa, delimiter, bb))))
+                        va.push(Rendered(Some(fmt.join_delim(aa, &delimiter, bb))))
                     } else {
                         va.push(last);
                         va.push(Rendered(Some(bb)));
@@ -66,13 +67,13 @@ where
     //
     // <group><names>...</names></group> matches `(Rendered(None), b) => b` == Names(...)
 
-    let folder = |left: IrSum<'c, O>, right: IrSum<'c, O>| {
+    let folder = |left: IrSum<O>, right: IrSum<O>| {
         match (left, right) {
             ((a, gva), (Rendered(None), gvb)) => (a, gva.neighbour(gvb)),
             ((Rendered(None), gva), (b, gvb)) => (b, gva.neighbour(gvb)),
             // aa,bb
             ((Rendered(Some(aa)), gva), (Rendered(Some(bb)), gvb)) => (
-                Rendered(Some(fmt.join_delim(aa, delimiter, bb))),
+                Rendered(Some(fmt.join_delim(aa, &delimiter, bb))),
                 gva.neighbour(gvb),
             ),
             ((Seq(mut s), gva), b) => {
@@ -84,7 +85,7 @@ where
                     contents: vec![a, b],
                     formatting,
                     affixes: affixes.clone(),
-                    delimiter,
+                    delimiter: delimiter.clone(),
                 }),
                 gva.neighbour(gvb),
             ),

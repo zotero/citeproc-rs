@@ -7,6 +7,7 @@ use crate::style::version::CslVersionReq;
 use crate::Atom;
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 type TermPlural = bool;
 type StripPeriods = bool;
@@ -22,8 +23,6 @@ pub enum TextSource {
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
-    /// <cs:choose>
-    Choose(Choose),
     /// <cs:text>
     Text(
         TextSource,
@@ -53,12 +52,16 @@ pub enum Element {
         TextCase,
         Option<DisplayMode>,
     ),
-    /// <cs:names>
-    Names(Names),
     /// <cs:group>
     Group(Group),
+    /// <cs:choose>
+    /// Arc because the IR needs a reference to one, cloning deep trees is costly, and IR has
+    /// to be in a Salsa db that doesn't really support lifetimes.
+    Choose(Arc<Choose>),
+    /// <cs:names>
+    Names(Arc<Names>),
     /// <cs:date>
-    Date(BodyDate),
+    Date(Arc<BodyDate>),
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -122,14 +125,15 @@ impl Default for Affixes {
     }
 }
 
-#[derive(Eq, Clone, PartialEq)]
+#[derive(Eq, Copy, Clone, PartialEq)]
 pub struct Formatting {
     pub font_style: FontStyle,
     pub font_variant: FontVariant,
     pub font_weight: FontWeight,
     pub vertical_alignment: VerticalAlignment,
     pub text_decoration: TextDecoration,
-    pub hyperlink: String,
+    // TODO: put this somewhere else, like directly on text nodes?
+    // pub hyperlink: String,
 }
 
 impl Formatting {
@@ -153,7 +157,6 @@ impl Default for Formatting {
             font_weight: FontWeight::default(),
             text_decoration: TextDecoration::default(),
             vertical_alignment: VerticalAlignment::default(),
-            hyperlink: "".to_owned(),
         }
     }
 }
@@ -190,9 +193,6 @@ impl fmt::Debug for Formatting {
         if self.vertical_alignment != default.vertical_alignment {
             write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment)?;
         }
-        if self.hyperlink != default.hyperlink {
-            write!(f, "hyperlink: {:?}, ", self.hyperlink)?;
-        }
         write!(f, "}}")
     }
 }
@@ -224,7 +224,7 @@ impl Default for TextCase {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontStyle {
     Normal,
@@ -238,7 +238,7 @@ impl Default for FontStyle {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontVariant {
     Normal,
@@ -251,7 +251,7 @@ impl Default for FontVariant {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontWeight {
     Normal,
@@ -265,7 +265,7 @@ impl Default for FontWeight {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TextDecoration {
     None,
@@ -278,7 +278,7 @@ impl Default for TextDecoration {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VerticalAlignment {
     #[strum(serialize = "baseline")]
     Baseline,

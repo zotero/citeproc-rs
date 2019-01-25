@@ -17,7 +17,7 @@ impl OutputFormat for PlainText {
         s.to_owned()
     }
 
-    fn text_node(&self, s: String, _: Option<&Formatting>) -> Self::Build {
+    fn text_node(&self, s: String, _: Option<Formatting>) -> Self::Build {
         s
     }
 
@@ -38,7 +38,7 @@ impl OutputFormat for PlainText {
         }
     }
 
-    fn with_format(&self, a: Self::Build, _f: Option<&Formatting>) -> Self::Build {
+    fn with_format(&self, a: Self::Build, _f: Option<Formatting>) -> Self::Build {
         a
     }
 
@@ -46,7 +46,7 @@ impl OutputFormat for PlainText {
         &self,
         nodes: Vec<Self::Build>,
         delimiter: &str,
-        _f: Option<&Formatting>,
+        _f: Option<Formatting>,
     ) -> Self::Build {
         nodes.join(delimiter)
     }

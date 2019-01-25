@@ -26,15 +26,15 @@ pub trait OutputFormat: Send + Sync + std::fmt::Debug {
     ///
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
 
-    // TODO: make formatting an Option<&Formatting>
-    fn text_node(&self, s: String, formatting: Option<&Formatting>) -> Self::Build;
+    // TODO: make formatting an Option<Formatting>
+    fn text_node(&self, s: String, formatting: Option<Formatting>) -> Self::Build;
 
     /// Group some text nodes. You might want to optimise for the case where delimiter is empty.
     fn group(
         &self,
         nodes: Vec<Self::Build>,
         delimiter: &str,
-        formatting: Option<&Formatting>,
+        formatting: Option<Formatting>,
     ) -> Self::Build;
 
     fn seq(&self, nodes: impl Iterator<Item = Self::Build>) -> Self::Build;
@@ -48,7 +48,7 @@ pub trait OutputFormat: Send + Sync + std::fmt::Debug {
     fn affixed_text(
         &self,
         s: String,
-        format_inner: Option<&Formatting>,
+        format_inner: Option<Formatting>,
         affixes: &Affixes,
     ) -> Self::Build {
         self.affixed(self.text_node(s, format_inner), affixes)
@@ -73,5 +73,5 @@ pub trait OutputFormat: Send + Sync + std::fmt::Debug {
         }
     }
 
-    fn with_format(&self, a: Self::Build, f: Option<&Formatting>) -> Self::Build;
+    fn with_format(&self, a: Self::Build, f: Option<Formatting>) -> Self::Build;
 }

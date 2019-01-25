@@ -14,11 +14,19 @@ use crate::style::variables::*;
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat> {
+    // *could* get this from db if every element was an Arc for IR to hold it
+    // OR you reused the lifetime from &impl Databse
     pub style: &'c Style,
+    // can get this from db
     pub reference: &'c Reference,
-    pub cite: &'c Cite<O>,
+    // could pull one out of thin air! all the useful formatters are ZSTs.
     pub format: &'c O,
+    // 
+
+    pub cite: &'c Cite<O>,
+    // could store in the DB
     pub position: Position,
+    // 
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
 }

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use super::cite_context::*;
 use super::helpers::sequence;
 use super::ir::*;
@@ -6,21 +7,21 @@ use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 
-impl<'c, O> Proc<'c, O> for Choose
+impl<'c, O> Proc<'c, O> for Arc<Choose>
 where
     O: OutputFormat,
 {
-    fn intermediate<'s: 'c>(
-        &'s self,
+    fn intermediate(
+        &self,
         db: &impl ReferenceDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<'c, O>
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         // XXX: should you treat conditional evaluations as a "variable test"?
-        let Choose(ref head, ref rest, ref last) = *self;
+        let Choose(ref head, ref rest, ref last) = **self;
         let mut disamb = false;
         let mut found;
         {
@@ -33,7 +34,7 @@ where
         }
         if let Some((content, gv)) = found {
             return if disamb {
-                (IR::ConditionalDisamb(self, Box::new(content)), gv)
+                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
                 (content, gv)
             };
@@ -52,21 +53,21 @@ where
         }
         if let Some((content, gv)) = found {
             return if disamb {
-                (IR::ConditionalDisamb(self, Box::new(content)), gv)
+                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
                 (content, gv)
             };
         } else {
             let Else(ref els) = last;
-            sequence(db, state, ctx, &els, "", None, Affixes::default())
+            sequence(db, state, ctx, &els, "".into(), None, Affixes::default())
         }
     }
 }
 
-struct BranchEval<'a, O: OutputFormat> {
+struct BranchEval<O: OutputFormat> {
     // the bools indicate if disambiguate was set
     disambiguate: bool,
-    content: Option<IrSum<'a, O>>,
+    content: Option<IrSum<O>>,
 }
 
 fn eval_ifthen<'c, O>(
@@ -74,7 +75,7 @@ fn eval_ifthen<'c, O>(
     db: &impl ReferenceDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
-) -> BranchEval<'c, O>
+) -> BranchEval< O>
 where
     O: OutputFormat,
 {
@@ -87,7 +88,7 @@ where
             state,
             ctx,
             &elements,
-            "",
+            "".into(),
             None,
             Affixes::default(),
         )),
