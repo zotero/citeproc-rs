@@ -11,13 +11,13 @@ use std::sync::Arc;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum YearSuffixHook {
     Date(Arc<BodyDate>),
     Explicit(),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct IrSeq<O: OutputFormat> {
     pub contents: Vec<IR<O>>,
     pub formatting: Option<Formatting>,
@@ -26,7 +26,7 @@ pub struct IrSeq<O: OutputFormat> {
 }
 
 // Intermediate Representation
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum IR<O: OutputFormat> {
     // no (further) disambiguation possible
     Rendered(Option<O::Build>),

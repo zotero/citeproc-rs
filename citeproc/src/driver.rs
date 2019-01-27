@@ -41,18 +41,39 @@ where
     pub fn new(style_string: &str, mut db: RootDatabase) -> Result<Self, StyleError> {
         let doc = Document::parse(&style_string)?;
         let style = Arc::new(Style::from_node(&doc.root_element())?);
-        db.query_mut(StyleQuery).set((), style);
+        db.set_style((), style);
+
+        db.init_clusters(&[
+            Cluster {
+                id: 0,
+                cites: vec![Cite::basic(0, "quagmire2018".into())],
+            },
+            Cluster {
+                id: 1,
+                cites: vec![Cite::basic(1, "quagmire2018".into())],
+            },
+        ]);
+
+        dbg!(db.cite_positions(()));
+        dbg!(db.ir(1));
+
         Ok(Driver {
             db,
             o: Default::default(),
         })
     }
 
+    #[cfg(feature = "rayon")]
+    fn snap(&self) -> Snap {
+        use salsa::ParallelDatabase;
+        Snap(self.db.snapshot())
+    }
+
     pub fn single(&self, refr: &Reference) -> String {
         let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic("ok".into(), &fmt.plain("")),
+            cite: &Cite::basic(0, "ok".into()),
             position: Position::First,
             format: &fmt,
             citation_number: 1,
@@ -98,11 +119,9 @@ where
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
-            use salsa::ParallelDatabase;
-            let snap = Snap(self.db.snapshot());
             pairs
                 .par_iter()
-                .map_with(snap, |snap, pair| {
+                .map_with(self.snap(), |snap, pair| {
                     let fmt = O::default();
                     let db = &*snap.0;
                     let ctx = CiteContext {
@@ -161,7 +180,7 @@ where
         let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic("ok".into(), &fmt.plain("")),
+            cite: &Cite::basic(0, "ok".into()),
             position: Position::First,
             format: &fmt,
             citation_number: 1,

@@ -17,9 +17,9 @@ pub struct Output<T> {
     pub citation_ids: Vec<String>,
 }
 
-pub trait OutputFormat: Send + Sync + Default + std::fmt::Debug {
-    type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync;
-    type Output: Serialize + Clone + Send + Sync;
+pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
+    type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync + Eq;
+    type Output: Serialize + Clone + Send + Sync + Eq;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
     /// nodes themselves, with no formatting except whatever is applied by a parent group.

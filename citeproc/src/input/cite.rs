@@ -6,50 +6,68 @@ use crate::style::variables::*;
 
 use crate::Atom;
 
+pub type CiteId = u64;
+pub type ClusterId = u64;
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Suppression {
+    // For author-in-text, or whatever the style author wants to put inline.
+    //
+    // E.g. the author, or party names for a case.
+    InText,
+    // For the rest.
+    //
+    // E.g. the cite with the author suppressed, or a case without party names.
+    Rest,
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Locator(LocatorType, NumericValue);
+
+impl Locator {
+    pub fn type_of(&self) -> LocatorType {
+        self.0
+    }
+    pub fn value(&self) -> &NumericValue {
+        &self.1
+    }
+}
+
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
-#[derive(Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Cite<O: OutputFormat> {
-    pub id: Atom,
-    pub prefix: O::Build,
-    pub suffix: O::Build,
-    pub locator_type: Option<LocatorType>,
-
-    // TODO: gotta be careful not to look up locators in the hashmap, even though
-    // they are 'variables'.
-    // in CSL-M they are number variables. also review the rest of the
-    // vars that are like this
-    pub locator: Option<NumericValue>,
-    // TODO: parse these out of the locator
+    pub id: CiteId,
+    pub ref_id: Atom,
+    pub prefix: Option<O::Build>,
+    pub suffix: Option<O::Build>,
+    pub suppression: Option<Suppression>,
+    // TODO: parse these out of the locator string
+    // Enforce len() == 1 in CSL mode
+    pub locators: Vec<Locator>,
     // CSL-M only
     pub locator_extra: Option<String>,
     // CSL-M only
     pub locator_date: Option<DateOrRange>,
 
+    // TODO
     // pub note_number: u32,
     pub near_note: bool,
-
-    // TODO: allow suppression of any variables
-    pub author_in_text: bool,
-    pub suppress_author: bool,
-    // Is this necessary?
-    // citeHash       :: Int
 }
 
 impl<O: OutputFormat> Cite<O> {
-    pub fn basic(id: Atom, prefix: &O::Build) -> Self {
+    pub fn basic(id: CiteId, ref_id: Atom) -> Self {
         Cite {
             id,
-            prefix: prefix.clone(),
-            suffix: prefix.clone(),
-            locator: None,
-            locator_type: None,
+            ref_id,
+            prefix: None,
+            suffix: None,
+            suppression: None,
+            locators: Vec::new(),
             locator_extra: None,
             locator_date: None,
             near_note: false,
-            author_in_text: false,
-            suppress_author: false,
         }
     }
 }
@@ -76,8 +94,9 @@ pub struct CiteContext<'c, O: OutputFormat> {
     // TODO: keep track of which variables have so far been substituted
 }
 
-pub struct Cluster<'c, O: OutputFormat> {
-    pub cites: Vec<CiteContext<'c, O>>,
+pub struct Cluster<O: OutputFormat> {
+    pub id: ClusterId,
+    pub cites: Vec<Cite<O>>,
 }
 
 // helper methods to access both cite and reference properties via Variables
@@ -88,7 +107,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         match *var {
             Name(NameVariable::Dummy) => false,
             // TODO: finish this list
-            Number(NumberVariable::Locator) => self.cite.locator.is_some(),
+            Number(NumberVariable::Locator) => !self.cite.locators.is_empty(),
             // we need Page to exist and be numeric
             Number(NumberVariable::PageFirst) => self.is_numeric(var),
             _ => self.reference.has_variable(var),
@@ -118,8 +137,13 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
 
     pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue> {
         match var {
-            // TODO: finish this list
-            NumberVariable::Locator => self.cite.locator.clone(),
+            // TODO: get all the locators?
+            NumberVariable::Locator => self
+                .cite
+                .locators
+                .get(0)
+                .map(Locator::value)
+                .map(Clone::clone),
             NumberVariable::PageFirst => self
                 .reference
                 .number
@@ -127,6 +151,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 .and_then(|pp| pp.page_first())
                 .clone(),
             _ => self.reference.number.get(var).cloned(),
+            // TODO: finish this list
         }
     }
 

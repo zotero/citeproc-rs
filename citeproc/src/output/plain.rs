@@ -2,7 +2,7 @@ use super::OutputFormat;
 
 use crate::style::element::Formatting;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlainText {}
 
 impl Default for PlainText {

@@ -82,7 +82,7 @@ pub enum BodyDate {
 }
 
 /// e.g. for <text variable="title" form="short" />
-#[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum VariableForm {
     Long,
@@ -95,7 +95,7 @@ impl Default for VariableForm {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NumericForm {
     Numeric,
@@ -197,7 +197,7 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DisplayMode {
     Block,
@@ -206,7 +206,7 @@ pub enum DisplayMode {
     Indent,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TextCase {
     None,
@@ -224,7 +224,7 @@ impl Default for TextCase {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontStyle {
     Normal,
@@ -238,7 +238,7 @@ impl Default for FontStyle {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontVariant {
     Normal,
@@ -251,7 +251,7 @@ impl Default for FontVariant {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontWeight {
     Normal,
@@ -265,7 +265,7 @@ impl Default for FontWeight {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TextDecoration {
     None,
@@ -278,7 +278,7 @@ impl Default for TextDecoration {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum VerticalAlignment {
     #[strum(serialize = "baseline")]
     Baseline,
@@ -708,6 +708,7 @@ pub enum GivenNameDisambiguationRule {
     PrimaryNameWithInitials,
     ByCite,
 }
+
 impl Default for GivenNameDisambiguationRule {
     fn default() -> Self {
         GivenNameDisambiguationRule::ByCite
@@ -796,7 +797,7 @@ pub enum SortSource {
     Macro(String),
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SortDirection {
     Ascending,
@@ -1021,7 +1022,7 @@ pub struct LocaleDate {
     pub formatting: Option<Formatting>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Position {
     First,
@@ -1040,7 +1041,7 @@ pub enum Position {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats)
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum PageRangeFormat {
     Chicago,
@@ -1049,7 +1050,7 @@ pub enum PageRangeFormat {
     MinimalTwo,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,

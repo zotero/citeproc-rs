@@ -48,6 +48,11 @@
 
   <citation>
     <layout suffix="." delimiter="; ">
+      <choose>
+        <if position="ibid" >
+          <text value="ibid" />
+        </if>
+        <else>
 
       <group font-style="italic">
         <group font-style="italic" prefix="outer " suffix=" outer">
@@ -168,6 +173,8 @@
             <!--     </if> -->
           <!--   </choose> -->
         <!-- </group> -->
+        </else>
+      </choose>
     </layout>
   </citation>
 

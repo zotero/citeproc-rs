@@ -1,5 +1,5 @@
 use crate::db::ReferenceDatabase;
-use crate::input::CiteContext;
+use crate::input::{Cite, CiteContext, Locator};
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
@@ -160,8 +160,11 @@ where
 
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 use crate::style::element::Plural;
-                let selector =
-                    GenderedTermSelector::from_number_variable(&ctx.cite.locator_type, var, form);
+                let selector = GenderedTermSelector::from_number_variable(
+                    &ctx.cite.locators.get(0).map(Locator::type_of),
+                    var,
+                    form,
+                );
                 let num_val = ctx.get_number(&var);
                 let plural = match (num_val, pl) {
                     (None, _) => None,
