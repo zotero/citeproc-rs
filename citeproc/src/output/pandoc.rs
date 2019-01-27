@@ -245,6 +245,7 @@ mod test {
 
 }
 
+#[allow(dead_code)]
 mod definition {
     use std::collections::HashMap;
 
@@ -253,7 +254,7 @@ mod definition {
 
     const PANDOC_API_VERSION: &'static [i32] = &[1, 17, 0, 5];
 
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Pandoc(pub Meta, pub Vec<Block>);
 
     impl Serialize for Pandoc {
@@ -293,7 +294,36 @@ mod definition {
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    use ordered_float::NotNan;
+    // wrapper to impl Deserialize on
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    pub struct Float(NotNan<f64>);
+
+    impl<'a> Deserialize<'a> for Float {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'a>,
+        {
+            let value = f64::deserialize(deserializer)?;
+            if let Ok(not) = NotNan::new(value) {
+                Ok(Float(not))
+            } else {
+                use serde::de::Error;
+                Err(D::Error::custom("Floating point values must not be NaN"))
+            }
+        }
+    }
+
+    impl Serialize for Float {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            self.0.into_inner().serialize(serializer)
+        }
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct Meta(pub HashMap<String, MetaValue>);
 
     impl Meta {
@@ -310,7 +340,7 @@ mod definition {
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     #[serde(tag = "t", content = "c")]
     pub enum MetaValue {
         MetaMap(HashMap<String, MetaValue>),
@@ -321,7 +351,7 @@ mod definition {
         MetaBlocks(Vec<Block>),
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     #[serde(tag = "t", content = "c")]
     pub enum Block {
         Plain(Vec<Inline>),
@@ -338,7 +368,7 @@ mod definition {
         Table(
             Vec<Inline>,
             Vec<Alignment>,
-            Vec<f64>,
+            Vec<Float>,
             Vec<TableCell>,
             Vec<Vec<TableCell>>,
         ),
@@ -416,7 +446,7 @@ mod definition {
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct TableCell(pub Vec<Block>);
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

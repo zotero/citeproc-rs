@@ -44,6 +44,7 @@ directories = { version = "1.0.2", optional = true }
 salsa = "0.10.0-alpha4"
 string_cache = "0.7.3"
 jemallocator = { version = "0.1.9", optional = true }
+ordered-float = "1.0.1"
 
 [dev-dependencies]
 criterion = "0.2"
