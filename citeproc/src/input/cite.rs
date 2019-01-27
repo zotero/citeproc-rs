@@ -1,5 +1,6 @@
 use super::{DateOrRange, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
+use crate::proc::ReEvaluation;
 use crate::style::element::Position;
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
@@ -92,6 +93,7 @@ pub struct CiteContext<'c, O: OutputFormat> {
     //
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
+    pub re_evaluation: Option<ReEvaluation>,
 }
 
 pub struct Cluster<O: OutputFormat> {

@@ -2,13 +2,13 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::{Cite, CiteContext, CiteId, Cluster, ClusterId, Reference};
+use crate::input::{Cite, CiteContext, CiteId, ClusterId, Reference};
 use crate::style::db::StyleDatabase;
 use crate::style::element::Position;
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
-use crate::output::Pandoc;
-use crate::proc::{AddDisambTokens, DisambToken, IrState, IR};
+use crate::output::{OutputFormat, Pandoc};
+use crate::proc::{AddDisambTokens, DisambToken, IrState, ReEvaluation, IR};
 use crate::Atom;
 
 #[salsa::query_group(ReferenceDatabaseStorage)]
@@ -34,6 +34,7 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn inverted_index(&self, key: ()) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
 
     fn cite_positions(&self, key: ()) -> Arc<FnvHashMap<CiteId, Position>>;
+    #[salsa::dependencies]
     fn cite_position(&self, key: CiteId) -> Position;
 
     #[salsa::input]
@@ -45,7 +46,9 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn cluster_ids(&self, key: ()) -> Arc<Vec<ClusterId>>;
 
-    fn ir(&self, key: CiteId) -> Arc<IR<Pandoc>>;
+    fn ir_gen(&self, key: CiteId) -> Arc<IR<Pandoc>>;
+
+    fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
 
 fn reference(db: &impl ReferenceDatabase, key: Atom) -> Option<Arc<Reference>> {
@@ -126,7 +129,7 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
             let matching_prev = prev_cite
                 .filter(|p| p.ref_id == cite.ref_id)
                 .or_else(|| {
-                    if let Some(prev_cluster) = (clusters.get(i.wrapping_sub(1))) {
+                    if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
                         if prev_cluster.len() > 0
                             && prev_cluster
                                 .iter()
@@ -176,19 +179,119 @@ fn cite_position(db: &impl ReferenceDatabase, key: CiteId) -> Position {
         .clone()
 }
 
-fn ir(db: &impl ReferenceDatabase, id: CiteId) -> Arc<IR<Pandoc>> {
+fn matching_refs(
+    index: &FnvHashMap<DisambToken, HashSet<Atom>>,
+    state: &IrState,
+) -> (FnvHashSet<Atom>, bool) {
+    let mut matching_ids = FnvHashSet::default();
+    for tok in state.tokens.iter() {
+        // ignore tokens which matched NO references; they are just part of the style,
+        // like <text value="xxx"/>. Of course:
+        //   - <text value="xxx"/> WILL match any references that have a field with
+        //     "xxx" in it.
+        //   - You have to make sure all text is transformed equivalently.
+        //   So TODO: make all text ASCII uppercase first!
+        if let Some(ids) = index.get(tok) {
+            for x in ids {
+                matching_ids.insert(x.clone());
+            }
+        }
+    }
+    // dbg!(&state.tokens);
+    // dbg!(&matching_ids);
+    // len == 0 is for "ibid" or "[1]", etc. They are clearly unambiguous, and we will assume
+    // that any time it happens is intentional.
+    // len == 1 means there was only one ref. Great!
+    //
+    // TODO Of course, that whole 'compare IR output for ambiguous cites' thing.
+    let len = matching_ids.len();
+    (matching_ids, len == 0 || len == 1)
+}
+
+fn ir_gen(db: &impl ReferenceDatabase, id: CiteId) -> Arc<IR<Pandoc>> {
     use crate::proc::Proc;
     let style = db.style(());
     let cite = &db.cite(id);
     let fmt = Pandoc::default();
-    // TODO: handle missing references
-    let ctx = CiteContext {
+    let mut ctx = CiteContext {
         cite,
         format: &fmt,
+        // TODO: handle missing references
         reference: &db.reference(cite.ref_id.clone()).expect("???"),
         position: db.cite_position(id),
         citation_number: 0, // XXX: from db
+        re_evaluation: None,
     };
+    let index = db.inverted_index(());
+    let is_unambig = |state: &IrState| {
+        let (_, unambiguous) = matching_refs(&index, &state);
+        unambiguous
+    };
+
+    // TODO: use this to apply the same transforms to other cites with the same ref_id
+    // in another pass
+    let mut biggest_reeval = None;
+
     let mut state = IrState::new();
-    Arc::new(style.intermediate(db, &mut state, &ctx).0)
+    let (mut ir, _) = style.intermediate(db, &mut state, &ctx);
+    // if the cite is ibid (etc), we are assuming it produces <= the first one's DisambTokens.
+    // So the first pass ignores ibids, and the second just reapplies any transforms done on the
+    // first one.
+    if is_unambig(&state) || ctx.position != Position::First {
+        return Arc::new(ir);
+    }
+
+    let mut reeval = |re: ReEvaluation| {
+        ctx.re_evaluation = Some(re);
+        biggest_reeval = ctx.re_evaluation;
+        ir.re_evaluate(db, &mut state, &ctx, &is_unambig);
+        let (_, unambiguous) = matching_refs(&index, &state);
+        unambiguous
+    };
+
+    if style.citation.disambiguate_add_names {
+        if reeval(ReEvaluation::AddNames) {
+            return Arc::new(ir);
+        }
+    }
+
+    if style.citation.disambiguate_add_givenname {
+        let gndr = style.citation.givenname_disambiguation_rule;
+        if reeval(ReEvaluation::AddGivenName(gndr)) {
+            return Arc::new(ir);
+        }
+    }
+
+    if style.citation.disambiguate_add_year_suffix {
+        if reeval(ReEvaluation::AddYearSuffix) {
+            return Arc::new(ir);
+        }
+    }
+
+    reeval(ReEvaluation::Conditionals);
+
+    Arc::new(ir)
+}
+
+fn built_cluster(
+    db: &impl ReferenceDatabase,
+    cluster_id: ClusterId,
+) -> Arc<<Pandoc as OutputFormat>::Output> {
+    let fmt = Pandoc::default();
+    let cite_ids = db.cluster_cites(cluster_id);
+    let style = db.style(());
+    let layout = &style.citation.layout;
+
+    let built_cites: Vec<_> = cite_ids
+        .iter()
+        .map(|&id| {
+            let ir = db.ir_gen(id);
+            ir.flatten(&fmt)
+        })
+        .collect();
+    let build = fmt.affixed(
+        fmt.group(built_cites, &layout.delimiter.0, layout.formatting),
+        &layout.affixes,
+    );
+    Arc::new(fmt.output(build))
 }

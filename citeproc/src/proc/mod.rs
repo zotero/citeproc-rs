@@ -1,5 +1,5 @@
 use crate::db::ReferenceDatabase;
-use crate::input::{Cite, CiteContext, Locator};
+use crate::input::{CiteContext, Locator};
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};

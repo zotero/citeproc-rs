@@ -1,4 +1,4 @@
-use salsa::{Database, ParallelDatabase, Snapshot};
+use salsa::{ParallelDatabase, Snapshot};
 use serde_json;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ impl RootDatabase {
             runtime: Default::default(),
             fetcher,
         };
-        db.query_mut(StyleQuery).set((), Default::default());
+        db.set_style((), Default::default());
         db
     }
 }
@@ -32,6 +32,21 @@ impl RootDatabase {
 impl salsa::Database for RootDatabase {
     fn salsa_runtime(&self) -> &salsa::Runtime<RootDatabase> {
         &self.runtime
+    }
+
+    fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
+        use self::__SalsaDatabaseKeyKind::ReferenceDatabaseStorage as RDS;
+        use crate::db::ReferenceDatabaseGroupKey__ as GroupKey;
+        use salsa::EventKind::*;
+        match event_fn().kind {
+            WillExecute { database_key } => match database_key.kind {
+                RDS(GroupKey::built_cluster(key)) => {
+                    eprintln!("cluster #{:?} recomputed", key);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
     }
 }
 
@@ -77,7 +92,15 @@ impl RootDatabase {
     // cluster_ids is maintained manually
     // the cluster_cites relation is maintained manually
 
-    pub fn delete_cluster(&mut self, id: ClusterId) {
+    pub fn remove_cluster(&mut self, id: ClusterId) {
+        self.set_cluster_cites(id, Arc::new(Vec::new()));
+        let cluster_ids = self.cluster_ids(());
+        let cluster_ids: Vec<_> = (*cluster_ids)
+            .iter()
+            .filter(|&i| *i != id)
+            .cloned()
+            .collect();
+        self.set_cluster_ids((), Arc::new(cluster_ids));
         // delete associated cites
         // self.set_cluster_cites(id, Arc::new(Vec::new()));
         // let new = self
@@ -89,7 +112,7 @@ impl RootDatabase {
         // self.set_cluster_ids((), Arc::new(new));
     }
 
-    pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {}
+    // pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {}
 
-    pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {}
+    // pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {}
 }

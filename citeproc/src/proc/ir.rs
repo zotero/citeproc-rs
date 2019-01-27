@@ -1,6 +1,11 @@
 use super::group::GroupVars;
+use super::{IrState, Proc};
+use crate::db::ReferenceDatabase;
+use crate::input::CiteContext;
 use crate::output::OutputFormat;
-use crate::style::element::{Affixes, BodyDate, Choose, Formatting, Names as NamesEl};
+use crate::style::element::{
+    Affixes, BodyDate, Choose, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
+};
 use crate::Atom;
 use std::sync::Arc;
 
@@ -11,18 +16,18 @@ use std::sync::Arc;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum YearSuffixHook {
-    Date(Arc<BodyDate>),
-    Explicit(),
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ReEvaluation {
+    AddNames,
+    AddGivenName(GivenNameDisambiguationRule),
+    AddYearSuffix,
+    Conditionals,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct IrSeq<O: OutputFormat> {
-    pub contents: Vec<IR<O>>,
-    pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
-    pub delimiter: Atom,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum YearSuffixHook {
+    Date(Arc<BodyDate>),
+    Explicit(/* XXX: clone a text node into here */),
 }
 
 // Intermediate Representation
@@ -57,12 +62,14 @@ pub enum IR<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> IR<O> {
+    fn is_rendered(&self) -> bool {
+        match self {
+            IR::Rendered(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn flatten(&self, fmt: &O) -> O::Build {
-        let flatten_seq = |seq: &IrSeq<O>| {
-            let xs: Vec<_> = seq.contents.iter().map(|i| i.flatten(fmt)).collect();
-            let grp = fmt.group(xs, &seq.delimiter, seq.formatting);
-            fmt.affixed(grp, &seq.affixes)
-        };
         // must clone
         match self {
             IR::Rendered(None) => fmt.plain(""),
@@ -70,7 +77,64 @@ impl<O: OutputFormat> IR<O> {
             IR::Names(_, ref x) => x.clone(),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
-            IR::Seq(seq) => flatten_seq(seq),
+            IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
+    }
+
+    pub fn re_evaluate<'c>(
+        &mut self,
+        db: &impl ReferenceDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+        is_unambig: &impl Fn(&IrState) -> bool,
+    ) {
+        use std::mem;
+        *self = match self {
+            IR::Rendered(_) => {
+                return;
+            }
+            IR::Names(ref el, ref _x) => {
+                // TODO: re-eval again until names are exhausted
+                let (new_ir, _) = el.intermediate(db, state, ctx);
+                mem::replace(self, new_ir)
+            }
+            IR::ConditionalDisamb(ref el, ref _xs) => {
+                let (new_ir, _) = el.intermediate(db, state, ctx);
+                mem::replace(self, new_ir)
+            }
+            IR::YearSuffix(ref _el, ref _x) => {
+                // XXX: implement
+                return;
+                // let (new_ir, _) = el.intermediate(db, state, ctx);
+                // mem::replace(self, new_ir);
+            }
+            IR::Seq(ref mut seq) => {
+                for ir in seq.contents.iter_mut() {
+                    ir.re_evaluate(db, state, ctx, is_unambig);
+                }
+                if seq.contents.iter().all(|ir| ir.is_rendered()) {
+                    let new_ir = IR::Rendered(Some(seq.flatten_seq(ctx.format)));
+                    mem::replace(self, new_ir)
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct IrSeq<O: OutputFormat> {
+    pub contents: Vec<IR<O>>,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub delimiter: Atom,
+}
+
+impl<O: OutputFormat> IrSeq<O> {
+    fn flatten_seq(&self, fmt: &O) -> O::Build {
+        let xs: Vec<_> = self.contents.iter().map(|i| i.flatten(fmt)).collect();
+        let grp = fmt.group(xs, &self.delimiter, self.formatting);
+        fmt.affixed(grp, &self.affixes)
     }
 }
