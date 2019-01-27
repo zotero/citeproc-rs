@@ -36,10 +36,11 @@ later, or a nightly compiler. You should install it with
 * XML parsing with [`roxmltree`](https://github.com/RazrFalcon/roxmltree)
 * Error reporting with [`codespan`](https://github.com/brendanzab/codespan)
 * Little utility parsers written with [`nom`](https://github.com/Geal/nom)
+* Incremental computation using [`salsa`](https://github.com/salsa-rs/salsa)
 * Parallel processing using [`rayon`](https://github.com/rayon-rs/rayon)'s 
   work-stealing queues
 * JSON IO using [`serde_json`](https://github.com/serde-rs/json)
-* Pandoc-JSON interop using 
+* Pandoc-JSON interop using (currently) an internal fork of
   [`pandoc_types`](https://github.com/elliottslaughter/rust-pandoc-types/).
 
 ## Try it out!
