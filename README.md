@@ -54,7 +54,9 @@ Currently it can:
   terms/dates/etc inside it
 * parse a CSL-JSON file into references
 * pluck out a particular reference, and execute the style against only that one
-* output valid Pandoc JSON that can be converted to HTML
+* read and write cites for an entire Pandoc JSON document
+
+### Parse a style
 
 ```sh
 git clone https://github.com/cormacrelf/citeproc-rs
@@ -80,6 +82,8 @@ for style in styles/*.csl; do citeproc-rs --csl $style | pandoc -f json -t html;
   just `.get("en-GB").unwrap()` on the inline locales instead of using a merged 
   locale.
 
+### Parse a locale
+
 You can also parse a locale to check for errors. It can find a locale in a 
 locales directory assuming it is structured like [the official CSL locales 
 repo](https://github.com/citation-style-language/locales), using e.g. 
@@ -91,5 +95,19 @@ See the [directories](https://docs.rs/directories) crate for more.
 ```sh
 git clone https://github.com/citation-style-language/locales $DIR_FROM_ABOVE
 cargo run -- parse-locale --lang en-GB
+```
+
+### The big end-to-end Pandoc filter
+
+```sh
+cd citeproc-rs/citeproc
+# create a markdown file called input.md
+# convert it to json
+pandoc -f markdown -t json input.md -o input.json
+# also export a CSL-JSON library somewhere, with Zotero for example
+cargo run -- \
+    --csl ../../styles/australian-guide-to-legal-citation.csl \
+    --library path-to-your-library.json \
+    pandoc input.json | pandoc -f json -t html -s -o output.html
 ```
 

@@ -18,6 +18,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
+mod pandoc;
+use pandoc_types::definition::Pandoc as PandocDocument;
+
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;
 use citeproc::locale::{Lang, LocaleFetcher};
@@ -42,6 +45,23 @@ fn main() {
         .subcommand(
             SubCommand::with_name("disamb-index")
                 .about("Prints the inverted disambiguation index for the reference library"),
+        )
+        .subcommand(
+            SubCommand::with_name("pandoc")
+                .about("Ingests the Pandoc JSON AST")
+                .arg(
+                    Arg::with_name("input")
+                        .help("pandoc json file")
+                        .index(1)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .help("pandoc json output")
+                        .short("o")
+                        .long("output")
+                        .takes_value(true),
+                ),
         )
         // .arg(
         //     Arg::with_name("format")
@@ -160,6 +180,33 @@ fn main() {
             dbg!((token, citekeys));
             // }
         }
+        return;
+    }
+
+    if let Some(sub) = matches.subcommand_matches("pandoc") {
+        let json_str = fs::read_to_string(sub.value_of("input").expect("input arg"))
+            .expect("couldn't read pandoc json input");
+        let mut doc: PandocDocument =
+            serde_json::from_str(&json_str).expect("could not parse pandoc json");
+        let clusters = pandoc::get_clusters(&mut doc);
+
+        db.init_clusters(&clusters);
+
+        if let Some(csl_path) = matches.value_of("csl") {
+            let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
+            let driver_r: Result<Driver<Pandoc>, _> = Driver::new(&text, db);
+            if let Ok(driver) = driver_r {
+                pandoc::write_clusters(&mut doc, &driver.db);
+
+                let out: String = serde_json::to_string(&doc).expect("could not write pandoc json");
+                if let Some(out_path) = sub.value_of("output") {
+                    fs::write(out_path, out).unwrap();
+                } else {
+                    println!("{}", out);
+                }
+            }
+        }
+
         return;
     }
 

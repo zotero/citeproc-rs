@@ -40,8 +40,8 @@ impl salsa::Database for RootDatabase {
         use salsa::EventKind::*;
         match event_fn().kind {
             WillExecute { database_key } => match database_key.kind {
-                RDS(GroupKey::built_cluster(key)) => {
-                    eprintln!("cluster #{:?} recomputed", key);
+                RDS(GroupKey::built_cluster(_key)) => {
+                    // eprintln!("cluster #{:?} recomputed", key);
                 }
                 _ => {}
             },

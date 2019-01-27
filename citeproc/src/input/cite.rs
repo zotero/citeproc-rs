@@ -52,8 +52,8 @@ impl Locator {
 pub struct Cite<O: OutputFormat> {
     pub id: CiteId,
     pub ref_id: Atom,
-    pub prefix: Option<O::Build>,
-    pub suffix: Option<O::Build>,
+    pub prefix: O::Build,
+    pub suffix: O::Build,
     pub suppression: Option<Suppression>,
     // TODO: parse these out of the locator string
     // Enforce len() == 1 in CSL mode
@@ -62,10 +62,6 @@ pub struct Cite<O: OutputFormat> {
     pub locator_extra: Option<String>,
     // CSL-M only
     pub locator_date: Option<DateOrRange>,
-
-    // TODO
-    // pub note_number: u32,
-    pub near_note: bool,
 }
 
 impl<O: OutputFormat> Cite<O> {
@@ -73,13 +69,12 @@ impl<O: OutputFormat> Cite<O> {
         Cite {
             id,
             ref_id,
-            prefix: None,
-            suffix: None,
+            prefix: O::Build::default(),
+            suffix: O::Build::default(),
             suppression: None,
             locators: Vec::new(),
             locator_extra: None,
             locator_date: None,
-            near_note: false,
         }
     }
 }
@@ -105,8 +100,11 @@ pub struct CiteContext<'c, O: OutputFormat> {
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
     pub re_evaluation: Option<ReEvaluation>,
+    // TODO
+    // pub note_number: u32,
 }
 
+#[derive(Debug)]
 pub struct Cluster<O: OutputFormat> {
     pub id: ClusterId,
     pub cites: Vec<Cite<O>>,

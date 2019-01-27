@@ -16,7 +16,7 @@ pub struct Driver<O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    db: RootDatabase,
+    pub db: RootDatabase,
     o: std::marker::PhantomData<O>,
 }
 
