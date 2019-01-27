@@ -22,6 +22,17 @@ pub enum Suppression {
     Rest,
 }
 
+use pandoc_types::definition::CitationMode;
+impl Suppression {
+    pub fn from_pandoc_mode(mode: CitationMode) -> Option<Self> {
+        match mode {
+            CitationMode::AuthorInText => Some(Suppression::InText),
+            CitationMode::SuppressAuthor => Some(Suppression::Rest),
+            CitationMode::NormalCitation => None,
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Locator(LocatorType, NumericValue);
 

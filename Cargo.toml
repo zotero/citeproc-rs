@@ -2,6 +2,7 @@
 members = [
   "citeproc",
   "citeproc-wasm",
+  "pandoc-types",
 ]
 
 [profile.bench]

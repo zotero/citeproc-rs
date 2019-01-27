@@ -1,0 +1,23 @@
+[package]
+name = "pandoc_types"
+version = "0.3.0"
+authors = [
+  "Elliott Slaughter <elliottslaughter@gmail.com>",
+  "Cormac Relf <web@cormacrelf.net>"
+]
+license = "Apache-2.0"
+description = "Rust port of pandoc-types"
+repository = "https://github.com/elliottslaughter/rust-pandoc-types"
+keywords = ["pandoc", "pandoc-types"]
+categories = ["text-processing"]
+readme = "README.md"
+include = ["Cargo.toml", "src/**/*.rs", "tests/**/*.rs", "examples/**/*.rs", "README.md", "LICENSE.txt"]
+
+[badges]
+travis-ci = { repository = "elliottslaughter/rust-pandoc-types" }
+
+[dependencies]
+ordered-float = "1.0.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"

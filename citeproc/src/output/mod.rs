@@ -1,4 +1,4 @@
-mod pandoc;
+pub mod pandoc;
 // mod markdown;
 mod plain;
 use std::marker::{Send, Sync};
