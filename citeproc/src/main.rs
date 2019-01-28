@@ -19,9 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 mod pandoc;
-use pandoc_types::definition::MetaValue;
-use pandoc_types::definition::Pandoc as PandocDocument;
-use pandoc_types::definition::Inline;
+use pandoc_types::definition::{MetaValue, Pandoc as PandocDocument, Inline};
 
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;

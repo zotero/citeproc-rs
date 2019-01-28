@@ -1,6 +1,3 @@
-use itertools::Itertools;
-use std::borrow::Cow;
-
 use super::group::GroupVars;
 use super::ir::*;
 use super::{IrState, Proc};
@@ -9,6 +6,7 @@ use crate::input::{CiteContext, Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameForm, Names, Position,
+    NamePart, NameEtAl,
 };
 use crate::utils::Intercalate;
 
@@ -127,6 +125,7 @@ enum NameToken<'a> {
 }
 
 impl NameEl {
+
     #[inline]
     fn naso(&self, seen_one: bool) -> bool {
         match self.name_as_sort_order {
@@ -222,7 +221,10 @@ impl NameEl {
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         names_slice: &[Name],
+        et_al: &Option<NameEtAl>,
     ) -> O::Build {
+        let fmt = &ctx.format;
+
         let mut seen_one = false;
         let name_tokens = self.name_tokens(ctx.position, names_slice);
         let locale = db.merged_locale(db.style(()).default_locale.clone());
@@ -238,6 +240,16 @@ impl NameEl {
                 .affixed_text(format!("{}", count), self.formatting, &self.affixes);
         }
 
+        let format_with_part = |o_part: &Option<NamePart>, s: &str| {
+            match o_part {
+                None => fmt.plain(s),
+                Some(ref part) => {
+                    // TODO: text-case
+                    fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
+                }
+            }
+        };
+
         let st = name_tokens
             .iter()
             .map(|n| match n {
@@ -249,14 +261,15 @@ impl NameEl {
                         db.style(()).demote_non_dropping_particle,
                     );
                     seen_one = true;
-                    let mut build = String::new();
+                    let mut build = vec![];
                     for part in pn.filtered_parts(order) {
                         // We already tested is_some() for all these Some::unwrap() calls
                         match part {
                             NamePartToken::Given => {
                                 if let Some(ref given) = pn.given {
+                                    let name_part = &self.name_part_given;
                                     // TODO: parametrize for disambiguation
-                                    build.push_str(&initialize(
+                                    let string = initialize(
                                         &given,
                                         self.initialize.unwrap_or(true),
                                         self.initialize_with
@@ -264,46 +277,72 @@ impl NameEl {
                                             .map(|s| s.as_ref())
                                             .unwrap_or(""),
                                         db.style(()).initialize_with_hyphen,
-                                    ))
+                                    );
+                                    build.push(format_with_part(name_part, &string));
                                 }
                             }
-                            NamePartToken::Family => build.push_str(&pn.family.as_ref().unwrap()),
+                            NamePartToken::Family => {
+                                let name_part = &self.name_part_given;
+                                let string = pn.family.as_ref().unwrap();
+                                build.push(format_with_part(name_part, &string));
+                            }
                             NamePartToken::NonDroppingParticle => {
-                                build.push_str(&pn.non_dropping_particle.as_ref().unwrap())
+                                build.push(fmt.plain(&pn.non_dropping_particle.as_ref().unwrap()));
                             }
                             NamePartToken::DroppingParticle => {
-                                build.push_str(&pn.dropping_particle.as_ref().unwrap())
+                                build.push(fmt.plain(pn.dropping_particle.as_ref().unwrap()));
                             }
-                            NamePartToken::Suffix => build.push_str(&pn.suffix.as_ref().unwrap()),
-                            NamePartToken::Space => build.push_str(" "),
-                            NamePartToken::SortSeparator => build.push_str(", "),
+                            NamePartToken::Suffix => {
+                                build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
+                            }
+                            NamePartToken::Space => {
+                                build.push(fmt.plain(" "));
+                            }
+                            NamePartToken::SortSeparator => {
+                                build.push(if let Some(sep) = &self.sort_separator {
+                                    fmt.plain(&sep)
+                                } else {
+                                    fmt.plain(", ")
+                                })
+                            }
                         }
                     }
-                    Cow::Owned(build.trim().to_string())
+                    fmt.seq(build.into_iter())
                 }
                 NameToken::Name(Name::Literal { ref literal }) => {
                     seen_one = true;
-                    Cow::Borrowed(literal.as_str())
+                    fmt.plain(literal.as_str())
                 }
-                NameToken::Delimiter => Cow::Borrowed(", "),
-                // TODO: parse cs:et-al element to get this, and refactor to let it do its own
-                // formatting
+                NameToken::Delimiter => {
+                    if let Some(delim) = &self.delimiter {
+                        fmt.plain(&delim.0)
+                    } else {
+                        fmt.plain(", ")
+                    }
+                }
                 NameToken::EtAl => {
                     use crate::style::terms::*;
-                    Cow::Borrowed(
-                        locale
-                            .get_text_term(
-                                TextTermSelector::Simple(SimpleTermSelector::Misc(
-                                    MiscTerm::EtAl,
-                                    TermFormExtended::Long,
-                                )),
-                                false,
-                            )
-                            .unwrap_or("et al"),
-                    )
+                    let mut term = MiscTerm::EtAl;
+                    let mut formatting = None;
+                    if let Some(ref etal_element) = &et_al {
+                        if etal_element.term == "and others" {
+                            term = MiscTerm::AndOthers;
+                        }
+                        formatting = etal_element.formatting;
+                    }
+                    let text = locale
+                        .get_text_term(
+                            TextTermSelector::Simple(SimpleTermSelector::Misc(
+                                term,
+                                TermFormExtended::Long,
+                            )),
+                            false,
+                        )
+                        .unwrap_or("et al");
+                    fmt.text_node(text.to_string(), formatting)
                 }
-                NameToken::Ellipsis => Cow::Borrowed("…"),
-                NameToken::Space => Cow::Borrowed(" "),
+                NameToken::Ellipsis => fmt.plain("…"),
+                NameToken::Space => fmt.plain(" "),
                 NameToken::And => {
                     use crate::style::terms::*;
                     let select = |form: TermFormExtended| {
@@ -318,13 +357,12 @@ impl NameEl {
                             .get_text_term(select(TermFormExtended::Long), false)
                             .unwrap_or("and"),
                     };
-                    Cow::Borrowed(form)
+                    fmt.plain(form)
                 }
-            })
-            // TODO: and, et-al, et cetera
-            .join("");
+            });
 
-        ctx.format.affixed_text(st, self.formatting, &self.affixes)
+
+        fmt.affixed(fmt.with_format(fmt.seq(st), self.formatting), &self.affixes)
     }
 }
 
@@ -493,7 +531,7 @@ where
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
             .filter_map(|var| ctx.get_name(var))
-            .map(|val| name_el.render(db, state, ctx, val))
+            .map(|val| name_el.render(db, state, ctx, val, &self.et_al))
             .collect();
         if rendered.is_empty() {
             return (IR::Rendered(None), GroupVars::new());
