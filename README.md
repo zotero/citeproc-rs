@@ -100,15 +100,25 @@ cargo run -- parse-locale --lang en-GB
 
 ### The big end-to-end Pandoc filter
 
+#### Step 1: export a CSL-JSON library somewhere, with Zotero for example
+
+#### Step 2: create a markdown file called `input.md`
+
+    vim input.md
+
+#### Step 3: Build (debug mode is much quicker)
+
+    cargo build
+
+#### Step 4: Run as a filter!
+
+At the moment, `--natbib` is necessary to prevent Pandoc from adding an
+implicit `-F pandoc-citeproc` and stealing our thunder.
+
 ```sh
-cd citeproc-rs/citeproc
-# create a markdown file called input.md
-# convert it to json
-pandoc -f markdown -t json input.md -o input.json
-# also export a CSL-JSON library somewhere, with Zotero for example
-cargo run -- \
-    --csl ../../styles/australian-guide-to-legal-citation.csl \
-    --library path-to-your-library.json \
-    pandoc input.json | pandoc -f json -t html -s -o output.html
+pandoc -f markdown --natbib \
+    --metadata bibliography=path-to-your-library.json \
+    --metadata csl=../../styles/australian-guide-to-legal-citation.csl \
+    -F ../target/debug/citeproc-rs input.md -t html  -s -o out.html
 ```
 

@@ -39,5 +39,7 @@ references:
 
 @item1
 
+yeah[@item1; see also @item2 46 ]
+
 # References
 

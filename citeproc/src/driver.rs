@@ -22,7 +22,7 @@ where
 
 // need a Clone impl for map_with
 // thanks to rust-analyzer for the tip
-struct Snap(salsa::Snapshot<RootDatabase>);
+pub struct Snap(pub salsa::Snapshot<RootDatabase>);
 impl Clone for Snap {
     fn clone(&self) -> Self {
         use salsa::ParallelDatabase;
@@ -46,7 +46,7 @@ where
     }
 
     #[cfg(feature = "rayon")]
-    fn snap(&self) -> Snap {
+    pub fn snap(&self) -> Snap {
         use salsa::ParallelDatabase;
         Snap(self.db.snapshot())
     }

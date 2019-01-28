@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 mod pandoc;
+use pandoc_types::definition::MetaValue;
 use pandoc_types::definition::Pandoc as PandocDocument;
 
 use citeproc::db::ReferenceDatabase;
@@ -28,6 +29,14 @@ use citeproc::output::*;
 use citeproc::Driver;
 
 fn main() {
+    // heuristically determine if we're running as an external pandoc filter
+    // TODO: work out earliest pandoc that sets PANDOC_VERSION
+    let not_a_tty = !atty::is(atty::Stream::Stdin) && !atty::is(atty::Stream::Stdout);
+    if std::env::var("PANDOC_VERSION").is_ok() && not_a_tty {
+        do_pandoc();
+        return;
+    }
+
     let matches = App::new("citeproc")
         .version("0.0.0")
         .author("Cormac Relf")
@@ -45,23 +54,6 @@ fn main() {
         .subcommand(
             SubCommand::with_name("disamb-index")
                 .about("Prints the inverted disambiguation index for the reference library"),
-        )
-        .subcommand(
-            SubCommand::with_name("pandoc")
-                .about("Ingests the Pandoc JSON AST")
-                .arg(
-                    Arg::with_name("input")
-                        .help("pandoc json file")
-                        .index(1)
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .help("pandoc json output")
-                        .short("o")
-                        .long("output")
-                        .takes_value(true),
-                ),
         )
         // .arg(
         //     Arg::with_name("format")
@@ -170,7 +162,7 @@ fn main() {
     }
 
     let mut db = RootDatabase::new(filesystem_fetcher);
-    db.set_references(&lib_text).expect("Coult not parse JSON");
+    db.set_references(&lib_text).expect("Could not parse JSON");
 
     if let Some(_) = matches.subcommand_matches("disamb-index") {
         for (tok, ids) in db.inverted_index(()).iter() {
@@ -180,33 +172,6 @@ fn main() {
             dbg!((token, citekeys));
             // }
         }
-        return;
-    }
-
-    if let Some(sub) = matches.subcommand_matches("pandoc") {
-        let json_str = fs::read_to_string(sub.value_of("input").expect("input arg"))
-            .expect("couldn't read pandoc json input");
-        let mut doc: PandocDocument =
-            serde_json::from_str(&json_str).expect("could not parse pandoc json");
-        let clusters = pandoc::get_clusters(&mut doc);
-
-        db.init_clusters(&clusters);
-
-        if let Some(csl_path) = matches.value_of("csl") {
-            let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
-            let driver_r: Result<Driver<Pandoc>, _> = Driver::new(&text, db);
-            if let Ok(driver) = driver_r {
-                pandoc::write_clusters(&mut doc, &driver.db);
-
-                let out: String = serde_json::to_string(&doc).expect("could not write pandoc json");
-                if let Some(out_path) = sub.value_of("output") {
-                    fs::write(out_path, out).unwrap();
-                } else {
-                    println!("{}", out);
-                }
-            }
-        }
-
         return;
     }
 
@@ -233,6 +198,65 @@ fn main() {
         } else if let Err(e) = driver_r {
             citeproc::style::error::file_diagnostics(&e, &csl_path, &text);
         }
+    }
+}
+
+fn pandoc_meta_str<'a>(doc: &'a PandocDocument, key: &str) -> Option<&'a str> {
+    doc.0.lookup(key).and_then(|value| match value {
+        MetaValue::MetaString(s) => Some(s.as_str()),
+        _ => None,
+    })
+}
+
+fn do_pandoc() {
+    // already BufReader
+    let input = std::io::stdin();
+    // already LineWriter buffered, but we're only writing one line of JSON so not too bad
+    let output = std::io::stdout();
+
+    let mut doc: PandocDocument =
+        serde_json::from_reader(input).expect("could not parse pandoc json");
+
+    let filesystem_fetcher = {
+        let locales_dir = None
+            // TODO: read metadata
+            .unwrap_or_else(|| {
+                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
+                    .expect("No home directory found.");
+                let mut locales_dir = pd.cache_dir().to_owned();
+                locales_dir.push("locales");
+                locales_dir
+            });
+        Arc::new(Filesystem::new(locales_dir))
+    };
+    let mut db = RootDatabase::new(filesystem_fetcher);
+
+    if let Some(library_path) = pandoc_meta_str(&doc, "bibliography") {
+        let lib_text =
+            fs::read_to_string(&library_path).expect("No bibliography found at that path");
+        db.set_references(&lib_text).expect("Could not parse JSON");
+    }
+
+    db.init_clusters(&pandoc::get_clusters(&mut doc));
+
+    let csl_path = pandoc_meta_str(&doc, "csl").expect("No csl path provided through metadata");
+    let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
+
+    let driver_r: Result<Driver<Pandoc>, _> = Driver::new(&text, db);
+    if let Ok(driver) = driver_r {
+        use citeproc::db::ReferenceDatabase;
+        use rayon::prelude::*;
+        let ids = driver.db.cluster_ids(());
+        ids.par_iter()
+            .for_each_with(driver.snap(), |snap, &cluster_id| {
+                let _ = snap.0.built_cluster(cluster_id);
+            });
+
+        pandoc::write_clusters(&mut doc, &driver.db);
+
+        serde_json::to_writer(output, &doc).expect("could not write pandoc json");
+    } else if let Err(e) = driver_r {
+        citeproc::style::error::file_diagnostics(&e, &csl_path, &text);
     }
 }
 

@@ -85,7 +85,7 @@ impl Meta {
         self.0.is_empty()
     }
 
-    pub fn lookup(&self, key: &String) -> Option<&MetaValue> {
+    pub fn lookup(&self, key: &str) -> Option<&MetaValue> {
         self.0.get(key)
     }
 }
