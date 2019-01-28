@@ -198,10 +198,13 @@ impl DatePart {
                 YearForm::Short => format!("{:02}", date.year % 100),
             },
             DatePartForm::Month(form, _strip_periods) => match form {
-                // TODO: locale getter for months
                 MonthForm::Numeric => format!("{}", date.month),
                 MonthForm::NumericLeadingZeros => format!("{:02}", date.month),
                 _ => {
+                    // TODO: support seasons
+                    if date.month == 0 || date.month > 12 {
+                        return O::Build::default();
+                    }
                     use crate::style::terms::*;
                     let term_form = match form {
                         MonthForm::Long => TermForm::Long,

@@ -213,11 +213,17 @@ fn ir_gen(db: &impl ReferenceDatabase, id: CiteId) -> Arc<IR<Pandoc>> {
     let style = db.style(());
     let cite = &db.cite(id);
     let fmt = Pandoc::default();
+    let refr = db.reference(cite.ref_id.clone());
+    if refr.is_none() {
+        eprintln!("citeproc-rs: reference {} not found", &cite.ref_id);
+        return Arc::new(IR::Rendered(Some(fmt.plain("???"))));
+    }
+    let refr = refr.unwrap();
     let mut ctx = CiteContext {
         cite,
         format: &fmt,
         // TODO: handle missing references
-        reference: &db.reference(cite.ref_id.clone()).expect("???"),
+        reference: &refr,
         position: db.cite_position(id),
         citation_number: 0, // XXX: from db
         re_evaluation: None,
