@@ -5,6 +5,7 @@ use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
 use std::collections::HashSet;
+use crate::Atom;
 
 mod choose;
 mod date;
@@ -21,12 +22,17 @@ use group::GroupVars;
 #[derive(Debug)]
 pub struct IrState {
     pub tokens: HashSet<DisambToken>,
+    /// This can be a set because macros are strictly non-recursive.
+    /// So the same macro name anywhere above indicates attempted recursion.
+    /// When you exit a frame, delete from the set.
+    pub macro_stack: HashSet<Atom>,
 }
 
 impl IrState {
     pub fn new() -> Self {
         IrState {
             tokens: HashSet::new(),
+            macro_stack: HashSet::new(),
         }
     }
 }
@@ -109,7 +115,16 @@ where
                             .macros
                             .get(name)
                             .expect("macro errors not implemented!");
-                        sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone())
+                        // Technically, if re-running a style with a fresh IrState, you might
+                        // get an extra level of recursion before it panics. BUT, then it will
+                        // already have panicked when it was run the first time! So we're OK.
+                        if state.macro_stack.contains(&name) {
+                            panic!("foiled macro recursion: {} called from within itself; exiting", &name);
+                        }
+                        state.macro_stack.insert(name.clone());
+                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone());
+                        state.macro_stack.remove(&name);
+                        out
                     }
                     Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
