@@ -148,8 +148,8 @@ where
                                     fmt.affixed_text(s, f, &af)
                                 })
                             }
-                            StandardVariable::Number(ref v) => {
-                                ctx.reference.number.get(v).map(|val| {
+                            StandardVariable::Number(v) => {
+                                ctx.get_number(v).map(|val| {
                                     // TODO: ignore locators/stuff that doesn't come from a
                                     state.tokens.insert(DisambToken::Num(val.clone()));
                                     fmt.affixed_text(
@@ -180,7 +180,7 @@ where
                     var,
                     form,
                 );
-                let num_val = ctx.get_number(&var);
+                let num_val = ctx.get_number(var);
                 let plural = match (num_val, pl) {
                     (None, _) => None,
                     (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
@@ -199,7 +199,7 @@ where
             }
 
             Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
-                let content = ctx.get_number(&var).map(|val| {
+                let content = ctx.get_number(var).map(|val| {
                     fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
                 });
                 let gv = GroupVars::rendered_if(content.is_some());

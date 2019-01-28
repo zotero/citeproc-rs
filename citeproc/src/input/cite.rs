@@ -113,14 +113,16 @@ pub struct Cluster<O: OutputFormat> {
 // helper methods to access both cite and reference properties via Variables
 
 impl<'c, O: OutputFormat> CiteContext<'c, O> {
-    pub fn has_variable(&self, var: &AnyVariable) -> bool {
+    pub fn has_variable(&self, var: AnyVariable) -> bool {
         use crate::style::variables::AnyVariable::*;
-        match *var {
+        match var {
             Name(NameVariable::Dummy) => false,
             // TODO: finish this list
             Number(NumberVariable::Locator) => !self.cite.locators.is_empty(),
             // we need Page to exist and be numeric
-            Number(NumberVariable::PageFirst) => self.is_numeric(var),
+            Number(NumberVariable::PageFirst) => self.is_numeric(
+                AnyVariable::Number(NumberVariable::Page)
+            ),
             _ => self.reference.has_variable(var),
         }
     }
@@ -134,7 +136,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
     ///   are literal hyphens, not number ranges.
     ///   By not representing them as numbers, `is-numeric="version"` won't work.
-    pub fn is_numeric(&self, var: &AnyVariable) -> bool {
+    pub fn is_numeric(&self, var: AnyVariable) -> bool {
         match var {
             AnyVariable::Number(num) => self
                 .get_number(num)
@@ -146,7 +148,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         }
     }
 
-    pub fn get_number<'a>(&'a self, var: &NumberVariable) -> Option<NumericValue> {
+    pub fn get_number<'a>(&'a self, var: NumberVariable) -> Option<NumericValue> {
         match var {
             // TODO: get all the locators?
             NumberVariable::Locator => self
@@ -161,7 +163,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 .get(&NumberVariable::Page)
                 .and_then(|pp| pp.page_first())
                 .clone(),
-            _ => self.reference.number.get(var).cloned(),
+            _ => self.reference.number.get(&var).cloned(),
             // TODO: finish this list
         }
     }
@@ -169,7 +171,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name>> {
         match var {
             NameVariable::Dummy => None,
-            _ => self.reference.name.get(var),
+            _ => self.reference.name.get(&var),
         }
     }
 }
@@ -178,12 +180,12 @@ impl Reference {
     // Implemented here privately so we don't use it by mistake.
     // It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
     // testing variables that only exist on the Cite.
-    fn has_variable(&self, var: &AnyVariable) -> bool {
-        match *var {
-            AnyVariable::Ordinary(ref v) => self.ordinary.contains_key(v),
-            AnyVariable::Number(ref v) => self.number.contains_key(v),
-            AnyVariable::Name(ref v) => self.name.contains_key(v),
-            AnyVariable::Date(ref v) => self.date.contains_key(v),
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        match var {
+            AnyVariable::Ordinary(v) => self.ordinary.contains_key(&v),
+            AnyVariable::Number(v) => self.number.contains_key(&v),
+            AnyVariable::Name(v) => self.name.contains_key(&v),
+            AnyVariable::Date(v) => self.date.contains_key(&v),
         }
     }
 }

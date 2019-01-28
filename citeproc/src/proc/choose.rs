@@ -116,9 +116,9 @@ fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>) -> bool
 where
     O: OutputFormat,
 {
-    let vars = cond.variable.iter().map(|var| ctx.has_variable(var));
+    let vars = cond.variable.iter().map(|&var| ctx.has_variable(var));
 
-    let nums = cond.is_numeric.iter().map(|var| ctx.is_numeric(var));
+    let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var));
 
     let types = cond
         .csl_type
