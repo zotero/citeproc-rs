@@ -115,3 +115,5 @@ impl<'a, DB: ReferenceDatabase> MutVisitor for WriteClusters<'a, DB> {
         }
     }
 }
+
+// TODO: parse locators!

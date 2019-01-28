@@ -1,7 +1,7 @@
 use super::{DateOrRange, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
 use crate::proc::ReEvaluation;
-use crate::style::element::Position;
+use crate::style::element::{Position, VariableForm};
 use crate::style::terms::LocatorType;
 use crate::style::variables::*;
 
@@ -113,6 +113,14 @@ pub struct Cluster<O: OutputFormat> {
 // helper methods to access both cite and reference properties via Variables
 
 impl<'c, O: OutputFormat> CiteContext<'c, O> {
+
+    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
+        (match (var, form) {
+            (Variable::Title, VariableForm::Short) => self.reference.ordinary.get(&Variable::TitleShort),
+            _ => self.reference.ordinary.get(&var),
+        }).map(|s| s.as_str())
+    }
+
     pub fn has_variable(&self, var: AnyVariable) -> bool {
         use crate::style::variables::AnyVariable::*;
         match var {

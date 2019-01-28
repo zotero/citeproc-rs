@@ -125,7 +125,7 @@ where
         .iter()
         .map(|typ| ctx.reference.csl_type == *typ);
 
-    let positions = cond.position.iter().map(|&pos| ctx.position == pos);
+    let positions = cond.position.iter().map(|&pos| pos.matches(ctx.position));
 
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.

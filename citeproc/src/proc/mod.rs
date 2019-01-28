@@ -140,24 +140,21 @@ where
                             GroupVars::new(),
                         )
                     }
-                    Variable(var, _form) => {
+                    Variable(var, form) => {
                         let content = match var {
-                            StandardVariable::Ordinary(ref v) => {
-                                ctx.reference.ordinary.get(v).map(|val| {
-                                    // TODO: ignore locators/stuff that doesn't come from a
-                                    // reference
-                                    state.tokens.insert(DisambToken::Str(val.as_str().into()));
+                            StandardVariable::Ordinary(v) => {
+                                ctx.get_ordinary(v, form).map(|val| {
+                                    state.tokens.insert(DisambToken::Str(val.into()));
                                     let s = if v.should_replace_hyphens() {
                                         val.replace('-', "\u{2013}")
                                     } else {
-                                        val.clone()
+                                        val.to_string()
                                     };
                                     fmt.affixed_text_quoted(s, f, &af, quotes)
                                 })
                             }
                             StandardVariable::Number(v) => {
                                 ctx.get_number(v).map(|val| {
-                                    // TODO: ignore locators/stuff that doesn't come from a
                                     state.tokens.insert(DisambToken::Num(val.clone()));
                                     fmt.affixed_text_quoted(
                                         val.verbatim(v.should_replace_hyphens()),

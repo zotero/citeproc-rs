@@ -1040,6 +1040,25 @@ pub enum Position {
     FarNote,
 }
 
+impl Position {
+    /// > "Whenever position=”ibid-with-locator” tests true, position=”ibid” also tests true.
+    /// And whenever position=”ibid” or position=”near-note” test true, position=”subsequent”
+    /// also tests true."
+    ///
+    /// [Spec](http://docs.citationstyles.org/en/stable/specification.html#choose)
+    pub fn matches(self, from_context: Self) -> bool {
+        use self::Position::*;
+        match (from_context, self) {
+            (IbidWithLocator, Ibid) => true,
+            (Ibid, Subsequent) => true,
+            (FarNote, Subsequent) => true,
+            (NearNote, Subsequent) => true,
+            (IbidWithLocator, Subsequent) => true,
+            (x, y) => x == y,
+        }
+    }
+}
+
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
