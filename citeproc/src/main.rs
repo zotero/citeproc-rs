@@ -21,6 +21,7 @@ use std::sync::Arc;
 mod pandoc;
 use pandoc_types::definition::MetaValue;
 use pandoc_types::definition::Pandoc as PandocDocument;
+use pandoc_types::definition::Inline;
 
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;
@@ -203,12 +204,34 @@ fn main() {
 
 fn pandoc_meta_str<'a>(doc: &'a PandocDocument, key: &str) -> Option<&'a str> {
     doc.0.lookup(key).and_then(|value| match value {
+        // for metadata passed through the command line
+        // --metadata csl=my-style.csl
         MetaValue::MetaString(s) => Some(s.as_str()),
+        MetaValue::MetaInlines(inlines) => match &inlines[..] {
+            // for inline paths with no spaces (otherwise they get split with
+            // Inline::Space)
+            // csl: "my-style.csl"
+            &[Inline::Str(ref s)] => Some(s.as_str()),
+            // for inline paths with spaces
+            // csl: "`my style.csl`{=raw}"
+            &[Inline::RawInline(_, ref s)] => Some(s.as_str()),
+            _ => None,
+        },
         _ => None,
     })
 }
 
 fn do_pandoc() {
+    let filter_args = App::new("pandoc_filter")
+        .arg(
+            Arg::with_name("output_format")
+             .required(false)
+             .index(1)
+         )
+        .get_matches();
+
+    let _output_format = filter_args.value_of("output_format").unwrap_or("none");
+
     // already BufReader
     let input = std::io::stdin();
     // already LineWriter buffered, but we're only writing one line of JSON so not too bad

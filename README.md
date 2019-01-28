@@ -102,23 +102,31 @@ cargo run -- parse-locale --lang en-GB
 
 #### Step 1: export a CSL-JSON library somewhere, with Zotero for example
 
-#### Step 2: create a markdown file called `input.md`
+#### Step 2: create a markdown file
 
-    vim input.md
+It must contain inline `csl`/`bibliography` metadata. Currently, and contrary 
+to its documentation, Pandoc will automatically add `-F pandoc-citeproc` 
+whenever you add command line `--metadata csl=XXX` or `--metadata 
+bibliography=XXX` flags. (That is, as far as I know, only supposed to happen if 
+you use shorthand `--csl XXX` or `--bibliography XXX`.)
 
-#### Step 3: Build (debug mode is much quicker)
+    ---
+    csl: path-to-my-csl.csl
+    bibliography: path-to-my-csl-json-library.json
+    ---
 
-    cargo build
+    First paragraph.[@knownCitekey]
+
+    Second paragraph.[@knownCitekey; @anotherOne]
 
 #### Step 4: Run as a filter!
 
-At the moment, `--natbib` is necessary to prevent Pandoc from adding an
-implicit `-F pandoc-citeproc` and stealing our thunder.
-
 ```sh
-pandoc -f markdown --natbib \
-    --metadata bibliography=path-to-your-library.json \
-    --metadata csl=../../styles/australian-guide-to-legal-citation.csl \
-    -F ../target/debug/citeproc-rs input.md -t html  -s -o out.html
+# much quicker than `build --release` or `install --path .`
+cargo build
+
+pandoc -F ../target/debug/citeproc-rs input.md -s -o out.html
+
+open out.html
 ```
 
