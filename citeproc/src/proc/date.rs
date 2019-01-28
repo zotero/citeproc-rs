@@ -91,7 +91,7 @@ where
                 .date_parts
                 .iter()
                 .filter(|d| d.matches(self.parts_selector.clone()))
-                .map(|dp| dp.render(db, state, ctx, &val))
+                .filter_map(|dp| dp.render(db, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
             fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
@@ -166,7 +166,7 @@ where
                 let each: Vec<_> = self
                     .date_parts
                     .iter()
-                    .map(|dp| dp.render(db, state, ctx, &val))
+                    .filter_map(|dp| dp.render(db, state, ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
                 fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
@@ -190,20 +190,32 @@ impl DatePart {
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         date: &Date,
-    ) -> O::Build {
+    ) -> Option<O::Build> {
         let locale = db.merged_locale(db.style(()).default_locale.clone());
         let string = match self.form {
             DatePartForm::Year(form) => match form {
-                YearForm::Long => format!("{}", date.year),
-                YearForm::Short => format!("{:02}", date.year % 100),
+                YearForm::Long => Some(format!("{}", date.year)),
+                YearForm::Short => Some(format!("{:02}", date.year % 100)),
             },
             DatePartForm::Month(form, _strip_periods) => match form {
-                MonthForm::Numeric => format!("{}", date.month),
-                MonthForm::NumericLeadingZeros => format!("{:02}", date.month),
+                MonthForm::Numeric => {
+                    if date.month == 0 || date.month > 12 {
+                        None
+                    } else {
+                        Some(format!("{}", date.month))
+                    }
+                }
+                MonthForm::NumericLeadingZeros => {
+                    if date.month == 0 || date.month > 12 {
+                        None
+                    } else {
+                        Some(format!("{:02}", date.month))
+                    }
+                }
                 _ => {
                     // TODO: support seasons
                     if date.month == 0 || date.month > 12 {
-                        return O::Build::default();
+                        return None;
                     }
                     use crate::style::terms::*;
                     let term_form = match form {
@@ -215,7 +227,7 @@ impl DatePart {
                         MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
                         term_form,
                     );
-                    locale
+                    Some(locale
                         .gendered_terms
                         .get(&sel)
                         .map(|gt| gt.0.singular().to_string())
@@ -226,17 +238,37 @@ impl DatePart {
                                 MONTHS_LONG
                             };
                             fallback[date.month as usize].to_string()
-                        })
+                        }))
                 }
             },
             DatePartForm::Day(form) => match form {
-                DayForm::Numeric => format!("{}", date.day),
-                DayForm::NumericLeadingZeros => format!("{:02}", date.day),
+                DayForm::Numeric => {
+                    if date.day == 0 {
+                        None
+                    } else {
+                        Some(format!("{}", date.day))
+                    }
+                }
+                DayForm::NumericLeadingZeros => {
+                    if date.day == 0 {
+                        None
+                    } else {
+                        Some(format!("{:02}", date.day))
+                    }
+                }
                 // TODO: implement ordinals
-                DayForm::Ordinal => format!("{:02}", date.day),
+                DayForm::Ordinal => {
+                    if date.day == 0 {
+                        None
+                    } else {
+                        Some(format!("{}ORD", date.day))
+                    }
+                }
             },
         };
-        ctx.format
-            .affixed_text(string, self.formatting, &self.affixes)
+        string.map(|s| {
+            ctx.format
+                .affixed_text(s, self.formatting, &self.affixes)
+        })
     }
 }

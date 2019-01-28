@@ -1,3 +1,4 @@
+use crate::Atom;
 pub mod pandoc;
 // mod markdown;
 mod plain;
@@ -15,6 +16,12 @@ pub struct Output<T> {
     pub citations: Vec<T>,
     pub bibliography: Vec<T>,
     pub citation_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum LocalizedQuotes {
+    Single(Atom, Atom),
+    Double(Atom, Atom),
 }
 
 pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
@@ -45,6 +52,16 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
 
     fn plain(&self, s: &str) -> Self::Build;
 
+    fn affixed_text_quoted(
+        &self,
+        s: String,
+        format_inner: Option<Formatting>,
+        affixes: &Affixes,
+        quotes: Option<&LocalizedQuotes>,
+    ) -> Self::Build {
+        self.affixed_quoted(self.text_node(s, format_inner), affixes, quotes)
+    }
+
     fn affixed_text(
         &self,
         s: String,
@@ -54,10 +71,22 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         self.affixed(self.text_node(s, format_inner), affixes)
     }
 
+    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build;
+
+    #[inline]
     fn affixed(&self, b: Self::Build, affixes: &Affixes) -> Self::Build {
+        self.affixed_quoted(b, affixes, None)
+    }
+
+    fn affixed_quoted(&self, b: Self::Build, affixes: &Affixes, quotes: Option<&LocalizedQuotes>) -> Self::Build {
         use std::iter::once;
         let pre = affixes.prefix.is_empty();
         let suf = affixes.suffix.is_empty();
+        let b = if let Some(lq) = quotes {
+            self.quoted(b, lq)
+        } else {
+            b
+        };
         match (pre, suf) {
             (true, true) => b,
 

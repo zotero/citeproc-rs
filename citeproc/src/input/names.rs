@@ -13,10 +13,12 @@ pub struct PersonName {
 #[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum Name {
-    Person(PersonName),
-    /// TODO: represent an institution in CSL-M?
+    // Put literal first, because PersonName's properties are all Options and derived
+    // Deserialize impls run in order.
     Literal {
         // the untagged macro uses the field names on Literal { literal } instead of the discriminant, so don't change that
         literal: String,
     },
+    Person(PersonName),
+    // TODO: represent an institution in CSL-M?
 }

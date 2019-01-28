@@ -105,8 +105,15 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
-            Element::Text(ref source, f, ref af, _quo, _sp, _tc, _disp) => {
+            Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
                 use crate::style::element::TextSource::*;
+                use crate::output::LocalizedQuotes;
+                let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
+                let quotes = if quo {
+                    Some(&q)
+                } else {
+                    None
+                };
                 match *source {
                     Macro(ref name) => {
                         // TODO: be able to return errors
@@ -129,7 +136,7 @@ where
                     Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
                         (
-                            IR::Rendered(Some(fmt.affixed_text(value.to_string(), f, &af))),
+                            IR::Rendered(Some(fmt.affixed_text_quoted(value.to_string(), f, &af, quotes))),
                             GroupVars::new(),
                         )
                     }
@@ -145,17 +152,18 @@ where
                                     } else {
                                         val.clone()
                                     };
-                                    fmt.affixed_text(s, f, &af)
+                                    fmt.affixed_text_quoted(s, f, &af, quotes)
                                 })
                             }
                             StandardVariable::Number(v) => {
                                 ctx.get_number(v).map(|val| {
                                     // TODO: ignore locators/stuff that doesn't come from a
                                     state.tokens.insert(DisambToken::Num(val.clone()));
-                                    fmt.affixed_text(
+                                    fmt.affixed_text_quoted(
                                         val.verbatim(v.should_replace_hyphens()),
                                         f,
                                         &af,
+                                        quotes,
                                     )
                                 })
                             }
@@ -167,7 +175,7 @@ where
                         let locale = db.merged_locale(db.style(()).default_locale.clone());
                         let content = locale
                             .get_text_term(term_selector, plural)
-                            .map(|val| fmt.affixed_text(val.to_owned(), f, &af));
+                            .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }

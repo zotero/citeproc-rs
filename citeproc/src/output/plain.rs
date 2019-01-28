@@ -1,4 +1,4 @@
-use super::OutputFormat;
+use super::{OutputFormat, LocalizedQuotes};
 
 use crate::style::element::Formatting;
 
@@ -51,6 +51,15 @@ impl OutputFormat for PlainText {
         _f: Option<Formatting>,
     ) -> Self::Build {
         nodes.join(delimiter)
+    }
+
+    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build {
+        match quotes {
+            LocalizedQuotes::Single(ref open, ref close) |
+            LocalizedQuotes::Double(ref open, ref close) => {
+                open.to_string() + &b + &close
+            }
+        }
     }
 
     fn output(&self, intermediate: Self::Build) -> Self::Output {

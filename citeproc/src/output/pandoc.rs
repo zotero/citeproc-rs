@@ -1,11 +1,11 @@
-use super::OutputFormat;
+use super::{OutputFormat, LocalizedQuotes};
 use crate::style::element::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 use crate::utils::{Intercalate, JoinMany};
 
 use pandoc_types::definition::Inline::*;
-use pandoc_types::definition::{Attr, Inline};
+use pandoc_types::definition::{Attr, Inline, QuoteType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pandoc {}
@@ -110,6 +110,14 @@ impl OutputFormat for Pandoc {
         self.fmt_vec(a, f)
     }
 
+    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build {
+        let qt = match quotes {
+            LocalizedQuotes::Single(..) => QuoteType::SingleQuote,
+            LocalizedQuotes::Double(..) => QuoteType::DoubleQuote,
+        };
+        vec![Inline::Quoted(qt, b)]
+    }
+
     fn output(&self, inter: Vec<Inline>) -> Vec<Inline> {
         let null = FlipFlopState::default();
         flip_flop_inlines(&inter, &null)
@@ -183,7 +191,7 @@ fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
             let mut flop = state.clone();
             flop.in_outer_quotes = !flop.in_outer_quotes;
             let subs = fl(ils, &flop);
-            if state.in_outer_quotes {
+            if !state.in_outer_quotes {
                 Some(Quoted(QuoteType::SingleQuote, subs))
             } else {
                 Some(Quoted(QuoteType::DoubleQuote, subs))
