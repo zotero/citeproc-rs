@@ -565,7 +565,7 @@ impl Name {
             form: Some(NameForm::Long),
             initialize: Some(true),
             // https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/util_names_render.js#L739
-            initialize_with: Some("".into()),
+            initialize_with: None,
             name_as_sort_order: None,
             sort_separator: Some(", ".into()),
             // these four aren't inherited

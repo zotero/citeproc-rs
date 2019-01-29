@@ -273,8 +273,7 @@ impl NameEl {
                                     self.initialize.unwrap_or(true),
                                     self.initialize_with
                                         .as_ref()
-                                        .map(|s| s.as_ref())
-                                        .unwrap_or(""),
+                                        .map(|s| s.as_ref()),
                                     db.style(()).initialize_with_hyphen,
                                 );
                                 build.push(format_with_part(name_part, &string));
