@@ -1046,14 +1046,14 @@ impl Position {
     /// also tests true."
     ///
     /// [Spec](http://docs.citationstyles.org/en/stable/specification.html#choose)
-    pub fn matches(self, from_context: Self) -> bool {
+    pub fn matches(self, in_cond: Self) -> bool {
         use self::Position::*;
-        match (from_context, self) {
+        match (self, in_cond) {
             (IbidWithLocator, Ibid) => true,
+            (IbidWithLocator, Subsequent) => true,
             (Ibid, Subsequent) => true,
             (FarNote, Subsequent) => true,
             (NearNote, Subsequent) => true,
-            (IbidWithLocator, Subsequent) => true,
             (x, y) => x == y,
         }
     }
