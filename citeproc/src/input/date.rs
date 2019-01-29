@@ -72,6 +72,13 @@ impl DateOrRange {
             None
         }
     }
+    pub fn single_or_first(&self) -> Option<Date> {
+        match self {
+            DateOrRange::Single(ref d) => Some(d.clone()),
+            DateOrRange::Range(ref d, _) => Some(d.clone()),
+            _ => None,
+        }
+    }
     pub fn from_parts(parts: &[&[i32]]) -> Option<Self> {
         if parts.is_empty() {
             None

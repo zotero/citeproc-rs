@@ -186,7 +186,7 @@ pub enum ListNumberDelim {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Format(pub String);
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
 pub struct Attr(pub String, pub Vec<String>, pub Vec<(String, String)>);
 
 impl Attr {
@@ -205,6 +205,8 @@ pub enum QuoteType {
     DoubleQuote,
 }
 
+/// Target("https://example.com", "Title")
+/// The title is often empty.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Target(pub String, pub String);
 

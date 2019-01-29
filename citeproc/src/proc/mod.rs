@@ -153,7 +153,10 @@ where
                                 } else {
                                     val.to_string()
                                 };
-                                fmt.affixed_text_quoted(s, f, &af, quotes)
+                                let maybe_link = v.hyperlink(val);
+                                let txt = fmt.text_node(s, f);
+                                let linked = fmt.hyperlinked(txt, maybe_link);
+                                fmt.affixed_quoted(linked, &af, quotes)
                             }),
                             StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
                                 state.tokens.insert(DisambToken::Num(val.clone()));

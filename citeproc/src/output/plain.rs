@@ -15,10 +15,12 @@ impl OutputFormat for PlainText {
     type Build = String;
     type Output = String;
 
+    #[inline]
     fn plain(&self, s: &str) -> Self::Build {
         s.to_owned()
     }
 
+    #[inline]
     fn text_node(&self, s: String, _: Option<Formatting>) -> Self::Build {
         s
     }
@@ -40,10 +42,6 @@ impl OutputFormat for PlainText {
         }
     }
 
-    fn with_format(&self, a: Self::Build, _f: Option<Formatting>) -> Self::Build {
-        a
-    }
-
     fn group(
         &self,
         nodes: Vec<Self::Build>,
@@ -60,6 +58,17 @@ impl OutputFormat for PlainText {
         }
     }
 
+    #[inline]
+    fn with_format(&self, a: Self::Build, _f: Option<Formatting>) -> Self::Build {
+        a
+    }
+
+    #[inline]
+    fn hyperlinked(&self, a: Self::Build, _target: Option<&str>) -> Self::Build {
+        a
+    }
+
+    #[inline]
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         intermediate
     }

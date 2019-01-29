@@ -209,6 +209,13 @@ impl Variable {
     pub(crate) fn should_replace_hyphens(self) -> bool {
         false
     }
+    pub(crate) fn hyperlink(self, value: &str) -> Option<&str> {
+        match self {
+            Variable::URL => Some(value),
+            Variable::DOI => Some(value),
+            _ => None,
+        }
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]

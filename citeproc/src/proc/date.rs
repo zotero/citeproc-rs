@@ -84,7 +84,7 @@ where
         // TODO: TextCase
         let date = ctx.reference.date.get(&self.variable).and_then(|r| {
             mask_range(r, &self.date_parts, state);
-            r.single()
+            r.single_or_first()
         });
         let content = date.map(|val| {
             let each: Vec<_> = locale_date
@@ -160,7 +160,7 @@ where
             // TODO: render date ranges
             .and_then(|r| {
                 mask_range(r, &self.date_parts, state);
-                r.single()
+                r.single_or_first()
             })
             .map(|val| {
                 let each: Vec<_> = self
