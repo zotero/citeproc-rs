@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.1mlz1" default-locale="en-GB">
+  <citation disambiguate-add-year-suffix="true">
+    <layout prefix="(" suffix=")" delimiter=", " >
+      <group delimiter=" ">
+        <names variable="author">
+          <name form="short" et-al-min="2" et-al-use-first="1"/>
+        </names>
+        <group>
+          <date variable="issued">
+            <date-part name="year" />
+          </date>
+          <text variable="year-suffix" />
+        </group>
+      </group>
+    </layout>
+  </citation>
+</style>

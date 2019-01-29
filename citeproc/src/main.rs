@@ -261,14 +261,7 @@ fn do_pandoc() {
 
     let driver_r: Result<Driver<Pandoc>, _> = Driver::new(&text, db);
     if let Ok(driver) = driver_r {
-        use citeproc::db::ReferenceDatabase;
-        use rayon::prelude::*;
-        let ids = driver.db.cluster_ids(());
-        ids.par_iter()
-            .for_each_with(driver.snap(), |snap, &cluster_id| {
-                let _ = snap.0.built_cluster(cluster_id);
-            });
-
+        driver.compute();
         pandoc::write_clusters(&mut doc, &driver.db);
 
         serde_json::to_writer(output, &doc).expect("could not write pandoc json");

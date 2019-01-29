@@ -1,5 +1,16 @@
 use typed_arena::Arena;
 
+pub fn to_bijective_base_26(int: u32) -> String {
+    let mut n = int;
+    let mut s = String::new();
+    while n > 0 {
+        n -= 1;
+        s.push(char::from((65 + 32 + (n % 26)) as u8));
+        n = n / 26;
+    }
+    s
+}
+
 use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(feature = "thread")] {

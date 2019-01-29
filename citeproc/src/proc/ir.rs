@@ -3,7 +3,7 @@ use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
 use crate::output::OutputFormat;
 use crate::style::element::{
-    Affixes, BodyDate, Choose, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
+    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
 use crate::Atom;
 use std::sync::Arc;
@@ -26,7 +26,9 @@ pub enum ReEvaluation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum YearSuffixHook {
     Date(Arc<BodyDate>),
-    Explicit(/* XXX: clone a text node into here */),
+    // Clone element into here, because we already know it's a <text variable="" />
+    // And it's cheap to clone those
+    Explicit(Element),
 }
 
 // Intermediate Representation
@@ -87,7 +89,6 @@ impl<O: OutputFormat> IR<O> {
         ctx: &CiteContext<'c, O>,
         is_unambig: &impl Fn(&IrState) -> bool,
     ) {
-        use std::mem;
         *self = match self {
             IR::Rendered(_) => {
                 return;
@@ -95,17 +96,22 @@ impl<O: OutputFormat> IR<O> {
             IR::Names(ref el, ref _x) => {
                 // TODO: re-eval again until names are exhausted
                 let (new_ir, _) = el.intermediate(db, state, ctx);
-                mem::replace(self, new_ir)
+                new_ir
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 let (new_ir, _) = el.intermediate(db, state, ctx);
-                mem::replace(self, new_ir)
+                new_ir
             }
-            IR::YearSuffix(ref _el, ref _x) => {
-                // XXX: implement
-                return;
-                // let (new_ir, _) = el.intermediate(db, state, ctx);
-                // mem::replace(self, new_ir);
+            IR::YearSuffix(ref ysh, ref _x) => {
+                // TODO: save GroupVars state in IrSeq so a Group with a year-suffix in
+                // it can do normal group suppression
+                if let YearSuffixHook::Explicit(ref el) = ysh {
+                    let (new_ir, _) = el.intermediate(db, state, ctx);
+                    new_ir
+                } else {
+                    // not implemented
+                    return;
+                }
             }
             IR::Seq(ref mut seq) => {
                 for ir in seq.contents.iter_mut() {
@@ -113,7 +119,7 @@ impl<O: OutputFormat> IR<O> {
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
                     let new_ir = IR::Rendered(Some(seq.flatten_seq(&ctx.format)));
-                    mem::replace(self, new_ir)
+                    new_ir
                 } else {
                     return;
                 }

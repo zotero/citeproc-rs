@@ -1,3 +1,4 @@
+use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
@@ -9,6 +10,9 @@ use crate::style::FromNode;
 use crate::Atom;
 use roxmltree::Document;
 use std::sync::Arc;
+
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
 
 use crate::db_impl::RootDatabase;
 
@@ -49,6 +53,29 @@ where
     pub fn snap(&self) -> Snap {
         use salsa::ParallelDatabase;
         Snap(self.db.snapshot())
+    }
+
+    pub fn compute(&self) {
+        // If you're not runnning in parallel, there is no optimal parallelization order
+        // So just do nothing.
+        #[cfg(feature = "rayon")]
+        {
+            let cluster_ids = self.db.cluster_ids(());
+            let cite_ids = self.db.all_cite_ids(());
+            // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
+            // single rayon thread
+            cite_ids
+                .par_iter()
+                .for_each_with(self.snap(), |snap, &cite_id| {
+                    snap.0.ir_gen2(cite_id);
+                });
+            self.db.year_suffixes(());
+            cluster_ids
+                .par_iter()
+                .for_each_with(self.snap(), |snap, &cluster_id| {
+                    snap.0.built_cluster(cluster_id);
+                });
+        }
     }
 
     pub fn single(&self, refr: &Reference) -> String {

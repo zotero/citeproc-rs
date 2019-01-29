@@ -28,6 +28,7 @@ impl RootDatabase {
             fetcher,
         };
         db.set_style((), Default::default());
+        db.set_all_uncited((), Default::default());
         db
     }
 }

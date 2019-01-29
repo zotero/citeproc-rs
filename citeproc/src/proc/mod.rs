@@ -24,6 +24,7 @@ use group::GroupVars;
 use crate::locale::Locale;
 use std::sync::Arc;
 pub trait ProcDatabase: StyleDatabase {
+    // TODO: get locales based on the current reference's language field
     fn default_locale(&self) -> Arc<Locale>;
     fn style_el(&self) -> Arc<Style>;
     fn cite_pos(&self, id: CiteId) -> crate::style::element::Position;
@@ -31,9 +32,12 @@ pub trait ProcDatabase: StyleDatabase {
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
 
-#[derive(Debug)]
+use fnv::FnvHashMap;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
     pub tokens: HashSet<DisambToken>,
+    pub name_tokens: FnvHashMap<u64, HashSet<DisambToken>>,
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.
@@ -44,6 +48,7 @@ impl IrState {
     pub fn new() -> Self {
         IrState {
             tokens: HashSet::new(),
+            name_tokens: Default::default(),
             macro_stack: HashSet::new(),
         }
     }
@@ -119,11 +124,11 @@ where
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
                 use crate::output::LocalizedQuotes;
-                use crate::style::element::TextSource::*;
+                use crate::style::element::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
                 let quotes = if quo { Some(&q) } else { None };
                 match *source {
-                    Macro(ref name) => {
+                    TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
                         let style = db.style_el();
                         let macro_unsafe = style
@@ -144,7 +149,7 @@ where
                         state.macro_stack.remove(&name);
                         out
                     }
-                    Value(ref value) => {
+                    TextSource::Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
                         (
                             IR::Rendered(Some(fmt.affixed_text_quoted(
@@ -156,7 +161,21 @@ where
                             GroupVars::new(),
                         )
                     }
-                    Variable(var, form) => {
+                    TextSource::Variable(var, form) => {
+                        if var == StandardVariable::Ordinary(Variable::YearSuffix) {
+                            if let Some(ReEvaluation::AddYearSuffix(i)) = ctx.re_evaluation {
+                                let base26 = crate::utils::to_bijective_base_26(i);
+                                return (
+                                    IR::Rendered(Some(fmt.text_node(base26, None))),
+                                    GroupVars::DidRender,
+                                );
+                            }
+                            let ysh = YearSuffixHook::Explicit(self.clone());
+                            return (
+                                IR::YearSuffix(ysh, O::Build::default()),
+                                GroupVars::OnlyEmpty,
+                            );
+                        }
                         let content = match var {
                             StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {
                                 state.tokens.insert(DisambToken::Str(val.into()));
@@ -183,7 +202,7 @@ where
                         let gv = GroupVars::rendered_if(content.is_some());
                         (IR::Rendered(content), gv)
                     }
-                    Term(term_selector, plural) => {
+                    TextSource::Term(term_selector, plural) => {
                         let locale = db.default_locale();
                         let content = locale
                             .get_text_term(term_selector, plural)
