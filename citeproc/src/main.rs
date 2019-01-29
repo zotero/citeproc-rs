@@ -19,7 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 mod pandoc;
-use pandoc_types::definition::{MetaValue, Pandoc as PandocDocument, Inline};
+use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;
@@ -221,11 +221,7 @@ fn pandoc_meta_str<'a>(doc: &'a PandocDocument, key: &str) -> Option<&'a str> {
 
 fn do_pandoc() {
     let filter_args = App::new("pandoc_filter")
-        .arg(
-            Arg::with_name("output_format")
-             .required(false)
-             .index(1)
-         )
+        .arg(Arg::with_name("output_format").required(false).index(1))
         .get_matches();
 
     let _output_format = filter_args.value_of("output_format").unwrap_or("none");

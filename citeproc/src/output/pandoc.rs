@@ -1,4 +1,4 @@
-use super::{OutputFormat, LocalizedQuotes};
+use super::{LocalizedQuotes, OutputFormat};
 use crate::style::element::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };

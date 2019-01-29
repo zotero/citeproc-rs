@@ -87,11 +87,10 @@ impl<O: OutputFormat> Cite<O> {
 /// [Cite]: ../input/struct.Cite.html
 
 #[derive(Clone)]
-pub struct CiteContext<'c, O: OutputFormat> {
-    // can get this from db
+pub struct CiteContext<'c, O: OutputFormat + Sized> {
+    // can technically get this from db
     pub reference: &'c Reference,
-    // could pull one out of thin air! all the useful formatters are ZSTs.
-    pub format: &'c O,
+    pub format: O,
     //
     pub cite: &'c Cite<O>,
     // could store in the DB
@@ -113,12 +112,14 @@ pub struct Cluster<O: OutputFormat> {
 // helper methods to access both cite and reference properties via Variables
 
 impl<'c, O: OutputFormat> CiteContext<'c, O> {
-
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
-            (Variable::Title, VariableForm::Short) => self.reference.ordinary.get(&Variable::TitleShort),
+            (Variable::Title, VariableForm::Short) => {
+                self.reference.ordinary.get(&Variable::TitleShort)
+            }
             _ => self.reference.ordinary.get(&var),
-        }).map(|s| s.as_str())
+        })
+        .map(|s| s.as_str())
     }
 
     pub fn has_variable(&self, var: AnyVariable) -> bool {
@@ -128,9 +129,9 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
             // TODO: finish this list
             Number(NumberVariable::Locator) => !self.cite.locators.is_empty(),
             // we need Page to exist and be numeric
-            Number(NumberVariable::PageFirst) => self.is_numeric(
-                AnyVariable::Number(NumberVariable::Page)
-            ),
+            Number(NumberVariable::PageFirst) => {
+                self.is_numeric(AnyVariable::Number(NumberVariable::Page))
+            }
             _ => self.reference.has_variable(var),
         }
     }

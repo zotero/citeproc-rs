@@ -1,5 +1,5 @@
 use pandoc_types::{
-    definition::{Block, Inline, Pandoc as PandocDocument, Citation},
+    definition::{Block, Citation, Inline, Pandoc as PandocDocument},
     walk::MutVisitor,
 };
 

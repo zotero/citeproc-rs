@@ -76,7 +76,7 @@ where
     where
         O: OutputFormat,
     {
-        let fmt = ctx.format;
+        let fmt = &ctx.format;
         let locale = db.merged_locale(db.style(()).default_locale.clone());
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
@@ -152,7 +152,7 @@ where
     where
         O: OutputFormat,
     {
-        let fmt = ctx.format;
+        let fmt = &ctx.format;
         let content = ctx
             .reference
             .date
@@ -227,18 +227,20 @@ impl DatePart {
                         MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
                         term_form,
                     );
-                    Some(locale
-                        .gendered_terms
-                        .get(&sel)
-                        .map(|gt| gt.0.singular().to_string())
-                        .unwrap_or_else(|| {
-                            let fallback = if term_form == TermForm::Short {
-                                MONTHS_SHORT
-                            } else {
-                                MONTHS_LONG
-                            };
-                            fallback[date.month as usize].to_string()
-                        }))
+                    Some(
+                        locale
+                            .gendered_terms
+                            .get(&sel)
+                            .map(|gt| gt.0.singular().to_string())
+                            .unwrap_or_else(|| {
+                                let fallback = if term_form == TermForm::Short {
+                                    MONTHS_SHORT
+                                } else {
+                                    MONTHS_LONG
+                                };
+                                fallback[date.month as usize].to_string()
+                            }),
+                    )
                 }
             },
             DatePartForm::Day(form) => match form {
@@ -266,9 +268,6 @@ impl DatePart {
                 }
             },
         };
-        string.map(|s| {
-            ctx.format
-                .affixed_text(s, self.formatting, &self.affixes)
-        })
+        string.map(|s| ctx.format.affixed_text(s, self.formatting, &self.affixes))
     }
 }

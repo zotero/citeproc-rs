@@ -4,8 +4,8 @@ use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
-use std::collections::HashSet;
 use crate::Atom;
+use std::collections::HashSet;
 
 mod choose;
 mod date;
@@ -101,19 +101,15 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O> {
-        let fmt = ctx.format;
+        let fmt = &ctx.format;
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
-                use crate::style::element::TextSource::*;
                 use crate::output::LocalizedQuotes;
+                use crate::style::element::TextSource::*;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-                let quotes = if quo {
-                    Some(&q)
-                } else {
-                    None
-                };
+                let quotes = if quo { Some(&q) } else { None };
                 match *source {
                     Macro(ref name) => {
                         // TODO: be able to return errors
@@ -126,7 +122,10 @@ where
                         // get an extra level of recursion before it panics. BUT, then it will
                         // already have panicked when it was run the first time! So we're OK.
                         if state.macro_stack.contains(&name) {
-                            panic!("foiled macro recursion: {} called from within itself; exiting", &name);
+                            panic!(
+                                "foiled macro recursion: {} called from within itself; exiting",
+                                &name
+                            );
                         }
                         state.macro_stack.insert(name.clone());
                         let out = sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone());
@@ -136,34 +135,35 @@ where
                     Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
                         (
-                            IR::Rendered(Some(fmt.affixed_text_quoted(value.to_string(), f, &af, quotes))),
+                            IR::Rendered(Some(fmt.affixed_text_quoted(
+                                value.to_string(),
+                                f,
+                                &af,
+                                quotes,
+                            ))),
                             GroupVars::new(),
                         )
                     }
                     Variable(var, form) => {
                         let content = match var {
-                            StandardVariable::Ordinary(v) => {
-                                ctx.get_ordinary(v, form).map(|val| {
-                                    state.tokens.insert(DisambToken::Str(val.into()));
-                                    let s = if v.should_replace_hyphens() {
-                                        val.replace('-', "\u{2013}")
-                                    } else {
-                                        val.to_string()
-                                    };
-                                    fmt.affixed_text_quoted(s, f, &af, quotes)
-                                })
-                            }
-                            StandardVariable::Number(v) => {
-                                ctx.get_number(v).map(|val| {
-                                    state.tokens.insert(DisambToken::Num(val.clone()));
-                                    fmt.affixed_text_quoted(
-                                        val.verbatim(v.should_replace_hyphens()),
-                                        f,
-                                        &af,
-                                        quotes,
-                                    )
-                                })
-                            }
+                            StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {
+                                state.tokens.insert(DisambToken::Str(val.into()));
+                                let s = if v.should_replace_hyphens() {
+                                    val.replace('-', "\u{2013}")
+                                } else {
+                                    val.to_string()
+                                };
+                                fmt.affixed_text_quoted(s, f, &af, quotes)
+                            }),
+                            StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
+                                state.tokens.insert(DisambToken::Num(val.clone()));
+                                fmt.affixed_text_quoted(
+                                    val.verbatim(v.should_replace_hyphens()),
+                                    f,
+                                    &af,
+                                    quotes,
+                                )
+                            }),
                         };
                         let gv = GroupVars::rendered_if(content.is_some());
                         (IR::Rendered(content), gv)

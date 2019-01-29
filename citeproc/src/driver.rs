@@ -52,29 +52,28 @@ where
     }
 
     pub fn single(&self, refr: &Reference) -> String {
-        let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
             cite: &Cite::basic(0, "ok".into()),
             position: Position::First,
-            format: &fmt,
+            format: O::default(),
             citation_number: 1,
             re_evaluation: None,
         };
         let mut state = IrState::new();
         let (i, _) = self.db.style(()).intermediate(&self.db, &mut state, &ctx);
+        let fmt = O::default();
         let flat = i.flatten(&fmt);
         let o = fmt.output(flat);
         serde_json::to_string(&o).unwrap()
     }
 
     pub fn pair(&self, cite: &Cite<O>, refr: &Reference) {
-        let fmt = O::default();
         let ctx = CiteContext {
             cite,
             reference: refr,
             position: Position::First,
-            format: &fmt,
+            format: O::default(),
             citation_number: 1,
             re_evaluation: None,
         };
@@ -89,13 +88,12 @@ where
             pairs
                 .par_iter()
                 .map_with(self.snap(), |snap, pair| {
-                    let fmt = O::default();
                     let db = &*snap.0;
                     let ctx = CiteContext {
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
-                        format: &fmt,
+                        format: O::default(),
                         citation_number: 1,
                         re_evaluation: None,
                     };
@@ -120,7 +118,7 @@ where
                         cite: pair.0,
                         reference: pair.1,
                         position: Position::First,
-                        format: &fmt,
+                        format: O::default(),
                         citation_number: 1,
                         re_evaluation: None,
                     };
@@ -146,12 +144,11 @@ where
     }
 
     pub fn dump_ir(&self, refr: &Reference) {
-        let fmt = O::default();
         let ctx = CiteContext {
             reference: refr,
             cite: &Cite::basic(0, "ok".into()),
             position: Position::First,
-            format: &fmt,
+            format: O::default(),
             citation_number: 1,
             re_evaluation: None,
         };

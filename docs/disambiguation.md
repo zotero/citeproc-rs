@@ -157,3 +157,196 @@ be disambiguated to `John Doe, 1999`.
 `givenname-disambiguation-rule` can also disambiguate names independently of 
 the ambiguity of their containing cites. You could create a second inverted 
 index of only name-parts, and run a similar procedure.
+
+#### How?
+
+1. The unit of name ambiguity is a single, rendered `PersonName` or `Literal`.
+2. The inverted index can be constructed using all individual name parts AND a 
+   rendered unit name.
+3. If disambiguation adds a name part (e.g. add-givenname), then the new 
+   rendered name gets added to the token set.
+
+```
+<citation disambiguate-add-givenname="true",
+          givenname-disambiguation-rule="all-names">
+    <names variable="author">
+        <name form="short" initialize-with="." initialize="true" />
+    </names>
+    <choose>
+      <if for-this-example="false">
+        <names variable="editor">
+            <name form="short" />
+        </names>
+      </if>
+    </choose>
+    <date form="long" variable="issued" />
+</citation>
+
+Ref: { id: "shortRide",
+       author: [{ given: "John", family: "Adams" }]
+       issued: { "raw": "1986" } }
+Ref: { id: "other",
+       author: [{ given: "Jane", family: "Adams" }]
+       issued: { "raw": "1986" } }
+
+Name elements:
+   Name(<name form="short" initialize-with="." initialize="true" />)
+   => TOKENS("ADAMS", "J. ADAMS", "JOHN ADAMS")
+   => TOKENS("ADAMS", "J. ADAMS", "JANE ADAMS")
+
+   Name(<name form="short" />)
+   => Tokens("ADAMS", "JOHN ADAMS")
+   => Tokens("ADAMS", "JANE ADAMS")
+
+Inverted index:
+   "ADAMS" => Set("shortRide", "other")
+   "J. ADAMS" => Set("shortRide", "other")
+   "JOHN ADAMS" => Set("shortRide")
+   "JANE ADAMS" => Set("other")
+   Date(1986, 0, 0) => Set("shortRide", "other")
+
+1st pass: "Adams, 1986" => either
+2nd pass: "J. Adams, 1986" => either
+2nd pass: "John Adams, 1986" => Set("shortRide")
+```
+
+For sort-separator == delimiter.
+
+```
+<citation disambiguate-add-givenname="true",
+          givenname-disambiguation-rule="all-names">
+    <names variable="author">
+        <name prefix="[" suffix="]" form="short"
+              name-as-sort-order="all" et-al-min="4"
+              initialize-with="." initialize="true" />
+    </names>
+</citation>
+
+Ref: { id: "one",
+       author: [ { given: "John", family: "Adams" } ] }
+Ref: { id: "two",
+       author: [ { given: "Jane", family: "Adams" } ] }
+Ref: { id: "three",
+       author: [ { given: "John", family: "Adams" }
+               , { given: "Adams", family: "John" } ] }
+
+Names elements:
+   (the only one)
+       one => TOKENS("Adams", "Adams, John")
+       two => TOKENS("Adams", "Adams, Jane")
+       three => TOKENS("Adams, John", "Adams, John, John, Adams")
+
+Inverted index:
+   "Adams"       => Set(one, two)
+   "Adams, John" => Set(one, three)
+   "Adams, Jane" => Set(two)
+   "Adams, John, John, Adams" => Set(three)
+   Date(1986, 0, 0) => Set("shortRide", "other")
+
+Ref(one):
+    1st pass:
+        "Adams"       => Set(one, two)
+    2nd pass:
+        "Adams, John" => Set(one, three)
+    Still ambiguous
+
+Ref(two):
+    1st pass:
+        "Adams"       => Set(one, two)
+    2nd pass:
+        "Adams, Jane" => Set(two)
+
+Ref(three):
+    1st pass:
+        "Adams, John" => Set(one, three)
+    2nd pass:
+        "Adams, John, John, Adams" => Set(three)
+
+```
+
+Now we know that `Ref(three)` is referred to as "Adams, John, John, Adams". So 
+`Ref(one)`'s lookups into the index for "Adams, John" should no longer include 
+`Ref(three)`.
+
+How do you do that? First, keep a map of negatives, like so:
+
+```
+if a token appears in this map, you may Set-Minus the ref ids from the usual 
+matching set.
+{ "Adams" => Set(one, two), "Adams, John" => Set(three) }
+```
+
+Split disambiguation into two phases (well, more, but get to that later), one 
+that generates IR + negative name matching and waits for all cites to 
+disqualify their own negatives before continuing. The second tries again from 
+the same point with negative matches excluded. In this case, you would have:
+
+```
+Ref(one):
+    2nd pass:
+        "Adams, John" => Set(one, three) \\ Set(three) = Set(one)
+    No longer ambiguous
+Ref(two):
+    Already unambiguous
+Ref(three):
+    Already unambiguous
+```
+
+Therefore, a cite to `Ref(one)` would not continue to be disambiguated 
+unnecessarily. A cite including a *literal* name "Adams" would also be 
+unambiguous from that point.
+
+### "all-names" disambiguation rule -- disambiguating names by themselves
+
+You can create another inverted index just for names.
+
+### Year suffixes
+
+You could do a similar but slightly different thing with year-suffixes, 
+producing a map like:
+
+```
+{ Ref(one) => "a", Ref(two) => "b" }
+```
+
+Example implementation:
+
+```rust
+fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<HashMap<Atom, u32>> {
+    let refs_to_add_suffixes_to = all_cites_ordered
+        .map(|cite| (&cite.ref_id, db.ir2(cite.id)))
+        .filter_map(|(ref_id, (_, is_date_ambig))| {
+            match is_date_ambig {
+                true => Some(ref_id),
+                _ => None
+            }
+        });
+
+    let mut suffixes = HashMap::new();
+    let mut i = 1; // "a" = 1
+    for ref_id in refs_to_add_suffixes_to {
+        if !suffixes.contains(ref_id) {
+            suffixes.insert(ref_id.clone(), i);
+            i += 1;
+        }
+    }
+    Arc::new(suffixes)
+}
+
+fn ir3(db: &impl ReferenceDatabase, cite_id: CiteId) -> Arc<(IrSum<Pandoc>, bool)> {
+    let cite = db.cite(cite_id);
+    let ir2 = db.ir2(cite_id);
+    let suffixes = db.year_suffixes(());
+    // if unambiguous or not improvable, just return ir2.
+    // It's an Arc, so cloning is cheap.
+    if !ir2.1 || !suffixes.contains_key(&cite.ref_id) {
+        return ir2.clone();
+    }
+    // Otherwise compute ir3() based on those suffixes
+    let ctx = CiteContext {
+        year_suffix: suffixes[&cite.ref_id],
+        ..etc
+    };
+}
+```
+

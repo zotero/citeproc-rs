@@ -78,7 +78,12 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         self.affixed_quoted(b, affixes, None)
     }
 
-    fn affixed_quoted(&self, b: Self::Build, affixes: &Affixes, quotes: Option<&LocalizedQuotes>) -> Self::Build {
+    fn affixed_quoted(
+        &self,
+        b: Self::Build,
+        affixes: &Affixes,
+        quotes: Option<&LocalizedQuotes>,
+    ) -> Self::Build {
         use std::iter::once;
         let pre = affixes.prefix.is_empty();
         let suf = affixes.suffix.is_empty();

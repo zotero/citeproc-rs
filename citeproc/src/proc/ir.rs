@@ -20,7 +20,7 @@ pub type IrSum<O> = (IR<O>, GroupVars);
 pub enum ReEvaluation {
     AddNames,
     AddGivenName(GivenNameDisambiguationRule),
-    AddYearSuffix,
+    AddYearSuffix(u32),
     Conditionals,
 }
 
@@ -31,7 +31,7 @@ pub enum YearSuffixHook {
 }
 
 // Intermediate Representation
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IR<O: OutputFormat> {
     // no (further) disambiguation possible
     Rendered(Option<O::Build>),
@@ -113,7 +113,7 @@ impl<O: OutputFormat> IR<O> {
                     ir.re_evaluate(db, state, ctx, is_unambig);
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
-                    let new_ir = IR::Rendered(Some(seq.flatten_seq(ctx.format)));
+                    let new_ir = IR::Rendered(Some(seq.flatten_seq(&ctx.format)));
                     mem::replace(self, new_ir)
                 } else {
                     return;
@@ -123,7 +123,7 @@ impl<O: OutputFormat> IR<O> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IrSeq<O: OutputFormat> {
     pub contents: Vec<IR<O>>,
     pub formatting: Option<Formatting>,

@@ -8,7 +8,7 @@ use crate::style::element::Position;
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
-use crate::proc::{AddDisambTokens, DisambToken, IrState, ReEvaluation, IR};
+use crate::proc::{AddDisambTokens, DisambToken, IrState, Proc, ReEvaluation, IR};
 use crate::Atom;
 
 #[salsa::query_group(ReferenceDatabaseStorage)]
@@ -46,7 +46,15 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn cluster_ids(&self, key: ()) -> Arc<Vec<ClusterId>>;
 
-    fn ir_gen(&self, key: CiteId) -> Arc<IR<Pandoc>>;
+    fn year_suffixes(&self, key: ()) -> Arc<FnvHashMap<Atom, u32>>;
+
+    // If these don't run any additional disambiguation, they just clone the
+    // previous ir's Arc.
+    fn ir_gen0(&self, key: CiteId) -> Arc<(IR<Pandoc>, bool)>;
+    fn ir_gen1(&self, key: CiteId) -> Arc<(IR<Pandoc>, bool)>;
+    fn ir_gen2(&self, key: CiteId) -> Arc<(IR<Pandoc>, bool)>;
+    fn ir_gen3(&self, key: CiteId) -> Arc<(IR<Pandoc>, bool)>;
+    fn ir_gen4(&self, key: CiteId) -> Arc<(IR<Pandoc>, bool)>;
 
     fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
@@ -179,6 +187,28 @@ fn cite_position(db: &impl ReferenceDatabase, key: CiteId) -> Position {
         .clone()
 }
 
+fn built_cluster(
+    db: &impl ReferenceDatabase,
+    cluster_id: ClusterId,
+) -> Arc<<Pandoc as OutputFormat>::Output> {
+    let fmt = Pandoc::default();
+    let cite_ids = db.cluster_cites(cluster_id);
+    let style = db.style(());
+    let layout = &style.citation.layout;
+    let built_cites: Vec<_> = cite_ids
+        .iter()
+        .map(|&id| {
+            let ir = &db.ir_gen4(id).0;
+            ir.flatten(&fmt)
+        })
+        .collect();
+    let build = fmt.affixed(
+        fmt.group(built_cites, &layout.delimiter.0, layout.formatting),
+        &layout.affixes,
+    );
+    Arc::new(fmt.output(build))
+}
+
 fn matching_refs(
     index: &FnvHashMap<DisambToken, HashSet<Atom>>,
     state: &IrState,
@@ -208,96 +238,177 @@ fn matching_refs(
     (matching_ids, len == 0 || len == 1)
 }
 
-fn ir_gen(db: &impl ReferenceDatabase, id: CiteId) -> Arc<IR<Pandoc>> {
-    use crate::proc::Proc;
-    let style = db.style(());
-    let cite = &db.cite(id);
-    let fmt = Pandoc::default();
-    let refr = db.reference(cite.ref_id.clone());
-    if refr.is_none() {
-        eprintln!("citeproc-rs: reference {} not found", &cite.ref_id);
-        return Arc::new(IR::Rendered(Some(fmt.plain("???"))));
-    }
-    let refr = refr.unwrap();
-    let mut ctx = CiteContext {
-        cite,
-        format: &fmt,
-        // TODO: handle missing references
-        reference: &refr,
-        position: db.cite_position(id),
-        citation_number: 0, // XXX: from db
-        re_evaluation: None,
-    };
-    let index = db.inverted_index(());
-    let is_unambig = |state: &IrState| {
-        let (_, unambiguous) = matching_refs(&index, &state);
-        unambiguous
-    };
-
-    // TODO: use this to apply the same transforms to other cites with the same ref_id
-    // in another pass
-    let mut biggest_reeval = None;
-
-    let mut state = IrState::new();
-    let (mut ir, _) = style.intermediate(db, &mut state, &ctx);
-    // if the cite is ibid (etc), we are assuming it produces <= the first one's DisambTokens.
-    // So the first pass ignores ibids, and the second just reapplies any transforms done on the
-    // first one.
-    if is_unambig(&state) || ctx.position != Position::First {
-        return Arc::new(ir);
-    }
-
-    let mut reeval = |re: ReEvaluation| {
-        ctx.re_evaluation = Some(re);
-        biggest_reeval = ctx.re_evaluation;
-        ir.re_evaluate(db, &mut state, &ctx, &is_unambig);
-        let (_, unambiguous) = matching_refs(&index, &state);
-        unambiguous
-    };
-
-    if style.citation.disambiguate_add_names {
-        if reeval(ReEvaluation::AddNames) {
-            return Arc::new(ir);
-        }
-    }
-
-    if style.citation.disambiguate_add_givenname {
-        let gndr = style.citation.givenname_disambiguation_rule;
-        if reeval(ReEvaluation::AddGivenName(gndr)) {
-            return Arc::new(ir);
-        }
-    }
-
-    if style.citation.disambiguate_add_year_suffix {
-        if reeval(ReEvaluation::AddYearSuffix) {
-            return Arc::new(ir);
-        }
-    }
-
-    reeval(ReEvaluation::Conditionals);
-
-    Arc::new(ir)
+fn year_suffixes(_db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<Atom, u32>> {
+    return Arc::new(FnvHashMap::default());
+    // unimplemented!();
+    // let refs_to_add_suffixes_to = all_cites_ordered
+    //     .map(|cite| (&cite.ref_id, db.ir2(cite.id)))
+    //     .filter_map(|(ref_id, (_, is_date_ambig))| {
+    //         match is_date_ambig {
+    //             true => Some(ref_id),
+    //             _ => None
+    //         }
+    //     });
+    //
+    // let mut suffixes = FnvHashMap::new();
+    // let mut i = 1; // "a" = 1
+    // for ref_id in refs_to_add_suffixes_to {
+    //     if !suffixes.contains(ref_id) {
+    //         suffixes.insert(ref_id.clone(), i);
+    //         i += 1;
+    //     }
+    // }
+    // Arc::new(suffixes)
 }
 
-fn built_cluster(
+fn disambiguate<O: OutputFormat>(
     db: &impl ReferenceDatabase,
-    cluster_id: ClusterId,
-) -> Arc<<Pandoc as OutputFormat>::Output> {
-    let fmt = Pandoc::default();
-    let cite_ids = db.cluster_cites(cluster_id);
-    let style = db.style(());
-    let layout = &style.citation.layout;
+    ir: &mut IR<O>,
+    state: &mut IrState,
+    ctx: &mut CiteContext<O>,
+    re: ReEvaluation,
+) -> (FnvHashSet<Atom>, bool) {
+    let index = db.inverted_index(());
+    ctx.re_evaluation = Some(re);
+    let is_unambig = |state: &IrState| {
+        let (_, unambiguous) = matching_refs(&index, state);
+        unambiguous
+    };
+    ir.re_evaluate(db, state, ctx, &is_unambig);
+    matching_refs(&index, state)
+}
 
-    let built_cites: Vec<_> = cite_ids
-        .iter()
-        .map(|&id| {
-            let ir = db.ir_gen(id);
-            ir.flatten(&fmt)
-        })
-        .collect();
-    let build = fmt.affixed(
-        fmt.group(built_cites, &layout.delimiter.0, layout.formatting),
-        &layout.affixes,
+fn ctx_for<'c, O: OutputFormat>(
+    db: &impl ReferenceDatabase,
+    cite: &'c Cite<O>,
+    reference: &'c Reference,
+) -> CiteContext<'c, O> {
+    CiteContext {
+        cite,
+        reference,
+        format: O::default(),
+        position: db.cite_position(cite.id),
+        citation_number: 0, // XXX: from db
+        re_evaluation: None,
+    }
+}
+
+fn ref_not_found(ref_id: &Atom, log: bool) -> Arc<(IR<Pandoc>, bool)> {
+    if log {
+        eprintln!("citeproc-rs: reference {} not found", ref_id);
+    }
+    return Arc::new((IR::Rendered(Some(Pandoc::default().plain("???"))), true));
+}
+
+fn ir_gen0(db: &impl ReferenceDatabase, id: CiteId) -> Arc<(IR<Pandoc>, bool)> {
+    let style = db.style(());
+    let index = db.inverted_index(());
+    let cite = db.cite(id);
+    let refr = match db.reference(cite.ref_id.clone()) {
+        None => return ref_not_found(&cite.ref_id, true),
+        Some(r) => r,
+    };
+    let ctx = ctx_for(db, &cite, &refr);
+    let mut state = IrState::new();
+    let ir = style.intermediate(db, &mut state, &ctx).0;
+
+    let (_, un) = matching_refs(&index, &state);
+    Arc::new((ir, un))
+}
+
+fn ir_gen1(db: &impl ReferenceDatabase, id: CiteId) -> Arc<(IR<Pandoc>, bool)> {
+    let style = db.style(());
+    let ir0 = db.ir_gen0(id);
+    // XXX: keep going if there is global name disambig to perform?
+    if ir0.1 || !style.citation.disambiguate_add_names {
+        return ir0.clone();
+    }
+    let cite = db.cite(id);
+    let refr = db
+        .reference(cite.ref_id.clone())
+        .expect("already handled missing ref");
+    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut state = IrState::new();
+    let mut ir = ir0.0.clone();
+
+    let (_, un) = disambiguate(db, &mut ir, &mut state, &mut ctx, ReEvaluation::AddNames);
+    Arc::new((ir, un))
+}
+
+fn ir_gen2(db: &impl ReferenceDatabase, id: CiteId) -> Arc<(IR<Pandoc>, bool)> {
+    let style = db.style(());
+    let ir1 = db.ir_gen1(id);
+    if ir1.1 || !style.citation.disambiguate_add_givenname {
+        return ir1.clone();
+    }
+    let cite = db.cite(id);
+    let refr = db
+        .reference(cite.ref_id.clone())
+        .expect("already handled missing ref");
+    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut state = IrState::new();
+    let mut ir = ir1.0.clone();
+
+    let gndr = style.citation.givenname_disambiguation_rule;
+    let (_, un) = disambiguate(
+        db,
+        &mut ir,
+        &mut state,
+        &mut ctx,
+        ReEvaluation::AddGivenName(gndr),
     );
-    Arc::new(fmt.output(build))
+    Arc::new((ir, un))
+}
+
+fn ir_gen3(db: &impl ReferenceDatabase, cite_id: CiteId) -> Arc<(IR<Pandoc>, bool)> {
+    let style = db.style(());
+    let ir2 = db.ir_gen2(cite_id);
+    if ir2.1 || !style.citation.disambiguate_add_year_suffix {
+        return ir2.clone();
+    }
+    // splitting the ifs means we only compute year suffixes if it's enabled
+    let cite = db.cite(cite_id);
+    let suffixes = db.year_suffixes(());
+    if !suffixes.contains_key(&cite.ref_id) {
+        return ir2.clone();
+    }
+    let refr = db
+        .reference(cite.ref_id.clone())
+        .expect("already handled missing ref");
+    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut state = IrState::new();
+    let mut ir = ir2.0.clone();
+
+    let year_suffix = suffixes[&cite.ref_id];
+    let (_, un) = disambiguate(
+        db,
+        &mut ir,
+        &mut state,
+        &mut ctx,
+        ReEvaluation::AddYearSuffix(year_suffix),
+    );
+    Arc::new((ir, un))
+}
+
+fn ir_gen4(db: &impl ReferenceDatabase, cite_id: CiteId) -> Arc<(IR<Pandoc>, bool)> {
+    let ir3 = db.ir_gen3(cite_id);
+    if ir3.1 {
+        return ir3.clone();
+    }
+    let cite = db.cite(cite_id);
+    let refr = db
+        .reference(cite.ref_id.clone())
+        .expect("already handled missing ref");
+    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut state = IrState::new();
+    let mut ir = ir3.0.clone();
+
+    let (_, un) = disambiguate(
+        db,
+        &mut ir,
+        &mut state,
+        &mut ctx,
+        ReEvaluation::Conditionals,
+    );
+    Arc::new((ir, un))
 }
