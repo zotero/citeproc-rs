@@ -828,7 +828,7 @@ pub struct MacroMap {
     pub elements: Vec<Element>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum StyleClass {
     InText,

@@ -6,6 +6,7 @@ use pandoc_types::{
 use citeproc::db::ReferenceDatabase;
 use citeproc::input::{Cite, Cluster, Suppression};
 use citeproc::output::Pandoc;
+use citeproc::style::element::StyleClass;
 
 struct GetClusters {
     next_cluster_id: u64,
@@ -106,9 +107,12 @@ impl<'a, DB: ReferenceDatabase> MutVisitor for WriteClusters<'a, DB> {
                     })
                     .collect();
                 *p_cites = cites;
-                *literal = vec![Inline::Note(vec![Block::Para(
-                    (*self.db.built_cluster(self.next_cluster_id)).clone(),
-                )])];
+                let built = (*self.db.built_cluster(self.next_cluster_id)).clone();
+                if self.db.style(()).class == StyleClass::Note {
+                    *literal = vec![Inline::Note(vec![Block::Para(built)])];
+                } else {
+                    *literal = built;
+                }
                 self.next_cluster_id += 1;
             }
             _ => {}

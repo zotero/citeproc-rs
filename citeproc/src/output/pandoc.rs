@@ -122,7 +122,11 @@ impl OutputFormat for Pandoc {
         // TODO: allow internal linking using the Attr parameter (e.g.
         // first-reference-note-number)
         if let Some(target) = target {
-            vec![Inline::Link(Default::default(), a, Target(target.to_string(), "".to_string()))]
+            vec![Inline::Link(
+                Default::default(),
+                a,
+                Target(target.to_string(), "".to_string()),
+            )]
         } else {
             a
         }
