@@ -1,9 +1,9 @@
 use super::disamb::{AddDisambTokens, DisambToken};
 use super::group::GroupVars;
 use super::ir::*;
-use super::{IrState, Proc};
+use super::{CiteContext, IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::{CiteContext, Date, DateOrRange};
+use crate::input::{Date, DateOrRange};
 use crate::output::OutputFormat;
 use crate::style::element::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,

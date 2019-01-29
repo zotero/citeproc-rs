@@ -1,5 +1,5 @@
 use crate::db::ReferenceDatabase;
-use crate::input::{CiteContext, Locator};
+use crate::input::Locator;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
@@ -7,6 +7,8 @@ use crate::style::variables::*;
 use crate::Atom;
 use std::collections::HashSet;
 
+mod cite_context;
+pub use cite_context::CiteContext;
 mod choose;
 mod date;
 mod disamb;

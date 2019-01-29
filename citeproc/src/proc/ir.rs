@@ -1,7 +1,6 @@
 use super::group::GroupVars;
-use super::{IrState, Proc};
+use super::{CiteContext, IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::CiteContext;
 use crate::output::OutputFormat;
 use crate::style::element::{
     Affixes, BodyDate, Choose, Formatting, GivenNameDisambiguationRule, Names as NamesEl,

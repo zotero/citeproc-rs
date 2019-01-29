@@ -36,7 +36,7 @@ itertools = "0.7.11"
 semver = "0.9.0"
 lazy_static = "1.2.0"
 ucd-trie = "0.1.1"
-salsa = "0.10.0-alpha4"
+salsa = "0.10.0"
 string_cache = "0.7.3"
 pandoc_types = { path = "../pandoc-types" }
 

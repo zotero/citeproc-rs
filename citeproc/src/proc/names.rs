@@ -1,8 +1,8 @@
 use super::group::GroupVars;
 use super::ir::*;
-use super::{IrState, Proc};
+use super::{CiteContext, IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::{CiteContext, Name, PersonName};
+use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
 use crate::style::element::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,

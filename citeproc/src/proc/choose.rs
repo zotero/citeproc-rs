@@ -1,8 +1,7 @@
 use super::helpers::sequence;
 use super::ir::*;
-use super::{IrState, Proc};
+use super::{CiteContext, IrState, Proc};
 use crate::db::ReferenceDatabase;
-use crate::input::CiteContext;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;

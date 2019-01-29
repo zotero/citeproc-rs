@@ -2,13 +2,13 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::{Cite, CiteContext, CiteId, ClusterId, Reference};
+use crate::input::{Cite, CiteId, ClusterId, Reference};
 use crate::style::db::StyleDatabase;
 use crate::style::element::Position;
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
-use crate::proc::{AddDisambTokens, DisambToken, IrState, Proc, ReEvaluation, IR};
+use crate::proc::{AddDisambTokens, CiteContext, DisambToken, IrState, Proc, ReEvaluation, IR};
 use crate::Atom;
 
 #[salsa::query_group(ReferenceDatabaseStorage)]
@@ -164,7 +164,6 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
             if let Some(pos) = matching_prev {
                 map.insert(id, pos);
             } else if let Some(last_id) = seen.get(&cite.ref_id) {
-                // TODO: read position="subsequent" as Ibid || FarNote || NearNote
                 if i - last_id < near_note_distance {
                     map.insert(id, Position::NearNote);
                 } else {

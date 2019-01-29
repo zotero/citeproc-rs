@@ -1,8 +1,7 @@
 use super::group::GroupVars;
 use super::ir::IR::*;
-use super::{IrSeq, IrState, IrSum, Proc, IR};
+use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
 use crate::db::ReferenceDatabase;
-use crate::input::CiteContext;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
 use crate::Atom;

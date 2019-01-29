@@ -1,6 +1,6 @@
 use crate::input::*;
 use crate::output::*;
-use crate::proc::{IrState, Proc};
+use crate::proc::{CiteContext, IrState, Proc};
 use crate::style::db::StyleDatabase;
 use crate::style::element::Position;
 use crate::style::element::Style;
