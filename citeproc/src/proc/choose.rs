@@ -79,7 +79,7 @@ where
     O: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, disambiguate) = eval_conditions(conditions, ctx);
+    let (matched, disambiguate) = eval_conditions(conditions, ctx, db);
     let content = match matched {
         false => None,
         true => Some(sequence(
@@ -100,24 +100,32 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, O>(conditions: &'c Conditions, ctx: &CiteContext<'c, O>) -> (bool, bool)
+fn eval_conditions<'c, O>(
+    conditions: &'c Conditions,
+    ctx: &CiteContext<'c, O>,
+    db: &impl ReferenceDatabase,
+) -> (bool, bool)
 where
     O: OutputFormat,
 {
     let Conditions(ref match_type, ref conds) = *conditions;
-    let mut tests = conds.iter().map(|c| eval_cond(c, ctx));
+    let mut tests = conds.iter().map(|c| eval_cond(c, ctx, db));
     let disambiguate = conds.iter().any(|c| c.disambiguate);
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>) -> bool
+fn eval_cond<'c, O>(
+    cond: &'c Condition,
+    ctx: &CiteContext<'c, O>,
+    db: &impl ReferenceDatabase,
+) -> bool
 where
     O: OutputFormat,
 {
-    let vars = cond.variable.iter().map(|&var| ctx.has_variable(var));
+    let vars = cond.variable.iter().map(|&var| ctx.has_variable(var, db));
 
-    let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var));
+    let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
 
     let types = cond
         .csl_type

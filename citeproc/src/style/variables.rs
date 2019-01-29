@@ -94,8 +94,7 @@ pub enum Variable {
     Event,
     /// geographic location of the related event (e.g. “Amsterdam, the Netherlands”)
     EventPlace,
-    /// number of a preceding note containing the first reference to the item. Assigned by the CSL processor. The variable holds no value for non-note-based styles, or when the item hasn’t been cited in any preceding notes.
-    FirstReferenceNoteNumber,
+
     /// class, type or genre of the item (e.g. “adventure” for an adventure movie, “PhD dissertation” for a PhD thesis)
     Genre,
     /// International Standard Book Number
@@ -230,7 +229,7 @@ pub enum NumberVariable {
     NumberOfVolumes,
     Volume,
 
-    /// Locator, Page and PageFirst: These three are technically meant to be standard variables in CSL 1.0.1, but the spec
+    /// Locator, Page and PageFirst, and FRRN: These are technically meant to be standard variables in CSL 1.0.1, but the spec
     /// requires us to treat them as numerics for `<label plural="contextual">` anyway.
     ///
     /// a cite-specific pinpointer within the item (e.g. a page number within a book, or a volume in a multi-volume work). Must be accompanied in the input data by a label indicating the locator type (see the Locators term list), which determines which term is rendered by cs:label when the “locator” variable is selected.
@@ -240,6 +239,9 @@ pub enum NumberVariable {
     Page,
     /// first page of the range of pages the item (e.g. a journal article) covers in a container (e.g. a journal issue)
     PageFirst,
+
+    /// number of a preceding note containing the first reference to the item. Assigned by the CSL processor. The variable holds no value for non-note-based styles, or when the item hasn’t been cited in any preceding notes.
+    FirstReferenceNoteNumber,
 
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]

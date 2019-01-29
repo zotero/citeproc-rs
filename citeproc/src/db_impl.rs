@@ -79,7 +79,7 @@ impl RootDatabase {
         self.set_all_keys((), Arc::new(keys));
         Ok(())
     }
-    pub fn init_clusters(&mut self, clusters: &[Cluster<Pandoc>]) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Pandoc>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
             let mut ids = Vec::new();
@@ -88,6 +88,7 @@ impl RootDatabase {
                 self.set_cite(cite.id, Arc::new(cite.clone()));
             }
             self.set_cluster_cites(cluster.id, Arc::new(ids));
+            self.set_cluster_note_number(cluster.id, cluster.note_number);
             cluster_ids.push(cluster.id);
         }
         self.set_cluster_ids((), Arc::new(cluster_ids));

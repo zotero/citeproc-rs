@@ -33,9 +33,12 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
 
     fn inverted_index(&self, key: ()) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
 
-    fn cite_positions(&self, key: ()) -> Arc<FnvHashMap<CiteId, Position>>;
+    #[salsa::input]
+    fn cluster_note_number(&self, key: ClusterId) -> u32;
+
+    fn cite_positions(&self, key: ()) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
     #[salsa::dependencies]
-    fn cite_position(&self, key: CiteId) -> Position;
+    fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     #[salsa::input]
     fn cite(&self, key: CiteId) -> Arc<Cite<Pandoc>>;
@@ -122,53 +125,60 @@ mod test {
     #[test]
     fn cite_positions_ibid() {
         let mut db = RootDatabase::test_db();
-        db.init_clusters(&[
+        db.init_clusters(vec![
             Cluster {
                 id: 1,
                 cites: vec![Cite::basic(1, "one")],
+                note_number: 1,
             },
             Cluster {
                 id: 2,
                 cites: vec![Cite::basic(2, "one")],
+                note_number: 2,
             },
         ]);
         let poss = db.cite_positions(());
-        assert_eq!(poss[&1], Position::First);
-        assert_eq!(poss[&2], Position::Ibid);
+        assert_eq!(poss[&1], (Position::First, None));
+        assert_eq!(poss[&2], (Position::Ibid, Some(1)));
     }
 
     #[test]
     fn cite_positions_near_note() {
         let mut db = RootDatabase::test_db();
-        db.init_clusters(&[
+        db.init_clusters(vec![
             Cluster {
                 id: 1,
                 cites: vec![Cite::basic(1, "one")],
+                note_number: 1,
             },
             Cluster {
                 id: 2,
                 cites: vec![Cite::basic(2, "other")],
+                note_number: 2,
             },
             Cluster {
                 id: 3,
                 cites: vec![Cite::basic(3, "one")],
+                note_number: 3,
             },
         ]);
         let poss = db.cite_positions(());
-        assert_eq!(poss[&1], Position::First);
-        assert_eq!(poss[&2], Position::First);
-        assert_eq!(poss[&3], Position::NearNote);
+        assert_eq!(poss[&1], (Position::First, None));
+        assert_eq!(poss[&2], (Position::First, None));
+        assert_eq!(poss[&3], (Position::NearNote, Some(1)));
     }
 
 }
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
-fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, Position>> {
+fn cite_positions(
+    db: &impl ReferenceDatabase,
+    _: (),
+) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
     let cluster_ids = db.cluster_ids(());
     let clusters: Vec<_> = cluster_ids
         .iter()
-        .cloned()
-        .map(|id| db.cluster_cites(id))
+        .map(|&id| (id, db.cluster_cites(id)))
         .collect();
 
     let mut map = FnvHashMap::default();
@@ -178,9 +188,8 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
 
     let mut seen = FnvHashMap::default();
 
-    // TODO: don't use enumerate, because it skips non-cite notes in e.g. Pandoc.
-    // Instead, store footnote number on a cluster.
-    for (i, cluster) in clusters.iter().enumerate() {
+    for (i, (cluster_id, cluster)) in clusters.iter().enumerate() {
+        let note_number = db.cluster_note_number(*cluster_id);
         for (j, &cite_id) in cluster.iter().enumerate() {
             let cite = db.cite(cite_id);
             let prev_cite = cluster
@@ -189,7 +198,7 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
             let matching_prev = prev_cite
                 .filter(|p| p.ref_id == cite.ref_id)
                 .or_else(|| {
-                    if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
+                    if let Some((_, prev_cluster)) = clusters.get(i.wrapping_sub(1)) {
                         if prev_cluster.len() > 0
                             && prev_cluster
                                 .iter()
@@ -211,17 +220,17 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
                     (pre, cur) if pre == cur => Position::Ibid,
                     _ => Position::IbidWithLocator,
                 });
-            if let Some(pos) = matching_prev {
-                map.insert(cite_id, pos);
-            } else if let Some(last_id) = seen.get(&cite.ref_id) {
-                if i - last_id < near_note_distance {
-                    map.insert(cite_id, Position::NearNote);
+            if let Some(&first_note_number) = seen.get(&cite.ref_id) {
+                if let Some(pos) = matching_prev {
+                    map.insert(cite_id, (pos, Some(first_note_number)));
+                } else if note_number - first_note_number < near_note_distance {
+                    map.insert(cite_id, (Position::NearNote, Some(first_note_number)));
                 } else {
-                    map.insert(cite_id, Position::FarNote);
+                    map.insert(cite_id, (Position::FarNote, Some(first_note_number)));
                 }
             } else {
-                map.insert(cite_id, Position::First);
-                seen.insert(cite.ref_id.clone(), i);
+                map.insert(cite_id, (Position::First, None));
+                seen.insert(cite.ref_id.clone(), note_number);
             }
         }
     }
@@ -229,7 +238,7 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
     Arc::new(map)
 }
 
-fn cite_position(db: &impl ReferenceDatabase, key: CiteId) -> Position {
+fn cite_position(db: &impl ReferenceDatabase, key: CiteId) -> (Position, Option<u32>) {
     db.cite_positions(())
         .get(&key)
         .expect("called cite_position on unknown cite id")
@@ -336,7 +345,7 @@ fn ctx_for<'c, O: OutputFormat>(
         cite,
         reference,
         format: O::default(),
-        position: db.cite_position(cite.id),
+        position: db.cite_position(cite.id).0,
         citation_number: 0, // XXX: from db
         re_evaluation: None,
     }

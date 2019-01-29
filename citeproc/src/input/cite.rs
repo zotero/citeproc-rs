@@ -80,4 +80,5 @@ impl<O: OutputFormat> Cite<O> {
 pub struct Cluster<O: OutputFormat> {
     pub id: ClusterId,
     pub cites: Vec<Cite<O>>,
+    pub note_number: u32,
 }

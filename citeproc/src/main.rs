@@ -254,7 +254,7 @@ fn do_pandoc() {
         db.set_references(&lib_text).expect("Could not parse JSON");
     }
 
-    db.init_clusters(&pandoc::get_clusters(&mut doc));
+    db.init_clusters(pandoc::get_clusters(&mut doc));
 
     let csl_path = pandoc_meta_str(&doc, "csl").expect("No csl path provided through metadata");
     let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");

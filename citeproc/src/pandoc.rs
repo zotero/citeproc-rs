@@ -54,9 +54,11 @@ impl MutVisitor for GetClusters {
                     })
                     .collect();
                 let cluster = Cluster {
+                    // id == note_number for Pandoc, but not necessarily with user-supplied
+                    // ids.
                     id: self.next_cluster_id,
+                    note_number: self.next_cluster_id as u32,
                     cites,
-                    // XXX: note_number,
                 };
                 self.clusters.push(cluster);
                 self.next_cluster_id += 1;

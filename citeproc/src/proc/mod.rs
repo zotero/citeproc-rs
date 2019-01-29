@@ -160,7 +160,7 @@ where
                                 let linked = fmt.hyperlinked(txt, maybe_link);
                                 fmt.affixed_quoted(linked, &af, quotes)
                             }),
-                            StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
+                            StandardVariable::Number(v) => ctx.get_number(v, db).map(|val| {
                                 state.tokens.insert(DisambToken::Num(val.clone()));
                                 fmt.affixed_text_quoted(
                                     val.verbatim(v.should_replace_hyphens()),
@@ -190,7 +190,7 @@ where
                     var,
                     form,
                 );
-                let num_val = ctx.get_number(var);
+                let num_val = ctx.get_number(var, db);
                 let plural = match (num_val, pl) {
                     (None, _) => None,
                     (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
@@ -209,7 +209,7 @@ where
             }
 
             Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
-                let content = ctx.get_number(var).map(|val| {
+                let content = ctx.get_number(var, db).map(|val| {
                     fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
                 });
                 let gv = GroupVars::rendered_if(content.is_some());
