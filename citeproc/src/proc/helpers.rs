@@ -1,13 +1,13 @@
 use super::group::GroupVars;
 use super::ir::IR::*;
+use super::ProcDatabase;
 use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
-use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Element, Formatting};
 use crate::Atom;
 
 pub fn sequence<'c, O>(
-    db: &impl ReferenceDatabase,
+    db: &impl ProcDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &[Element],

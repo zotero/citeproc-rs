@@ -1,8 +1,8 @@
 use super::disamb::{AddDisambTokens, DisambToken};
 use super::group::GroupVars;
 use super::ir::*;
+use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
-use crate::db::ReferenceDatabase;
 use crate::input::{Date, DateOrRange};
 use crate::output::OutputFormat;
 use crate::style::element::{
@@ -48,7 +48,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -69,7 +69,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -77,7 +77,7 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let locale = db.merged_locale(db.style(()).default_locale.clone());
+        let locale = db.default_locale();
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
@@ -145,7 +145,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -186,12 +186,12 @@ impl DatePart {
     }
     fn render<'c, O: OutputFormat>(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         date: &Date,
     ) -> Option<O::Build> {
-        let locale = db.merged_locale(db.style(()).default_locale.clone());
+        let locale = db.default_locale();
         let string = match self.form {
             DatePartForm::Year(form) => match form {
                 YearForm::Long => Some(format!("{}", date.year)),

@@ -1,6 +1,6 @@
 use super::group::GroupVars;
+use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
-use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{
     Affixes, BodyDate, Choose, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
@@ -82,7 +82,7 @@ impl<O: OutputFormat> IR<O> {
 
     pub fn re_evaluate<'c>(
         &mut self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         is_unambig: &impl Fn(&IrState) -> bool,

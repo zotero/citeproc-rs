@@ -1,6 +1,6 @@
-use crate::db::ReferenceDatabase;
-use crate::input::Locator;
+use crate::input::{CiteId, Locator};
 use crate::output::OutputFormat;
+use crate::style::db::StyleDatabase;
 use crate::style::element::{Affixes, Element, Style};
 use crate::style::terms::{GenderedTermSelector, TextTermSelector};
 use crate::style::variables::*;
@@ -20,6 +20,16 @@ pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
 use group::GroupVars;
+
+use crate::locale::Locale;
+use std::sync::Arc;
+pub trait ProcDatabase: StyleDatabase {
+    fn default_locale(&self) -> Arc<Locale>;
+    fn style_el(&self) -> Arc<Style>;
+    fn cite_pos(&self, id: CiteId) -> crate::style::element::Position;
+    fn cite_frnn(&self, id: CiteId) -> Option<u32>;
+    fn bib_number(&self, id: CiteId) -> Option<u32>;
+}
 
 #[derive(Debug)]
 pub struct IrState {
@@ -63,7 +73,7 @@ where
     /// often borrow from self to be recomputed during disambiguation.
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>;
@@ -75,7 +85,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O> {
@@ -99,7 +109,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O> {
@@ -115,7 +125,7 @@ where
                 match *source {
                     Macro(ref name) => {
                         // TODO: be able to return errors
-                        let style = db.style(());
+                        let style = db.style_el();
                         let macro_unsafe = style
                             .macros
                             .get(name)
@@ -174,7 +184,7 @@ where
                         (IR::Rendered(content), gv)
                     }
                     Term(term_selector, plural) => {
-                        let locale = db.merged_locale(db.style(()).default_locale.clone());
+                        let locale = db.default_locale();
                         let content = locale
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
@@ -199,7 +209,7 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        let locale = db.merged_locale(db.style(()).default_locale.clone());
+                        let locale = db.default_locale();
                         locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f, &af))

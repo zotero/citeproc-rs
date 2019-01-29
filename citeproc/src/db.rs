@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::input::{Cite, CiteId, ClusterId, Reference};
 use crate::style::db::StyleDatabase;
-use crate::style::element::Position;
+use crate::style::element::{Position, Style};
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
@@ -62,6 +62,33 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
 
+use crate::locale::Locale;
+use crate::proc::ProcDatabase;
+impl<T> ProcDatabase for T
+where
+    T: ReferenceDatabase,
+{
+    #[inline]
+    fn default_locale(&self) -> Arc<Locale> {
+        self.merged_locale(self.style(()).default_locale.clone())
+    }
+    #[inline]
+    fn style_el(&self) -> Arc<Style> {
+        self.style(())
+    }
+    #[inline]
+    fn cite_pos(&self, id: CiteId) -> crate::style::element::Position {
+        self.cite_position(id).0
+    }
+    #[inline]
+    fn cite_frnn(&self, id: CiteId) -> Option<u32> {
+        self.cite_position(id).1
+    }
+    fn bib_number(&self, _: CiteId) -> Option<u32> {
+        // TODO: None if not rendering bibliography
+        unimplemented!()
+    }
+}
 fn reference(db: &impl ReferenceDatabase, key: Atom) -> Option<Arc<Reference>> {
     if db.all_keys(()).contains(&key) {
         Some(db.reference_input(key))

@@ -1,5 +1,5 @@
+use super::ProcDatabase;
 use super::ReEvaluation;
-use crate::db::ReferenceDatabase;
 use crate::input::{Cite, Locator, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
 use crate::style::element::{Position, VariableForm};
@@ -33,7 +33,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         .map(|s| s.as_str())
     }
 
-    pub fn has_variable(&self, var: AnyVariable, db: &impl ReferenceDatabase) -> bool {
+    pub fn has_variable(&self, var: AnyVariable, db: &impl ProcDatabase) -> bool {
         use crate::style::variables::AnyVariable::*;
         match var {
             Name(NameVariable::Dummy) => false,
@@ -44,8 +44,9 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 self.is_numeric(AnyVariable::Number(NumberVariable::Page), db)
             }
             Number(NumberVariable::FirstReferenceNoteNumber) => {
-                db.cite_position(self.cite.id).1.is_some()
+                db.cite_frnn(self.cite.id).is_some()
             }
+            Number(NumberVariable::CitationNumber) => db.bib_number(self.cite.id).is_some(),
             _ => self.reference.has_variable(var),
         }
     }
@@ -59,7 +60,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
     ///   are literal hyphens, not number ranges.
     ///   By not representing them as numbers, `is-numeric="version"` won't work.
-    pub fn is_numeric(&self, var: AnyVariable, db: &impl ReferenceDatabase) -> bool {
+    pub fn is_numeric(&self, var: AnyVariable, db: &impl ProcDatabase) -> bool {
         match var {
             AnyVariable::Number(num) => self
                 .get_number(num, db)
@@ -71,11 +72,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         }
     }
 
-    pub fn get_number(
-        &self,
-        var: NumberVariable,
-        db: &impl ReferenceDatabase,
-    ) -> Option<NumericValue> {
+    pub fn get_number(&self, var: NumberVariable, db: &impl ProcDatabase) -> Option<NumericValue> {
         match var {
             // TODO: get all the locators?
             NumberVariable::Locator => self
@@ -85,8 +82,9 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 .map(Locator::value)
                 .map(Clone::clone),
             NumberVariable::FirstReferenceNoteNumber => {
-                db.cite_position(self.cite.id).1.map(NumericValue::num)
+                db.cite_frnn(self.cite.id).map(NumericValue::num)
             }
+            NumberVariable::CitationNumber => db.bib_number(self.cite.id).map(NumericValue::num),
             NumberVariable::PageFirst => self
                 .reference
                 .number

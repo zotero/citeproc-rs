@@ -1,7 +1,7 @@
 use super::helpers::sequence;
 use super::ir::*;
+use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
-use crate::db::ReferenceDatabase;
 use crate::output::OutputFormat;
 use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
@@ -12,7 +12,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ReferenceDatabase,
+        db: &impl ProcDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -71,7 +71,7 @@ struct BranchEval<O: OutputFormat> {
 
 fn eval_ifthen<'c, O>(
     branch: &'c IfThen,
-    db: &impl ReferenceDatabase,
+    db: &impl ProcDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
 ) -> BranchEval<O>
@@ -103,7 +103,7 @@ where
 fn eval_conditions<'c, O>(
     conditions: &'c Conditions,
     ctx: &CiteContext<'c, O>,
-    db: &impl ReferenceDatabase,
+    db: &impl ProcDatabase,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -115,11 +115,7 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_cond<'c, O>(
-    cond: &'c Condition,
-    ctx: &CiteContext<'c, O>,
-    db: &impl ReferenceDatabase,
-) -> bool
+fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>, db: &impl ProcDatabase) -> bool
 where
     O: OutputFormat,
 {
@@ -132,7 +128,10 @@ where
         .iter()
         .map(|typ| ctx.reference.csl_type == *typ);
 
-    let positions = cond.position.iter().map(|&pos| ctx.position.matches(pos));
+    let positions = cond
+        .position
+        .iter()
+        .map(|&pos| db.cite_pos(ctx.cite.id).matches(pos));
 
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
