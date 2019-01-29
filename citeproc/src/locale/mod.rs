@@ -13,6 +13,9 @@ pub use self::lang::{IsoCountry, IsoLang, Lang};
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+pub use self::fetcher::Predefined;
+
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocaleOptionsNode {
     pub limit_ordinals_to_day_1: Option<bool>,

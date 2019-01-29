@@ -18,6 +18,10 @@ pub struct RootDatabase {
 }
 
 impl RootDatabase {
+    #[cfg(test)]
+    pub fn test_db() -> Self {
+        RootDatabase::new(Arc::new(crate::locale::Predefined(Default::default())))
+    }
     pub fn new(fetcher: Arc<LocaleFetcher>) -> Self {
         let mut db = RootDatabase {
             runtime: Default::default(),

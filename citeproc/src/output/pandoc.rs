@@ -244,7 +244,7 @@ mod test {
 
     #[test]
     fn test_space() {
-        let f = Pandoc::new();
+        let f = Pandoc::default();
         assert_eq!(f.plain(" ")[0], Space);
         assert_eq!(f.plain("  "), &[Space, Space]);
         assert_eq!(f.plain(" h "), &[Space, Str("h".into()), Space]);
@@ -256,7 +256,7 @@ mod test {
 
     #[test]
     fn test_flip_emph() {
-        let f = Pandoc::new();
+        let f = Pandoc::default();
         let a = f.plain("normal");
         let b = f.text_node("emph".into(), Some(Formatting::italic()));
         let c = f.plain("normal");

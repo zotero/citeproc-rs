@@ -54,7 +54,7 @@ where
     pub fn single(&self, refr: &Reference) -> String {
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic(0, "ok".into()),
+            cite: &Cite::basic(0, "ok"),
             position: Position::First,
             format: O::default(),
             citation_number: 1,
@@ -146,7 +146,7 @@ where
     pub fn dump_ir(&self, refr: &Reference) {
         let ctx = CiteContext {
             reference: refr,
-            cite: &Cite::basic(0, "ok".into()),
+            cite: &Cite::basic(0, "ok"),
             position: Position::First,
             format: O::default(),
             citation_number: 1,

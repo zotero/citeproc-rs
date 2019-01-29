@@ -104,7 +104,7 @@ pub fn initialize<'n>(
 
 #[test]
 fn test_initialize_full() {
-    fn init(given_name: &str) -> String {
+    fn init<'a>(given_name: &'a str) -> Cow<'a, str> {
         initialize(given_name, true, Some(""), false)
     }
     assert_eq!(init("John R L"), "JRL");
@@ -117,7 +117,7 @@ fn test_initialize_full() {
 
 #[test]
 fn test_initialize_hyphen() {
-    fn init(given_name: &str) -> String {
+    fn init<'a>(given_name: &'a str) -> Cow<'a, str> {
         initialize(given_name, true, Some("."), true)
     }
     assert_eq!(init("John R L"), "J.R.L.");
@@ -131,7 +131,7 @@ fn test_initialize_hyphen() {
 
 #[test]
 fn test_initialize_normal() {
-    fn init(given_name: &str) -> String {
+    fn init<'a>(given_name: &'a str) -> Cow<'a, str> {
         initialize(given_name, false, Some("."), true)
     }
     assert_eq!(init("John R L"), "John R.L.");

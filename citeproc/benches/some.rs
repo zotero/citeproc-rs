@@ -66,14 +66,14 @@ fn aglc() -> String {
 // }
 
 fn bench_ir_gen<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic(0, "ok".into());
+    let cite = Cite::basic(0, "ok");
     let refr = common_reference();
     let driver = Driver::new(style, formatter).unwrap();
     b.iter(move || driver.pair(&cite, &refr))
 }
 
 fn bench_ir_gen_multi<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic(0, "ok".into());
+    let cite = Cite::basic(0, "ok");
     let refr = common_reference();
     let pairs: Vec<_> = std::iter::repeat((&cite, &refr)).take(40).collect();
     let driver = Driver::new(style, formatter).unwrap();
@@ -109,7 +109,7 @@ criterion_main!(tree, plain, pandoc);
 //     let ctx = CiteContext {
 //         style: &self.style,
 //         reference: refr,
-//         cite: &Cite::basic("ok".into(), &self.formatter.output(self.formatter.plain(""))),
+//         cite: &Cite::basic("ok", &self.formatter.output(self.formatter.plain(""))),
 //         position: Position::First,
 //         format: self.formatter,
 //         citation_number: 1,

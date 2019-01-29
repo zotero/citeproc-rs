@@ -65,10 +65,10 @@ pub struct Cite<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> Cite<O> {
-    pub fn basic(id: CiteId, ref_id: Atom) -> Self {
+    pub fn basic(id: CiteId, ref_id: impl Into<Atom>) -> Self {
         Cite {
             id,
-            ref_id,
+            ref_id: ref_id.into(),
             prefix: O::Build::default(),
             suffix: O::Build::default(),
             suppression: None,
