@@ -1,9 +1,6 @@
-use super::{DateOrRange, Name, NumericValue, Reference};
+use super::{DateOrRange, NumericValue};
 use crate::output::OutputFormat;
-use crate::proc::ReEvaluation;
-use crate::style::element::{Position, VariableForm};
 use crate::style::terms::LocatorType;
-use crate::style::variables::*;
 
 use crate::Atom;
 

@@ -112,6 +112,56 @@ fn citekeys(db: &impl ReferenceDatabase, _: ()) -> Arc<HashSet<Atom>> {
     Arc::new(merged)
 }
 
+#[cfg(test)]
+mod test {
+    use super::ReferenceDatabase;
+    use crate::db_impl::RootDatabase;
+    use crate::input::{Cite, Cluster};
+    use crate::style::element::Position;
+
+    #[test]
+    fn cite_positions_ibid() {
+        let mut db = RootDatabase::test_db();
+        db.init_clusters(&[
+            Cluster {
+                id: 1,
+                cites: vec![Cite::basic(1, "one")],
+            },
+            Cluster {
+                id: 2,
+                cites: vec![Cite::basic(2, "one")],
+            },
+        ]);
+        let poss = db.cite_positions(());
+        assert_eq!(poss[&1], Position::First);
+        assert_eq!(poss[&2], Position::Ibid);
+    }
+
+    #[test]
+    fn cite_positions_near_note() {
+        let mut db = RootDatabase::test_db();
+        db.init_clusters(&[
+            Cluster {
+                id: 1,
+                cites: vec![Cite::basic(1, "one")],
+            },
+            Cluster {
+                id: 2,
+                cites: vec![Cite::basic(2, "other")],
+            },
+            Cluster {
+                id: 3,
+                cites: vec![Cite::basic(3, "one")],
+            },
+        ]);
+        let poss = db.cite_positions(());
+        assert_eq!(poss[&1], Position::First);
+        assert_eq!(poss[&2], Position::First);
+        assert_eq!(poss[&3], Position::NearNote);
+    }
+
+}
+
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
 fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, Position>> {
     let cluster_ids = db.cluster_ids(());
@@ -126,11 +176,13 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
     // TODO: configure
     let near_note_distance = 5;
 
-    for (i, cluster) in clusters.iter().enumerate() {
-        let mut seen = FnvHashMap::default();
+    let mut seen = FnvHashMap::default();
 
-        for (j, &id) in cluster.iter().enumerate() {
-            let cite = db.cite(id);
+    // TODO: don't use enumerate, because it skips non-cite notes in e.g. Pandoc.
+    // Instead, store footnote number on a cluster.
+    for (i, cluster) in clusters.iter().enumerate() {
+        for (j, &cite_id) in cluster.iter().enumerate() {
+            let cite = db.cite(cite_id);
             let prev_cite = cluster
                 .get(j.wrapping_sub(1))
                 .map(|&prev_id| db.cite(prev_id));
@@ -152,27 +204,25 @@ fn cite_positions(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<CiteId, 
                         None
                     }
                 })
-                .map(|prev| {
-                    if cite.locators.len() > 0 {
-                        Position::Subsequent
-                    } else if prev.locators == cite.locators {
-                        Position::Ibid
-                    } else {
-                        Position::IbidWithLocator
-                    }
+                .map(|prev| match (&prev.locators[..], &cite.locators[..]) {
+                    (&[], &[]) => Position::Ibid,
+                    (&[], _cur) => Position::IbidWithLocator,
+                    (_pre, &[]) => Position::Subsequent,
+                    (pre, cur) if pre == cur => Position::Ibid,
+                    _ => Position::IbidWithLocator,
                 });
             if let Some(pos) = matching_prev {
-                map.insert(id, pos);
+                map.insert(cite_id, pos);
             } else if let Some(last_id) = seen.get(&cite.ref_id) {
                 if i - last_id < near_note_distance {
-                    map.insert(id, Position::NearNote);
+                    map.insert(cite_id, Position::NearNote);
                 } else {
-                    map.insert(id, Position::FarNote);
+                    map.insert(cite_id, Position::FarNote);
                 }
             } else {
-                map.insert(id, Position::First);
+                map.insert(cite_id, Position::First);
+                seen.insert(cite.ref_id.clone(), i);
             }
-            seen.insert(cite.ref_id.clone(), i);
         }
     }
 
