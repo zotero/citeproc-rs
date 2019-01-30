@@ -8,7 +8,7 @@ use crate::style::element::{Position, Style};
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
-use crate::proc::{AddDisambTokens, CiteContext, DisambToken, IrState, Proc, ReEvaluation, IR};
+use crate::proc::{AddDisambTokens, CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
 use crate::Atom;
 
 #[salsa::query_group(ReferenceDatabaseStorage)]
@@ -320,11 +320,11 @@ use crate::utils::to_bijective_base_26;
 /// the inverted index is constant for a particular set of cited+uncited references
 /// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
 /// the parallelization of IR <= 2
-fn matching_refs(
+fn is_unambiguous(
     index: &FnvHashMap<DisambToken, HashSet<Atom>>,
     year_suffixes: Option<&FnvHashMap<Atom, u32>>,
     state: &IrState,
-) -> (FnvHashSet<Atom>, bool) {
+) -> bool {
     let mut refs = FnvHashSet::default();
     let invert_ysuffix: Option<FnvHashMap<_, _>> = year_suffixes.map(|ys| {
         ys.iter()
@@ -363,13 +363,14 @@ fn matching_refs(
     //     "xxx" in it.
     //   - You have to make sure all text is transformed equivalently.
     //   So TODO: make all text ASCII uppercase first!
+
     // len == 0 is for "ibid" or "[1]", etc. They are clearly unambiguous, and we will assume
     // that any time it happens is intentional.
     // len == 1 means there was only one ref. Great!
     //
     // TODO Of course, that whole 'compare IR output for ambiguous cites' thing.
     let len = refs.len();
-    (refs, len == 0 || len == 1)
+    len < 2
 }
 
 fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<Atom, u32>> {
@@ -407,27 +408,22 @@ fn disambiguate<O: OutputFormat>(
     ir: &mut IR<O>,
     state: &mut IrState,
     ctx: &mut CiteContext<O>,
-    re: ReEvaluation,
     maybe_ys: Option<&FnvHashMap<Atom, u32>>,
-) -> (FnvHashSet<Atom>, bool) {
+) -> bool {
     let index = db.inverted_index(());
-    ctx.re_evaluation = Some(re);
-    let is_unambig = |state: &IrState| {
-        let (_, unambiguous) = matching_refs(&index, maybe_ys, state);
-        unambiguous
-    };
+    let is_unambig = |state: &IrState| is_unambiguous(&index, maybe_ys, state);
     // TODO: (BUG) Restore original IrState before running again?
     // Maybe maintain token sets per-name-el. Add an ID to each <names> and reuse IrStates, but
     // clear the relevant names tokens when you're re-evaluating one.
-    // Currently, the state being reset means re_evaluate doesn't add many tokens at all,
-    // and suddently matching_refs is running on less than its full range of tokens.
-    ir.re_evaluate(db, state, ctx, &is_unambig);
-    let (mr, un) = matching_refs(&index, maybe_ys, state);
-    eprintln!("trying {:?} for {}", re, ctx.cite.id);
+    // Currently, the state being reset means disambiguate doesn't add many tokens at all,
+    // and suddently is_unambiguous is running on less than its full range of tokens.
+    ir.disambiguate(db, state, ctx, &is_unambig);
+    let un = is_unambiguous(&index, maybe_ys, state);
+    eprintln!("trying {:?} for {}", ctx.disamb_pass, ctx.cite.id);
     if un {
-        eprintln!("{:?} disambiguated {}", re, ctx.cite.id);
+        eprintln!("{:?} disambiguated {}", ctx.disamb_pass, ctx.cite.id);
     }
-    (mr, un)
+    un
 }
 
 fn ctx_for<'c, O: OutputFormat>(
@@ -441,7 +437,7 @@ fn ctx_for<'c, O: OutputFormat>(
         format: O::default(),
         position: db.cite_position(cite.id).0,
         citation_number: 0, // XXX: from db
-        re_evaluation: None,
+        disamb_pass: None,
     }
 }
 
@@ -470,7 +466,7 @@ fn ir_gen0(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
 
-    let (_, un) = matching_refs(&index, None, &state);
+    let un = is_unambiguous(&index, None, &state);
     Arc::new((ir, un, state))
 }
 
@@ -489,14 +485,8 @@ fn ir_gen1_add_names(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     let mut state = ir0.2.clone();
     let mut ir = ir0.0.clone();
 
-    let (_, un) = disambiguate(
-        db,
-        &mut ir,
-        &mut state,
-        &mut ctx,
-        ReEvaluation::AddNames,
-        None,
-    );
+    ctx.disamb_pass = Some(DisambPass::AddNames);
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }
 
@@ -515,14 +505,8 @@ fn ir_gen2_add_given_name(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     let mut ir = ir1.0.clone();
 
     let gndr = style.citation.givenname_disambiguation_rule;
-    let (_, un) = disambiguate(
-        db,
-        &mut ir,
-        &mut state,
-        &mut ctx,
-        ReEvaluation::AddGivenName(gndr),
-        None,
-    );
+    ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }
 
@@ -546,14 +530,8 @@ fn ir_gen3_add_year_suffix(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGe
     let mut ir = ir2.0.clone();
 
     let year_suffix = suffixes[&cite.ref_id];
-    let (_, un) = disambiguate(
-        db,
-        &mut ir,
-        &mut state,
-        &mut ctx,
-        ReEvaluation::AddYearSuffix(year_suffix),
-        Some(&suffixes),
-    );
+    ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes));
     Arc::new((ir, un, state))
 }
 
@@ -570,13 +548,7 @@ fn ir_gen4_conditionals(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
     let mut state = ir3.2.clone();
     let mut ir = ir3.0.clone();
 
-    let (_, un) = disambiguate(
-        db,
-        &mut ir,
-        &mut state,
-        &mut ctx,
-        ReEvaluation::Conditionals,
-        None,
-    );
+    ctx.disamb_pass = Some(DisambPass::Conditionals);
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }

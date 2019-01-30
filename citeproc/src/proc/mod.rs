@@ -163,7 +163,7 @@ where
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
-                            if let Some(ReEvaluation::AddYearSuffix(i)) = ctx.re_evaluation {
+                            if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
                                 let base26 = crate::utils::to_bijective_base_26(i);
                                 state
                                     .tokens

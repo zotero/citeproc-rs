@@ -1,6 +1,4 @@
-use super::group::GroupVars;
-use super::ProcDatabase;
-use super::{CiteContext, IrState, Proc};
+use super::{CiteContext, GroupVars, IrState, Proc, ProcDatabase};
 use crate::output::OutputFormat;
 use crate::style::element::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
@@ -16,7 +14,7 @@ use std::sync::Arc;
 pub type IrSum<O> = (IR<O>, GroupVars);
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ReEvaluation {
+pub enum DisambPass {
     AddNames,
     AddGivenName(GivenNameDisambiguationRule),
     AddYearSuffix(u32),
@@ -82,7 +80,7 @@ impl<O: OutputFormat> IR<O> {
         }
     }
 
-    pub fn re_evaluate<'c>(
+    pub fn disambiguate<'c>(
         &mut self,
         db: &impl ProcDatabase,
         state: &mut IrState,
@@ -115,7 +113,7 @@ impl<O: OutputFormat> IR<O> {
             }
             IR::Seq(ref mut seq) => {
                 for ir in seq.contents.iter_mut() {
-                    ir.re_evaluate(db, state, ctx, is_unambig);
+                    ir.disambiguate(db, state, ctx, is_unambig);
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
                     let new_ir = IR::Rendered(seq.flatten_seq(&ctx.format));

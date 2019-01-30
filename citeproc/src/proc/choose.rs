@@ -120,7 +120,7 @@ where
     let Conditions(ref match_type, ref conds) = *conditions;
     let mut tests = conds.iter().map(|c| eval_cond(c, ctx, db));
     let disambiguate = conds.iter().any(|c| c.disambiguate.is_some())
-        && ctx.re_evaluation != Some(ReEvaluation::Conditionals);
+        && ctx.disamb_pass != Some(DisambPass::Conditionals);
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
@@ -133,11 +133,11 @@ where
 
     let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
 
-    use super::ReEvaluation;
+    use super::DisambPass;
     let disambiguate = cond
         .disambiguate
         .iter()
-        .map(|&d| d == (ctx.re_evaluation == Some(ReEvaluation::Conditionals)));
+        .map(|&d| d == (ctx.disamb_pass == Some(DisambPass::Conditionals)));
 
     let types = cond
         .csl_type

@@ -85,7 +85,7 @@ where
             position: Position::First,
             format: O::default(),
             citation_number: 1,
-            re_evaluation: None,
+            disamb_pass: None,
         };
         let mut state = IrState::new();
         let (i, _) = self.db.style(()).intermediate(&self.db, &mut state, &ctx);
@@ -105,7 +105,7 @@ where
             position: Position::First,
             format: O::default(),
             citation_number: 1,
-            re_evaluation: None,
+            disamb_pass: None,
         };
         let mut state = IrState::new();
         self.db.style(()).intermediate(&self.db, &mut state, &ctx);
@@ -125,7 +125,7 @@ where
                         position: Position::First,
                         format: O::default(),
                         citation_number: 1,
-                        re_evaluation: None,
+                        disamb_pass: None,
                     };
                     let mut state = IrState::new();
                     db.style(()).intermediate(db, &mut state, &ctx).0
@@ -150,7 +150,7 @@ where
                         position: Position::First,
                         format: O::default(),
                         citation_number: 1,
-                        re_evaluation: None,
+                        disamb_pass: None,
                     };
                     let mut state = IrState::new();
                     db.style(()).intermediate(&self.db, &mut state, &ctx).0
@@ -180,7 +180,7 @@ where
             position: Position::First,
             format: O::default(),
             citation_number: 1,
-            re_evaluation: None,
+            disamb_pass: None,
         };
         let mut state = IrState::new();
         let ir = self.db.style(()).intermediate(&self.db, &mut state, &ctx).0;

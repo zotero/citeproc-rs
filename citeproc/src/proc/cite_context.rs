@@ -1,5 +1,5 @@
+use super::DisambPass;
 use super::ProcDatabase;
-use super::ReEvaluation;
 use crate::input::{Cite, Locator, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
 use crate::style::element::{Position, VariableForm};
@@ -17,7 +17,7 @@ pub struct CiteContext<'c, O: OutputFormat + Sized> {
     //
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
-    pub re_evaluation: Option<ReEvaluation>,
+    pub disamb_pass: Option<DisambPass>,
 }
 
 // helper methods to access both cite and reference properties via Variables
