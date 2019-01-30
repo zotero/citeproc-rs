@@ -8,7 +8,7 @@ pub use self::pandoc::Pandoc;
 pub use self::plain::PlainText;
 // pub use self::markdown::Markdown;
 
-use crate::style::element::{Affixes, Formatting};
+use csl::style::{Affixes, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

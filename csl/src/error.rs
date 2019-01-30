@@ -1,9 +1,5 @@
 use super::variables::*;
-use codespan::{CodeMap, FileMap, Span};
-use codespan_reporting::termcolor::{ColorChoice, StandardStream};
-use codespan_reporting::{emit, Diagnostic, Label, Severity};
-use failure::Fail;
-use roxmltree::{Error, Node, TextPos};
+use roxmltree::{Node, TextPos};
 use std::num::ParseIntError;
 
 #[derive(Debug, PartialEq)]
@@ -19,19 +15,21 @@ impl UnknownAttributeValue {
     }
 }
 
-#[derive(Debug, Fail)]
 pub enum StyleError {
-    #[fail(display = "TODO")]
     Invalid(CslError),
-    #[fail(display = "TODO")]
-    ParseError(#[fail(cause)] Error),
+    ParseError(roxmltree::Error),
 }
 
 #[derive(Debug)]
 pub struct CslError(pub Vec<InvalidCsl>);
 
-#[derive(Fail, Debug, PartialEq, Clone)]
-#[fail(display = "{}", message)]
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct InvalidCsl {
     pub severity: Severity,
     pub text_pos: TextPos,
@@ -78,7 +76,7 @@ impl NeedVarType {
 
             TextVariable => maybe_got.map(|got| {
                 let wrong_type = "Wrong variable type for <text>".to_string();
-                use crate::style::variables::AnyVariable::*;
+                use crate::variables::AnyVariable::*;
                 match got {
                     Name(_) => (wrong_type, "Hint: use <names> instead".to_string(), Severity::Error),
                     Date(_) => (wrong_type, "Hint: use <date> instead".to_string(), Severity::Error),
@@ -89,7 +87,7 @@ impl NeedVarType {
 
             NumberVariable => maybe_got.map(|got| {
                 let wrong_type = "Wrong variable type for <number>".to_string();
-                use crate::style::variables::AnyVariable::*;
+                use crate::variables::AnyVariable::*;
                 match got {
                     Ordinary(_) => (wrong_type,
                                     format!("Hint: use <text variable=\"{}\" /> instead", var),
@@ -183,23 +181,10 @@ impl InvalidCsl {
         }
     }
 
-    pub fn to_diagnostic(&self, file_map: &FileMap) -> Option<Diagnostic> {
-        let str_start = file_map
-            .byte_index(
-                (self.text_pos.row - 1 as u32).into(),
-                (self.text_pos.col - 1 as u32).into(),
-            )
-            .ok()?;
-
-        let label = Label::new_primary(Span::from_offset(str_start, (self.len as i64).into()))
-            .with_message(self.hint.to_string());
-        let diag = Diagnostic::new(self.severity, self.message.clone()).with_label(label);
-        Some(diag)
-    }
 }
 
-impl From<Error> for StyleError {
-    fn from(err: Error) -> StyleError {
+impl From<roxmltree::Error> for StyleError {
+    fn from(err: roxmltree::Error) -> StyleError {
         StyleError::ParseError(err)
     }
 }
@@ -245,44 +230,28 @@ impl Default for StyleError {
     }
 }
 
-impl StyleError {
-    pub(crate) fn diagnostics(&self, file_map: &FileMap) -> Vec<Result<Diagnostic, String>> {
-        match *self {
-            StyleError::Invalid(ref invs) => invs
-                .0
-                .iter()
-                .map(|e| e.to_diagnostic(file_map).ok_or(e.message.clone()))
-                .collect(),
-            StyleError::ParseError(ref e) => {
-                let pos = e.pos();
-
-                let str_start =
-                    file_map.byte_index((pos.row - 1 as u32).into(), (pos.col - 1 as u32).into());
-
-                if let Ok(start) = str_start {
-                    vec![Ok(Diagnostic::new(Severity::Error, format!("{}", e))
-                        .with_label(
-                            Label::new_primary(Span::from_offset(start, (1 as i64).into()))
-                                .with_message(""),
-                        ))]
-                } else {
-                    vec![]
+pub trait PartitionResults<O, E>: Iterator<Item = Result<O, E>>
+where
+    O: Sized,
+    Self: Sized,
+{
+    fn partition_results<'a>(self) -> Result<Vec<O>, Vec<E>> {
+        let mut errors = Vec::new();
+        let oks = self
+            .filter_map(|res| match res {
+                Ok(ok) => Some(ok),
+                Err(e) => {
+                    errors.push(e);
+                    None
                 }
-            }
+            })
+            .collect();
+        if errors.len() > 0 {
+            Err(errors)
+        } else {
+            Ok(oks)
         }
     }
 }
 
-pub fn file_diagnostics<'a>(err: &StyleError, filename: &'a str, document: &'a str) {
-    let mut code_map = CodeMap::new();
-    let file_map = code_map.add_filemap(filename.to_owned().into(), document.to_string());
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    for diag in err.diagnostics(&file_map) {
-        if let Ok(d) = diag {
-            emit(&mut writer.lock(), &code_map, &d).unwrap();
-            eprintln!();
-        } else if let Err(emsg) = diag {
-            eprintln!("{}", emsg);
-        }
-    }
-}
+impl<O, E, I: Iterator<Item = Result<O, E>>> PartitionResults<O, E> for I {}

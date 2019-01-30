@@ -5,42 +5,10 @@ use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
 use crate::input::{Date, DateOrRange};
 use crate::output::OutputFormat;
-use crate::style::element::{
+use csl::style::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
 };
-
-const MONTHS_SHORT: &[&str] = &[
-    "undefined",
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-];
-
-const MONTHS_LONG: &[&str] = &[
-    "undefined",
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
 
 impl<'c, O> Proc<'c, O> for BodyDate
 where
@@ -90,12 +58,50 @@ where
             let each: Vec<_> = locale_date
                 .date_parts
                 .iter()
-                .filter(|d| d.matches(self.parts_selector.clone()))
+                .filter(|dp| dp_matches(dp, self.parts_selector.clone()))
                 .filter_map(|dp| dp.render(db, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
             fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
         });
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
+    }
+}
+
+
+impl<'c, O> Proc<'c, O> for IndependentDate
+where
+    O: OutputFormat,
+{
+    fn intermediate(
+        &self,
+        db: &impl ProcDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
+    where
+        O: OutputFormat,
+    {
+        let fmt = &ctx.format;
+        let content = ctx
+            .reference
+            .date
+            .get(&self.variable)
+            // TODO: render date ranges
+            .and_then(|r| {
+                mask_range(r, &self.date_parts, state);
+                r.single_or_first()
+            })
+            .map(|val| {
+                let each: Vec<_> = self
+                    .date_parts
+                    .iter()
+                    .filter_map(|dp| dp_render(dp, db, state, ctx, &val))
+                    .collect();
+                let delim = &self.delimiter.0;
+                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
+            });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)
     }
@@ -139,135 +145,130 @@ fn mask_range(r: &DateOrRange, date_parts: &[DatePart], state: &mut IrState) {
     }
 }
 
-impl<'c, O> Proc<'c, O> for IndependentDate
-where
-    O: OutputFormat,
-{
-    fn intermediate(
-        &self,
-        db: &impl ProcDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
-        let fmt = &ctx.format;
-        let content = ctx
-            .reference
-            .date
-            .get(&self.variable)
-            // TODO: render date ranges
-            .and_then(|r| {
-                mask_range(r, &self.date_parts, state);
-                r.single_or_first()
-            })
-            .map(|val| {
-                let each: Vec<_> = self
-                    .date_parts
-                    .iter()
-                    .filter_map(|dp| dp.render(db, state, ctx, &val))
-                    .collect();
-                let delim = &self.delimiter.0;
-                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
-            });
-        let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content), gv)
+fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
+    match part.form {
+        DatePartForm::Day(_) => selector == DateParts::YearMonthDay,
+        DatePartForm::Month(..) => selector != DateParts::Year,
+        DatePartForm::Year(_) => true,
     }
 }
 
-impl DatePart {
-    fn matches(&self, selector: DateParts) -> bool {
-        match self.form {
-            DatePartForm::Day(_) => selector == DateParts::YearMonthDay,
-            DatePartForm::Month(..) => selector != DateParts::Year,
-            DatePartForm::Year(_) => true,
-        }
-    }
-    fn render<'c, O: OutputFormat>(
-        &self,
-        db: &impl ProcDatabase,
-        _state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-        date: &Date,
-    ) -> Option<O::Build> {
-        let locale = db.default_locale();
-        let string = match self.form {
-            DatePartForm::Year(form) => match form {
-                YearForm::Long => Some(format!("{}", date.year)),
-                YearForm::Short => Some(format!("{:02}", date.year % 100)),
-            },
-            DatePartForm::Month(form, _strip_periods) => match form {
-                MonthForm::Numeric => {
-                    if date.month == 0 || date.month > 12 {
-                        None
-                    } else {
-                        Some(format!("{}", date.month))
-                    }
+fn dp_render<'c, O: OutputFormat>(
+    part: &DatePart,
+    db: &impl ProcDatabase,
+    _state: &mut IrState,
+    ctx: &CiteContext<'c, O>,
+    date: &Date,
+) -> Option<O::Build> {
+    let locale = db.default_locale();
+    let string = match part.form {
+        DatePartForm::Year(form) => match form {
+            YearForm::Long => Some(format!("{}", date.year)),
+            YearForm::Short => Some(format!("{:02}", date.year % 100)),
+        },
+        DatePartForm::Month(form, _strip_periods) => match form {
+            MonthForm::Numeric => {
+                if date.month == 0 || date.month > 12 {
+                    None
+                } else {
+                    Some(format!("{}", date.month))
                 }
-                MonthForm::NumericLeadingZeros => {
-                    if date.month == 0 || date.month > 12 {
-                        None
-                    } else {
-                        Some(format!("{:02}", date.month))
-                    }
+            }
+            MonthForm::NumericLeadingZeros => {
+                if date.month == 0 || date.month > 12 {
+                    None
+                } else {
+                    Some(format!("{:02}", date.month))
                 }
-                _ => {
-                    // TODO: support seasons
-                    if date.month == 0 || date.month > 12 {
-                        return None;
-                    }
-                    use crate::style::terms::*;
-                    let term_form = match form {
-                        MonthForm::Long => TermForm::Long,
-                        MonthForm::Short => TermForm::Short,
-                        _ => TermForm::Long,
-                    };
-                    let sel = GenderedTermSelector::Month(
-                        MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
-                        term_form,
-                    );
-                    Some(
-                        locale
-                            .gendered_terms
-                            .get(&sel)
-                            .map(|gt| gt.0.singular().to_string())
-                            .unwrap_or_else(|| {
-                                let fallback = if term_form == TermForm::Short {
-                                    MONTHS_SHORT
-                                } else {
-                                    MONTHS_LONG
-                                };
-                                fallback[date.month as usize].to_string()
-                            }),
-                    )
+            }
+            _ => {
+                // TODO: support seasons
+                if date.month == 0 || date.month > 12 {
+                    return None;
                 }
-            },
-            DatePartForm::Day(form) => match form {
-                DayForm::Numeric => {
-                    if date.day == 0 {
-                        None
-                    } else {
-                        Some(format!("{}", date.day))
-                    }
+                use csl::terms::*;
+                let term_form = match form {
+                    MonthForm::Long => TermForm::Long,
+                    MonthForm::Short => TermForm::Short,
+                    _ => TermForm::Long,
+                };
+                let sel = GenderedTermSelector::Month(
+                    MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
+                    term_form,
+                );
+                Some(
+                    locale
+                        .gendered_terms
+                        .get(&sel)
+                        .map(|gt| gt.0.singular().to_string())
+                        .unwrap_or_else(|| {
+                            let fallback = if term_form == TermForm::Short {
+                                MONTHS_SHORT
+                            } else {
+                                MONTHS_LONG
+                            };
+                            fallback[date.month as usize].to_string()
+                        }),
+                )
+            }
+        },
+        DatePartForm::Day(form) => match form {
+            DayForm::Numeric => {
+                if date.day == 0 {
+                    None
+                } else {
+                    Some(format!("{}", date.day))
                 }
-                DayForm::NumericLeadingZeros => {
-                    if date.day == 0 {
-                        None
-                    } else {
-                        Some(format!("{:02}", date.day))
-                    }
+            }
+            DayForm::NumericLeadingZeros => {
+                if date.day == 0 {
+                    None
+                } else {
+                    Some(format!("{:02}", date.day))
                 }
-                // TODO: implement ordinals
-                DayForm::Ordinal => {
-                    if date.day == 0 {
-                        None
-                    } else {
-                        Some(format!("{}ORD", date.day))
-                    }
+            }
+            // TODO: implement ordinals
+            DayForm::Ordinal => {
+                if date.day == 0 {
+                    None
+                } else {
+                    Some(format!("{}ORD", date.day))
                 }
-            },
-        };
-        string.map(|s| ctx.format.affixed_text(s, self.formatting, &self.affixes))
-    }
+            }
+        },
+    };
+    string.map(|s| ctx.format.affixed_text(s, part.formatting, &part.affixes))
 }
+
+const MONTHS_SHORT: &[&str] = &[
+    "undefined",
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+];
+
+const MONTHS_LONG: &[&str] = &[
+    "undefined",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+

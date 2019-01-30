@@ -2,8 +2,8 @@ use super::DisambPass;
 use super::ProcDatabase;
 use crate::input::{Cite, Locator, Name, NumericValue, Reference};
 use crate::output::OutputFormat;
-use crate::style::element::{Position, VariableForm};
-use crate::style::variables::*;
+use csl::style::{Position, VariableForm};
+use csl::variables::*;
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat + Sized> {
@@ -34,7 +34,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     }
 
     pub fn has_variable(&self, var: AnyVariable, db: &impl ProcDatabase) -> bool {
-        use crate::style::variables::AnyVariable::*;
+        use csl::variables::AnyVariable::*;
         match var {
             Name(NameVariable::Dummy) => false,
             // TODO: finish this list

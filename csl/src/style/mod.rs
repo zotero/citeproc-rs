@@ -1,9 +1,9 @@
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
 use crate::locale::{Lang, Locale};
-use crate::style::error::*;
-use crate::style::terms::LocatorType;
-use crate::style::variables::*;
-use crate::style::version::CslVersionReq;
+use crate::error::*;
+use crate::terms::LocatorType;
+use crate::variables::*;
+use crate::version::CslVersionReq;
 use crate::Atom;
 use std::fmt;
 use std::str::FromStr;
@@ -1010,16 +1010,6 @@ pub struct LocalizedDate {
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
     pub text_case: TextCase,
-}
-
-/// A date element defined inside a `<cs:locale>`
-#[derive(Debug, Eq, Clone, PartialEq)]
-pub struct LocaleDate {
-    pub form: DateForm,
-    pub date_parts: Vec<DatePart>,
-    pub delimiter: Delimiter,
-    pub text_case: TextCase,
-    pub formatting: Option<Formatting>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]

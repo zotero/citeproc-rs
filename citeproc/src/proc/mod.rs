@@ -1,11 +1,13 @@
+use crate::Atom;
 use crate::input::{CiteId, Locator};
 use crate::output::OutputFormat;
 use crate::style::db::StyleDatabase;
-use crate::style::element::{Affixes, Element, Style};
-use crate::style::terms::{GenderedTermSelector, TextTermSelector};
-use crate::style::variables::*;
-use crate::Atom;
+use csl::style::{Affixes, Element, Style};
+use csl::terms::{GenderedTermSelector, TextTermSelector};
+use csl::variables::*;
+use csl::locale::Locale;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 mod cite_context;
 pub use cite_context::CiteContext;
@@ -21,13 +23,11 @@ use self::helpers::sequence;
 pub use self::ir::*;
 pub use group::GroupVars;
 
-use crate::locale::Locale;
-use std::sync::Arc;
 pub trait ProcDatabase: StyleDatabase {
     // TODO: get locales based on the current reference's language field
     fn default_locale(&self) -> Arc<Locale>;
     fn style_el(&self) -> Arc<Style>;
-    fn cite_pos(&self, id: CiteId) -> crate::style::element::Position;
+    fn cite_pos(&self, id: CiteId) -> csl::style::Position;
     fn cite_frnn(&self, id: CiteId) -> Option<u32>;
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
@@ -124,7 +124,7 @@ where
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
                 use crate::output::LocalizedQuotes;
-                use crate::style::element::TextSource;
+                use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
                 let quotes = if quo { Some(&q) } else { None };
                 match *source {
@@ -216,7 +216,7 @@ where
             }
 
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
-                use crate::style::element::Plural;
+                use csl::style::Plural;
                 let selector = GenderedTermSelector::from_number_variable(
                     &ctx.cite.locators.get(0).map(Locator::type_of),
                     var,

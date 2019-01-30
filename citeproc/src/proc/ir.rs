@@ -1,6 +1,6 @@
 use super::{CiteContext, GroupVars, IrState, Proc, ProcDatabase};
 use crate::output::OutputFormat;
-use crate::style::element::{
+use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
 use crate::Atom;

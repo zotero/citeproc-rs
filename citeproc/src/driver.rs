@@ -1,14 +1,12 @@
+use crate::Atom;
 use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
 use crate::style::db::StyleDatabase;
-use crate::style::element::Position;
-use crate::style::element::Style;
-use crate::style::error::StyleError;
-use crate::style::FromNode;
-use crate::Atom;
-use roxmltree::Document;
+use csl::style::Position;
+use csl::style::Style;
+use csl::error::StyleError;
 use std::sync::Arc;
 
 #[cfg(feature = "rayon")]
@@ -39,8 +37,7 @@ where
     O: OutputFormat + std::fmt::Debug,
 {
     pub fn new(style_string: &str, mut db: RootDatabase) -> Result<Self, StyleError> {
-        let doc = Document::parse(&style_string)?;
-        let style = Arc::new(Style::from_node(&doc.root_element())?);
+        let style = Arc::new(Style::from_str(style_string)?);
         db.set_style((), style);
 
         Ok(Driver {

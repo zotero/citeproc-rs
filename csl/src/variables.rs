@@ -203,10 +203,10 @@ pub enum Variable {
 }
 
 impl Variable {
-    pub(crate) fn should_replace_hyphens(self) -> bool {
+    pub fn should_replace_hyphens(self) -> bool {
         false
     }
-    pub(crate) fn hyperlink(self, value: &str) -> Option<&str> {
+    pub fn hyperlink(self, value: &str) -> Option<&str> {
         match self {
             Variable::URL => Some(value),
             Variable::DOI => Some(value),
@@ -258,7 +258,7 @@ pub enum NumberVariable {
 }
 
 impl NumberVariable {
-    pub(crate) fn should_replace_hyphens(self) -> bool {
+    pub fn should_replace_hyphens(self) -> bool {
         self == NumberVariable::Locator
     }
 }

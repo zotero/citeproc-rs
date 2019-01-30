@@ -1,5 +1,5 @@
 use super::{LocalizedQuotes, OutputFormat};
-use crate::style::element::{
+use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 use crate::utils::{Intercalate, JoinMany};

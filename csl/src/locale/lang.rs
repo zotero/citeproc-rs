@@ -67,9 +67,9 @@ impl Lang {
     }
 }
 
-use crate::style::attr::GetAttribute;
-use crate::style::error::UnknownAttributeValue;
-use crate::style::version::CslVariant;
+use crate::attr::GetAttribute;
+use crate::error::UnknownAttributeValue;
+use crate::version::CslVariant;
 impl GetAttribute for Lang {
     fn get_attr(s: &str, _: CslVariant) -> Result<Self, UnknownAttributeValue> {
         Lang::from_str(s).map_err(|_| UnknownAttributeValue::new(s))
@@ -309,3 +309,15 @@ named!(
     parse_lang<CompleteStr, Lang>,
     alt!(call!(parse_unofficial) | call!(parse_iana) | call!(parse_iso))
 );
+
+#[test]
+fn lang_from_str() {
+    let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
+    let de = Lang::Iso(IsoLang::Deutsch, None);
+    let iana = Lang::Iana("Navajo".into());
+    let unofficial = Lang::Unofficial("Newspeak".into());
+    assert_eq!(Lang::from_str("de-AT"), Ok(de_at));
+    assert_eq!(Lang::from_str("de"), Ok(de));
+    assert_eq!(Lang::from_str("i-Navajo"), Ok(iana));
+    assert_eq!(Lang::from_str("x-Newspeak"), Ok(unofficial));
+}

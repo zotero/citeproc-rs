@@ -1,9 +1,7 @@
-use super::{Lang, Locale};
-use crate::style::error::StyleError;
-use crate::style::FromNode;
+use csl::locale::{Lang, Locale};
+use csl::error::StyleError;
+use std::io;
 
-use roxmltree::Document;
-use std::str::FromStr;
 
 pub trait LocaleFetcher: Send + Sync {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
@@ -14,14 +12,12 @@ pub trait LocaleFetcher: Send + Sync {
         match with_errors(&string) {
             Ok(l) => Some(l),
             Err(e) => {
-                crate::style::error::file_diagnostics(&e, "input", &string);
+                crate::error::file_diagnostics(&e, "input", &string);
                 None
             }
         }
     }
 }
-
-use std::io;
 
 #[derive(Debug)]
 pub enum LocaleFetchError {
@@ -38,15 +34,6 @@ impl From<io::Error> for LocaleFetchError {
 impl From<StyleError> for LocaleFetchError {
     fn from(err: StyleError) -> LocaleFetchError {
         LocaleFetchError::Style(err)
-    }
-}
-
-impl FromStr for Locale {
-    type Err = StyleError;
-    fn from_str(xml: &str) -> Result<Self, Self::Err> {
-        let doc = Document::parse(&xml)?;
-        let locale = Locale::from_node(&doc.root_element())?;
-        Ok(locale)
     }
 }
 

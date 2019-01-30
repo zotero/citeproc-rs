@@ -1,6 +1,6 @@
 use super::{DateOrRange, NumericValue};
 use crate::output::OutputFormat;
-use crate::style::terms::LocatorType;
+use csl::terms::LocatorType;
 
 use crate::Atom;
 

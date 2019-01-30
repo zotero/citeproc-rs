@@ -13,14 +13,14 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
-use crate::input::reference::Reference;
-use crate::style::attr::GetAttribute;
-use crate::style::variables::AnyVariable;
-use crate::style::version::CslVariant;
+use csl::GetAttribute;
+use csl::variables::AnyVariable;
+use csl::version::CslVariant;
 
+use crate::input::reference::Reference;
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
-use crate::style::element::CslType;
+use csl::style::CslType;
 use fnv::FnvHashMap;
 // Temporary. Make it dynamic later.
 pub const REF_CSL_VARIANT: CslVariant = CslVariant::CslM;

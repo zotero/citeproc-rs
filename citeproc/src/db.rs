@@ -1,10 +1,12 @@
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
+use csl::locale::Locale;
 
+use crate::proc::ProcDatabase;
 use crate::input::{Cite, CiteId, ClusterId, Reference};
 use crate::style::db::StyleDatabase;
-use crate::style::element::{Position, Style};
+use csl::style::{Position, Style};
 // use crate::input::{Reference, Cite};
 use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
@@ -68,8 +70,6 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
 
-use crate::locale::Locale;
-use crate::proc::ProcDatabase;
 impl<T> ProcDatabase for T
 where
     T: ReferenceDatabase,
@@ -83,7 +83,7 @@ where
         self.style(())
     }
     #[inline]
-    fn cite_pos(&self, id: CiteId) -> crate::style::element::Position {
+    fn cite_pos(&self, id: CiteId) -> csl::style::Position {
         self.cite_position(id).0
     }
     #[inline]
@@ -168,7 +168,7 @@ mod test {
     use super::ReferenceDatabase;
     use crate::db_impl::RootDatabase;
     use crate::input::{Cite, Cluster};
-    use crate::style::element::Position;
+    use csl::style::Position;
 
     #[test]
     fn cite_positions_ibid() {

@@ -18,7 +18,7 @@ use criterion::{Bencher, Criterion};
 
 use citeproc::input::*;
 use citeproc::output::*;
-use citeproc::style::element::CslType;
+use csl::style::CslType;
 use citeproc::style::variables::*;
 use citeproc::Driver;
 

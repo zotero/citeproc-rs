@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use csl::locale::*;
+
+use super::db::LocaleDatabase;
 use super::fetcher::Predefined;
-use super::*;
 use crate::db_impl::RootDatabase;
-use crate::locale::db::LocaleDatabase;
 
 fn terms(xml: &str) -> String {
     format!(
@@ -121,16 +122,4 @@ fn term_locale_fallback() {
         ],
         Some("USA"),
     )
-}
-
-#[test]
-fn lang_from_str() {
-    let de_at = Lang::Iso(IsoLang::Deutsch, Some(IsoCountry::AT));
-    let de = Lang::Iso(IsoLang::Deutsch, None);
-    let iana = Lang::Iana("Navajo".into());
-    let unofficial = Lang::Unofficial("Newspeak".into());
-    assert_eq!(Lang::from_str("de-AT"), Ok(de_at));
-    assert_eq!(Lang::from_str("de"), Ok(de));
-    assert_eq!(Lang::from_str("i-Navajo"), Ok(iana));
-    assert_eq!(Lang::from_str("x-Newspeak"), Ok(unofficial));
 }

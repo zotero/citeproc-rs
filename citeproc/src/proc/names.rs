@@ -3,7 +3,7 @@ use super::ir::*;
 use super::{CiteContext, IrState, Proc, ProcDatabase};
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
-use crate::style::element::{
+use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
 };
@@ -102,16 +102,14 @@ impl PersonName {
     }
 }
 
-impl DelimiterPrecedes {
-    fn should_delimit_after(&self, name: &NameEl, count_before_spot: usize) -> bool {
-        match self {
-            DelimiterPrecedes::Contextual => count_before_spot >= 2,
-            // anticipate whether name_as_sort_order would kick in for the
-            // name just before the delimiter would go
-            DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
-            DelimiterPrecedes::Always => true,
-            DelimiterPrecedes::Never => false,
-        }
+fn should_delimit_after(prec: DelimiterPrecedes, name: &NameEl, count_before_spot: usize) -> bool {
+    match prec {
+        DelimiterPrecedes::Contextual => count_before_spot >= 2,
+        // anticipate whether name_as_sort_order would kick in for the
+        // name just before the delimiter would go
+        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
+        DelimiterPrecedes::Always => true,
+        DelimiterPrecedes::Never => false,
     }
 }
 
@@ -125,10 +123,13 @@ enum NameToken<'a> {
     Space,
 }
 
-impl NameEl {
+struct OneName(NameEl);
+
+impl OneName {
+
     #[inline]
     fn naso(&self, seen_one: bool) -> bool {
-        match self.name_as_sort_order {
+        match self.0.name_as_sort_order {
             None => false,
             Some(NameAsSortOrder::First) => !seen_one,
             Some(NameAsSortOrder::All) => true,
@@ -137,21 +138,21 @@ impl NameEl {
 
     #[inline]
     fn ea_min(&self, pos: Position) -> usize {
-        let first = self.et_al_min.unwrap_or(0);
+        let first = self.0.et_al_min.unwrap_or(0);
         if pos == Position::First {
             first as usize
         } else {
-            self.et_al_subsequent_min.unwrap_or(first) as usize
+            self.0.et_al_subsequent_min.unwrap_or(first) as usize
         }
     }
 
     #[inline]
     fn ea_use_first(&self, pos: Position) -> usize {
-        let first = self.et_al_use_first.unwrap_or(1);
+        let first = self.0.et_al_use_first.unwrap_or(1);
         if pos == Position::First {
             first as usize
         } else {
-            self.et_al_subsequent_use_first.unwrap_or(first) as usize
+            self.0.et_al_subsequent_use_first.unwrap_or(first) as usize
         }
     }
 
@@ -160,7 +161,7 @@ impl NameEl {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
         if name_count >= ea_min {
-            if self.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
+            if self.0.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
                 let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
                     .iter()
@@ -178,10 +179,10 @@ impl NameEl {
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
-                let dpea = self
+                let dpea = self.0
                     .delimiter_precedes_et_al
                     .unwrap_or(DelimiterPrecedes::Contextual);
-                if dpea.should_delimit_after(self, ea_use_first) {
+                if should_delimit_after(dpea, &self.0, ea_use_first) {
                     nms.push(NameToken::Delimiter);
                 } else {
                     nms.push(NameToken::Space);
@@ -196,12 +197,13 @@ impl NameEl {
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
             // because it only has any effect when "and" is set.
-            if let Some(_) = self.and {
+            if let Some(_) = self.0.and {
                 if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
                     let dpl = self
+                        .0
                         .delimiter_precedes_last
                         .unwrap_or(DelimiterPrecedes::Contextual);
-                    if dpl.should_delimit_after(self, name_count - 1) {
+                    if should_delimit_after(dpl, &self.0, name_count - 1) {
                         nms.insert(last_delim + 1, NameToken::And);
                         nms.insert(last_delim + 2, NameToken::Space);
                     } else {
@@ -229,7 +231,7 @@ impl NameEl {
         let name_tokens = self.name_tokens(ctx.position, names_slice);
         let locale = db.default_locale();
 
-        if self.form == Some(NameForm::Count) {
+        if self.0.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
                 NameToken::Name(_) => acc + 1,
                 _ => acc,
@@ -237,7 +239,7 @@ impl NameEl {
             // This isn't sort-mode, you can render NameForm::Count as text.
             return ctx
                 .format
-                .affixed_text(format!("{}", count), self.formatting, &self.affixes);
+                .affixed_text(format!("{}", count), self.0.formatting, &self.0.affixes);
         }
 
         let format_with_part = |o_part: &Option<NamePart>, s: &str| {
@@ -254,7 +256,7 @@ impl NameEl {
             NameToken::Name(Name::Person(ref pn)) => {
                 let order = get_display_order(
                     pn.is_latin_cyrillic(),
-                    self.form == Some(NameForm::Long),
+                    self.0.form == Some(NameForm::Long),
                     self.naso(seen_one),
                     db.style_el().demote_non_dropping_particle,
                 );
@@ -265,19 +267,19 @@ impl NameEl {
                     match part {
                         NamePartToken::Given => {
                             if let Some(ref given) = pn.given {
-                                let name_part = &self.name_part_given;
+                                let name_part = &self.0.name_part_given;
                                 // TODO: parametrize for disambiguation
                                 let string = initialize(
                                     &given,
-                                    self.initialize.unwrap_or(true),
-                                    self.initialize_with.as_ref().map(|s| s.as_ref()),
+                                    self.0.initialize.unwrap_or(true),
+                                    self.0.initialize_with.as_ref().map(|s| s.as_ref()),
                                     db.style_el().initialize_with_hyphen,
                                 );
                                 build.push(format_with_part(name_part, &string));
                             }
                         }
                         NamePartToken::Family => {
-                            let name_part = &self.name_part_given;
+                            let name_part = &self.0.name_part_given;
                             let string = pn.family.as_ref().unwrap();
                             build.push(format_with_part(name_part, &string));
                         }
@@ -294,7 +296,7 @@ impl NameEl {
                             build.push(fmt.plain(" "));
                         }
                         NamePartToken::SortSeparator => {
-                            build.push(if let Some(sep) = &self.sort_separator {
+                            build.push(if let Some(sep) = &self.0.sort_separator {
                                 fmt.plain(&sep)
                             } else {
                                 fmt.plain(", ")
@@ -309,14 +311,14 @@ impl NameEl {
                 fmt.plain(literal.as_str())
             }
             NameToken::Delimiter => {
-                if let Some(delim) = &self.delimiter {
+                if let Some(delim) = &self.0.delimiter {
                     fmt.plain(&delim.0)
                 } else {
                     fmt.plain(", ")
                 }
             }
             NameToken::EtAl => {
-                use crate::style::terms::*;
+                use csl::terms::*;
                 let mut term = MiscTerm::EtAl;
                 let mut formatting = None;
                 if let Some(ref etal_element) = &et_al {
@@ -339,12 +341,12 @@ impl NameEl {
             NameToken::Ellipsis => fmt.plain("…"),
             NameToken::Space => fmt.plain(" "),
             NameToken::And => {
-                use crate::style::terms::*;
+                use csl::terms::*;
                 let select = |form: TermFormExtended| {
                     TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
                 };
-                // If an And token shows up, we already know self.and is Some.
-                let form = match self.and {
+                // If an And token shows up, we already know self.0.and is Some.
+                let form = match self.0.and {
                     Some(NameAnd::Symbol) => locale
                         .get_text_term(select(TermFormExtended::Symbol), false)
                         .unwrap_or("&"),
@@ -356,7 +358,7 @@ impl NameEl {
             }
         });
 
-        fmt.affixed(fmt.with_format(fmt.seq(st), self.formatting), &self.affixes)
+        fmt.affixed(fmt.with_format(fmt.seq(st), self.0.formatting), &self.0.affixes)
     }
 }
 
@@ -367,7 +369,7 @@ mod ord {
     //! Latin here means latin or cyrillic.
     //! TODO: use the regex crate with \\p{Cyrillic} and \\p{Latin}
 
-    use crate::style::element::DemoteNonDroppingParticle as DNDP;
+    use csl::style::DemoteNonDroppingParticle as DNDP;
 
     pub type DisplayOrdering = &'static [NamePartToken];
 
@@ -516,9 +518,9 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let name_el = db
+        let name_el = OneName(db
             .name_citation(())
-            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+            .merge(self.name.as_ref().unwrap_or(&NameEl::default())));
         let rendered: Vec<_> = self
             .variables
             .iter()

@@ -6,7 +6,7 @@ use pandoc_types::{
 use citeproc::db::ReferenceDatabase;
 use citeproc::input::{Cite, Cluster, Suppression};
 use citeproc::output::Pandoc;
-use citeproc::style::element::StyleClass;
+use csl::style::StyleClass;
 
 struct GetClusters {
     next_cluster_id: u64,

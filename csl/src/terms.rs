@@ -1,4 +1,4 @@
-use crate::style::error::*;
+use crate::error::*;
 use fnv::FnvHashMap;
 use std::str::FromStr;
 

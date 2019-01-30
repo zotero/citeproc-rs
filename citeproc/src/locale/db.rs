@@ -1,8 +1,9 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use super::lang::LocaleSource;
-use super::*;
+use super::LocaleFetcher;
+use csl::locale::LocaleSource;
+use csl::locale::*;
 use crate::style::db::*;
 
 pub trait HasFetcher {

@@ -3,7 +3,7 @@ use super::ir::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
 use crate::output::OutputFormat;
-use crate::style::element::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
+use csl::style::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
 
 impl<'c, O> Proc<'c, O> for Arc<Choose>

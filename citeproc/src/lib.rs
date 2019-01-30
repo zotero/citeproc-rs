@@ -6,15 +6,12 @@ pub use self::driver::Driver;
 pub mod input;
 pub mod locale;
 pub mod output;
+pub mod error;
 pub mod style;
-pub use self::style::error::StyleError;
+pub use csl::error::StyleError;
 pub mod proc;
 
 #[macro_use]
-extern crate strum_macros;
-#[macro_use]
 extern crate serde_derive;
-// #[macro_use]
-// extern crate failure;
 
-pub use string_cache::DefaultAtom as Atom;
+pub use csl::Atom as Atom;

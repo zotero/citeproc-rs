@@ -1,6 +1,6 @@
 use super::{LocalizedQuotes, OutputFormat};
 
-use crate::style::element::Formatting;
+use csl::style::Formatting;
 
 #[derive(Debug, Clone)]
 pub struct PlainText {}

@@ -1,36 +1,43 @@
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
+pub use string_cache::DefaultAtom as Atom;
+
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate strum_macros;
+
 use std::sync::Arc;
 
 pub(crate) mod attr;
-pub mod element;
+pub use self::attr::GetAttribute;
+pub mod style;
 pub mod error;
+pub mod locale;
 pub mod terms;
 pub mod variables;
 pub mod version;
 
 use self::attr::*;
-use self::element::*;
-use self::error::*;
+use self::style::*;
+use self::error::{StyleError, CslError, InvalidCsl, PartitionResults, NeedVarType};
 use self::terms::*;
 use self::version::*;
-use crate::locale::*;
-use crate::utils::PartitionArenaErrors;
-use crate::Atom;
+use self::locale::*;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
 
-pub type FromNodeResult<T> = Result<T, CslError>;
+pub(crate) type FromNodeResult<T> = Result<T, CslError>;
 
-pub trait FromNode
+pub(crate) trait FromNode
 where
     Self: Sized,
 {
     fn from_node(node: &Node) -> FromNodeResult<Self>;
 }
 
-pub trait AttrChecker
+trait AttrChecker
 where
     Self: Sized,
 {
@@ -706,23 +713,6 @@ impl FromNode for IndependentDate {
     }
 }
 
-impl FromNode for LocaleDate {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
-        let elements = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node_dp(&el, true))
-            .partition_results()?;
-        Ok(LocaleDate {
-            form: attribute_required(node, "form")?,
-            date_parts: elements,
-            formatting: Option::from_node(node)?,
-            delimiter: Delimiter::from_node(node)?,
-            text_case: TextCase::from_node(node)?,
-        })
-    }
-}
-
 impl FromNode for LocalizedDate {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         let elements = node
@@ -842,7 +832,7 @@ impl FromNode for Names {
 
 impl FromNode for Institution {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
-        use crate::style::element::InstitutionUseFirst::*;
+        use crate::style::InstitutionUseFirst::*;
         let uf = node.attribute("use-first");
         let suf = node.attribute("substitute-use-first");
         let invalid = "<institution> may only use one of `use-first` or `substitute-use-first`";
@@ -1043,133 +1033,6 @@ impl FromNode for TermForm {
     }
 }
 
-// Intermediate type for transforming a list of many terms into 4 different hashmaps
-enum TermEl {
-    Simple(SimpleTermSelector, TermPlurality),
-    Gendered(GenderedTermSelector, GenderedTerm),
-    Ordinal(OrdinalTermSelector, String),
-    Role(RoleTermSelector, TermPlurality),
-}
-
-impl FromNode for TermEl {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
-        use self::terms::AnyTermName::*;
-        let name: AnyTermName = attribute_required(node, "name")?;
-        let content = TermPlurality::from_node(node)?;
-        match name {
-            Number(v) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Number(v, TermForm::from_node(node)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
-            )),
-            Month(mt) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Month(mt, TermForm::from_node(node)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
-            )),
-            Loc(lt) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Locator(lt, TermForm::from_node(node)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
-            )),
-            Misc(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Misc(t, TermFormExtended::from_node(node)?),
-                content,
-            )),
-            Season(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Season(t, TermForm::from_node(node)?),
-                content,
-            )),
-            Quote(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Quote(t, TermForm::from_node(node)?),
-                content,
-            )),
-            Role(t) => Ok(TermEl::Role(
-                RoleTermSelector(t, TermFormExtended::from_node(node)?),
-                content,
-            )),
-            Ordinal(t) => match content {
-                TermPlurality::Invariant(a) => Ok(TermEl::Ordinal(
-                    OrdinalTermSelector(
-                        t,
-                        attribute_optional(node, "gender-form")?,
-                        OrdinalMatch::from_node(node)?,
-                    ),
-                    a,
-                )),
-                _ => Err(InvalidCsl::new(node, "ordinal terms cannot be pluralized").into()),
-            },
-        }
-    }
-}
-
-impl FromNode for LocaleOptionsNode {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
-        Ok(LocaleOptionsNode {
-            limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
-            punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
-        })
-    }
-}
-
-impl FromNode for Locale {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
-        let lang = attribute_option(node, ("xml", "lang"))?;
-
-        // TODO: one slot for each date form, avoid allocations?
-        let dates_vec = node
-            .children()
-            .filter(|el| el.has_tag_name("date"))
-            .map(|el| LocaleDate::from_node(&el))
-            .partition_results()?;
-
-        let mut dates = FnvHashMap::default();
-        for date in dates_vec.into_iter() {
-            dates.insert(date.form, date);
-        }
-
-        let mut simple_terms = SimpleMapping::default();
-        let mut gendered_terms = GenderedMapping::default();
-        let mut ordinal_terms = OrdinalMapping::default();
-        let mut role_terms = RoleMapping::default();
-
-        let options_node = node
-            .children()
-            .filter(|el| el.has_tag_name("style-options"))
-            .nth(0)
-            .map(|o_node| LocaleOptionsNode::from_node(&o_node))
-            .unwrap_or_else(|| Ok(LocaleOptionsNode::default()))?;
-
-        let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
-        if let Some(tn) = terms_node {
-            for n in tn.children().filter(|el| el.has_tag_name("term")) {
-                match TermEl::from_node(&n)? {
-                    TermEl::Simple(sel, con) => {
-                        simple_terms.insert(sel, con);
-                    }
-                    TermEl::Gendered(sel, con) => {
-                        gendered_terms.insert(sel, con);
-                    }
-                    TermEl::Ordinal(sel, con) => {
-                        ordinal_terms.insert(sel, con);
-                    }
-                    TermEl::Role(sel, con) => {
-                        role_terms.insert(sel, con);
-                    }
-                }
-            }
-        }
-
-        Ok(Locale {
-            version: "1.0".into(),
-            lang,
-            options_node,
-            simple_terms,
-            gendered_terms,
-            ordinal_terms,
-            role_terms,
-            dates,
-        })
-    }
-}
-
 impl FromNode for CslVersionReq {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         let version = attribute_string(node, "version");
@@ -1313,24 +1176,14 @@ impl FromNode for Style {
     }
 }
 
-pub(crate) mod db {
-    use std::sync::Arc;
-
-    use super::{Name, Style};
-
-    /// Salsa interface to a CSL style.
-    #[salsa::query_group(StyleDatabaseStorage)]
-    pub trait StyleDatabase: salsa::Database {
-        #[salsa::input]
-        fn style(&self, key: ()) -> Arc<Style>;
-        fn name_citation(&self, key: ()) -> Arc<Name>;
-    }
-
-    fn name_citation(db: &impl StyleDatabase, _: ()) -> Arc<Name> {
-        let style = db.style(());
-        let default = Name::root_default();
-        let root = &style.name_inheritance;
-        let citation = &style.citation.name_inheritance;
-        Arc::new(default.merge(root).merge(citation))
+use std::str::FromStr;
+use roxmltree::Document;
+impl FromStr for Style {
+    type Err = StyleError;
+    fn from_str(xml: &str) -> Result<Self, Self::Err> {
+        let doc = Document::parse(&xml)?;
+        let style = Style::from_node(&doc.root_element())?;
+        Ok(style)
     }
 }
+
