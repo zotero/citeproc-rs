@@ -64,7 +64,10 @@ impl GroupVars {
     /// The tag is `NoneSeen`, the var has `DidRender`.
     ///
     /// ```
+    /// use citeproc::proc::GroupVars::*;
     /// assert_eq!(NoneSeen.neighbour(DidRender), DidRender);
+    /// assert_eq!(NoneSeen.neighbour(OnlyEmpty), OnlyEmpty);
+    /// assert_eq!(DidRender.neighbour(OnlyEmpty), DidRender);
     /// ```
     pub fn neighbour(self, other: Self) -> Self {
         match (self, other) {

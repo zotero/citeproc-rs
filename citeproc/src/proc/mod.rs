@@ -19,7 +19,7 @@ mod names;
 pub use self::disamb::*;
 use self::helpers::sequence;
 pub use self::ir::*;
-use group::GroupVars;
+pub use group::GroupVars;
 
 use crate::locale::Locale;
 use std::sync::Arc;
