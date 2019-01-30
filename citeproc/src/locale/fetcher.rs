@@ -1,6 +1,7 @@
 use csl::locale::{Lang, Locale};
 use csl::error::StyleError;
 use std::io;
+use std::str::FromStr;
 
 
 pub trait LocaleFetcher: Send + Sync {

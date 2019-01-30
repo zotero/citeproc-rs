@@ -15,6 +15,7 @@ impl UnknownAttributeValue {
     }
 }
 
+#[derive(Debug)]
 pub enum StyleError {
     Invalid(CslError),
     ParseError(roxmltree::Error),

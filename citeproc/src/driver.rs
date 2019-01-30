@@ -8,6 +8,7 @@ use csl::style::Position;
 use csl::style::Style;
 use csl::error::StyleError;
 use std::sync::Arc;
+use std::str::FromStr;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;

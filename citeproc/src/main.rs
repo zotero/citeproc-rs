@@ -21,9 +21,10 @@ use std::sync::Arc;
 mod pandoc;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
+use csl::locale::Lang;
+use citeproc::locale::LocaleFetcher;
 use citeproc::db::ReferenceDatabase;
 use citeproc::db_impl::RootDatabase;
-use citeproc::locale::{Lang, LocaleFetcher};
 use citeproc::output::*;
 use citeproc::Driver;
 
@@ -195,7 +196,7 @@ fn main() {
             let footer = r#"}],"pandoc-api-version":[1,17,5,4],"meta":{}}"#;
             println!("{}{}{}", header, serialized, footer);
         } else if let Err(e) = driver_r {
-            citeproc::style::error::file_diagnostics(&e, &csl_path, &text);
+            citeproc::error::file_diagnostics(&e, &csl_path, &text);
         }
     }
 }
@@ -266,7 +267,7 @@ fn do_pandoc() {
 
         serde_json::to_writer(output, &doc).expect("could not write pandoc json");
     } else if let Err(e) = driver_r {
-        citeproc::style::error::file_diagnostics(&e, &csl_path, &text);
+        citeproc::error::file_diagnostics(&e, &csl_path, &text);
     }
 }
 

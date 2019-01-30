@@ -102,7 +102,7 @@ impl PersonName {
     }
 }
 
-fn should_delimit_after(prec: DelimiterPrecedes, name: &NameEl, count_before_spot: usize) -> bool {
+fn should_delimit_after(prec: DelimiterPrecedes, name: &OneName, count_before_spot: usize) -> bool {
     match prec {
         DelimiterPrecedes::Contextual => count_before_spot >= 2,
         // anticipate whether name_as_sort_order would kick in for the
@@ -182,7 +182,7 @@ impl OneName {
                 let dpea = self.0
                     .delimiter_precedes_et_al
                     .unwrap_or(DelimiterPrecedes::Contextual);
-                if should_delimit_after(dpea, &self.0, ea_use_first) {
+                if should_delimit_after(dpea, self, ea_use_first) {
                     nms.push(NameToken::Delimiter);
                 } else {
                     nms.push(NameToken::Space);
@@ -203,7 +203,7 @@ impl OneName {
                         .0
                         .delimiter_precedes_last
                         .unwrap_or(DelimiterPrecedes::Contextual);
-                    if should_delimit_after(dpl, &self.0, name_count - 1) {
+                    if should_delimit_after(dpl, self, name_count - 1) {
                         nms.insert(last_delim + 1, NameToken::And);
                         nms.insert(last_delim + 2, NameToken::Space);
                     } else {

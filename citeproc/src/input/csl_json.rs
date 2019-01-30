@@ -43,46 +43,51 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(field_identifier, rename_all = "kebab-case")]
+enum Field {
+    Id,
+    Type,
+    Any(WrapVar),
+}
+
+struct WrapType(CslType);
+
+impl<'de> Deserialize<'de> for WrapType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const FIELDS: &'static [&'static str] = &["a legal CSL type"];
+        deserializer.deserialize_identifier(CslVariantVisitor(
+            REF_CSL_VARIANT,
+            FIELDS,
+            Default::default(),
+        )).map(WrapType)
+    }
+}
+
+struct WrapVar(AnyVariable);
+
+impl<'de> Deserialize<'de> for WrapVar {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const FIELDS: &'static [&'static str] = &["any CSL variable"];
+        deserializer.deserialize_identifier(CslVariantVisitor(
+            REF_CSL_VARIANT,
+            FIELDS,
+            Default::default(),
+        )).map(WrapVar)
+    }
+}
+
 impl<'de> Deserialize<'de> for Reference {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "kebab-case")]
-        enum Field {
-            Id,
-            Type,
-            Any(AnyVariable),
-        }
-
-        impl<'de> Deserialize<'de> for CslType {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                const FIELDS: &'static [&'static str] = &["a legal CSL type"];
-                deserializer.deserialize_identifier(CslVariantVisitor(
-                    REF_CSL_VARIANT,
-                    FIELDS,
-                    Default::default(),
-                ))
-            }
-        }
-
-        impl<'de> Deserialize<'de> for AnyVariable {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                const FIELDS: &'static [&'static str] = &["any CSL variable"];
-                deserializer.deserialize_identifier(CslVariantVisitor(
-                    REF_CSL_VARIANT,
-                    FIELDS,
-                    Default::default(),
-                ))
-            }
-        }
 
         struct ReferenceVisitor;
 
@@ -98,7 +103,7 @@ impl<'de> Deserialize<'de> for Reference {
                 V: MapAccess<'de>,
             {
                 let mut id = None;
-                let mut csl_type = None;
+                let mut csl_type: Option<WrapType> = None;
                 let mut ordinary = FnvHashMap::default();
                 let mut number = FnvHashMap::default();
                 let mut name = FnvHashMap::default();
@@ -111,7 +116,7 @@ impl<'de> Deserialize<'de> for Reference {
                         Field::Type => {
                             csl_type = Some(map.next_value()?);
                         }
-                        Field::Any(AnyVariable::Ordinary(v)) => {
+                        Field::Any(WrapVar(AnyVariable::Ordinary(v))) => {
                             match ordinary.entry(v) {
                                 Entry::Occupied(_) => {
                                     // TODO: don't use Debug for this
@@ -122,7 +127,7 @@ impl<'de> Deserialize<'de> for Reference {
                                 }
                             }
                         }
-                        Field::Any(AnyVariable::Number(v)) => {
+                        Field::Any(WrapVar(AnyVariable::Number(v))) => {
                             match number.entry(v) {
                                 Entry::Occupied(_) => {
                                     // TODO: don't use Debug for this
@@ -133,7 +138,7 @@ impl<'de> Deserialize<'de> for Reference {
                                 }
                             }
                         }
-                        Field::Any(AnyVariable::Name(v)) => {
+                        Field::Any(WrapVar(AnyVariable::Name(v))) => {
                             match name.entry(v) {
                                 Entry::Occupied(_) => {
                                     // TODO: don't use Debug for this
@@ -144,7 +149,7 @@ impl<'de> Deserialize<'de> for Reference {
                                 }
                             }
                         }
-                        Field::Any(AnyVariable::Date(v)) => {
+                        Field::Any(WrapVar(AnyVariable::Date(v))) => {
                             match date.entry(v) {
                                 Entry::Occupied(_) => {
                                     // TODO: don't use Debug for this
@@ -159,7 +164,7 @@ impl<'de> Deserialize<'de> for Reference {
                 }
                 Ok(Reference {
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
-                    csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?,
+                    csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
                     ordinary,
                     number,
                     name,

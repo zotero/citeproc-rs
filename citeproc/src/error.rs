@@ -17,7 +17,7 @@ pub fn file_diagnostics<'a>(err: &StyleError, filename: &'a str, document: &'a s
     let mut code_map = CodeMap::new();
     let file_map = code_map.add_filemap(filename.to_owned().into(), document.to_string());
     let writer = StandardStream::stderr(ColorChoice::Auto);
-    for diag in err.diagnostics(&file_map) {
+    for diag in diagnostics(err, &file_map) {
         if let Ok(d) = diag {
             emit(&mut writer.lock(), &code_map, &d).unwrap();
             eprintln!();
@@ -32,7 +32,7 @@ pub(crate) fn diagnostics(err: &StyleError, file_map: &FileMap) -> Vec<Result<Di
         StyleError::Invalid(ref invs) => invs
             .0
             .iter()
-            .map(|e| e.to_diagnostic(file_map).ok_or(e.message.clone()))
+            .map(|e| to_diagnostic(e, file_map).ok_or(e.message.clone()))
             .collect(),
         StyleError::ParseError(ref e) => {
             let pos = e.pos();
