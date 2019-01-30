@@ -419,7 +419,7 @@ fn disambiguate<O: OutputFormat>(
     // and suddently is_unambiguous is running on less than its full range of tokens.
     ir.disambiguate(db, state, ctx, &is_unambig);
     let un = is_unambiguous(&index, maybe_ys, state);
-    eprintln!("trying {:?} for {}", ctx.disamb_pass, ctx.cite.id);
+    eprintln!("{:?} trying to disam {}", ctx.disamb_pass, ctx.cite.id);
     if un {
         eprintln!("{:?} disambiguated {}", ctx.disamb_pass, ctx.cite.id);
     }

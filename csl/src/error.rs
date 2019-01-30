@@ -231,7 +231,7 @@ impl Default for StyleError {
     }
 }
 
-pub trait PartitionResults<O, E>: Iterator<Item = Result<O, E>>
+pub(crate) trait PartitionResults<O, E>: Iterator<Item = Result<O, E>>
 where
     O: Sized,
     Self: Sized,

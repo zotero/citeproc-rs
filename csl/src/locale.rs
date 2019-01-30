@@ -60,10 +60,10 @@ pub struct Locale {
     pub version: String,
     pub lang: Option<Lang>,
     pub options_node: LocaleOptionsNode,
-    pub simple_terms: SimpleMapping,
-    pub gendered_terms: GenderedMapping,
-    pub ordinal_terms: OrdinalMapping,
-    pub role_terms: RoleMapping,
+    pub simple_terms: FnvHashMap<SimpleTermSelector, TermPlurality>,
+    pub gendered_terms: FnvHashMap<GenderedTermSelector, GenderedTerm>,
+    pub ordinal_terms: FnvHashMap<OrdinalTermSelector, String>,
+    pub role_terms: FnvHashMap<RoleTermSelector, TermPlurality>,
     pub dates: DateMapping,
 }
 
@@ -92,10 +92,10 @@ impl FromNode for Locale {
             dates.insert(date.form, date);
         }
 
-        let mut simple_terms = SimpleMapping::default();
-        let mut gendered_terms = GenderedMapping::default();
-        let mut ordinal_terms = OrdinalMapping::default();
-        let mut role_terms = RoleMapping::default();
+        let mut simple_terms = FnvHashMap::default();
+        let mut gendered_terms = FnvHashMap::default();
+        let mut ordinal_terms = FnvHashMap::default();
+        let mut role_terms = FnvHashMap::default();
 
         let options_node = node
             .children()

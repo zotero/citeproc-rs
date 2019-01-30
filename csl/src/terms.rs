@@ -1,5 +1,4 @@
 use crate::error::*;
-use fnv::FnvHashMap;
 use std::str::FromStr;
 
 use super::attr::GetAttribute;
@@ -133,11 +132,6 @@ impl RoleTermSelector {
         Box::new(self.1.fallback().map(move |x| RoleTermSelector(self.0, x)))
     }
 }
-
-pub type SimpleMapping = FnvHashMap<SimpleTermSelector, TermPlurality>;
-pub type GenderedMapping = FnvHashMap<GenderedTermSelector, GenderedTerm>;
-pub type OrdinalMapping = FnvHashMap<OrdinalTermSelector, String>;
-pub type RoleMapping = FnvHashMap<RoleTermSelector, TermPlurality>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenderedTerm(pub TermPlurality, pub Gender);
