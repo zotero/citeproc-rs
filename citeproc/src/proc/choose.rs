@@ -119,7 +119,7 @@ where
 {
     let Conditions(ref match_type, ref conds) = *conditions;
     let mut tests = conds.iter().map(|c| eval_cond(c, ctx, db));
-    let disambiguate = conds.iter().any(|c| c.disambiguate)
+    let disambiguate = conds.iter().any(|c| c.disambiguate.is_some())
         && ctx.re_evaluation != Some(ReEvaluation::Conditionals);
 
     (run_matcher(&mut tests, match_type), disambiguate)
@@ -134,7 +134,10 @@ where
     let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
 
     use super::ReEvaluation;
-    let disambiguate = cond.disambiguate && ctx.re_evaluation == Some(ReEvaluation::Conditionals);
+    let disambiguate = cond
+        .disambiguate
+        .iter()
+        .map(|&d| d == (ctx.re_evaluation == Some(ReEvaluation::Conditionals)));
 
     let types = cond
         .csl_type
@@ -154,7 +157,7 @@ where
         .chain(nums)
         .chain(types)
         .chain(positions)
-        .chain(std::iter::once(disambiguate));
+        .chain(disambiguate);
 
     run_matcher(&mut chain, &cond.match_type)
 }

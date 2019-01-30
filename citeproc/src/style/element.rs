@@ -321,7 +321,7 @@ pub struct Condition {
     /// TODO: apparently CSL-M has disambiguate="check-ambiguity-and-backreference" as an
     /// option here. Frank alone knows what that means.
     /// https://github.com/Juris-M/citeproc-js/blob/30ceaf50a0ef86517a9a8cd46362e450133c7f91/src/attributes.js#L17-L46
-    pub disambiguate: bool,
+    pub disambiguate: Option<bool>,
 
     /// It doesn't make much sense to test non-numeric variables, but the spec definitely says you
     /// can do it.
@@ -362,7 +362,7 @@ pub enum Context {
 
 impl Condition {
     pub fn is_empty(&self) -> bool {
-        !self.disambiguate
+        self.disambiguate.is_none()
             && self.is_numeric.is_empty()
             && self.variable.is_empty()
             && self.position.is_empty()

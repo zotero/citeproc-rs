@@ -44,14 +44,6 @@ pub fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, In
     }
 }
 
-pub fn attribute_only_true(node: &Node, attr: &str) -> Result<bool, InvalidCsl> {
-    match node.attribute(attr) {
-        Some("true") => Ok(true),
-        None => Ok(false),
-        Some(s) => Err(InvalidCsl::attr_val(node, attr, s)),
-    }
-}
-
 pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {

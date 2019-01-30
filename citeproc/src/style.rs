@@ -456,7 +456,7 @@ impl Condition {
             jurisdiction: attribute_option_atom(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
             context: attribute_option(node, "context")?,
-            disambiguate: attribute_only_true(node, "disambiguate")?,
+            disambiguate: attribute_option_bool(node, "disambiguate")?,
             variable: attribute_array_var(node, "variable", NeedVarType::Any)?,
             position: attribute_array_var(node, "position", NeedVarType::CondPosition)?,
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural)?,
