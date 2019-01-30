@@ -19,9 +19,11 @@
       ]
     },
     "title": "Title",
-    "type": "webpage"
+    "type": "webpage",
+    "annote": "annote-item1"
   },
   {
+    "annote": "annote-item1",
     "URL": "http://www.example.com",
     "author": [
       {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.1mlz1" default-locale="en-GB">
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.1mlz1" default-locale="en-GB">
   <citation disambiguate-add-year-suffix="true">
     <layout prefix="(" suffix=")" delimiter=", " >
       <group delimiter=" ">
@@ -12,6 +12,11 @@
           </date>
           <text variable="year-suffix" />
         </group>
+        <choose>
+          <if disambiguate="true">
+            <text variable="annote" />
+          </if>
+        </choose>
       </group>
     </layout>
   </citation>

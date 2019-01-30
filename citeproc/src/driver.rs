@@ -67,7 +67,7 @@ where
             cite_ids
                 .par_iter()
                 .for_each_with(self.snap(), |snap, &cite_id| {
-                    snap.0.ir_gen2(cite_id);
+                    snap.0.ir_gen2_add_given_name(cite_id);
                 });
             self.db.year_suffixes(());
             cluster_ids
@@ -90,9 +90,12 @@ where
         let mut state = IrState::new();
         let (i, _) = self.db.style(()).intermediate(&self.db, &mut state, &ctx);
         let fmt = O::default();
-        let flat = i.flatten(&fmt);
-        let o = fmt.output(flat);
-        serde_json::to_string(&o).unwrap()
+        if let Some(flat) = i.flatten(&fmt) {
+            let o = fmt.output(flat);
+            serde_json::to_string(&o).unwrap()
+        } else {
+            "".to_string()
+        }
     }
 
     pub fn pair(&self, cite: &Cite<O>, refr: &Reference) {

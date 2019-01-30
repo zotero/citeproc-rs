@@ -60,10 +60,10 @@ pub trait ReferenceDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> IrGen;
-    fn ir_gen1(&self, key: CiteId) -> IrGen;
-    fn ir_gen2(&self, key: CiteId) -> IrGen;
-    fn ir_gen3(&self, key: CiteId) -> IrGen;
-    fn ir_gen4(&self, key: CiteId) -> IrGen;
+    fn ir_gen1_add_names(&self, key: CiteId) -> IrGen;
+    fn ir_gen2_add_given_name(&self, key: CiteId) -> IrGen;
+    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> IrGen;
+    fn ir_gen4_conditionals(&self, key: CiteId) -> IrGen;
 
     fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
@@ -304,8 +304,8 @@ fn built_cluster(
     let built_cites: Vec<_> = cite_ids
         .iter()
         .map(|&id| {
-            let ir = &db.ir_gen4(id).0;
-            ir.flatten(&fmt)
+            let ir = &db.ir_gen4_conditionals(id).0;
+            ir.flatten(&fmt).unwrap_or(fmt.plain(""))
         })
         .collect();
     let build = fmt.affixed(
@@ -317,55 +317,59 @@ fn built_cluster(
 
 use crate::utils::to_bijective_base_26;
 
+/// the inverted index is constant for a particular set of cited+uncited references
+/// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
+/// the parallelization of IR <= 2
 fn matching_refs(
     index: &FnvHashMap<DisambToken, HashSet<Atom>>,
-    maybe_ys: Option<&FnvHashMap<Atom, u32>>,
+    year_suffixes: Option<&FnvHashMap<Atom, u32>>,
     state: &IrState,
 ) -> (FnvHashSet<Atom>, bool) {
-    let mut matching_ids = FnvHashSet::default();
-    let invert_ys: Option<FnvHashMap<_, _>> = maybe_ys.map(|ys| {
+    let mut refs = FnvHashSet::default();
+    let invert_ysuffix: Option<FnvHashMap<_, _>> = year_suffixes.map(|ys| {
         ys.iter()
             .map(|(a, &b)| (Atom::from(to_bijective_base_26(b)), a))
             .collect()
     });
+    let lookup_ysuffix = |tok: &DisambToken| match tok {
+        DisambToken::Str(s) => invert_ysuffix.as_ref().and_then(|iys| iys.get(&s)),
+        _ => None,
+    };
     // Build up all possible citekeys it could match
     for tok in state.tokens.iter() {
         if let Some(ids) = index.get(tok) {
             for x in ids {
-                matching_ids.insert(x.clone());
+                refs.insert(x.clone());
             }
-        } else if let DisambToken::Str(s) = tok {
-            if let Some(id) = invert_ys.as_ref().and_then(|iys| iys.get(&s)) {
-                matching_ids.insert((*id).clone());
-            }
+        }
+        if let Some(id) = lookup_ysuffix(tok) {
+            refs.insert((*id).clone());
         }
     }
     // Remove any that didn't appear in the index for ALL tokens
     for tok in state.tokens.iter() {
-        // ignore tokens which matched NO references; they are just part of the style,
-        // like <text value="xxx"/>. Of course:
-        //   - <text value="xxx"/> WILL match any references that have a field with
-        //     "xxx" in it.
-        //   - You have to make sure all text is transformed equivalently.
-        //   So TODO: make all text ASCII uppercase first!
         if let Some(ids) = index.get(tok) {
-            matching_ids.retain(|already| ids.contains(already));
-        // TODO: improve this, it's not very good
-        } else if let DisambToken::Str(s) = tok {
-            if let Some(id) = invert_ys.as_ref().and_then(|iys| iys.get(&s)) {
-                matching_ids.retain(|already| *id == already);
-            }
+            refs.retain(|already| ids.contains(already));
+        }
+        if let Some(id) = lookup_ysuffix(tok) {
+            refs.retain(|already| *id == already);
         }
     }
     // dbg!(&state.tokens);
-    // dbg!(&matching_ids);
+    // dbg!(&refs);
+    // ignore tokens which matched NO references; they are just part of the style,
+    // like <text value="xxx"/>. Of course:
+    //   - <text value="xxx"/> WILL match any references that have a field with
+    //     "xxx" in it.
+    //   - You have to make sure all text is transformed equivalently.
+    //   So TODO: make all text ASCII uppercase first!
     // len == 0 is for "ibid" or "[1]", etc. They are clearly unambiguous, and we will assume
     // that any time it happens is intentional.
     // len == 1 means there was only one ref. Great!
     //
     // TODO Of course, that whole 'compare IR output for ambiguous cites' thing.
-    let len = matching_ids.len();
-    (matching_ids, len == 0 || len == 1)
+    let len = refs.len();
+    (refs, len == 0 || len == 1)
 }
 
 fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<Atom, u32>> {
@@ -378,7 +382,7 @@ fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<FnvHashMap<Atom, u32
     let refs_to_add_suffixes_to = all_cites_ordered
         .iter()
         .map(|&id| db.cite(id))
-        .map(|cite| (cite.ref_id.clone(), db.ir_gen2(cite.id)))
+        .map(|cite| (cite.ref_id.clone(), db.ir_gen2_add_given_name(cite.id)))
         .filter_map(|(ref_id, ir2)| {
             match ir2.1 {
                 // if ambiguous (false), add a suffix
@@ -418,7 +422,12 @@ fn disambiguate<O: OutputFormat>(
     // Currently, the state being reset means re_evaluate doesn't add many tokens at all,
     // and suddently matching_refs is running on less than its full range of tokens.
     ir.re_evaluate(db, state, ctx, &is_unambig);
-    dbg!(matching_refs(&index, maybe_ys, state))
+    let (mr, un) = matching_refs(&index, maybe_ys, state);
+    eprintln!("trying {:?} for {}", re, ctx.cite.id);
+    if un {
+        eprintln!("{:?} disambiguated {}", re, ctx.cite.id);
+    }
+    (mr, un)
 }
 
 fn ctx_for<'c, O: OutputFormat>(
@@ -465,7 +474,7 @@ fn ir_gen0(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen1(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
+fn ir_gen1_add_names(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     let style = db.style(());
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
@@ -491,9 +500,9 @@ fn ir_gen1(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen2(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
+fn ir_gen2_add_given_name(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     let style = db.style(());
-    let ir1 = db.ir_gen1(id);
+    let ir1 = db.ir_gen1_add_names(id);
     if ir1.1 || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
@@ -517,10 +526,9 @@ fn ir_gen2(db: &impl ReferenceDatabase, id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen3(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
+fn ir_gen3_add_year_suffix(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
     let style = db.style(());
-    let ir2 = db.ir_gen2(cite_id);
-    dbg!(&ir2.1);
+    let ir2 = db.ir_gen2_add_given_name(cite_id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
@@ -549,9 +557,8 @@ fn ir_gen3(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen4(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
-    let ir3 = db.ir_gen3(cite_id);
-    dbg!(&ir3.1);
+fn ir_gen4_conditionals(db: &impl ReferenceDatabase, cite_id: CiteId) -> IrGen {
+    let ir3 = db.ir_gen3_add_year_suffix(cite_id);
     if ir3.1 {
         return ir3.clone();
     }

@@ -70,14 +70,14 @@ impl<O: OutputFormat> IR<O> {
         }
     }
 
-    pub fn flatten(&self, fmt: &O) -> O::Build {
+    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
         // must clone
         match self {
-            IR::Rendered(None) => fmt.plain(""),
-            IR::Rendered(Some(ref x)) => x.clone(),
-            IR::Names(_, ref x) => x.clone(),
+            IR::Rendered(None) => None,
+            IR::Rendered(Some(ref x)) => Some(x.clone()),
+            IR::Names(_, ref x) => Some(x.clone()),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
-            IR::YearSuffix(_, ref x) => x.clone(),
+            IR::YearSuffix(_, ref x) => Some(x.clone()),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
     }
@@ -118,7 +118,7 @@ impl<O: OutputFormat> IR<O> {
                     ir.re_evaluate(db, state, ctx, is_unambig);
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
-                    let new_ir = IR::Rendered(Some(seq.flatten_seq(&ctx.format)));
+                    let new_ir = IR::Rendered(seq.flatten_seq(&ctx.format));
                     new_ir
                 } else {
                     return;
@@ -137,9 +137,16 @@ pub struct IrSeq<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> IrSeq<O> {
-    fn flatten_seq(&self, fmt: &O) -> O::Build {
-        let xs: Vec<_> = self.contents.iter().map(|i| i.flatten(fmt)).collect();
+    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
+        let xs: Vec<_> = self
+            .contents
+            .iter()
+            .filter_map(|i| i.flatten(fmt))
+            .collect();
+        if xs.is_empty() {
+            return None;
+        }
         let grp = fmt.group(xs, &self.delimiter, self.formatting);
-        fmt.affixed(grp, &self.affixes)
+        Some(fmt.affixed(grp, &self.affixes))
     }
 }

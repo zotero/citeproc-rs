@@ -31,6 +31,7 @@ where
             found = content;
             disamb = disamb || disambiguate;
         }
+        // check the <if> element
         if let Some((content, gv)) = found {
             return if disamb {
                 (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
@@ -38,6 +39,7 @@ where
                 (content, gv)
             };
         } else {
+            // check the <else-if> elements
             for branch in rest.iter() {
                 if found.is_some() {
                     break;
@@ -50,15 +52,22 @@ where
                 disamb = disamb || disambiguate;
             }
         }
+        // did any of the <else-if> elements match?
         if let Some((content, gv)) = found {
-            return if disamb {
+            if disamb {
                 (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
                 (content, gv)
-            };
+            }
         } else {
+            // if not, <else>
             let Else(ref els) = last;
-            sequence(db, state, ctx, &els, "".into(), None, Affixes::default())
+            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default());
+            if disamb {
+                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
+            } else {
+                (content, gv)
+            }
         }
     }
 }
@@ -110,7 +119,8 @@ where
 {
     let Conditions(ref match_type, ref conds) = *conditions;
     let mut tests = conds.iter().map(|c| eval_cond(c, ctx, db));
-    let disambiguate = conds.iter().any(|c| c.disambiguate);
+    let disambiguate = conds.iter().any(|c| c.disambiguate)
+        && ctx.re_evaluation != Some(ReEvaluation::Conditionals);
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
@@ -122,6 +132,9 @@ where
     let vars = cond.variable.iter().map(|&var| ctx.has_variable(var, db));
 
     let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
+
+    use super::ReEvaluation;
+    let disambiguate = cond.disambiguate && ctx.re_evaluation == Some(ReEvaluation::Conditionals);
 
     let types = cond
         .csl_type
@@ -137,7 +150,11 @@ where
     // work.
     // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
 
-    let mut chain = vars.chain(nums).chain(types).chain(positions);
+    let mut chain = vars
+        .chain(nums)
+        .chain(types)
+        .chain(positions)
+        .chain(std::iter::once(disambiguate));
 
     run_matcher(&mut chain, &cond.match_type)
 }

@@ -165,6 +165,9 @@ where
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             if let Some(ReEvaluation::AddYearSuffix(i)) = ctx.re_evaluation {
                                 let base26 = crate::utils::to_bijective_base_26(i);
+                                state
+                                    .tokens
+                                    .insert(DisambToken::Str(base26.as_str().into()));
                                 return (
                                     IR::Rendered(Some(fmt.text_node(base26, None))),
                                     GroupVars::DidRender,
