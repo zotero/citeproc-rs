@@ -31,7 +31,7 @@ where
     pub fn new(style_string: &str) -> Result<Self, StyleError> {
         let db = RootDatabase::new(style_string, )
         let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style((), style);
+        db.set_style(style);
 
         Ok(Driver {
             db,
@@ -55,7 +55,7 @@ where
             disamb_pass: None,
         };
         let mut state = IrState::new();
-        let (i, _) = self.db.style(()).intermediate(&self.db, &mut state, &ctx);
+        let (i, _) = self.db.style().intermediate(&self.db, &mut state, &ctx);
         let fmt = O::default();
         if let Some(flat) = i.flatten(&fmt) {
             let o = fmt.output(flat);
@@ -75,7 +75,7 @@ where
             disamb_pass: None,
         };
         let mut state = IrState::new();
-        self.db.style(()).intermediate(&self.db, &mut state, &ctx);
+        self.db.style().intermediate(&self.db, &mut state, &ctx);
     }
 
     pub fn multiple(&self, pairs: &[(&Cite<O>, &Reference)]) -> bool {
@@ -95,7 +95,7 @@ where
                         disamb_pass: None,
                     };
                     let mut state = IrState::new();
-                    db.style(()).intermediate(db, &mut state, &ctx).0
+                    db.style().intermediate(db, &mut state, &ctx).0
                 })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
@@ -120,7 +120,7 @@ where
                         disamb_pass: None,
                     };
                     let mut state = IrState::new();
-                    db.style(()).intermediate(&self.db, &mut state, &ctx).0
+                    db.style().intermediate(&self.db, &mut state, &ctx).0
                 })
                 .any(|ir| {
                     if let crate::proc::IR::Rendered(None) = ir {
@@ -133,11 +133,11 @@ where
     }
 
     pub fn dump_macro(&self, s: Atom) {
-        eprintln!("{:?}", self.db.style(()).macros.get(&s))
+        eprintln!("{:?}", self.db.style().macros.get(&s))
     }
 
     pub fn dump_style(&self) {
-        eprintln!("{:?}", self.db.style(()))
+        eprintln!("{:?}", self.db.style())
     }
 
     pub fn dump_ir(&self, refr: &Reference) {
@@ -150,7 +150,7 @@ where
             disamb_pass: None,
         };
         let mut state = IrState::new();
-        let ir = self.db.style(()).intermediate(&self.db, &mut state, &ctx).0;
+        let ir = self.db.style().intermediate(&self.db, &mut state, &ctx).0;
         eprintln!("{:?}", ir);
     }
 }

@@ -336,7 +336,7 @@ fn year_suffixes(db: &impl CiteDatabase, _: ()) -> Arc<HashMap<Atom, u32>> {
 fn ir3(db: &impl CiteDatabase, cite_id: CiteId) -> Arc<(IrSum<Pandoc>, bool)> {
     let cite = db.cite(cite_id);
     let ir2 = db.ir2(cite_id);
-    let suffixes = db.year_suffixes(());
+    let suffixes = db.year_suffixes();
     // if unambiguous or not improvable, just return ir2.
     // It's an Arc, so cloning is cheap.
     if !ir2.1 || !suffixes.contains_key(&cite.ref_id) {

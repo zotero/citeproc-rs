@@ -160,7 +160,7 @@ fn main() {
     // if let Some(_) = matches.subcommand_matches("disamb-index") {
     //     let mut db = RootDatabase::new(filesystem_fetcher);
     //     db.set_references(refs);
-    //     for (tok, ids) in db.inverted_index(()).iter() {
+    //     for (tok, ids) in db.inverted_index().iter() {
     //         // if ids.len() > 1 {
     //         let token = tok.clone();
     //         let citekeys: Vec<_> = ids.iter().map(|atom| atom.to_string()).collect();

@@ -19,31 +19,31 @@ pub trait CiteDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
 
     #[salsa::input]
-    fn all_keys(&self, key: ()) -> Arc<HashSet<Atom>>;
+    fn all_keys(&self) -> Arc<HashSet<Atom>>;
 
     #[salsa::input]
-    fn all_uncited(&self, key: ()) -> Arc<HashSet<Atom>>;
+    fn all_uncited(&self) -> Arc<HashSet<Atom>>;
     /// Filters out keys not in the library
-    fn uncited(&self, key: ()) -> Arc<HashSet<Atom>>;
+    fn uncited(&self) -> Arc<HashSet<Atom>>;
 
     /// Filters out keys not in the library
-    fn cited_keys(&self, key: ()) -> Arc<HashSet<Atom>>;
+    fn cited_keys(&self) -> Arc<HashSet<Atom>>;
 
     /// Equal to `all.intersection(cited U uncited)`
-    fn disamb_participants(&self, key: ()) -> Arc<HashSet<Atom>>;
+    fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
 
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
     fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
 
-    fn inverted_index(&self, key: ()) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
+    fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
 
     // priv
     #[salsa::input]
     fn cite(&self, key: CiteId) -> Arc<Cite<Pandoc>>;
 
     #[salsa::input]
-    fn cluster_ids(&self, key: ()) -> Arc<Vec<ClusterId>>;
+    fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
 
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
@@ -52,13 +52,13 @@ pub trait CiteDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn cluster_note_number(&self, key: ClusterId) -> u32;
 
     // All cite ids, in the order they appear in the document
-    fn all_cite_ids(&self, key: ()) -> Arc<Vec<CiteId>>;
+    fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
 
-    fn cite_positions(&self, key: ()) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
+    fn cite_positions(&self) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
     #[salsa::dependencies]
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
-    fn year_suffixes(&self, key: ()) -> Arc<FnvHashMap<Atom, u32>>;
+    fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
 
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
@@ -77,11 +77,11 @@ where
 {
     #[inline]
     fn default_locale(&self) -> Arc<Locale> {
-        self.merged_locale(self.style(()).default_locale.clone())
+        self.merged_locale(self.style().default_locale.clone())
     }
     #[inline]
     fn style_el(&self) -> Arc<Style> {
-        self.style(())
+        self.style()
     }
     #[inline]
     fn cite_pos(&self, id: CiteId) -> csl::style::Position {
@@ -98,7 +98,7 @@ where
 }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
-    if db.all_keys(()).contains(&key) {
+    if db.all_keys().contains(&key) {
         Some(db.reference_input(key))
     } else {
         None
@@ -113,9 +113,9 @@ fn disamb_tokens(db: &impl CiteDatabase, key: Atom) -> Arc<HashSet<DisambToken>>
     Arc::new(set)
 }
 
-fn inverted_index(db: &impl CiteDatabase, _: ()) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
+fn inverted_index(db: &impl CiteDatabase) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
     let mut index = FnvHashMap::default();
-    for key in db.disamb_participants(()).iter() {
+    for key in db.disamb_participants().iter() {
         for tok in db.disamb_tokens(key.clone()).iter() {
             let ids = index.entry(tok.clone()).or_insert_with(|| HashSet::new());
             ids.insert(key.clone());
@@ -125,17 +125,17 @@ fn inverted_index(db: &impl CiteDatabase, _: ()) -> Arc<FnvHashMap<DisambToken, 
 }
 
 // make sure there are no keys we wouldn't recognise
-fn uncited(db: &impl CiteDatabase, _: ()) -> Arc<HashSet<Atom>> {
-    let all = db.all_keys(());
-    let uncited = db.all_uncited(());
+fn uncited(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+    let all = db.all_keys();
+    let uncited = db.all_uncited();
     let merged = all.intersection(&uncited).cloned().collect();
     Arc::new(merged)
 }
 
-fn cited_keys(db: &impl CiteDatabase, _: ()) -> Arc<HashSet<Atom>> {
-    let all = db.all_keys(());
+fn cited_keys(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+    let all = db.all_keys();
     let mut keys = HashSet::new();
-    let all_cite_ids = db.all_cite_ids(());
+    let all_cite_ids = db.all_cite_ids();
     for &id in all_cite_ids.iter() {
         keys.insert(db.cite(id).ref_id.clone());
     }
@@ -144,17 +144,17 @@ fn cited_keys(db: &impl CiteDatabase, _: ()) -> Arc<HashSet<Atom>> {
     Arc::new(merged)
 }
 
-fn disamb_participants(db: &impl CiteDatabase, _: ()) -> Arc<HashSet<Atom>> {
-    let cited = db.cited_keys(());
-    let uncited = db.uncited(());
+fn disamb_participants(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+    let cited = db.cited_keys();
+    let uncited = db.uncited();
     // make sure there are no keys we wouldn't recognise
     let merged = cited.union(&uncited).cloned().collect();
     Arc::new(merged)
 }
 
-fn all_cite_ids(db: &impl CiteDatabase, _: ()) -> Arc<Vec<CiteId>> {
+fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     let mut ids = Vec::new();
-    let cluster_ids = db.cluster_ids(());
+    let cluster_ids = db.cluster_ids();
     let clusters = cluster_ids.iter().cloned().map(|id| db.cluster_cites(id));
     for cluster in clusters {
         ids.extend(cluster.iter().cloned());
@@ -184,7 +184,7 @@ mod test {
                 note_number: 2,
             },
         ]);
-        let poss = db.cite_positions(());
+        let poss = db.cite_positions();
         assert_eq!(poss[&1], (Position::First, None));
         assert_eq!(poss[&2], (Position::Ibid, Some(1)));
     }
@@ -209,7 +209,7 @@ mod test {
                 note_number: 3,
             },
         ]);
-        let poss = db.cite_positions(());
+        let poss = db.cite_positions();
         assert_eq!(poss[&1], (Position::First, None));
         assert_eq!(poss[&2], (Position::First, None));
         assert_eq!(poss[&3], (Position::NearNote, Some(1)));
@@ -220,9 +220,8 @@ mod test {
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
 fn cite_positions(
     db: &impl CiteDatabase,
-    _: (),
 ) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
-    let cluster_ids = db.cluster_ids(());
+    let cluster_ids = db.cluster_ids();
     let clusters: Vec<_> = cluster_ids
         .iter()
         .map(|&id| (id, db.cluster_cites(id)))
@@ -286,7 +285,7 @@ fn cite_positions(
 }
 
 fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>) {
-    db.cite_positions(())
+    db.cite_positions()
         .get(&key)
         .expect("called cite_position on unknown cite id")
         .clone()
@@ -298,7 +297,7 @@ fn built_cluster(
 ) -> Arc<<Pandoc as OutputFormat>::Output> {
     let fmt = Pandoc::default();
     let cite_ids = db.cluster_cites(cluster_id);
-    let style = db.style(());
+    let style = db.style();
     let layout = &style.citation.layout;
     let built_cites: Vec<_> = cite_ids
         .iter()
@@ -372,13 +371,13 @@ fn is_unambiguous(
     len < 2
 }
 
-fn year_suffixes(db: &impl CiteDatabase, _: ()) -> Arc<FnvHashMap<Atom, u32>> {
-    let style = db.style(());
+fn year_suffixes(db: &impl CiteDatabase) -> Arc<FnvHashMap<Atom, u32>> {
+    let style = db.style();
     if !style.citation.disambiguate_add_year_suffix {
         return Arc::new(FnvHashMap::default());
     }
 
-    let all_cites_ordered = db.all_cite_ids(());
+    let all_cites_ordered = db.all_cite_ids();
     let refs_to_add_suffixes_to = all_cites_ordered
         .iter()
         .map(|&id| db.cite(id))
@@ -409,7 +408,7 @@ fn disambiguate<O: OutputFormat>(
     ctx: &mut CiteContext<O>,
     maybe_ys: Option<&FnvHashMap<Atom, u32>>,
 ) -> bool {
-    let index = db.inverted_index(());
+    let index = db.inverted_index();
     let is_unambig = |state: &IrState| is_unambiguous(&index, maybe_ys, state);
     // TODO: (BUG) Restore original IrState before running again?
     // Maybe maintain token sets per-name-el. Add an ID to each <names> and reuse IrStates, but
@@ -454,8 +453,8 @@ fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
 }
 
 fn ir_gen0(db: &impl CiteDatabase, id: CiteId) -> IrGen {
-    let style = db.style(());
-    let index = db.inverted_index(());
+    let style = db.style();
+    let index = db.inverted_index();
     let cite = db.cite(id);
     let refr = match db.reference(cite.ref_id.clone()) {
         None => return ref_not_found(&cite.ref_id, true),
@@ -470,7 +469,7 @@ fn ir_gen0(db: &impl CiteDatabase, id: CiteId) -> IrGen {
 }
 
 fn ir_gen1_add_names(db: &impl CiteDatabase, id: CiteId) -> IrGen {
-    let style = db.style(());
+    let style = db.style();
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
     if ir0.1 || !style.citation.disambiguate_add_names {
@@ -490,7 +489,7 @@ fn ir_gen1_add_names(db: &impl CiteDatabase, id: CiteId) -> IrGen {
 }
 
 fn ir_gen2_add_given_name(db: &impl CiteDatabase, id: CiteId) -> IrGen {
-    let style = db.style(());
+    let style = db.style();
     let ir1 = db.ir_gen1_add_names(id);
     if ir1.1 || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
@@ -510,14 +509,14 @@ fn ir_gen2_add_given_name(db: &impl CiteDatabase, id: CiteId) -> IrGen {
 }
 
 fn ir_gen3_add_year_suffix(db: &impl CiteDatabase, cite_id: CiteId) -> IrGen {
-    let style = db.style(());
+    let style = db.style();
     let ir2 = db.ir_gen2_add_given_name(cite_id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
     // splitting the ifs means we only compute year suffixes if it's enabled
     let cite = db.cite(cite_id);
-    let suffixes = db.year_suffixes(());
+    let suffixes = db.year_suffixes();
     if !suffixes.contains_key(&cite.ref_id) {
         return ir2.clone();
     }

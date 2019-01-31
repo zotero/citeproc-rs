@@ -36,7 +36,7 @@ fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
 }
 
 fn inline_locale(db: &impl LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
-    db.style(())
+    db.style()
         .locale_overrides
         .get(&key)
         .cloned()

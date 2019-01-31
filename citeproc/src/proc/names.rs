@@ -524,7 +524,7 @@ where
     {
         let fmt = &ctx.format;
         let name_el = OneName(
-            db.name_citation(())
+            db.name_citation()
                 .merge(self.name.as_ref().unwrap_or(&NameEl::default())),
         );
         let rendered: Vec<_> = self

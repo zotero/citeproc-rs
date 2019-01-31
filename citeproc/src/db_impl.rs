@@ -77,16 +77,16 @@ impl RootDatabase {
             fetcher,
         };
         // TODO: way more salsa::inputs
-        db.set_style((), Default::default());
-        db.set_all_uncited((), Default::default());
-        db.set_cluster_ids((), Arc::new(vec![]));
+        db.set_style(Default::default());
+        db.set_all_uncited(Default::default());
+        db.set_cluster_ids(Arc::new(vec![]));
         db
     }
 
     pub fn new(style_string: &str, fetcher: Arc<LocaleFetcher>) -> Result<Self, StyleError> {
         let mut db = RootDatabase::safe_default(fetcher);
         let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style((), style);
+        db.set_style(style);
         Ok(db)
     }
 
@@ -108,8 +108,8 @@ impl RootDatabase {
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
-            let cluster_ids = self.cluster_ids(());
-            let cite_ids = self.all_cite_ids(());
+            let cluster_ids = self.cluster_ids();
+            let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
             // single rayon thread
             cite_ids
@@ -117,7 +117,7 @@ impl RootDatabase {
                 .for_each_with(self.snap(), |snap, &cite_id| {
                     snap.0.ir_gen2_add_given_name(cite_id);
                 });
-            self.year_suffixes(());
+            self.year_suffixes();
             cluster_ids
                 .par_iter()
                 .for_each_with(self.snap(), |snap, &cluster_id| {
@@ -141,7 +141,7 @@ impl RootDatabase {
             citation_number: 1,
             disamb_pass: None,
         };
-        let style = self.style(());
+        let style = self.style();
         let mut state = IrState::new();
         use crate::proc::Proc;
         let ir = style.intermediate(self, &mut state, &ctx).0;
@@ -156,7 +156,7 @@ impl RootDatabase {
         for r in refs {
             self.set_reference_input(r.id.clone(), Arc::new(r));
         }
-        self.set_all_keys((), Arc::new(keys));
+        self.set_all_keys(Arc::new(keys));
     }
 
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Pandoc>>) {
@@ -171,7 +171,7 @@ impl RootDatabase {
             self.set_cluster_note_number(cluster.id, cluster.note_number);
             cluster_ids.push(cluster.id);
         }
-        self.set_cluster_ids((), Arc::new(cluster_ids));
+        self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
     // cluster_ids is maintained manually
@@ -179,22 +179,22 @@ impl RootDatabase {
 
     pub fn remove_cluster(&mut self, id: ClusterId) {
         self.set_cluster_cites(id, Arc::new(Vec::new()));
-        let cluster_ids = self.cluster_ids(());
+        let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
             .filter(|&i| *i != id)
             .cloned()
             .collect();
-        self.set_cluster_ids((), Arc::new(cluster_ids));
+        self.set_cluster_ids(Arc::new(cluster_ids));
         // delete associated cites
         // self.set_cluster_cites(id, Arc::new(Vec::new()));
         // let new = self
-        //     .cluster_ids(())
+        //     .cluster_ids()
         //     .iter()
         //     .filter(|i| **i != id)
         //     .cloned()
         //     .collect();
-        // self.set_cluster_ids((), Arc::new(new));
+        // self.set_cluster_ids(Arc::new(new));
     }
 
     // pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {}
@@ -216,6 +216,6 @@ impl RootDatabase {
     }
 
     pub fn get_style(&self) -> Arc<Style> {
-        self.style(())
+        self.style()
     }
 }
