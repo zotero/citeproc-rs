@@ -13,13 +13,13 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
-use csl::GetAttribute;
 use csl::variables::AnyVariable;
 use csl::version::CslVariant;
+use csl::GetAttribute;
 
-use crate::input::reference::Reference;
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
+use crate::input::reference::Reference;
 use csl::style::CslType;
 use fnv::FnvHashMap;
 // Temporary. Make it dynamic later.
@@ -59,11 +59,13 @@ impl<'de> Deserialize<'de> for WrapType {
         D: Deserializer<'de>,
     {
         const FIELDS: &'static [&'static str] = &["a legal CSL type"];
-        deserializer.deserialize_identifier(CslVariantVisitor(
-            REF_CSL_VARIANT,
-            FIELDS,
-            Default::default(),
-        )).map(WrapType)
+        deserializer
+            .deserialize_identifier(CslVariantVisitor(
+                REF_CSL_VARIANT,
+                FIELDS,
+                Default::default(),
+            ))
+            .map(WrapType)
     }
 }
 
@@ -75,11 +77,13 @@ impl<'de> Deserialize<'de> for WrapVar {
         D: Deserializer<'de>,
     {
         const FIELDS: &'static [&'static str] = &["any CSL variable"];
-        deserializer.deserialize_identifier(CslVariantVisitor(
-            REF_CSL_VARIANT,
-            FIELDS,
-            Default::default(),
-        )).map(WrapVar)
+        deserializer
+            .deserialize_identifier(CslVariantVisitor(
+                REF_CSL_VARIANT,
+                FIELDS,
+                Default::default(),
+            ))
+            .map(WrapVar)
     }
 }
 
@@ -88,7 +92,6 @@ impl<'de> Deserialize<'de> for Reference {
     where
         D: Deserializer<'de>,
     {
-
         struct ReferenceVisitor;
 
         impl<'de> Visitor<'de> for ReferenceVisitor {

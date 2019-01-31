@@ -1,4 +1,3 @@
-
 pub fn to_bijective_base_26(int: u32) -> String {
     let mut n = int;
     let mut s = String::new();
@@ -98,4 +97,3 @@ where
         result
     }
 }
-

@@ -181,7 +181,6 @@ impl InvalidCsl {
             severity,
         }
     }
-
 }
 
 impl From<roxmltree::Error> for StyleError {

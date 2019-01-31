@@ -3,8 +3,8 @@ use super::ir::IR::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
 use crate::output::OutputFormat;
-use csl::style::{Affixes, Element, Formatting};
 use crate::Atom;
+use csl::style::{Affixes, Element, Formatting};
 
 pub fn sequence<'c, O>(
     db: &impl ProcDatabase,

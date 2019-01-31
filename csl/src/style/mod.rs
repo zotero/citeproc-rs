@@ -1,6 +1,6 @@
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
-use crate::locale::{Lang, Locale};
 use crate::error::*;
+use crate::locale::{Lang, Locale};
 use crate::terms::LocatorType;
 use crate::variables::*;
 use crate::version::CslVersionReq;

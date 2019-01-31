@@ -18,9 +18,9 @@ use criterion::{Bencher, Criterion};
 
 use citeproc::input::*;
 use citeproc::output::*;
-use csl::style::CslType;
 use citeproc::style::variables::*;
 use citeproc::Driver;
+use csl::style::CslType;
 
 use std::fs::File;
 use std::io::prelude::*;

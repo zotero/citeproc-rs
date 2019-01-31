@@ -1,5 +1,5 @@
 use super::version::CslVariant;
-use crate::error::{InvalidCsl, UnknownAttributeValue, NeedVarType};
+use crate::error::{InvalidCsl, NeedVarType, UnknownAttributeValue};
 use crate::Atom;
 use roxmltree::{ExpandedName, Node};
 use std::str::FromStr;

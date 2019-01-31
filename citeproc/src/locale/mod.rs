@@ -7,4 +7,3 @@ mod test;
 
 #[cfg(test)]
 pub use self::fetcher::Predefined;
-

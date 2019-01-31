@@ -1,11 +1,11 @@
-use crate::Atom;
 use crate::input::{CiteId, Locator};
 use crate::output::OutputFormat;
 use crate::style::db::StyleDatabase;
+use crate::Atom;
+use csl::locale::Locale;
 use csl::style::{Affixes, Element, Style};
 use csl::terms::{GenderedTermSelector, TextTermSelector};
 use csl::variables::*;
-use csl::locale::Locale;
 use std::collections::HashSet;
 use std::sync::Arc;
 

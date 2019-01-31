@@ -34,7 +34,7 @@ fn term_and(form: TermFormExtended) -> SimpleTermSelector {
 }
 
 fn test_simple_term(term: SimpleTermSelector, langs: &[(Lang, &str)], expect: Option<&str>) {
-    let db = RootDatabase::new(Arc::new(predefined_xml(langs)));
+    let db = RootDatabase::safe_default(Arc::new(predefined_xml(langs)));
     // use en-AU so it has to do fallback to en-US
     let locale = db.merged_locale(en_au());
     assert_eq!(
@@ -61,10 +61,7 @@ fn term_form_refine() {
         term_and(TermFormExtended::Long),
         &[
             (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (
-                en_au(),
-                r#"<term name="and" form="short">Australia</term>"#,
-            ),
+            (en_au(), r#"<term name="and" form="short">Australia</term>"#),
         ],
         Some("USA"),
     );
@@ -72,10 +69,7 @@ fn term_form_refine() {
         term_and(TermFormExtended::Short),
         &[
             (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (
-                en_au(),
-                r#"<term name="and" form="short">Australia</term>"#,
-            ),
+            (en_au(), r#"<term name="and" form="short">Australia</term>"#),
         ],
         Some("Australia"),
     );

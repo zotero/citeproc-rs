@@ -312,7 +312,7 @@ producing a map like:
 Example implementation:
 
 ```rust
-fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<HashMap<Atom, u32>> {
+fn year_suffixes(db: &impl CiteDatabase, _: ()) -> Arc<HashMap<Atom, u32>> {
     let refs_to_add_suffixes_to = all_cites_ordered
         .map(|cite| (&cite.ref_id, db.ir2(cite.id)))
         .filter_map(|(ref_id, (_, is_date_ambig))| {
@@ -333,7 +333,7 @@ fn year_suffixes(db: &impl ReferenceDatabase, _: ()) -> Arc<HashMap<Atom, u32>> 
     Arc::new(suffixes)
 }
 
-fn ir3(db: &impl ReferenceDatabase, cite_id: CiteId) -> Arc<(IrSum<Pandoc>, bool)> {
+fn ir3(db: &impl CiteDatabase, cite_id: CiteId) -> Arc<(IrSum<Pandoc>, bool)> {
     let cite = db.cite(cite_id);
     let ir2 = db.ir2(cite_id);
     let suffixes = db.year_suffixes(());

@@ -7,9 +7,9 @@ use fnv::FnvHashMap;
 use super::date::DateOrRange;
 use super::names::Name;
 use super::numeric::NumericValue;
+use crate::Atom;
 use csl::style::CslType;
 use csl::variables::{DateVariable, NameVariable, NumberVariable, Variable};
-use crate::Atom;
 
 // We're saving copies and allocations by not using String here.
 #[derive(Debug, PartialEq, Eq)]

@@ -1,14 +1,14 @@
-use crate::Atom;
 use crate::db::ReferenceDatabase;
 use crate::input::*;
 use crate::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
 use crate::style::db::StyleDatabase;
+use crate::Atom;
+use csl::error::StyleError;
 use csl::style::Position;
 use csl::style::Style;
-use csl::error::StyleError;
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
@@ -23,21 +23,13 @@ where
     o: std::marker::PhantomData<O>,
 }
 
-// need a Clone impl for map_with
-// thanks to rust-analyzer for the tip
-pub struct Snap(pub salsa::Snapshot<RootDatabase>);
-impl Clone for Snap {
-    fn clone(&self) -> Self {
-        use salsa::ParallelDatabase;
-        Snap(self.0.snapshot())
-    }
-}
-
 impl<O> Driver<O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    pub fn new(style_string: &str, mut db: RootDatabase) -> Result<Self, StyleError> {
+
+    pub fn new(style_string: &str) -> Result<Self, StyleError> {
+        let db = RootDatabase::new(style_string, )
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style((), style);
 
@@ -51,29 +43,6 @@ where
     pub fn snap(&self) -> Snap {
         use salsa::ParallelDatabase;
         Snap(self.db.snapshot())
-    }
-
-    pub fn compute(&self) {
-        // If you're not runnning in parallel, there is no optimal parallelization order
-        // So just do nothing.
-        #[cfg(feature = "rayon")]
-        {
-            let cluster_ids = self.db.cluster_ids(());
-            let cite_ids = self.db.all_cite_ids(());
-            // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
-            // single rayon thread
-            cite_ids
-                .par_iter()
-                .for_each_with(self.snap(), |snap, &cite_id| {
-                    snap.0.ir_gen2_add_given_name(cite_id);
-                });
-            self.db.year_suffixes(());
-            cluster_ids
-                .par_iter()
-                .for_each_with(self.snap(), |snap, &cluster_id| {
-                    snap.0.built_cluster(cluster_id);
-                });
-        }
     }
 
     pub fn single(&self, refr: &Reference) -> String {

@@ -3,11 +3,11 @@ use super::ir::*;
 use super::{CiteContext, IrState, Proc, ProcDatabase};
 use crate::input::{Name, PersonName};
 use crate::output::OutputFormat;
+use crate::utils::Intercalate;
 use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
 };
-use crate::utils::Intercalate;
 
 use crate::input::is_latin_cyrillic;
 
@@ -126,7 +126,6 @@ enum NameToken<'a> {
 struct OneName(NameEl);
 
 impl OneName {
-
     #[inline]
     fn naso(&self, seen_one: bool) -> bool {
         match self.0.name_as_sort_order {
@@ -179,7 +178,8 @@ impl OneName {
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
-                let dpea = self.0
+                let dpea = self
+                    .0
                     .delimiter_precedes_et_al
                     .unwrap_or(DelimiterPrecedes::Contextual);
                 if should_delimit_after(dpea, self, ea_use_first) {
@@ -237,9 +237,11 @@ impl OneName {
                 _ => acc,
             });
             // This isn't sort-mode, you can render NameForm::Count as text.
-            return ctx
-                .format
-                .affixed_text(format!("{}", count), self.0.formatting, &self.0.affixes);
+            return ctx.format.affixed_text(
+                format!("{}", count),
+                self.0.formatting,
+                &self.0.affixes,
+            );
         }
 
         let format_with_part = |o_part: &Option<NamePart>, s: &str| {
@@ -358,7 +360,10 @@ impl OneName {
             }
         });
 
-        fmt.affixed(fmt.with_format(fmt.seq(st), self.0.formatting), &self.0.affixes)
+        fmt.affixed(
+            fmt.with_format(fmt.seq(st), self.0.formatting),
+            &self.0.affixes,
+        )
     }
 }
 
@@ -518,9 +523,10 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let name_el = OneName(db
-            .name_citation(())
-            .merge(self.name.as_ref().unwrap_or(&NameEl::default())));
+        let name_el = OneName(
+            db.name_citation(())
+                .merge(self.name.as_ref().unwrap_or(&NameEl::default())),
+        );
         let rendered: Vec<_> = self
             .variables
             .iter()

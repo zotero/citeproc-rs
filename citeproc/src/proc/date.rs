@@ -69,7 +69,6 @@ where
     }
 }
 
-
 impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
@@ -271,4 +270,3 @@ const MONTHS_LONG: &[&str] = &[
     "November",
     "December",
 ];
-

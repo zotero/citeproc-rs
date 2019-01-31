@@ -1,12 +1,12 @@
-use fnv::FnvHashMap;
-use crate::FromNode;
-use crate::terms::*;
-use std::str::FromStr;
-use roxmltree::{Document, Node};
 use crate::attr::*;
+use crate::error::{InvalidCsl, PartitionResults, StyleError};
+use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
+use crate::terms::*;
+use crate::FromNode;
 use crate::FromNodeResult;
-use crate::style::{TextCase, Formatting, Delimiter, DatePart, DateForm};
-use crate::error::{StyleError, InvalidCsl, PartitionResults};
+use fnv::FnvHashMap;
+use roxmltree::{Document, Node};
+use std::str::FromStr;
 
 mod lang;
 pub use self::lang::{IsoCountry, IsoLang, Lang, LocaleSource};
@@ -269,4 +269,3 @@ impl Locale {
         self.options_node.merge(&with.options_node);
     }
 }
-

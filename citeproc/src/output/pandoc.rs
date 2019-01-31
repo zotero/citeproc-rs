@@ -1,8 +1,8 @@
 use super::{LocalizedQuotes, OutputFormat};
+use crate::utils::{Intercalate, JoinMany};
 use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
-use crate::utils::{Intercalate, JoinMany};
 
 use pandoc_types::definition::Inline::*;
 use pandoc_types::definition::{Attr, Inline, QuoteType, Target};

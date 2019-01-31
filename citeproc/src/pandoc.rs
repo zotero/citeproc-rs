@@ -3,7 +3,7 @@ use pandoc_types::{
     walk::MutVisitor,
 };
 
-use citeproc::db::ReferenceDatabase;
+use citeproc::db_impl::RootDatabase;
 use citeproc::input::{Cite, Cluster, Suppression};
 use citeproc::output::Pandoc;
 use csl::style::StyleClass;
@@ -68,16 +68,16 @@ impl MutVisitor for GetClusters {
     }
 }
 
-struct WriteClusters<'a, DB: ReferenceDatabase> {
+struct WriteClusters<'a> {
     next_cluster_id: u64,
     next_cite_id: u64,
-    db: &'a DB,
+    db: &'a RootDatabase,
 }
 
 /// Only works if you run it on a PandocDocument that hasn't been modified since you ingested the
 /// clusters into the database. The Inline::Cite-s & Inline::Note-s have to be in the same order.
 /// If you're adding a bibliography, do it after a get_clusters/write_clusters pair.
-pub fn write_clusters(pandoc: &mut PandocDocument, db: &impl ReferenceDatabase) {
+pub fn write_clusters(pandoc: &mut PandocDocument, db: &RootDatabase) {
     let mut wc = WriteClusters {
         next_cluster_id: 1,
         next_cite_id: 1,
@@ -86,7 +86,7 @@ pub fn write_clusters(pandoc: &mut PandocDocument, db: &impl ReferenceDatabase) 
     wc.walk_pandoc(pandoc);
 }
 
-impl<'a, DB: ReferenceDatabase> MutVisitor for WriteClusters<'a, DB> {
+impl<'a> MutVisitor for WriteClusters<'a> {
     fn walk_inline(&mut self, inline: &mut Inline) {
         match *inline {
             Inline::Note(_) => {
@@ -99,7 +99,7 @@ impl<'a, DB: ReferenceDatabase> MutVisitor for WriteClusters<'a, DB> {
                     .map(|p| {
                         let id = self.next_cite_id;
                         self.next_cite_id += 1;
-                        let rust_cite = self.db.cite(id);
+                        let rust_cite = self.db.get_cite(id);
                         Citation {
                             citation_hash: id as i32,
                             citation_prefix: rust_cite.prefix.clone(),
@@ -109,8 +109,8 @@ impl<'a, DB: ReferenceDatabase> MutVisitor for WriteClusters<'a, DB> {
                     })
                     .collect();
                 *p_cites = cites;
-                let built = (*self.db.built_cluster(self.next_cluster_id)).clone();
-                if self.db.style(()).class == StyleClass::Note {
+                let built = (*self.db.get_cluster(self.next_cluster_id)).clone();
+                if self.db.get_style().class == StyleClass::Note {
                     *literal = vec![Inline::Note(vec![Block::Para(built)])];
                 } else {
                     *literal = built;

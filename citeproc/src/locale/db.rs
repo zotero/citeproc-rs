@@ -2,9 +2,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use super::LocaleFetcher;
+use crate::style::db::*;
 use csl::locale::LocaleSource;
 use csl::locale::*;
-use crate::style::db::*;
 
 pub trait HasFetcher {
     fn get_fetcher(&self) -> Arc<LocaleFetcher>;

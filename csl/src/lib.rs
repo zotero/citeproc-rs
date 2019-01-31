@@ -11,19 +11,19 @@ use std::sync::Arc;
 
 pub(crate) mod attr;
 pub use self::attr::GetAttribute;
-pub mod style;
 pub mod error;
 pub mod locale;
+pub mod style;
 pub mod terms;
 pub mod variables;
 pub mod version;
 
 use self::attr::*;
+use self::error::{CslError, InvalidCsl, NeedVarType, PartitionResults, StyleError};
+use self::locale::*;
 use self::style::*;
-use self::error::{StyleError, CslError, InvalidCsl, PartitionResults, NeedVarType};
 use self::terms::*;
 use self::version::*;
-use self::locale::*;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
@@ -1176,8 +1176,8 @@ impl FromNode for Style {
     }
 }
 
-use std::str::FromStr;
 use roxmltree::Document;
+use std::str::FromStr;
 impl FromStr for Style {
     type Err = StyleError;
     fn from_str(xml: &str) -> Result<Self, Self::Err> {
@@ -1186,4 +1186,3 @@ impl FromStr for Style {
         Ok(style)
     }
 }
-

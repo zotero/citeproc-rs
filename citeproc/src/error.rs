@@ -65,4 +65,3 @@ pub fn to_diagnostic(inv: &InvalidCsl, file_map: &FileMap) -> Option<Diagnostic>
     let diag = Diagnostic::new(convert_sev(inv.severity), inv.message.clone()).with_label(label);
     Some(diag)
 }
-
