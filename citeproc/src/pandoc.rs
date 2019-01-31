@@ -3,9 +3,9 @@ use pandoc_types::{
     walk::MutVisitor,
 };
 
-use citeproc::Processor;
-use citeproc::input::{Cite, Cluster, Suppression, CiteId, ClusterId};
+use citeproc::input::{Cite, CiteId, Cluster, ClusterId, Suppression};
 use citeproc::output::Pandoc;
+use citeproc::Processor;
 use csl::style::StyleClass;
 
 struct GetClusters {

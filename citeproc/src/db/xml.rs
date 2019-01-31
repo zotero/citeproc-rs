@@ -1,17 +1,16 @@
+use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::io;
 
 use csl::error::StyleError;
 use csl::{
+    locale::{Lang, Locale, LocaleOptions, LocaleSource},
     style::{Name, Style},
-    locale::{Lang, Locale, LocaleSource, LocaleOptions},
 };
 
 pub trait HasFetcher {
     fn get_fetcher(&self) -> Arc<LocaleFetcher>;
 }
-
 
 /// Salsa interface to a CSL style.
 #[salsa::query_group(StyleDatabaseStorage)]
@@ -55,11 +54,7 @@ fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
 }
 
 fn inline_locale(db: &impl LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
-    db.style()
-        .locale_overrides
-        .get(&key)
-        .cloned()
-        .map(Arc::new)
+    db.style().locale_overrides.get(&key).cloned().map(Arc::new)
 }
 
 fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {

@@ -7,8 +7,8 @@ use csl::terms::*;
 use super::Processor;
 
 mod position {
-    use crate::db::cite::CiteDatabase;
     use super::*;
+    use crate::db::cite::CiteDatabase;
     use crate::input::{Cite, Cluster};
     use csl::style::Position;
 
@@ -16,16 +16,16 @@ mod position {
     fn cite_positions_ibid() {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
-                         Cluster {
-                             id: 1,
-                             cites: vec![Cite::basic(1, "one")],
-                             note_number: 1,
-                         },
-                         Cluster {
-                             id: 2,
-                             cites: vec![Cite::basic(2, "one")],
-                             note_number: 2,
-                         },
+            Cluster {
+                id: 1,
+                cites: vec![Cite::basic(1, "one")],
+                note_number: 1,
+            },
+            Cluster {
+                id: 2,
+                cites: vec![Cite::basic(2, "one")],
+                note_number: 2,
+            },
         ]);
         let poss = db.cite_positions();
         assert_eq!(poss[&1], (Position::First, None));
@@ -36,21 +36,21 @@ mod position {
     fn cite_positions_near_note() {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
-                         Cluster {
-                             id: 1,
-                             cites: vec![Cite::basic(1, "one")],
-                             note_number: 1,
-                         },
-                         Cluster {
-                             id: 2,
-                             cites: vec![Cite::basic(2, "other")],
-                             note_number: 2,
-                         },
-                         Cluster {
-                             id: 3,
-                             cites: vec![Cite::basic(3, "one")],
-                             note_number: 3,
-                         },
+            Cluster {
+                id: 1,
+                cites: vec![Cite::basic(1, "one")],
+                note_number: 1,
+            },
+            Cluster {
+                id: 2,
+                cites: vec![Cite::basic(2, "other")],
+                note_number: 2,
+            },
+            Cluster {
+                id: 3,
+                cites: vec![Cite::basic(3, "one")],
+                note_number: 3,
+            },
         ]);
         let poss = db.cite_positions();
         assert_eq!(poss[&1], (Position::First, None));
@@ -72,7 +72,7 @@ mod terms {
             r#"<?xml version="1.0" encoding="utf-8"?>
         <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
         <terms>{}</terms></locale>"#,
-        xml
+            xml
         )
     }
 
@@ -99,82 +99,82 @@ mod terms {
         )
     }
 
-#[test]
+    #[test]
     fn term_override() {
         test_simple_term(
             term_and(TermFormExtended::Long),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (en_au(), r#"<term name="and">Australia</term>"#),
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (en_au(), r#"<term name="and">Australia</term>"#),
             ],
             Some("Australia"),
-            )
+        )
     }
 
-#[test]
+    #[test]
     fn term_form_refine() {
         test_simple_term(
             term_and(TermFormExtended::Long),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (en_au(), r#"<term name="and" form="short">Australia</term>"#),
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (en_au(), r#"<term name="and" form="short">Australia</term>"#),
             ],
             Some("USA"),
-            );
+        );
         test_simple_term(
             term_and(TermFormExtended::Short),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (en_au(), r#"<term name="and" form="short">Australia</term>"#),
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (en_au(), r#"<term name="and" form="short">Australia</term>"#),
             ],
             Some("Australia"),
-            );
+        );
     }
 
-#[test]
+    #[test]
     fn term_form_fallback() {
         test_simple_term(
             term_and(TermFormExtended::Short),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (en_au(), r#"<term name="and">Australia</term>"#),
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (en_au(), r#"<term name="and">Australia</term>"#),
             ],
             Some("Australia"),
-            );
+        );
         test_simple_term(
             // short falls back to long and skips the "symbol" in a later locale
             term_and(TermFormExtended::Short),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (
-                en_au(),
-                r#"<term name="and" form="symbol">Australia</term>"#,
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (
+                    en_au(),
+                    r#"<term name="and" form="symbol">Australia</term>"#,
                 ),
             ],
             Some("USA"),
-            );
+        );
         test_simple_term(
             term_and(TermFormExtended::VerbShort),
             &[
-            (Lang::en_us(), r#"<term name="and" form="long">USA</term>"#),
-            (
-                en_au(),
-                r#"<term name="and" form="symbol">Australia</term>"#,
+                (Lang::en_us(), r#"<term name="and" form="long">USA</term>"#),
+                (
+                    en_au(),
+                    r#"<term name="and" form="symbol">Australia</term>"#,
                 ),
             ],
             Some("USA"),
-            );
+        );
     }
 
-#[test]
+    #[test]
     fn term_locale_fallback() {
         test_simple_term(
             term_and(TermFormExtended::Long),
             &[
-            (Lang::en_us(), r#"<term name="and">USA</term>"#),
-            (en_au(), r#""#),
+                (Lang::en_us(), r#"<term name="and">USA</term>"#),
+                (en_au(), r#""#),
             ],
             Some("USA"),
-            )
+        )
     }
 }

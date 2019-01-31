@@ -1,6 +1,6 @@
 pub(crate) mod db;
-pub use self::db::Processor;
 pub use self::db::LocaleFetcher;
+pub use self::db::Processor;
 // mod driver;
 // pub use self::driver::Driver;
 pub mod input;

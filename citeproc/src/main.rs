@@ -19,11 +19,11 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-mod pandoc;
 mod error;
+mod pandoc;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
-use citeproc::{Processor, LocaleFetcher};
+use citeproc::{LocaleFetcher, Processor};
 use csl::locale::{Lang, Locale};
 
 fn main() {

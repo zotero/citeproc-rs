@@ -1,7 +1,9 @@
+mod ir;
+pub use ir::IrDatabase;
 mod cite;
 pub use cite::CiteDatabase;
 mod xml;
-pub use xml::{StyleDatabase, LocaleDatabase, LocaleFetcher};
+pub use xml::{LocaleDatabase, LocaleFetcher, StyleDatabase};
 
 #[cfg(test)]
 pub use self::xml::Predefined;
@@ -9,8 +11,9 @@ pub use self::xml::Predefined;
 #[cfg(test)]
 mod test;
 
-use self::cite::{CiteDatabaseStorage};
-use self::xml::{HasFetcher, StyleDatabaseStorage, LocaleDatabaseStorage};
+use self::cite::CiteDatabaseStorage;
+use self::ir::IrDatabaseStorage;
+use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
@@ -18,7 +21,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use csl::error::StyleError;
-use csl::style::{Style, Position};
+use csl::style::{Position, Style};
 
 use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
 use crate::output::OutputFormat;
@@ -26,7 +29,12 @@ use crate::output::Pandoc;
 use crate::proc::{CiteContext, IrState};
 use crate::Atom;
 
-#[salsa::database(StyleDatabaseStorage, LocaleDatabaseStorage, CiteDatabaseStorage)]
+#[salsa::database(
+    StyleDatabaseStorage,
+    LocaleDatabaseStorage,
+    CiteDatabaseStorage,
+    IrDatabaseStorage
+)]
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
     fetcher: Arc<LocaleFetcher>,
@@ -39,8 +47,8 @@ impl salsa::Database for Processor {
     }
 
     fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
-        use self::__SalsaDatabaseKeyKind::CiteDatabaseStorage as RDS;
-        use self::cite::CiteDatabaseGroupKey__ as GroupKey;
+        use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
+        use self::ir::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
         match event_fn().kind {
             WillExecute { database_key } => match database_key.kind {
