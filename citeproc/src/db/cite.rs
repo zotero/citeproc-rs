@@ -15,6 +15,8 @@ use crate::Atom;
 pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
+    #[salsa::dependencies]
+    fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
     #[salsa::input]
     fn all_keys(&self) -> Arc<HashSet<Atom>>;
@@ -28,9 +30,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cited_keys(&self) -> Arc<HashSet<Atom>>;
 
     /// Equal to `all.intersection(cited U uncited)`
+    /// Also represents "the refs that will be in the bibliography if we generate one"
     fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
-
-    fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
     fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
 
@@ -55,6 +56,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cite_positions(&self) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
     #[salsa::dependencies]
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
+
+    fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
 }
 
 // We don't want too tight a coupling between the salsa DB and the proc module.
@@ -79,9 +82,14 @@ where
     fn cite_frnn(&self, id: CiteId) -> Option<u32> {
         self.cite_position(id).1
     }
-    fn bib_number(&self, _: CiteId) -> Option<u32> {
-        // unimplemented!()
-        None
+    fn bib_number(&self, id: CiteId) -> Option<u32> {
+        let cite = self.cite(id);
+        if let Some(abc) = self.sorted_refs() {
+            let (_, ref lookup) = &*abc;
+            lookup.get(&cite.ref_id).cloned()
+        } else {
+            None
+        }
     }
 }
 
@@ -220,4 +228,70 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
         .get(&key)
         .expect("called cite_position on unknown cite id")
         .clone()
+}
+
+use csl::style::{SortKey, SortSource};
+use csl::variables::*;
+use std::cmp::Ordering;
+
+fn bib_ordering(_a: &Reference, _b: &Reference, key: &SortKey, _style: &Style) -> Ordering {
+    match key.sort_source {
+        // TODO: implement macro-based sorting using a new Proc method
+        SortSource::Macro(_) => Ordering::Equal,
+        SortSource::Variable(av) => match av {
+            AnyVariable::Ordinary(_) => Ordering::Equal,
+            AnyVariable::Number(_) => Ordering::Equal,
+            AnyVariable::Name(_) => Ordering::Equal,
+            AnyVariable::Date(_) => Ordering::Equal,
+        },
+    }
+}
+
+fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>> {
+    let style = db.style();
+    // TODO: also return None to avoid work if no bibliography was requested by the user
+    let bib = match style.bibliography {
+        None => return None,
+        Some(ref b) => b,
+    };
+
+    let mut citation_numbers = FnvHashMap::default();
+    // only the references that exist go in the bibliography
+
+    let refs = if let Some(ref sort) = bib.sort {
+        let mut refs: Vec<_> = db
+            .disamb_participants()
+            .iter()
+            .filter_map(|ref_id| db.reference(ref_id.clone()).map(|_| ref_id.clone()))
+            .collect();
+        for key in sort.keys.iter() {
+            refs.sort_by(|a, b| {
+                let ar = db.reference_input(a.clone());
+                let br = db.reference_input(b.clone());
+                bib_ordering(&ar, &br, key, &style)
+            });
+        }
+        for (i, ref_id) in refs.iter().enumerate() {
+            citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
+        }
+        refs
+    } else {
+        // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
+        // they are cited.
+        let all = db.all_keys();
+        let mut keys = Vec::new();
+        let all_cite_ids = db.all_cite_ids();
+        let mut i = 1;
+        for &id in all_cite_ids.iter() {
+            let ref_id = &db.cite(id).ref_id;
+            if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
+                keys.push(ref_id.clone());
+                citation_numbers.insert(ref_id.clone(), i as u32);
+                i += 1;
+            }
+        }
+        keys
+    };
+    // dbg!(&refs);
+    Some(Arc::new((refs, citation_numbers)))
 }
