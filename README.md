@@ -79,9 +79,6 @@ for style in styles/*.csl; do citeproc-rs --csl $style | pandoc -f json -t html;
 * Some styles in the repo are possibly invalid (mostly for using terms that 
   don't exist).
 * Some will successfully output HTML!
-* Many styles will panic when accessing locales, as most locale lookups are 
-  just `.get("en-GB").unwrap()` on the inline locales instead of using a merged 
-  locale.
 
 ### Parse a locale
 

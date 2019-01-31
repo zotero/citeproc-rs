@@ -93,8 +93,8 @@ where
         self.cite_position(id).1
     }
     fn bib_number(&self, _: CiteId) -> Option<u32> {
-        // TODO: None if not rendering bibliography
-        unimplemented!()
+        // unimplemented!()
+        None
     }
 }
 

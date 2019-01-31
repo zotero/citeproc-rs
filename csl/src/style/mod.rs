@@ -794,7 +794,7 @@ pub struct SortKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SortSource {
     Variable(AnyVariable),
-    Macro(String),
+    Macro(Atom),
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
