@@ -4,8 +4,8 @@ use csl::terms::LocatorType;
 
 use crate::Atom;
 
-pub type CiteId = u64;
-pub type ClusterId = u64;
+pub type CiteId = u32;
+pub type ClusterId = u32;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Suppression {

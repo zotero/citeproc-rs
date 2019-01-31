@@ -3,14 +3,14 @@ use pandoc_types::{
     walk::MutVisitor,
 };
 
-use citeproc::db_impl::RootDatabase;
-use citeproc::input::{Cite, Cluster, Suppression};
+use citeproc::Processor;
+use citeproc::input::{Cite, Cluster, Suppression, CiteId, ClusterId};
 use citeproc::output::Pandoc;
 use csl::style::StyleClass;
 
 struct GetClusters {
-    next_cluster_id: u64,
-    next_cite_id: u64,
+    next_cluster_id: ClusterId,
+    next_cite_id: CiteId,
     clusters: Vec<Cluster<Pandoc>>,
 }
 
@@ -69,15 +69,15 @@ impl MutVisitor for GetClusters {
 }
 
 struct WriteClusters<'a> {
-    next_cluster_id: u64,
-    next_cite_id: u64,
-    db: &'a RootDatabase,
+    next_cluster_id: ClusterId,
+    next_cite_id: CiteId,
+    db: &'a Processor,
 }
 
 /// Only works if you run it on a PandocDocument that hasn't been modified since you ingested the
 /// clusters into the database. The Inline::Cite-s & Inline::Note-s have to be in the same order.
 /// If you're adding a bibliography, do it after a get_clusters/write_clusters pair.
-pub fn write_clusters(pandoc: &mut PandocDocument, db: &RootDatabase) {
+pub fn write_clusters(pandoc: &mut PandocDocument, db: &Processor) {
     let mut wc = WriteClusters {
         next_cluster_id: 1,
         next_cite_id: 1,

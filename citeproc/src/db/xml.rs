@@ -1,13 +1,32 @@
 use std::str::FromStr;
 use std::sync::Arc;
+use std::io;
 
-use super::LocaleFetcher;
-use crate::style::db::*;
-use csl::locale::LocaleSource;
-use csl::locale::*;
+use csl::error::StyleError;
+use csl::{
+    style::{Name, Style},
+    locale::{Lang, Locale, LocaleSource, LocaleOptions},
+};
 
 pub trait HasFetcher {
     fn get_fetcher(&self) -> Arc<LocaleFetcher>;
+}
+
+
+/// Salsa interface to a CSL style.
+#[salsa::query_group(StyleDatabaseStorage)]
+pub trait StyleDatabase: salsa::Database {
+    #[salsa::input]
+    fn style(&self) -> Arc<Style>;
+    fn name_citation(&self) -> Arc<Name>;
+}
+
+fn name_citation(db: &impl StyleDatabase) -> Arc<Name> {
+    let style = db.style();
+    let default = Name::root_default();
+    let root = &style.name_inheritance;
+    let citation = &style.citation.name_inheritance;
+    Arc::new(default.merge(root).merge(citation))
 }
 
 /// Salsa interface to locales, including merging.
@@ -70,4 +89,45 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
 fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
     let merged = &db.merged_locale(key).options_node;
     Arc::new(LocaleOptions::from_merged(merged))
+}
+
+pub trait LocaleFetcher: Send + Sync {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+}
+
+#[derive(Debug)]
+pub enum LocaleFetchError {
+    Io(io::Error),
+    Style(StyleError),
+}
+
+impl From<io::Error> for LocaleFetchError {
+    fn from(err: io::Error) -> LocaleFetchError {
+        LocaleFetchError::Io(err)
+    }
+}
+
+impl From<StyleError> for LocaleFetchError {
+    fn from(err: StyleError) -> LocaleFetchError {
+        LocaleFetchError::Style(err)
+    }
+}
+
+#[cfg(test)]
+use std::collections::HashMap;
+
+#[cfg(test)]
+pub struct Predefined(pub HashMap<Lang, String>);
+
+#[cfg(test)]
+impl LocaleFetcher for Predefined {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        Ok(self.0.get(lang).cloned().unwrap_or_else(|| {
+            String::from(
+                r#"<?xml version="1.0" encoding="utf-8"?>
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        </locale>"#,
+            )
+        }))
+    }
 }

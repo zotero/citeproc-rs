@@ -1,37 +1,46 @@
+mod cite;
+pub use cite::CiteDatabase;
+mod xml;
+pub use xml::{StyleDatabase, LocaleDatabase, LocaleFetcher};
+
+#[cfg(test)]
+pub use self::xml::Predefined;
+
+#[cfg(test)]
+mod test;
+
+use self::cite::{CiteDatabaseStorage};
+use self::xml::{HasFetcher, StyleDatabaseStorage, LocaleDatabaseStorage};
+
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use csl::error::StyleError;
-use csl::style::Style;
+use csl::style::{Style, Position};
 
-use crate::db::*;
 use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
-use crate::locale::db::HasFetcher;
-use crate::locale::{db::*, LocaleFetcher};
 use crate::output::OutputFormat;
 use crate::output::Pandoc;
 use crate::proc::{CiteContext, IrState};
-use crate::style::db::*;
 use crate::Atom;
-use csl::style::Position;
 
 #[salsa::database(StyleDatabaseStorage, LocaleDatabaseStorage, CiteDatabaseStorage)]
-pub struct RootDatabase {
+pub struct Processor {
     runtime: salsa::Runtime<Self>,
     fetcher: Arc<LocaleFetcher>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
-impl salsa::Database for RootDatabase {
-    fn salsa_runtime(&self) -> &salsa::Runtime<RootDatabase> {
+impl salsa::Database for Processor {
+    fn salsa_runtime(&self) -> &salsa::Runtime<Processor> {
         &self.runtime
     }
 
     fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
         use self::__SalsaDatabaseKeyKind::CiteDatabaseStorage as RDS;
-        use crate::db::CiteDatabaseGroupKey__ as GroupKey;
+        use self::cite::CiteDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
         match event_fn().kind {
             WillExecute { database_key } => match database_key.kind {
@@ -45,16 +54,16 @@ impl salsa::Database for RootDatabase {
     }
 }
 
-impl ParallelDatabase for RootDatabase {
+impl ParallelDatabase for Processor {
     fn snapshot(&self) -> Snapshot<Self> {
-        Snapshot::new(RootDatabase {
+        Snapshot::new(Processor {
             runtime: self.runtime.snapshot(self),
             fetcher: self.fetcher.clone(),
         })
     }
 }
 
-impl HasFetcher for RootDatabase {
+impl HasFetcher for Processor {
     fn get_fetcher(&self) -> Arc<LocaleFetcher> {
         self.fetcher.clone()
     }
@@ -62,7 +71,7 @@ impl HasFetcher for RootDatabase {
 
 // need a Clone impl for map_with
 // thanks to rust-analyzer for the tip
-pub struct Snap(pub salsa::Snapshot<RootDatabase>);
+struct Snap(pub salsa::Snapshot<Processor>);
 impl Clone for Snap {
     fn clone(&self) -> Self {
         use salsa::ParallelDatabase;
@@ -70,9 +79,9 @@ impl Clone for Snap {
     }
 }
 
-impl RootDatabase {
+impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<LocaleFetcher>) -> Self {
-        let mut db = RootDatabase {
+        let mut db = Processor {
             runtime: Default::default(),
             fetcher,
         };
@@ -84,7 +93,7 @@ impl RootDatabase {
     }
 
     pub fn new(style_string: &str, fetcher: Arc<LocaleFetcher>) -> Result<Self, StyleError> {
-        let mut db = RootDatabase::safe_default(fetcher);
+        let mut db = Processor::safe_default(fetcher);
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style(style);
         Ok(db)
@@ -92,12 +101,12 @@ impl RootDatabase {
 
     #[cfg(test)]
     pub fn test_db() -> Self {
-        use crate::locale::Predefined;
-        RootDatabase::safe_default(Arc::new(Predefined(Default::default())))
+        use self::xml::Predefined;
+        Processor::safe_default(Arc::new(Predefined(Default::default())))
     }
 
     #[cfg(feature = "rayon")]
-    pub fn snap(&self) -> Snap {
+    fn snap(&self) -> Snap {
         use salsa::ParallelDatabase;
         Snap(self.snapshot())
     }

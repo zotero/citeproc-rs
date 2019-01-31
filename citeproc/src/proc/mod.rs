@@ -1,6 +1,6 @@
 use crate::input::{CiteId, Locator};
 use crate::output::OutputFormat;
-use crate::style::db::StyleDatabase;
+use crate::db::StyleDatabase;
 use crate::Atom;
 use csl::locale::Locale;
 use csl::style::{Affixes, Element, Style};

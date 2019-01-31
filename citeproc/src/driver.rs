@@ -13,13 +13,13 @@ use std::sync::Arc;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-use crate::db_impl::RootDatabase;
+use crate::db::Processor;
 
 pub struct Driver<O>
 where
     O: OutputFormat + std::fmt::Debug,
 {
-    pub db: RootDatabase,
+    pub db: Processor,
     o: std::marker::PhantomData<O>,
 }
 
@@ -29,7 +29,7 @@ where
 {
 
     pub fn new(style_string: &str) -> Result<Self, StyleError> {
-        let db = RootDatabase::new(style_string, )
+        let db = Processor::new(style_string, )
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style(style);
 

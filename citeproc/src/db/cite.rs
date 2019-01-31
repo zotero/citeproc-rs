@@ -1,20 +1,19 @@
+use super::{StyleDatabase, LocaleDatabase};
+
 use csl::locale::Locale;
+use csl::style::{Position, Style};
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::input::{Cite, CiteId, ClusterId, Reference};
 use crate::proc::ProcDatabase;
-use crate::style::db::StyleDatabase;
-use csl::style::{Position, Style};
-// use crate::input::{Reference, Cite};
-use crate::locale::db::LocaleDatabase;
 use crate::output::{OutputFormat, Pandoc};
 use crate::proc::{AddDisambTokens, CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
 use crate::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
-pub trait CiteDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
+pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
 
@@ -71,6 +70,8 @@ pub trait CiteDatabase: salsa::Database + LocaleDatabase + StyleDatabase {
     fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
 }
 
+// We don't want too tight a coupling between the salsa DB and the proc module.
+// It's just too annoying to refactor any changes here through all the Proc implementations.
 impl<T> ProcDatabase for T
 where
     T: CiteDatabase,
@@ -160,61 +161,6 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
         ids.extend(cluster.iter().cloned());
     }
     Arc::new(ids)
-}
-
-#[cfg(test)]
-mod test {
-    use super::CiteDatabase;
-    use crate::db_impl::RootDatabase;
-    use crate::input::{Cite, Cluster};
-    use csl::style::Position;
-
-    #[test]
-    fn cite_positions_ibid() {
-        let mut db = RootDatabase::test_db();
-        db.init_clusters(vec![
-            Cluster {
-                id: 1,
-                cites: vec![Cite::basic(1, "one")],
-                note_number: 1,
-            },
-            Cluster {
-                id: 2,
-                cites: vec![Cite::basic(2, "one")],
-                note_number: 2,
-            },
-        ]);
-        let poss = db.cite_positions();
-        assert_eq!(poss[&1], (Position::First, None));
-        assert_eq!(poss[&2], (Position::Ibid, Some(1)));
-    }
-
-    #[test]
-    fn cite_positions_near_note() {
-        let mut db = RootDatabase::test_db();
-        db.init_clusters(vec![
-            Cluster {
-                id: 1,
-                cites: vec![Cite::basic(1, "one")],
-                note_number: 1,
-            },
-            Cluster {
-                id: 2,
-                cites: vec![Cite::basic(2, "other")],
-                note_number: 2,
-            },
-            Cluster {
-                id: 3,
-                cites: vec![Cite::basic(3, "one")],
-                note_number: 3,
-            },
-        ]);
-        let poss = db.cite_positions();
-        assert_eq!(poss[&1], (Position::First, None));
-        assert_eq!(poss[&2], (Position::First, None));
-        assert_eq!(poss[&3], (Position::NearNote, Some(1)));
-    }
-
 }
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910

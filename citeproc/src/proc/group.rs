@@ -31,26 +31,13 @@ impl GroupVars {
         }
     }
 
-    #[inline]
-    pub fn did_not_render(self) -> Self {
-        match self {
-            DidRender => DidRender,
-            _ => OnlyEmpty,
-        }
-    }
-
-    #[inline]
-    pub fn did_render(self) -> Self {
-        DidRender
-    }
-
-    pub fn with_subtree(self, subtree: Self) -> Self {
-        match subtree {
-            NoneSeen => self,
-            OnlyEmpty => self.did_not_render(),
-            DidRender => DidRender,
-        }
-    }
+    // pub fn with_subtree(self, subtree: Self) -> Self {
+    //     match subtree {
+    //         NoneSeen => self,
+    //         OnlyEmpty => self.did_not_render(),
+    //         DidRender => DidRender,
+    //     }
+    // }
 
     /// Say you have
     ///
@@ -63,8 +50,7 @@ impl GroupVars {
     ///
     /// The tag is `NoneSeen`, the var has `DidRender`.
     ///
-    /// ```
-    /// use citeproc::proc::GroupVars::*;
+    /// ```text
     /// assert_eq!(NoneSeen.neighbour(DidRender), DidRender);
     /// assert_eq!(NoneSeen.neighbour(OnlyEmpty), OnlyEmpty);
     /// assert_eq!(DidRender.neighbour(OnlyEmpty), DidRender);

@@ -20,11 +20,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 mod pandoc;
+mod error;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
-use citeproc::db_impl::RootDatabase;
-use citeproc::locale::LocaleFetcher;
-use csl::locale::Lang;
+use citeproc::{Processor, LocaleFetcher};
+use csl::locale::{Lang, Locale};
 
 fn main() {
     // heuristically determine if we're running as an external pandoc filter
@@ -152,13 +152,24 @@ fn main() {
         } else {
             Lang::en_us()
         };
-        let locale = filesystem_fetcher.fetch_cli(&lang);
+        fn fetch_cli(fetcher: &Filesystem, lang: &Lang) -> Option<Locale> {
+            let string = fetcher.fetch_string(lang).ok()?;
+            let with_errors = |s: &str| Ok(Locale::from_str(s)?);
+            match with_errors(&string) {
+                Ok(l) => Some(l),
+                Err(e) => {
+                    self::error::file_diagnostics(&e, "input", &string);
+                    None
+                }
+            }
+        }
+        let locale = fetch_cli(&filesystem_fetcher, &lang);
         dbg!(locale);
         return;
     }
 
     // if let Some(_) = matches.subcommand_matches("disamb-index") {
-    //     let mut db = RootDatabase::new(filesystem_fetcher);
+    //     let mut db = Processor::new(filesystem_fetcher);
     //     db.set_references(refs);
     //     for (tok, ids) in db.inverted_index().iter() {
     //         // if ids.len() > 1 {
@@ -178,7 +189,7 @@ fn main() {
 
         let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
 
-        match RootDatabase::new(&text, filesystem_fetcher) {
+        match Processor::new(&text, filesystem_fetcher) {
             Ok(mut db) => {
                 let refs = if let Some(library_path) = matches.value_of("library") {
                     expect_refs(library_path)
@@ -201,7 +212,7 @@ fn main() {
                 println!("{}", out);
             }
             Err(e) => {
-                citeproc::error::file_diagnostics(&e, &csl_path, &text);
+                self::error::file_diagnostics(&e, &csl_path, &text);
             }
         }
     }
@@ -241,7 +252,7 @@ fn do_pandoc() {
     let csl_path = pandoc_meta_str(&doc, "csl").expect("No csl path provided through metadata");
     let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
 
-    match RootDatabase::new(&text, Arc::new(Filesystem::default())) {
+    match Processor::new(&text, Arc::new(Filesystem::default())) {
         Ok(mut db) => {
             if let Some(library_path) = pandoc_meta_str(&doc, "bibliography") {
                 db.set_references(expect_refs(library_path));
@@ -252,7 +263,7 @@ fn do_pandoc() {
             serde_json::to_writer(output, &doc).expect("could not write pandoc json");
         }
         Err(e) => {
-            citeproc::error::file_diagnostics(&e, &csl_path, &text);
+            self::error::file_diagnostics(&e, &csl_path, &text);
         }
     }
 }
