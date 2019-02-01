@@ -137,6 +137,48 @@ impl NumericValue {
     }
 }
 
+// Ordering
+
+use std::cmp::{Ord, Ordering, PartialOrd};
+impl Ord for NumericToken {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Num(a), Num(b)) => a.cmp(b),
+            (Affixed(a), Affixed(b)) => a.cmp(b),
+            (Hyphen, Hyphen) => Ordering::Equal,
+            (Comma, Comma) => Ordering::Equal,
+            (Ampersand, Ampersand) => Ordering::Equal,
+            _ => Ordering::Equal,
+        }
+    }
+}
+
+impl Ord for NumericValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        use self::NumericValue::*;
+        match (self, other) {
+            (Tokens(_, a), Tokens(_, b)) => a.cmp(b),
+            (Tokens(a, _), Str(b)) => a.cmp(b),
+            (Str(a), Tokens(b, _)) => a.cmp(b),
+            (Str(a), Str(b)) => a.cmp(b),
+        }
+    }
+}
+
+impl PartialOrd for NumericToken {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialOrd for NumericValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+// Parsing
+
 fn from_digits(input: CompleteStr) -> Result<u32, std::num::ParseIntError> {
     input.parse()
 }

@@ -230,21 +230,43 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
         .clone()
 }
 
-use csl::style::{SortKey, SortSource};
+use csl::style::{Sort, SortKey, SortSource};
 use csl::variables::*;
 use std::cmp::Ordering;
 
-fn bib_ordering(_a: &Reference, _b: &Reference, key: &SortKey, _style: &Style) -> Ordering {
-    match key.sort_source {
-        // TODO: implement macro-based sorting using a new Proc method
-        SortSource::Macro(_) => Ordering::Equal,
-        SortSource::Variable(av) => match av {
-            AnyVariable::Ordinary(_) => Ordering::Equal,
-            AnyVariable::Number(_) => Ordering::Equal,
-            AnyVariable::Name(_) => Ordering::Equal,
-            AnyVariable::Date(_) => Ordering::Equal,
-        },
+/// Creates a total ordering of References from a Sort element.
+fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Ordering {
+    // 
+    fn compare_demoting_none<T: Ord>(aa: Option<&T>, bb: Option<&T>) -> Ordering {
+        match (aa, bb) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(aaa), Some(bbb)) => aaa.cmp(bbb),
+        }
     }
+    let mut ord = Ordering::Equal;
+    for key in sort.keys.iter() {
+        // If an ordering is found, you don't need to tie-break any further with more sort keys.
+        if ord != Ordering::Equal {
+            break;
+        }
+        ord = match key.sort_source {
+            // TODO: implement macro-based sorting using a new Proc method
+            SortSource::Macro(_) => Ordering::Equal,
+            // For variables, we're not going to use the CiteContext wrappers, because if a
+            // variable is not defined directly on the reference, it shouldn't be sortable-by, so
+            // will just come back as None from reference.xxx.get() and produce Equal.
+            SortSource::Variable(any) => match any {
+                AnyVariable::Ordinary(v) => compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v)),
+                AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
+                AnyVariable::Name(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
+                AnyVariable::Name(n) => Ordering::Equal,
+                AnyVariable::Date(_) => Ordering::Equal,
+            },
+        };
+    }
+    ord
 }
 
 fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>> {
@@ -256,41 +278,37 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
     };
 
     let mut citation_numbers = FnvHashMap::default();
-    // only the references that exist go in the bibliography
 
-    let refs = if let Some(ref sort) = bib.sort {
-        let mut refs: Vec<_> = db
-            .disamb_participants()
-            .iter()
-            .filter_map(|ref_id| db.reference(ref_id.clone()).map(|_| ref_id.clone()))
-            .collect();
-        for key in sort.keys.iter() {
-            refs.sort_by(|a, b| {
-                let ar = db.reference_input(a.clone());
-                let br = db.reference_input(b.clone());
-                bib_ordering(&ar, &br, key, &style)
-            });
+    // only the references that exist go in the bibliography
+    // first, compute refs in the order that they are cited.
+    // stable sorting will cause this to be the final tiebreaker.
+    let all = db.all_keys();
+    let mut preordered = Vec::new();
+    let all_cite_ids = db.all_cite_ids();
+    let mut i = 1;
+    for &id in all_cite_ids.iter() {
+        let ref_id = &db.cite(id).ref_id;
+        if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
+            preordered.push(ref_id.clone());
+            citation_numbers.insert(ref_id.clone(), i as u32);
+            i += 1;
         }
-        for (i, ref_id) in refs.iter().enumerate() {
+    }
+    let refs = if let Some(ref sort) = bib.sort {
+        // dbg!(sort);
+        preordered.sort_by(|a, b| {
+            let ar = db.reference_input(a.clone());
+            let br = db.reference_input(b.clone());
+            bib_ordering(&ar, &br, sort, &style)
+        });
+        for (i, ref_id) in preordered.iter().enumerate() {
             citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
         }
-        refs
+        preordered
     } else {
         // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
         // they are cited.
-        let all = db.all_keys();
-        let mut keys = Vec::new();
-        let all_cite_ids = db.all_cite_ids();
-        let mut i = 1;
-        for &id in all_cite_ids.iter() {
-            let ref_id = &db.cite(id).ref_id;
-            if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
-                keys.push(ref_id.clone());
-                citation_numbers.insert(ref_id.clone(), i as u32);
-                i += 1;
-            }
-        }
-        keys
+        preordered
     };
     // dbg!(&refs);
     Some(Arc::new((refs, citation_numbers)))
