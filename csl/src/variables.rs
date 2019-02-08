@@ -159,9 +159,6 @@ pub enum Variable {
     Hereinafter,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
-    AvailableDate,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
     Dummy,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
@@ -328,6 +325,10 @@ pub enum DateVariable {
     #[strum(props(csl = "0", cslM = "1"))]
     PublicationDate,
 
+    // #[strum(props(csl = "0", cslM = "1"))]
+    // Available,
+
+    /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
-    Available,
+    AvailableDate,
 }

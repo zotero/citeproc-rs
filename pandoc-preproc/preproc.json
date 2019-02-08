@@ -1,0 +1,8 @@
+[
+  {
+    "id": "citekey",
+    "type": "book",
+    "title": "One *two*, $x = y$",
+    "section": "One *two*"
+  }
+]
