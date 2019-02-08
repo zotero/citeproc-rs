@@ -230,7 +230,7 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
         .clone()
 }
 
-use csl::style::{Sort, SortKey, SortSource};
+use csl::style::{Sort, SortSource};
 use csl::variables::*;
 use std::cmp::Ordering;
 
@@ -260,8 +260,7 @@ fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Or
             SortSource::Variable(any) => match any {
                 AnyVariable::Ordinary(v) => compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v)),
                 AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
-                AnyVariable::Name(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
-                AnyVariable::Name(n) => Ordering::Equal,
+                AnyVariable::Name(_) => Ordering::Equal,
                 AnyVariable::Date(_) => Ordering::Equal,
             },
         };

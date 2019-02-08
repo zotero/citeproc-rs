@@ -31,10 +31,10 @@ Makefile, which is already a pretty decent way of using Pandoc, especially for
 larger documents:
 
 ```Makefile
-pandoc-library.json:
-	echo "" | pandoc --lua-filter preproc.lua --metadata bibliography="input.json" > pandoc-library.json
+pandoc-library.json: original-library.json
+	echo "" | pandoc --lua-filter preproc.lua --metadata bibliography="$<" > $@
 all: pandoc-library.json
-	pandoc -F citeproc-rs --metadata bibliography="pandoc-library.json"
+	pandoc -F citeproc-rs --metadata bibliography="$<"
 ```
 
 It might eventually be worth fork/exec-ing this preprocessing step from 
