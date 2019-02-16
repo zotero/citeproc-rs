@@ -29,12 +29,14 @@ dependencies:
 - bytestring
 - text
 - data-default
+- containers
+- vector
 
 library:
   source-dirs: src
 
 executables:
-  pandoc-preproc-exe:
+  pandoc-preproc:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
