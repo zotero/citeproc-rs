@@ -1,0 +1,6 @@
+{
+  "pandoc-types/*.rs": {"type": "pt"},
+  "**/Cargo.toml": {"type": "cargo"},
+  "citeproc/src/*.rs": {"type": "cp"},
+  "**/tests/data/*": {"type": "test"}
+}
