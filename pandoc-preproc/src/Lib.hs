@@ -45,7 +45,6 @@ textFields = Set.fromList [
       "archive-place",
       "authority",
       "call-number",
-      "citation-label",
       "collection-title",
       "container-title",
       "container-title-short",
@@ -71,10 +70,10 @@ textFields = Set.fromList [
       "version",
 
       -- virtual-only variables
-      "year-suffix",
+      -- "year-suffix",
+      -- "citation-label",
 
       -- CSL-M
-      "available-date",
       "volume-title",
       "committee",
       "document-name",
