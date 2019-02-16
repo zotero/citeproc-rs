@@ -7,15 +7,17 @@ module Lib
 import Text.Pandoc.Definition
 import Text.Pandoc.Shared (blocksToInlines)
 import Text.Pandoc.Class (runPure)
+import Text.Pandoc.Extensions
+import Text.Pandoc.Options (ReaderOptions(..))
+import Text.Pandoc.Readers.Markdown (readMarkdown)
+
 import qualified Data.Set as Set
 import qualified Data.Vector as V
-import qualified Text.Pandoc.Readers.Markdown as PM
 import qualified Text.Pandoc.JSON as PJ
 import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Text.Lazy as TL
+import qualified Data.Text.Lazy as TL
 import Data.Text.Lazy.Encoding (decodeUtf8)
 
 import Data.Default (def)
@@ -103,11 +105,29 @@ parseTextFields = do
         emp = A.Array V.empty
 
         parseInlines :: Value -> Value
-        parseInlines (A.String x) = fromRight emp result
-            where
-                result = runPure $ do
-                    doc <- PM.readMarkdown def x
-                    let inlines = case doc of
-                                    Pandoc meta blocks -> blocksToInlines blocks
-                    return $ toJSON inlines
+        parseInlines (A.String txt) = fromRight emp $ runPure $ do
+            Pandoc _ blocks <- readMarkdown markdownOptions txt
+            return $ toJSON $ blocksToInlines blocks
         parseInlines _ = emp
+
+        markdownExtensions = extensionsFromList
+            [ Ext_raw_html
+            , Ext_native_spans
+            , Ext_native_divs
+            , Ext_bracketed_spans -- for smallcaps with [Small caps]{.smallcaps}
+            , Ext_tex_math_dollars
+            , Ext_backtick_code_blocks
+            , Ext_inline_code_attributes
+            , Ext_strikeout
+            , Ext_superscript
+            , Ext_subscript
+            , Ext_blank_before_header -- so you can't write #yeah and get a header by accident
+            , Ext_all_symbols_escapable
+            , Ext_link_attributes
+            , Ext_smart
+            ]
+
+        markdownOptions :: ReaderOptions
+        markdownOptions = def { readerExtensions = markdownExtensions
+                              , readerStandalone = False
+                              , readerStripComments = True }
