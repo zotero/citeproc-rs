@@ -1,0 +1,7 @@
+flags: {}
+packages:
+- .
+extra-deps:
+- pandoc-2.6
+- ipynb-0.1
+resolver: lts-13.7

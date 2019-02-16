@@ -1,0 +1,1 @@
+{"pandoc-api-version":[1,17,5,4],"pandoc-csl-json":[{"section":[{"c":"One","t":"Str"},{"t":"Space"},{"c":[{"c":"two","t":"Str"}],"t":"Emph"}],"title":[{"c":"One","t":"Str"},{"t":"Space"},{"c":[{"c":"two","t":"Str"}],"t":"Emph"},{"c":",","t":"Str"},{"t":"Space"},{"c":["InlineMath","x = y"],"t":"Math"}],"type":"book","id":"citekey"}]}

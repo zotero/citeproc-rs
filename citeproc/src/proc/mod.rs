@@ -28,6 +28,8 @@ pub trait ProcDatabase: StyleDatabase {
     fn default_locale(&self) -> Arc<Locale>;
     fn style_el(&self) -> Arc<Style>;
     fn cite_pos(&self, id: CiteId) -> csl::style::Position;
+    /// 'First Reference Note Number' -- the number of the footnote containing the first cite
+    /// referring to this cite's reference.
     fn cite_frnn(&self, id: CiteId) -> Option<u32>;
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
