@@ -3,7 +3,7 @@ use crate::error::*;
 use crate::locale::{Lang, Locale};
 use crate::terms::LocatorType;
 use crate::variables::*;
-use crate::version::CslVersionReq;
+use crate::version::{CslVersionReq, Features};
 use crate::Atom;
 use std::fmt;
 use std::str::FromStr;
@@ -835,6 +835,12 @@ pub enum StyleClass {
     Note,
 }
 
+impl Default for StyleClass {
+    fn default() -> Self {
+        StyleClass::Note
+    }
+}
+
 use fnv::FnvHashMap;
 
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
@@ -847,6 +853,7 @@ pub struct Style {
     pub citation: Citation,
     pub bibliography: Option<Bibliography>,
     pub info: Info,
+    pub features: Features,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
     /// `None` is the 'override everything' locale.
@@ -861,9 +868,10 @@ pub struct Style {
 impl Default for Style {
     fn default() -> Self {
         Style {
-            class: StyleClass::Note,
+            class: Default::default(),
             macros: Default::default(),
             citation: Default::default(),
+            features: Default::default(),
             bibliography: Default::default(),
             info: Default::default(),
             name_inheritance: Default::default(),

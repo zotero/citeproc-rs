@@ -778,7 +778,7 @@ fn get_toplevel<'a, 'd: 'a>(
         Ok(matches
             .into_iter()
             .nth(0)
-            .ok_or_else(|| InvalidCsl::new(&root, "Must have one <...>"))?)
+            .ok_or_else(|| InvalidCsl::new(&root, &format!("Must have one <{}>", nodename)))?)
     }
 }
 
@@ -1073,6 +1073,17 @@ r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x"
     }
 }
 
+impl FromNode for Features {
+    fn from_node(node: &Node) -> FromNodeResult<Self> {
+        let input = node
+            .children()
+            .filter(|n| n.is_element() && n.has_tag_name("feature"))
+            .filter_map(|el| el.attribute("name"));
+        read_features(input)
+            .map_err(|s| InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)).into())
+    }
+}
+
 impl FromNode for Style {
     fn from_node(node: &Node) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node)?;
@@ -1121,6 +1132,35 @@ impl FromNode for Style {
             }
         };
 
+        let feat_matches: Vec<_> = node
+            .children()
+            .filter(|n| n.has_tag_name("features"))
+            .collect();
+        let feat_node = if feat_matches.len() > 1 {
+            Ok(Err(InvalidCsl::new(
+                &node,
+                "Cannot have more than one <features>",
+            ))?)
+        } else {
+            // move matches into its first item
+            Ok(feat_matches.into_iter().nth(0))
+        };
+
+        let features = match feat_node {
+            Ok(Some(node)) => match Features::from_node(&node) {
+                Ok(bib) => Some(bib),
+                Err(err) => {
+                    errors.push(err);
+                    None
+                }
+            },
+            Ok(None) => None,
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
         let matches: Vec<_> = node
             .children()
             .filter(|n| n.has_tag_name("bibliography"))
@@ -1135,7 +1175,6 @@ impl FromNode for Style {
             Ok(matches.into_iter().nth(0))
         };
 
-        // TODO: push instead of bubble?
         let bibliography = match bib_node {
             Ok(Some(node)) => match Bibliography::from_node(&node) {
                 Ok(bib) => Some(bib),
@@ -1161,6 +1200,7 @@ impl FromNode for Style {
             locale_overrides,
             default_locale: attribute_optional(node, "default-locale")?,
             citation: citation?,
+            features: features.unwrap_or_else(Features::new),
             bibliography,
             info: Info {},
             class: attribute_required(node, "class")?,

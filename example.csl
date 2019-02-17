@@ -17,6 +17,11 @@
     <updated>2018-09-03T17:14:48+00:00</updated>
     <rights license="http://creativecommons.org/licenses/by-sa/3.0/">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>
   </info>
+
+  <features>
+    <feature name="conditions" />
+  </features>
+
   <locale />
   <locale xml:lang="en-GB">
     <terms>
