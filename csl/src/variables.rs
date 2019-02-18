@@ -1,4 +1,5 @@
 use super::attr::GetAttribute;
+use super::version::Features;
 use super::error::*;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty)]
@@ -12,16 +13,16 @@ pub enum AnyVariable {
 impl GetAttribute for AnyVariable {
     fn get_attr(
         s: &str,
-        csl_variant: super::version::CslVariant,
+        features: &Features,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_variant) {
+        if let Ok(v) = Variable::get_attr(s, features) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NameVariable::get_attr(s, csl_variant) {
+        } else if let Ok(v) = NameVariable::get_attr(s, features) {
             return Ok(Name(v));
-        } else if let Ok(v) = DateVariable::get_attr(s, csl_variant) {
+        } else if let Ok(v) = DateVariable::get_attr(s, features) {
             return Ok(Date(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, features) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))
@@ -42,12 +43,12 @@ pub enum StandardVariable {
 impl GetAttribute for StandardVariable {
     fn get_attr(
         s: &str,
-        csl_variant: super::version::CslVariant,
+        features: &Features,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::StandardVariable::*;
-        if let Ok(v) = Variable::get_attr(s, csl_variant) {
+        if let Ok(v) = Variable::get_attr(s, features) {
             return Ok(Ordinary(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, features) {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))

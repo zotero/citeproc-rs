@@ -78,7 +78,7 @@ impl FromStr for Locale {
 
 impl FromNode for Locale {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let lang = attribute_option(node, ("xml", "lang"))?;
+        let lang = attribute_option(node, ("xml", "lang"), info)?;
 
         // TODO: one slot for each date form, avoid allocations?
         let dates_vec = node
@@ -155,7 +155,7 @@ impl FromNode for LocaleDate {
             .map(|el| DatePart::from_node_dp(&el, true, info))
             .partition_results()?;
         Ok(LocaleDate {
-            form: attribute_required(node, "form")?,
+            form: attribute_required(node, "form", info)?,
             date_parts: elements,
             formatting: Option::from_node(node, info)?,
             delimiter: Delimiter::from_node(node, info)?,
@@ -175,20 +175,20 @@ enum TermEl {
 impl FromNode for TermEl {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         use crate::terms::AnyTermName::*;
-        let name: AnyTermName = attribute_required(node, "name")?;
+        let name: AnyTermName = attribute_required(node, "name", info)?;
         let content = TermPlurality::from_node(node, info)?;
         match name {
             Number(v) => Ok(TermEl::Gendered(
                 GenderedTermSelector::Number(v, TermForm::from_node(node, info)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
+                GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
             Month(mt) => Ok(TermEl::Gendered(
                 GenderedTermSelector::Month(mt, TermForm::from_node(node, info)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
+                GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
             Loc(lt) => Ok(TermEl::Gendered(
                 GenderedTermSelector::Locator(lt, TermForm::from_node(node, info)?),
-                GenderedTerm(content, attribute_optional(node, "gender")?),
+                GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
             Misc(t) => Ok(TermEl::Simple(
                 SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
@@ -210,7 +210,7 @@ impl FromNode for TermEl {
                 TermPlurality::Invariant(a) => Ok(TermEl::Ordinal(
                     OrdinalTermSelector(
                         t,
-                        attribute_optional(node, "gender-form")?,
+                        attribute_optional(node, "gender-form", info)?,
                         OrdinalMatch::from_node(node, info)?,
                     ),
                     a,

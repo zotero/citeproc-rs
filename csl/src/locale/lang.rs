@@ -69,9 +69,9 @@ impl Lang {
 
 use crate::attr::GetAttribute;
 use crate::error::UnknownAttributeValue;
-use crate::version::CslVariant;
+use crate::version::Features;
 impl GetAttribute for Lang {
-    fn get_attr(s: &str, _: CslVariant) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, _: &Features) -> Result<Self, UnknownAttributeValue> {
         Lang::from_str(s).map_err(|_| UnknownAttributeValue::new(s))
     }
 }

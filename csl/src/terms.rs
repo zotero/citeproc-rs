@@ -1,3 +1,4 @@
+use crate::version::Features;
 use crate::error::*;
 use std::str::FromStr;
 
@@ -31,24 +32,24 @@ pub enum AnyTermName {
 impl GetAttribute for AnyTermName {
     fn get_attr(
         s: &str,
-        csl_variant: super::version::CslVariant,
+        features: &Features,
     ) -> Result<Self, UnknownAttributeValue> {
         use self::AnyTermName::*;
-        if let Ok(v) = MiscTerm::get_attr(s, csl_variant) {
+        if let Ok(v) = MiscTerm::get_attr(s, features) {
             return Ok(Misc(v));
-        } else if let Ok(v) = MonthTerm::get_attr(s, csl_variant) {
+        } else if let Ok(v) = MonthTerm::get_attr(s, features) {
             return Ok(Month(v));
-        } else if let Ok(v) = NumberVariable::get_attr(s, csl_variant) {
+        } else if let Ok(v) = NumberVariable::get_attr(s, features) {
             return Ok(Number(v));
-        } else if let Ok(v) = LocatorType::get_attr(s, csl_variant) {
+        } else if let Ok(v) = LocatorType::get_attr(s, features) {
             return Ok(Loc(v));
-        } else if let Ok(v) = SeasonTerm::get_attr(s, csl_variant) {
+        } else if let Ok(v) = SeasonTerm::get_attr(s, features) {
             return Ok(Season(v));
-        } else if let Ok(v) = QuoteTerm::get_attr(s, csl_variant) {
+        } else if let Ok(v) = QuoteTerm::get_attr(s, features) {
             return Ok(Quote(v));
-        } else if let Ok(v) = RoleTerm::get_attr(s, csl_variant) {
+        } else if let Ok(v) = RoleTerm::get_attr(s, features) {
             return Ok(Role(v));
-        } else if let Ok(v) = OrdinalTerm::get_attr(s, csl_variant) {
+        } else if let Ok(v) = OrdinalTerm::get_attr(s, features) {
             return Ok(Ordinal(v));
         }
         Err(UnknownAttributeValue::new(s))
@@ -569,7 +570,7 @@ impl FromStr for OrdinalTerm {
 }
 
 fn is_digit(chr: char) -> bool {
-    chr as u8 >= 0x30 && chr as u8 <= 0x39
+    chr as u8 >= 0x30 && (chr as u8) <= 0x39
 }
 
 named!(two_digit_num<CompleteStr, u32>,

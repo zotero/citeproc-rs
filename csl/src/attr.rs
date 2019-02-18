@@ -1,24 +1,22 @@
-use super::version::CslVariant;
+use crate::ParseInfo;
+use crate::version::Features;
 use crate::error::{InvalidCsl, NeedVarType, UnknownAttributeValue};
 use crate::Atom;
 use roxmltree::{ExpandedName, Node};
 use std::str::FromStr;
 use strum::EnumProperty;
 
-// Temporary
-pub const CSL_VARIANT: CslVariant = CslVariant::CslM;
-
 pub trait GetAttribute
 where
     Self: Sized,
 {
-    fn get_attr(s: &str, csl_variant: CslVariant) -> Result<Self, UnknownAttributeValue>;
+    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue>;
 }
 
 impl<T: FromStr + EnumProperty> GetAttribute for T {
-    fn get_attr(s: &str, csl_variant: CslVariant) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         match T::from_str(s) {
-            Ok(a) => csl_variant
+            Ok(a) => features
                 .filter_arg(a)
                 .ok_or_else(|| UnknownAttributeValue::new(s)),
             Err(_) => Err(UnknownAttributeValue::new(s)),
@@ -26,7 +24,7 @@ impl<T: FromStr + EnumProperty> GetAttribute for T {
     }
 }
 
-pub fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, InvalidCsl> {
+pub(crate) fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, InvalidCsl> {
     match node.attribute(attr) {
         Some("true") => Ok(true),
         Some("false") => Ok(false),
@@ -35,7 +33,7 @@ pub fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, In
     }
 }
 
-pub fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, InvalidCsl> {
+pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, InvalidCsl> {
     match node.attribute(attr) {
         Some("true") => Ok(Some(true)),
         Some("false") => Ok(Some(false)),
@@ -44,7 +42,7 @@ pub fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, In
     }
 }
 
-pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
+pub(crate) fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s, 10);
@@ -54,7 +52,7 @@ pub fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, Inval
     }
 }
 
-pub fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
+pub(crate) fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s, 10);
@@ -66,29 +64,29 @@ pub fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, Inva
     }
 }
 
-pub fn attribute_string(node: &Node, attr: &str) -> String {
+pub(crate) fn attribute_string(node: &Node, attr: &str) -> String {
     node.attribute(attr)
         .map(String::from)
         .unwrap_or_else(|| String::from(""))
 }
 
-pub fn attribute_atom(node: &Node, attr: &str) -> Atom {
+pub(crate) fn attribute_atom(node: &Node, attr: &str) -> Atom {
     node.attribute(attr)
         .map(Atom::from)
         .unwrap_or_else(|| Atom::from(""))
 }
 
-pub fn attribute_atom_default(node: &Node, attr: &str, default: Atom) -> Atom {
+pub(crate) fn attribute_atom_default(node: &Node, attr: &str, default: Atom) -> Atom {
     node.attribute(attr).map(Atom::from).unwrap_or(default)
 }
 
-pub fn attribute_option_atom(node: &Node, attr: &str) -> Option<Atom> {
+pub(crate) fn attribute_option_atom(node: &Node, attr: &str) -> Option<Atom> {
     node.attribute(attr).map(Atom::from)
 }
 
-pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T, InvalidCsl> {
+pub(crate) fn attribute_required<T: GetAttribute>(node: &Node, attr: &str, info: &ParseInfo) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VARIANT) {
+        Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
@@ -98,20 +96,21 @@ pub fn attribute_required<T: GetAttribute>(node: &Node, attr: &str) -> Result<T,
 
 use super::variables::*;
 
-pub fn attribute_var_type<T: GetAttribute>(
+pub(crate) fn attribute_var_type<T: GetAttribute>(
     node: &Node,
     attr: &str,
     need: NeedVarType,
+    info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VARIANT) {
+        Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::wrong_var_type(
                 node,
                 attr,
                 &e.value,
                 need,
-                AnyVariable::get_attr(a, CSL_VARIANT).ok(),
+                AnyVariable::get_attr(a, &info.features).ok(),
             )),
         },
         None => Err(InvalidCsl::new(
@@ -121,12 +120,13 @@ pub fn attribute_var_type<T: GetAttribute>(
     }
 }
 
-pub fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
+pub(crate) fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
     node: &Node<'a, 'd>,
     attr: impl Into<ExpandedName<'a>> + Clone,
+    info: &ParseInfo,
 ) -> Result<Option<T>, InvalidCsl> {
     match node.attribute(attr.clone()) {
-        Some(a) => match T::get_attr(a, CSL_VARIANT) {
+        Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(Some(val)),
             Err(e) => Err(InvalidCsl::attr_val(
                 node,
@@ -138,12 +138,13 @@ pub fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
     }
 }
 
-pub fn attribute_optional<T: Default + GetAttribute>(
+pub(crate) fn attribute_optional<T: Default + GetAttribute>(
     node: &Node,
     attr: &str,
+    info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, CSL_VARIANT) {
+        Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
             Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
@@ -151,17 +152,18 @@ pub fn attribute_optional<T: Default + GetAttribute>(
     }
 }
 
-pub fn attribute_array_var<T: GetAttribute>(
+pub(crate) fn attribute_array_var<T: GetAttribute>(
     node: &Node,
     attr: &str,
     need: NeedVarType,
+    info: &ParseInfo,
 ) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {
         Some(array) => {
             let split: Result<Vec<_>, _> = array
                 .split(' ')
                 .filter(|a| a.len() > 0)
-                .map(|a| T::get_attr(a, CSL_VARIANT))
+                .map(|a| T::get_attr(a, &info.features))
                 .collect();
             match split {
                 Ok(val) => Ok(val),
@@ -170,7 +172,7 @@ pub fn attribute_array_var<T: GetAttribute>(
                     attr,
                     &e.value,
                     need,
-                    AnyVariable::get_attr(&e.value, CSL_VARIANT).ok(),
+                    AnyVariable::get_attr(&e.value, &info.features).ok(),
                 )),
             }
         }
@@ -178,13 +180,13 @@ pub fn attribute_array_var<T: GetAttribute>(
     }
 }
 
-pub fn attribute_array<T: GetAttribute>(node: &Node, attr: &str) -> Result<Vec<T>, InvalidCsl> {
+pub(crate) fn attribute_array<T: GetAttribute>(node: &Node, attr: &str, info: &ParseInfo) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {
         Some(array) => {
             let split: Result<Vec<_>, _> = array
                 .split(' ')
                 .filter(|a| a.len() > 0)
-                .map(|a| T::get_attr(a, CSL_VARIANT))
+                .map(|a| T::get_attr(a, &info.features))
                 .collect();
             match split {
                 Ok(val) => Ok(val),

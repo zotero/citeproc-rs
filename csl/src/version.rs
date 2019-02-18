@@ -90,6 +90,24 @@ macro_rules! declare_features {
                 $(f(stringify!($feature), self.$feature);)+
             }
 
+            pub(crate) fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
+                if let Some(csv) = val.get_str("feature") {
+                    for feat in csv.split(',') {
+                        if !self.str_enabled(feat) {
+                            return None;
+                        }
+                    }
+                }
+                Some(val)
+            }
+
+            pub(crate) fn str_enabled(&self, fstr: &str) -> bool {
+                match fstr {
+                    $(stringify!($feature) => self.$feature,)+
+                    _ => false,
+                }
+            }
+
         }
     };
 

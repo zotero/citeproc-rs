@@ -16,17 +16,17 @@ use std::str::FromStr;
 use csl::variables::AnyVariable;
 use csl::version::CslVariant;
 use csl::GetAttribute;
+use csl::style::CslType;
+use csl::version::Features;
 
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
 use crate::input::reference::Reference;
-use csl::style::CslType;
 use fnv::FnvHashMap;
 // Temporary. Make it dynamic later.
-pub const REF_CSL_VARIANT: CslVariant = CslVariant::CslM;
 use std::marker::PhantomData;
 
-struct CslVariantVisitor<T>(CslVariant, &'static [&'static str], PhantomData<T>);
+struct CslVariantVisitor<T>(Features, &'static [&'static str], PhantomData<T>);
 
 impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     type Value = T;
@@ -39,7 +39,7 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     where
         E: de::Error,
     {
-        T::get_attr(key, self.0).map_err(|_e| de::Error::unknown_field(key, self.1))
+        T::get_attr(key, &self.0).map_err(|_e| de::Error::unknown_field(key, self.1))
     }
 }
 
@@ -61,7 +61,7 @@ impl<'de> Deserialize<'de> for WrapType {
         const FIELDS: &'static [&'static str] = &["a legal CSL type"];
         deserializer
             .deserialize_identifier(CslVariantVisitor(
-                REF_CSL_VARIANT,
+                Features::new(),
                 FIELDS,
                 Default::default(),
             ))
@@ -79,7 +79,7 @@ impl<'de> Deserialize<'de> for WrapVar {
         const FIELDS: &'static [&'static str] = &["any CSL variable"];
         deserializer
             .deserialize_identifier(CslVariantVisitor(
-                REF_CSL_VARIANT,
+                Features::new(),
                 FIELDS,
                 Default::default(),
             ))
