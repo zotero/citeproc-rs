@@ -469,19 +469,20 @@ impl Condition {
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural)?,
             csl_type: attribute_array_var(node, "type", NeedVarType::CondType)?,
             locator: attribute_array_var(node, "locator", NeedVarType::CondLocator)?,
-            has_year_only: attribute_array_var(node, "has-year-only", NeedVarType::CondDate)?,
-            has_day: attribute_array_var(node, "has-day", NeedVarType::CondDate)?,
             is_uncertain_date: attribute_array_var(
                 node,
                 "is-uncertain-date",
                 NeedVarType::CondDate,
             )?,
             is_numeric: attribute_array_var(node, "is-numeric", NeedVarType::Any)?,
-            has_to_month_or_season: attribute_array_var(
+            // Under the condition_date_parts feature
+            has_year_only: attribute_array_var(node, "has-year-only", NeedVarType::CondDate)?,
+            has_month_or_season: attribute_array_var(
                 node,
-                "has-to-month-or-season",
+                "has-month-or-season",
                 NeedVarType::CondDate,
             )?,
+            has_day: attribute_array_var(node, "has-day", NeedVarType::CondDate)?,
         };
         // technically, only a match="..." on an <if> is ignored when a <conditions> block is
         // present, but that's ok

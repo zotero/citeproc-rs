@@ -2,6 +2,7 @@ use super::helpers::sequence;
 use super::ir::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
+use crate::input::DateOrRange;
 use crate::output::OutputFormat;
 use csl::style::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
@@ -153,13 +154,67 @@ where
     // work.
     // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
 
-    let mut chain = vars
+    let has_year_only = cond.has_year_only.iter().map(|dvar| {
+        ctx.reference
+            .date
+            .get(&dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.month == 0 && d.day == 0,
+                DateOrRange::Range(d1, d2) => {
+                    d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    });
+
+    let has_month_or_season = cond.has_month_or_season.iter().map(|dvar| {
+        ctx.reference
+            .date
+            .get(&dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.month != 0,
+                DateOrRange::Range(d1, d2) => {
+                    // XXX: is OR the right operator here?
+                    d1.month != 0 || d2.month != 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    });
+
+    let has_day = cond.has_day.iter().map(|dvar| {
+        ctx.reference
+            .date
+            .get(&dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.day != 0,
+                DateOrRange::Range(d1, d2) => {
+                    // XXX: is OR the right operator here?
+                    d1.day != 0 || d2.day != 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    });
+
+    let basic = vars
         .chain(nums)
         .chain(types)
         .chain(positions)
         .chain(disambiguate);
 
-    run_matcher(&mut chain, &cond.match_type)
+    let mut date_parts = None;
+
+    let style = db.style_el();
+    if style.features.condition_date_parts {
+        date_parts = Some(has_year_only.chain(has_month_or_season).chain(has_day));
+    }
+
+    // If a condition matcher is enabled, flattening the option::Iter pulls out the internal iterator if any
+    let mut bools = basic.chain(date_parts.into_iter().flatten());
+
+    run_matcher(&mut bools, &cond.match_type)
 }
 
 fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {

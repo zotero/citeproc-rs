@@ -341,9 +341,8 @@ pub struct Condition {
     /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-day-extension
     pub has_day: Vec<DateVariable>,
     /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-to-month-or-season-extension
-    ///
-    /// I have no idea why "to-" is in there.
-    pub has_to_month_or_season: Vec<DateVariable>,
+    /// Original CSL-M is "has-to-month-or-season" which makes no sense.
+    pub has_month_or_season: Vec<DateVariable>,
     pub context: Option<Context>,
 
     // undocumented CSL-M features
@@ -371,7 +370,7 @@ impl Condition {
             && self.is_uncertain_date.is_empty()
             && self.has_year_only.is_empty()
             && self.has_day.is_empty()
-            && self.has_to_month_or_season.is_empty()
+            && self.has_month_or_season.is_empty()
             && self.jurisdiction.is_none()
             && self.subjurisdictions.is_none()
             && self.is_plural.is_empty()
