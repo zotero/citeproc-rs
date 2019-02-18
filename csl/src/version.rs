@@ -151,6 +151,7 @@ declare_features! (
     (active, suppress_min_max, "1.0.1", None, None),
     (active, text_case_normal, "1.0.1", None, None),
     (active, year_range_format, "1.0.1", None, None),
+    (active, edtf_dates, "1.0.1", None, None),
 
     // includes vars: publication-date, publication-number, committee, document-name
     (active, cslm_legal_types, "1.0.1", None, None),
