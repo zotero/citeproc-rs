@@ -236,7 +236,7 @@ use std::cmp::Ordering;
 
 /// Creates a total ordering of References from a Sort element.
 fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Ordering {
-    // 
+    //
     fn compare_demoting_none<T: Ord>(aa: Option<&T>, bb: Option<&T>) -> Ordering {
         match (aa, bb) {
             (None, None) => Ordering::Equal,
@@ -258,7 +258,9 @@ fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Or
             // variable is not defined directly on the reference, it shouldn't be sortable-by, so
             // will just come back as None from reference.xxx.get() and produce Equal.
             SortSource::Variable(any) => match any {
-                AnyVariable::Ordinary(v) => compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v)),
+                AnyVariable::Ordinary(v) => {
+                    compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
+                }
                 AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
                 AnyVariable::Name(_) => Ordering::Equal,
                 AnyVariable::Date(_) => Ordering::Equal,

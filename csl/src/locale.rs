@@ -2,8 +2,7 @@ use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
 use crate::terms::*;
-use crate::FromNode;
-use crate::FromNodeResult;
+use crate::{FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
 use std::str::FromStr;
@@ -71,20 +70,21 @@ impl FromStr for Locale {
     type Err = StyleError;
     fn from_str(xml: &str) -> Result<Self, Self::Err> {
         let doc = Document::parse(&xml)?;
-        let locale = Locale::from_node(&doc.root_element())?;
+        let info = ParseInfo::default();
+        let locale = Locale::from_node(&doc.root_element(), &info)?;
         Ok(locale)
     }
 }
 
 impl FromNode for Locale {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let lang = attribute_option(node, ("xml", "lang"))?;
 
         // TODO: one slot for each date form, avoid allocations?
         let dates_vec = node
             .children()
             .filter(|el| el.has_tag_name("date"))
-            .map(|el| LocaleDate::from_node(&el))
+            .map(|el| LocaleDate::from_node(&el, info))
             .partition_results()?;
 
         let mut dates = FnvHashMap::default();
@@ -101,13 +101,13 @@ impl FromNode for Locale {
             .children()
             .filter(|el| el.has_tag_name("style-options"))
             .nth(0)
-            .map(|o_node| LocaleOptionsNode::from_node(&o_node))
+            .map(|o_node| LocaleOptionsNode::from_node(&o_node, info))
             .unwrap_or_else(|| Ok(LocaleOptionsNode::default()))?;
 
         let terms_node = node.children().filter(|el| el.has_tag_name("terms")).nth(0);
         if let Some(tn) = terms_node {
             for n in tn.children().filter(|el| el.has_tag_name("term")) {
-                match TermEl::from_node(&n)? {
+                match TermEl::from_node(&n, info)? {
                     TermEl::Simple(sel, con) => {
                         simple_terms.insert(sel, con);
                     }
@@ -148,18 +148,18 @@ pub struct LocaleDate {
 }
 
 impl FromNode for LocaleDate {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let elements = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("date-part"))
-            .map(|el| DatePart::from_node_dp(&el, true))
+            .map(|el| DatePart::from_node_dp(&el, true, info))
             .partition_results()?;
         Ok(LocaleDate {
             form: attribute_required(node, "form")?,
             date_parts: elements,
-            formatting: Option::from_node(node)?,
-            delimiter: Delimiter::from_node(node)?,
-            text_case: TextCase::from_node(node)?,
+            formatting: Option::from_node(node, info)?,
+            delimiter: Delimiter::from_node(node, info)?,
+            text_case: TextCase::from_node(node, info)?,
         })
     }
 }
@@ -173,37 +173,37 @@ enum TermEl {
 }
 
 impl FromNode for TermEl {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         use crate::terms::AnyTermName::*;
         let name: AnyTermName = attribute_required(node, "name")?;
-        let content = TermPlurality::from_node(node)?;
+        let content = TermPlurality::from_node(node, info)?;
         match name {
             Number(v) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Number(v, TermForm::from_node(node)?),
+                GenderedTermSelector::Number(v, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender")?),
             )),
             Month(mt) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Month(mt, TermForm::from_node(node)?),
+                GenderedTermSelector::Month(mt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender")?),
             )),
             Loc(lt) => Ok(TermEl::Gendered(
-                GenderedTermSelector::Locator(lt, TermForm::from_node(node)?),
+                GenderedTermSelector::Locator(lt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender")?),
             )),
             Misc(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Misc(t, TermFormExtended::from_node(node)?),
+                SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
             Season(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Season(t, TermForm::from_node(node)?),
+                SimpleTermSelector::Season(t, TermForm::from_node(node, info)?),
                 content,
             )),
             Quote(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Quote(t, TermForm::from_node(node)?),
+                SimpleTermSelector::Quote(t, TermForm::from_node(node, info)?),
                 content,
             )),
             Role(t) => Ok(TermEl::Role(
-                RoleTermSelector(t, TermFormExtended::from_node(node)?),
+                RoleTermSelector(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
             Ordinal(t) => match content {
@@ -211,7 +211,7 @@ impl FromNode for TermEl {
                     OrdinalTermSelector(
                         t,
                         attribute_optional(node, "gender-form")?,
-                        OrdinalMatch::from_node(node)?,
+                        OrdinalMatch::from_node(node, info)?,
                     ),
                     a,
                 )),
@@ -222,7 +222,7 @@ impl FromNode for TermEl {
 }
 
 impl FromNode for LocaleOptionsNode {
-    fn from_node(node: &Node) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
             limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
             punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,

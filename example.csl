@@ -20,6 +20,7 @@
 
   <features>
     <feature name="conditions" />
+    <feature name="condition-date-parts" />
   </features>
 
   <locale />
@@ -53,6 +54,12 @@
 
   <citation>
     <layout suffix="." delimiter="; ">
+      <choose>
+        <if has-year-only="issued">
+          <text value="has-year-only" />
+          <date variable="issued" form="numeric" />
+        </if>
+      </choose>
       <choose>
         <if position="ibid" >
           <text value="ibid" />
