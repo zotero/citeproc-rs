@@ -55,7 +55,10 @@
   <citation>
     <layout suffix="." delimiter="; ">
       <choose>
-        <if has-year-only="issued">
+        <if>
+          <conditions match="any">
+            <condition has-year-only="issued" />
+          </conditions>
           <text value="has-year-only" />
           <date variable="issued" form="numeric" />
         </if>

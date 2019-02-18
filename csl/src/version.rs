@@ -1,7 +1,7 @@
+use crate::Atom;
 use lazy_static::lazy_static;
 use semver::{Version, VersionReq};
 use strum::EnumProperty;
-use crate::Atom;
 
 lazy_static! {
     pub static ref COMPILED_VERSION: Version = { Version::parse("1.0.1").unwrap() };
@@ -57,7 +57,7 @@ macro_rules! set {
             features.$field = true;
         }
         f as fn(&mut Features)
-    }}
+    }};
 }
 
 macro_rules! declare_features {
@@ -115,14 +115,10 @@ macro_rules! declare_features {
     }
 }
 
-// Note that these are 
-
 // status, name, first added version, tracking issue, edition
 // add an issue number as in the first None when you get tracking issues sorted
-declare_features! (
-
+declare_features!(
     // Processor features
-
     (active, parallel_citations, "1.0.1", None, None),
     // includes legal_case form=short abbreviations, for now
     (active, abbreviations, "1.0.1", None, None),
@@ -152,18 +148,14 @@ declare_features! (
     (active, text_case_normal, "1.0.1", None, None),
     (active, year_range_format, "1.0.1", None, None),
     (active, edtf_dates, "1.0.1", None, None),
-
     // includes vars: publication-date, publication-number, committee, document-name
     (active, cslm_legal_types, "1.0.1", None, None),
     (active, jurisdictions, "1.0.1", None, None),
-
     (active, standard_type, "1.0.1", None, None),
     (active, software_type, "1.0.1", None, None),
     (active, periodical_type, "1.0.1", None, None),
-
     // E.g. page and page-first become numeric variables
     (active, more_numerics, "1.0.1", None, None),
-
     (active, var_volume_title, "1.0.1", None, None),
     (active, var_license, "1.0.1", None, None),
     (active, var_document_name, "1.0.1", None, None),
@@ -172,16 +164,20 @@ declare_features! (
     (active, var_dummy_name, "1.0.1", None, None),
     (active, var_publication_date, "1.0.1", None, None),
     (active, var_publication_number, "1.0.1", None, None),
-
     (active, term_every_type, "1.0.1", None, None),
     (active, term_unpublished, "1.0.1", None, None),
     (active, term_legal_locators, "1.0.1", None, None),
 );
 
 // status, name, first added version, tracking issue, None, reason(str)
-declare_features! (
-    (removed, legal_case_form_short, "1.0.1", None, None, Some("could be done without a breaking change")),
-);
+declare_features!((
+    removed,
+    legal_case_form_short,
+    "1.0.1",
+    None,
+    None,
+    Some("could be done without a breaking change")
+),);
 
 // // status, name, first added version, tracking issue, edition, None
 // declare_features! (
@@ -197,14 +193,15 @@ declare_features! (
 //     (stable_removed, no_stack_check, "1.0.0", None, None),
 // );
 
-
-pub fn read_features<'a>(input_features: impl Iterator<Item=&'a str>) -> Result<Features, &'a str> {
+pub fn read_features<'a>(
+    input_features: impl Iterator<Item = &'a str>,
+) -> Result<Features, &'a str> {
     let mut features = Features::new();
     for kebab in input_features {
         let name = kebab.replace('-', "_");
         if let Some((.., set)) = ACTIVE_FEATURES.iter().find(|f| name == f.0) {
             set(&mut features);
-            continue
+            continue;
         }
 
         let removed = REMOVED_FEATURES.iter().find(|f| name == f.0);
@@ -214,7 +211,7 @@ pub fn read_features<'a>(input_features: impl Iterator<Item=&'a str>) -> Result<
             eprintln!("{:?}", reason);
             // feature_removed(span_handler, mi.span, *reason);
             // continue
-            return Err(kebab)
+            return Err(kebab);
         }
 
         // if let Some((_, _since, ..)) = ACCEPTED_FEATURES.iter().find(|f| name == f.0) {
@@ -223,7 +220,7 @@ pub fn read_features<'a>(input_features: impl Iterator<Item=&'a str>) -> Result<
         //     continue
         // }
 
-        return Err(kebab)
+        return Err(kebab);
     }
     Ok(features)
 }

@@ -222,7 +222,7 @@ impl FromNode for TermEl {
 }
 
 impl FromNode for LocaleOptionsNode {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
             limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
             punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
