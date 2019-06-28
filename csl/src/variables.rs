@@ -5,8 +5,8 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::attr::GetAttribute;
-use super::version::Features;
 use super::error::*;
+use super::version::Features;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty)]
 pub enum AnyVariable {
@@ -17,10 +17,7 @@ pub enum AnyVariable {
 }
 
 impl GetAttribute for AnyVariable {
-    fn get_attr(
-        s: &str,
-        features: &Features,
-    ) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         use self::AnyVariable::*;
         if let Ok(v) = Variable::get_attr(s, features) {
             return Ok(Ordinary(v));
@@ -47,10 +44,7 @@ pub enum StandardVariable {
 }
 
 impl GetAttribute for StandardVariable {
-    fn get_attr(
-        s: &str,
-        features: &Features,
-    ) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         use self::StandardVariable::*;
         if let Ok(v) = Variable::get_attr(s, features) {
             return Ok(Ordinary(v));

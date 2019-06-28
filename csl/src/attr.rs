@@ -4,10 +4,10 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::ParseInfo;
-use crate::version::Features;
 use crate::error::{InvalidCsl, NeedVarType, UnknownAttributeValue};
+use crate::version::Features;
 use crate::Atom;
+use crate::ParseInfo;
 use roxmltree::{ExpandedName, Node};
 use std::str::FromStr;
 use strum::EnumProperty;
@@ -90,7 +90,11 @@ pub(crate) fn attribute_option_atom(node: &Node, attr: &str) -> Option<Atom> {
     node.attribute(attr).map(Atom::from)
 }
 
-pub(crate) fn attribute_required<T: GetAttribute>(node: &Node, attr: &str, info: &ParseInfo) -> Result<T, InvalidCsl> {
+pub(crate) fn attribute_required<T: GetAttribute>(
+    node: &Node,
+    attr: &str,
+    info: &ParseInfo,
+) -> Result<T, InvalidCsl> {
     match node.attribute(attr) {
         Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
@@ -186,7 +190,11 @@ pub(crate) fn attribute_array_var<T: GetAttribute>(
     }
 }
 
-pub(crate) fn attribute_array<T: GetAttribute>(node: &Node, attr: &str, info: &ParseInfo) -> Result<Vec<T>, InvalidCsl> {
+pub(crate) fn attribute_array<T: GetAttribute>(
+    node: &Node,
+    attr: &str,
+    info: &ParseInfo,
+) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {
         Some(array) => {
             let split: Result<Vec<_>, _> = array

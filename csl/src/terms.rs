@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::version::Features;
 use crate::error::*;
+use crate::version::Features;
 use std::str::FromStr;
 
 use super::attr::GetAttribute;
@@ -36,10 +36,7 @@ pub enum AnyTermName {
 }
 
 impl GetAttribute for AnyTermName {
-    fn get_attr(
-        s: &str,
-        features: &Features,
-    ) -> Result<Self, UnknownAttributeValue> {
+    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         use self::AnyTermName::*;
         if let Ok(v) = MiscTerm::get_attr(s, features) {
             return Ok(Misc(v));

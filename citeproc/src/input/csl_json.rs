@@ -19,10 +19,10 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
-use csl::variables::AnyVariable;
-use csl::GetAttribute;
 use csl::style::CslType;
+use csl::variables::AnyVariable;
 use csl::version::Features;
+use csl::GetAttribute;
 
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
@@ -470,8 +470,7 @@ impl<'de> Deserialize<'de> for DateOrRange {
             }
         }
 
-        const DATE_TYPES: &[&str] =
-            &["date-parts", "season", "circa", "literal", "raw"];
+        const DATE_TYPES: &[&str] = &["date-parts", "season", "circa", "literal", "raw"];
         deserializer.deserialize_struct("DateOrRange", DATE_TYPES, DateVisitor)
     }
 }

@@ -164,7 +164,7 @@ impl FromNode for Citation {
             givenname_disambiguation_rule: attribute_optional(
                 node,
                 "givenname-disambiguation-rule",
-                info
+                info,
             )?,
             disambiguate_add_year_suffix: attribute_bool(
                 node,
@@ -271,7 +271,7 @@ impl FromNode for Bibliography {
             subsequent_author_substitute_rule: attribute_optional(
                 node,
                 "subsequent-author-substitute-rule",
-                info
+                info,
             )?,
             names_delimiter: node
                 .attribute("names-delimiter")
@@ -1256,7 +1256,11 @@ impl FromNode for Style {
             class: attribute_required(node, "class", &info)?,
             name_inheritance: Name::from_node(&node, &info)?,
             page_range_format: attribute_option(node, "page-range-format", &info)?,
-            demote_non_dropping_particle: attribute_optional(node, "demote-non-dropping-particle", &info)?,
+            demote_non_dropping_particle: attribute_optional(
+                node,
+                "demote-non-dropping-particle",
+                &info,
+            )?,
             initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
             names_delimiter: node
                 .attribute("names-delimiter")
