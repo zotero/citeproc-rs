@@ -96,7 +96,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         }
     }
 
-    pub fn get_name(&self, var: &NameVariable) -> Option<&Vec<Name>> {
+    pub fn get_name(&self, var: NameVariable) -> Option<&Vec<Name>> {
         match var {
             NameVariable::Dummy => None,
             _ => self.reference.name.get(&var),

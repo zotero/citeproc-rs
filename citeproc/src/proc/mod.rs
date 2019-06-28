@@ -36,7 +36,7 @@ pub trait ProcDatabase: StyleDatabase {
 
 use fnv::FnvHashMap;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
     pub tokens: HashSet<DisambToken>,
     pub name_tokens: FnvHashMap<u64, HashSet<DisambToken>>,
@@ -48,11 +48,7 @@ pub struct IrState {
 
 impl IrState {
     pub fn new() -> Self {
-        IrState {
-            tokens: HashSet::new(),
-            name_tokens: Default::default(),
-            macro_stack: HashSet::new(),
-        }
+        IrState::default()
     }
 }
 

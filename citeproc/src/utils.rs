@@ -4,7 +4,7 @@ pub fn to_bijective_base_26(int: u32) -> String {
     while n > 0 {
         n -= 1;
         s.push(char::from((65 + 32 + (n % 26)) as u8));
-        n = n / 26;
+        n /= 26;
     }
     s
 }
@@ -53,7 +53,7 @@ where
     I: Iterator<Item = T>,
 {
     fn intercalate(self, sep: &T) -> Vec<T> {
-        let mut iter = self.into_iter();
+        let mut iter = self;
         let first = match iter.next() {
             Some(first) => first,
             None => return vec![],
@@ -83,7 +83,7 @@ where
 {
     fn intercalate_exact(self, sep: &T) -> Vec<T> {
         let count = self.len();
-        let mut iter = self.into_iter();
+        let mut iter = self;
         let first = match iter.next() {
             Some(first) => first,
             None => return vec![],

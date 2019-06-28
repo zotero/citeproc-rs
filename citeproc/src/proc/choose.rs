@@ -90,9 +90,8 @@ where
 {
     let IfThen(ref conditions, ref elements) = *branch;
     let (matched, disambiguate) = eval_conditions(conditions, ctx, db);
-    let content = match matched {
-        false => None,
-        true => Some(sequence(
+    let content = if matched {
+        Some(sequence(
             db,
             state,
             ctx,
@@ -100,7 +99,9 @@ where
             "".into(),
             None,
             Affixes::default(),
-        )),
+        ))
+    } else {
+        None
     };
     BranchEval {
         disambiguate,

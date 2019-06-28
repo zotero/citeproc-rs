@@ -94,7 +94,7 @@ impl AddDisambTokens for DateOrRange {
 impl AddDisambTokens for Date {
     fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool) {
         // when processing a cite, only insert the segments you actually used
-        set.insert(DisambToken::Date(self.clone()));
+        set.insert(DisambToken::Date(*self));
         // for the index, add all possible variations
         if indexing {
             let just_ym = Date {

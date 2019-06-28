@@ -24,3 +24,38 @@ pub fn parse(style: &str) -> String {
         "failed".into()
     }
 }
+
+pub struct JsLocaleFetcher {
+    root: PathBuf,
+}
+
+impl Default for JsLocaleFetcher {
+    fn default() -> Self {
+        let locales_dir = None
+            // TODO: read metadata
+            .unwrap_or_else(|| {
+                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
+                    .expect("No home directory found.");
+                let mut locales_dir = pd.cache_dir().to_owned();
+                locales_dir.push("locales");
+                locales_dir
+            });
+        Filesystem::new(locales_dir)
+    }
+}
+
+impl JsLocaleFetcher {
+    pub fn new(repo_dir: impl Into<PathBuf>) -> Self {
+        Filesystem {
+            root: repo_dir.into(),
+        }
+    }
+}
+
+impl LocaleFetcher for JsLocaleFetcher {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        let mut path = self.root.clone();
+        path.push(&format!("locales-{}.xml", lang));
+        fs::read_to_string(path)
+    }
+}

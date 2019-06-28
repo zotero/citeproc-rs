@@ -73,9 +73,9 @@ impl OutputFormat for Pandoc {
             .map(|s| Str(s.to_owned()))
             .intercalate(&Space)
             .into_iter()
-            .filter_map(|t| match t {
-                Str(ref s) if s == "" => None,
-                _ => Some(t),
+            .filter(|t| match t {
+                Str(ref s) if s == "" => false,
+                _ => true,
             })
             .collect();
 
@@ -151,16 +151,16 @@ fn attr_class(class: &str) -> Attr {
     Attr("".to_owned(), vec![class.to_owned()], vec![])
 }
 
-fn flip_flop_inlines(inlines: &Vec<Inline>, state: &FlipFlopState) -> Vec<Inline> {
+fn flip_flop_inlines(inlines: &[Inline], state: &FlipFlopState) -> Vec<Inline> {
     inlines
-        .into_iter()
+        .iter()
         .map(|inl| flip_flop(inl, state).unwrap_or_else(|| inl.clone()))
         .collect()
 }
 
 fn flip_flop(inline: &Inline, state: &FlipFlopState) -> Option<Inline> {
     use pandoc_types::definition::*;
-    let fl = |ils, st| flip_flop_inlines(ils, st);
+    let fl = |ils: &[Inline], st| flip_flop_inlines(ils, st);
     match inline {
         // Note(ref blocks) => {
         //     if let Some(Block::Para(ref ils)) = blocks.into_iter().nth(0) {

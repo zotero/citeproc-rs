@@ -156,11 +156,11 @@ fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
-    return Arc::new((
+    Arc::new((
         IR::Rendered(Some(Pandoc::default().plain("???"))),
         true,
         IrState::new(),
-    ));
+    ))
 }
 
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {

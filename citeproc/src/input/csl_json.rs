@@ -14,7 +14,6 @@ use std::str::FromStr;
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
 use csl::variables::AnyVariable;
-use csl::version::CslVariant;
 use csl::GetAttribute;
 use csl::style::CslType;
 use csl::version::Features;
@@ -58,7 +57,7 @@ impl<'de> Deserialize<'de> for WrapType {
     where
         D: Deserializer<'de>,
     {
-        const FIELDS: &'static [&'static str] = &["a legal CSL type"];
+        const FIELDS: &[&str] = &["a legal CSL type"];
         deserializer
             .deserialize_identifier(CslVariantVisitor(
                 Features::new(),
@@ -76,7 +75,7 @@ impl<'de> Deserialize<'de> for WrapVar {
     where
         D: Deserializer<'de>,
     {
-        const FIELDS: &'static [&'static str] = &["any CSL variable"];
+        const FIELDS: &[&str] = &["any CSL variable"];
         deserializer
             .deserialize_identifier(CslVariantVisitor(
                 Features::new(),
@@ -176,7 +175,7 @@ impl<'de> Deserialize<'de> for Reference {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["id", "type", "any variable name"];
+        const FIELDS: &[&str] = &["id", "type", "any variable name"];
         deserializer.deserialize_struct("Reference", FIELDS, ReferenceVisitor)
     }
 }
@@ -200,6 +199,13 @@ impl<'de> Deserialize<'de> for NumericValue {
                 E: de::Error,
             {
                 Ok(NumericValue::from(Cow::Owned(value)))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                self.visit_string(value.to_string())
             }
 
             fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
@@ -458,7 +464,7 @@ impl<'de> Deserialize<'de> for DateOrRange {
             }
         }
 
-        const DATE_TYPES: &'static [&'static str] =
+        const DATE_TYPES: &[&str] =
             &["date-parts", "season", "circa", "literal", "raw"];
         deserializer.deserialize_struct("DateOrRange", DATE_TYPES, DateVisitor)
     }

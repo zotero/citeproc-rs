@@ -116,8 +116,7 @@ impl<O: OutputFormat> IR<O> {
                     ir.disambiguate(db, state, ctx, is_unambig);
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
-                    let new_ir = IR::Rendered(seq.flatten_seq(&ctx.format));
-                    new_ir
+                    IR::Rendered(seq.flatten_seq(&ctx.format))
                 } else {
                     return;
                 }

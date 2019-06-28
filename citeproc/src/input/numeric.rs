@@ -82,11 +82,11 @@ impl NumericValue {
         NumericValue::Tokens(format!("{}", i), vec![Num(i)])
     }
     pub fn page_first(&self) -> Option<NumericValue> {
-        self.first_num().map(|n| NumericValue::num(n))
+        self.first_num().map(NumericValue::num)
     }
     fn first_num(&self) -> Option<u32> {
         match *self {
-            NumericValue::Tokens(_, ref ts) => ts.iter().nth(0).and_then(|token| token.get_num()),
+            NumericValue::Tokens(_, ref ts) => ts.get(0).and_then(|token| token.get_num()),
             NumericValue::Str(_) => None,
         }
     }
@@ -187,7 +187,7 @@ fn to_affixed(input: CompleteStr) -> NumericToken {
     NumericToken::Affixed(input.0.to_string())
 }
 
-fn sep_from<'s>(input: char) -> Result<NumericToken, ()> {
+fn sep_from(input: char) -> Result<NumericToken, ()> {
     match input {
         ',' => Ok(Comma),
         '-' => Ok(Hyphen),

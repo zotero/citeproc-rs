@@ -49,7 +49,7 @@ impl PersonName {
     /// For example, for a last-name-only name like "Megalodon", `NamePartToken::Given` is removed,
     /// which for `&[Family, SortSeparator, Given]` would leave `&[Family, SortSeparator]` and
     /// render "Megalodon, ", so SortSeparator also has to be removed.
-    pub fn filtered_parts<'a>(&self, order: DisplayOrdering) -> Vec<NamePartToken> {
+    pub fn filtered_parts(&self, order: DisplayOrdering) -> Vec<NamePartToken> {
         let parts: Vec<NamePartToken> = order
             .iter()
             .cloned()
@@ -197,7 +197,7 @@ impl OneName {
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
             // because it only has any effect when "and" is set.
-            if let Some(_) = self.0.and {
+            if self.0.and.is_some() {
                 if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
                     let dpl = self
                         .0
@@ -532,7 +532,7 @@ where
             .iter()
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
-            .filter_map(|var| ctx.get_name(var))
+            .filter_map(|&var| ctx.get_name(var))
             .map(|val| name_el.render(db, state, ctx, val, &self.et_al))
             .collect();
         if rendered.is_empty() {
@@ -542,7 +542,7 @@ where
             .delimiter
             .as_ref()
             .map(|d| d.0.as_ref())
-            .unwrap_or("".into());
+            .unwrap_or("");
         let content = Some(fmt.affixed(fmt.group(rendered, delim, self.formatting), &self.affixes));
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)

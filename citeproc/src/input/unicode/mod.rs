@@ -1,4 +1,5 @@
 #[allow(dead_code)]
+#[allow(clippy::all)]
 mod script;
 use self::script::{COMMON, CYRILLIC, LATIN};
 

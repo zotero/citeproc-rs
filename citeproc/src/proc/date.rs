@@ -58,7 +58,7 @@ where
             let each: Vec<_> = locale_date
                 .date_parts
                 .iter()
-                .filter(|dp| dp_matches(dp, self.parts_selector.clone()))
+                .filter(|dp| dp_matches(dp, self.parts_selector))
                 .filter_map(|dp| dp_render(dp, db, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;

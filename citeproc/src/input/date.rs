@@ -287,6 +287,7 @@ macro_rules! char_between(
     ($input:expr, $min:expr, $max:expr) => (
         {
         fn f(c: u8) -> bool { c >= ($min as u8) && c <= ($max as u8)}
+        #[allow(clippy::double_comparisons)]
         take_while_m_n!($input, 1, 1, f)
         }
     );
