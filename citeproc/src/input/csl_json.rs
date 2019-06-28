@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Copyright © 2018 Corporation for Digital Scholarship
+
 // We implement serde::de::Deserialize for CSL-JSON spec for now.
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
