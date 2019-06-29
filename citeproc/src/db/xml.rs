@@ -15,7 +15,7 @@ use csl::{
 };
 
 pub trait HasFetcher {
-    fn get_fetcher(&self) -> Arc<LocaleFetcher>;
+    fn get_fetcher(&self) -> Arc<dyn LocaleFetcher>;
 }
 
 /// Salsa interface to a CSL style.

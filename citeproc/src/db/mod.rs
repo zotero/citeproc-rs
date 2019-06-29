@@ -43,7 +43,7 @@ use crate::Atom;
 )]
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
-    fetcher: Arc<LocaleFetcher>,
+    fetcher: Arc<dyn LocaleFetcher>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -78,7 +78,7 @@ impl ParallelDatabase for Processor {
 }
 
 impl HasFetcher for Processor {
-    fn get_fetcher(&self) -> Arc<LocaleFetcher> {
+    fn get_fetcher(&self) -> Arc<dyn LocaleFetcher> {
         self.fetcher.clone()
     }
 }
@@ -88,13 +88,12 @@ impl HasFetcher for Processor {
 struct Snap(pub salsa::Snapshot<Processor>);
 impl Clone for Snap {
     fn clone(&self) -> Self {
-        use salsa::ParallelDatabase;
         Snap(self.0.snapshot())
     }
 }
 
 impl Processor {
-    pub(crate) fn safe_default(fetcher: Arc<LocaleFetcher>) -> Self {
+    pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut db = Processor {
             runtime: Default::default(),
             fetcher,
@@ -106,7 +105,7 @@ impl Processor {
         db
     }
 
-    pub fn new(style_string: &str, fetcher: Arc<LocaleFetcher>) -> Result<Self, StyleError> {
+    pub fn new(style_string: &str, fetcher: Arc<dyn LocaleFetcher>) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style(style);
@@ -121,7 +120,6 @@ impl Processor {
 
     #[cfg(feature = "rayon")]
     fn snap(&self) -> Snap {
-        use salsa::ParallelDatabase;
         Snap(self.snapshot())
     }
 

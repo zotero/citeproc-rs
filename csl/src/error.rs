@@ -21,24 +21,35 @@ impl UnknownAttributeValue {
     }
 }
 
-#[derive(Debug)]
-pub enum StyleError {
-    Invalid(CslError),
-    ParseError(roxmltree::Error),
+use serde::Serializer;
+
+fn rox_error_serialize<S>(x: &roxmltree::Error, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    s.serialize_str(&ToString::to_string(x))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+pub enum StyleError {
+    Invalid(CslError),
+    ParseError(#[serde(serialize_with = "rox_error_serialize")] roxmltree::Error),
+}
+
+#[derive(Debug, Serialize)]
 pub struct CslError(pub Vec<InvalidCsl>);
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize)]
 pub enum Severity {
     Error,
     Warning,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct InvalidCsl {
     pub severity: Severity,
+    // TODO: serialize_with or otherwise get this into the output
+    #[serde(skip_serializing)]
     pub text_pos: TextPos,
     pub len: usize,
     pub message: String,

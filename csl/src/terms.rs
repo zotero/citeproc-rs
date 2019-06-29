@@ -68,7 +68,7 @@ pub enum SimpleTermSelector {
 }
 
 impl SimpleTermSelector {
-    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+    pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
         match self {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
@@ -110,7 +110,7 @@ impl GenderedTermSelector {
             v => Some(GenderedTermSelector::Number(v, form.clone())),
         }
     }
-    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+    pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
         match self {
             GenderedTermSelector::Number(t, form) => Box::new(
                 form.fallback()
@@ -132,7 +132,7 @@ impl GenderedTermSelector {
 pub struct RoleTermSelector(pub RoleTerm, pub TermFormExtended);
 
 impl RoleTermSelector {
-    pub fn fallback(self) -> Box<Iterator<Item = Self>> {
+    pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(self.1.fallback().map(move |x| RoleTermSelector(self.0, x)))
     }
 }

@@ -23,8 +23,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 citeproc = { path = "../citeproc", default-features = false }
+csl = { path = "../csl" }
 cfg-if = "0.1.2"
-wasm-bindgen = "0.2.29"
+
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -39,8 +40,12 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 wee_alloc = { version = "0.4.2", optional = true }
 
+[dependencies.wasm-bindgen]
+version = "0.2.47"
+features = ["serde-serialize"]
+
 [dev-dependencies]
-wasm-bindgen-test = "0.2"
+wasm-bindgen-test = "0.2.47"
 
 # TODO: Set the opt level on new wasm-pack 0.6.0 config
 # when it's released, so as not to interfere with the

@@ -141,7 +141,6 @@ where
 
     let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
 
-    use super::DisambPass;
     let disambiguate = cond
         .disambiguate
         .iter()

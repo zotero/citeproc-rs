@@ -9,59 +9,46 @@ mod utils;
 extern crate wasm_bindgen;
 use wasm_bindgen::prelude::*;
 
-use citeproc::output::*;
+use csl::locale::Lang;
+use citeproc::LocaleFetcher;
+use std::sync::Arc;
 // use citeproc::input::*;
 // use citeproc::style::element::CslType;
 // use citeproc::style::variables::*;
-use citeproc::Driver;
+use citeproc::Processor;
 
 #[wasm_bindgen]
 extern "C" {
     fn alert(s: &str);
 }
 
+// XXX: this is pretty large for a minified binary
+const EN_US: &'static str = include_str!("locales-en-US.xml");
+
 /// Documentation
 #[wasm_bindgen]
-pub fn parse(style: &str) -> String {
-    let formatter = Pandoc::new();
-    if let Ok(_driver) = Driver::new(style, &formatter) {
-        "done!".into()
-    } else {
-        "failed".into()
+pub fn parse(style: &str) -> Result<String, JsValue> {
+    let mut locales = Predefined::default();
+    locales.0.insert(Lang::en_us(), EN_US.to_string());
+    match Processor::new(style, Arc::new(locales)) {
+        Ok(_) => Ok("done!".into()),
+        Err(e) => Err(JsValue::from_serde(&e).unwrap())
     }
 }
 
-pub struct JsLocaleFetcher {
-    root: PathBuf,
-}
+use std::collections::HashMap;
 
-impl Default for JsLocaleFetcher {
-    fn default() -> Self {
-        let locales_dir = None
-            // TODO: read metadata
-            .unwrap_or_else(|| {
-                let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
-                    .expect("No home directory found.");
-                let mut locales_dir = pd.cache_dir().to_owned();
-                locales_dir.push("locales");
-                locales_dir
-            });
-        Filesystem::new(locales_dir)
-    }
-}
+#[derive(Default)]
+pub struct Predefined(pub HashMap<Lang, String>);
 
-impl JsLocaleFetcher {
-    pub fn new(repo_dir: impl Into<PathBuf>) -> Self {
-        Filesystem {
-            root: repo_dir.into(),
-        }
-    }
-}
-
-impl LocaleFetcher for JsLocaleFetcher {
+impl LocaleFetcher for Predefined {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        let mut path = self.root.clone();
-        path.push(&format!("locales-{}.xml", lang));
-        fs::read_to_string(path)
+        Ok(self.0.get(lang).cloned().unwrap_or_else(|| {
+            String::from(
+                r#"<?xml version="1.0" encoding="utf-8"?>
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        </locale>"#,
+            )
+        }))
     }
 }
