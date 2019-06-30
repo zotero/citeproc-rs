@@ -4,8 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use nom::types::CompleteStr;
-use nom::*;
 use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
@@ -185,12 +183,12 @@ impl PartialOrd for NumericValue {
 
 // Parsing
 
-fn from_digits(input: CompleteStr) -> Result<u32, std::num::ParseIntError> {
+fn from_digits(input: &str) -> Result<u32, std::num::ParseIntError> {
     input.parse()
 }
 
-fn to_affixed(input: CompleteStr) -> NumericToken {
-    NumericToken::Affixed(input.0.to_string())
+fn to_affixed(input: &str) -> NumericToken {
+    NumericToken::Affixed(input.to_string())
 }
 
 fn sep_from(input: char) -> Result<NumericToken, ()> {
@@ -202,84 +200,99 @@ fn sep_from(input: char) -> Result<NumericToken, ()> {
     }
 }
 
-named!(int<CompleteStr, u32>, map_res!(call!(digit1), from_digits));
-named!(num<CompleteStr, NumericToken>, map!(call!(int), NumericToken::Num));
+use nom::{
+    branch::alt,
+    bytes::complete::is_not,
+    character::complete::{char, digit1, one_of},
+    combinator::{map, map_res, recognize},
+    multi::{many0, many1},
+    sequence::{delimited, tuple},
+    IResult,
+};
+
+fn int(inp: &str) -> IResult<&str, u32> {
+    map_res(digit1, from_digits)(inp)
+}
+
+fn num(inp: &str) -> IResult<&str, NumericToken> {
+    map(int, NumericToken::Num)(inp)
+}
 
 // Try to parse affixed versions first, because
 // 2b => Affixed("2b")
 // not   Num(2), Err("b")
 
-named!(num_pre<CompleteStr, CompleteStr>, is_not!(" ,&-01234567890"));
-named!(num_suf<CompleteStr, CompleteStr>, is_not!(" ,&-"));
+fn num_pre(inp: &str) -> IResult<&str, &str> {
+    is_not(" ,&-01234567890")(inp)
+}
 
-named!(prefix1<CompleteStr, NumericToken>,
-    map!(
-        recognize!(tuple!(many1!(call!(num_pre)), call!(digit1), many0!(call!(num_suf)))),
-        to_affixed
-    )
-);
+fn num_suf(inp: &str) -> IResult<&str, &str> {
+    is_not(" ,&-")(inp)
+}
 
-named!(suffix1<CompleteStr, NumericToken>,
-    map!(
-        recognize!(tuple!(many0!(call!(num_pre)), call!(digit1), many1!(call!(num_suf)))),
-        to_affixed
-    )
-);
+fn prefix1(inp: &str) -> IResult<&str, NumericToken> {
+    map(
+        recognize(tuple((many1(num_pre), digit1, many0(num_suf)))),
+        to_affixed,
+    )(inp)
+}
 
-named!(num_ish<CompleteStr, NumericToken>,
-       alt!(call!(prefix1) | call!(suffix1) | call!(num)));
+fn suffix1(inp: &str) -> IResult<&str, NumericToken> {
+    map(
+        recognize(tuple((many0(num_pre), digit1, many1(num_suf)))),
+        to_affixed,
+    )(inp)
+}
 
-named!(
-    sep<CompleteStr, NumericToken>,
-    map_res!(delimited!(
-        many0!(char!(' ')),
-        one_of!(",&-"),
-        many0!(char!(' '))
-    ), sep_from)
-);
+fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
+    alt((prefix1, suffix1, num))(inp)
+}
 
-named!(
-    num_tokens<CompleteStr, Vec<NumericToken> >,
-    map!(tuple!(
-        call!(num_ish),
-        many0!(tuple!( call!(sep), call!(num_ish) ))
-    ), |(n, rest)| {
-        let mut new = Vec::with_capacity(rest.len() * 2);
-        new.push(n);
-        rest.into_iter()
-            .fold(new, |mut acc, p| { acc.push(p.0); acc.push(p.1); acc })
-    })
-);
+fn sep(inp: &str) -> IResult<&str, NumericToken> {
+    map_res(
+        delimited(many0(char(' ')), one_of(",&-"), many0(char(' '))),
+        sep_from,
+    )(inp)
+}
+
+fn num_tokens(inp: &str) -> IResult<&str, Vec<NumericToken>> {
+    map(
+        tuple((num_ish, many0(tuple((sep, num_ish))))),
+        |(n, rest)| {
+            let mut new = Vec::with_capacity(rest.len() * 2);
+            new.push(n);
+            rest.into_iter().fold(new, |mut acc, p| {
+                acc.push(p.0);
+                acc.push(p.1);
+                acc
+            })
+        },
+    )(inp)
+}
 
 #[test]
 fn test_num_token_parser() {
-    assert_eq!(num_ish(CompleteStr("2")), Ok((CompleteStr(""), Num(2))));
+    assert_eq!(num_ish("2"), Ok(("", Num(2))));
     assert_eq!(
-        num_ish(CompleteStr("2b")),
-        Ok((CompleteStr(""), NumericToken::Affixed("2b".to_string())))
+        num_ish("2b"),
+        Ok(("", NumericToken::Affixed("2b".to_string())))
     );
-    assert_eq!(sep(CompleteStr("- ")), Ok((CompleteStr(""), Hyphen)));
-    assert_eq!(sep(CompleteStr(", ")), Ok((CompleteStr(""), Comma)));
+    assert_eq!(sep("- "), Ok(("", Hyphen)));
+    assert_eq!(sep(", "), Ok(("", Comma)));
+    assert_eq!(num_tokens("2, 3"), Ok(("", vec![Num(2), Comma, Num(3)])));
     assert_eq!(
-        num_tokens(CompleteStr("2, 3")),
-        Ok((CompleteStr(""), vec![Num(2), Comma, Num(3)]))
-    );
-    assert_eq!(
-        num_tokens(CompleteStr("2 - 5, 9")),
-        Ok((CompleteStr(""), vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
+        num_tokens("2 - 5, 9"),
+        Ok(("", vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
     );
     assert_eq!(
-        num_tokens(CompleteStr("2 - 5, 9, edition")),
-        Ok((
-            CompleteStr(", edition"),
-            vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
-        ))
+        num_tokens("2 - 5, 9, edition"),
+        Ok((", edition", vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
     );
 }
 
 impl<'r> From<Cow<'r, str>> for NumericValue {
     fn from(input: Cow<'r, str>) -> Self {
-        if let Ok((remainder, parsed)) = num_tokens(CompleteStr(&input)) {
+        if let Ok((remainder, parsed)) = num_tokens(&input) {
             if remainder.is_empty() {
                 NumericValue::Tokens(input.into_owned(), parsed)
             } else {

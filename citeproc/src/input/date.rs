@@ -4,7 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use nom::*;
 /// TODO: parse 2018-3-17 as if it were '03'
 
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
@@ -253,6 +252,15 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take_while_m_n},
+    character::is_digit,
+    combinator::opt,
+    sequence::preceded,
+    IResult,
+};
+
 use std::str::{from_utf8_unchecked, FromStr};
 
 fn to_string(s: &[u8]) -> &str {
@@ -272,122 +280,133 @@ fn buf_to_i32(s: &[u8]) -> i32 {
     to_i32(to_string(s))
 }
 
-named!(take_4_digits, take_while_m_n!(4, 4, is_digit));
+fn take_4_digits(inp: &[u8]) -> IResult<&[u8], &[u8]> {
+    take_while_m_n(4, 4, is_digit)(inp)
+}
 
-// year
-named!(year_prefix, alt!(tag!("+") | tag!("-")));
-named!(
-    year<i32>,
-    do_parse!(
-        pref: opt!(complete!(year_prefix))
-            >> year: call!(take_4_digits)
-            >> (match pref {
-                Some(b"-") => -buf_to_i32(year),
-                _ => buf_to_i32(year),
-            })
-    )
-);
+fn year_prefix(inp: &[u8]) -> IResult<&[u8], &[u8]> {
+    alt((tag("+"), tag("-")))(inp)
+}
 
-// https://github.com/Geal/nom/blob/master/doc/how_nom_macros_work.md
-macro_rules! char_between(
-    ($input:expr, $min:expr, $max:expr) => (
-        {
-        fn f(c: u8) -> bool { c >= ($min as u8) && c <= ($max as u8)}
-        #[allow(clippy::double_comparisons)]
-        take_while_m_n!($input, 1, 1, f)
-        }
-    );
-);
+fn year(inp: &[u8]) -> IResult<&[u8], i32> {
+    let (rem1, pref) = opt(year_prefix)(inp)?;
+    let (rem2, y) = take_4_digits(rem1)?;
+    Ok((
+        rem2,
+        match pref {
+            Some(b"-") => -buf_to_i32(y),
+            _ => buf_to_i32(y),
+        },
+    ))
+}
+
+fn char_between<'a>(min: char, max: char) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
+    take_while_m_n(1, 1, move |c: u8| c >= (min as u8) && c <= (max as u8))
+}
 
 // DD
-named!(
-    day_zero<u32>,
-    do_parse!(tag!("0") >> s: char_between!('1', '9') >> (buf_to_u32(s)))
-);
-named!(
-    day_one<u32>,
-    do_parse!(tag!("1") >> s: char_between!('0', '9') >> (10 + buf_to_u32(s)))
-);
-named!(
-    day_two<u32>,
-    do_parse!(tag!("2") >> s: char_between!('0', '9') >> (20 + buf_to_u32(s)))
-);
-named!(
-    day_three<u32>,
-    do_parse!(tag!("3") >> s: char_between!('0', '1') >> (30 + buf_to_u32(s)))
-);
-named!(day<u32>, alt!(day_zero | day_one | day_two | day_three));
+fn day_zero(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("0"), char_between('1', '9'))(inp)?;
+    Ok((rem, buf_to_u32(dig)))
+}
 
-named!(
-    lower_month<u32>,
-    do_parse!(tag!("0") >> s: char_between!('1', '9') >> (buf_to_u32(s)))
-);
-named!(
-    upper_month<u32>,
-    do_parse!(tag!("1") >> s: char_between!('0', '2') >> (10 + buf_to_u32(s)))
-);
-named!(month<u32>, alt!(lower_month | upper_month));
+fn day_one(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("1"), char_between('0', '9'))(inp)?;
+    Ok((rem, 10 + buf_to_u32(dig)))
+}
+
+fn day_two(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("2"), char_between('0', '9'))(inp)?;
+    Ok((rem, 20 + buf_to_u32(dig)))
+}
+
+fn day_three(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("3"), char_between('0', '1'))(inp)?;
+    Ok((rem, 30 + buf_to_u32(dig)))
+}
+
+fn day(inp: &[u8]) -> IResult<&[u8], u32> {
+    alt((day_zero, day_one, day_two, day_three))(inp)
+}
+
+// MM
+fn lower_month(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("0"), char_between('1', '9'))(inp)?;
+    Ok((rem, buf_to_u32(dig)))
+}
+
+fn upper_month(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, dig) = preceded(tag("1"), char_between('0', '2'))(inp)?;
+    Ok((rem, 10 + buf_to_u32(dig)))
+}
+
+fn month(inp: &[u8]) -> IResult<&[u8], u32> {
+    alt((lower_month, upper_month))(inp)
+}
 
 // Custom stuff built on top of that:
 
-named!(and_day<u32>, do_parse!(tag!("-") >> d: day >> (d)));
+fn and_day(inp: &[u8]) -> IResult<&[u8], u32> {
+    let (rem, _) = tag("-")(inp)?;
+    Ok(day(rem)?)
+}
 
 enum MonthDay {
     Month(u32),
     MonthDay(u32, u32),
 }
 
-named!(
-    month_day<MonthDay>,
-    do_parse!(
-        tag!("-")
-            >> m: month
-            >> ad: opt!(complete!(and_day))
-            >> (match ad {
-                Some(d) => MonthDay::MonthDay(m, d),
-                None => MonthDay::Month(m),
-            })
-    )
-);
+fn month_day(inp: &[u8]) -> IResult<&[u8], MonthDay> {
+    let (rem1, _) = tag("-")(inp)?;
+    let (rem2, m) = month(rem1)?;
+    let (rem3, ad) = opt(and_day)(rem2)?;
+    Ok((
+        rem3,
+        match ad {
+            Some(d) => MonthDay::MonthDay(m, d),
+            None => MonthDay::Month(m),
+        },
+    ))
+}
 
-// YYYY-MM-DD
-named!(
-    ymd_date<Date>,
-    do_parse!(
-        y: year
-            >> md: opt!(complete!(month_day))
-            >> ({
-                match md {
-                    None => Date {
-                        year: y,
-                        month: 0,
-                        day: 0,
-                    },
-                    Some(MonthDay::MonthDay(m, d)) => Date {
-                        year: y,
-                        month: m,
-                        day: d,
-                    },
-                    Some(MonthDay::Month(m)) => Date {
-                        year: y,
-                        month: m,
-                        day: 0,
-                    },
-                }
-            })
-    )
-);
+fn ymd_date(inp: &[u8]) -> IResult<&[u8], Date> {
+    let (rem1, y) = year(inp)?;
+    let (rem2, md) = opt(month_day)(rem1)?;
+    Ok((
+        rem2,
+        match md {
+            None => Date {
+                year: y,
+                month: 0,
+                day: 0,
+            },
+            Some(MonthDay::MonthDay(m, d)) => Date {
+                year: y,
+                month: m,
+                day: d,
+            },
+            Some(MonthDay::Month(m)) => Date {
+                year: y,
+                month: m,
+                day: 0,
+            },
+        },
+    ))
+}
 
-named!(and_ymd<Date>, do_parse!(tag!("/") >> d: ymd_date >> (d)));
+fn and_ymd(inp: &[u8]) -> IResult<&[u8], Date> {
+    let (rem1, _) = tag("/")(inp)?;
+    Ok(ymd_date(rem1)?)
+}
 
-named!(
-    range<DateOrRange>,
-    do_parse!(
-        d1: ymd_date
-            >> d2o: opt!(complete!(and_ymd))
-            >> (match d2o {
-                None => DateOrRange::Single(d1),
-                Some(d2) => DateOrRange::Range(d1, d2),
-            })
-    )
-);
+fn range(inp: &[u8]) -> IResult<&[u8], DateOrRange> {
+    let (rem1, d1) = ymd_date(inp)?;
+    let (rem2, d2o) = opt(and_ymd)(rem1)?;
+    Ok((
+        rem2,
+        match d2o {
+            None => DateOrRange::Single(d1),
+            Some(d2) => DateOrRange::Range(d1, d2),
+        },
+    ))
+}

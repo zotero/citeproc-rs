@@ -114,7 +114,6 @@ impl Processor {
 
     #[cfg(test)]
     pub fn test_db() -> Self {
-        use self::xml::Predefined;
         Processor::safe_default(Arc::new(Predefined(Default::default())))
     }
 

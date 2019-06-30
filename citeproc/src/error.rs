@@ -9,7 +9,7 @@ use std::ops::Range;
 
 use csl::error::Severity as CslSeverity;
 
-use codespan::{CodeMap, FileMap, Span, ByteIndex, ByteSpan};
+use codespan::{ByteIndex, ByteSpan, CodeMap, FileMap, Span};
 use codespan_reporting::termcolor::{ColorChoice, StandardStream};
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
 
@@ -61,12 +61,14 @@ pub(crate) fn diagnostics(err: &StyleError, file_map: &FileMap) -> Vec<Result<Di
 }
 
 fn span_from_range(range: &Range<usize>) -> ByteSpan {
-    Span::new(ByteIndex(range.start as u32 + 1), ByteIndex(range.end as u32 + 1))
+    Span::new(
+        ByteIndex(range.start as u32 + 1),
+        ByteIndex(range.end as u32 + 1),
+    )
 }
 
 pub fn to_diagnostic(inv: &InvalidCsl) -> Option<Diagnostic> {
-    let label = Label::new_primary(span_from_range(&inv.range))
-        .with_message(inv.hint.to_string());
+    let label = Label::new_primary(span_from_range(&inv.range)).with_message(inv.hint.to_string());
     let diag = Diagnostic::new(convert_sev(inv.severity), inv.message.clone()).with_label(label);
     Some(diag)
 }
