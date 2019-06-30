@@ -247,13 +247,10 @@ impl Iterator for InlineIter {
     }
 }
 
-use nom::types::CompleteStr;
-use nom::*;
-
 impl FromStr for Lang {
     type Err = ();
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        if let Ok((remainder, parsed)) = parse_lang(CompleteStr(&input)) {
+        if let Ok((remainder, parsed)) = parse_lang(&input) {
             if remainder.is_empty() {
                 Ok(parsed)
             } else {
@@ -265,56 +262,49 @@ impl FromStr for Lang {
     }
 }
 
-named!(
-    iso_lang<CompleteStr, IsoLang>,
-    map!(take_while_m_n!(2, 3, char::is_alphabetic), |lang| {
+use nom::{
+  IResult,
+  bytes::complete::{tag, take_while_m_n, take_while},
+  combinator::{map, opt},
+  sequence::{tuple, preceded},
+  branch::alt,
+};
+
+fn iso_lang(inp: &str) -> IResult<&str, IsoLang> {
+    map(take_while_m_n(2, 3, char::is_alphabetic), |lang| {
         // You can unwrap because codegen has a default case with no Err output
-        IsoLang::from_str(&lang).unwrap()
-    })
-);
+        IsoLang::from_str(lang).unwrap()
+    })(inp)
+}
 
-named!(
-    iso_country<CompleteStr, IsoCountry>,
-    map!(preceded!(tag!("-"), take_while_m_n!(2, 2, char::is_alphabetic)), |country| {
+fn iso_country(inp: &str) -> IResult<&str, IsoCountry> {
+    map(preceded(tag("-"), take_while_m_n(2, 2, char::is_alphabetic)), |country| {
         // You can unwrap because codegen has a default case with no Err output
-        IsoCountry::from_str(&country).unwrap()
-    })
-);
+        IsoCountry::from_str(country).unwrap()
+    })(inp)
+}
 
-named!(
-    parse_iana<CompleteStr, Lang>,
-    map!(preceded!(
-        tag!("i-"),
-        take_while!(|_| true)
-    ), |lang| {
-        Lang::Iana(Atom::from(lang.as_ref()))
-    })
-);
+fn parse_iana(inp: &str) -> IResult<&str, Lang> {
+    map(preceded(tag("i-"), take_while(|_| true)), |lang| {
+        Lang::Iana(Atom::from(lang))
+    })(inp)
+}
 
-named!(
-    parse_unofficial<CompleteStr, Lang>,
-    map!(preceded!(
-        tag!("x-"),
-        take_while_m_n!(1, 8, char::is_alphanumeric)
-    ), |lang| {
-        Lang::Unofficial(Atom::from(lang.as_ref()))
-    })
-);
+fn parse_unofficial(inp: &str) -> IResult<&str, Lang> {
+    map(preceded(tag("x-"), take_while_m_n(1, 8, char::is_alphanumeric)), |lang| {
+        Lang::Unofficial(Atom::from(lang))
+    })(inp)
+}
 
-named!(
-    parse_iso<CompleteStr, Lang>,
-    map!(tuple!(
-        call!(iso_lang),
-        opt!(call!(iso_country))
-    ), |(lang, country)| {
+fn parse_iso(inp: &str) -> IResult<&str, Lang> {
+    map(tuple((iso_lang, opt(iso_country))), |(lang, country)| {
         Lang::Iso(lang, country)
-    })
-);
+    })(inp)
+}
 
-named!(
-    parse_lang<CompleteStr, Lang>,
-    alt!(call!(parse_unofficial) | call!(parse_iana) | call!(parse_iso))
-);
+fn parse_lang(inp: &str) -> IResult<&str, Lang> {
+    alt((parse_unofficial, parse_iana, parse_iso))(inp)
+}
 
 #[test]
 fn lang_from_str() {

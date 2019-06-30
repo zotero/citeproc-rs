@@ -10,8 +10,6 @@ use std::str::FromStr;
 
 use super::attr::GetAttribute;
 use super::variables::NumberVariable;
-use nom::types::CompleteStr;
-use nom::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TextTermSelector {
@@ -562,7 +560,7 @@ impl FromStr for OrdinalTerm {
             "long-ordinal-09" => Ok(LongOrdinal09),
             "long-ordinal-10" => Ok(LongOrdinal10),
             _ => {
-                if let Ok((CompleteStr(""), o)) = zero_through_99(CompleteStr(s)) {
+                if let Ok(("", o)) = zero_through_99(s) {
                     Ok(o)
                 } else {
                     Err(UnknownAttributeValue::new(s))
@@ -572,21 +570,25 @@ impl FromStr for OrdinalTerm {
     }
 }
 
+use nom::{
+  IResult,
+  bytes::complete::{tag, take_while_m_n},
+  combinator::{map, map_res},
+  sequence::preceded,
+};
+
 fn is_digit(chr: char) -> bool {
     chr as u8 >= 0x30 && (chr as u8) <= 0x39
 }
 
-named!(two_digit_num<CompleteStr, u32>,
-    map_res!(
-        take_while_m_n!(2, 2, is_digit),
-        |s: CompleteStr| s.0.parse()
-    ));
+fn two_digit_num(inp: &str) -> IResult<&str, u32> {
+    map_res(take_while_m_n(2, 2, is_digit), |s: &str| s.parse())(inp)
+}
 
-named!(zero_through_99<CompleteStr, OrdinalTerm>,
-    map!(
-        preceded!(tag!("ordinal-"), call!(two_digit_num)),
-        |n| OrdinalTerm::Mod100(n)
-    ));
+fn zero_through_99(inp: &str) -> IResult<&str, OrdinalTerm> {
+    map(preceded(tag("ordinal-"), two_digit_num),
+        |n| OrdinalTerm::Mod100(n))(inp)
+}
 
 #[cfg(test)]
 #[test]
