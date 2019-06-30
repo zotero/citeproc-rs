@@ -5,10 +5,11 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use csl::error::{InvalidCsl, StyleError};
+use std::ops::Range;
 
 use csl::error::Severity as CslSeverity;
 
-use codespan::{CodeMap, FileMap, Span};
+use codespan::{CodeMap, FileMap, Span, ByteIndex, ByteSpan};
 use codespan_reporting::termcolor::{ColorChoice, StandardStream};
 use codespan_reporting::{emit, Diagnostic, Label, Severity};
 
@@ -38,7 +39,7 @@ pub(crate) fn diagnostics(err: &StyleError, file_map: &FileMap) -> Vec<Result<Di
         StyleError::Invalid(ref invs) => invs
             .0
             .iter()
-            .map(|e| to_diagnostic(e, file_map).ok_or(e.message.clone()))
+            .map(|e| to_diagnostic(e).ok_or(e.message.clone()))
             .collect(),
         StyleError::ParseError(ref e) => {
             let pos = e.pos();
@@ -59,14 +60,12 @@ pub(crate) fn diagnostics(err: &StyleError, file_map: &FileMap) -> Vec<Result<Di
     }
 }
 
-pub fn to_diagnostic(inv: &InvalidCsl, file_map: &FileMap) -> Option<Diagnostic> {
-    let str_start = file_map
-        .byte_index(
-            (inv.text_pos.row - 1 as u32).into(),
-            (inv.text_pos.col - 1 as u32).into(),
-        )
-        .ok()?;
-    let label = Label::new_primary(Span::from_offset(str_start, (inv.len as i64).into()))
+fn span_from_range(range: &Range<usize>) -> ByteSpan {
+    Span::new(ByteIndex(range.start as u32 + 1), ByteIndex(range.end as u32 + 1))
+}
+
+pub fn to_diagnostic(inv: &InvalidCsl) -> Option<Diagnostic> {
+    let label = Label::new_primary(span_from_range(&inv.range))
         .with_message(inv.hint.to_string());
     let diag = Diagnostic::new(convert_sev(inv.severity), inv.message.clone()).with_label(label);
     Some(diag)

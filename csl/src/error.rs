@@ -5,8 +5,9 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::variables::*;
-use roxmltree::{Node, TextPos};
+use roxmltree::Node;
 use std::num::ParseIntError;
+use std::ops::Range;
 
 #[derive(Debug, PartialEq)]
 pub struct UnknownAttributeValue {
@@ -49,9 +50,7 @@ pub enum Severity {
 pub struct InvalidCsl {
     pub severity: Severity,
     // TODO: serialize_with or otherwise get this into the output
-    #[serde(skip_serializing)]
-    pub text_pos: TextPos,
-    pub len: usize,
+    pub range: Range<usize>,
     pub message: String,
     pub hint: String,
 }
@@ -139,11 +138,9 @@ impl NeedVarType {
 
 impl InvalidCsl {
     pub fn new(node: &Node, message: &str) -> Self {
-        let mut pos = node.node_pos();
-        pos.col += 1;
+        let range = node.range();
         InvalidCsl {
-            text_pos: pos,
-            len: node.tag_name().name().len(),
+            range,
             severity: Severity::Error,
             hint: "".to_string(),
             message: message.to_owned(),
@@ -151,11 +148,10 @@ impl InvalidCsl {
     }
 
     pub fn bad_int(node: &Node, attr: &str, uav: &ParseIntError) -> Self {
+        let at = node.attribute_node(attr).unwrap();
+        let range = at.range();
         InvalidCsl {
-            text_pos: node
-                .attribute_value_pos(attr)
-                .unwrap_or_else(|| node.node_pos()),
-            len: node.attribute("attr").map(|a| a.len()).unwrap_or_else(|| 1),
+            range,
             message: format!("Invalid integer value for {}: {:?}", attr, uav),
             hint: "".to_string(),
             severity: Severity::Error,
@@ -167,12 +163,10 @@ impl InvalidCsl {
     }
 
     pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
-        let full_val = node.attribute(attr);
+        let at = node.attribute_node(attr).unwrap();
+        let range = at.range();
         InvalidCsl {
-            text_pos: node
-                .attribute_value_pos(attr)
-                .unwrap_or_else(|| node.node_pos()),
-            len: full_val.map(|v| v.len()).unwrap_or(1),
+            range,
             message: format!("Unknown attribute value for `{}`: \"{}\"", attr, uav),
             hint: "".to_string(),
             severity: Severity::Error,
@@ -186,13 +180,11 @@ impl InvalidCsl {
         needed: NeedVarType,
         got: Option<AnyVariable>,
     ) -> Self {
-        let full_val = node.attribute(attr);
+        let at = node.attribute_node(attr).unwrap();
+        let range = at.range();
         let (message, hint, severity) = needed.hint(attr, uav, got);
         InvalidCsl {
-            text_pos: node
-                .attribute_value_pos(attr)
-                .unwrap_or_else(|| node.node_pos()),
-            len: full_val.map(|v| v.len()).unwrap_or(1),
+            range,
             message,
             hint,
             severity,
@@ -239,8 +231,7 @@ impl Default for StyleError {
     fn default() -> Self {
         StyleError::Invalid(CslError(vec![InvalidCsl {
             severity: Severity::Error,
-            text_pos: TextPos::new(1, 1),
-            len: 0,
+            range: 1usize..2usize,
             hint: "".to_string(),
             message: "".to_string(),
         }]))
