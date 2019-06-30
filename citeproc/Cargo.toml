@@ -28,26 +28,26 @@ cli = ["clap", "directories"]
 [dependencies]
 csl = { path = "../csl" }
 pandoc_types = { path = "../pandoc-types" }
-cfg-if = "0.1.2"
-codespan = { version = "0.2.0", optional = false }
-codespan-reporting = { version = "0.2.0", optional = false }
-serde = "1.0.80"
-serde_derive = "1.0.80"
-serde_json = "1.0.33"
+cfg-if = "0.1.9"
+codespan = { version = "0.3.0", optional = false }
+codespan-reporting = { version = "0.3.0", optional = false }
+serde = "1.0.94"
+serde_derive = "1.0.94"
+serde_json = "1.0.39"
 fnv = "1.0.6"
 nom = "4"
-itertools = "0.7.11"
+itertools = "0.8.0"
 ucd-trie = "0.1.1"
-salsa = "0.10.0"
+salsa = "0.12.3"
 
-clap = { version = "2.32.0", optional = true }
-rayon = { version = "1.0.3", optional = true }
-directories = { version = "1.0.2", optional = true }
-jemallocator = { version = "0.1.9", optional = true }
+clap = { version = "2.33.0", optional = true }
+rayon = { version = "1.1.0", optional = true }
+directories = { version = "2.0.1", optional = true }
+jemallocator = { version = "0.3.2", optional = true }
 atty = "0.2.11"
 
 [dev-dependencies]
-criterion = "0.2"
+criterion = "0.2.11"
 
 # [[bench]]
 # name = "some"
