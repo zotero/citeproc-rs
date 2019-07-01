@@ -90,10 +90,11 @@ impl USFetcher {
 impl LocaleFetcher for USFetcher {
     fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
         Ok(self.cache.get(lang).cloned().unwrap_or_else(|| {
-            String::from(
+            format!(
                 r#"<?xml version="1.0" encoding="utf-8"?>
-        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="{}">
         </locale>"#,
+                lang.to_string()
             )
         }))
     }

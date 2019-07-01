@@ -116,8 +116,7 @@ fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
 fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
     let cite = db.cite(id);
     let refr = db.reference(cite.ref_id.clone());
-    refr
-        .and_then(|r| r.language.clone())
+    refr.and_then(|r| r.language.clone())
         .map(|l| db.merged_locale(l))
         .unwrap_or_else(|| db.default_locale())
 }

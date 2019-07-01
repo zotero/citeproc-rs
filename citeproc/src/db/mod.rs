@@ -28,8 +28,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use csl::error::StyleError;
-use csl::style::{Position, Style};
 use csl::locale::Lang;
+use csl::style::{Position, Style};
 
 use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
 use crate::output::OutputFormat;
@@ -252,10 +252,13 @@ impl Processor {
             langs.insert(lang.clone());
             self.set_locale_input_xml(lang, Arc::new(xml));
         }
+        self.set_locale_input_langs(Arc::new(langs));
     }
 
     pub fn get_langs_in_use(&self) -> Vec<Lang> {
-        let mut langs: Vec<Lang> = self.all_keys().iter()
+        let mut langs: Vec<Lang> = self
+            .all_keys()
+            .iter()
             .filter_map(|ref_id| self.reference(ref_id.clone()))
             .filter_map(|refr| refr.language.clone())
             .collect();
@@ -268,5 +271,4 @@ impl Processor {
         let langs = self.locale_input_langs();
         langs.contains(lang)
     }
-
 }

@@ -100,6 +100,23 @@ fn test_file_iter() {
     );
 }
 
+#[test]
+fn test_french() {
+    let fr_fr = Lang::Iso(IsoLang::French, Some(IsoCountry::FR));
+    let fr = Lang::Iso(IsoLang::French, None);
+    let en_us = Lang::Iso(IsoLang::English, Some(IsoCountry::US));
+    assert_eq!(
+        fr_fr.iter().collect::<Vec<_>>(),
+        &[
+            LocaleSource::Inline(Some(fr_fr.clone())),
+            LocaleSource::Inline(Some(fr)),
+            LocaleSource::Inline(None),
+            LocaleSource::File(fr_fr),
+            LocaleSource::File(en_us),
+        ]
+    );
+}
+
 impl fmt::Display for Lang {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -263,11 +280,11 @@ impl FromStr for Lang {
 }
 
 use nom::{
-  IResult,
-  bytes::complete::{tag, take_while_m_n, take_while},
-  combinator::{map, opt},
-  sequence::{tuple, preceded},
-  branch::alt,
+    branch::alt,
+    bytes::complete::{tag, take_while, take_while_m_n},
+    combinator::{map, opt},
+    sequence::{preceded, tuple},
+    IResult,
 };
 
 fn iso_lang(inp: &str) -> IResult<&str, IsoLang> {
@@ -278,10 +295,13 @@ fn iso_lang(inp: &str) -> IResult<&str, IsoLang> {
 }
 
 fn iso_country(inp: &str) -> IResult<&str, IsoCountry> {
-    map(preceded(tag("-"), take_while_m_n(2, 2, char::is_alphabetic)), |country| {
-        // You can unwrap because codegen has a default case with no Err output
-        IsoCountry::from_str(country).unwrap()
-    })(inp)
+    map(
+        preceded(tag("-"), take_while_m_n(2, 2, char::is_alphabetic)),
+        |country| {
+            // You can unwrap because codegen has a default case with no Err output
+            IsoCountry::from_str(country).unwrap()
+        },
+    )(inp)
 }
 
 fn parse_iana(inp: &str) -> IResult<&str, Lang> {
@@ -291,9 +311,10 @@ fn parse_iana(inp: &str) -> IResult<&str, Lang> {
 }
 
 fn parse_unofficial(inp: &str) -> IResult<&str, Lang> {
-    map(preceded(tag("x-"), take_while_m_n(1, 8, char::is_alphanumeric)), |lang| {
-        Lang::Unofficial(Atom::from(lang))
-    })(inp)
+    map(
+        preceded(tag("x-"), take_while_m_n(1, 8, char::is_alphanumeric)),
+        |lang| Lang::Unofficial(Atom::from(lang)),
+    )(inp)
 }
 
 fn parse_iso(inp: &str) -> IResult<&str, Lang> {
