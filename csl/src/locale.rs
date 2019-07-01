@@ -82,9 +82,13 @@ impl FromStr for Locale {
     }
 }
 
+/// This is always bound to the prefix "xml:"
+const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
+// const CSL_NAMESPACE: &str = "http://purl.org/net/xbiblio/csl";
+
 impl FromNode for Locale {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let lang = attribute_option(node, ("xml", "lang"), info)?;
+        let lang = attribute_option(node, (XML_NAMESPACE, "lang"), info)?;
 
         // TODO: one slot for each date form, avoid allocations?
         let dates_vec = node

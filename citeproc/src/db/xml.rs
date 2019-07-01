@@ -84,17 +84,18 @@ fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
 }
 
 fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
-    let locales: Vec<_> = key.iter().filter_map(|ls| db.locale(ls)).collect();
-    if locales.len() >= 1 {
-        // could fold, but we only need to clone the base
-        let mut base = (*locales[locales.len() - 1]).clone();
-        for nxt in locales.into_iter().rev().skip(1) {
-            base.merge(&nxt);
-        }
-        Arc::new(base)
-    } else {
-        Arc::new(Locale::default())
-    }
+    let locales = key
+        .iter()
+        .filter_map(|src| db.locale(src))
+        .collect::<Vec<_>>();
+    Arc::new(locales
+        .into_iter()
+        .rev()
+        .fold(None, |mut acc, l| match acc {
+            None => Some((*l).clone()),
+            Some(ref mut base) => { base.merge(&l); acc }
+        })
+        .unwrap_or_else(Locale::default))
 }
 
 fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {

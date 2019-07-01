@@ -255,7 +255,7 @@ impl Processor {
     }
 
     pub fn get_langs_in_use(&self) -> Vec<Lang> {
-        let mut langs: Vec<Lang> = self.disamb_participants().iter()
+        let mut langs: Vec<Lang> = self.all_keys().iter()
             .filter_map(|ref_id| self.reference(ref_id.clone()))
             .filter_map(|refr| refr.language.clone())
             .collect();
