@@ -32,6 +32,7 @@ pub use group::GroupVars;
 pub trait ProcDatabase: StyleDatabase {
     // TODO: get locales based on the current reference's language field
     fn default_locale(&self) -> Arc<Locale>;
+    fn locale(&self, id: CiteId) -> Arc<Locale>;
     fn style_el(&self) -> Arc<Style>;
     fn cite_pos(&self, id: CiteId) -> csl::style::Position;
     /// 'First Reference Note Number' -- the number of the footnote containing the first cite
@@ -210,7 +211,7 @@ where
                         (IR::Rendered(content), gv)
                     }
                     TextSource::Term(term_selector, plural) => {
-                        let locale = db.default_locale();
+                        let locale = db.locale(ctx.cite.id);
                         let content = locale
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
@@ -235,7 +236,7 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        let locale = db.default_locale();
+                        let locale = db.locale(ctx.cite.id);
                         locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f, &af))

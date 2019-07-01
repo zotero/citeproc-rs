@@ -263,4 +263,10 @@ impl Processor {
         langs.push(style.default_locale.clone());
         langs
     }
+
+    pub fn has_cached_locale(&self, lang: &Lang) -> bool {
+        let langs = self.locale_input_langs();
+        langs.contains(lang)
+    }
+
 }

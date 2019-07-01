@@ -63,6 +63,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::dependencies]
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
+    fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
+
     fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
 }
 
@@ -75,6 +77,10 @@ where
     #[inline]
     fn default_locale(&self) -> Arc<Locale> {
         self.merged_locale(self.style().default_locale.clone())
+    }
+    #[inline]
+    fn locale(&self, id: CiteId) -> Arc<Locale> {
+        self.locale_by_cite(id)
     }
     #[inline]
     fn style_el(&self) -> Arc<Style> {
@@ -105,6 +111,15 @@ fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     } else {
         None
     }
+}
+
+fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
+    let cite = db.cite(id);
+    let refr = db.reference(cite.ref_id.clone());
+    refr
+        .and_then(|r| r.language.clone())
+        .map(|l| db.merged_locale(l))
+        .unwrap_or_else(|| db.default_locale())
 }
 
 // only call with real references please
