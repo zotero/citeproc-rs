@@ -15,17 +15,16 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# wasm-pack has no way of selecting feature sets, so this is wasm's
-
-# uncomment for development.
-# don't leave this here when you commit
-# default = ["console_error_panic_hook"]
+# use --features console
+console = ["console_error_panic_hook", "console_log", "fern"]
+default = []
 
 [dependencies]
 citeproc = { path = "../citeproc", default-features = false, features=[] }
 csl = { path = "../csl" }
 cfg-if = "0.1.9"
-
+console_log = { version = "0.1.2", optional = true }
+fern = { version = "0.5.7", optional = true }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -49,6 +48,12 @@ serde_derive = "1.0.94"
 [dependencies.wasm-bindgen]
 version = "0.2.47"
 features = ["serde-serialize"]
+
+[dependencies.log]
+version = "0.4.6"
+features = ["release_max_level_error"]
+# this doesn't work
+# [target.'cfg(not(feature="console"))'.dependencies.log]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2.47"

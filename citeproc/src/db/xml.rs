@@ -77,13 +77,22 @@ fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
     match key {
         LocaleSource::File(ref lang) => {
             let string = db.locale_xml(lang.clone());
-            string.and_then(|s| Locale::from_str(&s).ok()).map(Arc::new)
+            string.and_then(|s| {
+                match Locale::from_str(&s) {
+                    Ok(l) => Some(l),
+                    Err(e) => {
+                        error!("failed to parse locale for lang {}: {:?}", lang, e);
+                        None
+                    }
+                }
+            }).map(Arc::new)
         }
         LocaleSource::Inline(ref lang) => db.inline_locale(lang.clone()),
     }
 }
 
 fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
+    info!("requested locale {:?}", key);
     let locales = key
         .iter()
         .filter_map(|src| db.locale(src))

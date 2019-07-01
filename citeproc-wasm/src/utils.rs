@@ -5,6 +5,11 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use cfg_if::cfg_if;
+use std::collections::HashMap;
+use citeproc::LocaleFetcher;
+use csl::locale::Lang;
+use wasm_bindgen::prelude::*;
+use serde::de::DeserializeOwned;
 
 cfg_if! {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -21,4 +26,108 @@ cfg_if! {
         #[allow(dead_code)]
         pub fn set_panic_hook() {}
     }
+}
+
+cfg_if! {
+    if #[cfg(feature = "console")] {
+        pub fn init_log() {
+            fern::Dispatch::new()
+                .level(log::LevelFilter::Debug)
+                .level_for("salsa", log::LevelFilter::Info)
+                .level_for("salsa::derived", log::LevelFilter::Warn)
+                .format(|out, message, record| {
+                    out.finish(format_args!(
+                        "[{}][{}] {}",
+                        record.level(),
+                        record.target(),
+                        message
+                    ))
+                })
+                .chain(fern::Output::call(raw_js_log))
+                .apply()
+                .unwrap_or(());
+        }
+    } else {
+        pub fn init_log() {
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ErrorPlaceholder(String);
+
+impl ErrorPlaceholder {
+    pub fn throw(msg: &str) -> JsValue {
+        JsValue::from_serde(&ErrorPlaceholder(msg.to_string())).unwrap()
+    }
+}
+
+pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue> where T : DeserializeOwned {
+    let xs: Result<Vec<T>, _> = js.iter().map(|x| x.into_serde()).collect();
+    xs
+        // TODO: remove Debug code
+        .map_err(|e| ErrorPlaceholder::throw(&format!("could not deserialize array: {:?}", e)))
+}
+
+/// A basic cache that includes en-US statically, so it never has to be async-fetched
+pub struct USFetcher {
+    cache: HashMap<Lang, String>,
+}
+
+// ~2kB gzipped, and prevents the same initial fetch every single time.
+const EN_US: &'static str = include_str!("locales-en-US.xml");
+
+impl USFetcher {
+    pub fn new() -> Self {
+        let mut cache = HashMap::new();
+        cache.insert(Lang::en_us(), EN_US.to_string());
+        USFetcher {
+            cache,
+        }
+    }
+}
+
+impl LocaleFetcher for USFetcher {
+    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+        Ok(self.cache.get(lang).cloned().unwrap_or_else(|| {
+            String::from(
+                r#"<?xml version="1.0" encoding="utf-8"?>
+        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
+        </locale>"#,
+            )
+        }))
+    }
+}
+
+// A version of the console_log crate that might be smaller than using web_sys
+
+use log::{Level, Record};
+
+#[wasm_bindgen]
+extern "C" {
+    // Use `js_namespace` here to bind `console.log(..)` instead of just
+    // `log(..)`
+    #[wasm_bindgen(js_namespace = console)]
+    fn debug(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    fn info(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    fn warn(s: &str);
+    #[wasm_bindgen(js_namespace = console)]
+    fn error(s: &str);
+}
+
+pub fn raw_js_log(record: &Record) {
+    // pick the console.log() variant for the appropriate logging level
+    let console_log = match record.level() {
+        Level::Error => error,
+        Level::Warn => warn,
+        Level::Info => info,
+        Level::Debug => log,
+        Level::Trace => debug,
+    };
+
+    console_log(&format!("{}", record.args()));
 }
