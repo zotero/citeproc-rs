@@ -2,7 +2,7 @@ const { Driver } = require('../pkg');
 
 class Fetcher {
   async fetchLocale(lang) {
-    console.log("did fetch lang: ", lang)
+    console.log("did fetch lang:", lang);
     let loc = '<?xml version="1.0" encoding="utf-8"?><locale xml:lang="' + lang + '"><terms><term name="edition">SUCCESS</term></terms></locale>';
     return loc;
   }

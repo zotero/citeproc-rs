@@ -10,19 +10,20 @@ mod utils;
 
 #[macro_use]
 extern crate serde_derive;
+#[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 
-use std::rc::Rc;
+use js_sys::Promise;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::futures_0_3::{JsFuture, future_to_promise};
-use js_sys::Promise;
+use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
-use csl::locale::Lang;
 use citeproc::input::ClusterId;
 use citeproc::Processor;
+use csl::locale::Lang;
 
 #[wasm_bindgen]
 pub struct Driver {
@@ -45,7 +46,10 @@ impl Driver {
 
         // The Driver manually adds locales fetched via PromiseFetcher, which asks the consumer
         // asynchronously.
-        Ok(Driver { engine, fetcher: promise_fetcher })
+        Ok(Driver {
+            engine,
+            fetcher: promise_fetcher,
+        })
     }
 
     #[wasm_bindgen(js_name = "setReferences")]
@@ -56,7 +60,13 @@ impl Driver {
 
     #[wasm_bindgen(js_name = "toFetch")]
     pub fn locales_to_fetch(&self) -> JsValue {
-        let langs: Vec<String> = self.engine.borrow().get_langs_in_use().iter().map(|l| l.to_string()).collect();
+        let langs: Vec<String> = self
+            .engine
+            .borrow()
+            .get_langs_in_use()
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
         JsValue::from_serde(&langs).unwrap()
     }
 
@@ -101,7 +111,6 @@ impl Driver {
         };
         future_to_promise(future())
     }
-
 }
 
 #[wasm_bindgen]
@@ -148,4 +157,3 @@ async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, Strin
     }
     pairs
 }
-

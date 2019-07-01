@@ -571,10 +571,10 @@ impl FromStr for OrdinalTerm {
 }
 
 use nom::{
-  IResult,
-  bytes::complete::{tag, take_while_m_n},
-  combinator::{map, map_res},
-  sequence::preceded,
+    bytes::complete::{tag, take_while_m_n},
+    combinator::{map, map_res},
+    sequence::preceded,
+    IResult,
 };
 
 fn is_digit(chr: char) -> bool {
@@ -586,8 +586,9 @@ fn two_digit_num(inp: &str) -> IResult<&str, u32> {
 }
 
 fn zero_through_99(inp: &str) -> IResult<&str, OrdinalTerm> {
-    map(preceded(tag("ordinal-"), two_digit_num),
-        |n| OrdinalTerm::Mod100(n))(inp)
+    map(preceded(tag("ordinal-"), two_digit_num), |n| {
+        OrdinalTerm::Mod100(n)
+    })(inp)
 }
 
 #[cfg(test)]

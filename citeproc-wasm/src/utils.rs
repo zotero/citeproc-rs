@@ -5,11 +5,11 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use cfg_if::cfg_if;
-use std::collections::HashMap;
 use citeproc::LocaleFetcher;
 use csl::locale::Lang;
-use wasm_bindgen::prelude::*;
 use serde::de::DeserializeOwned;
+use std::collections::HashMap;
+use wasm_bindgen::prelude::*;
 
 cfg_if! {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -62,7 +62,10 @@ impl ErrorPlaceholder {
     }
 }
 
-pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue> where T : DeserializeOwned {
+pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue>
+where
+    T: DeserializeOwned,
+{
     let xs: Result<Vec<T>, _> = js.iter().map(|x| x.into_serde()).collect();
     xs
         // TODO: remove Debug code
@@ -81,9 +84,7 @@ impl USFetcher {
     pub fn new() -> Self {
         let mut cache = HashMap::new();
         cache.insert(Lang::en_us(), EN_US.to_string());
-        USFetcher {
-            cache,
-        }
+        USFetcher { cache }
     }
 }
 
@@ -120,6 +121,7 @@ extern "C" {
     fn error(s: &str);
 }
 
+#[allow(dead_code)]
 pub fn raw_js_log(record: &Record) {
     // pick the console.log() variant for the appropriate logging level
     let console_log = match record.level() {
