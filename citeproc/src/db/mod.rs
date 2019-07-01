@@ -21,6 +21,7 @@ use self::cite::CiteDatabaseStorage;
 use self::ir::IrDatabaseStorage;
 use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 
+#[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -28,6 +29,7 @@ use std::sync::Arc;
 
 use csl::error::StyleError;
 use csl::style::{Position, Style};
+use csl::locale::Lang;
 
 use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
 use crate::output::OutputFormat;
@@ -43,7 +45,7 @@ use crate::Atom;
 )]
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
-    fetcher: Arc<dyn LocaleFetcher>,
+    pub fetcher: Arc<dyn LocaleFetcher>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -68,6 +70,7 @@ impl salsa::Database for Processor {
     }
 }
 
+#[cfg(feature = "rayon")]
 impl ParallelDatabase for Processor {
     fn snapshot(&self) -> Snapshot<Self> {
         Snapshot::new(Processor {
@@ -85,7 +88,9 @@ impl HasFetcher for Processor {
 
 // need a Clone impl for map_with
 // thanks to rust-analyzer for the tip
+#[cfg(feature = "rayon")]
 struct Snap(pub salsa::Snapshot<Processor>);
+#[cfg(feature = "rayon")]
 impl Clone for Snap {
     fn clone(&self) -> Self {
         Snap(self.0.snapshot())
@@ -102,6 +107,7 @@ impl Processor {
         db.set_style(Default::default());
         db.set_all_uncited(Default::default());
         db.set_cluster_ids(Arc::new(vec![]));
+        db.set_locale_input_langs(Default::default());
         db
     }
 
@@ -114,6 +120,7 @@ impl Processor {
 
     #[cfg(test)]
     pub fn test_db() -> Self {
+        use self::xml::Predefined;
         Processor::safe_default(Arc::new(Predefined(Default::default())))
     }
 
@@ -237,5 +244,23 @@ impl Processor {
 
     pub fn get_style(&self) -> Arc<Style> {
         self.style()
+    }
+
+    pub fn store_locales(&mut self, locales: Vec<(Lang, String)>) {
+        let mut langs = (*self.locale_input_langs()).clone();
+        for (lang, xml) in locales {
+            langs.insert(lang.clone());
+            self.set_locale_input_xml(lang, Arc::new(xml));
+        }
+    }
+
+    pub fn get_langs_in_use(&self) -> Vec<Lang> {
+        let mut langs: Vec<Lang> = self.disamb_participants().iter()
+            .filter_map(|ref_id| self.reference(ref_id.clone()))
+            .filter_map(|refr| refr.language.clone())
+            .collect();
+        let style = self.style();
+        langs.push(style.default_locale.clone());
+        langs
     }
 }

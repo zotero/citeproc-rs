@@ -22,7 +22,7 @@ crate-type = ["cdylib", "rlib"]
 # default = ["console_error_panic_hook"]
 
 [dependencies]
-citeproc = { path = "../citeproc", default-features = false }
+citeproc = { path = "../citeproc", default-features = false, features=[] }
 csl = { path = "../csl" }
 cfg-if = "0.1.9"
 
@@ -39,6 +39,12 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 #
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 wee_alloc = { version = "0.4.4", optional = true }
+
+# futures_0_3 lets us use std::future ahead of the of the July 4 release
+wasm-bindgen-futures = { version = "0.3.24", features = ["futures_0_3"] }
+js-sys = "0.3.24"
+serde = "1.0.94"
+serde_derive = "1.0.94"
 
 [dependencies.wasm-bindgen]
 version = "0.2.47"

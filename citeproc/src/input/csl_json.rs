@@ -19,17 +19,48 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
-use csl::style::CslType;
 use csl::variables::AnyVariable;
-use csl::version::Features;
 use csl::GetAttribute;
+use csl::style::CslType;
+use csl::version::Features;
 
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
 use crate::input::reference::Reference;
 use fnv::FnvHashMap;
-// Temporary. Make it dynamic later.
 use std::marker::PhantomData;
+
+use csl::locale::Lang;
+
+struct LanguageVisitor;
+
+impl<'de> Visitor<'de> for LanguageVisitor {
+    type Value = Lang;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a valid language code")
+    }
+
+    fn visit_str<E>(self, key: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Lang::from_str(key).map_err(|_e| de::Error::unknown_field(key, &["language"]))
+    }
+}
+
+pub struct WrapLang(Lang);
+
+impl<'de> Deserialize<'de> for WrapLang {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer
+            .deserialize_identifier(LanguageVisitor)
+            .map(WrapLang)
+    }
+}
 
 struct CslVariantVisitor<T>(Features, &'static [&'static str], PhantomData<T>);
 
@@ -53,6 +84,7 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
 enum Field {
     Id,
     Type,
+    Language,
     Any(WrapVar),
 }
 
@@ -112,6 +144,7 @@ impl<'de> Deserialize<'de> for Reference {
             {
                 let mut id = None;
                 let mut csl_type: Option<WrapType> = None;
+                let mut language = None;
                 let mut ordinary = FnvHashMap::default();
                 let mut number = FnvHashMap::default();
                 let mut name = FnvHashMap::default();
@@ -123,6 +156,9 @@ impl<'de> Deserialize<'de> for Reference {
                         }
                         Field::Type => {
                             csl_type = Some(map.next_value()?);
+                        }
+                        Field::Language => {
+                            language = Some(map.next_value()?).map(|WrapLang(l)| l);
                         }
                         Field::Any(WrapVar(AnyVariable::Ordinary(v))) => {
                             match ordinary.entry(v) {
@@ -173,6 +209,7 @@ impl<'de> Deserialize<'de> for Reference {
                 Ok(Reference {
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
                     csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
+                    language,
                     ordinary,
                     number,
                     name,
@@ -470,7 +507,8 @@ impl<'de> Deserialize<'de> for DateOrRange {
             }
         }
 
-        const DATE_TYPES: &[&str] = &["date-parts", "season", "circa", "literal", "raw"];
+        const DATE_TYPES: &[&str] =
+            &["date-parts", "season", "circa", "literal", "raw"];
         deserializer.deserialize_struct("DateOrRange", DATE_TYPES, DateVisitor)
     }
 }

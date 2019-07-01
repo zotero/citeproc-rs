@@ -13,7 +13,7 @@ use crate::Atom;
 pub type CiteId = u32;
 pub type ClusterId = u32;
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub enum Suppression {
     // For author-in-text, or whatever the style author wants to put inline.
     //
@@ -36,7 +36,7 @@ impl Suppression {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub struct Locator(LocatorType, NumericValue);
 
 impl Locator {
@@ -51,19 +51,25 @@ impl Locator {
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Cite<O: OutputFormat> {
     pub id: CiteId,
     pub ref_id: Atom,
+    #[serde(default)]
     pub prefix: O::Build,
+    #[serde(default)]
     pub suffix: O::Build,
+    #[serde(default)]
     pub suppression: Option<Suppression>,
     // TODO: parse these out of the locator string
     // Enforce len() == 1 in CSL mode
+    #[serde(default)]
     pub locators: Vec<Locator>,
     // CSL-M only
+    #[serde(default)]
     pub locator_extra: Option<String>,
     // CSL-M only
+    #[serde(default)]
     pub locator_date: Option<DateOrRange>,
 }
 
@@ -82,7 +88,7 @@ impl<O: OutputFormat> Cite<O> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct Cluster<O: OutputFormat> {
     pub id: ClusterId,
     pub cites: Vec<Cite<O>>,

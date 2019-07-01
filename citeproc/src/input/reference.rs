@@ -14,6 +14,7 @@ use super::date::DateOrRange;
 use super::names::Name;
 use super::numeric::NumericValue;
 use crate::Atom;
+use csl::locale::Lang;
 use csl::style::CslType;
 use csl::variables::{DateVariable, NameVariable, NumberVariable, Variable};
 
@@ -22,6 +23,7 @@ use csl::variables::{DateVariable, NameVariable, NumberVariable, Variable};
 pub struct Reference {
     pub id: Atom,
     pub csl_type: CslType,
+    pub language: Option<Lang>,
 
     // each field type gets its own hashmap, as its data type is different
     // and writing a Fn(Variable::Xxx) -> CslJson.xxx; would be O(n)
@@ -31,7 +33,6 @@ pub struct Reference {
     pub number: FnvHashMap<NumberVariable, NumericValue>,
     pub name: FnvHashMap<NameVariable, Vec<Name>>,
     pub date: FnvHashMap<DateVariable, DateOrRange>,
-    // TODO: language field
 }
 
 impl Reference {
@@ -39,6 +40,7 @@ impl Reference {
         Reference {
             id,
             csl_type,
+            language: None,
             ordinary: FnvHashMap::default(),
             number: FnvHashMap::default(),
             name: FnvHashMap::default(),

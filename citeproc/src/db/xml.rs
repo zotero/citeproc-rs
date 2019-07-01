@@ -13,6 +13,7 @@ use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource},
     style::{Name, Style},
 };
+use fnv::FnvHashSet;
 
 pub trait HasFetcher {
     fn get_fetcher(&self) -> Arc<dyn LocaleFetcher>;
@@ -37,6 +38,11 @@ fn name_citation(db: &impl StyleDatabase) -> Arc<Name> {
 /// Salsa interface to locales, including merging.
 #[salsa::query_group(LocaleDatabaseStorage)]
 pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
+    #[salsa::input]
+    fn locale_input_xml(&self, key: Lang) -> Arc<String>;
+    #[salsa::input]
+    fn locale_input_langs(&self) -> Arc<FnvHashSet<Lang>>;
+
     /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
 
@@ -56,6 +62,10 @@ pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
 }
 
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
+    let stored = db.locale_input_langs();
+    if stored.contains(&key) {
+        return Some(db.locale_input_xml(key));
+    }
     db.get_fetcher().fetch_string(&key).ok().map(Arc::new)
 }
 
@@ -92,8 +102,17 @@ fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
     Arc::new(LocaleOptions::from_merged(merged))
 }
 
-pub trait LocaleFetcher: Send + Sync {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(feature = "rayon")] {
+        pub trait LocaleFetcher: Send + Sync {
+            fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+        }
+    } else {
+        pub trait LocaleFetcher {
+            fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+        }
+    }
 }
 
 #[derive(Debug)]

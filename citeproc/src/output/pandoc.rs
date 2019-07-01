@@ -13,7 +13,7 @@ use csl::style::{
 use pandoc_types::definition::Inline::*;
 use pandoc_types::definition::{Attr, Inline, QuoteType, Target};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Pandoc {}
 
 impl Default for Pandoc {
