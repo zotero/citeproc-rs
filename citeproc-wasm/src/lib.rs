@@ -94,17 +94,21 @@ impl Driver {
         let rc = self.engine.clone();
         let fetcher = self.fetcher.clone();
         let future = async move || -> Result<JsValue, JsValue> {
-            let pairs = {
+            // Keep these two RefCell borrows short-lived. The { scope } ensures the first borrow
+            // ends before the JS code runs indefinitely. Just in case someone calls the Driver
+            // while a request is in-flight. The ultimate effect is that the RefCell is only
+            // borrowed for the time that the Rust code is in control.
+            let langs: Vec<Lang> = {
                 let eng = rc.borrow();
-                let langs: Vec<Lang> = eng
+                eng
                     .get_langs_in_use()
                     .iter()
                     // we definitely have en-US, it's statically included
                     .filter(|l| **l != Lang::en_us() && !eng.has_cached_locale(l))
                     .cloned()
-                    .collect();
-                fetch_all(&fetcher, langs).await
+                    .collect()
             };
+            let pairs = fetch_all(&fetcher, langs).await;
             let mut eng = rc.borrow_mut();
             eng.store_locales(pairs);
             Ok(JsValue::null())
@@ -120,8 +124,14 @@ extern "C" {
 
     #[wasm_bindgen(method, js_name = "fetchLocale")]
     fn fetch_locale(this: &PromiseFetcher, lang: &str) -> Promise;
+
+    #[wasm_bindgen(js_name = "error", js_namespace = console)]
+    fn log_js_error(val: JsValue);
 }
 
+// TODO: include note about free()-ing the Driver before an async fetchLocale() call comes back (in
+// which case the Driver reference held to by the promise handler function is now a dangling
+// wasm-bindgen pointer).
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &'static str = r#"
 
@@ -158,7 +168,10 @@ async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, Strin
                 None => {}
             }
             // ~= Promise.catch; some async JS code threw an Error.
-            Err(_e) => error!("caught: failed to fetch lang {}", lang),
+            Err(e) => {
+                error!("caught: failed to fetch lang {}", lang);
+                log_js_error(e);
+            }
         }
     }
     pairs
