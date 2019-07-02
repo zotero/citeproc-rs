@@ -13,10 +13,11 @@ members = [
 ]
 
 [profile.bench]
-lto = true
+lto = "thin"
 
 [profile.release]
-lto = true
+lto = "thin"
+# opt-level = "z"
 
 # [profile.dev]
 # rpath = true
