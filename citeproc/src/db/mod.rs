@@ -256,15 +256,15 @@ impl Processor {
     }
 
     pub fn get_langs_in_use(&self) -> Vec<Lang> {
-        let mut langs: Vec<Lang> = self
+        let mut langs: HashSet<Lang> = self
             .all_keys()
             .iter()
             .filter_map(|ref_id| self.reference(ref_id.clone()))
             .filter_map(|refr| refr.language.clone())
             .collect();
         let style = self.style();
-        langs.push(style.default_locale.clone());
-        langs
+        langs.insert(style.default_locale.clone());
+        langs.into_iter().collect()
     }
 
     pub fn has_cached_locale(&self, lang: &Lang) -> bool {
