@@ -1,0 +1,52 @@
+{
+  "author": "Nick Fitzgerald <nfitzgerald@mozilla.com>",
+  "name": "create-rust-webpack",
+  "version": "0.1.5",
+  "repository": "https://github.com/rustwasm/rust-webpack-template",
+  "license": "(MIT OR Apache-2.0)",
+  "scripts": {
+    "start": "webpack-dev-server --open -d --compress",
+    "build": "webpack"
+  },
+  "bin": {
+    "create-rust-webpack": ".bin/create-rust-webpack.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.3.3",
+    "@babel/plugin-proposal-class-properties": "^7.3.3",
+    "@babel/plugin-transform-runtime": "^7.2.0",
+    "@babel/preset-env": "^7.3.1",
+    "@babel/preset-react": "^7.0.0",
+    "@babel/preset-typescript": "^7.3.3",
+    "@wasm-tool/wasm-pack-plugin": "^0.4.2",
+    "babel-loader": "^8.0.5",
+    "copy-webpack-plugin": "^5.0.3",
+    "webpack": "^4.29.5",
+    "webpack-cli": "^3.2.3",
+    "webpack-dev-server": "^3.1.14"
+  },
+  "dependencies": {
+    "@babel/plugin-syntax-dynamic-import": "^7.2.0",
+    "@babel/runtime": "^7.3.1",
+    "@types/jest": "^24.0.6",
+    "@types/node": "^11.9.5",
+    "@types/react": "^16.8.4",
+    "@types/react-dom": "^16.8.2",
+    "react": "^16.8.2",
+    "react-async-component": "^2.0.0",
+    "react-dom": "^16.8.2",
+    "typescript": "^3.3.3333"
+  },
+  "babel": {
+    "plugins": [
+      "@babel/plugin-transform-runtime",
+      "@babel/plugin-syntax-dynamic-import",
+      "@babel/plugin-proposal-class-properties"
+    ],
+    "presets": [
+      "@babel/preset-env",
+      "@babel/preset-typescript",
+      "@babel/preset-react"
+    ]
+  }
+}

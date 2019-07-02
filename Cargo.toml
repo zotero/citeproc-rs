@@ -17,7 +17,6 @@ lto = "thin"
 
 [profile.release]
 lto = "thin"
-# opt-level = "z"
 
 # [profile.dev]
 # rpath = true
