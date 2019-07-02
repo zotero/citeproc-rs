@@ -241,6 +241,7 @@ impl FromNode for LocaleOptionsNode {
 }
 
 impl Locale {
+
     pub fn get_text_term<'l>(&'l self, sel: TextTermSelector, plural: bool) -> Option<&'l str> {
         use crate::terms::TextTermSelector::*;
         match sel {

@@ -8,7 +8,6 @@ use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use csl::error::StyleError;
 use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource},
     style::{Name, Style},
@@ -67,7 +66,14 @@ fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
         return Some(db.locale_input_xml(key));
     }
     debug!("fetching locale: {:?}", key);
-    db.get_fetcher().fetch_string(&key).ok().map(Arc::new)
+    match db.get_fetcher().fetch_string(&key) {
+        Ok(Some(s)) => Some(Arc::new(s)),
+        Ok(None) => None,
+        Err(e) => {
+            error!("{:?}", e);
+            None
+        }
+    }
 }
 
 fn inline_locale(db: &impl LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
@@ -123,11 +129,11 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(feature = "rayon")] {
         pub trait LocaleFetcher: Send + Sync {
-            fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+            fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
         }
     } else {
         pub trait LocaleFetcher {
-            fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error>;
+            fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
         }
     }
 }
@@ -135,18 +141,18 @@ cfg_if! {
 #[derive(Debug)]
 pub enum LocaleFetchError {
     Io(io::Error),
-    Style(StyleError),
+    Other(String),
+}
+
+impl From<String> for LocaleFetchError {
+    fn from(err: String) -> LocaleFetchError {
+        LocaleFetchError::Other(err)
+    }
 }
 
 impl From<io::Error> for LocaleFetchError {
     fn from(err: io::Error) -> LocaleFetchError {
         LocaleFetchError::Io(err)
-    }
-}
-
-impl From<StyleError> for LocaleFetchError {
-    fn from(err: StyleError) -> LocaleFetchError {
-        LocaleFetchError::Style(err)
     }
 }
 
@@ -158,13 +164,7 @@ pub struct Predefined(pub HashMap<Lang, String>);
 
 #[cfg(test)]
 impl LocaleFetcher for Predefined {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        Ok(self.0.get(lang).cloned().unwrap_or_else(|| {
-            String::from(
-                r#"<?xml version="1.0" encoding="utf-8"?>
-        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="en-US">
-        </locale>"#,
-            )
-        }))
+    fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
+        Ok(self.0.get(lang).cloned())
     }
 }

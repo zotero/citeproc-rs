@@ -38,7 +38,7 @@ impl Driver {
         utils::init_log();
 
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
-        let us_fetcher = Arc::new(utils::USFetcher::new());
+        let us_fetcher = Arc::new(utils::USFetcher);
         let engine = Processor::new(style, us_fetcher)
             .map(RefCell::new)
             .map(Rc::new)
@@ -115,7 +115,6 @@ impl Driver {
 
 #[wasm_bindgen]
 extern "C" {
-    /// Yeh
     #[derive(Clone)]
     pub type PromiseFetcher;
 
@@ -136,8 +135,8 @@ export type Fetcher = {
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
 async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, String)> {
-    // Must collect to avoid shared + later mutable borrows of self.cache in
-    // two different stages of the iterator
+    // Promises are push-, not pull-based, so this kicks all of the requests off at once. If the JS
+    // consumer is making HTTP requests for extra locales, they will run in parallel.
     let thunks: Vec<_> = langs
         .into_iter()
         .map(|lang| {
@@ -145,14 +144,21 @@ async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, Strin
             let future = JsFuture::from(promised);
             (lang.clone(), future)
         })
+        // Must collect to avoid shared + later mutable borrows of self.cache in two different
+        // stages of the iterator
         .collect();
     let mut pairs = Vec::with_capacity(thunks.len());
     for (lang, thunk) in thunks {
+        // And collect them.
         match thunk.await {
-            Ok(got) => {
-                pairs.push((lang, got.as_string().unwrap()));
+            Ok(got) => match got.as_string() {
+                Some(string) => pairs.push((lang, string)),
+                // JS consumer did not return a string. Assume it was null/undefined/etc, so no
+                // locale was available.
+                None => {}
             }
-            Err(_e) => panic!("failed to fetch lang {}", lang),
+            // ~= Promise.catch; some async JS code threw an Error.
+            Err(_e) => error!("caught: failed to fetch lang {}", lang),
         }
     }
     pairs

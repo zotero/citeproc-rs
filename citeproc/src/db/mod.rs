@@ -9,7 +9,7 @@ pub use ir::IrDatabase;
 mod cite;
 pub use cite::CiteDatabase;
 mod xml;
-pub use xml::{LocaleDatabase, LocaleFetcher, StyleDatabase};
+pub use xml::{LocaleDatabase, LocaleFetcher, LocaleFetchError, StyleDatabase};
 
 #[cfg(test)]
 pub use self::xml::Predefined;

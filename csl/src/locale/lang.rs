@@ -156,9 +156,9 @@ pub enum IsoLang {
     Other(Atom),
 }
 
-impl fmt::Display for IsoLang {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match *self {
+impl IsoLang {
+    fn short_code(&self) -> String {
+        let s = match self {
             IsoLang::English => "en",
             IsoLang::Deutsch => "de",
             IsoLang::Portuguese => "pt",
@@ -169,7 +169,13 @@ impl fmt::Display for IsoLang {
             IsoLang::Arabic => "ar",
             IsoLang::Other(ref o) => &o,
         };
-        write!(f, "{}", s)
+        String::from(s)
+    }
+}
+
+impl fmt::Display for IsoLang {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.short_code())
     }
 }
 

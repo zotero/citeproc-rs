@@ -29,7 +29,7 @@ mod error;
 mod pandoc;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
-use citeproc::{LocaleFetcher, Processor};
+use citeproc::{LocaleFetcher, LocaleFetchError, Processor};
 use csl::locale::{Lang, Locale};
 
 fn main() {
@@ -159,7 +159,10 @@ fn main() {
             Lang::en_us()
         };
         fn fetch_cli(fetcher: &Filesystem, lang: &Lang) -> Option<Locale> {
-            let string = fetcher.fetch_string(lang).ok()?;
+            let string = match fetcher.fetch_string(lang) {
+                Ok(opt) => opt?,
+                Err(e) => panic!("failed to read locale file, exiting\n{:?}", e),
+            };
             let with_errors = |s: &str| Ok(Locale::from_str(s)?);
             match with_errors(&string) {
                 Ok(l) => Some(l),
@@ -301,11 +304,20 @@ impl Filesystem {
     }
 }
 
+use std::io;
+
 impl LocaleFetcher for Filesystem {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
+    fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
         let mut path = self.root.clone();
         path.push(&format!("locales-{}.xml", lang));
-        fs::read_to_string(path)
+        let read = fs::read_to_string(path);
+        match read {
+            Ok(string) => Ok(Some(string)),
+            Err(e) => match e.kind() {
+                io::ErrorKind::NotFound => Ok(None),
+                _ => Err(LocaleFetchError::Io(e)),
+            }
+        }
     }
 }
 

@@ -5,10 +5,9 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use cfg_if::cfg_if;
-use citeproc::LocaleFetcher;
-use csl::locale::Lang;
+use citeproc::{LocaleFetcher, LocaleFetchError};
+use csl::locale::{Lang, IsoLang, IsoCountry};
 use serde::de::DeserializeOwned;
-use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 cfg_if! {
@@ -72,32 +71,20 @@ where
         .map_err(|e| ErrorPlaceholder::throw(&format!("could not deserialize array: {:?}", e)))
 }
 
-/// A basic cache that includes en-US statically, so it never has to be async-fetched
-pub struct USFetcher {
-    cache: HashMap<Lang, String>,
-}
+/// A `LocaleFetcher` that statically includes `en-US`, so it never has to be async-fetched, but
+/// otherwise returns `None`.
+pub struct USFetcher;
 
 // ~2kB gzipped, and prevents the same initial fetch every single time.
 const EN_US: &'static str = include_str!("locales-en-US.xml");
 
-impl USFetcher {
-    pub fn new() -> Self {
-        let mut cache = HashMap::new();
-        cache.insert(Lang::en_us(), EN_US.to_string());
-        USFetcher { cache }
-    }
-}
-
 impl LocaleFetcher for USFetcher {
-    fn fetch_string(&self, lang: &Lang) -> Result<String, std::io::Error> {
-        Ok(self.cache.get(lang).cloned().unwrap_or_else(|| {
-            format!(
-                r#"<?xml version="1.0" encoding="utf-8"?>
-        <locale xmlns="http://purl.org/net/xbiblio/csl" version="1.0" xml:lang="{}">
-        </locale>"#,
-                lang.to_string()
-            )
-        }))
+    fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
+        if let Lang::Iso(IsoLang::English, Some(IsoCountry::US)) = lang {
+            Ok(Some(String::from(EN_US)))
+        } else {
+            Ok(None)
+        }
     }
 }
 

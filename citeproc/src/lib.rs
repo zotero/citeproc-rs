@@ -5,7 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 pub(crate) mod db;
-pub use self::db::LocaleFetcher;
+pub use self::db::{LocaleFetcher, LocaleFetchError};
 pub use self::db::Processor;
 // mod driver;
 // pub use self::driver::Driver;
