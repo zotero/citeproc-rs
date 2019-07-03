@@ -1,6 +1,6 @@
 import React, { Component, ChangeEvent } from 'react';
 import { asyncComponent } from 'react-async-component';
-import { Driver as DriverT } from '../../pkg';
+import { Driver as DriverT, Lifecycle, Reference, Cite, Cluster } from '../../pkg';
 import { useState } from 'react';
 
 type WasmPackage = typeof import ('../../pkg');
@@ -38,6 +38,34 @@ let initialStyle = `<style class="note">
   </citation>
 </style>`;
 
+const initialReferences: Reference[] = [
+    {
+        id: 'citekey',
+        type: 'book',
+        author: [{ given: "Kurt", family: "Camembert" }],
+        title: "Where The Vile Things Are",
+        issued: { "raw": "1999-08-09" },
+        language: 'fr-FR',
+    },
+    {
+        id: 'foreign',
+        type: 'book',
+        title: "Some other title",
+        language: 'fr-FR',
+    }
+];
+
+const initialClusters: Cluster[] = [
+    {
+        id: 1,
+        cites: [
+            { citeId: 1, id: "foreign" },
+            { citeId: 2, id: "citekey", locators: [["page", "56"]] }
+        ],
+        noteNumber: 1,
+    }
+];
+
 function loadApp(wasm: WasmPackage) {
 
     const { Driver } = wasm;
@@ -46,8 +74,8 @@ function loadApp(wasm: WasmPackage) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    class Fetcher {
-        async fetchLocale(lang) {
+    class Fetcher implements Lifecycle {
+        async fetchLocale(lang: string) {
             // this works
             // console.log(lang, "sleeping");
             // await sleep(1000);
@@ -57,37 +85,12 @@ function loadApp(wasm: WasmPackage) {
         }
     }
 
-    let fetcher = new Fetcher();
-
     let driverFactory = async (style: string): Promise<{driver: DriverT, error: any }> => {
         try {
+            let fetcher = new Fetcher();
             let driver = Driver.new(style || initialStyle, fetcher);
-            driver.setReferences([
-                {
-                    id: 'citekey',
-                    type: 'book',
-                    author: [{ given: "Kurt", family: "Camembert" }],
-                    title: "Where The Vile Things Are",
-                    issued: { "raw": "1999-08-09" },
-                    language: 'fr-FR',
-                },
-                {
-                    id: 'foreign',
-                    type: 'book',
-                    title: "Some other title",
-                    language: 'fr-FR',
-                }
-            ]);
-            driver.initClusters([
-                {
-                    id: 1,
-                    cites: [
-                        { citeId: 1, id: "foreign" },
-                        { citeId: 2, id: "citekey", locators: [["page", "56"]] }
-                    ],
-                    noteNumber: 1,
-                }
-            ]);
+            driver.setReferences(initialReferences);
+            driver.initClusters(initialClusters);
             await driver.fetchAll();
             return { driver, error: null };
         } catch (e) {

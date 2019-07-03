@@ -120,6 +120,7 @@ impl Driver {
 #[wasm_bindgen]
 extern "C" {
     #[derive(Clone)]
+    #[wasm_bindgen(js_name = "Lifecycle")]
     pub type PromiseFetcher;
 
     #[wasm_bindgen(method, js_name = "fetchLocale")]
@@ -137,10 +138,48 @@ const TS_APPEND_CONTENT: &'static str = r#"
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
     according to which ones are needed. */
-export type Fetcher = {
+export interface Lifecycle {
     /** Return locale XML for a particular locale. */
-    fetchLocale: async (lang: string) => string,
-}; 
+    fetchLocale(lang: string): Promise<string>;
+}
+
+export type DateLiteral = { "literal": string; };
+export type DateRaw = { "raw": string; };
+export type DatePartsDate = [number] | [number, number] | [number, number, number];
+export type DatePartsSingle = { "date-parts": [DatePartsDate]; };
+export type DatePartsRange = { "date-parts": [DatePartsDate, DatePartsDate]; };
+export type DateParts = DatePartsSingle | DatePartsRange;
+
+/** Locator type, and a locator string, e.g. `["page", "56"]`. */
+export type DateOrRange = DateLiteral | DateRaw | DateParts;
+
+/** Locator type, and a locator string, e.g. `["page", "56"]`. */
+export type Locator = [string, string];
+
+export type Cite = {
+    citeId: number;
+    id: string;
+    prefix?: any;
+    suffix?: any;
+    suppression?: "InText" | "Rest" | null;
+    locators?: Locator[];
+    locatorExtra?: string;
+    locatorDate?: DateOrRange | null;
+};
+
+export type Cluster = {
+    id: number;
+    cites: Cite[];
+    noteNumber: number;
+};
+
+export type Reference = {
+    id: string;
+    type: CslType;
+};
+
+export type CslType = "book" | "article" | "legal_case" | "article-journal";
+
 "#;
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
