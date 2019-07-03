@@ -1,8 +1,10 @@
-import React, { Component, ChangeEvent } from 'react';
+import React, { Component, ChangeEvent, useEffect, useRef } from 'react';
 import { asyncComponent } from 'react-async-component';
-import { Driver as DriverT, Lifecycle, Reference, Cite, Cluster } from '../../pkg';
+import { Driver as DriverT, Lifecycle, Reference, Cite, Cluster, Driver } from '../../pkg';
 import { useState } from 'react';
 import { DocumentEditor } from './DocumentEditor';
+import { Result, Err, Ok, Option, Some, None } from 'safe-types';
+import { useDocument } from './useDocument';
 
 let initialStyle = `<style class="note">
   <features>
@@ -101,78 +103,69 @@ async function loadEditor() {
     }
 
     class Fetcher implements Lifecycle {
+        private cache: { [lang: string]: string } = {};
         async fetchLocale(lang: string) {
+            if (typeof this.cache[lang] === 'string') {
+                return this.cache[lang];
+            }
             // this works
             // console.log(lang, "sleeping");
-            // await sleep(1000);
+            // await sleep(400);
             // console.log(lang, "waking");
-            let loc = '<?xml version="1.0" encoding="utf-8"?><locale xml:lang="' + lang + '"><terms><term name="edition">SUCCESS</term></terms></locale>';
-            return loc;
+            let res = await fetch(`https://cdn.rawgit.com/citation-style-language/locales/master/locales-${lang}.xml`);
+            if (res.ok) {
+                let text = await res.text();
+                this.cache[lang] = text;
+                return text;
+            }
         }
     }
 
-    async function driverFactory(style: string): Promise<{driver: DriverT, error: any }> {
+    let fetcher = new Fetcher();
+
+    function driverFactory(style: string): Result<DriverT, any> {
         try {
-            let fetcher = new Fetcher();
             let driver = Driver.new(style || initialStyle, fetcher);
-            driver.setReferences(initialReferences);
-            driver.initClusters(initialClusters);
-            await driver.fetchAll();
-            return { driver, error: null };
+            return Ok(driver);
         } catch (e) {
             console.log('caught error:', e)
-            return {driver: null, error: e}
+            return Err(e);
         };
     };
 
-    const StyleEditor = ({updateDriver} : {updateDriver: (s: DriverState) => void}) => {
+    const StyleEditor = ({updateDriver, setReferences} : {
+        inFlight: boolean,
+        updateDriver: (s: Result<DriverT, any>) => void;
+        setReferences: (rs: Reference[]) => void;
+    }) => {
         const [text, setText] = useState(initialStyle);
         const [refsText, setRefsText] = useState(JSON.stringify(initialReferences, null, 2));
-        const [oldDriver, setDriver] = useState(null as DriverT);
-        const [inFlight, setInFlight] = useState(false);
 
-        const parse = async () => {
-            if (inFlight) { return };
-            setInFlight(true);
-            let { driver, error } = await driverFactory(text);
+        const parse = () => {
+            updateDriver(driverFactory(text));
+        };
+
+        const parseRefs = () => {
             try {
-                const refs = JSON.parse(refsText);
-                driver.setReferences(refs);
-                await driver.fetchAll();
+                let refs = JSON.parse(refsText);
+                setReferences(refs);
             } catch (e) {
-                setInFlight(false);
-                updateDriver({ driver: oldDriver, error: "could not set references" });
-                return;
-            }
-            setInFlight(false);
-            if (error) {
-                updateDriver({ driver: null, error });
-            }
-            if (driver) {
-                oldDriver && oldDriver.free();
-                setDriver(driver);
-                updateDriver({ driver, error: null })
+                console.error("could not parse references json", e);
             }
         };
 
-        async function updateRefs(text: string) {
-            setRefsText(text);
-            if (oldDriver) {
-                const refs = JSON.parse(text);
-                oldDriver.setReferences(refs);
-                updateDriver({ driver: oldDriver, error: null });
-            }
-        }
+        useEffect(parse, [ text ]);
+        useEffect(parseRefs, [ refsText ]);
 
-        if (!oldDriver) {
+        const firstRun = useRef(true);
+        if (firstRun.current) {
+            firstRun.current = false;
             parse();
+            parseRefs();
         }
 
         let column = { width: '50%' };
         return <div>
-            <button disabled={inFlight} onClick={parse}>
-                { !inFlight && "Parse" || "fetching locales" }
-            </button>
             <div style={{display: 'flex'}}>
                 <div style={column}>
                     <h3>Style</h3>
@@ -180,7 +173,7 @@ async function loadEditor() {
                 </div>
                 <div style={column}>
                     <h3>References</h3>
-                    <textarea value={refsText} onChange={(e) => updateRefs(e.target.value)} style={mono} />
+                    <textarea value={refsText} onChange={(e) => setRefsText(e.target.value)} style={mono} />
                 </div>
             </div>
         </div>;
@@ -195,25 +188,33 @@ const AsyncEditor = asyncComponent({
     ErrorComponent: ({ error }) => <pre>{JSON.stringify(error)}</pre> // Optional
 });
 
-type DriverState = {
-    driver: DriverT,
-    error: any,
+const Results = ({ driver }: { driver: Result<Driver, any> }) => {
+    return driver.match({
+        Ok: d => <p>
+            locales in use:
+            <code>{JSON.stringify(d.toFetch())}</code>
+        </p>,
+        Err: e => <pre><code>{JSON.stringify(e, null, 2)}</code></pre>
+    });
 };
-
-const Results = ({ driverState }: { driverState: DriverState }) => {
-    const { driver, error } = driverState;
-    return <div>
-        {!error && driver && <p>
-                locales in use:
-                <code>{JSON.stringify(driver.toFetch())}</code>
-            </p>}
-        { error && <pre><code>{JSON.stringify(error, null, 2)}</code></pre> }
-    </div>;
-};
-
 
 const App = () => {
-    const [driverState, setDriverState] = useState({ driver: null, error: null });
+    const {
+        document,
+        driver,
+        updateDriver,
+        inFlight,
+        setDocument,
+        resetReferences,
+        updateReferences,
+    } = useDocument(Err(undefined), initialReferences, initialClusters);
+
+    const docEditor = document.map(doc =>
+        <DocumentEditor
+            document={doc}
+            onChange={newDoc => setDocument(Some(newDoc))} />
+    ).unwrap_or(null);
+
     return (
         <div className="App">
             <header className="App-header">
@@ -226,9 +227,9 @@ const App = () => {
                     Test driver for <code>citeproc-wasm</code>
                 </a>
             </header>
-            <AsyncEditor updateDriver={setDriverState} />
-            <Results driverState={driverState} />
-            { driverState.driver && <DocumentEditor clusters={initialClusters} driver={driverState.driver} /> }
+            <AsyncEditor updateDriver={updateDriver} inFlight={inFlight} setReferences={resetReferences} />
+            <Results driver={driver} />
+            { docEditor }
         </div>
     );
 };

@@ -2,19 +2,18 @@ import { Document, stringifyInlines } from './Document';
 import React, { useState } from 'react';
 import { Cluster, Cite, Driver } from '../../pkg/citeproc_wasm';
 
-export const DocumentEditor = ({clusters, driver}: { clusters: Cluster[]; driver: Driver; }) => {
-    let [doc, setDocument] = useState(() => new Document(clusters, driver));
-    let editors = clusters.map((cluster: Cluster) => {
-        return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={ newCluster => {
-            driver.replaceCluster(newCluster);
-            let summary = driver.batchedUpdates();
-            let neu = doc.merge(summary);
-            setDocument(neu);
-        } } />
+export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
+    let editors = document.clusters.map((cluster: Cluster) => {
+        return (
+            <ClusterEditor
+                key={cluster.id}
+                cluster={cluster}
+                updateCluster={ newCluster => onChange(document.replaceCluster(newCluster)) } />
+        );
     });
     return <div>
         { editors }
-        <DocumentViewer document={doc} />
+        <DocumentViewer document={document} />
     </div>;
 };
 

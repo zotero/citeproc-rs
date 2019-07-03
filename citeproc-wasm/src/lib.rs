@@ -14,6 +14,8 @@ extern crate serde_derive;
 #[macro_use]
 extern crate log;
 
+use self::utils::ErrorPlaceholder;
+
 use js_sys::Promise;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -58,6 +60,16 @@ impl Driver {
         Ok(self.engine.borrow_mut().set_references(refs))
     }
 
+    #[wasm_bindgen(js_name = "insertReference")]
+    pub fn insert_reference(&mut self, js_refr: JsValue) -> Result<(), JsValue> {
+        let refr = js_refr
+            .into_serde()
+            .map_err(|_| ErrorPlaceholder::throw("could not parse Reference from host"))?;
+        // inserting & replacing are the same
+        self.engine.borrow_mut().insert_reference(refr);
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = "toFetch")]
     pub fn locales_to_fetch(&self) -> JsValue {
         let langs: Vec<String> = self
@@ -72,9 +84,16 @@ impl Driver {
 
     #[wasm_bindgen(js_name = "replaceCluster")]
     pub fn replace_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
-        let cluster = cluster.into_serde().map_err(|_| utils::ErrorPlaceholder::throw("..."))?;
+        let cluster = cluster.into_serde().map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
         let mut eng = self.engine.borrow_mut();
         Ok(eng.replace_cluster(cluster))
+    }
+
+    #[wasm_bindgen(js_name = "insertCluster")]
+    pub fn insert_cluster(&mut self, cluster: JsValue, before: Option<ClusterId>) -> Result<(), JsValue> {
+        let cluster = cluster.into_serde().map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
+        let mut eng = self.engine.borrow_mut();
+        Ok(eng.insert_cluster(cluster, before))
     }
 
     #[wasm_bindgen(js_name = "initClusters")]

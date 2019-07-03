@@ -124,6 +124,7 @@ impl Processor {
         };
         // TODO: way more salsa::inputs
         db.set_style(Default::default());
+        db.set_all_keys(Default::default());
         db.set_all_uncited(Default::default());
         db.set_cluster_ids(Arc::new(vec![]));
         db.set_locale_input_langs(Default::default());
@@ -153,9 +154,9 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) {
+        let cluster_ids = self.cluster_ids();
         #[cfg(feature = "rayon")] {
             use rayon::prelude::*;
-            let cluster_ids = self.cluster_ids();
             let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
             // single rayon thread
@@ -172,7 +173,6 @@ impl Processor {
                 });
         }
         #[cfg(not(feature = "rayon"))] {
-            let cluster_ids = self.cluster_ids();
             for &cluster_id in cluster_ids.iter() {
                 self.built_cluster(cluster_id);
             }
@@ -223,6 +223,10 @@ impl Processor {
         self.set_all_keys(Arc::new(keys));
     }
 
+    pub fn insert_reference(&mut self, refr: Reference) {
+        self.set_references(vec![refr])
+    }
+
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Pandoc>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
@@ -261,8 +265,6 @@ impl Processor {
         // self.set_cluster_ids(Arc::new(new));
     }
 
-    // pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {}
-
     pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {
         let mut ids = Vec::new();
         for cite in cluster.cites.iter() {
@@ -272,6 +274,45 @@ impl Processor {
         self.set_cluster_cites(cluster.id, Arc::new(ids));
         self.set_cluster_note_number(cluster.id, cluster.note_number);
     }
+
+    /// Experimental. The split ids/cites/note numbers cluster interface is clunky, plus it's hard
+    /// to take into account that some footnotes don't have clusters in them, and other footnotes
+    /// have MULTIPLE clusters!
+    pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {
+        // TODO: return Result::Err when called with bad args
+        // assumes note_number on cluster is where you want it to be
+        let cluster_ids = self.cluster_ids();
+        let mut new_cluster_ids = (*cluster_ids).clone();
+        if let Some(bef) = before {
+            let old_len = cluster_ids.len();
+            if let Some(pos) = cluster_ids.iter().position(|&id| id == bef) {
+                new_cluster_ids.insert(pos, cluster.id);
+                assert!(cluster.note_number <= self.cluster_note_number(cluster_ids[pos]));
+                // shift all the note numbers across
+                // old = [] => noop
+                // bef=3, pos=1, old = [id3 note 1, id9 note 3] => { id9 => note 4 }
+                // bef=3, pos=1, old = [id3 note 1, id9 note 3] => { id9 => note 4 }
+                if old_len > 0 && pos < old_len - 1 {
+                    for &id in &new_cluster_ids[pos+1..] {
+                        let nn = self.cluster_note_number(id);
+                        self.set_cluster_note_number(id, nn + 1);
+                    }
+                }
+            }
+        } else {
+            new_cluster_ids.push(cluster.id);
+        }
+        self.set_cluster_ids(Arc::new(new_cluster_ids));
+
+        let mut cluster_cites = Vec::with_capacity(cluster.cites.len());
+        for cite in cluster.cites.iter() {
+            cluster_cites.push(cite.id);
+            self.set_cite(cite.id, Arc::new(cite.clone()));
+        }
+        self.set_cluster_cites(cluster.id, Arc::new(cluster_cites));
+        self.set_cluster_note_number(cluster.id, cluster.note_number);
+    }
+
 
     // Getters, because the query groups have too much exposed to publish.
 

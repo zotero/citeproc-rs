@@ -36,6 +36,7 @@
     "react": "^16.8.2",
     "react-async-component": "^2.0.0",
     "react-dom": "^16.8.2",
+    "safe-types": "^4.20.0",
     "typescript": "^3.3.3333"
   },
   "babel": {
