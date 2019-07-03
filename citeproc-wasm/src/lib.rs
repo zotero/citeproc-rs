@@ -23,6 +23,7 @@ use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
 use citeproc::input::ClusterId;
 use citeproc::Processor;
+use citeproc::UpdateSummary;
 use csl::locale::Lang;
 
 #[wasm_bindgen]
@@ -80,6 +81,16 @@ impl Driver {
     pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
         let built = (*self.engine.borrow().get_cluster(id)).clone();
         Ok(JsValue::from_serde(&built).unwrap())
+    }
+
+    #[wasm_bindgen(js_name = "drain")]
+    pub fn drain(&self) -> JsValue {
+        let eng = self.engine.borrow();
+        eng.compute();
+        let mut queue = eng.queue.lock();
+        let summary = UpdateSummary::summarize(&*eng, &*queue);
+        queue.clear();
+        JsValue::from_serde(&summary).unwrap()
     }
 
     /// This asynchronously fetches all the locales that may be required, and saves them into the

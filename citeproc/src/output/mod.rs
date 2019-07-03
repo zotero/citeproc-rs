@@ -17,13 +17,6 @@ pub use self::plain::PlainText;
 use csl::style::{Affixes, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Output<T> {
-    pub citations: Vec<T>,
-    pub bibliography: Vec<T>,
-    pub citation_ids: Vec<String>,
-}
-
 #[derive(Debug, Clone)]
 pub enum LocalizedQuotes {
     Single(Atom, Atom),
@@ -32,7 +25,7 @@ pub enum LocalizedQuotes {
 
 pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync + Eq;
-    type Output: Serialize + Clone + Send + Sync + Eq;
+    type Output: Clone + Send + Sync + Eq + Serialize + DeserializeOwned;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
     /// nodes themselves, with no formatting except whatever is applied by a parent group.

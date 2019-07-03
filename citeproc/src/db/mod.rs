@@ -10,6 +10,7 @@ mod cite;
 pub use cite::CiteDatabase;
 mod xml;
 pub use xml::{LocaleDatabase, LocaleFetcher, LocaleFetchError, StyleDatabase};
+pub mod update;
 
 #[cfg(test)]
 pub use self::xml::Predefined;
@@ -20,12 +21,14 @@ mod test;
 use self::cite::CiteDatabaseStorage;
 use self::ir::IrDatabaseStorage;
 use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
+use self::update::DocUpdate;
 
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
+use parking_lot::Mutex;
 
 use csl::error::StyleError;
 use csl::locale::Lang;
@@ -46,6 +49,7 @@ use crate::Atom;
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
+    pub queue: Arc<Mutex<Vec<DocUpdate>>>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -54,19 +58,26 @@ impl salsa::Database for Processor {
         &self.runtime
     }
 
+    /// A way to extract imperative update sequences from a "here's the entire world" API. An
+    /// editor might require simple instructions to update a document; modify this footnote,
+    /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
+    /// things were recomputed, and assume a recomputation means re-rendering is necessary.
     fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
         use self::ir::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
+        let mut q = self.queue.lock();
         match event_fn().kind {
             WillExecute { database_key } => match database_key.kind {
-                RDS(GroupKey::built_cluster(_key)) => {
-                    // eprintln!("cluster #{:?} recomputed", key);
+                RDS(GroupKey::built_cluster(key)) => {
+                    let upd = DocUpdate::Cluster(key);
+                    // info!("produced update, {:?}", upd);
+                    q.push(upd)
                 }
-                _ => {}
+                _ => {},
             },
-            _ => {}
-        }
+            _ => {},
+        };
     }
 }
 
@@ -76,6 +87,7 @@ impl ParallelDatabase for Processor {
         Snapshot::new(Processor {
             runtime: self.runtime.snapshot(self),
             fetcher: self.fetcher.clone(),
+            queue: Arc::new(Mutex::new(Default::default())),
         })
     }
 }
@@ -102,6 +114,7 @@ impl Processor {
         let mut db = Processor {
             runtime: Default::default(),
             fetcher,
+            queue: Arc::new(Mutex::new(Default::default())),
         };
         // TODO: way more salsa::inputs
         db.set_style(Default::default());
@@ -129,11 +142,11 @@ impl Processor {
         Snap(self.snapshot())
     }
 
+    // TODO: This might not play extremely well with Salsa's garbage collector,
+    // which will have a new revision number for each built_cluster call.
+    // Probably better to have this as a real query.
     pub fn compute(&self) {
-        // If you're not runnning in parallel, there is no optimal parallelization order
-        // So just do nothing.
-        #[cfg(feature = "rayon")]
-        {
+        #[cfg(feature = "rayon")] {
             use rayon::prelude::*;
             let cluster_ids = self.cluster_ids();
             let cite_ids = self.all_cite_ids();
@@ -150,6 +163,12 @@ impl Processor {
                 .for_each_with(self.snap(), |snap, &cluster_id| {
                     snap.0.built_cluster(cluster_id);
                 });
+        }
+        #[cfg(not(feature = "rayon"))] {
+            let cluster_ids = self.cluster_ids();
+            for &cluster_id in cluster_ids.iter() {
+                self.built_cluster(cluster_id);
+            }
         }
     }
 
@@ -226,7 +245,15 @@ impl Processor {
 
     // pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {}
 
-    // pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {}
+    pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {
+        let mut ids = Vec::new();
+        for cite in cluster.cites.iter() {
+            ids.push(cite.id);
+            self.set_cite(cite.id, Arc::new(cite.clone()));
+        }
+        self.set_cluster_cites(cluster.id, Arc::new(ids));
+        self.set_cluster_note_number(cluster.id, cluster.note_number);
+    }
 
     // Getters, because the query groups have too much exposed to publish.
 

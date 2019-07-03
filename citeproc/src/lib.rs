@@ -7,8 +7,7 @@
 pub(crate) mod db;
 pub use self::db::{LocaleFetcher, LocaleFetchError};
 pub use self::db::Processor;
-// mod driver;
-// pub use self::driver::Driver;
+pub use self::db::update::{DocUpdate, UpdateSummary};
 pub mod input;
 pub mod output;
 mod utils;
