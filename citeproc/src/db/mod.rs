@@ -21,7 +21,7 @@ mod test;
 use self::cite::CiteDatabaseStorage;
 use self::ir::IrDatabaseStorage;
 use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
-use self::update::DocUpdate;
+use self::update::{DocUpdate, UpdateSummary};
 
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
@@ -49,7 +49,8 @@ use crate::Atom;
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
-    pub queue: Arc<Mutex<Vec<DocUpdate>>>,
+    queue: Arc<Mutex<Vec<DocUpdate>>>,
+    save_updates: bool,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -63,6 +64,9 @@ impl salsa::Database for Processor {
     /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
     /// things were recomputed, and assume a recomputation means re-rendering is necessary.
     fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
+        if !self.save_updates {
+            return;
+        }
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
         use self::ir::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
@@ -87,7 +91,8 @@ impl ParallelDatabase for Processor {
         Snapshot::new(Processor {
             runtime: self.runtime.snapshot(self),
             fetcher: self.fetcher.clone(),
-            queue: Arc::new(Mutex::new(Default::default())),
+            queue: self.queue.clone(),
+            save_updates: self.save_updates,
         })
     }
 }
@@ -115,6 +120,7 @@ impl Processor {
             runtime: Default::default(),
             fetcher,
             queue: Arc::new(Mutex::new(Default::default())),
+            save_updates: false,
         };
         // TODO: way more salsa::inputs
         db.set_style(Default::default());
@@ -124,8 +130,9 @@ impl Processor {
         db
     }
 
-    pub fn new(style_string: &str, fetcher: Arc<dyn LocaleFetcher>) -> Result<Self, StyleError> {
+    pub fn new(style_string: &str, fetcher: Arc<dyn LocaleFetcher>, save_updates: bool) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
+        db.save_updates = save_updates;
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style(style);
         Ok(db)
@@ -170,6 +177,17 @@ impl Processor {
                 self.built_cluster(cluster_id);
             }
         }
+    }
+
+    pub fn batched_updates(&self) -> UpdateSummary {
+        if !self.save_updates {
+            return UpdateSummary::default();
+        }
+        self.compute();
+        let mut queue = self.queue.lock();
+        let summary = UpdateSummary::summarize(self, &*queue);
+        queue.clear();
+        summary
     }
 
     // TODO: make this use

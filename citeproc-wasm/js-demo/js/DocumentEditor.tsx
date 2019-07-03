@@ -5,9 +5,9 @@ import { Cluster, Cite, Driver } from '../../pkg/citeproc_wasm';
 export const DocumentEditor = ({clusters, driver}: {clusters: Cluster[], driver: Driver }) => {
     let [doc, setDocument] = useState(() => new Document(clusters, driver));
     let editors = clusters.map((cluster: Cluster) => {
-        return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={(newCluster) => {
+        return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={ newCluster => {
             driver.replaceCluster(newCluster);
-            let summary = driver.drain();
+            let summary = driver.batchedUpdates();
             let neu = doc.merge(summary);
             setDocument(neu);
         } } />
@@ -33,7 +33,7 @@ const ClusterViewer = React.memo(({cluster, html}: {cluster: Cluster, html: stri
 const ClusterEditor = ({cluster, updateCluster}: {cluster: Cluster, updateCluster: (cluster: Cluster) => void}) => {
     let [me, setMe] = useState(cluster);
     let editors = cluster.cites.map((cite: Cite) => {
-        return <CiteEditor key={cite.citeId} cite={cite} update={(c) => {
+        return <CiteEditor key={cite.citeId} cite={cite} update={ c => {
             let cites = me.cites.slice(0) as Cite[];
             cites[cites.findIndex(x => x.citeId === c.citeId)] = c;
             let _me = { ...me, cites };

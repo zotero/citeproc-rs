@@ -10,11 +10,13 @@ export class Document {
         for (let cluster of clusters) {
             this.builtClusters[cluster.id] = stringifyInlines(driver.builtCluster(cluster.id));
         }
-        driver.drain();
+        // Drain the update queue, because we know we're up to date
+        driver.batchedUpdates();
     }
 
     /** Immutably updates the document to include all the Driver's batched updates in a summary.  */
     merge(summary: UpdateSummary): Document {
+        console.info(summary);
         return produce(this, draft => {
             for (let [id, built] of summary.clusters) {
                 draft.builtClusters[id] = stringifyInlines(built);

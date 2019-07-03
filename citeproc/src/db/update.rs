@@ -21,7 +21,7 @@ pub enum DocUpdate {
 use std::sync::Arc;
 use crate::output::{OutputFormat, Pandoc};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSummary<O : OutputFormat = Pandoc> {
     // A list of clusters that were updated, paired with the formatted output for each

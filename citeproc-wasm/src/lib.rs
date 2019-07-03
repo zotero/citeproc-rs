@@ -23,7 +23,6 @@ use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
 use citeproc::input::ClusterId;
 use citeproc::Processor;
-use citeproc::UpdateSummary;
 use csl::locale::Lang;
 
 #[wasm_bindgen]
@@ -40,7 +39,7 @@ impl Driver {
 
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
         let us_fetcher = Arc::new(utils::USFetcher);
-        let engine = Processor::new(style, us_fetcher)
+        let engine = Processor::new(style, us_fetcher, true)
             .map(RefCell::new)
             .map(Rc::new)
             .map_err(|e| JsValue::from_serde(&e).unwrap())?;
@@ -90,13 +89,10 @@ impl Driver {
         Ok(JsValue::from_serde(&built).unwrap())
     }
 
-    #[wasm_bindgen(js_name = "drain")]
-    pub fn drain(&self) -> JsValue {
+    #[wasm_bindgen(js_name = "batchedUpdates")]
+    pub fn batched_updates(&self) -> JsValue {
         let eng = self.engine.borrow();
-        eng.compute();
-        let mut queue = eng.queue.lock();
-        let summary = UpdateSummary::summarize(&*eng, &*queue);
-        queue.clear();
+        let summary = eng.batched_updates();
         JsValue::from_serde(&summary).unwrap()
     }
 
@@ -194,6 +190,7 @@ export type Cluster = {
 export type Reference = {
     id: string;
     type: CslType;
+    [key: string]: any;
 };
 
 export type CslType = "book" | "article" | "legal_case" | "article-journal";
