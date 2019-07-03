@@ -5,8 +5,11 @@ import { Cluster, Cite, Driver } from '../../pkg/citeproc_wasm';
 export const DocumentEditor = ({clusters, driver}: {clusters: Cluster[], driver: Driver }) => {
     let [doc, setDocument] = useState(() => new Document(clusters, driver));
     let editors = clusters.map((cluster: Cluster) => {
-        return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={(c) => {
-            // TODO: setDocument with a new complete doc
+        return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={(newCluster) => {
+            driver.replaceCluster(newCluster);
+            let summary = driver.drain();
+            let neu = doc.merge(summary);
+            setDocument(neu);
         } } />
     });
     return <div>
@@ -36,7 +39,7 @@ const ClusterEditor = ({cluster, updateCluster}: {cluster: Cluster, updateCluste
             let _me = { ...me, cites };
             setMe(_me);
             updateCluster(_me);
-            } } />
+        } } />
     });
     return <div>
         { editors }

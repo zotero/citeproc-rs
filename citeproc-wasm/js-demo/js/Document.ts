@@ -1,13 +1,25 @@
-import { Cite, Cluster, Driver as DriverT } from '../../pkg/citeproc_wasm';
+import { Cite, Cluster, Driver, UpdateSummary } from '../../pkg/citeproc_wasm';
+import { produce, immerable } from 'immer';
 
 export class Document {
     /** Caches HTML for a ClusterId */
     public builtClusters: { [id: number]: string } = {};
 
-    constructor(public clusters: Cluster[], driver: DriverT) {
+    constructor(public clusters: Cluster[], driver: Driver) {
+        this[immerable] = true;
         for (let cluster of clusters) {
             this.builtClusters[cluster.id] = stringifyInlines(driver.builtCluster(cluster.id));
         }
+        driver.drain();
+    }
+
+    /** Immutably updates the document to include all the Driver's batched updates in a summary.  */
+    merge(summary: UpdateSummary): Document {
+        return produce(this, draft => {
+            for (let [id, built] of summary.clusters) {
+                draft.builtClusters[id] = stringifyInlines(built);
+            }
+        });
     }
 
 }

@@ -71,6 +71,13 @@ impl Driver {
         JsValue::from_serde(&langs).unwrap()
     }
 
+    #[wasm_bindgen(js_name = "replaceCluster")]
+    pub fn replace_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
+        let cluster = cluster.into_serde().map_err(|_| utils::ErrorPlaceholder::throw("..."))?;
+        let mut eng = self.engine.borrow_mut();
+        Ok(eng.replace_cluster(cluster))
+    }
+
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
         let clusters = utils::read_js_array(clusters)?;
@@ -190,6 +197,10 @@ export type Reference = {
 };
 
 export type CslType = "book" | "article" | "legal_case" | "article-journal";
+
+export type UpdateSummary = {
+    clusters: [number, any[]][];
+};
 
 "#;
 
