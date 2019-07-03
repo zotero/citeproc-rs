@@ -4,6 +4,7 @@ import { produce, immerable } from 'immer';
 export class Document {
     /** Caches HTML for a ClusterId */
     public builtClusters: { [id: number]: string } = {};
+    public updatedLastRevision: { [id: number]: boolean } = {};
 
     constructor(public clusters: Cluster[], driver: Driver) {
         this[immerable] = true;
@@ -18,8 +19,10 @@ export class Document {
     merge(summary: UpdateSummary): Document {
         console.info(summary);
         return produce(this, draft => {
+            draft.updatedLastRevision = {};
             for (let [id, built] of summary.clusters) {
                 draft.builtClusters[id] = stringifyInlines(built);
+                draft.updatedLastRevision[id] = true;
             }
         });
     }

@@ -2,7 +2,7 @@ import { Document, stringifyInlines } from './Document';
 import React, { useState } from 'react';
 import { Cluster, Cite, Driver } from '../../pkg/citeproc_wasm';
 
-export const DocumentEditor = ({clusters, driver}: {clusters: Cluster[], driver: Driver }) => {
+export const DocumentEditor = ({clusters, driver}: { clusters: Cluster[]; driver: Driver; }) => {
     let [doc, setDocument] = useState(() => new Document(clusters, driver));
     let editors = clusters.map((cluster: Cluster) => {
         return <ClusterEditor key={cluster.id} cluster={cluster} updateCluster={ newCluster => {
@@ -21,13 +21,15 @@ export const DocumentEditor = ({clusters, driver}: {clusters: Cluster[], driver:
 const DocumentViewer = React.memo(({document}: {document: Document}) => {
     let clusters = document.clusters.map(c => {
         let html = document.builtClusters[c.id];
-        return <ClusterViewer key={c.id} cluster={c} html={html} />
+        let touched = document.updatedLastRevision[c.id];
+        return <ClusterViewer key={c.id} cluster={c} html={html} touched={touched} />
     });
     return <div>{clusters}</div>;
 });
 
-const ClusterViewer = React.memo(({cluster, html}: {cluster: Cluster, html: string }) => {
-    return <p dangerouslySetInnerHTML={{ __html: cluster.noteNumber + ". " + html }}></p>
+const ClusterViewer = React.memo(({cluster, html, touched}: { cluster: Cluster, html: string, touched: boolean }) => {
+    let style = touched ? { backgroundColor: 'lightgoldenrodyellow' } : {};
+    return <p style={style} dangerouslySetInnerHTML={{ __html: cluster.noteNumber + ". " + html }}></p>
 });
 
 const ClusterEditor = ({cluster, updateCluster}: {cluster: Cluster, updateCluster: (cluster: Cluster) => void}) => {

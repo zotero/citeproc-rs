@@ -12,12 +12,21 @@ let initialStyle = `<style class="note">
   <citation et-al-min="3">
     <layout delimiter="; " suffix=".">
       <choose>
-        <if position="ibid ibid-with-locator">
+        <if position="ibid-with-locator">
           <group delimiter=", ">
             <text term="ibid" />
             <text variable="locator" />
           </group>
         </if>
+        <else-if position="ibid">
+          <text term="ibid" />
+        </else-if>
+        <else-if position="subsequent">
+          <group delimiter=" ">
+            <text variable="title" font-style="italic" />
+            <text prefix="(n " variable="first-reference-note-number" suffix=")" />
+          </group>
+        </else-if>
         <else>
           <group delimiter=", ">
             <text variable="title" font-style="italic" />
@@ -58,11 +67,24 @@ const initialClusters: Cluster[] = [
     {
         id: 1,
         cites: [
-            { citeId: 1, id: "foreign" },
-            { citeId: 2, id: "citekey", locators: [["page", "56"]] }
+            { citeId: 1, id: "citekey" }
         ],
         noteNumber: 1,
-    }
+    },
+    {
+        id: 2,
+        cites: [
+            { citeId: 2, id: "citekey" }
+        ],
+        noteNumber: 2,
+    },
+    {
+        id: 3,
+        cites: [
+            { citeId: 3, id: "citekey", locators: [["page", "56"]] }
+        ],
+        noteNumber: 3,
+    },
 ];
 
 const mono = {
@@ -146,14 +168,21 @@ async function loadEditor() {
             parse();
         }
 
+        let column = { width: '50%' };
         return <div>
-            <h3>Style</h3>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} style={mono} />
-            <h3>References</h3>
-            <textarea value={refsText} onChange={(e) => updateRefs(e.target.value)} style={mono} />
             <button disabled={inFlight} onClick={parse}>
                 { !inFlight && "Parse" || "fetching locales" }
             </button>
+            <div style={{display: 'flex'}}>
+                <div style={column}>
+                    <h3>Style</h3>
+                    <textarea value={text} onChange={(e) => setText(e.target.value)} style={mono} />
+                </div>
+                <div style={column}>
+                    <h3>References</h3>
+                    <textarea value={refsText} onChange={(e) => updateRefs(e.target.value)} style={mono} />
+                </div>
+            </div>
         </div>;
     }
 
