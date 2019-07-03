@@ -81,8 +81,11 @@ function loadApp(wasm: WasmPackage) {
             driver.initClusters([
                 {
                     id: 1,
-                    cites: [{id: 1, ref_id: "foreign"}, { id: 2, ref_id: "citekey", locators: [["page", "56"]] }],
-                    note_number: 1,
+                    cites: [
+                        { citeId: 1, id: "foreign" },
+                        { citeId: 2, id: "citekey", locators: [["page", "56"]] }
+                    ],
+                    noteNumber: 1,
                 }
             ]);
             await driver.fetchAll();

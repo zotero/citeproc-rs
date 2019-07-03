@@ -52,8 +52,11 @@ impl Locator {
 ///
 /// Prefixes and suffixes
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Cite<O: OutputFormat> {
+    #[serde(rename = "citeId")]
     pub id: CiteId,
+    #[serde(rename = "id")]
     pub ref_id: Atom,
     #[serde(default)]
     pub prefix: O::Build,
@@ -88,7 +91,8 @@ impl<O: OutputFormat> Cite<O> {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Cluster<O: OutputFormat> {
     pub id: ClusterId,
     pub cites: Vec<Cite<O>>,
