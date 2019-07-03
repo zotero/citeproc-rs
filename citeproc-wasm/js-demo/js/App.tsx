@@ -2,8 +2,7 @@ import React, { Component, ChangeEvent } from 'react';
 import { asyncComponent } from 'react-async-component';
 import { Driver as DriverT, Lifecycle, Reference, Cite, Cluster } from '../../pkg';
 import { useState } from 'react';
-
-type WasmPackage = typeof import ('../../pkg');
+import { DocumentEditor } from './DocumentEditor';
 
 let initialStyle = `<style class="note">
   <features>
@@ -159,8 +158,13 @@ async function loadEditor() {
     }
 
     return StyleEditor;
-
 }
+
+const AsyncEditor = asyncComponent({
+    resolve: loadEditor,
+    LoadingComponent: () => <div><i>(Loading editor)</i></div>, // Optional
+    ErrorComponent: ({ error }) => <pre>{JSON.stringify(error)}</pre> // Optional
+});
 
 type DriverState = {
     driver: DriverT,
@@ -170,39 +174,14 @@ type DriverState = {
 const Results = ({ driverState }: { driverState: DriverState }) => {
     const { driver, error } = driverState;
     return <div>
-        {!error && driver && <p>languages in use: <code>{JSON.stringify(driver.toFetch())}</code></p>}
-        {!error && driver && <p dangerouslySetInnerHTML={{__html: 
-                stringifyInlines(driver.builtCluster(1)) || "render it here" 
-            }}></p>}
+        {!error && driver && <p>
+                locales in use:
+                <code>{JSON.stringify(driver.toFetch())}</code>
+            </p>}
         { error && <pre><code>{JSON.stringify(error, null, 2)}</code></pre> }
     </div>;
 };
 
-// Pandoc JSON won't be the output format forever -- when Salsa can do
-// generics, then we will produce preformatted HTML strings.
-interface Str { t: "Str", c: string };
-interface Span { t: "Span", c: [any, Inline[]] };
-interface Emph { t: "Emph", c: Inline[] };
-interface Strikeout { t: "Strikeout", c: Inline[] };
-interface Space { t: "Space" };
-type Inline = Str | Space | Span | Emph | Strikeout;
-function stringifyInlines(inlines: Inline[]): string {
-    return inlines.map(inl => {
-        switch (inl.t) {
-            case "Str": return inl.c;
-            case "Span": return "<span>" +stringifyInlines(inl.c) + '</span>';
-            case "Emph": return "<i>" + stringifyInlines(inl.c) + "</i>";
-            case "Space": return " ";
-            default: return "\"" + inl.t + "\" AST node not supported"
-        }
-    }).join("");
-}
-
-const AsyncEditor = asyncComponent({
-    resolve: loadEditor,
-    LoadingComponent: () => <div><i>(Loading editor)</i></div>, // Optional
-    ErrorComponent: ({ error }) => <pre>{JSON.stringify(error)}</pre> // Optional
-});
 
 const App = () => {
     const [driverState, setDriverState] = useState({ driver: null, error: null });
@@ -220,8 +199,10 @@ const App = () => {
             </header>
             <AsyncEditor updateDriver={setDriverState} />
             <Results driverState={driverState} />
+            { driverState.driver && <DocumentEditor clusters={initialClusters} driver={driverState.driver} /> }
         </div>
     );
 };
+
 
 export default App;
