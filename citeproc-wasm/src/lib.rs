@@ -54,6 +54,15 @@ impl Driver {
         })
     }
 
+    #[wasm_bindgen(js_name = "setStyle")]
+    pub fn set_style(&mut self, style_text: &str) -> JsValue {
+        self.engine.borrow_mut()
+            .set_style_text(style_text)
+            .map_err(|e| JsValue::from_serde(&e).unwrap())
+            .err()
+            .unwrap_or(JsValue::UNDEFINED)
+    }
+
     #[wasm_bindgen(js_name = "setReferences")]
     pub fn set_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
@@ -217,6 +226,24 @@ export type CslType = "book" | "article" | "legal_case" | "article-journal";
 export type UpdateSummary = {
     clusters: [number, any[]][];
 };
+
+type InvalidCsl = {
+    severity: "Error" | "Warning";
+    range: {
+        start: number;
+        end: number;
+    };
+    message: string;
+    hint: string;
+};
+type ParseError = {
+    ParseError: string;
+};
+type Invalid = {
+    Invalid: InvalidCsl[];
+};
+type StyleError = Partial<ParseError & Invalid>;
+
 
 "#;
 

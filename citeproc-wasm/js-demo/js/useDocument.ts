@@ -1,36 +1,47 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { Driver, Reference, Cluster, Lifecycle, UpdateSummary } from '../../pkg/citeproc_wasm';
 import { Document } from './Document';
+import { Fetcher } from './Fetcher';
+
+// Global for caching.
+const fetcher = new Fetcher();
 
 /**
- * This isolates the free-ing of old drivers.
- * JS garbage collection isn't technically part of the spec, so there is no way to call free() automatically.
- * This solution uses React's useState.
  **/
-export const useDriver = (initial: Result<Driver, any>) => {
-    const [old, setOld] = useState(null as Driver);
-    const [driver, setDriver] = useState<Result<[Driver, Promise<void>], any>>(initial);
-    const request = useRef(Promise.resolve(true));
-    const update = (d: Result<Driver, any>) => {
-        if (driver.is_ok()) {
-            if (old) {
-                old.free();
-            }
-            setOld(driver.unwrap());
-        }
-        setDriver(d);
-    };
-    return [driver, update] as [Result<Driver, any>, (res: Result<Driver, any>) => void];
+export const useDriver = (initialStyle: string) => {
+    // const driverFactory = (s: string) => Result.from(() => Driver.new(s, fetcher));
+    // const [driver, setDriver] = useState(driverFactory(initialStyle));
+    // const [error, setError] = useState<Result<void, any>>(Ok(void 0));
+    // const setStyle = async (s: string) => {
+    //     if (driver.is_ok()) {
+    //         let d = driver.unwrap();
+    //         setError(Result.from(() => d.setStyle(s)));
+    //         return driver;
+    //     } else {
+    //         let d = driverFactory(s);
+    //         setError(Ok(void 0));
+    //         setDriver(d);
+    //         return d;
+    //     }
+    // };
+    // useEffect(() => function cleanup() {
+    //     driver.tap(d => d.free());
+    // });
+    // // could be Ok(driver) but setStyle sets error to Err(e), then we want that error
+    // return [d, setStyle] as [typeof d, typeof setStyle];
 };
 
 /**
- * This keeps a Driver, some References, and a Document in sync, i.e.:
+ * This keeps a Driver, a style, some References, and a Document in sync, i.e.:
  *
  * * when you supply a new Driver, its references are set and locales fetched,
  *   the Document is reconfigured to use it, and any existing clusters are added
  * * when you set references (all or some), the Driver is informed, and the
  *   Document gets an update
+ * * Frees old drivers. JS garbage collection isn't technically part of the spec,
+ *   so there is no way to call free() automatically. This solution uses React's
+ *   `useEffect` hook.
  * 
  * You will typically want to update references if a user has edited them. This
  * makes sure to wait for fetchAll() when modifying references, as they might
@@ -40,13 +51,13 @@ export const useDriver = (initial: Result<Driver, any>) => {
  * Again, you don't have to use React hooks/useState etc and the Rust-like `safe-types`.
  * An example that would work in an imperative app (e.g. without React's automatic updating) is below.
  */
-export const useDocument = (initialDriver: Result<Driver, any>, initialReferences: Reference[], initialClusters: Cluster[]) => {
+export const useDocument = (initialStyle: string, initialReferences: Reference[], initialClusters: Cluster[]) => {
     const [references, setReferences] = useState(initialReferences);
-    const [driver, setDriver] = useDriver(initialDriver);
     const [document, setDocument] = useState(None() as Option<Document>);
     const [inFlight, setInFlight] = useState(false);
-
-    // Setting references might mean waiting for a new locale to be fetched. So they're async 'methods'.
+    const [driver, setDriver] = useState<Result<Driver, any>>(Err("uninitialized"));
+    const [style, setStyle] = useState(initialStyle);
+    const [error, setError] = useState<Option<any>>(None());
 
     const flightFetcher = async (driv: Driver) => {
         setInFlight(true);
@@ -57,12 +68,55 @@ export const useDocument = (initialDriver: Result<Driver, any>, initialReference
         }
     }
 
+    const createDriver = async (style: string) => {
+        // make sure it's not loading wasm in the initial chunk
+        const { Driver: CreateDriver } = await import('../../pkg');
+        let d: Result<Driver, any> = Result.from(() => {
+            let d = CreateDriver.new(style, fetcher);
+            d.setReferences(references);
+            return d;
+        });
+        if (d.is_ok()) {
+            let newDriver = d.unwrap();
+            newDriver.setReferences(references);
+            await flightFetcher(newDriver);
+        }
+        setDriver(d);
+    };
+
+    useEffect(() => {
+        if (driver.is_ok()) {
+            let d = driver.unwrap();
+            setError(Option.from(d.setStyle(style)));
+        } else {
+            createDriver(style);
+        }
+    }, [ style ]);
+
+    useEffect(() => {
+        setError(None());
+        if (driver.is_ok()) {
+            // doc updated/created to use newDriver, after ref-setting & fetching
+            let newDriver = driver.unwrap();
+            let newDoc = Some(document.match({
+                Some: old => old.rebuild(newDriver),
+                None: () => new Document(initialClusters, newDriver),
+            }));
+            setDocument(newDoc);
+        }
+        return function cleanup() {
+            driver.map(d => d.free());
+        }
+    }, [ driver ]);
+
+    // Setting references might mean waiting for a new locale to be fetched. So they're async 'methods'.
+
     const resetReferences = async (refs: Reference[]) => {
         setReferences(refs);
         if (driver.is_ok()) {
             let d = driver.unwrap();
             d.setReferences(refs);
-            await d.fetchAll();
+            await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         }
     };
@@ -76,8 +130,8 @@ export const useDocument = (initialDriver: Result<Driver, any>, initialReference
             } else {
                 neu[i] = ref;
             }
-            driver.is_ok() && driver.unwrap().insertReference(ref);
         }
+        driver.tap(d => d.setReferences(refs));
         setReferences(neu);
         if (driver.is_ok()) {
             let d = driver.unwrap();
@@ -86,25 +140,13 @@ export const useDocument = (initialDriver: Result<Driver, any>, initialReference
         }
     };
 
-    const updateDriver = async (res: Result<Driver, any>): Promise<void> => {
-        if (res.is_ok()) {
-            let newDriver = res.unwrap();
-            newDriver.setReferences(references);
-            await flightFetcher(newDriver);
-            // doc updated/created to use newDriver, after ref-setting & fetching
-            let newDoc = document.match({
-                Some: old => old.rebuild(newDriver),
-                None: () => new Document(initialClusters, newDriver),
-            });
-            setDocument(Some(newDoc));
-        }
-        setDriver(res);
-    };
 
     return {
         document,
-        driver,
-        updateDriver,
+        // could be Ok(driver) but setStyle sets error to Err(e), then we want that error
+        driver: error.into_result_err().and_then(() => driver),
+        style,
+        setStyle,
         setDocument,
         inFlight,
         resetReferences,

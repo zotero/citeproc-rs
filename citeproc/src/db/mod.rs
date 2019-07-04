@@ -139,6 +139,12 @@ impl Processor {
         Ok(db)
     }
 
+    pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
+        let style = Style::from_str(style_text)?;
+        self.set_style(Arc::new(style));
+        Ok(())
+    }
+
     #[cfg(test)]
     pub fn test_db() -> Self {
         use self::xml::Predefined;

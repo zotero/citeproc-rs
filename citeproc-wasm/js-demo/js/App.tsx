@@ -1,21 +1,27 @@
 import React, { Component, ChangeEvent, useEffect, useRef } from 'react';
 import { asyncComponent } from 'react-async-component';
-import { Driver as DriverT, Lifecycle, Reference, Cite, Cluster, Driver } from '../../pkg';
+import { Reference, Cluster, Driver, StyleError, ParseError, Invalid } from '../../pkg';
 import { useState } from 'react';
 import { DocumentEditor } from './DocumentEditor';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { useDocument } from './useDocument';
+import { string } from 'prop-types';
 
 let initialStyle = `<style class="note">
   <features>
     <feature name="conditions" />
     <feature name="condition-date-parts" />
   </features>
+  <locale>
+    <terms>
+      <term name="ibid">ibid</term>
+    </terms>
+  </locale>
   <citation et-al-min="3">
     <layout delimiter="; " suffix=".">
       <choose>
         <if position="ibid-with-locator">
-          <group delimiter=", ">
+          <group delimiter=" ">
             <text term="ibid" />
             <text variable="locator" />
           </group>
@@ -27,6 +33,7 @@ let initialStyle = `<style class="note">
           <group delimiter=" ">
             <text variable="title" font-style="italic" />
             <text prefix="(n " variable="first-reference-note-number" suffix=")" />
+            <text variable="locator" />
           </group>
         </else-if>
         <else>
@@ -41,6 +48,7 @@ let initialStyle = `<style class="note">
                 <date variable="issued" form="numeric" />
               </if>
             </choose>
+            <text variable="locator" />
           </group>
         </else>
       </choose>
@@ -55,7 +63,7 @@ const initialReferences: Reference[] = [
         author: [{ given: "Kurt", family: "Camembert" }],
         title: "Where The Vile Things Are",
         issued: { "raw": "1999-08-09" },
-        language: 'fr-FR',
+        language: 'en-GB',
     },
     {
         id: 'foreign',
@@ -96,54 +104,17 @@ const mono = {
 };
 
 async function loadEditor() {
-    const { Driver } = await import('../../pkg');
+    // Load wasm before making it interactive.
+    // Removes failed expectation of immediate response compared to lazily loading it.
+    await import('../../pkg');
 
-    function sleep(ms: number) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    class Fetcher implements Lifecycle {
-        private cache: { [lang: string]: string } = {};
-        async fetchLocale(lang: string) {
-            if (typeof this.cache[lang] === 'string') {
-                return this.cache[lang];
-            }
-            // this works
-            // console.log(lang, "sleeping");
-            // await sleep(400);
-            // console.log(lang, "waking");
-            let res = await fetch(`https://cdn.rawgit.com/citation-style-language/locales/master/locales-${lang}.xml`);
-            if (res.ok) {
-                let text = await res.text();
-                this.cache[lang] = text;
-                return text;
-            }
-        }
-    }
-
-    let fetcher = new Fetcher();
-
-    function driverFactory(style: string): Result<DriverT, any> {
-        try {
-            let driver = Driver.new(style || initialStyle, fetcher);
-            return Ok(driver);
-        } catch (e) {
-            console.log('caught error:', e)
-            return Err(e);
-        };
-    };
-
-    const StyleEditor = ({updateDriver, setReferences} : {
+    const StyleEditor = ({style, setStyle, setReferences} : {
         inFlight: boolean,
-        updateDriver: (s: Result<DriverT, any>) => void;
+        style: string,
+        setStyle: React.Dispatch<string>,
         setReferences: (rs: Reference[]) => void;
     }) => {
-        const [text, setText] = useState(initialStyle);
         const [refsText, setRefsText] = useState(JSON.stringify(initialReferences, null, 2));
-
-        const parse = () => {
-            updateDriver(driverFactory(text));
-        };
 
         const parseRefs = () => {
             try {
@@ -154,13 +125,11 @@ async function loadEditor() {
             }
         };
 
-        useEffect(parse, [ text ]);
         useEffect(parseRefs, [ refsText ]);
 
         const firstRun = useRef(true);
         if (firstRun.current) {
             firstRun.current = false;
-            parse();
             parseRefs();
         }
 
@@ -169,11 +138,11 @@ async function loadEditor() {
             <div style={{display: 'flex'}}>
                 <div style={column}>
                     <h3>Style</h3>
-                    <textarea value={text} onChange={(e) => setText(e.target.value)} style={mono} />
+                    <textarea value={style} onChange={e => setStyle(e.target.value)} style={mono} />
                 </div>
                 <div style={column}>
                     <h3>References</h3>
-                    <textarea value={refsText} onChange={(e) => setRefsText(e.target.value)} style={mono} />
+                    <textarea value={refsText} onChange={e => setRefsText(e.target.value)} style={mono} />
                 </div>
             </div>
         </div>;
@@ -188,26 +157,47 @@ const AsyncEditor = asyncComponent({
     ErrorComponent: ({ error }) => <pre>{JSON.stringify(error)}</pre> // Optional
 });
 
-const Results = ({ driver }: { driver: Result<Driver, any> }) => {
+const Results = ({ driver, style }: { driver: Result<Driver, any>, style: string }) => {
     return driver.match({
         Ok: d => <p>
             locales in use:
-            <code>{JSON.stringify(d.toFetch())}</code>
+            <code>{JSON.stringify(d.toFetch().sort())}</code>
         </p>,
-        Err: e => <pre><code>{JSON.stringify(e, null, 2)}</code></pre>
+        Err: e => <ErrorViewer style={style} error={e as StyleError} />
     });
 };
+
+const ErrorViewer = ({style, error}: { style: string, error: StyleError }) => {
+    if (error.ParseError) {
+        let e = error as ParseError;
+        return <p>{ e.ParseError }</p>
+    } else if (error.Invalid) {
+        let e = error as Invalid;
+        return <div>{ e.Invalid.map(i => {
+            let text = style.slice(i.range.start, i.range.end);
+            return <div key={i.range.start * style.length + i.range.end}
+                        style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>
+                <p>{ `${i.severity}: ${i.message}` }</p>
+                <pre style={{marginLeft: "2em" }}>{ text }</pre>
+                { i.hint && <p>{ i.hint } </p>}
+            </div>
+        }) } </div>
+    } else {
+        return null;
+    }
+}
 
 const App = () => {
     const {
         document,
         driver,
-        updateDriver,
+        style,
+        setStyle,
         inFlight,
         setDocument,
         resetReferences,
         updateReferences,
-    } = useDocument(Err(undefined), initialReferences, initialClusters);
+    } = useDocument(initialStyle, initialReferences, initialClusters);
 
     const docEditor = document.map(doc =>
         <DocumentEditor
@@ -227,8 +217,8 @@ const App = () => {
                     Test driver for <code>citeproc-wasm</code>
                 </a>
             </header>
-            <AsyncEditor updateDriver={updateDriver} inFlight={inFlight} setReferences={resetReferences} />
-            <Results driver={driver} />
+            <AsyncEditor style={style} setStyle={setStyle} inFlight={inFlight} setReferences={resetReferences} />
+            <Results style={style} driver={driver} />
             { docEditor }
         </div>
     );
