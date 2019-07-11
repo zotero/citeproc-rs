@@ -561,8 +561,8 @@ impl Name {
             delimiter: Some(Delimiter(",".into())),
             delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
             delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
-            et_al_min: Some(0),
-            et_al_use_first: Some(1),
+            et_al_min: None,
+            et_al_use_first: None,
             et_al_use_last: Some(false),
             et_al_subsequent_min: None, // must fall back to et_al_min
             et_al_subsequent_use_first: None, // must fall back to et_al_use_first
@@ -623,6 +623,10 @@ impl Name {
             name_part_given: overrider.name_part_given.clone(),
             name_part_family: overrider.name_part_family.clone(),
         }
+    }
+
+    pub fn enable_et_al(&self) -> bool {
+        self.et_al_min.is_some() && self.et_al_use_first.is_some()
     }
 }
 

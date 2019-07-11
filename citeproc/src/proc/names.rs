@@ -165,7 +165,7 @@ impl OneName {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
-        if name_count >= ea_min {
+        if self.0.enable_et_al() && name_count >= ea_min {
             if self.0.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
                 let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
