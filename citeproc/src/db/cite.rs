@@ -21,7 +21,6 @@ use crate::Atom;
 pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
-    #[salsa::dependencies]
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
     #[salsa::input]
@@ -60,7 +59,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
 
     fn cite_positions(&self) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
-    #[salsa::dependencies]
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
