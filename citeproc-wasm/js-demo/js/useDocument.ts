@@ -1,36 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { Driver, Reference, Cluster, Lifecycle, UpdateSummary } from '../../pkg/citeproc_wasm';
+import { Driver, Reference, Cluster, Lifecycle, UpdateSummary } from '../../pkg';
 import { Document } from './Document';
 import { Fetcher } from './Fetcher';
 
 // Global for caching.
 const fetcher = new Fetcher();
-
-/**
- **/
-export const useDriver = (initialStyle: string) => {
-    // const driverFactory = (s: string) => Result.from(() => Driver.new(s, fetcher));
-    // const [driver, setDriver] = useState(driverFactory(initialStyle));
-    // const [error, setError] = useState<Result<void, any>>(Ok(void 0));
-    // const setStyle = async (s: string) => {
-    //     if (driver.is_ok()) {
-    //         let d = driver.unwrap();
-    //         setError(Result.from(() => d.setStyle(s)));
-    //         return driver;
-    //     } else {
-    //         let d = driverFactory(s);
-    //         setError(Ok(void 0));
-    //         setDriver(d);
-    //         return d;
-    //     }
-    // };
-    // useEffect(() => function cleanup() {
-    //     driver.tap(d => d.free());
-    // });
-    // // could be Ok(driver) but setStyle sets error to Err(e), then we want that error
-    // return [d, setStyle] as [typeof d, typeof setStyle];
-};
 
 /**
  * This keeps a Driver, a style, some References, and a Document in sync, i.e.:

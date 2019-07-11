@@ -290,20 +290,8 @@ impl Processor {
         let cluster_ids = self.cluster_ids();
         let mut new_cluster_ids = (*cluster_ids).clone();
         if let Some(bef) = before {
-            let old_len = cluster_ids.len();
             if let Some(pos) = cluster_ids.iter().position(|&id| id == bef) {
                 new_cluster_ids.insert(pos, cluster.id);
-                assert!(cluster.note_number <= self.cluster_note_number(cluster_ids[pos]));
-                // shift all the note numbers across
-                // old = [] => noop
-                // bef=3, pos=1, old = [id3 note 1, id9 note 3] => { id9 => note 4 }
-                // bef=3, pos=1, old = [id3 note 1, id9 note 3] => { id9 => note 4 }
-                if old_len > 0 && pos < old_len - 1 {
-                    for &id in &new_cluster_ids[pos+1..] {
-                        let nn = self.cluster_note_number(id);
-                        self.set_cluster_note_number(id, nn + 1);
-                    }
-                }
             }
         } else {
             new_cluster_ids.push(cluster.id);
@@ -319,6 +307,13 @@ impl Processor {
         self.set_cluster_note_number(cluster.id, cluster.note_number);
     }
 
+    pub fn renumber_clusters(&mut self, mappings: &[u32]) {
+        for chunk in mappings.chunks_exact(2) {
+            let id = chunk[0];
+            let nn = chunk[1];
+            self.set_cluster_note_number(id, nn);
+        }
+    }
 
     // Getters, because the query groups have too much exposed to publish.
 

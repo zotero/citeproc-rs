@@ -117,6 +117,16 @@ impl Driver {
         Ok(JsValue::from_serde(&built).unwrap())
     }
 
+    #[wasm_bindgen(js_name = "renumberClusters")]
+    pub fn renumber_clusters(&mut self, mappings: &[u32]) -> Result<(), JsValue> {
+        let mut eng = self.engine.borrow_mut();
+        if mappings.len() % 2 != 0 {
+            return Err(ErrorPlaceholder::throw("incorrect arguments; should be [id, nn, id2, nn2]"));
+        }
+        eng.renumber_clusters(mappings);
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = "batchedUpdates")]
     pub fn batched_updates(&self) -> JsValue {
         let eng = self.engine.borrow();

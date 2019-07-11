@@ -224,9 +224,11 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     _ => Position::IbidWithLocator,
                 });
             if let Some(&first_note_number) = seen.get(&cite.ref_id) {
+                assert!(note_number >= first_note_number);
                 if let Some(pos) = matching_prev {
                     map.insert(cite_id, (pos, Some(first_note_number)));
                 } else if note_number - first_note_number < near_note_distance {
+                    // TODO: what does diff == 0 mean?
                     map.insert(cite_id, (Position::NearNote, Some(first_note_number)));
                 } else {
                     map.insert(cite_id, (Position::FarNote, Some(first_note_number)));
