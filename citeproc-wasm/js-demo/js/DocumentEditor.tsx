@@ -1,6 +1,6 @@
-import { Document, RenderedDocument, stringifyInlines } from './Document';
+import { Document, RenderedDocument } from './Document';
 import React, { useState } from 'react';
-import { Cluster, Cite, Driver } from '../../pkg';
+import { Cluster, Cite } from '../../pkg';
 
 export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
     const insertCluster = (before: number) => {

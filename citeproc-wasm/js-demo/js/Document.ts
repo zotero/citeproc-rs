@@ -125,12 +125,28 @@ export class Document {
 
     // TODO: be able to pick up a cluster and move it
     /**
-     * @param _cluster A createCluster() result.
-     * @param   before The cluster ID to insert this before; `null` = at the end.
+     * Presumes that each noteNumber will have only one cluster associated with
+     * it. In Zotero's Word plugin, if using a note style, each footnote may
+     * have multiple if you manually create a footnote and add clusters to it.
+     * So this button is like the Zotero add cite button; it conceptually
+     * inserts a footnote with a single cluster. In the Word plugin, a manual
+     * footnote could have been inserted anywhere, so the document's footnote
+     * numbers should be read and updated here, before running this. And for
+     * adding a cluster to an existing footnote, there should be another
+     * version of this function, i.e. `addClusterToFootnote`.
+     * 
+     * Obviously for in-text styles, footnote numbers don't matter, but should
+     * be maintained as one-to-one so that switching to a note style works.
+     * 
+     * TODO: API for asking the driver what kind of style it is.
+     * TODO: maybe use beforeNumber instead of beforeCluster
+     * 
+     * @param _cluster      A createCluster() result.
+     * @param beforeCluster The cluster ID to insert this before; `null` = at the end.
      */
-    insertCluster(_cluster: NonNumberedCluster, before: ClusterId | null) {
+    insertCluster(_cluster: NonNumberedCluster, beforeCluster: ClusterId | null) {
         let cluster = _cluster as Cluster;
-        let pos = before === null ? -1 : this.clusters.findIndex(c => c.id === before);
+        let pos = beforeCluster === null ? -1 : this.clusters.findIndex(c => c.id === beforeCluster);
         if (pos !== -1) {
             let atPos = this.clusters[pos];
             cluster.noteNumber = atPos.noteNumber;
@@ -156,12 +172,12 @@ export class Document {
             // Equivalently
             //     c1 = { id: ..., noteNumber: 2 }
             //     c2 = { id: ..., noteNumber: 1 }
-            this.driver.insertCluster(cluster, before);
+            this.driver.insertCluster(cluster, beforeCluster);
             this.driver.renumberClusters(new Uint32Array(arr))
         } else {
             cluster.noteNumber = this.clusters[this.clusters.length - 1].noteNumber + 1;
             this.clusters.push(cluster);
-            this.driver.insertCluster(cluster, before);
+            this.driver.insertCluster(cluster, beforeCluster);
         }
     }
 
