@@ -6,7 +6,7 @@
 
 use crate::Atom;
 mod pandoc;
-// mod markdown;
+mod html;
 mod plain;
 use std::marker::{Send, Sync};
 
@@ -21,6 +21,13 @@ use serde::{de::DeserializeOwned, Serialize};
 pub enum LocalizedQuotes {
     Single(Atom, Atom),
     Double(Atom, Atom),
+    // Would this be better?
+    // /// When the locale supplied single quotes that were just unicode curly quotes, you can use
+    // /// optimized HTML/Pandoc objects that do the flip-flopping for you. Otherwise, flip flopping
+    // /// is not supported.
+    // SystemSingle,
+    // // See SystemSingle
+    // SystemDouble,
 }
 
 pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
