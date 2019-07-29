@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 #![feature(async_await)]
+#![feature(async_closure)]
 
 mod utils;
 

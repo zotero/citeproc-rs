@@ -48,7 +48,7 @@ fn test_html() {
         use_classes: false,
         // quotes: LocalizedQuotes::
     });
-    assert_eq!(html, "<emph><strong>hello</strong></emph>");
+    assert_eq!(html, "<i><strong>hello</strong></i>");
 }
 
 impl InlineElement {
@@ -62,11 +62,11 @@ impl InlineElement {
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         match self {
             Emph(inners) => {
-                s.push_str("<emph>");
+                s.push_str("<i>");
                 for i in inners {
                     i.to_html_inner(s, options);
                 }
-                s.push_str("</emph>");
+                s.push_str("</i>");
             }
             Span(attrs, inners) => {
                 s.push_str("<span");
@@ -127,7 +127,7 @@ impl InlineElement {
                 }
                 s.push_str("</span>");
             }
-            Quoted(qt, inners) => {
+            Quoted(_qt, inners) => {
                 // todo: use smallcaps class if options.use_classes
                 s.push_str(r#"<q>"#);
                 for i in inners {
@@ -205,7 +205,7 @@ impl Html {
 
 impl OutputFormat for Html {
     type Build = Vec<InlineElement>;
-    type Output = Vec<InlineElement>;
+    type Output = String;
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {
@@ -272,9 +272,13 @@ impl OutputFormat for Html {
         }
     }
 
-    fn output(&self, inter: Vec<InlineElement>) -> Vec<InlineElement> {
+    fn output(&self, inter: Vec<InlineElement>) -> Self::Output {
         let null = FlipFlopState::default();
-        flip_flop_inlines(&inter, &null)
+        let flipped = flip_flop_inlines(&inter, &null);
+        let html = InlineElement::to_html(&flipped, &HtmlOptions {
+            use_classes: true
+        });
+        html
     }
 }
 
@@ -390,7 +394,7 @@ mod test {
             use_classes: false,
             // quotes: LocalizedQuotes::
         });
-        assert_eq!(html, "<emph>normal <span class=\"csl-no-emph \">emph</span> normal</emph>");
+        assert_eq!(html, "<i>normal <span class=\"csl-no-emph \">emph</span> normal</i>");
     }
 
 }

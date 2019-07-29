@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::input::{Cite, CiteId, ClusterId, Reference};
-use crate::output::Pandoc;
+use crate::output::Html;
 use crate::proc::{AddDisambTokens, DisambToken, ProcDatabase};
 use crate::Atom;
 
@@ -44,7 +44,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     // priv
     #[salsa::input]
-    fn cite(&self, key: CiteId) -> Arc<Cite<Pandoc>>;
+    fn cite(&self, key: CiteId) -> Arc<Cite<Html>>;
 
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;

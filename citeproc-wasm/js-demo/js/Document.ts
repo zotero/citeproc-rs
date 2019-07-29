@@ -191,7 +191,7 @@ interface Emph { t: "Emph", c: Inline[] };
 interface Strikeout { t: "Strikeout", c: Inline[] };
 interface Space { t: "Space" };
 type Inline = Str | Space | Span | Emph | Strikeout;
-export function stringifyInlines(inlines: Inline[]): string {
+export function stringifyInlinesPandoc(inlines: Inline[]): string {
     return inlines.map(inl => {
         switch (inl.t) {
             case "Str": return inl.c;
@@ -201,4 +201,8 @@ export function stringifyInlines(inlines: Inline[]): string {
             default: return "\"" + inl.t + "\" AST node not supported"
         }
     }).join("");
+}
+
+export function stringifyInlines(inlines: any): String {
+    return inlines
 }

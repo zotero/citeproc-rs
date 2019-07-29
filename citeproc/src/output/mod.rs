@@ -12,6 +12,7 @@ use std::marker::{Send, Sync};
 
 pub use self::pandoc::Pandoc;
 pub use self::plain::PlainText;
+pub use self::html::Html;
 // pub use self::markdown::Markdown;
 
 use csl::style::{Affixes, Formatting};

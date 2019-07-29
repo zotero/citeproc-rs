@@ -36,7 +36,7 @@ use csl::style::{Position, Style};
 
 use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
 use crate::output::OutputFormat;
-use crate::output::Pandoc;
+use crate::output::Html;
 use crate::proc::{CiteContext, IrState};
 use crate::Atom;
 
@@ -197,8 +197,8 @@ impl Processor {
     }
 
     // TODO: make this use
-    pub fn single(&self, ref_id: &Atom) -> <Pandoc as OutputFormat>::Output {
-        let fmt = Pandoc::default();
+    pub fn single(&self, ref_id: &Atom) -> <Html as OutputFormat>::Output {
+        let fmt = Html::default();
         let refr = match self.reference(ref_id.clone()) {
             None => return fmt.output(fmt.plain("Reference not found")),
             Some(r) => r,
@@ -207,7 +207,7 @@ impl Processor {
             reference: &refr,
             cite: &Cite::basic(0, "ok"),
             position: Position::First,
-            format: Pandoc::default(),
+            format: Html::default(),
             citation_number: 1,
             disamb_pass: None,
         };
@@ -218,7 +218,7 @@ impl Processor {
 
         ir.flatten(&fmt)
             .map(|flat| fmt.output(flat))
-            .unwrap_or(<Pandoc as OutputFormat>::Output::default())
+            .unwrap_or(<Html as OutputFormat>::Output::default())
     }
 
     pub fn set_references(&mut self, refs: Vec<Reference>) {
@@ -233,7 +233,7 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Pandoc>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Html>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
             let mut ids = Vec::new();
@@ -271,7 +271,7 @@ impl Processor {
         // self.set_cluster_ids(Arc::new(new));
     }
 
-    pub fn replace_cluster(&mut self, cluster: Cluster<Pandoc>) {
+    pub fn replace_cluster(&mut self, cluster: Cluster<Html>) {
         let mut ids = Vec::new();
         for cite in cluster.cites.iter() {
             ids.push(cite.id);
@@ -284,7 +284,7 @@ impl Processor {
     /// Experimental. The split ids/cites/note numbers cluster interface is clunky, plus it's hard
     /// to take into account that some footnotes don't have clusters in them, and other footnotes
     /// have MULTIPLE clusters!
-    pub fn insert_cluster(&mut self, cluster: Cluster<Pandoc>, before: Option<ClusterId>) {
+    pub fn insert_cluster(&mut self, cluster: Cluster<Html>, before: Option<ClusterId>) {
         // TODO: return Result::Err when called with bad args
         // assumes note_number on cluster is where you want it to be
         let cluster_ids = self.cluster_ids();
@@ -317,11 +317,11 @@ impl Processor {
 
     // Getters, because the query groups have too much exposed to publish.
 
-    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Pandoc>> {
+    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Html>> {
         self.cite(id)
     }
 
-    pub fn get_cluster(&self, id: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output> {
+    pub fn get_cluster(&self, id: ClusterId) -> Arc<<Html as OutputFormat>::Output> {
         self.built_cluster(id)
     }
 

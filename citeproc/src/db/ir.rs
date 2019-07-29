@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::input::{Cite, CiteId, ClusterId, Reference};
-use crate::output::{OutputFormat, Pandoc};
+use crate::output::{OutputFormat, Html};
 use crate::proc::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
 use crate::Atom;
 
@@ -25,7 +25,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
     fn ir_gen3_add_year_suffix(&self, key: CiteId) -> IrGen;
     fn ir_gen4_conditionals(&self, key: CiteId) -> IrGen;
 
-    fn built_cluster(&self, key: ClusterId) -> Arc<<Pandoc as OutputFormat>::Output>;
+    fn built_cluster(&self, key: ClusterId) -> Arc<<Html as OutputFormat>::Output>;
 
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
 }
@@ -156,14 +156,14 @@ fn ctx_for<'c, O: OutputFormat>(
     }
 }
 
-type IrGen = Arc<(IR<Pandoc>, bool, IrState)>;
+type IrGen = Arc<(IR<Html>, bool, IrState)>;
 
 fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
     Arc::new((
-        IR::Rendered(Some(Pandoc::default().plain("???"))),
+        IR::Rendered(Some(Html::default().plain("???"))),
         true,
         IrState::new(),
     ))
@@ -271,8 +271,8 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
 fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
-) -> Arc<<Pandoc as OutputFormat>::Output> {
-    let fmt = Pandoc::default();
+) -> Arc<<Html as OutputFormat>::Output> {
+    let fmt = Html::default();
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();
     let layout = &style.citation.layout;
