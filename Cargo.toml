@@ -6,10 +6,7 @@
 
 [workspace]
 members = [
-  "csl",
-  "citeproc",
-  "citeproc-wasm",
-  "pandoc-types",
+  "crates/*"
 ]
 
 [profile.bench]
