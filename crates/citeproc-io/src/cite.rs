@@ -5,10 +5,9 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::{DateOrRange, NumericValue};
-use crate::output::OutputFormat;
+use super::output::OutputFormat;
 use csl::terms::LocatorType;
-
-use crate::Atom;
+use csl::Atom;
 
 pub type CiteId = u32;
 pub type ClusterId = u32;
@@ -23,17 +22,6 @@ pub enum Suppression {
     //
     // E.g. the cite with the author suppressed, or a case without party names.
     Rest,
-}
-
-use pandoc_types::definition::CitationMode;
-impl Suppression {
-    pub fn from_pandoc_mode(mode: CitationMode) -> Option<Self> {
-        match mode {
-            CitationMode::AuthorInText => Some(Suppression::InText),
-            CitationMode::SuppressAuthor => Some(Suppression::Rest),
-            CitationMode::NormalCitation => None,
-        }
-    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
@@ -59,9 +47,9 @@ pub struct Cite<O: OutputFormat> {
     #[serde(rename = "id")]
     pub ref_id: Atom,
     #[serde(default)]
-    pub prefix: O::Build,
+    pub prefix: O::Input,
     #[serde(default)]
-    pub suffix: O::Build,
+    pub suffix: O::Input,
     #[serde(default)]
     pub suppression: Option<Suppression>,
     // TODO: parse these out of the locator string
@@ -81,8 +69,8 @@ impl<O: OutputFormat> Cite<O> {
         Cite {
             id,
             ref_id: ref_id.into(),
-            prefix: O::Build::default(),
-            suffix: O::Build::default(),
+            prefix: O::Input::default(),
+            suffix: O::Input::default(),
             suppression: None,
             locators: Vec::new(),
             locator_extra: None,

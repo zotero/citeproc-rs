@@ -6,7 +6,7 @@
 
 #![allow(dead_code)]
 
-use crate::input::ClusterId;
+use citeproc_io::ClusterId;
 use super::ir::IrDatabase;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -19,7 +19,7 @@ pub enum DocUpdate {
 }
 
 use std::sync::Arc;
-use crate::output::{OutputFormat, Html};
+use citeproc_io::output::{OutputFormat, html::Html};
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]

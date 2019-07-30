@@ -42,8 +42,8 @@ wee_alloc = { version = "0.4.4", optional = true }
 # futures_0_3 lets us use std::future ahead of the of the July 4 release
 wasm-bindgen-futures = { version = "0.3.24", features = ["futures_0_3"] }
 js-sys = "0.3.24"
-serde = "1.0.94"
-serde_derive = "1.0.94"
+serde = "1.0.98"
+serde_derive = "1.0.98"
 
 [dependencies.wasm-bindgen]
 version = "0.2.47"

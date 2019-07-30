@@ -4,21 +4,29 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::Atom;
-mod pandoc;
-mod html;
-mod plain;
+use csl::Atom;
+
+pub mod generic;
+#[cfg(feature = "pandoc")]
+pub mod pandoc;
+#[cfg(feature = "html")]
+pub mod html;
+#[cfg(feature = "plain")]
+pub mod plain;
+#[cfg(feature = "rtf")]
+pub mod rtf;
+
 use std::marker::{Send, Sync};
 
-pub use self::pandoc::Pandoc;
-pub use self::plain::PlainText;
-pub use self::html::Html;
-// pub use self::markdown::Markdown;
+// pub use self::pandoc::Pandoc;
+// pub use self::plain::PlainText;
+// pub use self::html::Html;
+// pub use self::generic::{GenericFormat, Node};
 
 use csl::style::{Affixes, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LocalizedQuotes {
     Single(Atom, Atom),
     Double(Atom, Atom),
@@ -32,8 +40,11 @@ pub enum LocalizedQuotes {
 }
 
 pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
-    type Build: std::fmt::Debug + DeserializeOwned + Serialize + Default + Clone + Send + Sync + Eq;
-    type Output: Clone + Send + Sync + Eq + Serialize + DeserializeOwned;
+    type Input: std::fmt::Debug + DeserializeOwned + Default + Clone + Send + Sync + Eq;
+    type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;
+    type Output: Default + Clone + Send + Sync + Eq + Serialize;
+
+    fn ingest(&self, input: Self::Input) -> Self::Build;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
     /// nodes themselves, with no formatting except whatever is applied by a parent group.

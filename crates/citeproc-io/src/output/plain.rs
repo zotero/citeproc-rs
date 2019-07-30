@@ -18,8 +18,14 @@ impl Default for PlainText {
 }
 
 impl OutputFormat for PlainText {
+    type Input = String;
     type Build = String;
     type Output = String;
+
+    #[inline]
+    fn ingest(&self, s: Self::Input) -> Self::Build {
+        s
+    }
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {

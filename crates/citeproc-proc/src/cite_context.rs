@@ -6,8 +6,8 @@
 
 use super::DisambPass;
 use super::ProcDatabase;
-use crate::input::{Cite, Locator, Name, NumericValue, Reference};
-use crate::output::OutputFormat;
+use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
+use citeproc_io::output::OutputFormat;
 use csl::style::{Position, VariableForm};
 use csl::variables::*;
 
@@ -53,7 +53,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 db.cite_frnn(self.cite.id).is_some()
             }
             Number(NumberVariable::CitationNumber) => db.bib_number(self.cite.id).is_some(),
-            _ => self.reference.has_variable(var),
+            _ => ref_has_variable(self.reference, var),
         }
     }
 
@@ -110,16 +110,14 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     }
 }
 
-impl Reference {
-    // Implemented here privately so we don't use it by mistake.
-    // It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
-    // testing variables that only exist on the Cite.
-    fn has_variable(&self, var: AnyVariable) -> bool {
-        match var {
-            AnyVariable::Ordinary(v) => self.ordinary.contains_key(&v),
-            AnyVariable::Number(v) => self.number.contains_key(&v),
-            AnyVariable::Name(v) => self.name.contains_key(&v),
-            AnyVariable::Date(v) => self.date.contains_key(&v),
-        }
+// Implemented here privately so we don't use it by mistake.
+// It's meant to be used only by CiteContext::has_variable, which wraps it and prevents
+// testing variables that only exist on the Cite.
+fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
+    match var {
+        AnyVariable::Ordinary(v) => refr.ordinary.contains_key(&v),
+        AnyVariable::Number(v) => refr.number.contains_key(&v),
+        AnyVariable::Name(v) => refr.name.contains_key(&v),
+        AnyVariable::Date(v) => refr.date.contains_key(&v),
     }
 }

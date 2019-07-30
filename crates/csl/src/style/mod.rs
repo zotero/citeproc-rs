@@ -131,7 +131,7 @@ impl Default for Affixes {
     }
 }
 
-#[derive(Eq, Copy, Clone, PartialEq)]
+#[derive(Eq, Copy, Clone, PartialEq, Hash)]
 pub struct Formatting {
     pub font_style: FontStyle,
     pub font_variant: FontVariant,

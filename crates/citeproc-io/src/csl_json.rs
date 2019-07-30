@@ -19,6 +19,7 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
+use csl::locale::Lang;
 use csl::style::CslType;
 use csl::variables::AnyVariable;
 use csl::version::Features;
@@ -26,11 +27,10 @@ use csl::GetAttribute;
 
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
-use crate::input::reference::Reference;
+use super::reference::Reference;
 use fnv::FnvHashMap;
 use std::marker::PhantomData;
 
-use csl::locale::Lang;
 
 struct LanguageVisitor;
 

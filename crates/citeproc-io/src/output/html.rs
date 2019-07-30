@@ -203,9 +203,16 @@ impl Html {
     }
 }
 
+use super::generic::MicroHtml;
+
 impl OutputFormat for Html {
+    type Input = MicroHtml;
     type Build = Vec<InlineElement>;
     type Output = String;
+
+    fn ingest(&self, input: Self::Input) -> Self::Build {
+        return vec![];
+    }
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {

@@ -4,6 +4,15 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use pandoc_types::definition::CitationMode;
+pub fn suppression_from_pandoc_mode(mode: CitationMode) -> Option<Suppression> {
+    match mode {
+        CitationMode::AuthorInText => Some(Suppression::InText),
+        CitationMode::SuppressAuthor => Some(Suppression::Rest),
+        CitationMode::NormalCitation => None,
+    }
+}
+
 use pandoc_types::{
     definition::{Block, Citation, Inline, Pandoc as PandocDocument},
     walk::MutVisitor,
@@ -49,7 +58,7 @@ impl MutVisitor for GetClusters {
                         Cite {
                             id,
                             ref_id: p.citation_id.clone().into(),
-                            suppression: Suppression::from_pandoc_mode(p.citation_mode.clone()),
+                            suppression: suppression_from_pandoc_mode(p.citation_mode.clone()),
                             prefix: p.citation_prefix.clone(),
                             suffix: p.citation_suffix.clone(),
                             // XXX: parse these out of the suffix, and drop the rest in "suffix"

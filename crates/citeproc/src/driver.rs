@@ -5,11 +5,11 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::db::ReferenceDatabase;
-use crate::input::*;
-use crate::output::*;
+use citeproc_io::*;
+use citeproc_io::output::*;
 use crate::proc::{CiteContext, IrState, Proc};
 use crate::style::db::StyleDatabase;
-use crate::Atom;
+use csl::Atom;
 use csl::error::StyleError;
 use csl::style::Position;
 use csl::style::Style;
@@ -35,7 +35,7 @@ where
 {
 
     pub fn new(style_string: &str) -> Result<Self, StyleError> {
-        let db = Processor::new(style_string, )
+        let db = Processor::new(style_string);
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style(style);
 

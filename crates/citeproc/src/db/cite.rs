@@ -12,13 +12,14 @@ use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::{Cite, CiteId, ClusterId, Reference};
-use crate::output::Html;
+use citeproc_io::{Cite, CiteId, ClusterId, Reference};
+use citeproc_io::output::OutputFormat;
+use citeproc_io::output::html::Html;
 use crate::proc::{AddDisambTokens, DisambToken, ProcDatabase};
-use crate::Atom;
+use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
-pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
+pub trait CiteDatabase: LocaleDatabase + StyleDatabase + ProcDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
@@ -44,7 +45,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     // priv
     #[salsa::input]
-    fn cite(&self, key: CiteId) -> Arc<Cite<Html>>;
+    fn cite(&self, key: CiteId) -> Arc<Cite<<Html as OutputFormat>::Output>>;
 
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
@@ -64,43 +65,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
 
     fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
-}
-
-// We don't want too tight a coupling between the salsa DB and the proc module.
-// It's just too annoying to refactor any changes here through all the Proc implementations.
-impl<T> ProcDatabase for T
-where
-    T: CiteDatabase,
-{
-    #[inline]
-    fn default_locale(&self) -> Arc<Locale> {
-        self.merged_locale(self.style().default_locale.clone())
-    }
-    #[inline]
-    fn locale(&self, id: CiteId) -> Arc<Locale> {
-        self.locale_by_cite(id)
-    }
-    #[inline]
-    fn style_el(&self) -> Arc<Style> {
-        self.style()
-    }
-    #[inline]
-    fn cite_pos(&self, id: CiteId) -> csl::style::Position {
-        self.cite_position(id).0
-    }
-    #[inline]
-    fn cite_frnn(&self, id: CiteId) -> Option<u32> {
-        self.cite_position(id).1
-    }
-    fn bib_number(&self, id: CiteId) -> Option<u32> {
-        let cite = self.cite(id);
-        if let Some(abc) = self.sorted_refs() {
-            let (_, ref lookup) = &*abc;
-            lookup.get(&cite.ref_id).cloned()
-        } else {
-            None
-        }
-    }
 }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {

@@ -4,108 +4,106 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use super::unicode::is_latin_cyrillic;
 use super::group::GroupVars;
 use super::ir::*;
 use super::{CiteContext, IrState, Proc, ProcDatabase};
-use crate::input::{Name, PersonName};
-use crate::output::OutputFormat;
-use crate::utils::Intercalate;
+use citeproc_io::{Name, PersonName};
+use citeproc_io::utils::Intercalate;
+use citeproc_io::output::OutputFormat;
 use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
 };
 
-use crate::input::is_latin_cyrillic;
 
 mod initials;
 use self::initials::initialize;
 
-impl PersonName {
-    fn is_latin_cyrillic(&self) -> bool {
-        self.family
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-            && self
-                .given
-                .as_ref()
-                .map(|s| is_latin_cyrillic(s))
-                .unwrap_or(true)
-            && self
-                .suffix
-                .as_ref()
-                .map(|s| is_latin_cyrillic(s))
-                .unwrap_or(true)
-            && self
-                .non_dropping_particle
-                .as_ref()
-                .map(|s| is_latin_cyrillic(s))
-                .unwrap_or(true)
-            && self
-                .dropping_particle
-                .as_ref()
-                .map(|s| is_latin_cyrillic(s))
-                .unwrap_or(true)
-    }
+fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
+    pn.family
+        .as_ref()
+        .map(|s| is_latin_cyrillic(s))
+        .unwrap_or(true)
+        && pn
+        .given
+        .as_ref()
+        .map(|s| is_latin_cyrillic(s))
+        .unwrap_or(true)
+        && pn
+        .suffix
+        .as_ref()
+        .map(|s| is_latin_cyrillic(s))
+        .unwrap_or(true)
+        && pn
+        .non_dropping_particle
+        .as_ref()
+        .map(|s| is_latin_cyrillic(s))
+        .unwrap_or(true)
+        && pn
+        .dropping_particle
+        .as_ref()
+        .map(|s| is_latin_cyrillic(s))
+        .unwrap_or(true)
+}
 
-    /// For a given display order, not all the name parts will have data in them at the end. So for
-    /// this PersonName, reduce the DisplayOrdering to include only those parts that will end up
-    /// with content.
-    ///
-    /// For example, for a last-name-only name like "Megalodon", `NamePartToken::Given` is removed,
-    /// which for `&[Family, SortSeparator, Given]` would leave `&[Family, SortSeparator]` and
-    /// render "Megalodon, ", so SortSeparator also has to be removed.
-    pub fn filtered_parts(&self, order: DisplayOrdering) -> Vec<NamePartToken> {
-        let parts: Vec<NamePartToken> = order
-            .iter()
-            .cloned()
-            .filter(|npt| match npt {
-                NamePartToken::Given => self.given.is_some(),
-                NamePartToken::Family => self.family.is_some(),
-                NamePartToken::NonDroppingParticle => self.non_dropping_particle.is_some(),
-                NamePartToken::DroppingParticle => self.dropping_particle.is_some(),
-                NamePartToken::Suffix => self.suffix.is_some(),
-                NamePartToken::Space => true,
-                NamePartToken::SortSeparator => true,
-            })
-            .collect();
+/// For a given display order, not all the name parts will have data in them at the end. So for
+/// this PersonName, reduce the DisplayOrdering to include only those parts that will end up
+/// with content.
+///
+/// For example, for a last-name-only name like "Megalodon", `NamePartToken::Given` is removed,
+/// which for `&[Family, SortSeparator, Given]` would leave `&[Family, SortSeparator]` and
+/// render "Megalodon, ", so SortSeparator also has to be removed.
+pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePartToken> {
+    let parts: Vec<NamePartToken> = order
+        .iter()
+        .cloned()
+        .filter(|npt| match npt {
+            NamePartToken::Given => pn.given.is_some(),
+            NamePartToken::Family => pn.family.is_some(),
+            NamePartToken::NonDroppingParticle => pn.non_dropping_particle.is_some(),
+            NamePartToken::DroppingParticle => pn.dropping_particle.is_some(),
+            NamePartToken::Suffix => pn.suffix.is_some(),
+            NamePartToken::Space => true,
+            NamePartToken::SortSeparator => true,
+        })
+        .collect();
 
-        // don't include leading or trailing spaces or delimiters
-        let len = parts.len();
-        let take = if let Some(last) = parts.iter().rposition(|t| t.not_delim()) {
-            last + 1
-        } else {
-            len
-        };
-        // We may have dropped some of the namey name parts, leaving some stylistic tokens that
-        // are incorrect or redundant. So we need to drop stuff like 'two spaces in a row'.
-        // It *could* be done without a new Vec, but this is easier.
-        parts
-            .into_iter()
-            .take(take)
-            .fold(Vec::with_capacity(len), |mut acc, token| {
-                use self::ord::NamePartToken::*;
-                match (acc.last(), token) {
-                    (None, Space)
-                    | (None, SortSeparator)
-                    | (Some(Space), Space)
-                    | (Some(SortSeparator), SortSeparator)
-                    | (Some(SortSeparator), Space) => {
-                        // do not add the token
-                    }
-                    (Some(Space), SortSeparator) => {
-                        // recall that separator includes a space
-                        // "Doe , John" is wrong
-                        acc.pop();
-                        acc.push(SortSeparator);
-                    }
-                    (_, t) => {
-                        acc.push(t);
-                    }
+    // don't include leading or trailing spaces or delimiters
+    let len = parts.len();
+    let take = if let Some(last) = parts.iter().rposition(|t| t.not_delim()) {
+        last + 1
+    } else {
+        len
+    };
+    // We may have dropped some of the namey name parts, leaving some stylistic tokens that
+    // are incorrect or redundant. So we need to drop stuff like 'two spaces in a row'.
+    // It *could* be done without a new Vec, but this is easier.
+    parts
+        .into_iter()
+        .take(take)
+        .fold(Vec::with_capacity(len), |mut acc, token| {
+            use self::ord::NamePartToken::*;
+            match (acc.last(), token) {
+                (None, Space)
+                | (None, SortSeparator)
+                | (Some(Space), Space)
+                | (Some(SortSeparator), SortSeparator)
+                | (Some(SortSeparator), Space) => {
+                    // do not add the token
                 }
-                acc
-            })
-    }
+                (Some(Space), SortSeparator) => {
+                    // recall that separator includes a space
+                    // "Doe , John" is wrong
+                    acc.pop();
+                    acc.push(SortSeparator);
+                }
+                (_, t) => {
+                    acc.push(t);
+                }
+            }
+            acc
+        })
 }
 
 fn should_delimit_after(prec: DelimiterPrecedes, name: &OneName, count_before_spot: usize) -> bool {
@@ -263,14 +261,14 @@ impl OneName {
         let st = name_tokens.iter().map(|n| match n {
             NameToken::Name(Name::Person(ref pn)) => {
                 let order = get_display_order(
-                    pn.is_latin_cyrillic(),
+                    pn_is_latin_cyrillic(pn),
                     self.0.form == Some(NameForm::Long),
                     self.naso(seen_one),
                     db.style_el().demote_non_dropping_particle,
                 );
                 seen_one = true;
                 let mut build = vec![];
-                for part in pn.filtered_parts(order) {
+                for part in pn_filtered_parts(pn, order) {
                     // We already tested is_some() for all these Some::unwrap() calls
                     match part {
                         NamePartToken::Given => {

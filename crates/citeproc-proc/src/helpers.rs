@@ -8,8 +8,8 @@ use super::group::GroupVars;
 use super::ir::IR::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
-use crate::output::OutputFormat;
-use crate::Atom;
+use citeproc_io::output::OutputFormat;
+use csl::Atom;
 use csl::style::{Affixes, Element, Formatting};
 
 pub fn sequence<'c, O>(

@@ -4,19 +4,21 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::db::StyleDatabase;
-use crate::input::{CiteId, Locator};
-use crate::output::OutputFormat;
-use crate::Atom;
+#[macro_use]
+extern crate serde_derive;
+
+use citeproc_io::{CiteId, Locator};
+use citeproc_io::output::OutputFormat;
+use csl::Atom;
 use csl::locale::Locale;
-use csl::style::{Affixes, Element, Style};
+use csl::style::{Affixes, Element, Style, Name};
 use csl::terms::{GenderedTermSelector, TextTermSelector};
 use csl::variables::*;
 use std::collections::HashSet;
 use std::sync::Arc;
+use fnv::FnvHashMap;
 
 mod cite_context;
-pub use cite_context::CiteContext;
 mod choose;
 mod date;
 mod disamb;
@@ -24,12 +26,16 @@ mod group;
 mod helpers;
 mod ir;
 mod names;
+mod unicode;
+
 pub use self::disamb::*;
-use self::helpers::sequence;
 pub use self::ir::*;
 pub use group::GroupVars;
+pub use cite_context::CiteContext;
 
-pub trait ProcDatabase: StyleDatabase {
+use self::helpers::sequence;
+
+pub trait ProcDatabase {
     // TODO: get locales based on the current reference's language field
     fn default_locale(&self) -> Arc<Locale>;
     fn locale(&self, id: CiteId) -> Arc<Locale>;
@@ -39,9 +45,8 @@ pub trait ProcDatabase: StyleDatabase {
     /// referring to this cite's reference.
     fn cite_frnn(&self, id: CiteId) -> Option<u32>;
     fn bib_number(&self, id: CiteId) -> Option<u32>;
+    fn name_citation(&self) -> Arc<Name>;
 }
-
-use fnv::FnvHashMap;
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
@@ -79,8 +84,6 @@ pub trait Proc<'c, O>
 where
     O: OutputFormat,
 {
-    /// `'s` (the self lifetime) must live longer than the IR it generates, because the IR will
-    /// often borrow from self to be recomputed during disambiguation.
     fn intermediate(
         &self,
         db: &impl ProcDatabase,
@@ -128,7 +131,7 @@ where
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
-                use crate::output::LocalizedQuotes;
+                use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
                 let quotes = if quo { Some(&q) } else { None };
@@ -169,7 +172,7 @@ where
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
-                                let base26 = crate::utils::to_bijective_base_26(i);
+                                let base26 = citeproc_io::utils::to_bijective_base_26(i);
                                 state
                                     .tokens
                                     .insert(DisambToken::Str(base26.as_str().into()));

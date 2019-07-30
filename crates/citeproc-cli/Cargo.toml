@@ -1,0 +1,18 @@
+[package]
+name = "citeproc-cli"
+version = "0.1.0"
+authors = ["Cormac Relf <web@cormacrelf.net>"]
+edition = "2018"
+
+[[bin]]
+name = "citeproc-rs"
+path = "src/main.rs"
+
+[features]
+default = ["jemalloc"]
+jemalloc = ["jemallocator"]
+
+[dependencies]
+citeproc = { path = "../citeproc" }
+csl = { path = "../csl" }
+jemallocator = { version = "0.3.2", optional = true }

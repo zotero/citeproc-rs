@@ -15,7 +15,7 @@ use super::Processor;
 mod position {
     use super::*;
     use crate::db::cite::CiteDatabase;
-    use crate::input::{Cite, Cluster};
+    use citeproc_io::{Cite, Cluster};
     use csl::style::Position;
 
     #[test]

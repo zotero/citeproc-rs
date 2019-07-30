@@ -11,6 +11,7 @@ pub use cite::CiteDatabase;
 mod xml;
 pub use xml::{LocaleDatabase, LocaleFetcher, LocaleFetchError, StyleDatabase};
 pub mod update;
+mod proc_database;
 
 #[cfg(test)]
 pub use self::xml::Predefined;
@@ -34,11 +35,11 @@ use csl::error::StyleError;
 use csl::locale::Lang;
 use csl::style::{Position, Style};
 
-use crate::input::{Cite, CiteId, Cluster, ClusterId, Reference};
-use crate::output::OutputFormat;
-use crate::output::Html;
+use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
+// use citeproc_io::output::{OutputFormat, generic::{GenericFormat, Node}};
+use citeproc_io::output::{OutputFormat, html::Html};
 use crate::proc::{CiteContext, IrState};
-use crate::Atom;
+use csl::Atom;
 
 #[salsa::database(
     StyleDatabaseStorage,
@@ -233,7 +234,7 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Html>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<<Html as OutputFormat>::Output>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
             let mut ids = Vec::new();
@@ -271,7 +272,7 @@ impl Processor {
         // self.set_cluster_ids(Arc::new(new));
     }
 
-    pub fn replace_cluster(&mut self, cluster: Cluster<Html>) {
+    pub fn replace_cluster(&mut self, cluster: Cluster<<Html as OutputFormat>::Output>) {
         let mut ids = Vec::new();
         for cite in cluster.cites.iter() {
             ids.push(cite.id);
@@ -284,7 +285,7 @@ impl Processor {
     /// Experimental. The split ids/cites/note numbers cluster interface is clunky, plus it's hard
     /// to take into account that some footnotes don't have clusters in them, and other footnotes
     /// have MULTIPLE clusters!
-    pub fn insert_cluster(&mut self, cluster: Cluster<Html>, before: Option<ClusterId>) {
+    pub fn insert_cluster(&mut self, cluster: Cluster<<Html as OutputFormat>::Output>, before: Option<ClusterId>) {
         // TODO: return Result::Err when called with bad args
         // assumes note_number on cluster is where you want it to be
         let cluster_ids = self.cluster_ids();
@@ -317,7 +318,7 @@ impl Processor {
 
     // Getters, because the query groups have too much exposed to publish.
 
-    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Html>> {
+    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<<Html as OutputFormat>::Output>> {
         self.cite(id)
     }
 
@@ -359,3 +360,4 @@ impl Processor {
         langs.contains(lang)
     }
 }
+

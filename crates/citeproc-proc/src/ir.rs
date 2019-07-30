@@ -5,8 +5,8 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::{CiteContext, GroupVars, IrState, Proc, ProcDatabase};
-use crate::output::OutputFormat;
-use crate::Atom;
+use citeproc_io::output::OutputFormat;
+use csl::Atom;
 use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };

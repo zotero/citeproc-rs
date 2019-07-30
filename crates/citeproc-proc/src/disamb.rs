@@ -4,8 +4,8 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::input::{Date, DateOrRange, Name, NumericValue, Reference};
-use crate::Atom;
+use citeproc_io::{Date, DateOrRange, Name, NumericValue, Reference};
+use csl::Atom;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

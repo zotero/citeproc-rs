@@ -10,10 +10,10 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::input::{Cite, CiteId, ClusterId, Reference};
-use crate::output::{OutputFormat, Html};
+use citeproc_io::{Cite, CiteId, ClusterId, Reference};
+use citeproc_io::output::{OutputFormat, html::Html};
 use crate::proc::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
-use crate::Atom;
+use csl::Atom;
 
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
@@ -143,7 +143,7 @@ fn disambiguate<O: OutputFormat>(
 
 fn ctx_for<'c, O: OutputFormat>(
     db: &impl IrDatabase,
-    cite: &'c Cite<O>,
+    cite: &'c Cite<O::Output>,
     reference: &'c Reference,
 ) -> CiteContext<'c, O> {
     CiteContext {

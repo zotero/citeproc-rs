@@ -209,11 +209,11 @@ export type DateOrRange = DateLiteral | DateRaw | DateParts;
 /** Locator type, and a locator string, e.g. `["page", "56"]`. */
 export type Locator = [string, string];
 
-export type Cite = {
+export type Cite<Affix = string> = {
     citeId: number;
     id: string;
-    prefix?: any;
-    suffix?: any;
+    prefix?: Affix;
+    suffix?: Affix;
     suppression?: "InText" | "Rest" | null;
     locators?: Locator[];
     locatorExtra?: string;

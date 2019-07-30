@@ -15,14 +15,17 @@
 //!
 //! [Reference]: struct.Reference.html
 
+#[macro_use]
+extern crate serde_derive;
+
 mod cite;
 mod csl_json;
 mod date;
 mod names;
 mod numeric;
 mod reference;
-mod unicode;
-pub(crate) use self::unicode::is_latin_cyrillic;
+pub mod output;
+pub mod utils;
 
 pub use self::cite::*;
 pub use self::date::*;

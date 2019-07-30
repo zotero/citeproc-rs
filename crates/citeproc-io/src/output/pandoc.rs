@@ -64,8 +64,14 @@ impl Pandoc {
 }
 
 impl OutputFormat for Pandoc {
+    type Input = Vec<Inline>;
     type Build = Vec<Inline>;
     type Output = Vec<Inline>;
+
+    #[inline]
+    fn ingest(&self, input: Self::Input) -> Self::Build {
+        input
+    }
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {

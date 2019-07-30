@@ -8,11 +8,11 @@ pub(crate) mod db;
 pub use self::db::{LocaleFetcher, LocaleFetchError};
 pub use self::db::Processor;
 pub use self::db::update::{DocUpdate, UpdateSummary};
-pub mod input;
-pub mod output;
 mod utils;
 pub use csl::error::StyleError;
-mod proc;
+
+pub use citeproc_proc as proc;
+pub use citeproc_proc::output as output;
 
 #[macro_use]
 extern crate serde_derive;
