@@ -2,10 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
-// Copyright © 2018 Corporation for Digital Scholarship
+// Copyright © 2019 Corporation for Digital Scholarship
 
 use super::{LocalizedQuotes, OutputFormat};
-use crate::utils::{Intercalate, JoinMany};
+use crate::utils::JoinMany;
 use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
@@ -36,7 +36,6 @@ pub enum InlineElement {
 
 #[derive(Clone)]
 struct HtmlOptions {
-    use_classes: bool,
     // TODO: is it enough to have one set of localized quotes for the entire style?
     // quotes: LocalizedQuotes,
 }
@@ -44,10 +43,7 @@ struct HtmlOptions {
 #[test]
 fn test_html() {
     let tester = vec![Emph(vec![Strong(vec![Text("hello".into())])])];
-    let html = InlineElement::to_html(&tester, &HtmlOptions {
-        use_classes: false,
-        // quotes: LocalizedQuotes::
-    });
+    let html = InlineElement::to_html(&tester, &HtmlOptions { });
     assert_eq!(html, "<i><strong>hello</strong></i>");
 }
 
@@ -83,7 +79,15 @@ impl InlineElement {
                     }
                     s.push_str(r#"""#);
                 }
-                // TODO: attrs.2 (key-value pairs)?
+                if attrs.2.len() > 0 {
+                    for (key, value) in attrs.2.iter() {
+                        s.push_str(" ");
+                        s.push_str(&key);
+                        s.push_str("=\"");
+                        s.push_str(&value);
+                        s.push_str("\"");
+                    }
+                }
                 s.push_str(">");
                 for i in inners {
                     i.to_html_inner(s, options);
@@ -112,7 +116,6 @@ impl InlineElement {
                 s.push_str("</sub>");
             }
             Underline(inners) => {
-                // todo: use underline class if options.use_classes
                 s.push_str(r#"<span style="text-decoration: underline;">"#);
                 for i in inners {
                     i.to_html_inner(s, options);
@@ -120,7 +123,6 @@ impl InlineElement {
                 s.push_str("</span>");
             }
             SmallCaps(inners) => {
-                // todo: use smallcaps class if options.use_classes
                 s.push_str(r#"<span style="font-variant:small-caps;">"#);
                 for i in inners {
                     i.to_html_inner(s, options);
@@ -128,7 +130,6 @@ impl InlineElement {
                 s.push_str("</span>");
             }
             Quoted(_qt, inners) => {
-                // todo: use smallcaps class if options.use_classes
                 s.push_str(r#"<q>"#);
                 for i in inners {
                     i.to_html_inner(s, options);
@@ -136,7 +137,6 @@ impl InlineElement {
                 s.push_str("</q>");
             }
             Anchor { title: _, url, content } => {
-                // todo: use smallcaps class if options.use_classes
                 s.push_str(r#"<a href=""#);
                 // TODO: HTML-quoted-escape? the url?
                 s.push_str(&url);
@@ -275,9 +275,7 @@ impl OutputFormat for Html {
     fn output(&self, inter: Vec<InlineElement>) -> Self::Output {
         let null = FlipFlopState::default();
         let flipped = flip_flop_inlines(&inter, &null);
-        let html = InlineElement::to_html(&flipped, &HtmlOptions {
-            use_classes: true
-        });
+        let html = InlineElement::to_html(&flipped, &HtmlOptions { });
         html
     }
 }
@@ -292,6 +290,10 @@ struct FlipFlopState {
 
 fn attr_class(class: &str) -> Attr {
     Attr("".to_owned(), vec![class.to_owned()], vec![])
+}
+
+fn attr_style(style: &str) -> Attr {
+    Attr("".to_owned(), vec![], vec![("style".into(), style.to_owned())])
 }
 
 fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<InlineElement> {
@@ -310,8 +312,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             flop.in_emph = !flop.in_emph;
             let subs = fl(ils, &flop);
             if state.in_emph {
-                // unimplemented!("spans with csl-no-emph classes")
-                Some(Span(attr_class("csl-no-emph"), subs))
+                Some(Span(attr_style("font-style: initial;"), subs))
             } else {
                 Some(Emph(subs))
             }
@@ -322,7 +323,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             flop.in_strong = !flop.in_strong;
             let subs = fl(ils, &flop);
             if state.in_strong {
-                Some(Span(attr_class("csl-no-strong"), subs))
+                Some(Span(attr_style("font-weight: initial;"), subs))
             } else {
                 Some(Strong(subs))
             }
@@ -333,10 +334,17 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             flop.in_small_caps = !flop.in_small_caps;
             let subs = fl(ils, &flop);
             if state.in_small_caps {
-                Some(Span(attr_class("csl-no-smallcaps"), subs))
+                // Some(Span(attr_class("csl-no-smallcaps"), subs))
+                Some(Span(attr_style("font-variant: initial;"), subs))
             } else {
                 Some(SmallCaps(subs))
             }
+        }
+
+        // don't flip-flop underlines
+        Underline(ref ils) => {
+            let subs = fl(ils, state);
+            Some(Underline(subs))
         }
 
         Quoted(ref _q, ref ils) => {
@@ -365,11 +373,6 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             Some(Anchor { title: title.clone(), url: url.clone(), content: subs })
         }
 
-        Underline(ref ils) => {
-            let subs = fl(ils, state);
-            Some(Underline(subs))
-        }
-
         _ => None,
     }
 
@@ -390,10 +393,7 @@ mod test {
         let out = f.output(group.clone());
         assert_ne!(group, out);
 
-        let html = InlineElement::to_html(&out, &HtmlOptions {
-            use_classes: false,
-            // quotes: LocalizedQuotes::
-        });
+        let html = InlineElement::to_html(&out, &HtmlOptions { });
         assert_eq!(html, "<i>normal <span class=\"csl-no-emph \">emph</span> normal</i>");
     }
 
