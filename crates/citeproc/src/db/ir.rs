@@ -143,7 +143,7 @@ fn disambiguate<O: OutputFormat>(
 
 fn ctx_for<'c, O: OutputFormat>(
     db: &impl IrDatabase,
-    cite: &'c Cite<O::Output>,
+    cite: &'c Cite<O>,
     reference: &'c Reference,
 ) -> CiteContext<'c, O> {
     CiteContext {

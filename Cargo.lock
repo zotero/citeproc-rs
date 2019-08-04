@@ -177,6 +177,7 @@ version = "0.0.1"
 dependencies = [
  "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "citeproc 0.0.1",
+ "citeproc-io 0.1.0",
  "console_error_panic_hook 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "console_log 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "csl 0.0.1",

@@ -12,7 +12,6 @@ mod utils;
 pub use csl::error::StyleError;
 
 pub use citeproc_proc as proc;
-pub use citeproc_proc::output as output;
 
 #[macro_use]
 extern crate serde_derive;

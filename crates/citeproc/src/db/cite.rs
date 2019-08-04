@@ -45,7 +45,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase + ProcDatabase {
 
     // priv
     #[salsa::input]
-    fn cite(&self, key: CiteId) -> Arc<Cite<<Html as OutputFormat>::Output>>;
+    fn cite(&self, key: CiteId) -> Arc<Cite<Html>>;
 
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
