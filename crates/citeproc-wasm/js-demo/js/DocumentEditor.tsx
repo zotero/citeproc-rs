@@ -66,7 +66,7 @@ const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) 
     let [locType, setLocType] = useState(initT);
     let [locator, setLocator] = useState(initL);
     const up = (k?: string) => {
-        if (k) setKey(k);
+        setKey(k);
         update({ ...cite, id: k });
     };
     const upLocator = useCallback((l: string, ty = "page") => {
