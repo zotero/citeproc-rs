@@ -1,5 +1,5 @@
 import { Document, RenderedDocument } from './Document';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Cluster, Cite } from '../../pkg';
 
 export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
@@ -58,13 +58,25 @@ const ClusterEditor = ({cluster, updateCluster}: {cluster: Cluster, updateCluste
 }
 
 const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) => {
+    let initT: string, initL: string;
+    if (cite.locators && cite.locators.length > 0) {
+        [initT, initL] = cite.locators[0];
+    }
     let [key, setKey] = useState(cite.id);
-    const up = (s: string) => {
-        setKey(s);
-        let neu = { ...cite, id: s };
-        update(neu);
+    let [locType, setLocType] = useState(initT);
+    let [locator, setLocator] = useState(initL);
+    const up = (k?: string) => {
+        if (k) setKey(k);
+        update({ ...cite, id: k });
     };
+    const upLocator = useCallback((l: string, ty = "page") => {
+        setLocator(l);
+        setLocType(ty);
+        let neu: [string, string][] = l ? [[ty, l]] : undefined;
+        update({ ...cite, locators: neu });
+    }, []);
     return <div>
         <input value={key} onChange={(e) => up(e.target.value)} />
+        <input value={locator} onChange={(e) => upLocator(e.target.value)} />
     </div>;
 }
