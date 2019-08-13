@@ -24,7 +24,7 @@ matrix:
     before_script:
       - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
     script:
-      - (cd crates/citeproc-wasm/js-demo && yarn build)
+      - (cd crates/citeproc-wasm/js-demo && yarn && yarn build)
       # - cargo test --all
       # - (cd citeproc-wasm && wasm-pack build)
       # - (cd citeproc-wasm && wasm-pack test --firefox --headless)
