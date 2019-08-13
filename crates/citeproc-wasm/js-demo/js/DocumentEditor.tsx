@@ -65,16 +65,16 @@ const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) 
     let [key, setKey] = useState(cite.id);
     let [locType, setLocType] = useState(initT);
     let [locator, setLocator] = useState(initL);
-    const up = (k?: string) => {
+    const up = useCallback((k?: string) => {
         setKey(k);
         update({ ...cite, id: k });
-    };
+    }, [ locator, locType ]);
     const upLocator = useCallback((l: string, ty = "page") => {
         setLocator(l);
         setLocType(ty);
         let neu: [string, string][] = l ? [[ty, l]] : undefined;
         update({ ...cite, locators: neu });
-    }, []);
+    }, [ key ]);
     return <div>
         <input value={key} onChange={(e) => up(e.target.value)} />
         <input value={locator} onChange={(e) => upLocator(e.target.value)} />
