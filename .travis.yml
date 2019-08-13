@@ -16,17 +16,26 @@ branches:
 matrix:
   include:
 
-  - rust: stable
+  - rust: nightly
     env: RUST_BACKTRACE=1
     # addons:
     #   firefox: latest
       # chrome: stable
-    # before_script:
-    #   - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+    before_script:
+      - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
     script:
-      - cargo test --all
+      - (cd crates/citeproc-wasm/js-demo && yarn build)
+      # - cargo test --all
       # - (cd citeproc-wasm && wasm-pack build)
       # - (cd citeproc-wasm && wasm-pack test --firefox --headless)
+    deploy:
+      provider: pages
+      skip_cleanup: true
+      local_dir: "crates/citeproc-wasm/js-demo/dist/"
+      repo: "cormacrelf/citeproc-wasm-demo"
+      github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
+      on:
+        branch: master
 
   # # Builds with wasm-pack.
   # - rust: beta

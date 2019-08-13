@@ -398,10 +398,10 @@ mod test {
         let c = f.plain("normal");
         let group = f.group(vec![a, b, c], " ", Some(Formatting::italic()));
         let out = f.output(group.clone());
-        assert_ne!(group, out);
 
-        let html = InlineElement::to_html(&out, &HtmlOptions { });
-        assert_eq!(html, "<i>normal <span class=\"csl-no-emph \">emph</span> normal</i>");
+        let group_str = InlineElement::to_html(&group, &HtmlOptions { });
+        assert_ne!(group_str, out);
+        assert_eq!(out, "<i>normal <span class=\"csl-no-emph \">emph</span> normal</i>");
     }
 
 }
