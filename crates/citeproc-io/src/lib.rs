@@ -27,6 +27,8 @@ pub mod output;
 mod reference;
 pub mod utils;
 
+pub use csl_json::IdOrNumber;
+
 pub use self::cite::*;
 pub use self::date::*;
 pub use self::names::*;

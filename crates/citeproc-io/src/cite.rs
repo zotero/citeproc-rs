@@ -36,6 +36,15 @@ impl Locator {
     }
 }
 
+use serde::de::{Deserialize, Deserializer};
+
+/// Techincally reference IDs are allowed to be numbers.
+fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error> where D: Deserializer<'de> {
+    use super::csl_json::IdOrNumber;
+    let s = IdOrNumber::deserialize(d)?;
+    Ok(Atom::from(s.0))
+}
+
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
@@ -44,18 +53,24 @@ impl Locator {
 pub struct Cite<O: OutputFormat> {
     #[serde(rename = "citeId")]
     pub id: CiteId,
-    #[serde(rename = "id")]
+
+    #[serde(rename = "id", deserialize_with = "get_ref_id")]
     pub ref_id: Atom,
+
     #[serde(default)]
     pub prefix: O::Input,
+
     #[serde(default)]
     pub suffix: O::Input,
+
     #[serde(default)]
     pub suppression: Option<Suppression>,
+
     // TODO: parse these out of the locator string
     // Enforce len() == 1 in CSL mode
     #[serde(default)]
     pub locators: Vec<Locator>,
+
     // CSL-M only
     #[serde(default)]
     pub locator_extra: Option<String>,

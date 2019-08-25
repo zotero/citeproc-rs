@@ -87,6 +87,54 @@ enum Field {
     Any(WrapVar),
 }
 
+pub struct IdOrNumber(pub String);
+
+impl<'de> Deserialize<'de> for IdOrNumber {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ParseIntVisitor;
+        impl<'de> Visitor<'de> for ParseIntVisitor {
+            type Value = IdOrNumber;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an integer or a string that's actually just an integer")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(value).map(|i| IdOrNumber(i.to_string()))
+            }
+
+            fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
+            }
+
+            fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
+            }
+
+            fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
+            }
+
+        }
+        deserializer.deserialize_any(ParseIntVisitor)
+    }
+}
+
 struct WrapType(CslType);
 
 impl<'de> Deserialize<'de> for WrapType {
@@ -141,7 +189,7 @@ impl<'de> Deserialize<'de> for Reference {
             where
                 V: MapAccess<'de>,
             {
-                let mut id = None;
+                let mut id: Option<IdOrNumber> = None;
                 let mut csl_type: Option<WrapType> = None;
                 let mut language = None;
                 let mut ordinary = FnvHashMap::default();
@@ -206,7 +254,7 @@ impl<'de> Deserialize<'de> for Reference {
                     }
                 }
                 Ok(Reference {
-                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    id: id.map(|i| csl::Atom::from(i.0)).ok_or_else(|| de::Error::missing_field("id"))?,
                     csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
                     language,
                     ordinary,
@@ -297,6 +345,7 @@ impl<'de> Deserialize<'de> for NumericValue {
 
 // newtype these so we can have a different implementation
 struct DateParts(DateOrRange);
+
 struct DateInt(i32);
 
 impl<'de> Deserialize<'de> for DateInt {
@@ -371,6 +420,68 @@ impl<'de> Deserialize<'de> for DateInt {
     }
 }
 
+struct DateUInt(u32);
+
+impl<'de> Deserialize<'de> for DateUInt {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ParseIntVisitor;
+        impl<'de> Visitor<'de> for ParseIntVisitor {
+            type Value = DateUInt;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an unsigned integer or a string that's actually just an unsigned integer")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                value
+                    .parse::<u32>()
+                    .map_err(|_| de::Error::invalid_value(de::Unexpected::Str(value), &self))
+                    .map(|i| DateUInt(i))
+            }
+
+            fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(DateUInt(u32::from(value)))
+            }
+
+            fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(DateUInt(u32::from(value)))
+            }
+
+            fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(DateUInt(u32::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                use std::u32;
+                if value <= u64::from(u32::MAX - 1) {
+                    Ok(DateUInt(value as u32))
+                } else {
+                    Err(E::custom(format!("u32 out of range: {}", value)))
+                }
+            }
+        }
+        deserializer.deserialize_any(ParseIntVisitor)
+    }
+}
+
 impl<'de> Deserialize<'de> for Date {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -392,8 +503,8 @@ impl<'de> Deserialize<'de> for Date {
                 let year: DateInt = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let month = seq.next_element()?.unwrap_or(0 as u32);
-                let day = seq.next_element()?.unwrap_or(0 as u32);
+                let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
+                let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
                 let month = if month >= 1 && month <= 12 { month } else { 0 };
                 let day = if day >= 1 && day <= 31 { day } else { 0 };
                 Ok(Date::new(year.0, month, day))

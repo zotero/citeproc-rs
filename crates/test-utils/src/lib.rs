@@ -20,10 +20,20 @@ use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 
+
+/// Techincally reference IDs are allowed to be numbers.
+fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error> where D: Deserializer<'de> {
+    use citeproc_io::IdOrNumber;
+    let s = IdOrNumber::deserialize(d)?;
+    Ok(s.0)
+}
+
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 struct CitationItem {
+    #[serde(deserialize_with = "get_ref_id")]
     id: String,
+
     #[serde(default)]
     label: Option<String>,
     #[serde(default)]
