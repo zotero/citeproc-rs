@@ -4,9 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-#![feature(async_await)]
-#![feature(async_closure)]
-
 mod utils;
 
 #[macro_use]
@@ -24,8 +21,8 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
-use citeproc_io::ClusterId;
 use citeproc::Processor;
+use citeproc_io::ClusterId;
 use csl::locale::Lang;
 
 #[wasm_bindgen]
@@ -57,7 +54,8 @@ impl Driver {
 
     #[wasm_bindgen(js_name = "setStyle")]
     pub fn set_style(&mut self, style_text: &str) -> JsValue {
-        self.engine.borrow_mut()
+        self.engine
+            .borrow_mut()
             .set_style_text(style_text)
             .map_err(|e| JsValue::from_serde(&e).unwrap())
             .err()
@@ -94,14 +92,22 @@ impl Driver {
 
     #[wasm_bindgen(js_name = "replaceCluster")]
     pub fn replace_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
-        let cluster = cluster.into_serde().map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
+        let cluster = cluster
+            .into_serde()
+            .map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
         let mut eng = self.engine.borrow_mut();
         Ok(eng.replace_cluster(cluster))
     }
 
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(&mut self, cluster: JsValue, before: Option<ClusterId>) -> Result<(), JsValue> {
-        let cluster = cluster.into_serde().map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
+    pub fn insert_cluster(
+        &mut self,
+        cluster: JsValue,
+        before: Option<ClusterId>,
+    ) -> Result<(), JsValue> {
+        let cluster = cluster
+            .into_serde()
+            .map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
         let mut eng = self.engine.borrow_mut();
         Ok(eng.insert_cluster(cluster, before))
     }
@@ -122,7 +128,9 @@ impl Driver {
     pub fn renumber_clusters(&mut self, mappings: &[u32]) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
         if mappings.len() % 2 != 0 {
-            return Err(ErrorPlaceholder::throw("incorrect arguments; should be [id, nn, id2, nn2]"));
+            return Err(ErrorPlaceholder::throw(
+                "incorrect arguments; should be [id, nn, id2, nn2]",
+            ));
         }
         eng.renumber_clusters(mappings);
         Ok(())
@@ -146,15 +154,14 @@ impl Driver {
     pub fn fetch_all(&self) -> Promise {
         let rc = self.engine.clone();
         let fetcher = self.fetcher.clone();
-        let future = async move || -> Result<JsValue, JsValue> {
+        let future = async move {
             // Keep these two RefCell borrows short-lived. The { scope } ensures the first borrow
             // ends before the JS code runs indefinitely. Just in case someone calls the Driver
             // while a request is in-flight. The ultimate effect is that the RefCell is only
             // borrowed for the time that the Rust code is in control.
             let langs: Vec<Lang> = {
                 let eng = rc.borrow();
-                eng
-                    .get_langs_in_use()
+                eng.get_langs_in_use()
                     .iter()
                     // we definitely have en-US, it's statically included
                     .filter(|l| **l != Lang::en_us() && !eng.has_cached_locale(l))
@@ -166,7 +173,7 @@ impl Driver {
             eng.store_locales(pairs);
             Ok(JsValue::null())
         };
-        future_to_promise(future())
+        future_to_promise(future)
     }
 }
 
@@ -281,7 +288,7 @@ async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, Strin
                 // JS consumer did not return a string. Assume it was null/undefined/etc, so no
                 // locale was available.
                 None => {}
-            }
+            },
             // ~= Promise.catch; some async JS code threw an Error.
             Err(e) => {
                 error!("caught: failed to fetch lang {}", lang);
