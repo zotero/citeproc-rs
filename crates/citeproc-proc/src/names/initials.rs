@@ -86,7 +86,6 @@ pub fn initialize<'n>(
 
         for word in given_name.split(&[' ', '.'][..]) {
             if word == "" {
-
             } else if !word.chars().nth(0).unwrap().is_uppercase() {
                 // 'not uppercase' also includes uncased code points like Chinese or random punctuation
                 process_token(Other(word));
@@ -102,7 +101,7 @@ pub fn initialize<'n>(
                 }
             }
         }
-        Cow::Owned(build)
+        Cow::Owned(build.trim().to_string())
     } else {
         Cow::Borrowed(given_name)
     }
