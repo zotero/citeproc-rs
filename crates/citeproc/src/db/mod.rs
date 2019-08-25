@@ -197,6 +197,12 @@ impl Processor {
         summary
     }
 
+    pub fn drain(&mut self) {
+        self.compute();
+        let mut queue = self.queue.lock();
+        queue.clear();
+    }
+
     // TODO: make this use
     pub fn single(&self, ref_id: &Atom) -> <Html as OutputFormat>::Output {
         let fmt = Html::default();
@@ -273,6 +279,13 @@ impl Processor {
     }
 
     pub fn replace_cluster(&mut self, cluster: Cluster<Html>) {
+        let cluster_ids = self.cluster_ids();
+        if !cluster_ids.contains(&cluster.id) {
+            let mut new_cluster_ids = (*cluster_ids).clone();
+            new_cluster_ids.push(cluster.id);
+            self.set_cluster_ids(Arc::new(new_cluster_ids));
+        }
+
         let mut ids = Vec::new();
         for cite in cluster.cites.iter() {
             ids.push(cite.id);

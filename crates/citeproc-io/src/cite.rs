@@ -25,7 +25,7 @@ pub enum Suppression {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
-pub struct Locator(LocatorType, NumericValue);
+pub struct Locator(pub LocatorType, pub NumericValue);
 
 impl Locator {
     pub fn type_of(&self) -> LocatorType {

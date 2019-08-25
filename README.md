@@ -43,6 +43,8 @@ later, or a nightly compiler. You should install it with
 * Pandoc-JSON interop using (currently) an internal fork of
   [`pandoc_types`](https://github.com/elliottslaughter/rust-pandoc-types/).
 
+
+
 ## Try it out!
 
 Currently it can:
@@ -61,7 +63,7 @@ Currently it can:
 
 ```sh
 git clone https://github.com/cormacrelf/citeproc-rs
-cd citeproc-rs/citeproc
+cd citeproc-rs/crates/citeproc-cli
 cargo run -- --csl ../example.csl # runs on a predefined single ref
 cargo run -- --csl ../example.csl --library path/to/csl-json/file.json
 ```
@@ -69,7 +71,7 @@ cargo run -- --csl ../example.csl --library path/to/csl-json/file.json
 To test it across the entire styles repo:
 
 ```sh
-cd citeproc-rs/citeproc
+cd citeproc-rs/crates/citeproc-cli
 cargo install --path . --force
 cd ../..
 git clone https://github.com/citation-style-language/styles
@@ -92,6 +94,7 @@ See the [directories](https://docs.rs/directories) crate for more.
 
 ```sh
 git clone https://github.com/citation-style-language/locales $DIR_FROM_ABOVE
+cd crates/citeproc-cli
 cargo run -- parse-locale --lang en-GB
 ```
 
@@ -127,3 +130,23 @@ pandoc -F ../target/debug/citeproc-rs input.md -s -o out.html
 open out.html
 ```
 
+## Running the CSL test suite
+
+```sh
+# setup
+cd crates/citeproc/tests/data
+git clone https://github.com/citation-style-language/test-suite
+
+# the whole suite in parallel
+cargo test
+
+# for a particular test, paste the file name
+cargo test name_ParsedDroppingParticleWithApostrophe.txt
+
+# for a subset of tests with some commonality in the name (this runs 8 of them)
+cargo test name_Initials
+```
+
+Run `cargo test -- --test-threads 1` to have the tests run in a deterministic 
+order (i.e. alphabetically); this helps show related tests alongside one 
+another in the terminal output. Run `cargo test -- --help` for more options.

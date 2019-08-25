@@ -210,10 +210,11 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
 }
 
 fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>) {
-    db.cite_positions()
-        .get(&key)
-        .expect("called cite_position on unknown cite id")
-        .clone()
+    if let Some(x) = db.cite_positions().get(&key) {
+        return x.clone()
+    } else {
+        panic!("called cite_position on unknown cite id, {}", key);
+    }
 }
 
 use csl::style::{Sort, SortSource};
