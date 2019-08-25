@@ -4,18 +4,17 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::unicode::is_latin_cyrillic;
 use super::group::GroupVars;
 use super::ir::*;
+use super::unicode::is_latin_cyrillic;
 use super::{CiteContext, IrState, Proc, ProcDatabase};
-use citeproc_io::{Name, PersonName};
-use citeproc_io::utils::Intercalate;
 use citeproc_io::output::OutputFormat;
+use citeproc_io::utils::Intercalate;
+use citeproc_io::{Name, PersonName};
 use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
 };
-
 
 mod initials;
 use self::initials::initialize;
@@ -26,25 +25,25 @@ fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
         .map(|s| is_latin_cyrillic(s))
         .unwrap_or(true)
         && pn
-        .given
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
+            .given
+            .as_ref()
+            .map(|s| is_latin_cyrillic(s))
+            .unwrap_or(true)
         && pn
-        .suffix
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
+            .suffix
+            .as_ref()
+            .map(|s| is_latin_cyrillic(s))
+            .unwrap_or(true)
         && pn
-        .non_dropping_particle
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
+            .non_dropping_particle
+            .as_ref()
+            .map(|s| is_latin_cyrillic(s))
+            .unwrap_or(true)
         && pn
-        .dropping_particle
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
+            .dropping_particle
+            .as_ref()
+            .map(|s| is_latin_cyrillic(s))
+            .unwrap_or(true)
 }
 
 /// For a given display order, not all the name parts will have data in them at the end. So for
@@ -285,7 +284,7 @@ impl OneName {
                             }
                         }
                         NamePartToken::Family => {
-                            let name_part = &self.0.name_part_given;
+                            let name_part = &self.0.name_part_family;
                             let string = pn.family.as_ref().unwrap();
                             build.push(format_with_part(name_part, &string));
                         }
@@ -510,7 +509,6 @@ mod ord {
     static NON_LATIN_SHORT: DisplayOrdering = &[Family];
     static NON_LATIN_SORT_LONG: SortOrdering = &[One(Family), One(Given)];
     static NON_LATIN_SORT_SHORT: SortOrdering = &[One(Family)];
-
 }
 
 impl<'c, O> Proc<'c, O> for Names
