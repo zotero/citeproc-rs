@@ -133,9 +133,10 @@ open out.html
 ## Running the CSL test suite
 
 ```sh
-# setup
-cd crates/citeproc/tests/data
-git clone https://github.com/citation-style-language/test-suite
+# setup once
+cargo pull-test-suite
+
+cd crates/citeproc
 
 # the whole suite in parallel
 cargo test

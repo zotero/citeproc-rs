@@ -1,0 +1,2 @@
+[alias]
+pull-test-suite   = "run --package tools --bin tools -- pull-test-suite"
