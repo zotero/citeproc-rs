@@ -6,8 +6,8 @@
 
 #![allow(dead_code)]
 
-use citeproc_io::ClusterId;
 use super::ir::IrDatabase;
+use citeproc_io::ClusterId;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum DocUpdate {
@@ -18,24 +18,24 @@ pub enum DocUpdate {
     WholeBibliography,
 }
 
+use citeproc_io::output::{html::Html, OutputFormat};
 use std::sync::Arc;
-use citeproc_io::output::{OutputFormat, html::Html};
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateSummary<O : OutputFormat = Html> {
+pub struct UpdateSummary<O: OutputFormat = Html> {
     // A list of clusters that were updated, paired with the formatted output for each
     pub clusters: Vec<(ClusterId, Arc<O::Output>)>,
-
     // Not sure if this way is better than DocUpdate::BibEntry(id)
     // pub bib_entries: Vec<(u32, Arc<O::Output>)>,
 }
 
 impl UpdateSummary {
     pub fn summarize(db: &impl IrDatabase, updates: &[DocUpdate]) -> Self {
-        let ids = updates
-            .iter()
-            .filter_map(|&u| match u { DocUpdate::Cluster(x) => Some(x), _ => None });
+        let ids = updates.iter().filter_map(|&u| match u {
+            DocUpdate::Cluster(x) => Some(x),
+            _ => None,
+        });
         let mut set = fnv::FnvHashSet::default();
         for id in ids {
             set.insert(id);
@@ -44,9 +44,6 @@ impl UpdateSummary {
         for id in set {
             clusters.push((id, db.built_cluster(id)));
         }
-        UpdateSummary {
-            clusters,
-        }
+        UpdateSummary { clusters }
     }
 }
-

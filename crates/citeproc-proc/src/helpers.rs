@@ -9,8 +9,8 @@ use super::ir::IR::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
 use citeproc_io::output::OutputFormat;
-use csl::Atom;
 use csl::style::{Affixes, Element, Formatting};
+use csl::Atom;
 
 pub fn sequence<'c, O>(
     db: &impl ProcDatabase,

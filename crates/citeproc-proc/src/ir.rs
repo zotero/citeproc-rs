@@ -6,10 +6,10 @@
 
 use super::{CiteContext, GroupVars, IrState, Proc, ProcDatabase};
 use citeproc_io::output::OutputFormat;
-use csl::Atom;
 use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
+use csl::Atom;
 use std::sync::Arc;
 
 // /// Just exists to make it easier to add other tree-folded summary data.

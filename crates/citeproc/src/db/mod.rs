@@ -9,27 +9,24 @@ pub use ir::IrDatabase;
 mod cite;
 pub use cite::CiteDatabase;
 mod xml;
-pub use xml::{LocaleDatabase, LocaleFetcher, LocaleFetchError, StyleDatabase};
-pub mod update;
+pub use xml::{LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase};
 mod proc_database;
-
-#[cfg(test)]
-pub use self::xml::Predefined;
+pub mod update;
 
 #[cfg(test)]
 mod test;
 
 use self::cite::CiteDatabaseStorage;
 use self::ir::IrDatabaseStorage;
-use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 use self::update::{DocUpdate, UpdateSummary};
+use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 
+use parking_lot::Mutex;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 use csl::error::StyleError;
 use csl::locale::Lang;
@@ -37,8 +34,8 @@ use csl::style::{Position, Style};
 
 use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
 // use citeproc_io::output::{OutputFormat, generic::{GenericFormat, Node}};
-use citeproc_io::output::{OutputFormat, html::Html};
 use crate::proc::{CiteContext, IrState};
+use citeproc_io::output::{html::Html, OutputFormat};
 use csl::Atom;
 
 #[salsa::database(
@@ -79,9 +76,9 @@ impl salsa::Database for Processor {
                     // info!("produced update, {:?}", upd);
                     q.push(upd)
                 }
-                _ => {},
+                _ => {}
             },
-            _ => {},
+            _ => {}
         };
     }
 }
@@ -132,7 +129,11 @@ impl Processor {
         db
     }
 
-    pub fn new(style_string: &str, fetcher: Arc<dyn LocaleFetcher>, save_updates: bool) -> Result<Self, StyleError> {
+    pub fn new(
+        style_string: &str,
+        fetcher: Arc<dyn LocaleFetcher>,
+        save_updates: bool,
+    ) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
         db.save_updates = save_updates;
         let style = Arc::new(Style::from_str(style_string)?);
@@ -162,7 +163,8 @@ impl Processor {
     // Probably better to have this as a real query.
     pub fn compute(&self) {
         let cluster_ids = self.cluster_ids();
-        #[cfg(feature = "rayon")] {
+        #[cfg(feature = "rayon")]
+        {
             use rayon::prelude::*;
             let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
@@ -179,7 +181,8 @@ impl Processor {
                     snap.0.built_cluster(cluster_id);
                 });
         }
-        #[cfg(not(feature = "rayon"))] {
+        #[cfg(not(feature = "rayon"))]
+        {
             for &cluster_id in cluster_ids.iter() {
                 self.built_cluster(cluster_id);
             }
@@ -373,4 +376,3 @@ impl Processor {
         langs.contains(lang)
     }
 }
-

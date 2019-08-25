@@ -4,22 +4,22 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-#[macro_use]
-extern crate serde_derive;
+// #[macro_use]
+// extern crate serde_derive;
 
-use citeproc_io::{CiteId, Locator};
 use citeproc_io::output::OutputFormat;
-use csl::Atom;
+use citeproc_io::{CiteId, Locator};
 use csl::locale::Locale;
-use csl::style::{Affixes, Element, Style, Name};
+use csl::style::{Affixes, Element, Name, Style};
 use csl::terms::{GenderedTermSelector, TextTermSelector};
 use csl::variables::*;
+use csl::Atom;
+use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use fnv::FnvHashMap;
 
-mod cite_context;
 mod choose;
+mod cite_context;
 mod date;
 mod disamb;
 mod group;
@@ -30,8 +30,8 @@ mod unicode;
 
 pub use self::disamb::*;
 pub use self::ir::*;
-pub use group::GroupVars;
 pub use cite_context::CiteContext;
+pub use group::GroupVars;
 
 use self::helpers::sequence;
 

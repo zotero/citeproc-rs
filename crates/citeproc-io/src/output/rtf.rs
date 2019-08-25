@@ -4,13 +4,10 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::{LocalizedQuotes, OutputFormat};
-use crate::utils::JoinMany;
-use csl::style::{
-    FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
-};
-
-use rtf_grimoire::tokenizer::Token;
+// use super::{LocalizedQuotes, OutputFormat};
+// use crate::utils::JoinMany;
+// use csl::style::{FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment};
+// use rtf_grimoire::tokenizer::Token;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Rtf;

@@ -384,7 +384,6 @@ impl<'de> Deserialize<'de> for Mode {
     }
 }
 
-
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TestCase {
     pub mode: Mode,

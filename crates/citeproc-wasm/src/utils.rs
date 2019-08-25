@@ -5,8 +5,8 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use cfg_if::cfg_if;
-use citeproc::{LocaleFetcher, LocaleFetchError};
-use csl::locale::{Lang, IsoLang, IsoCountry};
+use citeproc::{LocaleFetchError, LocaleFetcher};
+use csl::locale::{IsoCountry, IsoLang, Lang};
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 

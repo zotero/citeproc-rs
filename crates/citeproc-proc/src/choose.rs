@@ -8,8 +8,8 @@ use super::helpers::sequence;
 use super::ir::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
-use citeproc_io::DateOrRange;
 use citeproc_io::output::OutputFormat;
+use citeproc_io::DateOrRange;
 use csl::style::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
 

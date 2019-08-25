@@ -41,20 +41,20 @@ pub enum InlineElement {
         title: String,
         url: String,
         content: Vec<InlineElement>,
-    }
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlOptions {
     // TODO: is it enough to have one set of localized quotes for the entire style?
     // quotes: LocalizedQuotes,
-    use_b_for_strong: bool
+    use_b_for_strong: bool,
 }
 
 impl Default for HtmlOptions {
     fn default() -> Self {
         HtmlOptions {
-            use_b_for_strong: false
+            use_b_for_strong: false,
         }
     }
 }
@@ -62,7 +62,7 @@ impl Default for HtmlOptions {
 impl HtmlOptions {
     pub fn test_suite() -> Self {
         HtmlOptions {
-            use_b_for_strong: true
+            use_b_for_strong: true,
         }
     }
 }
@@ -171,7 +171,11 @@ impl InlineElement {
                 }
                 s.push_str("</q>");
             }
-            Anchor { title: _, url, content } => {
+            Anchor {
+                title: _,
+                url,
+                content,
+            } => {
                 s.push_str(r#"<a href=""#);
                 // TODO: HTML-quoted-escape? the url?
                 s.push_str(&url);
@@ -194,7 +198,7 @@ use self::InlineElement::*;
 impl Default for Html {
     fn default() -> Self {
         Html {
-            options: HtmlOptions::default()
+            options: HtmlOptions::default(),
         }
     }
 }
@@ -206,7 +210,11 @@ impl Html {
     /// elements. So formatting with two of those styles at once requires wrapping twice, in any
     /// order.
 
-    fn fmt_vec(&self, inlines: Vec<InlineElement>, formatting: Option<Formatting>) -> Vec<InlineElement> {
+    fn fmt_vec(
+        &self,
+        inlines: Vec<InlineElement>,
+        formatting: Option<Formatting>,
+    ) -> Vec<InlineElement> {
         if let Some(f) = formatting {
             let mut current = inlines;
 
@@ -337,7 +345,11 @@ struct FlipFlopState {
 // }
 
 fn attr_style(style: &str) -> Attr {
-    Attr("".to_owned(), vec![], vec![("style".into(), style.to_owned())])
+    Attr(
+        "".to_owned(),
+        vec![],
+        vec![("style".into(), style.to_owned())],
+    )
 }
 
 fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<InlineElement> {
@@ -411,9 +423,17 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             Some(Subscript(subs))
         }
 
-        Anchor {title, url, content } => {
+        Anchor {
+            title,
+            url,
+            content,
+        } => {
             let subs = fl(content, state);
-            Some(Anchor { title: title.clone(), url: url.clone(), content: subs })
+            Some(Anchor {
+                title: title.clone(),
+                url: url.clone(),
+                content: subs,
+            })
         }
 
         _ => None,
@@ -437,7 +457,9 @@ mod test {
 
         let group_str = InlineElement::to_html(&group, &HtmlOptions::default());
         assert_ne!(group_str, out);
-        assert_eq!(out, "<i>normal <span style=\"font-style: initial;\">emph</span> normal</i>");
+        assert_eq!(
+            out,
+            "<i>normal <span style=\"font-style: initial;\">emph</span> normal</i>"
+        );
     }
-
 }

@@ -276,5 +276,4 @@ mod test {
         let out = f.output(group.clone());
         assert_ne!(group, out);
     }
-
 }

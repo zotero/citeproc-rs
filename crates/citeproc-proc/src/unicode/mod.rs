@@ -6,6 +6,7 @@
 
 #[allow(dead_code)]
 #[allow(clippy::all)]
+#[rustfmt::skip]
 mod script;
 use self::script::{COMMON, CYRILLIC, LATIN};
 

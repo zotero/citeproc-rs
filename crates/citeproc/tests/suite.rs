@@ -7,14 +7,14 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(datatest::runner)]
 
-use test_utils::{TestCase, parse_human_test};
+use test_utils::{parse_human_test, TestCase};
 
-use std::collections::HashSet;
-use std::fs::read_to_string;
-use std::path::Path;
-use std::fmt;
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
+use std::collections::HashSet;
+use std::fmt;
+use std::fs::read_to_string;
+use std::path::Path;
 
 /// See https://github.com/colin-kiegel/rust-pretty-assertions/issues/24
 ///

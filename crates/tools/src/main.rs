@@ -8,9 +8,7 @@ fn main() -> Result<(), ()> {
         .subcommand(SubCommand::with_name("pull-test-suite"))
         .get_matches();
     match matches.subcommand() {
-        ("pull-test-suite", Some(_matches)) => {
-            pull_test_suite()
-        }
+        ("pull-test-suite", Some(_matches)) => pull_test_suite(),
         _ => unreachable!(),
     }
     Ok(())

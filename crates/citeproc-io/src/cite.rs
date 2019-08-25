@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::{DateOrRange, NumericValue};
 use super::output::OutputFormat;
+use super::{DateOrRange, NumericValue};
 use csl::terms::LocatorType;
 use csl::Atom;
 

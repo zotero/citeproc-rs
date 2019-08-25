@@ -13,9 +13,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::{Cite, CiteId, ClusterId, Reference};
-use citeproc_io::output::OutputFormat;
-use citeproc_io::output::html::Html;
+// use citeproc_io::output::OutputFormat;
 use crate::proc::{AddDisambTokens, DisambToken, ProcDatabase};
+use citeproc_io::output::html::Html;
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -188,7 +188,12 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     _ => Position::IbidWithLocator,
                 });
             if let Some(&first_note_number) = seen.get(&cite.ref_id) {
-                assert!(note_number >= first_note_number, "note numbers not monotonic: {} came after but was less than {}", note_number, first_note_number);
+                assert!(
+                    note_number >= first_note_number,
+                    "note numbers not monotonic: {} came after but was less than {}",
+                    note_number,
+                    first_note_number
+                );
                 if let Some(pos) = matching_prev {
                     map.insert(cite_id, (pos, Some(first_note_number)));
                 } else if note_number == first_note_number {
@@ -211,7 +216,7 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
 
 fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>) {
     if let Some(x) = db.cite_positions().get(&key) {
-        return x.clone()
+        return x.clone();
     } else {
         panic!("called cite_position on unknown cite id, {}", key);
     }

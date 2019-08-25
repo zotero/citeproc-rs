@@ -10,11 +10,11 @@ use super::ir::*;
 use super::ProcDatabase;
 use super::{CiteContext, IrState, Proc};
 use citeproc_io::output::OutputFormat;
+use citeproc_io::{Date, DateOrRange};
 use csl::style::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
 };
-use citeproc_io::{Date, DateOrRange};
 
 impl<'c, O> Proc<'c, O> for BodyDate
 where

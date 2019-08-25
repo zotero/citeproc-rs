@@ -23,8 +23,8 @@ mod csl_json;
 mod date;
 mod names;
 mod numeric;
-mod reference;
 pub mod output;
+mod reference;
 pub mod utils;
 
 pub use self::cite::*;

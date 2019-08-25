@@ -6,13 +6,13 @@
 
 use std::sync::Arc;
 
-use csl::locale::Locale;
-use csl::style::{Position, Style, Name};
 use citeproc_io::CiteId;
 use citeproc_proc::ProcDatabase;
+use csl::locale::Locale;
+use csl::style::{Name, Position, Style};
 
 use super::Processor;
-use super::{StyleDatabase, LocaleDatabase, CiteDatabase};
+use super::{CiteDatabase, LocaleDatabase, StyleDatabase};
 
 // We don't want too tight a coupling between the salsa DB and the proc module.
 // It's just too annoying to refactor any changes here through all the Proc implementations.
@@ -51,4 +51,3 @@ impl ProcDatabase for Processor {
         }
     }
 }
-

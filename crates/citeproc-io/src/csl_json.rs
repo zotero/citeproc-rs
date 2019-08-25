@@ -31,7 +31,6 @@ use super::reference::Reference;
 use fnv::FnvHashMap;
 use std::marker::PhantomData;
 
-
 struct LanguageVisitor;
 
 impl<'de> Visitor<'de> for LanguageVisitor {

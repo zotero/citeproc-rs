@@ -119,10 +119,10 @@ impl AddDisambTokens for Date {
     }
 }
 
-use std::collections::HashMap;
-use std::collections::BTreeSet;
 use csl::style::Formatting;
-use citeproc_io::output::OutputFormat;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+// use citeproc_io::output::OutputFormat;
 
 use petgraph::graph::{Graph, NodeIndex};
 
@@ -175,7 +175,8 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     while !work.is_empty() {
         let s = work.pop().unwrap();
         for node in nfa.neighbors(s) {
-            let is_epsilon = nfa.find_edge(s, node)
+            let is_epsilon = nfa
+                .find_edge(s, node)
                 .and_then(|e| nfa.edge_weight(e))
                 .map(|e| e == &NfaEdge::Epsilon)
                 .unwrap_or(false);
@@ -228,26 +229,29 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
         let mut by_edge_weight = HashMap::<NfaToken, BTreeSet<NodeIndex>>::new();
         for nfa_node in dfa_state {
             for neigh in nfa.graph.neighbors(nfa_node) {
-                let weight = nfa.graph.find_edge(nfa_node, neigh)
+                let weight = nfa
+                    .graph
+                    .find_edge(nfa_node, neigh)
                     .and_then(|e| nfa.graph.edge_weight(e))
                     .cloned()
                     .unwrap();
                 if let NfaEdge::Token(t) = weight {
-                by_edge_weight.entry(t)
-                    .and_modify(|set| {
-                        set.insert(neigh);
-                    })
-                    .or_insert_with(|| {
-                        let mut set = BTreeSet::new();
-                        set.insert(neigh);
-                        set
-                    });
+                    by_edge_weight
+                        .entry(t)
+                        .and_modify(|set| {
+                            set.insert(neigh);
+                        })
+                        .or_insert_with(|| {
+                            let mut set = BTreeSet::new();
+                            set.insert(neigh);
+                            set
+                        });
                 }
             }
         }
         for (k, mut set) in by_edge_weight.drain() {
             epsilon_closure(&nfa.graph, &mut set);
-            if !dfa_states.contains_key(&set)  {
+            if !dfa_states.contains_key(&set) {
                 let node = dfa.add_node(DfaNode::Normal);
                 for s in set.iter() {
                     if let Some(NfaNode::Accepting) = nfa.graph.node_weight(*s) {
@@ -277,7 +281,9 @@ impl Dfa {
         for token in tokens {
             let mut found = false;
             for neighbour in self.graph.neighbors(cursor) {
-                let weight = self.graph.find_edge(cursor, neighbour)
+                let weight = self
+                    .graph
+                    .find_edge(cursor, neighbour)
                     .and_then(|e| self.graph.edge_weight(e))
                     .map(|w| w == token);
                 if let Some(true) = weight {
@@ -366,18 +372,35 @@ fn nfa() {
     println!("{:?}", Dot::with_config(&dfa.graph, &[]));
     println!("{:?}", Dot::with_config(&dfa2.graph, &[]));
 
-    assert!(dfa.accepts(&[ "Peters".into(), ",".into(), "2017".into() ]));
-    assert!(dfa2.accepts(&[ "Peters".into(), ",".into(), "2017".into() ]));
+    assert!(dfa.accepts(&["Peters".into(), ",".into(), "2017".into()]));
+    assert!(dfa2.accepts(&["Peters".into(), ",".into(), "2017".into()]));
 
-    assert!(dfa.accepts(&[ "Reuben".into(), "Peters".into(), ",".into(), "2017".into() ]));
-    assert!(dfa.accepts(&[ "Peters".into(), ",".into(), "Reuben".into(), ",".into(), "2017".into() ]));
-    assert!(!dfa.accepts(&[ "Peters".into(), ",".into(), "Andy".into(), ",".into(), "2017".into() ]));
-    assert!(!dfa.accepts(&[ "Andy".into(), "Peters".into(), ",".into(), "2017".into() ]));
+    assert!(dfa.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
+    assert!(dfa.accepts(&[
+        "Peters".into(),
+        ",".into(),
+        "Reuben".into(),
+        ",".into(),
+        "2017".into()
+    ]));
+    assert!(!dfa.accepts(&[
+        "Peters".into(),
+        ",".into(),
+        "Andy".into(),
+        ",".into(),
+        "2017".into()
+    ]));
+    assert!(!dfa.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
 
-    assert!(dfa2.accepts(&[ "Andy".into(), "Peters".into(), ",".into(), "2017".into() ]));
-    assert!(!dfa2.accepts(&[ "Peters".into(), ",".into(), "Reuben".into(), ",".into(), "2017".into() ]));
-    assert!(!dfa2.accepts(&[ "Reuben".into(), "Peters".into(), ",".into(), "2017".into() ]));
-
+    assert!(dfa2.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
+    assert!(!dfa2.accepts(&[
+        "Peters".into(),
+        ",".into(),
+        "Reuben".into(),
+        ",".into(),
+        "2017".into()
+    ]));
+    assert!(!dfa2.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
 }
 
 // struct DisambNfa {

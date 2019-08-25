@@ -29,7 +29,7 @@ mod error;
 mod pandoc;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
-use citeproc::{LocaleFetcher, LocaleFetchError, Processor};
+use citeproc::{LocaleFetchError, LocaleFetcher, Processor};
 use csl::locale::{Lang, Locale};
 
 fn main() {
@@ -316,7 +316,7 @@ impl LocaleFetcher for Filesystem {
             Err(e) => match e.kind() {
                 io::ErrorKind::NotFound => Ok(None),
                 _ => Err(LocaleFetchError::Io(e)),
-            }
+            },
         }
     }
 }

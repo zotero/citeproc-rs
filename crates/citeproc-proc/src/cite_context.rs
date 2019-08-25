@@ -6,8 +6,8 @@
 
 use super::DisambPass;
 use super::ProcDatabase;
-use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
 use citeproc_io::output::OutputFormat;
+use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
 use csl::style::{Position, VariableForm};
 use csl::variables::*;
 

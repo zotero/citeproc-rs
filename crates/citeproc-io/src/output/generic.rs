@@ -4,9 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::{OutputFormat, LocalizedQuotes};
-use csl::style::Formatting;
+use super::{LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
+use csl::style::Formatting;
 
 // use std::sync::Arc;
 // use std::any::Any;
@@ -34,12 +34,12 @@ impl OutputFormat for GenericFormat {
     type Output = String;
 
     #[inline]
-    fn ingest(&self, micro_html: Self::Input) -> Self::Build {
+    fn ingest(&self, _micro_html: Self::Input) -> Self::Build {
         vec![]
     }
 
     #[inline]
-    fn output(&self, inter: Self::Build) -> Self::Output {
+    fn output(&self, _inter: Self::Build) -> Self::Output {
         "".to_owned()
     }
 

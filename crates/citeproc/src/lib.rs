@@ -5,9 +5,9 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 pub(crate) mod db;
-pub use self::db::{LocaleFetcher, LocaleFetchError};
-pub use self::db::Processor;
 pub use self::db::update::{DocUpdate, UpdateSummary};
+pub use self::db::Processor;
+pub use self::db::{LocaleFetchError, LocaleFetcher};
 mod utils;
 pub use csl::error::StyleError;
 

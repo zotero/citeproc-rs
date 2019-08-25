@@ -7,10 +7,10 @@
 use csl::Atom;
 
 pub mod generic;
-#[cfg(feature = "pandoc")]
-pub mod pandoc;
 #[cfg(feature = "html")]
 pub mod html;
+#[cfg(feature = "pandoc")]
+pub mod pandoc;
 #[cfg(feature = "plain")]
 pub mod plain;
 #[cfg(feature = "rtf")]
