@@ -10,9 +10,12 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use citeproc_io::{Cite, CiteId, ClusterId, Reference};
-use citeproc_io::output::{OutputFormat, html::Html};
 use crate::proc::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
+use citeproc_io::output::{
+    html::{Html, HtmlOptions},
+    OutputFormat,
+};
+use citeproc_io::{Cite, CiteId, ClusterId, Reference};
 use csl::Atom;
 
 #[salsa::query_group(IrDatabaseStorage)]
@@ -268,11 +271,21 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
+cfg_if::cfg_if! {
+    if #[cfg(feature = "test")] {
+        fn html_options() -> HtmlOptions { HtmlOptions::test_suite() }
+    } else {
+        fn html_options() -> HtmlOptions { HtmlOptions::default() }
+    }
+}
+
 fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
 ) -> Arc<<Html as OutputFormat>::Output> {
-    let fmt = Html::default();
+    let fmt = Html {
+        options: html_options(),
+    };
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();
     let layout = &style.citation.layout;

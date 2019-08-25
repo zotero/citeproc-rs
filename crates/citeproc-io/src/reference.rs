@@ -19,7 +19,7 @@ use csl::style::CslType;
 use csl::variables::{DateVariable, NameVariable, NumberVariable, Variable};
 
 // We're saving copies and allocations by not using String here.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reference {
     pub id: Atom,
     pub csl_type: CslType,

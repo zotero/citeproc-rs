@@ -1,0 +1,23 @@
+mode: citation
+input:
+  - id: ITEM-1
+    type: book
+result: |
+  a,d,e,f
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <macro name="Inner">
+      <text value="d" />
+      <text value="e" />
+    </macro>
+    <citation>
+      <layout>
+        <group delimiter="," >
+          <text value="a" />
+          <text macro="Inner" />
+          <text value="f" />
+        </group>
+      </layout>
+    </citation>
+  </style>

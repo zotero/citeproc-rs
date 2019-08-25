@@ -1,0 +1,24 @@
+mode: citation
+input:
+  - id: ITEM-1
+    type: book
+result: |
+  a,b,c,f
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <citation>
+      <layout>
+        <group delimiter="," >
+          <text value="a" />
+          <choose>
+            <if position="first">
+              <text value="b" />
+              <text value="c" />
+            </if>
+          </choose>
+          <text value="f" />
+        </group>
+      </layout>
+    </citation>
+  </style>

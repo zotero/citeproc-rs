@@ -10,10 +10,20 @@ use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 
-use pandoc_types::definition::{QuoteType, Attr};
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Html {
+    pub options: HtmlOptions,
+    // could conceivably make this where you enable RTF
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct Html;
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum QuoteType {
+    SingleQuote,
+    DoubleQuote,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+pub struct Attr(pub String, pub Vec<String>, pub Vec<(String, String)>);
 
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -34,17 +44,34 @@ pub enum InlineElement {
     }
 }
 
-#[derive(Clone)]
-struct HtmlOptions {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HtmlOptions {
     // TODO: is it enough to have one set of localized quotes for the entire style?
     // quotes: LocalizedQuotes,
+    use_b_for_strong: bool
+}
+
+impl Default for HtmlOptions {
+    fn default() -> Self {
+        HtmlOptions {
+            use_b_for_strong: false
+        }
+    }
+}
+
+impl HtmlOptions {
+    pub fn test_suite() -> Self {
+        HtmlOptions {
+            use_b_for_strong: true
+        }
+    }
 }
 
 #[test]
 fn test_html() {
     let tester = vec![Emph(vec![Strong(vec![Text("hello".into())])])];
-    let html = InlineElement::to_html(&tester, &HtmlOptions { });
-    assert_eq!(html, "<i><strong>hello</strong></i>");
+    let html = InlineElement::to_html(&tester, &HtmlOptions::default());
+    assert_eq!(html, "<i><b>hello</b></i>");
 }
 
 impl InlineElement {
@@ -95,11 +122,19 @@ impl InlineElement {
                 s.push_str("</span>");
             }
             Strong(inners) => {
-                s.push_str("<strong>");
+                if options.use_b_for_strong {
+                    s.push_str("<b>");
+                } else {
+                    s.push_str("<strong>");
+                }
                 for i in inners {
                     i.to_html_inner(s, options);
                 }
-                s.push_str("</strong>");
+                if options.use_b_for_strong {
+                    s.push_str("</b>");
+                } else {
+                    s.push_str("</strong>");
+                }
             }
             Superscript(inners) => {
                 s.push_str(r#"<sup>"#);
@@ -158,7 +193,9 @@ use self::InlineElement::*;
 
 impl Default for Html {
     fn default() -> Self {
-        Html
+        Html {
+            options: HtmlOptions::default()
+        }
     }
 }
 
@@ -210,7 +247,7 @@ impl OutputFormat for Html {
     type Build = Vec<InlineElement>;
     type Output = String;
 
-    fn ingest(&self, input: Self::Input) -> Self::Build {
+    fn ingest(&self, _input: Self::Input) -> Self::Build {
         return vec![];
     }
 
@@ -282,7 +319,7 @@ impl OutputFormat for Html {
     fn output(&self, inter: Vec<InlineElement>) -> Self::Output {
         let null = FlipFlopState::default();
         let flipped = flip_flop_inlines(&inter, &null);
-        let html = InlineElement::to_html(&flipped, &HtmlOptions { });
+        let html = InlineElement::to_html(&flipped, &self.options);
         html
     }
 }
@@ -295,9 +332,9 @@ struct FlipFlopState {
     in_outer_quotes: bool,
 }
 
-fn attr_class(class: &str) -> Attr {
-    Attr("".to_owned(), vec![class.to_owned()], vec![])
-}
+// fn attr_class(class: &str) -> Attr {
+//     Attr("".to_owned(), vec![class.to_owned()], vec![])
+// }
 
 fn attr_style(style: &str) -> Attr {
     Attr("".to_owned(), vec![], vec![("style".into(), style.to_owned())])
@@ -311,7 +348,6 @@ fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<In
 }
 
 fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElement> {
-    use pandoc_types::definition::*;
     let fl = |ils: &[InlineElement], st| flip_flop_inlines(ils, st);
     match inline {
         Emph(ref ils) => {
@@ -399,9 +435,9 @@ mod test {
         let group = f.group(vec![a, b, c], " ", Some(Formatting::italic()));
         let out = f.output(group.clone());
 
-        let group_str = InlineElement::to_html(&group, &HtmlOptions { });
+        let group_str = InlineElement::to_html(&group, &HtmlOptions::default());
         assert_ne!(group_str, out);
-        assert_eq!(out, "<i>normal <span class=\"csl-no-emph \">emph</span> normal</i>");
+        assert_eq!(out, "<i>normal <span style=\"font-style: initial;\">emph</span> normal</i>");
     }
 
 }

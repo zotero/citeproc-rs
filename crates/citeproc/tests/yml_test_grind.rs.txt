@@ -1,0 +1,16 @@
+#[macro_use]
+extern crate serde_derive;
+
+mod common;
+use common::{TestCase, parse_human_test, format_human_test};
+use std::fs::read_to_string;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    for yml_file in std::env::args() {
+        let contents = read_to_string(yml_file)?;
+        let test_case: TestCase = serde_yaml::from_str(&contents)?;
+        let human = format_human_test(&test_case);
+        println!("{}", human);
+    }
+    Ok(())
+}
