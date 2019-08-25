@@ -1,2 +1,4 @@
 [alias]
-pull-test-suite   = "run --package tools --bin tools -- pull-test-suite"
+pull-test-suite = "run --package tools --bin tools -- pull-test-suite"
+pull-locales    = "run --package tools --bin tools -- pull-locales"
+pull-styles     = "run --package tools --bin tools -- pull-styles"

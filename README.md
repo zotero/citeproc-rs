@@ -86,19 +86,23 @@ for style in styles/*.csl; do citeproc-rs --csl $style | pandoc -f json -t html;
 
 You can also parse a locale to check for errors. It can find a locale in a 
 locales directory assuming it is structured like [the official CSL locales 
-repo](https://github.com/citation-style-language/locales), using e.g. 
-`$HOME/Library/Caches/net.cormacrelf.citeproc-rs/locales` on a Mac, or 
-`$HOME/.cache/citeproc-rs/locales` on Linux. It's best to just clone that repo 
-into place.
-See the [directories](https://docs.rs/directories) crate for more.
+repo](https://github.com/citation-style-language/locales), found via
+[directories](https://docs.rs/directories) (the cache directory). **Shortcut**:
 
 ```sh
-git clone https://github.com/citation-style-language/locales $DIR_FROM_ABOVE
+# clones the locales repo into place for you
+cargo pull-locales
+```
+
+Then:
+
+```sh
+# currently broken
 cd crates/citeproc-cli
 cargo run -- parse-locale --lang en-GB
 ```
 
-### The big end-to-end Pandoc filter
+### The big end-to-end Pandoc filter (currently broken)
 
 #### Step 1: export a CSL-JSON library somewhere, with Zotero for example
 
@@ -134,6 +138,7 @@ open out.html
 
 ```sh
 # setup once
+cargo pull-locales # if not done already
 cargo pull-test-suite
 
 cd crates/citeproc
