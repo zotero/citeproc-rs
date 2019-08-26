@@ -7,10 +7,15 @@ pub enum MicroNode {
 
     Italic(Vec<MicroNode>),
     Bold(Vec<MicroNode>),
+    Superscript(Vec<MicroNode>),
+    Subscript(Vec<MicroNode>),
     SmallCaps(Vec<MicroNode>),
-    SuperScript(Vec<MicroNode>),
-    SubScript(Vec<MicroNode>),
+
+    /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
+
+    /// When you flip-flop formatting away, this is what it becomes
+    DissolvedFormat(Vec<MicroNode>),
 }
 
 use html5ever::driver::ParseOpts;
@@ -216,6 +221,8 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
         let single = match tag.name {
             "b" => MicroNode::Bold(children),
             "i" => MicroNode::Italic(children),
+            "sup" => MicroNode::Superscript(children),
+            "sub" => MicroNode::Subscript(children),
             "span" => match tag.attrs {
                 // very specific!
                 [("style", "font-variant: small-caps;")] => MicroNode::SmallCaps(children),

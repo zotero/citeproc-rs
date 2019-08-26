@@ -82,6 +82,71 @@ fn test_html() {
     assert_eq!(html, "<i><strong>hello</strong></i>");
 }
 
+impl MicroNode {
+    fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
+        use MicroNode::*;
+        match self {
+            Text(txt) => {
+                // TODO: HTML-escape the text
+                s.push_str(&txt);
+            }
+            DissolvedFormat(inners) => {
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+            }
+            NoCase(inners) => {
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+            }
+            Italic(inners) => {
+                s.push_str("<i>");
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str("</i>");
+            }
+            Bold(inners) => {
+                if options.use_b_for_strong {
+                    s.push_str("<b>");
+                } else {
+                    s.push_str("<strong>");
+                }
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+                if options.use_b_for_strong {
+                    s.push_str("</b>");
+                } else {
+                    s.push_str("</strong>");
+                }
+            }
+            SmallCaps(inners) => {
+                s.push_str(r#"<span style="font-variant: small-caps;">"#);
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str("</span>");
+            }
+            Superscript(inners) => {
+                s.push_str(r#"<sup>"#);
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str("</sup>");
+            }
+            Subscript(inners) => {
+                s.push_str(r#"<sub>"#);
+                for i in inners {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str("</sub>");
+            }
+        }
+    }
+}
+
 impl InlineElement {
     fn to_html(inlines: &[InlineElement], options: &HtmlOptions) -> String {
         let mut s = String::new();
@@ -92,8 +157,10 @@ impl InlineElement {
     }
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         match self {
-            Micro(micro) => {
-                s.push_str("TODO: micro_html output");
+            Micro(micros) => {
+                for micro in micros {
+                    micro.to_html_inner(s, options);
+                }
             }
             Emph(inners) => {
                 s.push_str("<i>");
@@ -215,7 +282,7 @@ impl InlineElement {
     fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
         match self {
             Micro(micro) => {
-                s.push_str("TODO: micro_html output");
+                s.push_str("TODO: micro_html -> RTF output");
             }
             Emph(inners) => {
                 s.push_str(r"{\\i{}");
