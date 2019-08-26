@@ -80,9 +80,9 @@ impl MicroNode {
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         use MicroNode::*;
         match self {
-            Text(txt) => {
-                // TODO: HTML-escape the text
-                s.push_str(&txt);
+            Text(text) => {
+                use v_htmlescape::escape;
+                s.push_str(&escape(text).to_string());
             }
             Formatted(nodes, cmd) => {
                 let tag = cmd.html_tag(options);
@@ -96,11 +96,6 @@ impl MicroNode {
                 *s += "</";
                 *s += tag.0;
                 *s += ">";
-            }
-            DissolvedFormat(inners) => {
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
             }
             NoCase(inners) => {
                 for i in inners {
@@ -119,7 +114,13 @@ impl FormatCmd {
             FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
             FontStyleNormal => ("span", r#" style="font-style:normal;""#),
 
-            Strong => if options.use_b_for_strong {("b", "")} else {("strong", "")},
+            Strong => {
+                if options.use_b_for_strong {
+                    ("b", "")
+                } else {
+                    ("strong", "")
+                }
+            }
             FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
             FontWeightLight => ("span", r#" style="font-weight:light;""#),
 
@@ -136,7 +137,12 @@ impl FormatCmd {
     }
 }
 
-fn stack_formats_html(s: &mut String, options: &HtmlOptions, inlines: &[InlineElement], formatting: Formatting) {
+fn stack_formats_html(
+    s: &mut String,
+    options: &HtmlOptions,
+    inlines: &[InlineElement],
+    formatting: Formatting,
+) {
     use self::FormatCmd::*;
 
     let mut stack = Vec::new();
@@ -156,18 +162,18 @@ fn stack_formats_html(s: &mut String, options: &HtmlOptions, inlines: &[InlineEl
     match formatting.font_variant {
         Some(FontVariant::SmallCaps) => stack.push(FontVariantSmallCaps),
         Some(FontVariant::Normal) => stack.push(FontVariantNormal),
-        _ => {},
+        _ => {}
     };
     match formatting.text_decoration {
         Some(TextDecoration::Underline) => stack.push(TextDecorationUnderline),
         Some(TextDecoration::None) => stack.push(TextDecorationNone),
-        _ => {},
+        _ => {}
     }
     match formatting.vertical_alignment {
         Some(VerticalAlignment::Superscript) => stack.push(VerticalAlignmentSuperscript),
         Some(VerticalAlignment::Subscript) => stack.push(VerticalAlignmentSubscript),
         Some(VerticalAlignment::Baseline) => stack.push(VerticalAlignmentBaseline),
-        _ => {},
+        _ => {}
     }
 
     for cmd in stack.iter() {
@@ -198,8 +204,8 @@ impl InlineElement {
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         match self {
             Text(text) => {
-                // TODO: HTML-escape the text
-                s.push_str(&text);
+                use v_htmlescape::escape;
+                s.push_str(&escape(text).to_string());
             }
             Micro(micros) => {
                 for micro in micros {
@@ -438,8 +444,6 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> 
                 }
             }
         }
-        // We don't create these before flip flop happens anyway
-        MicroNode::DissolvedFormat(ref nodes) => None,
         MicroNode::Text(_) => None,
         MicroNode::NoCase(ref nodes) => {
             let subs = fl(nodes, state);

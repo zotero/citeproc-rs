@@ -9,9 +9,6 @@ pub enum MicroNode {
 
     /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
-
-    /// When you flip-flop formatting away, this is what it becomes
-    DissolvedFormat(Vec<MicroNode>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,7 +27,6 @@ pub enum FormatCmd {
     VerticalAlignmentSubscript,
     VerticalAlignmentBaseline,
 }
-
 
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
@@ -239,7 +235,10 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
             "sub" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript),
             "span" => match tag.attrs {
                 // very specific!
-                [("style", "font-variant: small-caps;")] => MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps),
+                [("style", "font-variant:small-caps;")]
+                | [("style", "font-variant: small-caps;")] => {
+                    MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
+                }
                 [("class", "nocase")] => MicroNode::NoCase(children),
                 _ => return vec![],
             },

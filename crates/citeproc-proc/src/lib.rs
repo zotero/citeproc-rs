@@ -159,13 +159,10 @@ where
                     }
                     TextSource::Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
+                        let b = fmt.ingest(value, Default::default());
+                        let txt = fmt.with_format(b, f);
                         (
-                            IR::Rendered(Some(fmt.affixed_text_quoted(
-                                value.to_string(),
-                                f,
-                                &af,
-                                quotes,
-                            ))),
+                            IR::Rendered(Some(fmt.affixed_quoted(txt, &af, quotes))),
                             GroupVars::new(),
                         )
                     }

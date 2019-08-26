@@ -52,7 +52,7 @@ where
 ///
 /// Prefixes and suffixes
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cite<O: OutputFormat> {
     #[serde(rename = "citeId")]
     pub id: CiteId,
@@ -61,10 +61,10 @@ pub struct Cite<O: OutputFormat> {
     pub ref_id: Atom,
 
     #[serde(default)]
-    pub prefix: O::Input,
+    pub prefix: Option<O::Input>,
 
     #[serde(default)]
-    pub suffix: O::Input,
+    pub suffix: Option<O::Input>,
 
     #[serde(default)]
     pub suppression: Option<Suppression>,
@@ -87,8 +87,8 @@ impl<O: OutputFormat> Cite<O> {
         Cite {
             id,
             ref_id: ref_id.into(),
-            prefix: O::Input::default(),
-            suffix: O::Input::default(),
+            prefix: Default::default(),
+            suffix: Default::default(),
             suppression: None,
             locators: Vec::new(),
             locator_extra: None,
@@ -98,7 +98,7 @@ impl<O: OutputFormat> Cite<O> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cluster<O: OutputFormat> {
     pub id: ClusterId,
     pub cites: Vec<Cite<O>>,

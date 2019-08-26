@@ -41,9 +41,9 @@ struct CitationItem {
     #[serde(default)]
     locator: Option<String>,
     #[serde(default)]
-    prefix: String,
+    prefix: Option<String>,
     #[serde(default)]
-    suffix: String,
+    suffix: Option<String>,
     #[serde(default)]
     suppress_author: bool,
     #[serde(default)]

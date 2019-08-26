@@ -291,12 +291,34 @@ fn built_cluster(
         .iter()
         .map(|&id| {
             let ir = &db.ir_gen4_conditionals(id).0;
-            ir.flatten(&fmt).unwrap_or(fmt.plain(""))
+            let cite = db.cite(id);
+            let flattened = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
+            // TODO: strip punctuation on these
+            let prefix = cite
+                .prefix
+                .as_ref()
+                .map(|pre| fmt.ingest(pre, Default::default()));
+            let suffix = cite
+                .suffix
+                .as_ref()
+                .map(|pre| fmt.ingest(pre, Default::default()));
+            use std::iter::once;
+            match (prefix, suffix) {
+                (Some(pre), Some(suf)) => {
+                    fmt.seq(once(pre).chain(once(flattened)).chain(once(suf)))
+                }
+                (Some(pre), None) => fmt.seq(once(pre).chain(once(flattened))),
+                (None, Some(suf)) => fmt.seq(once(flattened).chain(once(suf))),
+                (None, None) => flattened,
+            }
         })
         .collect();
-    let build = fmt.affixed(
-        fmt.group(built_cites, &layout.delimiter.0, layout.formatting),
-        &layout.affixes,
+    let build = fmt.with_format(
+        fmt.affixed(
+            fmt.group(built_cites, &layout.delimiter.0, None),
+            &layout.affixes,
+        ),
+        layout.formatting,
     );
     Arc::new(fmt.output(build))
 }
