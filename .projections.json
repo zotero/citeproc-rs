@@ -1,6 +1,6 @@
 {
-  "pandoc-types/*.rs": {"type": "pt"},
   "**/Cargo.toml": {"type": "cargo"},
-  "citeproc/src/*.rs": {"type": "cp"},
-  "**/tests/data/*": {"type": "test"}
+  "crates/citeproc-proc/src/*.rs": {"type": "proc"},
+  "crates/citeproc/tests/data/humans/*.yml": {"type": "test"},
+  "crates/citeproc/tests/data/test-suite/processor-tests/humans/*.txt": {"type": "test"}
 }

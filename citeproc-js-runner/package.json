@@ -1,0 +1,12 @@
+{
+  "name": "citeproc-js-runner",
+  "bin": {
+    "citeproc-js-runner": "./index.js"
+  },
+  "dependencies": {
+    "citeproc": "^2.2.22",
+    "citeproc-test-runner": "^1.1.5",
+    "commander": "^3.0.0",
+    "js-yaml": "^3.13.1"
+  }
+}
