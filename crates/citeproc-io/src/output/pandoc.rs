@@ -47,12 +47,12 @@ impl Pandoc {
                 _ => current,
             };
             current = match f.text_decoration {
-                TextDecoration::Underline => vec![Span(attr_class("underline"), current)],
+                Some(TextDecoration::Underline) => vec![Span(attr_class("underline"), current)],
                 _ => current,
             };
             current = match f.vertical_alignment {
-                VerticalAlignment::Superscript => vec![Superscript(current)],
-                VerticalAlignment::Subscript => vec![Subscript(current)],
+                Some(VerticalAlignment::Superscript) => vec![Superscript(current)],
+                Some(VerticalAlignment::Subscript) => vec![Subscript(current)],
                 _ => current,
             };
 

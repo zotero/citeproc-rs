@@ -1,5 +1,5 @@
 use clap::{App, SubCommand};
-use tools::{pull_test_suite, pull_locales, pull_styles};
+use tools::{pull_locales, pull_styles, pull_test_suite};
 // use std::{env, path::PathBuf};
 
 fn main() -> Result<(), ()> {

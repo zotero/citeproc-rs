@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::{LocalizedQuotes, OutputFormat};
+use crate::IngestOptions;
 
 use csl::style::Formatting;
 
@@ -23,8 +24,8 @@ impl OutputFormat for PlainText {
     type Output = String;
 
     #[inline]
-    fn ingest(&self, s: Self::Input) -> Self::Build {
-        s
+    fn ingest(&self, s: &str, o: IngestOptions) -> Self::Build {
+        s.to_string()
     }
 
     #[inline]

@@ -32,10 +32,9 @@ use csl::error::StyleError;
 use csl::locale::Lang;
 use csl::style::{Position, Style};
 
-use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
-// use citeproc_io::output::{OutputFormat, generic::{GenericFormat, Node}};
 use crate::proc::{CiteContext, IrState};
 use citeproc_io::output::{html::Html, OutputFormat};
+use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
 use csl::Atom;
 
 #[salsa::database(

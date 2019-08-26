@@ -8,7 +8,7 @@
 extern crate serde_derive;
 
 use citeproc::{LocaleFetchError, LocaleFetcher, Processor};
-use citeproc_io::output::{generic::MicroHtml, html::Html};
+use citeproc_io::output::html::Html;
 use citeproc_io::{
     Cite, CiteId, Cluster, ClusterId, Locator, NumericValue, Reference, Suppression,
 };
@@ -20,9 +20,11 @@ use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 
-
 /// Techincally reference IDs are allowed to be numbers.
-fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error> where D: Deserializer<'de> {
+fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
     use citeproc_io::IdOrNumber;
     let s = IdOrNumber::deserialize(d)?;
     Ok(s.0)
@@ -53,8 +55,8 @@ impl CitationItem {
         Cite {
             id: n,
             ref_id: csl::Atom::from(self.id.as_str()),
-            prefix: MicroHtml(self.prefix.clone()),
-            suffix: MicroHtml(self.suffix.clone()),
+            prefix: self.prefix.clone(),
+            suffix: self.suffix.clone(),
             locators: match (self.locator.as_ref(), self.label.as_ref()) {
                 (Some(loc), Some(lab)) => vec![Locator(
                     LocatorType::from_str(&lab).expect("unknown locator type"),

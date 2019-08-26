@@ -4,11 +4,12 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::IngestOptions;
 use csl::Atom;
 
-pub mod generic;
 #[cfg(feature = "html")]
 pub mod html;
+pub mod micro_html;
 #[cfg(feature = "pandoc")]
 pub mod pandoc;
 #[cfg(feature = "plain")]
@@ -21,7 +22,6 @@ use std::marker::{Send, Sync};
 // pub use self::pandoc::Pandoc;
 // pub use self::plain::PlainText;
 // pub use self::html::Html;
-// pub use self::generic::{GenericFormat, Node};
 
 use csl::style::{Affixes, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
@@ -44,7 +44,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;
     type Output: Default + Clone + Send + Sync + Eq + Serialize;
 
-    fn ingest(&self, input: Self::Input) -> Self::Build;
+    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
     /// nodes themselves, with no formatting except whatever is applied by a parent group.

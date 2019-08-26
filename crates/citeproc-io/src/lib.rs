@@ -34,3 +34,8 @@ pub use self::date::*;
 pub use self::names::*;
 pub use self::numeric::*;
 pub use self::reference::*;
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct IngestOptions {
+    pub replace_hyphens: bool,
+}

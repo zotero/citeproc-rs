@@ -19,8 +19,8 @@ use directories::ProjectDirs;
 
 // TODO: should update an existing one.
 pub fn pull_styles() {
-    let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
-        .expect("No home directory found.");
+    let pd =
+        ProjectDirs::from("net", "cormacrelf", "citeproc-rs").expect("No home directory found.");
     let mut styles_dir = pd.cache_dir().to_owned();
     styles_dir.push("styles");
 
@@ -36,8 +36,8 @@ pub fn pull_styles() {
 
 // TODO: should update an existing one.
 pub fn pull_locales() {
-    let pd = ProjectDirs::from("net", "cormacrelf", "citeproc-rs")
-        .expect("No home directory found.");
+    let pd =
+        ProjectDirs::from("net", "cormacrelf", "citeproc-rs").expect("No home directory found.");
     let mut locales_dir = pd.cache_dir().to_owned();
     locales_dir.push("locales");
 

@@ -6,14 +6,15 @@
 
 use super::{LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
+use crate::IngestOptions;
 use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Html {
-    pub options: HtmlOptions,
-    // could conceivably make this where you enable RTF
+pub enum Html {
+    Html(HtmlOptions),
+    Rtf(RtfOptions),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -28,6 +29,10 @@ pub struct Attr(pub String, pub Vec<String>, pub Vec<(String, String)>);
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InlineElement {
+    /// This is how we can flip-flop only user-supplied styling.
+    /// Inside this is parsed micro html
+    Micro(Vec<MicroNode>),
+
     Emph(Vec<InlineElement>),
     Strong(Vec<InlineElement>),
     SmallCaps(Vec<InlineElement>),
@@ -43,6 +48,9 @@ pub enum InlineElement {
         content: Vec<InlineElement>,
     },
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RtfOptions {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlOptions {
@@ -71,7 +79,7 @@ impl HtmlOptions {
 fn test_html() {
     let tester = vec![Emph(vec![Strong(vec![Text("hello".into())])])];
     let html = InlineElement::to_html(&tester, &HtmlOptions::default());
-    assert_eq!(html, "<i><b>hello</b></i>");
+    assert_eq!(html, "<i><strong>hello</strong></i>");
 }
 
 impl InlineElement {
@@ -84,6 +92,9 @@ impl InlineElement {
     }
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         match self {
+            Micro(micro) => {
+                s.push_str("TODO: micro_html output");
+            }
             Emph(inners) => {
                 s.push_str("<i>");
                 for i in inners {
@@ -193,13 +204,125 @@ impl InlineElement {
     }
 }
 
+impl InlineElement {
+    fn to_rtf(inlines: &[InlineElement], options: &RtfOptions) -> String {
+        let mut s = String::new();
+        for i in inlines {
+            i.to_rtf_inner(&mut s, options);
+        }
+        s
+    }
+    fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
+        match self {
+            Micro(micro) => {
+                s.push_str("TODO: micro_html output");
+            }
+            Emph(inners) => {
+                s.push_str(r"{\\i{}");
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str(r"}");
+            }
+            Span(attrs, inners) => {
+                s.push_str("<span");
+                if attrs.0.len() > 0 {
+                    s.push_str(r#" id=""#);
+                    s.push_str(&attrs.0);
+                    s.push_str(r#"""#);
+                }
+                if attrs.1.len() > 0 {
+                    s.push_str(r#" class=""#);
+                    for class in attrs.1.iter() {
+                        s.push_str(&class);
+                        s.push_str(" ");
+                    }
+                    s.push_str(r#"""#);
+                }
+                if attrs.2.len() > 0 {
+                    for (key, value) in attrs.2.iter() {
+                        s.push_str(" ");
+                        s.push_str(&key);
+                        s.push_str("=\"");
+                        s.push_str(&value);
+                        s.push_str("\"");
+                    }
+                }
+                s.push_str(">");
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</span>");
+            }
+            Strong(inners) => {
+                s.push_str("<strong>");
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</strong>");
+            }
+            Superscript(inners) => {
+                s.push_str(r#"<sup>"#);
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</sup>");
+            }
+            Subscript(inners) => {
+                s.push_str(r#"<sub>"#);
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</sub>");
+            }
+            Underline(inners) => {
+                s.push_str(r#"<span style="text-decoration: underline;">"#);
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</span>");
+            }
+            SmallCaps(inners) => {
+                s.push_str(r#""#);
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</span>");
+            }
+            Quoted(_qt, inners) => {
+                s.push_str(r#"<q>"#);
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</q>");
+            }
+            Anchor {
+                title: _,
+                url,
+                content,
+            } => {
+                s.push_str(r#"<a href=""#);
+                // TODO: HTML-quoted-escape? the url?
+                s.push_str(&url);
+                s.push_str(r#"">"#);
+                for i in content {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</a>");
+            }
+            Text(text) => {
+                // TODO: HTML-escape the text
+                s.push_str(&text);
+            }
+        }
+    }
+}
+
 use self::InlineElement::*;
 
 impl Default for Html {
     fn default() -> Self {
-        Html {
-            options: HtmlOptions::default(),
-        }
+        Html::Html(HtmlOptions::default())
     }
 }
 
@@ -219,25 +342,25 @@ impl Html {
             let mut current = inlines;
 
             current = match f.font_style {
-                FontStyle::Italic | FontStyle::Oblique => vec![Emph(current)],
+                Some(FontStyle::Italic) | Some(FontStyle::Oblique) => vec![Emph(current)],
                 _ => current,
             };
             current = match f.font_weight {
-                FontWeight::Bold => vec![Strong(current)],
+                Some(FontWeight::Bold) => vec![Strong(current)],
                 // Light => unimplemented!(),
                 _ => current,
             };
             current = match f.font_variant {
-                FontVariant::SmallCaps => vec![SmallCaps(current)],
+                Some(FontVariant::SmallCaps) => vec![SmallCaps(current)],
                 _ => current,
             };
             current = match f.text_decoration {
-                TextDecoration::Underline => vec![Underline(current)],
+                Some(TextDecoration::Underline) => vec![Underline(current)],
                 _ => current,
             };
             current = match f.vertical_alignment {
-                VerticalAlignment::Superscript => vec![Superscript(current)],
-                VerticalAlignment::Subscript => vec![Subscript(current)],
+                Some(VerticalAlignment::Superscript) => vec![Superscript(current)],
+                Some(VerticalAlignment::Subscript) => vec![Subscript(current)],
                 _ => current,
             };
 
@@ -248,15 +371,15 @@ impl Html {
     }
 }
 
-use super::generic::MicroHtml;
+use super::micro_html::{MicroHtml, MicroNode};
 
 impl OutputFormat for Html {
-    type Input = MicroHtml;
+    type Input = String;
     type Build = Vec<InlineElement>;
     type Output = String;
 
-    fn ingest(&self, _input: Self::Input) -> Self::Build {
-        return vec![];
+    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
+        vec![InlineElement::Micro(MicroNode::parse(input, options))]
     }
 
     #[inline]
@@ -327,8 +450,11 @@ impl OutputFormat for Html {
     fn output(&self, inter: Vec<InlineElement>) -> Self::Output {
         let null = FlipFlopState::default();
         let flipped = flip_flop_inlines(&inter, &null);
-        let html = InlineElement::to_html(&flipped, &self.options);
-        html
+        let string = match self {
+            Html::Html(ref options) => InlineElement::to_html(&flipped, options),
+            Html::Rtf(ref options) => InlineElement::to_rtf(&flipped, options),
+        };
+        string
     }
 }
 
@@ -389,8 +515,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             flop.in_small_caps = !flop.in_small_caps;
             let subs = fl(ils, &flop);
             if state.in_small_caps {
-                // Some(Span(attr_class("csl-no-smallcaps"), subs))
-                Some(Span(attr_style("font-variant: initial;"), subs))
+                Some(Span(attr_style("font-variant: normal;"), subs))
             } else {
                 Some(SmallCaps(subs))
             }

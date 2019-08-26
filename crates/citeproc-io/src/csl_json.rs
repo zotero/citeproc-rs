@@ -129,7 +129,6 @@ impl<'de> Deserialize<'de> for IdOrNumber {
             {
                 Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
             }
-
         }
         deserializer.deserialize_any(ParseIntVisitor)
     }
@@ -254,7 +253,9 @@ impl<'de> Deserialize<'de> for Reference {
                     }
                 }
                 Ok(Reference {
-                    id: id.map(|i| csl::Atom::from(i.0)).ok_or_else(|| de::Error::missing_field("id"))?,
+                    id: id
+                        .map(|i| csl::Atom::from(i.0))
+                        .ok_or_else(|| de::Error::missing_field("id"))?,
                     csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
                     language,
                     ordinary,
@@ -432,7 +433,9 @@ impl<'de> Deserialize<'de> for DateUInt {
             type Value = DateUInt;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("an unsigned integer or a string that's actually just an unsigned integer")
+                formatter.write_str(
+                    "an unsigned integer or a string that's actually just an unsigned integer",
+                )
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>

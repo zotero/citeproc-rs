@@ -131,13 +131,13 @@ impl Default for Affixes {
     }
 }
 
-#[derive(Eq, Copy, Clone, PartialEq, Hash)]
+#[derive(Eq, Copy, Clone, Default, PartialEq, Hash)]
 pub struct Formatting {
-    pub font_style: FontStyle,
-    pub font_variant: FontVariant,
-    pub font_weight: FontWeight,
-    pub vertical_alignment: VerticalAlignment,
-    pub text_decoration: TextDecoration,
+    pub font_style: Option<FontStyle>,
+    pub font_variant: Option<FontVariant>,
+    pub font_weight: Option<FontWeight>,
+    pub vertical_alignment: Option<VerticalAlignment>,
+    pub text_decoration: Option<TextDecoration>,
     // TODO: put this somewhere else, like directly on text nodes?
     // pub hyperlink: String,
 }
@@ -145,25 +145,18 @@ pub struct Formatting {
 impl Formatting {
     pub fn bold() -> Self {
         let mut f = Formatting::default();
-        f.font_weight = FontWeight::Bold;
+        f.font_weight = Some(FontWeight::Bold);
         f
     }
     pub fn italic() -> Self {
         let mut f = Formatting::default();
-        f.font_style = FontStyle::Italic;
+        f.font_style = Some(FontStyle::Italic);
         f
     }
-}
-
-impl Default for Formatting {
-    fn default() -> Self {
-        Formatting {
-            font_style: FontStyle::default(),
-            font_variant: FontVariant::default(),
-            font_weight: FontWeight::default(),
-            text_decoration: TextDecoration::default(),
-            vertical_alignment: VerticalAlignment::default(),
-        }
+    pub fn small_caps() -> Self {
+        let mut f = Formatting::default();
+        f.font_variant = Some(FontVariant::SmallCaps);
+        f
     }
 }
 
@@ -184,20 +177,20 @@ impl fmt::Debug for Formatting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let default = Formatting::default();
         write!(f, "Formatting {{ ")?;
-        if self.font_style != default.font_style {
-            write!(f, "font_style: {:?}, ", self.font_style)?;
+        if let Some(font_style) = self.font_style {
+            write!(f, "font_style: {:?}, ", font_style)?;
         }
-        if self.font_variant != default.font_variant {
-            write!(f, "font_variant: {:?}, ", self.font_variant)?;
+        if let Some(font_variant) = self.font_variant {
+            write!(f, "font_variant: {:?}, ", font_variant)?;
         }
-        if self.font_weight != default.font_weight {
-            write!(f, "font_weight: {:?}, ", self.font_weight)?;
+        if let Some(font_weight) = self.font_weight {
+            write!(f, "font_weight: {:?}, ", font_weight)?;
         }
-        if self.text_decoration != default.text_decoration {
-            write!(f, "text_decoration: {:?}, ", self.text_decoration)?;
+        if let Some(text_decoration) = self.text_decoration {
+            write!(f, "text_decoration: {:?}, ", text_decoration)?;
         }
-        if self.vertical_alignment != default.vertical_alignment {
-            write!(f, "vertical_alignment: {:?}, ", self.vertical_alignment)?;
+        if let Some(vertical_alignment) = self.vertical_alignment {
+            write!(f, "vertical_alignment: {:?}, ", vertical_alignment)?;
         }
         write!(f, "}}")
     }

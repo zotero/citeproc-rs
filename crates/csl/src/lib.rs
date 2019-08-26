@@ -133,11 +133,11 @@ impl FromNode for Delimiter {
 impl FromNode for Formatting {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(Formatting {
-            font_style: attribute_optional(node, "font-style", info)?,
-            font_variant: attribute_optional(node, "font-variant", info)?,
-            font_weight: attribute_optional(node, "font-weight", info)?,
-            text_decoration: attribute_optional(node, "text-decoration", info)?,
-            vertical_alignment: attribute_optional(node, "vertical-alignment", info)?,
+            font_style: attribute_option(node, "font-style", info)?,
+            font_variant: attribute_option(node, "font-variant", info)?,
+            font_weight: attribute_option(node, "font-weight", info)?,
+            text_decoration: attribute_option(node, "text-decoration", info)?,
+            vertical_alignment: attribute_option(node, "vertical-alignment", info)?,
             // TODO: carry options from root
             // hyperlink: String::from(""),
         })

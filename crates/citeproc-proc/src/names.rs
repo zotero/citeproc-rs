@@ -266,6 +266,7 @@ impl OneName {
                     db.style_el().demote_non_dropping_particle,
                 );
                 seen_one = true;
+
                 let mut build = vec![];
                 for part in pn_filtered_parts(pn, order) {
                     // We already tested is_some() for all these Some::unwrap() calls

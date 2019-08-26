@@ -283,9 +283,7 @@ fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
 ) -> Arc<<Html as OutputFormat>::Output> {
-    let fmt = Html {
-        options: html_options(),
-    };
+    let fmt = Html::Html(html_options());
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();
     let layout = &style.citation.layout;

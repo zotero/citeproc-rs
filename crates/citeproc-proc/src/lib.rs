@@ -8,7 +8,7 @@
 // extern crate serde_derive;
 
 use citeproc_io::output::OutputFormat;
-use citeproc_io::{CiteId, Locator};
+use citeproc_io::{CiteId, IngestOptions, Locator};
 use csl::locale::Locale;
 use csl::style::{Affixes, Element, Name, Style};
 use csl::terms::{GenderedTermSelector, TextTermSelector};
@@ -190,13 +190,13 @@ where
                         let content = match var {
                             StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {
                                 state.tokens.insert(DisambToken::Str(val.into()));
-                                let s = if v.should_replace_hyphens() {
-                                    val.replace('-', "\u{2013}")
-                                } else {
-                                    val.to_string()
+                                let options = IngestOptions {
+                                    replace_hyphens: v.should_replace_hyphens(),
                                 };
+                                let b = fmt.ingest(val, options);
+                                let txt = fmt.with_format(b, f);
+
                                 let maybe_link = v.hyperlink(val);
-                                let txt = fmt.text_node(s, f);
                                 let linked = fmt.hyperlinked(txt, maybe_link);
                                 fmt.affixed_quoted(linked, &af, quotes)
                             }),
