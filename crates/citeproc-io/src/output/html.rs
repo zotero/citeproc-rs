@@ -84,6 +84,19 @@ impl MicroNode {
                 // TODO: HTML-escape the text
                 s.push_str(&txt);
             }
+            Formatted(nodes, cmd) => {
+                let tag = cmd.html_tag(options);
+                *s += "<";
+                *s += tag.0;
+                *s += tag.1;
+                *s += ">";
+                for node in nodes {
+                    node.to_html_inner(s, options);
+                }
+                *s += "</";
+                *s += tag.0;
+                *s += ">";
+            }
             DissolvedFormat(inners) => {
                 for i in inners {
                     i.to_html_inner(s, options);
@@ -94,67 +107,8 @@ impl MicroNode {
                     i.to_html_inner(s, options);
                 }
             }
-            Italic(inners) => {
-                s.push_str("<i>");
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</i>");
-            }
-            Bold(inners) => {
-                if options.use_b_for_strong {
-                    s.push_str("<b>");
-                } else {
-                    s.push_str("<strong>");
-                }
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                if options.use_b_for_strong {
-                    s.push_str("</b>");
-                } else {
-                    s.push_str("</strong>");
-                }
-            }
-            SmallCaps(inners) => {
-                s.push_str(r#"<span style="font-variant: small-caps;">"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            Superscript(inners) => {
-                s.push_str(r#"<sup>"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</sup>");
-            }
-            Subscript(inners) => {
-                s.push_str(r#"<sub>"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</sub>");
-            }
         }
     }
-}
-
-enum FormatCmd {
-    Italic,
-    FontStyleOblique,
-    FontStyleNormal,
-    Strong,
-    FontWeightNormal,
-    FontWeightLight,
-    FontVariantSmallCaps,
-    FontVariantNormal,
-    TextDecorationUnderline,
-    TextDecorationNone,
-    VerticalAlignmentSuperscript,
-    VerticalAlignmentSubscript,
-    VerticalAlignmentBaseline,
 }
 
 impl FormatCmd {
@@ -233,7 +187,6 @@ fn stack_formats_html(s: &mut String, options: &HtmlOptions, inlines: &[InlineEl
         s.push_str(">");
     }
 }
-
 impl InlineElement {
     fn to_html(inlines: &[InlineElement], options: &HtmlOptions) -> String {
         let mut s = String::new();
@@ -436,12 +389,71 @@ fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<In
         .collect()
 }
 
+fn flip_flop_nodes(nodes: &[MicroNode], state: &FlipFlopState) -> Vec<MicroNode> {
+    nodes
+        .iter()
+        .map(|nod| flip_flop_node(nod, state).unwrap_or_else(|| nod.clone()))
+        .collect()
+}
+
+use super::micro_html::FormatCmd;
+
+fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> {
+    let fl = |nodes: &[MicroNode], st| flip_flop_nodes(nodes, st);
+    match node {
+        MicroNode::Formatted(ref nodes, cmd) => {
+            let mut flop = state.clone();
+            match cmd {
+                FormatCmd::Italic => {
+                    flop.in_emph = !flop.in_emph;
+                    let subs = fl(nodes, &flop);
+                    if state.in_emph {
+                        Some(MicroNode::Formatted(subs, FormatCmd::FontStyleNormal))
+                    } else {
+                        Some(MicroNode::Formatted(subs, *cmd))
+                    }
+                }
+                FormatCmd::Strong => {
+                    flop.in_strong = !flop.in_strong;
+                    let subs = fl(nodes, &flop);
+                    if state.in_strong {
+                        Some(MicroNode::Formatted(subs, FormatCmd::FontWeightNormal))
+                    } else {
+                        Some(MicroNode::Formatted(subs, *cmd))
+                    }
+                }
+                FormatCmd::FontVariantSmallCaps => {
+                    flop.in_small_caps = !flop.in_small_caps;
+                    let subs = fl(nodes, &flop);
+                    if state.in_small_caps {
+                        Some(MicroNode::Formatted(subs, FormatCmd::FontVariantNormal))
+                    } else {
+                        Some(MicroNode::Formatted(subs, *cmd))
+                    }
+                }
+                // i.e. sup and sub
+                _ => {
+                    let subs = fl(nodes, state);
+                    Some(MicroNode::Formatted(subs, *cmd))
+                }
+            }
+        }
+        // We don't create these before flip flop happens anyway
+        MicroNode::DissolvedFormat(ref nodes) => None,
+        MicroNode::Text(_) => None,
+        MicroNode::NoCase(ref nodes) => {
+            let subs = fl(nodes, state);
+            Some(MicroNode::NoCase(subs))
+        }
+    }
+}
+
 fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElement> {
     let fl = |ils: &[InlineElement], st| flip_flop_inlines(ils, st);
     match inline {
         Micro(nodes) => {
-            // TODO
-            None
+            let subs = flip_flop_nodes(nodes, state);
+            Some(Micro(subs))
         }
         Formatted(ils, f) => {
             let mut flop = state.clone();

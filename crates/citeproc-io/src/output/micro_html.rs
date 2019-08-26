@@ -1,15 +1,11 @@
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct MicroHtml(pub String);
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MicroNode {
     Text(String),
 
-    Italic(Vec<MicroNode>),
-    Bold(Vec<MicroNode>),
-    Superscript(Vec<MicroNode>),
-    Subscript(Vec<MicroNode>),
-    SmallCaps(Vec<MicroNode>),
+    Formatted(Vec<MicroNode>, FormatCmd),
 
     /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
@@ -17,6 +13,24 @@ pub enum MicroNode {
     /// When you flip-flop formatting away, this is what it becomes
     DissolvedFormat(Vec<MicroNode>),
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormatCmd {
+    Italic,
+    FontStyleOblique,
+    FontStyleNormal,
+    Strong,
+    FontWeightNormal,
+    FontWeightLight,
+    FontVariantSmallCaps,
+    FontVariantNormal,
+    TextDecorationUnderline,
+    TextDecorationNone,
+    VerticalAlignmentSuperscript,
+    VerticalAlignmentSubscript,
+    VerticalAlignmentBaseline,
+}
+
 
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
@@ -219,13 +233,13 @@ struct MicroHtmlReader {
 impl HtmlReader<MicroNode> for MicroHtmlReader {
     fn constructor(&self, tag: &Tag, children: Vec<MicroNode>) -> Vec<MicroNode> {
         let single = match tag.name {
-            "b" => MicroNode::Bold(children),
-            "i" => MicroNode::Italic(children),
-            "sup" => MicroNode::Superscript(children),
-            "sub" => MicroNode::Subscript(children),
+            "i" => MicroNode::Formatted(children, FormatCmd::Italic),
+            "b" => MicroNode::Formatted(children, FormatCmd::Strong),
+            "sup" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript),
+            "sub" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript),
             "span" => match tag.attrs {
                 // very specific!
-                [("style", "font-variant: small-caps;")] => MicroNode::SmallCaps(children),
+                [("style", "font-variant: small-caps;")] => MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps),
                 [("class", "nocase")] => MicroNode::NoCase(children),
                 _ => return vec![],
             },
