@@ -155,20 +155,8 @@ impl<'a> From<&'a str> for NfaToken {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum NfaNode {
-    Normal,
-    Accepting,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum DfaNode {
-    Normal,
-    Accepting,
-}
-
-type NfaGraph = Graph<NfaNode, NfaEdge>;
-type DfaGraph = Graph<DfaNode, NfaToken>;
+type NfaGraph = Graph<(), NfaEdge>;
+type DfaGraph = Graph<(), NfaToken>;
 
 fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     let mut work: Vec<_> = closure.iter().cloned().collect();
@@ -192,30 +180,44 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
 struct Nfa {
     graph: NfaGraph,
     accepting: BTreeSet<NodeIndex>,
-    start: NodeIndex,
+    start: BTreeSet<NodeIndex>,
 }
 
 #[derive(Debug)]
 struct Dfa {
     graph: DfaGraph,
-    // TODO: you can use the node data to store this
-    // accepting: BTreeSet<NodeIndex>,
+    accepting: BTreeSet<NodeIndex>,
     start: NodeIndex,
 }
 
+// fn brzozowski_minimise(nfa: Nfa) -> Dfa {
+//     // reverse
+//     let rev1 = {
+//         nfa.graph.reverse();
+//         let orig_start = nfa.start;
+//         let new_start = nfa.add_node(NfaNode::Normal);
+//         nfa
+//     };
+//     // then convert to dfa via subset construction
+//     // reverse again
+//     // then convert to dfa via subset construction
+//     to_dfa(&mid)
+// }
+
+
 // TODO: find the quotient automaton of the resulting DFA?
+// Use Brzozowski's double-reversal algorithm
 fn to_dfa(nfa: &Nfa) -> Dfa {
     let mut dfa = DfaGraph::new();
 
     let mut work = Vec::new();
-    let mut start_set = BTreeSet::new();
-    start_set.insert(nfa.start);
+    let mut start_set = nfa.start.clone();
     epsilon_closure(&nfa.graph, &mut start_set);
-    let dfa_start_node = dfa.add_node(DfaNode::Normal);
+    let dfa_start_node = dfa.add_node(());
+    let mut dfa_accepting = BTreeSet::new();
     for s in start_set.iter() {
-        if let Some(NfaNode::Accepting) = nfa.graph.node_weight(*s) {
-            let n = dfa.node_weight_mut(dfa_start_node).unwrap();
-            *n = DfaNode::Accepting;
+        if nfa.accepting.contains(s) {
+            dfa_accepting.insert(dfa_start_node);
             break;
         }
     }
@@ -252,11 +254,10 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
         for (k, mut set) in by_edge_weight.drain() {
             epsilon_closure(&nfa.graph, &mut set);
             if !dfa_states.contains_key(&set) {
-                let node = dfa.add_node(DfaNode::Normal);
+                let node = dfa.add_node(());
                 for s in set.iter() {
-                    if let Some(NfaNode::Accepting) = nfa.graph.node_weight(*s) {
-                        let n = dfa.node_weight_mut(node).unwrap();
-                        *n = DfaNode::Accepting;
+                    if nfa.accepting.contains(s) {
+                        dfa_accepting.insert(node);
                         break;
                     }
                 }
@@ -272,6 +273,7 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
     Dfa {
         graph: dfa,
         start: dfa_start_node,
+        accepting: dfa_accepting,
     }
 }
 
@@ -296,7 +298,7 @@ impl Dfa {
                 return false;
             }
         }
-        self.graph.node_weight(cursor).unwrap() == &DfaNode::Accepting
+        self.accepting.contains(&cursor)
     }
 }
 
@@ -310,14 +312,14 @@ fn nfa() {
 
     let mut nfa = {
         let mut nfa = NfaGraph::new();
-        let initial = nfa.add_node(NfaNode::Normal);
-        let forwards1 = nfa.add_node(NfaNode::Normal);
-        let backwards1 = nfa.add_node(NfaNode::Normal);
-        let backwards2 = nfa.add_node(NfaNode::Normal);
-        let last_only = nfa.add_node(NfaNode::Normal);
-        let target = nfa.add_node(NfaNode::Normal);
-        let abc = nfa.add_node(NfaNode::Normal);
-        let acc = nfa.add_node(NfaNode::Accepting);
+        let initial = nfa.add_node(());
+        let forwards1 = nfa.add_node(());
+        let backwards1 = nfa.add_node(());
+        let backwards2 = nfa.add_node(());
+        let last_only = nfa.add_node(());
+        let target = nfa.add_node(());
+        let abc = nfa.add_node(());
+        let acc = nfa.add_node(());
         nfa.add_edge(initial, forwards1, reuben.clone());
         nfa.add_edge(forwards1, target, peters.clone());
         nfa.add_edge(initial, backwards1, peters.clone());
@@ -328,23 +330,25 @@ fn nfa() {
         nfa.add_edge(abc, acc, twenty.clone());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
+        let mut start = BTreeSet::new();
+        start.insert(initial);
         Nfa {
             graph: nfa,
             accepting,
-            start: initial,
+            start,
         }
     };
 
     let mut nfa2 = {
         let mut nfa = NfaGraph::new();
-        let initial = nfa.add_node(NfaNode::Normal);
-        let forwards1 = nfa.add_node(NfaNode::Normal);
-        let backwards1 = nfa.add_node(NfaNode::Normal);
-        let backwards2 = nfa.add_node(NfaNode::Normal);
-        let last_only = nfa.add_node(NfaNode::Normal);
-        let target = nfa.add_node(NfaNode::Normal);
-        let abc = nfa.add_node(NfaNode::Normal);
-        let acc = nfa.add_node(NfaNode::Accepting);
+        let initial = nfa.add_node(());
+        let forwards1 = nfa.add_node(());
+        let backwards1 = nfa.add_node(());
+        let backwards2 = nfa.add_node(());
+        let last_only = nfa.add_node(());
+        let target = nfa.add_node(());
+        let abc = nfa.add_node(());
+        let acc = nfa.add_node(());
         nfa.add_edge(initial, forwards1, andy.clone());
         nfa.add_edge(forwards1, target, peters.clone());
         nfa.add_edge(initial, backwards1, peters.clone());
@@ -355,10 +359,12 @@ fn nfa() {
         nfa.add_edge(abc, acc, twenty.clone());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
+        let mut start = BTreeSet::new();
+        start.insert(initial);
         Nfa {
             graph: nfa,
             accepting,
-            start: initial,
+            start,
         }
     };
 
@@ -367,6 +373,7 @@ fn nfa() {
 
     let dfa = to_dfa(&nfa);
     let dfa2 = to_dfa(&nfa2);
+
     println!("{:?}", dfa.start);
     use petgraph::dot::Dot;
     println!("{:?}", Dot::with_config(&dfa.graph, &[]));
