@@ -129,7 +129,7 @@ use petgraph::graph::{Graph, NodeIndex};
 // // NFA, but only one epsilon transition per node.
 // // Two if branches in a row = A -ε-> B(if1) -ε-> C(if2)
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct NfaToken(String, Formatting);
+pub struct NfaToken(String, Formatting);
 
 use std::fmt::{Debug, Formatter};
 
@@ -144,7 +144,7 @@ impl Debug for NfaToken {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum NfaEdge {
+pub enum NfaEdge {
     Epsilon,
     Token(NfaToken),
 }
@@ -155,8 +155,8 @@ impl<'a> From<&'a str> for NfaToken {
     }
 }
 
-type NfaGraph = Graph<(), NfaEdge>;
-type DfaGraph = Graph<(), NfaToken>;
+pub type NfaGraph = Graph<(), NfaEdge>;
+pub type DfaGraph = Graph<(), NfaToken>;
 
 fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     let mut work: Vec<_> = closure.iter().cloned().collect();
@@ -177,33 +177,60 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
 }
 
 #[derive(Debug)]
-struct Nfa {
+pub struct Nfa {
     graph: NfaGraph,
     accepting: BTreeSet<NodeIndex>,
     start: BTreeSet<NodeIndex>,
 }
 
 #[derive(Debug)]
-struct Dfa {
+pub struct Dfa {
     graph: DfaGraph,
     accepting: BTreeSet<NodeIndex>,
     start: NodeIndex,
 }
 
-// fn brzozowski_minimise(nfa: Nfa) -> Dfa {
-//     // reverse
-//     let rev1 = {
-//         nfa.graph.reverse();
-//         let orig_start = nfa.start;
-//         let new_start = nfa.add_node(NfaNode::Normal);
-//         nfa
-//     };
-//     // then convert to dfa via subset construction
-//     // reverse again
-//     // then convert to dfa via subset construction
-//     to_dfa(&mid)
-// }
+impl Nfa {
+    pub fn new() -> Self {
+        Nfa {
+            graph: NfaGraph::new(),
+            start: BTreeSet::new(),
+            accepting: BTreeSet::new(),
+        }
+    }
+    pub fn add_complete_sequence(&mut self, tokens: Vec<NfaToken>) {
+        let mut cursor = self.graph.add_node(());
+        self.start.insert(cursor);
+        for token in tokens {
+            let next = self.graph.add_node(());
+            self.graph.add_edge(cursor, next, NfaEdge::Token(token));
+            cursor = next;
+        }
+        self.accepting.insert(cursor);
+    }
 
+    pub fn brzozowski_minimise(mut nfa: Nfa) -> Dfa {
+        use std::mem;
+        // reverse
+        let rev1 = {
+            nfa.graph.reverse();
+            mem::swap(&mut nfa.start, &mut nfa.accepting);
+            nfa
+        };
+        let mut dfa1 = to_dfa(&rev1);
+        let rev2 = {
+            dfa1.graph.reverse();
+            let mut start_set = BTreeSet::new();
+            start_set.insert(dfa1.start);
+            Nfa {
+                graph: dfa1.graph.map(|_, _| (), |_, e| NfaEdge::Token(e.clone())),
+                accepting: start_set,
+                start: dfa1.accepting,
+            }
+        };
+        to_dfa(&rev2)
+    }
+}
 
 // TODO: find the quotient automaton of the resulting DFA?
 // Use Brzozowski's double-reversal algorithm
@@ -278,7 +305,7 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    fn accepts(&self, tokens: &[NfaToken]) -> bool {
+    pub fn accepts(&self, tokens: &[NfaToken]) -> bool {
         let mut cursor = self.start;
         for token in tokens {
             let mut found = false;
@@ -302,6 +329,9 @@ impl Dfa {
     }
 }
 
+#[cfg(test)]
+use petgraph::dot::Dot;
+
 #[test]
 fn nfa() {
     let andy = NfaEdge::Token("Andy".into());
@@ -310,7 +340,7 @@ fn nfa() {
     let comma = NfaEdge::Token(",".into());
     let twenty = NfaEdge::Token("2017".into());
 
-    let mut nfa = {
+    let nfa = {
         let mut nfa = NfaGraph::new();
         let initial = nfa.add_node(());
         let forwards1 = nfa.add_node(());
@@ -339,7 +369,7 @@ fn nfa() {
         }
     };
 
-    let mut nfa2 = {
+    let nfa2 = {
         let mut nfa = NfaGraph::new();
         let initial = nfa.add_node(());
         let forwards1 = nfa.add_node(());
@@ -368,46 +398,74 @@ fn nfa() {
         }
     };
 
-    // You can't do this, because it will overwrite the `middle -ho-> target` edge above
-    // nfa.add_edge(middle, target, NfaEdge::Epsilon);
-
     let dfa = to_dfa(&nfa);
     let dfa2 = to_dfa(&nfa2);
 
+    let dfa_brz = brzozowski_minimise(nfa);
+    let dfa2_brz = brzozowski_minimise(nfa2);
+
     println!("{:?}", dfa.start);
-    use petgraph::dot::Dot;
-    println!("{:?}", Dot::with_config(&dfa.graph, &[]));
-    println!("{:?}", Dot::with_config(&dfa2.graph, &[]));
+    println!("dfa {:?}", Dot::with_config(&dfa.graph, &[]));
+    println!("dfa2 {:?}", Dot::with_config(&dfa2.graph, &[]));
+    println!("dfa_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
+    println!("dfa2_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
 
-    assert!(dfa.accepts(&["Peters".into(), ",".into(), "2017".into()]));
-    assert!(dfa2.accepts(&["Peters".into(), ",".into(), "2017".into()]));
+    test_dfa(&dfa);
+    test_dfa(&dfa_brz);
+    test_dfa2(&dfa2);
+    test_dfa2(&dfa2_brz);
 
-    assert!(dfa.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
-    assert!(dfa.accepts(&[
-        "Peters".into(),
-        ",".into(),
-        "Reuben".into(),
-        ",".into(),
-        "2017".into()
-    ]));
-    assert!(!dfa.accepts(&[
-        "Peters".into(),
-        ",".into(),
-        "Andy".into(),
-        ",".into(),
-        "2017".into()
-    ]));
-    assert!(!dfa.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
+    fn test_dfa(dfa: &Dfa) {
+        assert!(dfa.accepts(&["Peters".into(), ",".into(), "2017".into()]));
+        assert!(dfa.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
+        assert!(dfa.accepts(&[
+            "Peters".into(),
+            ",".into(),
+            "Reuben".into(),
+            ",".into(),
+            "2017".into()
+        ]));
+        assert!(!dfa.accepts(&[
+            "Peters".into(),
+            ",".into(),
+            "Andy".into(),
+            ",".into(),
+            "2017".into()
+        ]));
+        assert!(!dfa.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
+    }
 
-    assert!(dfa2.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
-    assert!(!dfa2.accepts(&[
-        "Peters".into(),
-        ",".into(),
-        "Reuben".into(),
-        ",".into(),
-        "2017".into()
-    ]));
-    assert!(!dfa2.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
+    fn test_dfa2(dfa2: &Dfa) {
+        assert!(dfa2.accepts(&["Peters".into(), ",".into(), "2017".into()]));
+
+        assert!(dfa2.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
+        assert!(!dfa2.accepts(&[
+            "Peters".into(),
+            ",".into(),
+            "Reuben".into(),
+            ",".into(),
+            "2017".into()
+        ]));
+        assert!(!dfa2.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
+    }
+}
+
+#[test]
+fn test_brzozowski_minimise() {
+    let nfa = {
+        let mut nfa = Nfa::new();
+        nfa.add_complete_sequence(vec!["A".into(), "B".into(), "C".into(), "E".into()]);
+        nfa.add_complete_sequence(vec!["A".into(), "B".into(), "E".into()]);
+        nfa.add_complete_sequence(vec!["B".into(), "C".into(), "D".into(), "E".into()]);
+        nfa.add_complete_sequence(vec!["B".into(), "D".into(), "E".into()]);
+        nfa
+    };
+
+    let dfa = brzozowski_minimise(nfa);
+    println!("abcde {:?}", Dot::with_config(&dfa.graph, &[]));
+
+    assert!(dfa.accepts(&["A".into(), "B".into(), "E".into()]));
+    assert!(!dfa.accepts(&["A".into(), "B".into(), "C".into(), "D".into(), "E".into()]));
 }
 
 // struct DisambNfa {
