@@ -27,19 +27,13 @@ pub enum QuoteType {
 pub struct Attr(pub String, pub Vec<String>, pub Vec<(String, String)>);
 
 /// TODO: serialize and deserialize using an HTML parser?
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum InlineElement {
     /// This is how we can flip-flop only user-supplied styling.
     /// Inside this is parsed micro html
     Micro(Vec<MicroNode>),
 
-    Emph(Vec<InlineElement>),
-    Strong(Vec<InlineElement>),
-    SmallCaps(Vec<InlineElement>),
-    Underline(Vec<InlineElement>),
-    Superscript(Vec<InlineElement>),
-    Subscript(Vec<InlineElement>),
-    Span(Attr, Vec<InlineElement>),
+    Formatted(Vec<InlineElement>, Formatting),
     Quoted(QuoteType, Vec<InlineElement>),
     Text(String),
     Anchor {
@@ -147,6 +141,99 @@ impl MicroNode {
     }
 }
 
+enum FormatCmd {
+    Italic,
+    FontStyleOblique,
+    FontStyleNormal,
+    Strong,
+    FontWeightNormal,
+    FontWeightLight,
+    FontVariantSmallCaps,
+    FontVariantNormal,
+    TextDecorationUnderline,
+    TextDecorationNone,
+    VerticalAlignmentSuperscript,
+    VerticalAlignmentSubscript,
+    VerticalAlignmentBaseline,
+}
+
+impl FormatCmd {
+    fn html_tag(&self, options: &HtmlOptions) -> (&'static str, &'static str) {
+        use FormatCmd::*;
+        match self {
+            Italic => ("i", ""),
+            FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
+            FontStyleNormal => ("span", r#" style="font-style:normal;""#),
+
+            Strong => if options.use_b_for_strong {("b", "")} else {("strong", "")},
+            FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
+            FontWeightLight => ("span", r#" style="font-weight:light;""#),
+
+            FontVariantSmallCaps => ("span", r#" style="font-variant:small-caps;""#),
+            FontVariantNormal => ("span", r#" style="font-variant:normal;""#),
+
+            TextDecorationUnderline => ("span", r#" style="text-decoration:underline;""#),
+            TextDecorationNone => ("span", r#" style="text-decoration:none;""#),
+
+            VerticalAlignmentSuperscript => ("sup", ""),
+            VerticalAlignmentSubscript => ("sub", ""),
+            VerticalAlignmentBaseline => ("span", r#" style="vertical-alignment:baseline;"#),
+        }
+    }
+}
+
+fn stack_formats_html(s: &mut String, options: &HtmlOptions, inlines: &[InlineElement], formatting: Formatting) {
+    use self::FormatCmd::*;
+
+    let mut stack = Vec::new();
+
+    match formatting.font_style {
+        Some(FontStyle::Italic) => stack.push(Italic),
+        Some(FontStyle::Oblique) => stack.push(FontStyleOblique),
+        Some(FontStyle::Normal) => stack.push(FontStyleNormal),
+        _ => {}
+    }
+    match formatting.font_weight {
+        Some(FontWeight::Bold) => stack.push(Strong),
+        Some(FontWeight::Light) => stack.push(FontWeightLight),
+        Some(FontWeight::Normal) => stack.push(FontWeightNormal),
+        _ => {}
+    }
+    match formatting.font_variant {
+        Some(FontVariant::SmallCaps) => stack.push(FontVariantSmallCaps),
+        Some(FontVariant::Normal) => stack.push(FontVariantNormal),
+        _ => {},
+    };
+    match formatting.text_decoration {
+        Some(TextDecoration::Underline) => stack.push(TextDecorationUnderline),
+        Some(TextDecoration::None) => stack.push(TextDecorationNone),
+        _ => {},
+    }
+    match formatting.vertical_alignment {
+        Some(VerticalAlignment::Superscript) => stack.push(VerticalAlignmentSuperscript),
+        Some(VerticalAlignment::Subscript) => stack.push(VerticalAlignmentSubscript),
+        Some(VerticalAlignment::Baseline) => stack.push(VerticalAlignmentBaseline),
+        _ => {},
+    }
+
+    for cmd in stack.iter() {
+        let tag = cmd.html_tag(options);
+        s.push_str("<");
+        s.push_str(tag.0);
+        s.push_str(tag.1);
+        s.push_str(">");
+    }
+    for inner in inlines {
+        inner.to_html_inner(s, options);
+    }
+    for cmd in stack.iter().rev() {
+        let tag = cmd.html_tag(options);
+        s.push_str("</");
+        s.push_str(tag.0);
+        s.push_str(">");
+    }
+}
+
 impl InlineElement {
     fn to_html(inlines: &[InlineElement], options: &HtmlOptions) -> String {
         let mut s = String::new();
@@ -157,90 +244,17 @@ impl InlineElement {
     }
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         match self {
+            Text(text) => {
+                // TODO: HTML-escape the text
+                s.push_str(&text);
+            }
             Micro(micros) => {
                 for micro in micros {
                     micro.to_html_inner(s, options);
                 }
             }
-            Emph(inners) => {
-                s.push_str("<i>");
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</i>");
-            }
-            Span(attrs, inners) => {
-                s.push_str("<span");
-                if attrs.0.len() > 0 {
-                    s.push_str(r#" id=""#);
-                    s.push_str(&attrs.0);
-                    s.push_str(r#"""#);
-                }
-                if attrs.1.len() > 0 {
-                    s.push_str(r#" class=""#);
-                    for class in attrs.1.iter() {
-                        s.push_str(&class);
-                        s.push_str(" ");
-                    }
-                    s.push_str(r#"""#);
-                }
-                if attrs.2.len() > 0 {
-                    for (key, value) in attrs.2.iter() {
-                        s.push_str(" ");
-                        s.push_str(&key);
-                        s.push_str("=\"");
-                        s.push_str(&value);
-                        s.push_str("\"");
-                    }
-                }
-                s.push_str(">");
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            Strong(inners) => {
-                if options.use_b_for_strong {
-                    s.push_str("<b>");
-                } else {
-                    s.push_str("<strong>");
-                }
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                if options.use_b_for_strong {
-                    s.push_str("</b>");
-                } else {
-                    s.push_str("</strong>");
-                }
-            }
-            Superscript(inners) => {
-                s.push_str(r#"<sup>"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</sup>");
-            }
-            Subscript(inners) => {
-                s.push_str(r#"<sub>"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</sub>");
-            }
-            Underline(inners) => {
-                s.push_str(r#"<span style="text-decoration: underline;">"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            SmallCaps(inners) => {
-                s.push_str(r#"<span style="font-variant:small-caps;">"#);
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</span>");
+            Formatted(inlines, formatting) => {
+                stack_formats_html(s, options, inlines, *formatting);
             }
             Quoted(_qt, inners) => {
                 s.push_str(r#"<q>"#);
@@ -262,10 +276,6 @@ impl InlineElement {
                     i.to_html_inner(s, options);
                 }
                 s.push_str("</a>");
-            }
-            Text(text) => {
-                // TODO: HTML-escape the text
-                s.push_str(&text);
             }
         }
     }
@@ -280,108 +290,7 @@ impl InlineElement {
         s
     }
     fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
-        match self {
-            Micro(micro) => {
-                s.push_str("TODO: micro_html -> RTF output");
-            }
-            Emph(inners) => {
-                s.push_str(r"{\\i{}");
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str(r"}");
-            }
-            Span(attrs, inners) => {
-                s.push_str("<span");
-                if attrs.0.len() > 0 {
-                    s.push_str(r#" id=""#);
-                    s.push_str(&attrs.0);
-                    s.push_str(r#"""#);
-                }
-                if attrs.1.len() > 0 {
-                    s.push_str(r#" class=""#);
-                    for class in attrs.1.iter() {
-                        s.push_str(&class);
-                        s.push_str(" ");
-                    }
-                    s.push_str(r#"""#);
-                }
-                if attrs.2.len() > 0 {
-                    for (key, value) in attrs.2.iter() {
-                        s.push_str(" ");
-                        s.push_str(&key);
-                        s.push_str("=\"");
-                        s.push_str(&value);
-                        s.push_str("\"");
-                    }
-                }
-                s.push_str(">");
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            Strong(inners) => {
-                s.push_str("<strong>");
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</strong>");
-            }
-            Superscript(inners) => {
-                s.push_str(r#"<sup>"#);
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</sup>");
-            }
-            Subscript(inners) => {
-                s.push_str(r#"<sub>"#);
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</sub>");
-            }
-            Underline(inners) => {
-                s.push_str(r#"<span style="text-decoration: underline;">"#);
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            SmallCaps(inners) => {
-                s.push_str(r#""#);
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</span>");
-            }
-            Quoted(_qt, inners) => {
-                s.push_str(r#"<q>"#);
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</q>");
-            }
-            Anchor {
-                title: _,
-                url,
-                content,
-            } => {
-                s.push_str(r#"<a href=""#);
-                // TODO: HTML-quoted-escape? the url?
-                s.push_str(&url);
-                s.push_str(r#"">"#);
-                for i in content {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</a>");
-            }
-            Text(text) => {
-                // TODO: HTML-escape the text
-                s.push_str(&text);
-            }
-        }
+        unimplemented!()
     }
 }
 
@@ -406,32 +315,7 @@ impl Html {
         formatting: Option<Formatting>,
     ) -> Vec<InlineElement> {
         if let Some(f) = formatting {
-            let mut current = inlines;
-
-            current = match f.font_style {
-                Some(FontStyle::Italic) | Some(FontStyle::Oblique) => vec![Emph(current)],
-                _ => current,
-            };
-            current = match f.font_weight {
-                Some(FontWeight::Bold) => vec![Strong(current)],
-                // Light => unimplemented!(),
-                _ => current,
-            };
-            current = match f.font_variant {
-                Some(FontVariant::SmallCaps) => vec![SmallCaps(current)],
-                _ => current,
-            };
-            current = match f.text_decoration {
-                Some(TextDecoration::Underline) => vec![Underline(current)],
-                _ => current,
-            };
-            current = match f.vertical_alignment {
-                Some(VerticalAlignment::Superscript) => vec![Superscript(current)],
-                Some(VerticalAlignment::Subscript) => vec![Subscript(current)],
-                _ => current,
-            };
-
-            current
+            vec![Formatted(inlines, f)]
         } else {
             inlines
         }
@@ -555,43 +439,26 @@ fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<In
 fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElement> {
     let fl = |ils: &[InlineElement], st| flip_flop_inlines(ils, st);
     match inline {
-        Emph(ref ils) => {
-            let mut flop = state.clone();
-            flop.in_emph = !flop.in_emph;
-            let subs = fl(ils, &flop);
-            if state.in_emph {
-                Some(Span(attr_style("font-style: initial;"), subs))
-            } else {
-                Some(Emph(subs))
-            }
+        Micro(nodes) => {
+            // TODO
+            None
         }
-
-        Strong(ref ils) => {
+        Formatted(ils, f) => {
             let mut flop = state.clone();
-            flop.in_strong = !flop.in_strong;
-            let subs = fl(ils, &flop);
-            if state.in_strong {
-                Some(Span(attr_style("font-weight: initial;"), subs))
-            } else {
-                Some(Strong(subs))
+            if let Some(fs) = f.font_style {
+                flop.in_emph = match fs {
+                    FontStyle::Italic | FontStyle::Oblique => true,
+                    _ => false,
+                };
             }
-        }
-
-        SmallCaps(ref ils) => {
-            let mut flop = state.clone();
-            flop.in_small_caps = !flop.in_small_caps;
-            let subs = fl(ils, &flop);
-            if state.in_small_caps {
-                Some(Span(attr_style("font-variant: normal;"), subs))
-            } else {
-                Some(SmallCaps(subs))
+            if let Some(fw) = f.font_weight {
+                flop.in_strong = fw == FontWeight::Bold;
             }
-        }
-
-        // don't flip-flop underlines
-        Underline(ref ils) => {
-            let subs = fl(ils, state);
-            Some(Underline(subs))
+            if let Some(fv) = f.font_variant {
+                flop.in_small_caps = fv == FontVariant::SmallCaps;
+            }
+            let subs = fl(ils, &flop);
+            Some(Formatted(subs, *f))
         }
 
         Quoted(ref _q, ref ils) => {
@@ -603,16 +470,6 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             } else {
                 Some(Quoted(QuoteType::DoubleQuote, subs))
             }
-        }
-
-        Superscript(ref ils) => {
-            let subs = fl(ils, state);
-            Some(Superscript(subs))
-        }
-
-        Subscript(ref ils) => {
-            let subs = fl(ils, state);
-            Some(Subscript(subs))
         }
 
         Anchor {
