@@ -629,6 +629,9 @@ impl TestCase {
         if self.result == "[CSL STYLE ERROR: reference with no printed form.]" {
             self.result = String::new()
         }
-        res
+        // Because citeproc-rs is a bit keen to escape things
+        // Slashes are fine if they're not next to angle braces
+        // let's hope they're not
+        res.replace("&#x2f;", "/")
     }
 }

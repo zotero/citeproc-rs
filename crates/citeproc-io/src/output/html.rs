@@ -371,6 +371,7 @@ impl OutputFormat for Html {
 #[derive(Default, Debug, Clone)]
 struct FlipFlopState {
     in_emph: bool,
+    emph: FontStyle,
     in_strong: bool,
     in_small_caps: bool,
     in_outer_quotes: bool,
@@ -461,20 +462,34 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
         }
         Formatted(ils, f) => {
             let mut flop = state.clone();
+            let mut new_f = f.clone();
             if let Some(fs) = f.font_style {
+                let samey = fs == state.emph;
+                if samey {
+                    new_f.font_style = None;
+                }
                 flop.in_emph = match fs {
                     FontStyle::Italic | FontStyle::Oblique => true,
                     _ => false,
                 };
+                flop.emph = fs;
             }
             if let Some(fw) = f.font_weight {
-                flop.in_strong = fw == FontWeight::Bold;
+                let want = fw == FontWeight::Bold;
+                if flop.in_strong == want && want == true {
+                    new_f.font_weight = None;
+                }
+                flop.in_strong = want;
             }
             if let Some(fv) = f.font_variant {
-                flop.in_small_caps = fv == FontVariant::SmallCaps;
+                let want_small_caps = fv == FontVariant::SmallCaps;
+                if flop.in_small_caps == want_small_caps {
+                    new_f.font_variant = None;
+                }
+                flop.in_small_caps = want_small_caps;
             }
             let subs = fl(ils, &flop);
-            Some(Formatted(subs, *f))
+            Some(Formatted(subs, new_f))
         }
 
         Quoted(ref _q, ref ils) => {
