@@ -1,0 +1,51 @@
+mode: citation
+result: >
+  [no-format-group]
+  <span style="font-variant:small-caps;">txt</span>
+  [inner-reverts]
+  <span style="font-variant:small-caps;"><span style="font-variant:normal;">txt</span></span>
+  [inner-unrelated]
+  <span style="font-variant:small-caps;"><b>txt</b></span>
+  [inner-from-reference]
+  <span style="font-variant:small-caps;">Normal <span style="font-variant:normal;">SmallCaps</span> Normal</span>
+
+input:
+  - id: ITEM-1
+    type: book
+    title: 'Normal <span style="font-variant: small-caps;">SmallCaps</span> Normal'
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <group delimiter=" ">
+          <text value="[no-format-group]" />
+          <group font-variant="small-caps">
+            <group>
+              <text value="txt" />
+            </group>
+          </group>
+
+          <text value="[inner-reverts]" />
+          <group font-variant="small-caps">
+            <group font-variant="normal">
+              <text value="txt" />
+            </group>
+          </group>
+
+          <text value="[inner-unrelated]" />
+          <group font-variant="small-caps">
+            <group font-weight="bold">
+              <text value="txt" />
+            </group>
+          </group>
+
+          <text value="[inner-from-reference]" />
+          <group font-variant="small-caps">
+              <text variable="title" />
+          </group>
+        </group>
+      </layout>
+    </citation>
+  </style>
