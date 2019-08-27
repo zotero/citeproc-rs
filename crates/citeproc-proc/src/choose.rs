@@ -4,11 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::helpers::sequence;
-use super::ir::*;
-use super::ProcDatabase;
-use super::{CiteContext, IrState, Proc};
-use citeproc_io::output::OutputFormat;
+use crate::prelude::*;
+
+use crate::helpers::sequence;
 use citeproc_io::DateOrRange;
 use csl::style::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
@@ -19,7 +17,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -87,7 +85,7 @@ struct BranchEval<O: OutputFormat> {
 
 fn eval_ifthen<'c, O>(
     branch: &'c IfThen,
-    db: &impl ProcDatabase,
+    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
 ) -> BranchEval<O>
@@ -120,7 +118,7 @@ where
 fn eval_conditions<'c, O>(
     conditions: &'c Conditions,
     ctx: &CiteContext<'c, O>,
-    db: &impl ProcDatabase,
+    db: &impl IrDatabase,
 ) -> (bool, bool)
 where
     O: OutputFormat,
@@ -133,7 +131,7 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>, db: &impl ProcDatabase) -> bool
+fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>, db: &impl IrDatabase) -> bool
 where
     O: OutputFormat,
 {
@@ -154,7 +152,7 @@ where
     let positions = cond
         .position
         .iter()
-        .map(|&pos| db.cite_pos(ctx.cite.id).matches(pos));
+        .map(|&pos| db.cite_position(ctx.cite.id).0.matches(pos));
 
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
@@ -212,7 +210,7 @@ where
 
     let mut date_parts = None;
 
-    let style = db.style_el();
+    let style = db.style();
     if style.features.condition_date_parts {
         date_parts = Some(has_year_only.chain(has_month_or_season).chain(has_day));
     }

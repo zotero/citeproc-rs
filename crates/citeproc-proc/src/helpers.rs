@@ -4,16 +4,14 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::group::GroupVars;
+use crate::prelude::*;
+
 use super::ir::IR::*;
-use super::ProcDatabase;
-use super::{CiteContext, IrSeq, IrState, IrSum, Proc, IR};
-use citeproc_io::output::OutputFormat;
 use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
 pub fn sequence<'c, O>(
-    db: &impl ProcDatabase,
+    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &[Element],
@@ -133,3 +131,15 @@ where
         )
     }
 }
+
+pub fn to_bijective_base_26(int: u32) -> String {
+    let mut n = int;
+    let mut s = String::new();
+    while n > 0 {
+        n -= 1;
+        s.push(char::from((65 + 32 + (n % 26)) as u8));
+        n /= 26;
+    }
+    s
+}
+

@@ -6,7 +6,7 @@
 
 #![allow(dead_code)]
 
-use super::ir::IrDatabase;
+use citeproc_proc::IrDatabase;
 use citeproc_io::ClusterId;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

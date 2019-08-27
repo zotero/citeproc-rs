@@ -126,19 +126,39 @@ use std::collections::HashMap;
 
 use petgraph::graph::{Graph, NodeIndex};
 
-// // NFA, but only one epsilon transition per node.
-// // Two if branches in a row = A -ε-> B(if1) -ε-> C(if2)
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+pub struct Edge(u32);
+
+use super::ir_database::IrDatabase;
+impl Edge {
+    // Adding this method is often convenient, since you can then
+    // write `path.lookup(db)` to access the data, which reads a bit better.
+    pub fn lookup(self, db: &impl IrDatabase) -> EdgeData {
+        IrDatabase::lookup_edge(db, self)
+    }
+}
+
+use salsa::{InternKey, InternId};
+impl InternKey for Edge {
+    fn from_intern_id(v: InternId) -> Self {
+        Edge(u32::from(v))
+    }
+    fn as_intern_id(&self) -> InternId {
+        InternId::from(self.0)
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct NfaToken(String, Formatting);
+pub struct EdgeData(String, Formatting);
 
 use std::fmt::{Debug, Formatter};
 
-impl Debug for NfaToken {
+impl Debug for EdgeData {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.1 == Formatting::default() {
             write!(f, "{}", self.0)
         } else {
-            write!(f, "NfaToken({:?}, {:?})", self.0, self.1)
+            write!(f, "EdgeData({:?}, {:?})", self.0, self.1)
         }
     }
 }
@@ -146,17 +166,17 @@ impl Debug for NfaToken {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {
     Epsilon,
-    Token(NfaToken),
+    Token(Edge),
 }
 
-impl<'a> From<&'a str> for NfaToken {
+impl<'a> From<&'a str> for EdgeData {
     fn from(s: &'a str) -> Self {
-        NfaToken(s.to_owned(), Formatting::default())
+        EdgeData(s.to_owned(), Formatting::default())
     }
 }
 
 pub type NfaGraph = Graph<(), NfaEdge>;
-pub type DfaGraph = Graph<(), NfaToken>;
+pub type DfaGraph = Graph<(), Edge>;
 
 fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     let mut work: Vec<_> = closure.iter().cloned().collect();
@@ -198,7 +218,8 @@ impl Nfa {
             accepting: BTreeSet::new(),
         }
     }
-    pub fn add_complete_sequence(&mut self, tokens: Vec<NfaToken>) {
+
+    pub fn add_complete_sequence(&mut self, tokens: Vec<Edge>) {
         let mut cursor = self.graph.add_node(());
         self.start.insert(cursor);
         for token in tokens {
@@ -209,13 +230,26 @@ impl Nfa {
         self.accepting.insert(cursor);
     }
 
-    pub fn brzozowski_minimise(mut nfa: Nfa) -> Dfa {
+    /// A Names block, for instance, is given start & end nodes, and simply fills in a segment a
+    /// few times with increasing given-name counts etc.
+    pub fn add_sequence_between(&mut self, a: NodeIndex, b: NodeIndex, tokens: Vec<Edge>) {
+        let mut cursor = self.graph.add_node(());
+        self.graph.add_edge(a, cursor, NfaEdge::Epsilon);
+        for token in tokens {
+            let next = self.graph.add_node(());
+            self.graph.add_edge(cursor, next, NfaEdge::Token(token));
+            cursor = next;
+        }
+        self.graph.add_edge(cursor, b, NfaEdge::Epsilon);
+    }
+
+    pub fn brzozowski_minimise(mut self: Nfa) -> Dfa {
         use std::mem;
         // reverse
         let rev1 = {
-            nfa.graph.reverse();
-            mem::swap(&mut nfa.start, &mut nfa.accepting);
-            nfa
+            self.graph.reverse();
+            mem::swap(&mut self.start, &mut self.accepting);
+            self
         };
         let mut dfa1 = to_dfa(&rev1);
         let rev2 = {
@@ -255,7 +289,7 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 
     while !work.is_empty() {
         let (dfa_state, current_node) = work.pop().unwrap();
-        let mut by_edge_weight = HashMap::<NfaToken, BTreeSet<NodeIndex>>::new();
+        let mut by_edge_weight = HashMap::<Edge, BTreeSet<NodeIndex>>::new();
         for nfa_node in dfa_state {
             for neigh in nfa.graph.neighbors(nfa_node) {
                 let weight = nfa
@@ -305,7 +339,7 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    pub fn accepts(&self, tokens: &[NfaToken]) -> bool {
+    pub fn accepts(&self, tokens: &[Edge]) -> bool {
         let mut cursor = self.start;
         for token in tokens {
             let mut found = false;
@@ -332,13 +366,19 @@ impl Dfa {
 #[cfg(test)]
 use petgraph::dot::Dot;
 
+impl From<Edge> for NfaEdge {
+    fn from(edge: Edge) -> Self {
+        NfaEdge::Token(edge)
+    }
+}
+
 #[test]
 fn nfa() {
-    let andy = NfaEdge::Token("Andy".into());
-    let reuben = NfaEdge::Token("Reuben".into());
-    let peters = NfaEdge::Token("Peters".into());
-    let comma = NfaEdge::Token(",".into());
-    let twenty = NfaEdge::Token("2017".into());
+    let andy = Edge(1);
+    let reuben = Edge(2);
+    let peters = Edge(3);
+    let comma = Edge(4);
+    let twenty = Edge(5);
 
     let nfa = {
         let mut nfa = NfaGraph::new();
@@ -346,18 +386,17 @@ fn nfa() {
         let forwards1 = nfa.add_node(());
         let backwards1 = nfa.add_node(());
         let backwards2 = nfa.add_node(());
-        let last_only = nfa.add_node(());
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, reuben.clone());
-        nfa.add_edge(forwards1, target, peters.clone());
-        nfa.add_edge(initial, backwards1, peters.clone());
-        nfa.add_edge(backwards1, backwards2, comma.clone());
-        nfa.add_edge(backwards2, target, reuben.clone());
-        nfa.add_edge(initial, target, peters.clone());
-        nfa.add_edge(target, abc, comma.clone());
-        nfa.add_edge(abc, acc, twenty.clone());
+        nfa.add_edge(initial, forwards1, reuben.into());
+        nfa.add_edge(forwards1, target, peters.into());
+        nfa.add_edge(initial, backwards1, peters.into());
+        nfa.add_edge(backwards1, backwards2, comma.into());
+        nfa.add_edge(backwards2, target, reuben.into());
+        nfa.add_edge(initial, target, peters.into());
+        nfa.add_edge(target, abc, comma.into());
+        nfa.add_edge(abc, acc, twenty.into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -375,18 +414,17 @@ fn nfa() {
         let forwards1 = nfa.add_node(());
         let backwards1 = nfa.add_node(());
         let backwards2 = nfa.add_node(());
-        let last_only = nfa.add_node(());
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, andy.clone());
-        nfa.add_edge(forwards1, target, peters.clone());
-        nfa.add_edge(initial, backwards1, peters.clone());
-        nfa.add_edge(backwards1, backwards2, comma.clone());
-        nfa.add_edge(backwards2, target, andy.clone());
-        nfa.add_edge(initial, target, peters.clone());
-        nfa.add_edge(target, abc, comma.clone());
-        nfa.add_edge(abc, acc, twenty.clone());
+        nfa.add_edge(initial, forwards1, andy.into());
+        nfa.add_edge(forwards1, target, peters.into());
+        nfa.add_edge(initial, backwards1, peters.into());
+        nfa.add_edge(backwards1, backwards2, comma.into());
+        nfa.add_edge(backwards2, target, andy.into());
+        nfa.add_edge(initial, target, peters.into());
+        nfa.add_edge(target, abc, comma.into());
+        nfa.add_edge(abc, acc, twenty.into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -401,8 +439,8 @@ fn nfa() {
     let dfa = to_dfa(&nfa);
     let dfa2 = to_dfa(&nfa2);
 
-    let dfa_brz = brzozowski_minimise(nfa);
-    let dfa2_brz = brzozowski_minimise(nfa2);
+    let dfa_brz = nfa.brzozowski_minimise();
+    let dfa2_brz = nfa2.brzozowski_minimise();
 
     println!("{:?}", dfa.start);
     println!("dfa {:?}", Dot::with_config(&dfa.graph, &[]));
@@ -410,69 +448,53 @@ fn nfa() {
     println!("dfa_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
     println!("dfa2_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
 
+    let test_dfa = |dfa: &Dfa| {
+        assert!(dfa.accepts(&[peters, comma, twenty]));
+        assert!(dfa.accepts(&[reuben, peters, comma, twenty]));
+        assert!(dfa.accepts(&[peters, comma, reuben, comma, twenty]));
+        assert!(!dfa.accepts(&[peters, comma, andy, comma, twenty]));
+        assert!(!dfa.accepts(&[andy, comma, peters, comma, twenty]));
+    };
+
+    let test_dfa2 = |dfa2: &Dfa| {
+        assert!(dfa2.accepts(&[peters, comma, twenty]));
+        assert!(dfa2.accepts(&[andy, peters, comma, twenty]));
+        assert!(!dfa2.accepts(&[peters, comma, reuben, comma, twenty]));
+        assert!(!dfa2.accepts(&[reuben, peters, comma, twenty]));
+    };
+
     test_dfa(&dfa);
     test_dfa(&dfa_brz);
     test_dfa2(&dfa2);
     test_dfa2(&dfa2_brz);
-
-    fn test_dfa(dfa: &Dfa) {
-        assert!(dfa.accepts(&["Peters".into(), ",".into(), "2017".into()]));
-        assert!(dfa.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
-        assert!(dfa.accepts(&[
-            "Peters".into(),
-            ",".into(),
-            "Reuben".into(),
-            ",".into(),
-            "2017".into()
-        ]));
-        assert!(!dfa.accepts(&[
-            "Peters".into(),
-            ",".into(),
-            "Andy".into(),
-            ",".into(),
-            "2017".into()
-        ]));
-        assert!(!dfa.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
-    }
-
-    fn test_dfa2(dfa2: &Dfa) {
-        assert!(dfa2.accepts(&["Peters".into(), ",".into(), "2017".into()]));
-
-        assert!(dfa2.accepts(&["Andy".into(), "Peters".into(), ",".into(), "2017".into()]));
-        assert!(!dfa2.accepts(&[
-            "Peters".into(),
-            ",".into(),
-            "Reuben".into(),
-            ",".into(),
-            "2017".into()
-        ]));
-        assert!(!dfa2.accepts(&["Reuben".into(), "Peters".into(), ",".into(), "2017".into()]));
-    }
 }
 
 #[test]
 fn test_brzozowski_minimise() {
+    let a = Edge(1);
+    let b = Edge(2);
+    let c = Edge(3);
+    let d = Edge(4);
+    let e = Edge(5);
     let nfa = {
         let mut nfa = Nfa::new();
-        nfa.add_complete_sequence(vec!["A".into(), "B".into(), "C".into(), "E".into()]);
-        nfa.add_complete_sequence(vec!["A".into(), "B".into(), "E".into()]);
-        nfa.add_complete_sequence(vec!["B".into(), "C".into(), "D".into(), "E".into()]);
-        nfa.add_complete_sequence(vec!["B".into(), "D".into(), "E".into()]);
+        nfa.add_complete_sequence(vec![a, b, c, e]);
+        nfa.add_complete_sequence(vec![a, b, e]);
+        nfa.add_complete_sequence(vec![b, c, d, e]);
+        nfa.add_complete_sequence(vec![b, d, e]);
         nfa
     };
 
-    let dfa = brzozowski_minimise(nfa);
+    let dfa = nfa.brzozowski_minimise();
     println!("abcde {:?}", Dot::with_config(&dfa.graph, &[]));
 
-    assert!(dfa.accepts(&["A".into(), "B".into(), "E".into()]));
-    assert!(!dfa.accepts(&["A".into(), "B".into(), "C".into(), "D".into(), "E".into()]));
+    assert!(dfa.accepts(&[a, b, e]));
+    assert!(!dfa.accepts(&[a, b, c, d, e]));
 }
 
-// struct DisambNfa {
-//     state: NfaIndex,
-//     edges: Vec<HashMap<Option<NfaToken>, NfaIndex>>,
-//     accepting: HashSet<NfaIndex>,
-// }
+trait ConstructNfa {
+}
+
 
 // struct DisambiguationState<O: OutputFormat> {
 //     format_stack: Vec<Formatting>,

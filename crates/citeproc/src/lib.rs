@@ -4,18 +4,21 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+#[macro_use]
+extern crate serde_derive;
+// #[macro_use]
+// extern crate log;
+
 pub(crate) mod db;
 pub use self::db::update::{DocUpdate, UpdateSummary};
 pub use self::db::Processor;
-pub use self::db::{LocaleFetchError, LocaleFetcher};
-mod utils;
-pub use csl::error::StyleError;
 
-pub use citeproc_proc as proc;
-
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate log;
-
-pub use csl::Atom;
+pub mod prelude {
+    pub use csl::Atom;
+    pub use citeproc_db::{CiteDatabase, StyleDatabase, LocaleFetcher, LocaleFetchError, LocaleDatabase};
+    pub use citeproc_proc::IrDatabase;
+    pub use citeproc_io::{Reference, Cite, Cluster, CiteId, ClusterId};
+    pub use crate::db::Processor;
+    pub use crate::db::update::{DocUpdate, UpdateSummary};
+    pub use citeproc_io::output::{OutputFormat, html::Html};
+}

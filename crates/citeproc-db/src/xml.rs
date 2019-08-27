@@ -20,9 +20,11 @@ pub trait HasFetcher {
 
 /// Salsa interface to a CSL style.
 #[salsa::query_group(StyleDatabaseStorage)]
-pub trait StyleDatabase: salsa::Database {
+pub trait StyleDatabase {
     #[salsa::input]
     fn style(&self) -> Arc<Style>;
+
+    /// Grabs the Name options from `<style>` + `<citation>` elements
     fn name_citation(&self) -> Arc<Name>;
 }
 
@@ -58,7 +60,14 @@ pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
     /// `Option`. To avoid having to unwrap each field later on, we merge whatever options did
     /// get provided into a non-`Option` defaults struct.
     fn locale_options(&self, key: Lang) -> Arc<LocaleOptions>;
+
+    fn default_locale(&self) -> Arc<Locale>;
 }
+
+fn default_locale(db: &impl LocaleDatabase) -> Arc<Locale> {
+    db.merged_locale(db.style().default_locale.clone())
+}
+
 
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
     let stored = db.locale_input_langs();
@@ -125,9 +134,8 @@ fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
     Arc::new(LocaleOptions::from_merged(merged))
 }
 
-use cfg_if::cfg_if;
-cfg_if! {
-    if #[cfg(feature = "rayon")] {
+cfg_if::cfg_if! {
+    if #[cfg(feature = "parallel")] {
         pub trait LocaleFetcher: Send + Sync {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
         }
@@ -156,14 +164,11 @@ impl From<io::Error> for LocaleFetchError {
     }
 }
 
-#[cfg(test)]
 use std::collections::HashMap;
 
-#[cfg(test)]
-pub struct Predefined(pub HashMap<Lang, String>);
+pub struct PredefinedLocales(pub HashMap<Lang, String>);
 
-#[cfg(test)]
-impl LocaleFetcher for Predefined {
+impl LocaleFetcher for PredefinedLocales {
     fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
         Ok(self.0.get(lang).cloned())
     }

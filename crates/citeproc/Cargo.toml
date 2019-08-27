@@ -17,7 +17,7 @@ crate-type = ["rlib", "staticlib"]
 [features]
 test = []
 default = ["cli", "parallel"]
-parallel = ["rayon"]
+parallel = ["rayon", "citeproc-db/parallel"]
 cli = ["clap", "directories"]
 
 [dependencies]
@@ -30,7 +30,7 @@ serde = { version = "1.0.98", features = ["rc"] }
 serde_derive = "1.0.98"
 serde_json = "1.0.40"
 fnv = "1.0.6"
-salsa = "0.12.3"
+salsa = "0.13.0"
 
 clap = { version = "2.33.0", optional = true }
 rayon = { version = "1.1.0", optional = true }
@@ -40,6 +40,7 @@ log = "0.4.7"
 parking_lot = "0.9.0"
 citeproc-io = { path = "../citeproc-io" }
 citeproc-proc = { path = "../citeproc-proc" }
+citeproc-db = { path = "../citeproc-db" }
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }

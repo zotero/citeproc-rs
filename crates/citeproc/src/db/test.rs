@@ -82,7 +82,7 @@ mod terms {
         )
     }
 
-    use crate::db::xml::Predefined;
+    use citeproc_db::PredefinedLocales;
     fn predefined_xml(pairs: &[(Lang, &str)]) -> Predefined {
         let mut map = HashMap::new();
         for (lang, ts) in pairs {

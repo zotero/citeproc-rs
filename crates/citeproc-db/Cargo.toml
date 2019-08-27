@@ -1,22 +1,18 @@
 [package]
-name = "citeproc-proc"
+name = "citeproc-db"
 version = "0.1.0"
 authors = ["Cormac Relf <web@cormacrelf.net>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+parallel = []
+
 [dependencies]
+salsa = "0.13.0"
+fnv = "1.0.6"
 csl = { path = "../csl" }
 citeproc-io = { path = "../citeproc-io" }
-serde = "1.0.98"
-serde_derive = "1.0.98"
-fnv = "1.0.6"
-ucd-trie = "0.1.1"
-petgraph = "0.4.13"
-generational-arena = "0.2.2"
+log = "0.4.8"
 cfg-if = "0.1.9"
-salsa = "0.13.0"
-citeproc-db = { path = "../citeproc-db" }
-
-[dev-dependencies]
-lazy_static = "1.4.0"

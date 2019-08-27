@@ -4,22 +4,28 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::{CiteDatabase, LocaleDatabase, StyleDatabase};
+use citeproc_db::{CiteDatabase, LocaleDatabase, StyleDatabase};
+use crate::disamb::{AddDisambTokens, Edge, EdgeData};
 
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::proc::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
+use crate::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
 use citeproc_io::output::{
     html::{Html, HtmlOptions},
     OutputFormat,
 };
 use citeproc_io::{Cite, CiteId, ClusterId, Reference};
 use csl::Atom;
+use crate::helpers::to_bijective_base_26;
 
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
+
+    fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
+    fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
+
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> IrGen;
@@ -31,9 +37,29 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
     fn built_cluster(&self, key: ClusterId) -> Arc<<Html as OutputFormat>::Output>;
 
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
+
+    #[salsa::interned]
+    fn edge(&self, e: EdgeData) -> Edge;
 }
 
-use crate::utils::to_bijective_base_26;
+// only call with real references please
+fn disamb_tokens(db: &impl CiteDatabase, key: Atom) -> Arc<HashSet<DisambToken>> {
+    let refr = db.reference_input(key);
+    let mut set = HashSet::new();
+    refr.add_tokens_index(&mut set);
+    Arc::new(set)
+}
+
+fn inverted_index(db: &impl IrDatabase) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
+    let mut index = FnvHashMap::default();
+    for key in db.disamb_participants().iter() {
+        for tok in db.disamb_tokens(key.clone()).iter() {
+            let ids = index.entry(tok.clone()).or_insert_with(|| HashSet::new());
+            ids.insert(key.clone());
+        }
+    }
+    Arc::new(index)
+}
 
 /// the inverted index is constant for a particular set of cited+uncited references
 /// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up

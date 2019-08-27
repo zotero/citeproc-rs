@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::{CiteContext, GroupVars, IrState, Proc, ProcDatabase};
-use citeproc_io::output::OutputFormat;
+use crate::prelude::*;
+
 use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
@@ -88,7 +88,7 @@ impl<O: OutputFormat> IR<O> {
 
     pub fn disambiguate<'c>(
         &mut self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         is_unambig: &impl Fn(&IrState) -> bool,

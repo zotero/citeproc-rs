@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::{LocaleDatabase, StyleDatabase};
+use super::xml::{LocaleDatabase, StyleDatabase};
 
 use csl::locale::Locale;
 use csl::style::{Position, Style};
@@ -13,13 +13,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::{Cite, CiteId, ClusterId, Reference};
-// use citeproc_io::output::OutputFormat;
-use crate::proc::{AddDisambTokens, DisambToken, ProcDatabase};
 use citeproc_io::output::html::Html;
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
-pub trait CiteDatabase: LocaleDatabase + StyleDatabase + ProcDatabase {
+pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn reference_input(&self, key: Atom) -> Arc<Reference>;
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
@@ -39,10 +37,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase + ProcDatabase {
     /// Also represents "the refs that will be in the bibliography if we generate one"
     fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
 
-    fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
-
-    fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
-
     // priv
     #[salsa::input]
     fn cite(&self, key: CiteId) -> Arc<Cite<Html>>;
@@ -60,11 +54,18 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase + ProcDatabase {
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
 
     fn cite_positions(&self) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
+
+    /// The first element is a [`Position`]; first, ibid, subsequent, etc
+    ///
+    /// The second is the 'First Reference Note Number' -- the number of the footnote containing the first cite
+    /// referring to this cite's reference. This is None for a [`Position::First`].
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
 
     fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
+
+    fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
@@ -81,25 +82,6 @@ fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
     refr.and_then(|r| r.language.clone())
         .map(|l| db.merged_locale(l))
         .unwrap_or_else(|| db.default_locale())
-}
-
-// only call with real references please
-fn disamb_tokens(db: &impl CiteDatabase, key: Atom) -> Arc<HashSet<DisambToken>> {
-    let refr = db.reference_input(key);
-    let mut set = HashSet::new();
-    refr.add_tokens_index(&mut set);
-    Arc::new(set)
-}
-
-fn inverted_index(db: &impl CiteDatabase) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
-    let mut index = FnvHashMap::default();
-    for key in db.disamb_participants().iter() {
-        for tok in db.disamb_tokens(key.clone()).iter() {
-            let ids = index.entry(tok.clone()).or_insert_with(|| HashSet::new());
-            ids.insert(key.clone());
-        }
-    }
-    Arc::new(index)
 }
 
 // make sure there are no keys we wouldn't recognise
@@ -305,4 +287,14 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
     };
     // dbg!(&refs);
     Some(Arc::new((refs, citation_numbers)))
+}
+
+fn bib_number(db: &impl CiteDatabase, id: CiteId) -> Option<u32> {
+    let cite = db.cite(id);
+    if let Some(abc) = db.sorted_refs() {
+        let (_, ref lookup) = &*abc;
+        lookup.get(&cite.ref_id).cloned()
+    } else {
+        None
+    }
 }

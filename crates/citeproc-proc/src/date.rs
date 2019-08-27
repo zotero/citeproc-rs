@@ -4,12 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::disamb::{AddDisambTokens, DisambToken};
-use super::group::GroupVars;
-use super::ir::*;
-use super::ProcDatabase;
-use super::{CiteContext, IrState, Proc};
-use citeproc_io::output::OutputFormat;
+use crate::prelude::*;
+
 use citeproc_io::{Date, DateOrRange};
 use csl::style::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
@@ -22,7 +18,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -43,7 +39,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -51,7 +47,7 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let locale = db.locale(ctx.cite.id);
+        let locale = db.locale_by_cite(ctx.cite.id);
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
@@ -81,7 +77,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -160,12 +156,12 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
 
 fn dp_render<'c, O: OutputFormat>(
     part: &DatePart,
-    db: &impl ProcDatabase,
+    db: &impl IrDatabase,
     _state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     date: &Date,
 ) -> Option<O::Build> {
-    let locale = db.locale(ctx.cite.id);
+    let locale = db.locale_by_cite(ctx.cite.id);
     let string = match part.form {
         DatePartForm::Year(form) => match form {
             YearForm::Long => Some(format!("{}", date.year)),

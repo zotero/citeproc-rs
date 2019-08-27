@@ -4,11 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::group::GroupVars;
-use super::ir::*;
+use crate::prelude::*;
+
 use super::unicode::is_latin_cyrillic;
-use super::{CiteContext, IrState, Proc, ProcDatabase};
-use citeproc_io::output::OutputFormat;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName};
 use csl::style::{
@@ -222,7 +220,7 @@ impl OneName {
 
     fn render<'c, O: OutputFormat>(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         names_slice: &[Name],
@@ -232,7 +230,7 @@ impl OneName {
 
         let mut seen_one = false;
         let name_tokens = self.name_tokens(ctx.position, names_slice);
-        let locale = db.locale(ctx.cite.id);
+        let locale = db.locale_by_cite(ctx.cite.id);
 
         if self.0.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -263,7 +261,7 @@ impl OneName {
                     pn_is_latin_cyrillic(pn),
                     self.0.form == Some(NameForm::Long),
                     self.naso(seen_one),
-                    db.style_el().demote_non_dropping_particle,
+                    db.style().demote_non_dropping_particle,
                 );
                 seen_one = true;
 
@@ -279,7 +277,7 @@ impl OneName {
                                     &given,
                                     self.0.initialize.unwrap_or(true),
                                     self.0.initialize_with.as_ref().map(|s| s.as_ref()),
-                                    db.style_el().initialize_with_hyphen,
+                                    db.style().initialize_with_hyphen,
                                 );
                                 build.push(format_with_part(name_part, &string));
                             }
@@ -518,7 +516,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl ProcDatabase,
+        db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>

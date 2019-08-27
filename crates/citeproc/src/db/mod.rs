@@ -4,22 +4,16 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-mod ir;
-pub use ir::IrDatabase;
-mod cite;
-pub use cite::CiteDatabase;
-mod xml;
-pub use xml::{LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase};
-mod proc_database;
 pub mod update;
 
 #[cfg(test)]
 mod test;
 
-use self::cite::CiteDatabaseStorage;
-use self::ir::IrDatabaseStorage;
+use crate::prelude::*;
+
+use citeproc_proc::IrDatabaseStorage;
+use citeproc_db::{HasFetcher, CiteDatabaseStorage, LocaleDatabaseStorage, StyleDatabaseStorage};
 use self::update::{DocUpdate, UpdateSummary};
-use self::xml::{HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 
 use parking_lot::Mutex;
 #[cfg(feature = "rayon")]
@@ -30,9 +24,8 @@ use std::sync::Arc;
 
 use csl::error::StyleError;
 use csl::locale::Lang;
-use csl::style::{Position, Style};
+use csl::style::Style;
 
-use crate::proc::{CiteContext, IrState};
 use citeproc_io::output::{html::Html, OutputFormat};
 use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
 use csl::Atom;
@@ -65,7 +58,7 @@ impl salsa::Database for Processor {
             return;
         }
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
-        use self::ir::IrDatabaseGroupKey__ as GroupKey;
+        use citeproc_proc::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
         let mut q = self.queue.lock();
         match event_fn().kind {
@@ -119,12 +112,7 @@ impl Processor {
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
         };
-        // TODO: way more salsa::inputs
-        db.set_style(Default::default());
-        db.set_all_keys(Default::default());
-        db.set_all_uncited(Default::default());
-        db.set_cluster_ids(Arc::new(vec![]));
-        db.set_locale_input_langs(Default::default());
+        citeproc_db::safe_default(&mut db);
         db
     }
 
@@ -205,30 +193,29 @@ impl Processor {
         queue.clear();
     }
 
-    // TODO: make this use
-    pub fn single(&self, ref_id: &Atom) -> <Html as OutputFormat>::Output {
-        let fmt = Html::default();
-        let refr = match self.reference(ref_id.clone()) {
-            None => return fmt.output(fmt.plain("Reference not found")),
-            Some(r) => r,
-        };
-        let ctx = CiteContext {
-            reference: &refr,
-            cite: &Cite::basic(0, "ok"),
-            position: Position::First,
-            format: Html::default(),
-            citation_number: 1,
-            disamb_pass: None,
-        };
-        let style = self.style();
-        let mut state = IrState::new();
-        use crate::proc::Proc;
-        let ir = style.intermediate(self, &mut state, &ctx).0;
-
-        ir.flatten(&fmt)
-            .map(|flat| fmt.output(flat))
-            .unwrap_or(<Html as OutputFormat>::Output::default())
-    }
+    // // TODO: make this use a function exported from citeproc_proc
+    // pub fn single(&self, ref_id: &Atom) -> <Html as OutputFormat>::Output {
+    //     let fmt = Html::default();
+    //     let refr = match self.reference(ref_id.clone()) {
+    //         None => return fmt.output(fmt.plain("Reference not found")),
+    //         Some(r) => r,
+    //     };
+    //     let ctx = CiteContext {
+    //         reference: &refr,
+    //         cite: &Cite::basic(0, "ok"),
+    //         position: Position::First,
+    //         format: Html::default(),
+    //         citation_number: 1,
+    //         disamb_pass: None,
+    //     };
+    //     let style = self.style();
+    //     let mut state = IrState::new();
+    //     use crate::proc::Proc;
+    //     let ir = style.intermediate(self, &mut state, &ctx).0;
+    //     ir.flatten(&fmt)
+    //         .map(|flat| fmt.output(flat))
+    //         .unwrap_or(<Html as OutputFormat>::Output::default())
+    // }
 
     pub fn set_references(&mut self, refs: Vec<Reference>) {
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
