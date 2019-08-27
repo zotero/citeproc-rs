@@ -31,7 +31,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::IngestOptions;
     pub use crate::ir_database::IrDatabase;
 
-    pub use crate::disamb::{AddDisambTokens, DisambToken};
+    pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::cite_context::CiteContext;
     pub(crate) use crate::{Proc, IrState};
     pub use crate::ir::*;
@@ -43,7 +43,7 @@ use prelude::*;
 #[cfg(test)]
 mod test;
 
-pub use self::disamb::DisambToken;
+pub use self::disamb::old::DisambToken;
 pub use self::ir::IR;
 pub use self::ir_database::*;
 

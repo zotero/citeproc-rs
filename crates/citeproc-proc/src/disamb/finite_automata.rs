@@ -4,132 +4,23 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use citeproc_io::{Date, DateOrRange, Name, NumericValue, Reference};
+use crate::ir_database::IrDatabase;
 use csl::Atom;
-use std::collections::HashSet;
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum DisambToken {
-    // Should this be an Atom, really? There will not typically be that much reuse going on. It
-    // might inflate the cache too much. The size of the disambiguation index is reduced, though.
-    Str(Atom),
-
-    /// Significantly simplifies things compared to ultra-localized date output strings.
-    /// Reference cannot predict what they'll look like.
-    /// `Date` itself can encode the lack of day/month with those fields set to zero.
-    Date(Date),
-
-    Num(NumericValue),
-
-    YearSuffix(Atom),
-}
-
-pub trait AddDisambTokens {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool);
-    #[inline]
-    fn add_tokens_index(&self, set: &mut HashSet<DisambToken>) {
-        self.add_tokens_ctx(set, true);
-    }
-    #[inline]
-    fn add_tokens(&self, set: &mut HashSet<DisambToken>) {
-        self.add_tokens_ctx(set, false);
-    }
-}
-
-impl AddDisambTokens for Reference {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool) {
-        for val in self.ordinary.values() {
-            set.insert(DisambToken::Str(val.as_str().into()));
-        }
-        for val in self.number.values() {
-            set.insert(DisambToken::Num(val.clone()));
-        }
-        for val in self.name.values() {
-            for name in val.iter() {
-                name.add_tokens_ctx(set, indexing);
-            }
-        }
-        for val in self.date.values() {
-            val.add_tokens_ctx(set, indexing);
-        }
-    }
-}
-
-impl AddDisambTokens for Option<String> {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, _indexing: bool) {
-        if let Some(ref x) = self {
-            set.insert(DisambToken::Str(x.as_str().into()));
-        }
-    }
-}
-
-impl AddDisambTokens for Name {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool) {
-        match self {
-            Name::Person(ref pn) => {
-                pn.family.add_tokens_ctx(set, indexing);
-                pn.given.add_tokens_ctx(set, indexing);
-                pn.non_dropping_particle.add_tokens_ctx(set, indexing);
-                pn.dropping_particle.add_tokens_ctx(set, indexing);
-                pn.suffix.add_tokens_ctx(set, indexing);
-            }
-            Name::Literal { ref literal } => {
-                set.insert(DisambToken::Str(literal.as_str().into()));
-            }
-        }
-    }
-}
-
-impl AddDisambTokens for DateOrRange {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool) {
-        match self {
-            DateOrRange::Single(ref single) => {
-                single.add_tokens_ctx(set, indexing);
-            }
-            DateOrRange::Range(d1, d2) => {
-                d1.add_tokens_ctx(set, indexing);
-                d2.add_tokens_ctx(set, indexing);
-            }
-            DateOrRange::Literal(ref lit) => {
-                set.insert(DisambToken::Str(lit.as_str().into()));
-            }
-        }
-    }
-}
-
-impl AddDisambTokens for Date {
-    fn add_tokens_ctx(&self, set: &mut HashSet<DisambToken>, indexing: bool) {
-        // when processing a cite, only insert the segments you actually used
-        set.insert(DisambToken::Date(*self));
-        // for the index, add all possible variations
-        if indexing {
-            let just_ym = Date {
-                year: self.year,
-                month: self.month,
-                day: 0,
-            };
-            let just_year = Date {
-                year: self.year,
-                month: 0,
-                day: 0,
-            };
-            set.insert(DisambToken::Date(just_ym));
-            set.insert(DisambToken::Date(just_year));
-        }
-    }
-}
-
+use std::collections::HashSet; 
 use csl::style::Formatting;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-// use citeproc_io::output::OutputFormat;
-
 use petgraph::graph::{Graph, NodeIndex};
+use salsa::{InternKey, InternId};
+use std::fmt::{Debug, Formatter};
+
+#[cfg(test)]
+use petgraph::dot::Dot;
+
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
 
-use super::ir_database::IrDatabase;
 impl Edge {
     // Adding this method is often convenient, since you can then
     // write `path.lookup(db)` to access the data, which reads a bit better.
@@ -138,7 +29,6 @@ impl Edge {
     }
 }
 
-use salsa::{InternKey, InternId};
 impl InternKey for Edge {
     fn from_intern_id(v: InternId) -> Self {
         Edge(u32::from(v))
@@ -151,8 +41,6 @@ impl InternKey for Edge {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct EdgeData(String, Formatting);
 
-use std::fmt::{Debug, Formatter};
-
 impl Debug for EdgeData {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.1 == Formatting::default() {
@@ -163,15 +51,21 @@ impl Debug for EdgeData {
     }
 }
 
+impl<'a> From<&'a str> for EdgeData {
+    fn from(s: &'a str) -> Self {
+        EdgeData(s.to_owned(), Formatting::default())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {
     Epsilon,
     Token(Edge),
 }
 
-impl<'a> From<&'a str> for EdgeData {
-    fn from(s: &'a str) -> Self {
-        EdgeData(s.to_owned(), Formatting::default())
+impl From<Edge> for NfaEdge {
+    fn from(edge: Edge) -> Self {
+        NfaEdge::Token(edge)
     }
 }
 
@@ -363,15 +257,6 @@ impl Dfa {
     }
 }
 
-#[cfg(test)]
-use petgraph::dot::Dot;
-
-impl From<Edge> for NfaEdge {
-    fn from(edge: Edge) -> Self {
-        NfaEdge::Token(edge)
-    }
-}
-
 #[test]
 fn nfa() {
     let andy = Edge(1);
@@ -492,56 +377,3 @@ fn test_brzozowski_minimise() {
     assert!(!dfa.accepts(&[a, b, c, d, e]));
 }
 
-trait ConstructNfa {
-}
-
-
-// struct DisambiguationState<O: OutputFormat> {
-//     format_stack: Vec<Formatting>,
-//     format_current: Formatting,
-//     dfa: DisambNfa<O>,
-// }
-
-// impl DisambiguationState {
-//     /// if None, you should exit out of DFADisambiguate
-//     fn digest(&mut self, token: DisambToken) -> Option<()> {
-//         // ... match against internal DFA, using formatting from the stack.
-//     }
-//     fn push_fmt(&mut self, fmt: Formatting) {
-//         self.format_stack.push(fmt);
-//         self.coalesce_fmt();
-//     }
-//     fn pop_fmt(&mut self) {
-//         self.format_stack.pop();
-//         self.coalesce_fmt();
-//     }
-//     fn coalesce_fmt(&mut self) {
-//         self.format_current = Formatting::default();
-//         for fmt in self.format_stack.iter() {
-//             self.format_current.font_style = fmt.font_style;
-//             self.format_current.font_weight = fmt.font_weight;
-//             self.format_current.font_variant = fmt.font_variant;
-//             self.format_current.text_decoration = fmt.text_decoration;
-//             self.format_current.vertical_alignment = fmt.vertical_alignment;
-//         }
-//     }
-// }
-
-// trait DFADisambiguate {
-//     fn traverse(&self, state: &mut DisambiguationState);
-// }
-
-// impl DFADisambiguate for Vec<Node> {
-//     fn traverse(&self, state: &mut DisambiguationState) -> Option<()> {
-//         match self {
-//             Text(s) => for token in s.split(" ") { state.digest(token)?; },
-//             Fmt(f, ts) => {
-//                 state.push_fmt(f);
-//                 for token in ts {
-//                     state.digest(token)?;
-//                 }
-//                 state.pop_fmt();
-//             }
-//         }
-//     }
-// }
