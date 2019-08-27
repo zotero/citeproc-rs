@@ -34,6 +34,7 @@ cfg_if! {
                 .level(log::LevelFilter::Debug)
                 .level_for("salsa", log::LevelFilter::Info)
                 .level_for("salsa::derived", log::LevelFilter::Warn)
+                .level_for("html5ever", log::LevelFilter::Off)
                 .format(|out, message, record| {
                     out.finish(format_args!(
                         "[{}][{}] {}",
