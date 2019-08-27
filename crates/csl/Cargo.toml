@@ -10,6 +10,10 @@ version = "0.0.1"
 authors = ["Cormac Relf <web@cormacrelf.net>"]
 license = "MPL-2.0"
 edition = "2018"
+description = "Parser and types for Citation Style Language"
+readme = "README.md"
+repository = "https://github.com/cormacrelf/citeproc-rs"
+docs = "https://docs.rs/csl"
 
 [dependencies]
 roxmltree = "0.6.1"

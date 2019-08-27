@@ -36,15 +36,20 @@ pub use group::GroupVars;
 use self::helpers::sequence;
 
 pub trait ProcDatabase {
-    // TODO: get locales based on the current reference's language field
+    /// The default locale for the style
     fn default_locale(&self) -> Arc<Locale>;
+    /// The Locale for a particular cite (which may have a Lang on the associated Reference)
     fn locale(&self, id: CiteId) -> Arc<Locale>;
+    /// The entire Style object
     fn style_el(&self) -> Arc<Style>;
+    /// The position of a given cite (ibid, subsequent, etc)
     fn cite_pos(&self, id: CiteId) -> csl::style::Position;
     /// 'First Reference Note Number' -- the number of the footnote containing the first cite
     /// referring to this cite's reference.
     fn cite_frnn(&self, id: CiteId) -> Option<u32>;
+    /// The order that the cite's reference appears in the bibliography
     fn bib_number(&self, id: CiteId) -> Option<u32>;
+    /// Grabs the Name options from `<style>` + `<citation>` elements
     fn name_citation(&self) -> Arc<Name>;
 }
 

@@ -175,7 +175,6 @@ impl fmt::Debug for Affixes {
 
 impl fmt::Debug for Formatting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let default = Formatting::default();
         write!(f, "Formatting {{ ")?;
         if let Some(font_style) = self.font_style {
             write!(f, "font_style: {:?}, ", font_style)?;
