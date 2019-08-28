@@ -470,7 +470,7 @@ impl From<Vec<CslError>> for ConditionError {
     }
 }
 
-impl Condition {
+impl ConditionParser {
     fn from_node_custom(node: &Node, info: &ParseInfo) -> Result<Self, ConditionError> {
         let (has_year_only, has_month_or_season, has_day) = if info.features.condition_date_parts {
             (
@@ -481,7 +481,7 @@ impl Condition {
         } else {
             Default::default()
         };
-        let cond = Condition {
+        let cond = ConditionParser {
             match_type: Match::from_node(node, info)?,
             jurisdiction: attribute_option_atom(node, "jurisdiction"),
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
@@ -522,13 +522,19 @@ impl FromNode for Conditions {
         let conds = node
             .children()
             .filter(|n| n.has_tag_name("condition"))
-            .map(|el| Condition::from_node_custom(&el, info).map_err(|e| e.into_inner()))
+            .map(|el| CondSet::from_node_custom(&el, info).map_err(|e| e.into_inner()))
             .partition_results()?;
         if conds.is_empty() {
             Err(InvalidCsl::new(node, "Unconditional <choose> branch").into())
         } else {
             Ok(Conditions(match_type, conds))
         }
+    }
+}
+
+impl CondSet {
+    fn from_node_custom(node: &Node, info: &ParseInfo) -> Result<Self, ConditionError> {
+        ConditionParser::from_node_custom(node, info).map(CondSet::from)
     }
 }
 
@@ -542,7 +548,7 @@ impl FromNode for IfThen {
 
         // these are 'inline' ones directly on an if / if-else node
         let own_conditions: Result<Conditions, ConditionError> =
-            Condition::from_node_custom(node, info).map(|c| Conditions(Match::All, vec![c]));
+            CondSet::from_node_custom(node, info).map(|c| Conditions(Match::All, vec![c]));
 
         // these are child nodes
         let sub_conditions: Result<Option<Conditions>, CslError> = if info.features.conditions {

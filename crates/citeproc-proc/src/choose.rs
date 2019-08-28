@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use crate::helpers::sequence;
 use citeproc_io::DateOrRange;
-use csl::style::{Affixes, Choose, Condition, Conditions, Else, IfThen, Match};
+use csl::style::{Affixes, Choose, Cond, CondSet, Conditions, Else, IfThen, Match};
 use std::sync::Arc;
 
 impl<'c, O> Proc<'c, O> for Arc<Choose>
@@ -123,102 +123,87 @@ fn eval_conditions<'c, O>(
 where
     O: OutputFormat,
 {
-    let Conditions(ref match_type, ref conds) = *conditions;
-    let mut tests = conds.iter().map(|c| eval_cond(c, ctx, db));
-    let disambiguate = conds.iter().any(|c| c.disambiguate.is_some())
-        && ctx.disamb_pass != Some(DisambPass::Conditionals);
+    let Conditions(ref match_type, ref conditions) = *conditions;
+    let mut tests = conditions.iter().map(|c| eval_condset(c, ctx, db));
+    let disambiguate = conditions.iter().any(|c| {
+        c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
+    }) && ctx.disamb_pass != Some(DisambPass::Conditionals);
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_cond<'c, O>(cond: &'c Condition, ctx: &CiteContext<'c, O>, db: &impl IrDatabase) -> bool
+fn eval_condset<'c, O>(
+    cond_set: &'c CondSet,
+    ctx: &CiteContext<'c, O>,
+    db: &impl IrDatabase,
+) -> bool
 where
     O: OutputFormat,
 {
-    let vars = cond.variable.iter().map(|&var| ctx.has_variable(var, db));
-
-    let nums = cond.is_numeric.iter().map(|&var| ctx.is_numeric(var, db));
-
-    let disambiguate = cond
-        .disambiguate
-        .iter()
-        .map(|&d| d == (ctx.disamb_pass == Some(DisambPass::Conditionals)));
-
-    let types = cond
-        .csl_type
-        .iter()
-        .map(|typ| ctx.reference.csl_type == *typ);
-
-    let positions = cond
-        .position
-        .iter()
-        .map(|&pos| db.cite_position(ctx.cite.id).0.matches(pos));
-
-    // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
-    // work.
-    // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
-
-    let has_year_only = cond.has_year_only.iter().map(|dvar| {
-        ctx.reference
-            .date
-            .get(&dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.month == 0 && d.day == 0,
-                DateOrRange::Range(d1, d2) => {
-                    d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
-                }
-                _ => false,
-            })
-            .unwrap_or(false)
-    });
-
-    let has_month_or_season = cond.has_month_or_season.iter().map(|dvar| {
-        ctx.reference
-            .date
-            .get(&dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.month != 0,
-                DateOrRange::Range(d1, d2) => {
-                    // XXX: is OR the right operator here?
-                    d1.month != 0 || d2.month != 0
-                }
-                _ => false,
-            })
-            .unwrap_or(false)
-    });
-
-    let has_day = cond.has_day.iter().map(|dvar| {
-        ctx.reference
-            .date
-            .get(&dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.day != 0,
-                DateOrRange::Range(d1, d2) => {
-                    // XXX: is OR the right operator here?
-                    d1.day != 0 || d2.day != 0
-                }
-                _ => false,
-            })
-            .unwrap_or(false)
-    });
-
-    let basic = vars
-        .chain(nums)
-        .chain(types)
-        .chain(positions)
-        .chain(disambiguate);
-
-    let mut date_parts = None;
-
     let style = db.style();
-    if style.features.condition_date_parts {
-        date_parts = Some(has_year_only.chain(has_month_or_season).chain(has_day));
-    }
+    use citeproc_io::DateOrRange;
+    use csl::variables::DateVariable;
 
-    // If a condition matcher is enabled, flattening the option::Iter pulls out the internal iterator if any
-    let mut bools = basic.chain(date_parts.into_iter().flatten());
+    let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
+        Some(match cond {
+            Cond::Variable(var) => ctx.has_variable(*var, db),
+            Cond::IsNumeric(var) => ctx.is_numeric(*var, db),
+            Cond::Disambiguate(d) => *d == (ctx.disamb_pass == Some(DisambPass::Conditionals)),
+            Cond::Type(typ) => ctx.reference.csl_type == *typ,
+            Cond::Position(pos) => db.cite_position(ctx.cite.id).0.matches(*pos),
 
-    run_matcher(&mut bools, &cond.match_type)
+            Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
+                if !style.features.condition_date_parts =>
+            {
+                return None;
+            }
+
+            Cond::HasYearOnly(dvar) => ctx
+                .reference
+                .date
+                .get(dvar)
+                .map(|dor| match dor {
+                    DateOrRange::Single(d) => d.month == 0 && d.day == 0,
+                    DateOrRange::Range(d1, d2) => {
+                        d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
+                    }
+                    _ => false,
+                })
+                .unwrap_or(false),
+            Cond::HasMonthOrSeason(dvar) => ctx
+                .reference
+                .date
+                .get(dvar)
+                .map(|dor| match dor {
+                    DateOrRange::Single(d) => d.month != 0,
+                    DateOrRange::Range(d1, d2) => {
+                        // XXX: is OR the right operator here?
+                        d1.month != 0 || d2.month != 0
+                    }
+                    _ => false,
+                })
+                .unwrap_or(false),
+            Cond::HasDay(dvar) => ctx
+                .reference
+                .date
+                .get(dvar)
+                .map(|dor| match dor {
+                    DateOrRange::Single(d) => d.day != 0,
+                    DateOrRange::Range(d1, d2) => {
+                        // XXX: is OR the right operator here?
+                        d1.day != 0 || d2.day != 0
+                    }
+                    _ => false,
+                })
+                .unwrap_or(false),
+            _ => return None,
+            // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
+            // work.
+            // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
+        })
+    });
+
+    run_matcher(&mut iter_all, &cond_set.match_type)
 }
 
 fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {

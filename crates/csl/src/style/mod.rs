@@ -11,6 +11,7 @@ use crate::terms::LocatorType;
 use crate::variables::*;
 use crate::version::{CslVersionReq, Features};
 use crate::Atom;
+use fnv::{FnvHashMap, FnvHashSet};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -309,11 +310,88 @@ impl Default for Plural {
     }
 }
 
+/// Something is Independent if what it represents is computed during processing, based on a Cite
+/// and the rest of a document. That is, it is not sourced directly from a Reference.
+trait IsIndependent {
+    fn is_independent(&self) -> bool;
+}
+
+impl IsIndependent for AnyVariable {
+    fn is_independent(&self) -> bool {
+        false
+    }
+}
+
+impl Cond {
+    fn is_independent(&self) -> bool {
+        match self {
+            Cond::Disambiguate(_) => true,
+            Cond::Position(_) => true,
+            Cond::Locator(_) => true,
+            Cond::Variable(v) => v.is_independent(),
+            Cond::IsNumeric(v) => v.is_independent(),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Eq, Hash, Clone, PartialEq)]
+pub enum Cond {
+    IsNumeric(AnyVariable),
+    Variable(AnyVariable),
+    Position(Position),
+    Locator(LocatorType),
+    Disambiguate(bool),
+    Type(CslType),
+    IsUncertainDate(DateVariable),
+    HasYearOnly(DateVariable),
+    HasMonthOrSeason(DateVariable),
+    HasDay(DateVariable),
+    Context(Context),
+    IsPlural(NameVariable),
+    Jurisdiction(Atom),
+    SubJurisdiction(u32),
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct CondSet {
+    pub match_type: Match,
+    pub conds: FnvHashSet<Cond>,
+}
+
+impl From<ConditionParser> for CondSet {
+    #[rustfmt::skip]
+    fn from(cp: ConditionParser) -> Self {
+        let mut conds = FnvHashSet::default();
+        for x in cp.position { conds.insert(Cond::Position(x)); }
+        for x in cp.csl_type { conds.insert(Cond::Type(x)); }
+        for x in cp.locator { conds.insert(Cond::Locator(x)); }
+        for x in cp.variable { conds.insert(Cond::Variable(x)); }
+        for x in cp.is_numeric { conds.insert(Cond::IsNumeric(x)); }
+        for x in cp.is_plural { conds.insert(Cond::IsPlural(x)); }
+        for x in cp.context { conds.insert(Cond::Context(x)); }
+        for x in cp.disambiguate { conds.insert(Cond::Disambiguate(x)); }
+        for x in cp.is_uncertain_date { conds.insert(Cond::IsUncertainDate(x)); }
+
+        // CSL-M
+        for x in cp.has_year_only { conds.insert(Cond::HasYearOnly(x)); }
+        for x in cp.has_month_or_season { conds.insert(Cond::HasMonthOrSeason(x)); }
+        for x in cp.has_day { conds.insert(Cond::HasDay(x)); }
+        for x in cp.jurisdiction { conds.insert(Cond::Jurisdiction(x)); }
+        for x in cp.subjurisdictions { conds.insert(Cond::SubJurisdiction(x)); }
+
+        CondSet {
+            match_type: cp.match_type,
+            conds
+        }
+    }
+}
+
 /// [spec][]
 ///
 /// [spec]: https://docs.citationstyles.org/en/stable/specification.html#choose
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Condition {
+pub(crate) struct ConditionParser {
     pub match_type: Match,
 
     /// TODO: apparently CSL-M has disambiguate="check-ambiguity-and-backreference" as an
@@ -350,14 +428,14 @@ pub struct Condition {
     pub is_plural: Vec<NameVariable>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Context {
     Citation,
     Bibliography,
 }
 
-impl Condition {
+impl ConditionParser {
     pub fn is_empty(&self) -> bool {
         self.disambiguate.is_none()
             && self.is_numeric.is_empty()
@@ -398,7 +476,7 @@ impl Default for Match {
 pub struct IfThen(pub Conditions, pub Vec<Element>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct Conditions(pub Match, pub Vec<Condition>);
+pub struct Conditions(pub Match, pub Vec<CondSet>);
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Else(pub Vec<Element>);
@@ -841,8 +919,6 @@ impl Default for StyleClass {
         StyleClass::Note
     }
 }
-
-use fnv::FnvHashMap;
 
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Info {}

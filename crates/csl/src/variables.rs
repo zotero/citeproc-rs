@@ -8,7 +8,7 @@ use super::attr::GetAttribute;
 use super::error::*;
 use super::version::Features;
 
-#[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty, Hash)]
 pub enum AnyVariable {
     Ordinary(Variable),
     Name(NameVariable),
@@ -37,7 +37,7 @@ impl GetAttribute for AnyVariable {
 /// standard variables":
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#number-variables)
 
-#[derive(Debug, Eq, Copy, Clone, PartialEq)]
+#[derive(Debug, Eq, Copy, Clone, PartialEq, Hash)]
 pub enum StandardVariable {
     Ordinary(Variable),
     Number(NumberVariable),
