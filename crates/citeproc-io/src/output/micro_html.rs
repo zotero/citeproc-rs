@@ -227,7 +227,7 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
                 [("class", "nocase")] => MicroNode::NoCase(children),
                 _ => return vec![],
             },
-            x => return vec![],
+            _ => return vec![],
         };
         vec![single]
     }

@@ -25,7 +25,11 @@ impl OutputFormat for PlainText {
 
     #[inline]
     fn ingest(&self, s: &str, o: IngestOptions) -> Self::Build {
-        s.to_string()
+        if o.replace_hyphens {
+            s.replace('-', "\u{2013}")
+        } else {
+            s.to_string()
+        }
     }
 
     #[inline]

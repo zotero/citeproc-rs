@@ -4,6 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use super::micro_html::MicroNode;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
@@ -238,7 +239,7 @@ impl InlineElement {
         }
         s
     }
-    fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
+    fn to_rtf_inner(&self, _s: &mut String, _options: &RtfOptions) {
         unimplemented!()
     }
 }
@@ -270,8 +271,6 @@ impl Html {
         }
     }
 }
-
-use super::micro_html::{MicroHtml, MicroNode};
 
 impl OutputFormat for Html {
     type Input = String;
@@ -347,9 +346,28 @@ impl OutputFormat for Html {
         }
     }
 
-    fn output(&self, inter: Vec<InlineElement>) -> Self::Output {
+    fn output(&self, intermediate: Self::Build) -> Self::Output {
         let null = FlipFlopState::default();
-        let flipped = flip_flop_inlines(&inter, &null);
+        self.output_with_state(intermediate, null)
+    }
+
+    fn output_in_context(
+        &self,
+        intermediate: Self::Build,
+        format_stacked: Formatting,
+    ) -> Self::Output {
+        let stack = FlipFlopState::from_formatting(format_stacked);
+        self.output_with_state(intermediate, stack)
+    }
+}
+
+impl Html {
+    fn output_with_state(
+        &self,
+        intermediate: <Self as OutputFormat>::Build,
+        initial_state: FlipFlopState,
+    ) -> <Self as OutputFormat>::Output {
+        let flipped = flip_flop_inlines(&intermediate, &initial_state);
         let string = match self {
             Html::Html(ref options) => InlineElement::to_html(&flipped, options),
             Html::Rtf(ref options) => InlineElement::to_rtf(&flipped, options),
@@ -365,6 +383,20 @@ struct FlipFlopState {
     in_strong: bool,
     in_small_caps: bool,
     in_outer_quotes: bool,
+}
+
+impl FlipFlopState {
+    fn from_formatting(f: Formatting) -> Self {
+        FlipFlopState {
+            emph: f.font_style.unwrap_or_default(),
+            in_emph: f.font_style == Some(FontStyle::Italic)
+                || f.font_style == Some(FontStyle::Oblique),
+            in_strong: f.font_weight == Some(FontWeight::Bold),
+            in_small_caps: f.font_variant == Some(FontVariant::SmallCaps),
+            // TODO: quotes
+            in_outer_quotes: false,
+        }
+    }
 }
 
 fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<InlineElement> {
