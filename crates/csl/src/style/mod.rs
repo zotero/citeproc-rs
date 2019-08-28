@@ -1139,7 +1139,7 @@ pub enum PageRangeFormat {
     MinimalTwo,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,

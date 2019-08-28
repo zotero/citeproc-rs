@@ -34,6 +34,7 @@ pub trait Disambiguation {
 
 impl Disambiguation for Style {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        // XXX: include layout parts?
         for el in &self.citation.layout.elements {
             el.construct_nfa(db, state);
         }
@@ -84,7 +85,24 @@ impl From<&Reference> for ConditionStack {
 
 impl Disambiguation for CondSet {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
-        unimplemented!()
+        match self.match_type {
+            Match::Any => {
+                state
+                    .knowledge
+                    .know_some_of(self.conds.iter().cloned().map(|c| (c, true)));
+            }
+            Match::All => {
+                state
+                    .knowledge
+                    .know_all_of(self.conds.iter().cloned().map(|c| (c, true)));
+            }
+            Match::None => {
+                state
+                    .knowledge
+                    .know_all_of(self.conds.iter().cloned().map(|c| (c, false)));
+            }
+            _ => unimplemented!(),
+        }
     }
     fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
         let (indep, ref_based): (Vec<&Cond>, Vec<&Cond>) =
@@ -97,8 +115,7 @@ impl Disambiguation for CondSet {
             // this condition block is always going to return TRUE, so it doesn't depend on the
             // independent ones
             return;
-        }
-        if self.match_type == Match::All
+        } else if self.match_type == Match::All
             && ref_based
                 .iter()
                 .any(|&c| stack.knowledge.demonstrates(&c, false))
@@ -106,16 +123,21 @@ impl Disambiguation for CondSet {
             // this condition block is always going to return FALSE, so it doesn't depend on the
             // independent ones
             return;
-        }
-        for i in indep {
-            stack.output.push(i.clone())
+        } else {
+            for i in indep {
+                stack.output.push(i.clone())
+            }
         }
     }
 }
 
 impl Disambiguation for Conditions {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
-        unimplemented!()
+        // TODO(CSL-M): handle other match modes than ALL
+        for cond_set in &self.1 {
+            // push all the relevant knowledge gleaned from the cond_set
+            cond_set.construct_nfa(db, state);
+        }
     }
     fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
         // TODO(CSL-M): handle other match modes than ALL
@@ -127,21 +149,47 @@ impl Disambiguation for Conditions {
 
 impl Disambiguation for Choose {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
-        unimplemented!()
+        let &Choose(ref ift, ref elifs, ref elset) = self;
+        state.knowledge.push();
+        ift.0.construct_nfa(db, state);
+        for el in &ift.1 {
+            el.construct_nfa(db, state);
+        }
+        state.knowledge.pop();
+        for elif in elifs {
+            state.knowledge.push();
+            elif.0.construct_nfa(db, state);
+            for el in &elif.1 {
+                el.construct_nfa(db, state);
+            }
+            state.knowledge.pop();
+        }
+        for el in &elset.0 {
+            el.construct_nfa(db, state);
+        }
     }
     fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
         let &Choose(ref ift, ref elifs, ref elset) = self;
+        stack.knowledge.push();
         ift.0.independent_conds(db, stack);
         for el in &ift.1 {
             el.independent_conds(db, stack);
         }
+        // TODO: you can assert a bunch of knowledge about what was not true because the previous
+        // branches didn't match
+        // TODO: make the push() API return a GenerationIndex and let you rollback() to that index
+        stack.knowledge.pop();
         for elif in elifs {
+            stack.knowledge.push();
             elif.0.independent_conds(db, stack);
             for el in &elif.1 {
                 el.independent_conds(db, stack);
             }
+            stack.knowledge.pop();
         }
-        // TODO: handle else
+        for el in &elset.0 {
+            el.independent_conds(db, stack);
+        }
     }
 }
 
@@ -197,6 +245,7 @@ impl Disambiguation for Element {
 use citeproc_io::output::html::Html;
 
 pub struct DisambiguationState<'c> {
+    knowledge: Knowledge,
     format_stack: Vec<Formatting>,
     format_current: Formatting,
     nfa: Nfa,
@@ -212,6 +261,7 @@ impl DisambiguationState<'_> {
     ) -> DisambiguationState<'a> {
         let format = Html::default();
         DisambiguationState {
+            knowledge: Knowledge::new(),
             format_stack: vec![],
             format_current: Default::default(),
             nfa: Nfa::new(),
@@ -249,21 +299,6 @@ impl DisambiguationState<'_> {
         }
     }
 }
-
-// impl ConstructNfa for Vec<Node> {
-//     fn traverse(&self, state: &mut DisambiguationState) -> Option<()> {
-//         match self {
-//             Text(s) => for token in s.split(" ") { state.digest(token)?; },
-//             Fmt(f, ts) => {
-//                 state.push_fmt(f);
-//                 for token in ts {
-//                     state.digest(token)?;
-//                 }
-//                 state.pop_fmt();
-//             }
-//         }
-//     }
-// }
 
 #[cfg(test)]
 macro_rules! style_layout {
@@ -304,6 +339,10 @@ fn independent_conds() {
             <else-if position="subsequent" variable="title">
                 <text value="..." />
             </else-if>
+            <else>
+                <text variable="first-reference-note-number" />
+                <text variable="ISBN" />
+            </else>
         </choose>
     </group>
     "#
@@ -316,6 +355,10 @@ fn independent_conds() {
     result_set.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
     result_set.insert(Cond::Position(Position::First));
     result_set.insert(Cond::Disambiguate(true));
+    result_set.insert(Cond::Variable(AnyVariable::Number(
+        NumberVariable::FirstReferenceNoteNumber,
+    )));
+    // does not contain Position::Subsequent as we knew variable="title" was true
     assert_eq!(
         stack.output.into_iter().collect::<FnvHashSet<_>>(),
         result_set,

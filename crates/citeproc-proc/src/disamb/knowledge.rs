@@ -1,4 +1,6 @@
 use csl::style::Cond;
+use csl::style::{Context, CslType, Position};
+use csl::variables::{AnyVariable, NumberVariable};
 use fnv::{FnvHashMap, FnvHashSet};
 use generational_arena::{Arena, Index as ArenaIndex};
 
@@ -6,7 +8,7 @@ type CondIndex = ArenaIndex;
 type SomeOfIndex = ArenaIndex;
 type GenerationIndex = usize;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Maybe {
     True,
     False,
@@ -42,20 +44,36 @@ impl Possibility {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct SingleKnowledge(Vec<(GenerationIndex, Maybe)>);
+
+#[test]
+fn test_pop_larger_than() {
+    let mut sk = SingleKnowledge(vec![(1, Maybe::True), (2, Maybe::True), (3, Maybe::True)]);
+    sk.pop_larger_than(2);
+    assert_eq!(
+        sk,
+        SingleKnowledge(vec![(1, Maybe::True), (2, Maybe::True)])
+    );
+    sk.pop_larger_than(2);
+    assert_eq!(
+        sk,
+        SingleKnowledge(vec![(1, Maybe::True), (2, Maybe::True)])
+    );
+    sk.pop_larger_than(1);
+    assert_eq!(sk, SingleKnowledge(vec![(1, Maybe::True)]));
+    sk.pop_larger_than(0);
+    assert_eq!(sk, SingleKnowledge(vec![]));
+}
 
 impl SingleKnowledge {
     fn pop_larger_than(&mut self, ix: GenerationIndex) {
-        let mut i = self.0.len() - 1;
-        while i > 0 {
-            let (g, _) = self.0[i];
-            if g <= ix {
-                break;
-            }
-            i -= 1;
+        // Go backwards. Slightly faster.
+        if let Some(i) = self.0.iter().rev().position(|(g, _)| *g <= ix) {
+            self.0.truncate(self.0.len() - i);
+        } else {
+            self.0.clear();
         }
-        self.0.truncate(i + 1);
     }
 
     fn determinism(&self) -> Option<Result<bool, Vec<SomeOfIndex>>> {
@@ -110,34 +128,51 @@ impl Knowledge {
             current_gen: 1,
         }
     }
+
     fn current_gen(&self) -> &Generation {
         &self.gens[self.current_gen - 1]
     }
     fn lookup_gen(&self, ix: GenerationIndex) -> Option<&Generation> {
         self.gens.get(ix - 1)
     }
+    fn insert_know(&mut self, item: (Cond, bool)) {
+        let (cond, truth) = item;
+        if let Some(existing) = self.known.get_mut(&cond) {
+            existing.pop_larger_than(self.current_gen);
+            let b = if truth { Maybe::True } else { Maybe::False };
+            existing.push(self.current_gen, b);
+        } else {
+            let b = if truth { Maybe::True } else { Maybe::False };
+            let v = SingleKnowledge(vec![(self.current_gen, b)]);
+            self.known.insert(cond.clone(), v);
+        }
+    }
     pub fn know_all_of(&mut self, things: impl Iterator<Item = (Cond, bool)> + Clone) {
-        for (cond, truth) in things {
-            if let Some(existing) = self.known.get_mut(&cond) {
-                existing.pop_larger_than(self.current_gen);
-                let b = if truth { Maybe::True } else { Maybe::False };
-                existing.push(self.current_gen, b);
-            } else {
-                let b = if truth { Maybe::True } else { Maybe::False };
-                let v = SingleKnowledge(vec![(self.current_gen, b)]);
-                self.known.insert(cond.clone(), v);
+        for pair in things {
+            let inferences = cond_inferences(&pair);
+            self.insert_know(pair);
+            for inference in inferences {
+                self.insert_know(inference);
             }
         }
     }
 
     pub fn know_some_of(&mut self, iter: impl Iterator<Item = (Cond, bool)> + Clone) {
-        if iter.clone().any(|c| self.is_determined(&c.0)) {
+        // let filtered = iter.filter(|(cond, truth)| {
+        //     if self.demonstrates(&cond, !truth) {
+        //         return false;
+        //     }
+        // })
+        if iter.clone().any(|c| self.demonstrates(&c.0, c.1)) {
             // if any are already known, there is no new knowledge to be derived here.
             return;
         }
         let set = self.some_ofs.insert(FnvHashSet::default());
         let mut some_of_set = FnvHashSet::default();
         for (cond, truth) in iter {
+            if self.demonstrates(&cond, !truth) {
+                continue;
+            }
             if let Some(existing) = self.known.get_mut(&cond) {
                 if !existing.push(self.current_gen, Maybe::PartOf(set)) {
                     some_of_set.insert((cond.clone(), truth));
@@ -153,7 +188,7 @@ impl Knowledge {
         gen.insert(set);
     }
 
-    fn is_determined_inner(&self, cond: &Cond, truth: bool) -> Option<bool> {
+    fn is_determined_inner(&self, cond: &Cond) -> Option<bool> {
         if let Some(existing) = self.known.get(cond) {
             let det = existing.determinism();
             // dbg!(&det);
@@ -183,7 +218,7 @@ impl Knowledge {
                         });
                         // dbg!((own, all_others_disproven));
                         if all_others_disproven {
-                            return own.map(|o| o == truth);
+                            return own;
                         }
                     }
                 }
@@ -193,16 +228,30 @@ impl Knowledge {
     }
 
     pub fn is_determined(&self, cond: &Cond) -> bool {
-        self.is_determined_inner(cond, true).is_some()
+        self.is_determined_inner(cond).is_some()
     }
     pub fn demonstrates(&self, cond: &Cond, truth: bool) -> bool {
-        self.is_determined_inner(cond, truth) == Some(true)
+        self.is_determined_inner(cond) == Some(truth)
     }
 
-    pub fn push(&mut self) {
+    pub fn push(&mut self) -> GenerationIndex {
+        let before_gen = self.current_gen;
         let gen = Default::default();
         self.gens.push(gen);
         self.current_gen = self.gens.len();
+
+        // Consolidate all the knowledge we have amassed, and make inferences from it
+        let keys = self.known.keys().cloned().collect::<Vec<_>>();
+        for cond in keys {
+            if let Some(truth) = self.is_determined_inner(&cond) {
+                self.insert_know((cond.clone(), truth));
+                let inferences = cond_inferences(&(cond, truth));
+                for inf in inferences {
+                    self.insert_know(inf);
+                }
+            }
+        }
+        before_gen
     }
     pub fn pop(&mut self) {
         if let Some(gen) = self.gens.pop() {
@@ -215,14 +264,77 @@ impl Knowledge {
             v.pop_larger_than(self.current_gen);
         }
     }
+
+    pub fn rollback(&mut self, to: GenerationIndex) {
+        while self.current_gen > to {
+            self.pop();
+        }
+    }
+}
+
+// XXX: turn this into an imperative routine that makes inferences (and can do from multiple vars
+// at once) using a macro?
+// Just so it doesn't have to iterate over every single cond in the database and mostly construct
+// empty vec![]s
+pub fn cond_inferences(pair: &(Cond, bool)) -> Vec<(Cond, bool)> {
+    use Cond as C;
+    let t = pair.1;
+    match (&pair.0, t) {
+        (C::Position(Position::NearNote), true) => {
+            vec![(C::Position(Position::Subsequent), true),
+            (C::Position(Position::FarNote), false)]
+        }
+        (C::Position(Position::FarNote), true) => {
+            vec![(C::Position(Position::Subsequent), true),
+            (C::Position(Position::FarNote), false)]
+        }
+        (C::Position(Position::Subsequent), true) => vec![],
+        (C::Position(Position::Subsequent), false) => {
+            vec![
+                (C::Position(Position::Ibid), false),
+                (C::Position(Position::IbidWithLocator), false),
+                (C::Position(Position::FarNote), false),
+                (C::Position(Position::NearNote), false),
+            ]
+        }
+        (C::Position(Position::Ibid), true) => {
+            vec![
+                (C::Position(Position::Subsequent), true),
+            ]
+        }
+        (C::Position(Position::IbidWithLocator), true) => {
+            vec![
+                (C::Position(Position::Ibid), true),
+                (C::Variable(AnyVariable::Number(NumberVariable::Locator)), true),
+                (C::Position(Position::Subsequent), true),
+            ]
+        }
+        (C::Position(Position::IbidWithLocator), false) => {
+            vec![
+                (C::Position(Position::Ibid), false),
+                (C::Position(Position::Subsequent), true),
+            ]
+        }
+        (Cond::Context(Context::Citation), _) => vec![(Cond::Context(Context::Bibliography), !t)],
+        (Cond::Disambiguate(d), _) => vec![(Cond::Disambiguate(!d), !t)],
+        (Cond::Type(csl_type), true) => {
+            <CslType as strum::IntoEnumIterator>::iter()
+                .filter(|ty| *ty != *csl_type)
+                .map(|ty| (Cond::Type(ty), false))
+                .collect()
+        }
+        _ => vec![]
+        // No need, we will add these manually anyway
+        // (Cond::IsUncertainDate)
+        // (Cond::HasDay(dv), _) => vec![(Cond::HasMonthOrSeason(dv), t), (Cond::HasYearOnly(dv), !t)],
+        // (Cond::HasMonthOrSeason(dv), _) => vec![(Cond::HasYearOnly(dv), !t)],
+    }
 }
 
 // TODO: transform conds by adding everything they imply
 
 #[cfg(test)]
-use csl::style::Position;
-#[cfg(test)]
-use csl::variables::{AnyVariable, NumberVariable, Variable};
+use csl::variables::Variable;
 
 #[test]
 fn test_know() {
@@ -256,4 +368,40 @@ fn test_know() {
     assert!(!k.is_determined(ibid));
 
     k.pop();
+}
+
+#[test]
+fn inferences() {
+    let mut k = Knowledge::new();
+    let book = &Cond::Type(CslType::Book);
+    let manuscript = &Cond::Type(CslType::Manuscript);
+    let article_journal = &Cond::Type(CslType::ArticleJournal);
+    let ibid = &Cond::Position(Position::Ibid);
+    let subsequent = &Cond::Position(Position::Subsequent);
+    // let page_first = &Cond::Variable(AnyVariable::Number(NumberVariable::PageFirst));
+
+    let before_book = k.push();
+    k.know_all_of(vec![(book.clone(), true)].into_iter());
+    assert!(k.demonstrates(book, true));
+    assert!(k.is_determined(manuscript));
+    assert!(k.demonstrates(manuscript, false));
+    assert!(k.demonstrates(article_journal, false));
+
+    // now check if we made any secondary inferences
+    k.know_some_of(vec![(manuscript.clone(), true), (ibid.clone(), true)].into_iter());
+    assert!(k.demonstrates(ibid, true));
+    assert!(!k.is_determined(subsequent));
+
+    // consolidate inferences from the ibid, which needs anothe push
+    k.push();
+    assert!(k.demonstrates(subsequent, true));
+
+    k.rollback(before_book);
+
+    // types no longer known
+    assert!(!k.is_determined(manuscript));
+    assert!(!k.is_determined(article_journal));
+    // inferences no longer known
+    assert!(!k.is_determined(ibid));
+    assert!(!k.is_determined(subsequent));
 }
