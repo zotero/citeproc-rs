@@ -39,6 +39,23 @@ pub enum LocalizedQuotes {
     // SystemDouble,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormatCmd {
+    FontStyleItalic,
+    FontStyleOblique,
+    FontStyleNormal,
+    FontWeightBold,
+    FontWeightNormal,
+    FontWeightLight,
+    FontVariantSmallCaps,
+    FontVariantNormal,
+    TextDecorationUnderline,
+    TextDecorationNone,
+    VerticalAlignmentSuperscript,
+    VerticalAlignmentSubscript,
+    VerticalAlignmentBaseline,
+}
+
 pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     type Input: std::fmt::Debug + DeserializeOwned + Default + Clone + Send + Sync + Eq;
     type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;

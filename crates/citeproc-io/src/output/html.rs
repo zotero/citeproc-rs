@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::{LocalizedQuotes, OutputFormat};
+use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::style::{
@@ -66,13 +66,6 @@ impl HtmlOptions {
     }
 }
 
-#[test]
-fn test_html() {
-    let tester = vec![Emph(vec![Strong(vec![Text("hello".into())])])];
-    let html = InlineElement::to_html(&tester, &HtmlOptions::default());
-    assert_eq!(html, "<i><strong>hello</strong></i>");
-}
-
 impl MicroNode {
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         use MicroNode::*;
@@ -107,11 +100,11 @@ impl FormatCmd {
     fn html_tag(&self, options: &HtmlOptions) -> (&'static str, &'static str) {
         use FormatCmd::*;
         match self {
-            Italic => ("i", ""),
+            FontStyleItalic => ("i", ""),
             FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
             FontStyleNormal => ("span", r#" style="font-style:normal;""#),
 
-            Strong => {
+            FontWeightBold => {
                 if options.use_b_for_strong {
                     ("b", "")
                 } else {
@@ -145,13 +138,13 @@ fn stack_formats_html(
     let mut stack = Vec::new();
 
     match formatting.font_style {
-        Some(FontStyle::Italic) => stack.push(Italic),
+        Some(FontStyle::Italic) => stack.push(FontStyleItalic),
         Some(FontStyle::Oblique) => stack.push(FontStyleOblique),
         Some(FontStyle::Normal) => stack.push(FontStyleNormal),
         _ => {}
     }
     match formatting.font_weight {
-        Some(FontWeight::Bold) => stack.push(Strong),
+        Some(FontWeight::Bold) => stack.push(FontWeightBold),
         Some(FontWeight::Light) => stack.push(FontWeightLight),
         Some(FontWeight::Normal) => stack.push(FontWeightNormal),
         _ => {}
@@ -388,15 +381,13 @@ fn flip_flop_nodes(nodes: &[MicroNode], state: &FlipFlopState) -> Vec<MicroNode>
         .collect()
 }
 
-use super::micro_html::FormatCmd;
-
 fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> {
     let fl = |nodes: &[MicroNode], st| flip_flop_nodes(nodes, st);
     match node {
         MicroNode::Formatted(ref nodes, cmd) => {
             let mut flop = state.clone();
             match cmd {
-                FormatCmd::Italic => {
+                FormatCmd::FontStyleItalic => {
                     flop.in_emph = !flop.in_emph;
                     let subs = fl(nodes, &flop);
                     if state.in_emph {
@@ -405,7 +396,7 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> 
                         Some(MicroNode::Formatted(subs, *cmd))
                     }
                 }
-                FormatCmd::Strong => {
+                FormatCmd::FontWeightBold => {
                     flop.in_strong = !flop.in_strong;
                     let subs = fl(nodes, &flop);
                     if state.in_strong {

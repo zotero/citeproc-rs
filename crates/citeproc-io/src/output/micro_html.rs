@@ -1,3 +1,5 @@
+use super::FormatCmd;
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct MicroHtml(pub String);
 
@@ -9,23 +11,6 @@ pub enum MicroNode {
 
     /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FormatCmd {
-    Italic,
-    FontStyleOblique,
-    FontStyleNormal,
-    Strong,
-    FontWeightNormal,
-    FontWeightLight,
-    FontVariantSmallCaps,
-    FontVariantNormal,
-    TextDecorationUnderline,
-    TextDecorationNone,
-    VerticalAlignmentSuperscript,
-    VerticalAlignmentSubscript,
-    VerticalAlignmentBaseline,
 }
 
 use html5ever::driver::ParseOpts;
@@ -229,8 +214,8 @@ struct MicroHtmlReader {
 impl HtmlReader<MicroNode> for MicroHtmlReader {
     fn constructor(&self, tag: &Tag, children: Vec<MicroNode>) -> Vec<MicroNode> {
         let single = match tag.name {
-            "i" => MicroNode::Formatted(children, FormatCmd::Italic),
-            "b" => MicroNode::Formatted(children, FormatCmd::Strong),
+            "i" => MicroNode::Formatted(children, FormatCmd::FontStyleItalic),
+            "b" => MicroNode::Formatted(children, FormatCmd::FontWeightBold),
             "sup" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript),
             "sub" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript),
             "span" => match tag.attrs {
@@ -273,14 +258,18 @@ fn test_sanitize() {
     let fragment =
         r#"<span class="nocase"><i class="whatever">Italic</i></span> <img src="5" /> <b>Bold</b>"#;
     let result = MicroNode::parse(fragment, Default::default());
+    use FormatCmd::*;
     use MicroNode::*;
     assert_eq!(
         result,
         &[
-            NoCase(vec![Italic(vec![Text("Italic".to_string())]),]),
+            NoCase(vec![Formatted(
+                vec![Text("Italic".to_string())],
+                FontStyleItalic
+            ),]),
             Text(" ".to_string()),
             Text(" ".to_string()),
-            Bold(vec![Text("Bold".to_string())])
+            Formatted(vec![Text("Bold".to_string())], FontWeightBold)
         ]
     );
 }
