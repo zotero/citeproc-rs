@@ -23,9 +23,6 @@ pub enum QuoteType {
     DoubleQuote,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
-pub struct Attr(pub String, pub Vec<String>, pub Vec<(String, String)>);
-
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum InlineElement {
@@ -375,18 +372,6 @@ struct FlipFlopState {
     in_strong: bool,
     in_small_caps: bool,
     in_outer_quotes: bool,
-}
-
-// fn attr_class(class: &str) -> Attr {
-//     Attr("".to_owned(), vec![class.to_owned()], vec![])
-// }
-
-fn attr_style(style: &str) -> Attr {
-    Attr(
-        "".to_owned(),
-        vec![],
-        vec![("style".into(), style.to_owned())],
-    )
 }
 
 fn flip_flop_inlines(inlines: &[InlineElement], state: &FlipFlopState) -> Vec<InlineElement> {

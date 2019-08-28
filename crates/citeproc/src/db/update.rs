@@ -6,8 +6,10 @@
 
 #![allow(dead_code)]
 
-use citeproc_proc::IrDatabase;
+use citeproc_proc::db::IrDatabase;
 use citeproc_io::ClusterId;
+use citeproc_io::output::{html::Html, OutputFormat};
+use std::sync::Arc;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum DocUpdate {
@@ -17,9 +19,6 @@ pub enum DocUpdate {
     BibEntry(u32),
     WholeBibliography,
 }
-
-use citeproc_io::output::{html::Html, OutputFormat};
-use std::sync::Arc;
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]

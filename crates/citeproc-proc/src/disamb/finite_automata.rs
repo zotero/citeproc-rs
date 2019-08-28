@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::ir_database::IrDatabase;
+use crate::db::IrDatabase;
 use csl::Atom;
 use std::collections::HashSet; 
 use csl::style::Formatting;
@@ -14,12 +14,17 @@ use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternKey, InternId};
 use std::fmt::{Debug, Formatter};
 
+use citeproc_io::output::{html::Html, OutputFormat};
+
 #[cfg(test)]
 use petgraph::dot::Dot;
 
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct EdgeData(<Html as OutputFormat>::Output);
 
 impl Edge {
     // Adding this method is often convenient, since you can then
@@ -38,22 +43,9 @@ impl InternKey for Edge {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct EdgeData(String, Formatting);
-
 impl Debug for EdgeData {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.1 == Formatting::default() {
-            write!(f, "{}", self.0)
-        } else {
-            write!(f, "EdgeData({:?}, {:?})", self.0, self.1)
-        }
-    }
-}
-
-impl<'a> From<&'a str> for EdgeData {
-    fn from(s: &'a str) -> Self {
-        EdgeData(s.to_owned(), Formatting::default())
+        write!(f, "{}", self.0)
     }
 }
 

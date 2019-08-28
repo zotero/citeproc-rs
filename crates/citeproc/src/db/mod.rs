@@ -11,7 +11,7 @@ mod test;
 
 use crate::prelude::*;
 
-use citeproc_proc::IrDatabaseStorage;
+use citeproc_proc::db::IrDatabaseStorage;
 use citeproc_db::{HasFetcher, CiteDatabaseStorage, LocaleDatabaseStorage, StyleDatabaseStorage};
 use self::update::{DocUpdate, UpdateSummary};
 
@@ -58,7 +58,7 @@ impl salsa::Database for Processor {
             return;
         }
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
-        use citeproc_proc::IrDatabaseGroupKey__ as GroupKey;
+        use citeproc_proc::db::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
         let mut q = self.queue.lock();
         match event_fn().kind {

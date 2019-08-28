@@ -23,13 +23,13 @@ mod ir;
 mod names;
 mod unicode;
 mod element;
-mod ir_database;
+pub mod db;
 
 pub(crate) mod prelude {
     pub use citeproc_db::{CiteDatabase, StyleDatabase, LocaleDatabase};
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
-    pub use crate::ir_database::IrDatabase;
+    pub use crate::db::IrDatabase;
 
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::cite_context::CiteContext;
@@ -45,7 +45,6 @@ mod test;
 
 pub use self::disamb::old::DisambToken;
 pub use self::ir::IR;
-pub use self::ir_database::*;
 
 use self::helpers::sequence;
 

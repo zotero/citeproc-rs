@@ -7,7 +7,7 @@ use std::collections::HashMap;
     citeproc_db::StyleDatabaseStorage,
     citeproc_db::LocaleDatabaseStorage,
     citeproc_db::CiteDatabaseStorage,
-    crate::ir_database::IrDatabaseStorage,
+    crate::db::IrDatabaseStorage,
 )]
 pub struct MockProcessor {
     runtime: salsa::Runtime<Self>,
