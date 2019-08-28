@@ -12,8 +12,8 @@ use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use citeproc_io::{Cite, CiteId, ClusterId, Reference};
 use citeproc_io::output::html::Html;
+use citeproc_io::{Cite, CiteId, ClusterId, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]

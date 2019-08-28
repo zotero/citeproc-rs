@@ -11,9 +11,9 @@ mod test;
 
 use crate::prelude::*;
 
-use citeproc_proc::db::IrDatabaseStorage;
-use citeproc_db::{HasFetcher, CiteDatabaseStorage, LocaleDatabaseStorage, StyleDatabaseStorage};
 use self::update::{DocUpdate, UpdateSummary};
+use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
+use citeproc_proc::db::IrDatabaseStorage;
 
 use parking_lot::Mutex;
 #[cfg(feature = "rayon")]

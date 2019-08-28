@@ -6,8 +6,7 @@
 
 use citeproc_io::{Date, DateOrRange, Name, NumericValue, Reference};
 use csl::Atom;
-use std::collections::HashSet; 
-
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum DisambToken {
@@ -119,4 +118,3 @@ impl AddDisambTokens for Date {
         }
     }
 }
-

@@ -4,13 +4,14 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::prelude::*;
 use crate::disamb::{Edge, EdgeData};
+use crate::prelude::*;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::helpers::to_bijective_base_26;
 use crate::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
 use citeproc_io::output::{
     html::{Html, HtmlOptions},
@@ -18,11 +19,9 @@ use citeproc_io::output::{
 };
 use citeproc_io::{Cite, CiteId, ClusterId, Reference};
 use csl::Atom;
-use crate::helpers::to_bijective_base_26;
 
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
-
     fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
     fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
 

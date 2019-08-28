@@ -68,7 +68,6 @@ fn default_locale(db: &impl LocaleDatabase) -> Arc<Locale> {
     db.merged_locale(db.style().default_locale.clone())
 }
 
-
 fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
     let stored = db.locale_input_langs();
     if stored.contains(&key) {

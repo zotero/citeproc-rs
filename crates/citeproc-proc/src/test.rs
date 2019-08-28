@@ -1,13 +1,13 @@
 use citeproc_db::{LocaleFetcher, PredefinedLocales};
 use csl::locale::Lang;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[salsa::database(
     citeproc_db::StyleDatabaseStorage,
     citeproc_db::LocaleDatabaseStorage,
     citeproc_db::CiteDatabaseStorage,
-    crate::db::IrDatabaseStorage,
+    crate::db::IrDatabaseStorage
 )]
 pub struct MockProcessor {
     runtime: salsa::Runtime<Self>,
@@ -29,7 +29,10 @@ impl citeproc_db::HasFetcher for MockProcessor {
 impl MockProcessor {
     pub fn new() -> Self {
         let mut m = HashMap::new();
-        m.insert(Lang::en_us(), include_str!("../../citeproc-wasm/src/locales-en-US.xml").to_string());
+        m.insert(
+            Lang::en_us(),
+            include_str!("../../citeproc-wasm/src/locales-en-US.xml").to_string(),
+        );
         let fetcher = Arc::new(PredefinedLocales(m));
         let mut db = MockProcessor {
             runtime: Default::default(),

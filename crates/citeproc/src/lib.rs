@@ -14,11 +14,13 @@ pub use self::db::update::{DocUpdate, UpdateSummary};
 pub use self::db::Processor;
 
 pub mod prelude {
-    pub use csl::Atom;
-    pub use citeproc_db::{CiteDatabase, StyleDatabase, LocaleFetcher, LocaleFetchError, LocaleDatabase};
-    pub use citeproc_proc::db::IrDatabase;
-    pub use citeproc_io::{Reference, Cite, Cluster, CiteId, ClusterId};
-    pub use crate::db::Processor;
     pub use crate::db::update::{DocUpdate, UpdateSummary};
-    pub use citeproc_io::output::{OutputFormat, html::Html};
+    pub use crate::db::Processor;
+    pub use citeproc_db::{
+        CiteDatabase, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
+    };
+    pub use citeproc_io::output::{html::Html, OutputFormat};
+    pub use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
+    pub use citeproc_proc::db::IrDatabase;
+    pub use csl::Atom;
 }

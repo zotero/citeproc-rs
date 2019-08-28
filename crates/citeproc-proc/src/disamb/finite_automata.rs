@@ -5,20 +5,16 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use crate::db::IrDatabase;
-use csl::Atom;
-use std::collections::HashSet; 
-use csl::style::Formatting;
+use petgraph::graph::{Graph, NodeIndex};
+use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use petgraph::graph::{Graph, NodeIndex};
-use salsa::{InternKey, InternId};
 use std::fmt::{Debug, Formatter};
 
 use citeproc_io::output::{html::Html, OutputFormat};
 
 #[cfg(test)]
 use petgraph::dot::Dot;
-
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
@@ -368,4 +364,3 @@ fn test_brzozowski_minimise() {
     assert!(dfa.accepts(&[a, b, e]));
     assert!(!dfa.accepts(&[a, b, c, d, e]));
 }
-

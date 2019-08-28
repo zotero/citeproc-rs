@@ -1,9 +1,9 @@
+use crate::helpers::sequence;
 use crate::prelude::*;
+use citeproc_io::Locator;
 use csl::style::{Affixes, Element, Style};
 use csl::terms::{GenderedTermSelector, TextTermSelector};
-use citeproc_io::Locator;
 use csl::variables::*;
-use crate::helpers::sequence;
 use csl::Atom;
 
 impl<'c, O> Proc<'c, O> for Style

@@ -8,7 +8,6 @@
 // extern crate serde_derive;
 
 use citeproc_io::output::OutputFormat;
-use citeproc_io::{IngestOptions, Locator};
 use csl::Atom;
 use fnv::FnvHashMap;
 use std::collections::HashSet;
@@ -16,26 +15,26 @@ use std::collections::HashSet;
 mod choose;
 mod cite_context;
 mod date;
+pub mod db;
 mod disamb;
+mod element;
 mod group;
 mod helpers;
 mod ir;
 mod names;
 mod unicode;
-mod element;
-pub mod db;
 
 pub(crate) mod prelude {
-    pub use citeproc_db::{CiteDatabase, StyleDatabase, LocaleDatabase};
+    pub use crate::db::IrDatabase;
+    pub use citeproc_db::{CiteDatabase, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
-    pub use crate::db::IrDatabase;
 
-    pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::cite_context::CiteContext;
-    pub(crate) use crate::{Proc, IrState};
-    pub use crate::ir::*;
+    pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::group::GroupVars;
+    pub use crate::ir::*;
+    pub(crate) use crate::{IrState, Proc};
 }
 
 use prelude::*;
@@ -45,24 +44,6 @@ mod test;
 
 pub use self::disamb::old::DisambToken;
 pub use self::ir::IR;
-
-use self::helpers::sequence;
-
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
-pub struct IrState {
-    pub tokens: HashSet<DisambToken>,
-    pub name_tokens: FnvHashMap<u64, HashSet<DisambToken>>,
-    /// This can be a set because macros are strictly non-recursive.
-    /// So the same macro name anywhere above indicates attempted recursion.
-    /// When you exit a frame, delete from the set.
-    pub macro_stack: HashSet<Atom>,
-}
-
-impl IrState {
-    pub fn new() -> Self {
-        IrState::default()
-    }
-}
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
 // nodes are possibly disambiguate-able in year suffix mode and if such a node should be inserted
@@ -85,3 +66,18 @@ where
     ) -> IrSum<O>;
 }
 
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
+pub struct IrState {
+    pub tokens: HashSet<DisambToken>,
+    pub name_tokens: FnvHashMap<u64, HashSet<DisambToken>>,
+    /// This can be a set because macros are strictly non-recursive.
+    /// So the same macro name anywhere above indicates attempted recursion.
+    /// When you exit a frame, delete from the set.
+    pub macro_stack: HashSet<Atom>,
+}
+
+impl IrState {
+    pub fn new() -> Self {
+        IrState::default()
+    }
+}

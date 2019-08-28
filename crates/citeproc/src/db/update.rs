@@ -6,9 +6,9 @@
 
 #![allow(dead_code)]
 
-use citeproc_proc::db::IrDatabase;
-use citeproc_io::ClusterId;
 use citeproc_io::output::{html::Html, OutputFormat};
+use citeproc_io::ClusterId;
+use citeproc_proc::db::IrDatabase;
 use std::sync::Arc;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
