@@ -25,7 +25,7 @@ csl = { path = "../csl" }
 citeproc-io = { path = "../citeproc-io" }
 cfg-if = "0.1.9"
 console_log = { version = "0.1.2", optional = true }
-fern = { version = "0.5.7", optional = true }
+fern = { version = "0.5.8", optional = true }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -38,26 +38,26 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 # allocator, however.
 #
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
-wee_alloc = { version = "0.4.4", optional = true }
+wee_alloc = { version = "0.4.5", optional = true }
 
 # futures_0_3 lets us use std::future ahead of the of the July 4 release
-wasm-bindgen-futures = { version = "0.3.24", features = ["futures_0_3"] }
-js-sys = "0.3.24"
-serde = "1.0.98"
-serde_derive = "1.0.98"
+wasm-bindgen-futures = { version = "0.3.27", features = ["futures_0_3"] }
+js-sys = "0.3.27"
+serde = "1.0.99"
+serde_derive = "1.0.99"
 
 [dependencies.wasm-bindgen]
-version = "0.2.47"
+version = "0.2.50"
 features = ["serde-serialize"]
 
 [dependencies.log]
-version = "0.4.6"
+version = "0.4.8"
 features = ["release_max_level_error"]
 # this doesn't work
 # [target.'cfg(not(feature="console"))'.dependencies.log]
 
 [dev-dependencies]
-wasm-bindgen-test = "0.2.47"
+wasm-bindgen-test = "0.2.50"
 
 # TODO: Set the opt level on new wasm-pack 0.6.0 config
 # when it's released, so as not to interfere with the
