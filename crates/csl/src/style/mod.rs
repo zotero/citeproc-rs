@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
+use super::IsIndependent;
 use crate::error::*;
 use crate::locale::{Lang, Locale};
 use crate::terms::LocatorType;
@@ -310,19 +311,13 @@ impl Default for Plural {
     }
 }
 
-/// Something is Independent if what it represents is computed during processing, based on a Cite
-/// and the rest of a document. That is, it is not sourced directly from a Reference.
-trait IsIndependent {
-    fn is_independent(&self) -> bool;
-}
-
 impl IsIndependent for AnyVariable {
     fn is_independent(&self) -> bool {
         false
     }
 }
 
-impl Cond {
+impl IsIndependent for Cond {
     fn is_independent(&self) -> bool {
         match self {
             Cond::Disambiguate(_) => true,

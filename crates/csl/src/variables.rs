@@ -7,6 +7,7 @@
 use super::attr::GetAttribute;
 use super::error::*;
 use super::version::Features;
+use super::IsIndependent;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty, Hash)]
 pub enum AnyVariable {
@@ -43,6 +44,24 @@ pub enum StandardVariable {
     Number(NumberVariable),
 }
 
+impl From<&StandardVariable> for AnyVariable {
+    fn from(sv: &StandardVariable) -> Self {
+        match sv {
+            StandardVariable::Number(n) => AnyVariable::Number(*n),
+            StandardVariable::Ordinary(o) => AnyVariable::Ordinary(*o),
+        }
+    }
+}
+
+impl IsIndependent for StandardVariable {
+    fn is_independent(&self) -> bool {
+        match self {
+            StandardVariable::Number(n) => n.is_independent(),
+            StandardVariable::Ordinary(o) => o.is_independent(),
+        }
+    }
+}
+
 impl GetAttribute for StandardVariable {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         use self::StandardVariable::*;
@@ -52,6 +71,18 @@ impl GetAttribute for StandardVariable {
             return Ok(Number(v));
         }
         Err(UnknownAttributeValue::new(s))
+    }
+}
+
+impl IsIndependent for Variable {
+    fn is_independent(&self) -> bool {
+        match self {
+            Variable::LocatorExtra => true,
+            Variable::CitationLabel => false,
+            Variable::YearSuffix => true,
+            Variable::Hereinafter => true,
+            _ => false,
+        }
     }
 }
 
@@ -209,6 +240,16 @@ impl Variable {
             Variable::URL => Some(value),
             Variable::DOI => Some(value),
             _ => None,
+        }
+    }
+}
+
+impl IsIndependent for NumberVariable {
+    fn is_independent(&self) -> bool {
+        match self {
+            NumberVariable::Locator => true,
+            NumberVariable::FirstReferenceNoteNumber => true,
+            _ => false,
         }
     }
 }

@@ -34,6 +34,12 @@ use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
 
+/// Something is Independent if what it represents is computed during processing, based on a Cite
+/// and the rest of a document. That is, it is not sourced directly from a Reference.
+pub trait IsIndependent {
+    fn is_independent(&self) -> bool;
+}
+
 #[derive(Default)]
 pub(crate) struct ParseInfo {
     features: Features,

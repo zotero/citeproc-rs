@@ -1,0 +1,14 @@
+mode: citation
+result: ""
+input:
+  - id: "ITEM-1"
+    type: book
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation>
+      <layout>
+        <label variable="volume" />
+      </layout>
+    </citation>
+  </style>

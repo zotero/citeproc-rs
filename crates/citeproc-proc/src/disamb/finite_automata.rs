@@ -19,8 +19,9 @@ use petgraph::dot::Dot;
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
 
+// XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct EdgeData(<Html as OutputFormat>::Output);
+pub struct EdgeData(pub <Html as OutputFormat>::Output);
 
 impl Edge {
     // Adding this method is often convenient, since you can then

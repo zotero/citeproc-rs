@@ -6,29 +6,223 @@
 
 #![allow(dead_code)]
 
-use csl::style::Formatting;
+use crate::prelude::*;
+use citeproc_io::{Cite, Reference};
+use csl::style::{
+    Choose, Cond, CondSet, Conditions, CslType, Element, Formatting, Match, Position, Style,
+    TextSource,
+};
+use csl::variables::{AnyVariable, NumberVariable, Variable};
+use csl::IsIndependent;
+use fnv::{FnvHashMap, FnvHashSet};
 
 mod finite_automata;
+mod knowledge;
 pub mod old;
+
+use knowledge::Knowledge;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
 
 pub trait Disambiguation {
-    fn construct_nfa(&self, state: &mut DisambiguationState);
+    // You're gonna need an IrDatabase there
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState);
+    fn independent_conds(&self, db: &impl IrDatabase, conds: &mut ConditionStack) {
+        // most elements don't contain conditionals
+    }
 }
 
-pub struct DisambiguationState {
+impl Disambiguation for Style {
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        for el in &self.citation.layout.elements {
+            el.construct_nfa(db, state);
+        }
+    }
+    fn independent_conds(&self, db: &impl IrDatabase, conds: &mut ConditionStack) {
+        for el in &self.citation.layout.elements {
+            el.independent_conds(db, conds);
+        }
+    }
+}
+
+pub struct ConditionStack {
+    knowledge: Knowledge,
+    output: Vec<Cond>,
+}
+
+impl From<&Reference> for ConditionStack {
+    fn from(refr: &Reference) -> Self {
+        let mut knowledge = Knowledge::new();
+        knowledge.know_all_of(
+            refr.ordinary
+                .keys()
+                .map(|&var| (Cond::Variable(AnyVariable::Ordinary(var)), true)),
+        );
+        knowledge.know_all_of(
+            refr.number
+                .keys()
+                .map(|&var| (Cond::Variable(AnyVariable::Number(var)), true)),
+        );
+        // TODO: insert Cond::HasYearOnly & friends as well
+        knowledge.know_all_of(
+            refr.date
+                .keys()
+                .map(|&var| (Cond::Variable(AnyVariable::Date(var)), true)),
+        );
+        knowledge.know_all_of(
+            refr.name
+                .keys()
+                .map(|&var| (Cond::Variable(AnyVariable::Name(var)), true)),
+        );
+        knowledge.push();
+        ConditionStack {
+            knowledge,
+            output: Vec::new(),
+        }
+    }
+}
+
+impl Disambiguation for CondSet {
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        unimplemented!()
+    }
+    fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+        let (indep, ref_based): (Vec<&Cond>, Vec<&Cond>) =
+            self.conds.iter().partition(|c| c.is_independent());
+        if self.match_type == Match::Any
+            && ref_based
+                .iter()
+                .any(|&c| stack.knowledge.demonstrates(&c, true))
+        {
+            // this condition block is always going to return TRUE, so it doesn't depend on the
+            // independent ones
+            return;
+        }
+        if self.match_type == Match::All
+            && ref_based
+                .iter()
+                .any(|&c| stack.knowledge.demonstrates(&c, false))
+        {
+            // this condition block is always going to return FALSE, so it doesn't depend on the
+            // independent ones
+            return;
+        }
+        for i in indep {
+            stack.output.push(i.clone())
+        }
+    }
+}
+
+impl Disambiguation for Conditions {
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        unimplemented!()
+    }
+    fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+        // TODO(CSL-M): handle other match modes than ALL
+        for cond_set in &self.1 {
+            cond_set.independent_conds(db, stack);
+        }
+    }
+}
+
+impl Disambiguation for Choose {
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        unimplemented!()
+    }
+    fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+        let &Choose(ref ift, ref elifs, ref elset) = self;
+        ift.0.independent_conds(db, stack);
+        for el in &ift.1 {
+            el.independent_conds(db, stack);
+        }
+        for elif in elifs {
+            elif.0.independent_conds(db, stack);
+            for el in &elif.1 {
+                el.independent_conds(db, stack);
+            }
+        }
+        // TODO: handle else
+    }
+}
+
+impl Disambiguation for Element {
+    fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+        match self {
+            Element::Group(g) => {
+                // TODO: create a new conds vec, and extend the main conds if GroupVars is a hit
+                for el in &g.elements {
+                    el.independent_conds(db, stack);
+                }
+            }
+            Element::Names(n) => {
+                if let Some(subst) = &n.substitute {
+                    for el in &subst.0 {
+                        el.independent_conds(db, stack);
+                    }
+                }
+            }
+            Element::Choose(c) => c.independent_conds(db, stack),
+            Element::Number(num_var, ..) | Element::Label(num_var, ..) => {
+                if num_var.is_independent() {
+                    stack
+                        .output
+                        .push(Cond::Variable(AnyVariable::Number(*num_var)))
+                }
+            }
+            Element::Text(src, ..) => match src {
+                TextSource::Macro(m) => unimplemented!(),
+                TextSource::Variable(sv, ..) => {
+                    if sv.is_independent() {
+                        stack.output.push(Cond::Variable(sv.into()));
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+        match self {
+            Element::Text(..) => {
+                // let ir = self
+                //     .intermediate(db, ir_state, state.cite_context)
+                //     .flatten();
+                // state.cite_context.format()
+            }
+            _ => {}
+        }
+    }
+}
+
+use citeproc_io::output::html::Html;
+
+pub struct DisambiguationState<'c> {
     format_stack: Vec<Formatting>,
     format_current: Formatting,
     nfa: Nfa,
+    cite_context: CiteContext<'c, Html>,
 }
 
-impl DisambiguationState {
-    pub fn new() -> Self {
+impl DisambiguationState<'_> {
+    pub fn new<'a>(
+        reference: &'a Reference,
+        cite: &'a Cite<Html>,
+        position: Position,
+        number: u32,
+    ) -> DisambiguationState<'a> {
+        let format = Html::default();
         DisambiguationState {
             format_stack: vec![],
             format_current: Default::default(),
             nfa: Nfa::new(),
+            cite_context: CiteContext {
+                reference,
+                format,
+                cite,
+                position,
+                citation_number: number,
+                disamb_pass: None,
+            },
         }
     }
     /// if None, you should exit out of DFADisambiguate
@@ -69,4 +263,82 @@ impl DisambiguationState {
 //             }
 //         }
 //     }
+// }
+
+#[cfg(test)]
+macro_rules! style_layout {
+    ($ex:expr) => {{
+        use std::str::FromStr;
+        ::csl::style::Style::from_str(&format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+    <style class="in-text" version="1.0.1">
+        <citation>
+            <layout>
+                {}
+            </layout>
+        </citation>
+    </style>
+        "#,
+            $ex
+        ))
+        .unwrap()
+    }};
+}
+
+#[test]
+fn independent_conds() {
+    use crate::test::MockProcessor;
+    let db = MockProcessor::new();
+    let style = style_layout!(
+        r#"
+    <group delimiter=" ">
+        <text variable="locator" />
+        <text variable="title" font-style="italic"/>
+        <choose>
+            <if disambiguate="true">
+                <text value="..." />
+            </if>
+            <else-if position="first" type="book">
+                <text value="..." />
+            </else-if>
+            <else-if position="subsequent" variable="title">
+                <text value="..." />
+            </else-if>
+        </choose>
+    </group>
+    "#
+    );
+    let mut refr = Reference::empty("id".into(), CslType::Book);
+    refr.ordinary.insert(Variable::Title, "Title".into());
+    let mut stack = ConditionStack::from(&refr);
+    style.independent_conds(&db, &mut stack);
+    let mut result_set = FnvHashSet::default();
+    result_set.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
+    result_set.insert(Cond::Position(Position::First));
+    result_set.insert(Cond::Disambiguate(true));
+    assert_eq!(
+        stack.output.into_iter().collect::<FnvHashSet<_>>(),
+        result_set,
+    )
+}
+
+// #[test(ignore)]
+// fn element_disamb() {
+//     use crate::test::MockProcessor;
+//     let db = MockProcessor::new();
+//     let style = style_layout!(
+//         r#"
+//     <group delimiter=" ">
+//         <text value="value" />
+//         <text value="italic" font-style="italic"/>
+//     </group>
+//     "#
+//     );
+//     let group = &style.citation.layout.elements[0];
+//     let mut state = DisambiguationState::new();
+//     group.construct_nfa(&db, &mut state);
+//     let dfa = state.nfa.brzozowski_minimise();
+//     let value = db.edge(EdgeData("value".to_string()));
+//     let italic = db.edge(EdgeData("<i>italic</i>".to_string()));
+//     assert!(dfa.accepts(&[value, italic]));
 // }
