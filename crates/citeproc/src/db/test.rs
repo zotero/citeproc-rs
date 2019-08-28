@@ -14,8 +14,7 @@ use super::Processor;
 
 mod position {
     use super::*;
-    use crate::db::cite::CiteDatabase;
-    use citeproc_io::{Cite, Cluster};
+    use crate::prelude::*;
     use csl::style::Position;
 
     #[test]
@@ -67,7 +66,7 @@ mod position {
 
 mod terms {
     use super::*;
-    use crate::db::xml::LocaleDatabase;
+    use crate::prelude::*;
 
     fn en_au() -> Lang {
         Lang::Iso(IsoLang::English, Some(IsoCountry::AU))
@@ -83,12 +82,12 @@ mod terms {
     }
 
     use citeproc_db::PredefinedLocales;
-    fn predefined_xml(pairs: &[(Lang, &str)]) -> Predefined {
+    fn predefined_xml(pairs: &[(Lang, &str)]) -> PredefinedLocales {
         let mut map = HashMap::new();
         for (lang, ts) in pairs {
             map.insert(lang.clone(), terms(ts));
         }
-        Predefined(map)
+        PredefinedLocales(map)
     }
 
     fn term_and(form: TermFormExtended) -> SimpleTermSelector {

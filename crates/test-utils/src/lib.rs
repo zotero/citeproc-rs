@@ -7,8 +7,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use citeproc::{LocaleFetchError, LocaleFetcher, Processor};
-use citeproc_io::output::html::Html;
+use citeproc::prelude::*;
 use citeproc_io::{
     Cite, CiteId, Cluster, ClusterId, Locator, NumericValue, Reference, Suppression,
 };

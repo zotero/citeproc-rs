@@ -136,8 +136,8 @@ impl Processor {
 
     #[cfg(test)]
     pub fn test_db() -> Self {
-        use self::xml::Predefined;
-        Processor::safe_default(Arc::new(Predefined(Default::default())))
+        use citeproc_db::PredefinedLocales;
+        Processor::safe_default(Arc::new(PredefinedLocales(Default::default())))
     }
 
     #[cfg(feature = "rayon")]
