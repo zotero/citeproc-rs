@@ -103,14 +103,6 @@ export class Document {
     // Clusters //
     //////////////
 
-    replaceCluster(cluster: NoteCluster) {
-        // Mutate
-        let idx = this.clusters.findIndex(c => c.id === cluster.id);
-        this.clusters[idx] = cluster;
-        // Inform the driver
-        this.driver.insertCluster(cluster);
-    }
-
     createCite(_cite: UnidentifiedCite): Cite {
         let cite = _cite as Cite;
         cite.citeId = this.nextCiteId++;
@@ -122,6 +114,22 @@ export class Document {
             id: this.nextClusterId++,
             cites: cites.map(c => this.createCite(c))
         };
+    }
+
+    replaceCluster(cluster: NoteCluster) {
+        // Mutate
+        let idx = this.clusters.findIndex(c => c.id === cluster.id);
+        this.clusters[idx] = cluster;
+        // Inform the driver
+        this.driver.insertCluster(cluster);
+    }
+
+    removeCluster(id: number) {
+        // Mutate
+        let idx = this.clusters.findIndex(c => c.id === id);
+        this.clusters.splice(idx, 1);
+        // Inform the driver
+        this.driver.removeCluster(id);
     }
 
     // TODO: be able to pick up a cluster and move it
@@ -165,7 +173,11 @@ export class Document {
             console.log(arr);
             this.driver.renumberClusters(arr)
         } else {
-            cluster.note = inc(this.clusters[this.clusters.length - 1].note);
+            if (this.clusters.length > 0) {
+                cluster.note = inc(this.clusters[this.clusters.length - 1].note);
+            } else {
+                cluster.note = 1;
+            }
             this.clusters.push(cluster);
             this.driver.insertCluster(cluster);
         }

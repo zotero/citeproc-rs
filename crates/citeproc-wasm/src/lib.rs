@@ -102,6 +102,15 @@ impl Driver {
         Ok(eng.insert_cluster(cluster))
     }
 
+    #[wasm_bindgen(js_name = "removeCluster")]
+    pub fn remove_cluster(
+        &mut self,
+        cluster: u32,
+    ) -> Result<(), JsValue> {
+        let mut eng = self.engine.borrow_mut();
+        Ok(eng.remove_cluster(cluster))
+    }
+
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
         let clusters = utils::read_js_array(clusters)?;

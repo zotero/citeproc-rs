@@ -16,6 +16,7 @@ use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleD
 use citeproc_proc::db::IrDatabaseStorage;
 
 use parking_lot::Mutex;
+use salsa::Durability;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
@@ -124,13 +125,13 @@ impl Processor {
         let mut db = Processor::safe_default(fetcher);
         db.save_updates = save_updates;
         let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style(style);
+        db.set_style_with_durability(style, Durability::MEDIUM);
         Ok(db)
     }
 
     pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
         let style = Style::from_str(style_text)?;
-        self.set_style(Arc::new(style));
+        self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
         Ok(())
     }
 
@@ -250,6 +251,7 @@ impl Processor {
 
     pub fn remove_cluster(&mut self, id: ClusterId) {
         self.set_cluster_cites(id, Arc::new(Vec::new()));
+        self.set_cluster_note_number(id, ClusterNumber::InText(0));
         let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
@@ -257,15 +259,6 @@ impl Processor {
             .cloned()
             .collect();
         self.set_cluster_ids(Arc::new(cluster_ids));
-        // delete associated cites
-        // self.set_cluster_cites(id, Arc::new(Vec::new()));
-        // let new = self
-        //     .cluster_ids()
-        //     .iter()
-        //     .filter(|i| **i != id)
-        //     .cloned()
-        //     .collect();
-        // self.set_cluster_ids(Arc::new(new));
     }
 
     pub fn insert_cluster(&mut self, cluster: Cluster2<Html>) {
@@ -316,7 +309,7 @@ impl Processor {
         let mut langs = (*self.locale_input_langs()).clone();
         for (lang, xml) in locales {
             langs.insert(lang.clone());
-            self.set_locale_input_xml(lang, Arc::new(xml));
+            self.set_locale_input_xml_with_durability(lang, Arc::new(xml), Durability::MEDIUM);
         }
         self.set_locale_input_langs(Arc::new(langs));
     }
