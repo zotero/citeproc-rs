@@ -22,7 +22,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
 use citeproc::Processor;
-use citeproc_io::ClusterId;
+use citeproc::prelude::*;
 use csl::locale::Lang;
 
 #[wasm_bindgen]
@@ -90,26 +90,16 @@ impl Driver {
         JsValue::from_serde(&langs).unwrap()
     }
 
-    #[wasm_bindgen(js_name = "replaceCluster")]
-    pub fn replace_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
-        let cluster = cluster
-            .into_serde()
-            .map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
-        let mut eng = self.engine.borrow_mut();
-        Ok(eng.replace_cluster(cluster))
-    }
-
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(
         &mut self,
         cluster: JsValue,
-        before: Option<ClusterId>,
     ) -> Result<(), JsValue> {
         let cluster = cluster
             .into_serde()
-            .map_err(|_| ErrorPlaceholder::throw("could not parse cluster from host"))?;
+            .map_err(|e| ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e)))?;
         let mut eng = self.engine.borrow_mut();
-        Ok(eng.insert_cluster(cluster, before))
+        Ok(eng.insert_cluster(cluster))
     }
 
     #[wasm_bindgen(js_name = "initClusters")]
@@ -125,13 +115,9 @@ impl Driver {
     }
 
     #[wasm_bindgen(js_name = "renumberClusters")]
-    pub fn renumber_clusters(&mut self, mappings: &[u32]) -> Result<(), JsValue> {
+    pub fn renumber_clusters(&mut self, mappings: Box<[JsValue]>) -> Result<(), JsValue> {
+        let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
         let mut eng = self.engine.borrow_mut();
-        if mappings.len() % 2 != 0 {
-            return Err(ErrorPlaceholder::throw(
-                "incorrect arguments; should be [id, nn, id2, nn2]",
-            ));
-        }
         eng.renumber_clusters(mappings);
         Ok(())
     }
@@ -227,11 +213,19 @@ export type Cite<Affix = string> = {
     locatorDate?: DateOrRange | null;
 };
 
-export type Cluster = {
+export type NoteCluster = {
     id: number;
     cites: Cite[];
-    noteNumber: number;
+    note: number | [number, number]
 };
+
+export type InTextCluster = {
+    id: number;
+    cites: Cite[];
+    in_text: number;
+};
+
+export type Cluster = NoteCluster | InTextCluster;
 
 export type Reference = {
     id: string;

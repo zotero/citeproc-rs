@@ -27,7 +27,7 @@ use csl::locale::Lang;
 use csl::style::Style;
 
 use citeproc_io::output::{html::Html, OutputFormat};
-use citeproc_io::{Cite, CiteId, Cluster, ClusterId, Reference};
+use citeproc_io::{Cite, CiteId, Cluster2, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
 #[salsa::database(
@@ -229,17 +229,18 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Html>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Html>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
+            let (id, number, cites) = cluster.split();
             let mut ids = Vec::new();
-            for cite in cluster.cites.iter() {
+            for cite in cites.iter() {
                 ids.push(cite.id);
                 self.set_cite(cite.id, Arc::new(cite.clone()));
             }
-            self.set_cluster_cites(cluster.id, Arc::new(ids));
-            self.set_cluster_note_number(cluster.id, cluster.note_number);
-            cluster_ids.push(cluster.id);
+            self.set_cluster_cites(id, Arc::new(ids));
+            self.set_cluster_note_number(id, number);
+            cluster_ids.push(id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
@@ -267,54 +268,29 @@ impl Processor {
         // self.set_cluster_ids(Arc::new(new));
     }
 
-    pub fn replace_cluster(&mut self, cluster: Cluster<Html>) {
+    pub fn insert_cluster(&mut self, cluster: Cluster2<Html>) {
+        let (id, number, cites) = cluster.split();
         let cluster_ids = self.cluster_ids();
-        if !cluster_ids.contains(&cluster.id) {
+        if !cluster_ids.contains(&id) {
             let mut new_cluster_ids = (*cluster_ids).clone();
-            new_cluster_ids.push(cluster.id);
+            new_cluster_ids.push(id);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
         }
 
         let mut ids = Vec::new();
-        for cite in cluster.cites.iter() {
+        for cite in cites.iter() {
             ids.push(cite.id);
             self.set_cite(cite.id, Arc::new(cite.clone()));
         }
-        self.set_cluster_cites(cluster.id, Arc::new(ids));
-        self.set_cluster_note_number(cluster.id, cluster.note_number);
+        self.set_cluster_cites(id, Arc::new(ids));
+        self.set_cluster_note_number(id, number);
     }
 
-    /// Experimental. The split ids/cites/note numbers cluster interface is clunky, plus it's hard
-    /// to take into account that some footnotes don't have clusters in them, and other footnotes
-    /// have MULTIPLE clusters!
-    pub fn insert_cluster(&mut self, cluster: Cluster<Html>, before: Option<ClusterId>) {
-        // TODO: return Result::Err when called with bad args
-        // assumes note_number on cluster is where you want it to be
-        let cluster_ids = self.cluster_ids();
-        let mut new_cluster_ids = (*cluster_ids).clone();
-        if let Some(bef) = before {
-            if let Some(pos) = cluster_ids.iter().position(|&id| id == bef) {
-                new_cluster_ids.insert(pos, cluster.id);
-            }
-        } else {
-            new_cluster_ids.push(cluster.id);
-        }
-        self.set_cluster_ids(Arc::new(new_cluster_ids));
-
-        let mut cluster_cites = Vec::with_capacity(cluster.cites.len());
-        for cite in cluster.cites.iter() {
-            cluster_cites.push(cite.id);
-            self.set_cite(cite.id, Arc::new(cite.clone()));
-        }
-        self.set_cluster_cites(cluster.id, Arc::new(cluster_cites));
-        self.set_cluster_note_number(cluster.id, cluster.note_number);
-    }
-
-    pub fn renumber_clusters(&mut self, mappings: &[u32]) {
-        for chunk in mappings.chunks_exact(2) {
-            let id = chunk[0];
-            let nn = chunk[1];
-            self.set_cluster_note_number(id, nn);
+    pub fn renumber_clusters(&mut self, mappings: Vec<(u32, ClusterNumber)>) {
+        for chunk in mappings {
+            let id = chunk.0;
+            let n = chunk.1;
+            self.set_cluster_note_number(id, n);
         }
     }
 

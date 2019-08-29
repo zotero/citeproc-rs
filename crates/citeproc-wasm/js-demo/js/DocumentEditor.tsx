@@ -30,14 +30,14 @@ const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: Render
     let clusters = renderedDocument.orderedClusterIds.map(c => {
         let html = renderedDocument.builtClusters[c.id];
         let touched = renderedDocument.updatedLastRevision[c.id];
-        return <ClusterViewer key={c.id} noteNumber={c.noteNumber} html={html} touched={touched} />
+        return <ClusterViewer key={c.id} note={c.note} html={html} touched={touched} />
     });
     return <div>{clusters}</div>;
 });
 
-const ClusterViewer = React.memo(({noteNumber, html, touched}: { noteNumber: number, html: string, touched: boolean }) => {
+const ClusterViewer = React.memo(({note, html, touched}: { note: number, html: string, touched: boolean }) => {
     let style = touched ? { backgroundColor: 'lightgoldenrodyellow' } : {};
-    return <p style={style} dangerouslySetInnerHTML={{ __html: noteNumber + ". " + html }}></p>
+    return <p style={style} dangerouslySetInnerHTML={{ __html: note + ". " + html }}></p>
 });
 
 const ClusterEditor = ({cluster, updateCluster}: {cluster: Cluster, updateCluster: (cluster: Cluster) => void}) => {

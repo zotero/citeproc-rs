@@ -9,7 +9,8 @@ extern crate serde_derive;
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, CiteId, Cluster, ClusterId, Locator, NumericValue, Reference, Suppression,
+    Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
+    Suppression,
 };
 use csl::locale::Lang;
 use csl::terms::LocatorType;
@@ -295,7 +296,7 @@ impl JsExecutor<'_> {
             cites.push(cite_item.to_cite(self.n_cite));
             self.n_cite += 1;
         }
-        let cluster = Cluster {
+        let cluster = Cluster2 {
             id,
             note_number,
             cites,
@@ -569,7 +570,7 @@ impl TestCase {
         }
         let fet = Arc::new(Filesystem::project_dirs());
         let mut proc = Processor::new(&self.csl, fet, true).expect("could not construct processor");
-        let mut clusters: Vec<Cluster<Html>> = Vec::new();
+        let mut clusters: Vec<Cluster2<Html>> = Vec::new();
 
         let mut res = String::new();
         if let Some(ref instructions) = &self.citations {
@@ -592,9 +593,9 @@ impl TestCase {
                         cites.push(cite_item.to_cite(n_cite));
                         n_cite += 1;
                     }
-                    clusters.push(Cluster {
+                    clusters.push(Cluster2::Note {
                         id: n_cluster,
-                        note_number: n_cluster,
+                        note: ClusterNumber::Note(IntraNote::Single(n_cluster)),
                         cites,
                     });
                     n_cluster += 1;
@@ -606,9 +607,9 @@ impl TestCase {
                     let n = n as u32;
                     cites.push(Cite::basic(n, &refr.id));
                 }
-                clusters.push(Cluster {
+                clusters.push(Cluster2::Note {
                     id: 1,
-                    note_number: 1,
+                    note: ClusterNumber::Note(IntraNote::Single(1)),
                     cites,
                 });
             }

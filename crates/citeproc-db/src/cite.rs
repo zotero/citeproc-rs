@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::html::Html;
-use citeproc_io::{Cite, CiteId, ClusterId, Reference};
+use citeproc_io::{Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -45,10 +45,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
 
     #[salsa::input]
-    fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
-
-    #[salsa::input]
-    fn cluster_note_number(&self, key: ClusterId) -> u32;
+    fn cluster_note_number(&self, key: ClusterId) -> ClusterNumber;
 
     // All cite ids, in the order they appear in the document
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
@@ -66,7 +63,49 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
 
     fn bib_number(&self, id: CiteId) -> Option<u32>;
+
+    #[salsa::input]
+    fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
+    fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
 }
+
+macro_rules! intern_key {
+    ($name:ident) => {
+        struct $name(u32);
+        impl ::salsa::InternKey for $name {
+            fn from_intern_id(v: ::salsa::InternId) -> Self {
+                $name(u32::from(v))
+            }
+            fn as_intern_id(&self) -> ::salsa::InternId {
+                self.0
+            }
+        }
+    };
+}
+
+// intern_key(Cluster);
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct ClusterData {
+    id: ClusterId,
+    number: ClusterNumber,
+    cites: Arc<Vec<CiteId>>,
+}
+
+// impl ClusterData {
+//     fn from_io(db: &impl CiteDatabase, cluster: &citeproc_io::Cluster) {
+//         ClusterData {
+//             number: cluster.note_number,
+//             cites: db.cites(Arc::new(cluster.cites)),
+//         }
+//     }
+//     fn from_io2(db: &impl CiteDatabase, cluster: &citeproc_io::Cluster2) {
+//         ClusterData {
+//             number: cluster.cluster_number(),
+//             cites: db.cites(Arc::new(cluster.cites)),
+//         }
+//     }
+// }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     if db.all_keys().contains(&key) {
@@ -122,39 +161,52 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     Arc::new(ids)
 }
 
+fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
+    let cluster_ids = db.cluster_ids();
+    let mut clusters: Vec<_> = cluster_ids
+        .iter()
+        .map(|&id| ClusterData {
+            id,
+            number: db.cluster_note_number(id),
+            cites: db.cluster_cites(id),
+        })
+        .collect();
+    clusters.sort_by_key(|cluster| cluster.number);
+    Arc::new(clusters)
+}
+
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
 fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
     let cluster_ids = db.cluster_ids();
-    let clusters: Vec<_> = cluster_ids
-        .iter()
-        .map(|&id| (id, db.cluster_cites(id)))
-        .collect();
+    let clusters = db.clusters_sorted();
 
     let mut map = FnvHashMap::default();
 
     // TODO: configure
     let near_note_distance = 5;
 
-    let mut seen = FnvHashMap::default();
+    let mut seen: FnvHashMap<Atom, IntraNote> = FnvHashMap::default();
 
-    for (i, (cluster_id, cluster)) in clusters.iter().enumerate() {
-        let note_number = db.cluster_note_number(*cluster_id);
-        for (j, &cite_id) in cluster.iter().enumerate() {
+    for (i, cluster) in clusters.iter().enumerate() {
+        for (j, &cite_id) in cluster.cites.iter().enumerate() {
             let cite = db.cite(cite_id);
             let prev_cite = cluster
+                .cites
+                // 0 - 1 == u32::MAX is never going to come up with anything
                 .get(j.wrapping_sub(1))
                 .map(|&prev_id| db.cite(prev_id));
             let matching_prev = prev_cite
                 .filter(|p| p.ref_id == cite.ref_id)
                 .or_else(|| {
-                    if let Some((_, prev_cluster)) = clusters.get(i.wrapping_sub(1)) {
-                        if prev_cluster.len() > 0
+                    if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
+                        if prev_cluster.cites.len() > 0
                             && prev_cluster
+                                .cites
                                 .iter()
                                 .all(|&pid| db.cite(pid).ref_id == cite.ref_id)
                         {
                             // Pick the last one to match locators against
-                            prev_cluster.last().map(|&pid| db.cite(pid))
+                            prev_cluster.cites.last().map(|&pid| db.cite(pid))
                         } else {
                             None
                         }
@@ -170,25 +222,31 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     _ => Position::IbidWithLocator,
                 });
             if let Some(&first_note_number) = seen.get(&cite.ref_id) {
+                let first_number = ClusterNumber::Note(first_note_number);
                 assert!(
-                    note_number >= first_note_number,
-                    "note numbers not monotonic: {} came after but was less than {}",
-                    note_number,
-                    first_note_number
+                    cluster.number >= first_number,
+                    "note numbers not monotonic: {:?} came after but was less than {:?}",
+                    cluster.number,
+                    first_note_number,
                 );
+                let unsigned = first_note_number.note_number();
+                let diff = cluster.number.sub_note(first_note_number);
                 if let Some(pos) = matching_prev {
-                    map.insert(cite_id, (pos, Some(first_note_number)));
-                } else if note_number == first_note_number {
-                    // TODO: same footnote!
-                    unimplemented!("cite position for same note_number, but different cluster");
-                } else if note_number - first_note_number < near_note_distance {
-                    map.insert(cite_id, (Position::NearNote, Some(first_note_number)));
+                    map.insert(cite_id, (pos, Some(unsigned)));
+                } else if cluster.number == first_number {
+                    // XXX: not sure about this one
+                    // unimplemented!("cite position for same number, but different cluster");
+                    map.insert(cite_id, (Position::NearNote, Some(unsigned)));
+                } else if diff.map(|d| d < near_note_distance).unwrap_or(false) {
+                    map.insert(cite_id, (Position::NearNote, Some(unsigned)));
                 } else {
-                    map.insert(cite_id, (Position::FarNote, Some(first_note_number)));
+                    map.insert(cite_id, (Position::FarNote, Some(unsigned)));
                 }
             } else {
                 map.insert(cite_id, (Position::First, None));
-                seen.insert(cite.ref_id.clone(), note_number);
+                if let ClusterNumber::Note(note_number) = cluster.number {
+                    seen.insert(cite.ref_id.clone(), note_number);
+                }
             }
         }
     }

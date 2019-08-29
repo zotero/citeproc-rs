@@ -1,29 +1,30 @@
-import { Reference, Cite, Cluster, Driver, UpdateSummary } from '../../pkg';
+import { Reference, Cite, NoteCluster, Driver, UpdateSummary } from '../../pkg';
 import { produce, immerable, Draft, IProduce } from 'immer';
 
 export type ClusterId = number;
 export type CiteId = number;
+export type OrderedClusterIds = Pick<NoteCluster, "id" | "note">;
 
 export class RenderedDocument {
 
     /** Caches HTML for a ClusterId, that is pulled from the driver */
     public builtClusters: { [id: number]: string } = {};
 
-    public orderedClusterIds: Array<{ id: ClusterId; noteNumber: number; }> = [];
+    public orderedClusterIds: Array<OrderedClusterIds> = [];
 
     /** For showing a paint splash when clusters are updated */
     public updatedLastRevision: { [id: number]: boolean } = {};
 
-    constructor(clusters: Cluster[], driver: Driver) {
+    constructor(clusters: NoteCluster[], driver: Driver) {
         this[immerable] = true;
         for (let cluster of clusters) {
             this.builtClusters[cluster.id] = stringifyInlines(driver.builtCluster(cluster.id));
-            // TODO: send noteNumber through a round trip and get it from builtCluster
-            this.orderedClusterIds.push({ id: cluster.id, noteNumber: cluster.noteNumber });
+            // TODO: send note through a round trip and get it from builtCluster
+            this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
     }
 
-    public update(summary: UpdateSummary, oci: Array<{ id: ClusterId, noteNumber: number }>) {
+    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>) {
         return produce(this, draft => {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
@@ -36,7 +37,7 @@ export class RenderedDocument {
 
 }
 
-type NonNumberedCluster = Omit<Cluster, "noteNumber">;
+type NonNumberedCluster = Omit<NoteCluster, "note">;
 type UnidentifiedCite = Omit<Cite, "citeId">;
 
 /**
@@ -54,20 +55,20 @@ export class Document {
     private driver: Driver;
 
     /** The internal document model */
-    public clusters: Cluster[];
+    public clusters: NoteCluster[];
 
     public rendered: RenderedDocument;
 
     private nextClusterId = 100;
     private nextCiteId = 100;
 
-    constructor(clusters: Cluster[], driver: Driver) {
+    constructor(clusters: NoteCluster[], driver: Driver) {
         this.clusters = clusters;
         this.init(driver);
     }
 
     private ordered() {
-        return this.clusters.map(c => ({ id: c.id, noteNumber: c.noteNumber, }));
+        return this.clusters.map(c => ({ id: c.id, note: c.note, }));
     }
 
     private init(driver: Driver) {
@@ -102,12 +103,12 @@ export class Document {
     // Clusters //
     //////////////
 
-    replaceCluster(cluster: Cluster) {
+    replaceCluster(cluster: NoteCluster) {
         // Mutate
         let idx = this.clusters.findIndex(c => c.id === cluster.id);
         this.clusters[idx] = cluster;
         // Inform the driver
-        this.driver.replaceCluster(cluster);
+        this.driver.insertCluster(cluster);
     }
 
     createCite(_cite: UnidentifiedCite): Cite {
@@ -145,11 +146,11 @@ export class Document {
      * @param beforeCluster The cluster ID to insert this before; `null` = at the end.
      */
     insertCluster(_cluster: NonNumberedCluster, beforeCluster: ClusterId | null) {
-        let cluster = _cluster as Cluster;
+        let cluster = _cluster as NoteCluster;
         let pos = beforeCluster === null ? -1 : this.clusters.findIndex(c => c.id === beforeCluster);
         if (pos !== -1) {
             let atPos = this.clusters[pos];
-            cluster.noteNumber = atPos.noteNumber;
+            cluster.note = atPos.note;
             this.clusters.splice(pos, 0, cluster);
             let arr = [];
             // cascade to the rest of it;
@@ -157,30 +158,28 @@ export class Document {
             // e.g. [2, 3, 3, 4, 4, 5, 5, 6, ...]
             for (let i = pos + 1; i < this.clusters.length; i++) {
                 let cl = this.clusters[i];
-                arr.push(cl.id);
-                arr.push(++cl.noteNumber);
+                cl.note = inc(cl.note);
+                arr.push([cl.id, { note: cl.note }]);
             }
-            // The invariant to uphold is that note numbers increase monotonically with the cluster order.
-            // So you can have n1 and n2 not containing any clusters ie
-            //     n1 -> []
-            //     n2 -> []
-            //     n3 -> [c1, c2]
-            //     n4 -> [c3]
-            // But you cannot have
-            //     n1 -> [c2] 
-            //     n2 -> [c1] 
-            // Equivalently
-            //     c1 = { id: ..., noteNumber: 2 }
-            //     c2 = { id: ..., noteNumber: 1 }
-            this.driver.insertCluster(cluster, beforeCluster);
-            this.driver.renumberClusters(new Uint32Array(arr))
+            this.driver.insertCluster(cluster);
+            console.log(arr);
+            this.driver.renumberClusters(arr)
         } else {
-            cluster.noteNumber = this.clusters[this.clusters.length - 1].noteNumber + 1;
+            cluster.note = inc(this.clusters[this.clusters.length - 1].note);
             this.clusters.push(cluster);
-            this.driver.insertCluster(cluster, beforeCluster);
+            this.driver.insertCluster(cluster);
         }
     }
 
+}
+
+function inc(x: number | [number, number]): number | [number, number] {
+    if (Array.isArray(x)) {
+        let [a, b] = x;
+        return [a+1, b];
+    } else {
+        return x + 1;
+    }
 }
 
 // Pandoc JSON won't be the output format forever -- when Salsa can do
@@ -203,6 +202,6 @@ export function stringifyInlinesPandoc(inlines: Inline[]): string {
     }).join("");
 }
 
-export function stringifyInlines(inlines: any): String {
+export function stringifyInlines(inlines: any): string {
     return inlines
 }

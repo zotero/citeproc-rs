@@ -529,25 +529,3 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
 
     // a => a
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_flip_emph() {
-        let f = Html::default();
-        let a = f.plain("normal");
-        let b = f.text_node("emph".into(), Some(Formatting::italic()));
-        let c = f.plain("normal");
-        let group = f.group(vec![a, b, c], " ", Some(Formatting::italic()));
-        let out = f.output(group.clone());
-
-        let group_str = InlineElement::to_html(&group, &HtmlOptions::default());
-        assert_ne!(group_str, out);
-        assert_eq!(
-            out,
-            "<i>normal <span style=\"font-style: initial;\">emph</span> normal</i>"
-        );
-    }
-}
