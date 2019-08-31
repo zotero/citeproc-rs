@@ -255,6 +255,7 @@ pub struct DisambiguationState<'c> {
 impl DisambiguationState<'_> {
     pub fn new<'a>(
         reference: &'a Reference,
+        cite_id: CiteId,
         cite: &'a Cite<Html>,
         position: Position,
         number: u32,
@@ -266,6 +267,7 @@ impl DisambiguationState<'_> {
             format_current: Default::default(),
             nfa: Nfa::new(),
             cite_context: CiteContext {
+                cite_id,
                 reference,
                 format,
                 cite,

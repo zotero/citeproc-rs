@@ -17,7 +17,7 @@ use citeproc_io::output::{
     html::{Html, HtmlOptions},
     OutputFormat,
 };
-use citeproc_io::{Cite, CiteId, ClusterId, Reference};
+use citeproc_io::{Cite, ClusterId, Reference};
 use csl::Atom;
 
 #[salsa::query_group(IrDatabaseStorage)]
@@ -125,8 +125,8 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     let all_cites_ordered = db.all_cite_ids();
     let refs_to_add_suffixes_to = all_cites_ordered
         .iter()
-        .map(|&id| db.cite(id))
-        .map(|cite| (cite.ref_id.clone(), db.ir_gen2_add_given_name(cite.id)))
+        .map(|&id| (id, id.lookup(db)))
+        .map(|(id, cite)| (cite.ref_id.clone(), db.ir_gen2_add_given_name(id)))
         .filter_map(|(ref_id, ir2)| {
             match ir2.1 {
                 // if ambiguous (false), add a suffix
@@ -162,23 +162,25 @@ fn disambiguate<O: OutputFormat>(
     // and suddently is_unambiguous is running on less than its full range of tokens.
     ir.disambiguate(db, state, ctx, &is_unambig);
     let un = is_unambiguous(&index, maybe_ys, state);
-    eprintln!("{:?} trying to disam {}", ctx.disamb_pass, ctx.cite.id);
+    debug!("{:?} trying to disam {:?}", ctx.disamb_pass, ctx.cite_id);
     if un {
-        eprintln!("{:?} disambiguated {}", ctx.disamb_pass, ctx.cite.id);
+        debug!("{:?} disambiguated {:?}", ctx.disamb_pass, ctx.cite_id);
     }
     un
 }
 
 fn ctx_for<'c, O: OutputFormat>(
     db: &impl IrDatabase,
+    cite_id: CiteId,
     cite: &'c Cite<O>,
     reference: &'c Reference,
 ) -> CiteContext<'c, O> {
     CiteContext {
+        cite_id,
         cite,
         reference,
         format: O::default(),
-        position: db.cite_position(cite.id).0,
+        position: db.cite_position(cite_id).0,
         citation_number: 0, // XXX: from db
         disamb_pass: None,
     }
@@ -200,12 +202,12 @@ fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style = db.style();
     let index = db.inverted_index();
-    let cite = db.cite(id);
+    let cite = id.lookup(db);
     let refr = match db.reference(cite.ref_id.clone()) {
         None => return ref_not_found(&cite.ref_id, true),
         Some(r) => r,
     };
-    let ctx = ctx_for(db, &cite, &refr);
+    let ctx = ctx_for(db, id, &cite, &refr);
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
 
@@ -220,11 +222,11 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
     if ir0.1 || !style.citation.disambiguate_add_names {
         return ir0.clone();
     }
-    let cite = db.cite(id);
+    let cite = id.lookup(db);
     let refr = db
         .reference(cite.ref_id.clone())
         .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir0.2.clone();
     let mut ir = ir0.0.clone();
 
@@ -239,11 +241,11 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     if ir1.1 || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
-    let cite = db.cite(id);
+    let cite = id.lookup(db);
     let refr = db
         .reference(cite.ref_id.clone())
         .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir1.2.clone();
     let mut ir = ir1.0.clone();
 
@@ -253,14 +255,14 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen3_add_year_suffix(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
+fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style = db.style();
-    let ir2 = db.ir_gen2_add_given_name(cite_id);
+    let ir2 = db.ir_gen2_add_given_name(id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
     // splitting the ifs means we only compute year suffixes if it's enabled
-    let cite = db.cite(cite_id);
+    let cite = id.lookup(db);
     let suffixes = db.year_suffixes();
     if !suffixes.contains_key(&cite.ref_id) {
         return ir2.clone();
@@ -268,7 +270,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
     let refr = db
         .reference(cite.ref_id.clone())
         .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir2.2.clone();
     let mut ir = ir2.0.clone();
 
@@ -278,16 +280,16 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-fn ir_gen4_conditionals(db: &impl IrDatabase, cite_id: CiteId) -> IrGen {
-    let ir3 = db.ir_gen3_add_year_suffix(cite_id);
+fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
+    let ir3 = db.ir_gen3_add_year_suffix(id);
     if ir3.1 {
         return ir3.clone();
     }
-    let cite = db.cite(cite_id);
+    let cite = id.lookup(db);
     let refr = db
         .reference(cite.ref_id.clone())
         .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, &cite, &refr);
+    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir3.2.clone();
     let mut ir = ir3.0.clone();
 
@@ -316,7 +318,7 @@ fn built_cluster(
         .iter()
         .map(|&id| {
             let ir = &db.ir_gen4_conditionals(id).0;
-            let cite = db.cite(id);
+            let cite = id.lookup(db);
             let flattened = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
             // TODO: strip punctuation on these
             let prefix = cite

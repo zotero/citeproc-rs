@@ -150,7 +150,7 @@ where
             Cond::IsNumeric(var) => ctx.is_numeric(*var, db),
             Cond::Disambiguate(d) => *d == (ctx.disamb_pass == Some(DisambPass::Conditionals)),
             Cond::Type(typ) => ctx.reference.csl_type == *typ,
-            Cond::Position(pos) => db.cite_position(ctx.cite.id).0.matches(*pos),
+            Cond::Position(pos) => db.cite_position(ctx.cite_id).0.matches(*pos),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
                 if !style.features.condition_date_parts =>

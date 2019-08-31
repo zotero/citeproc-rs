@@ -16,7 +16,7 @@ pub struct CiteContext<'c, O: OutputFormat + Sized> {
     // can technically get this from db
     pub reference: &'c Reference,
     pub format: O,
-    //
+    pub cite_id: CiteId,
     pub cite: &'c Cite<O>,
     // could store in the DB
     pub position: Position,
@@ -50,9 +50,9 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 self.is_numeric(AnyVariable::Number(NumberVariable::Page), db)
             }
             Number(NumberVariable::FirstReferenceNoteNumber) => {
-                db.cite_position(self.cite.id).1.is_some()
+                db.cite_position(self.cite_id).1.is_some()
             }
-            Number(NumberVariable::CitationNumber) => db.bib_number(self.cite.id).is_some(),
+            Number(NumberVariable::CitationNumber) => db.bib_number(self.cite_id).is_some(),
             _ => ref_has_variable(self.reference, var),
         }
     }
@@ -88,9 +88,9 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 .map(Locator::value)
                 .map(Clone::clone),
             NumberVariable::FirstReferenceNoteNumber => {
-                db.cite_position(self.cite.id).1.map(NumericValue::num)
+                db.cite_position(self.cite_id).1.map(NumericValue::num)
             }
-            NumberVariable::CitationNumber => db.bib_number(self.cite.id).map(NumericValue::num),
+            NumberVariable::CitationNumber => db.bib_number(self.cite_id).map(NumericValue::num),
             NumberVariable::PageFirst => self
                 .reference
                 .number

@@ -47,7 +47,7 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let locale = db.locale_by_cite(ctx.cite.id);
+        let locale = db.locale_by_cite(ctx.cite_id);
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
@@ -161,7 +161,7 @@ fn dp_render<'c, O: OutputFormat>(
     ctx: &CiteContext<'c, O>,
     date: &Date,
 ) -> Option<O::Build> {
-    let locale = db.locale_by_cite(ctx.cite.id);
+    let locale = db.locale_by_cite(ctx.cite_id);
     let string = match part.form {
         DatePartForm::Year(form) => match form {
             YearForm::Long => Some(format!("{}", date.year)),

@@ -28,7 +28,7 @@ use csl::locale::Lang;
 use csl::style::Style;
 
 use citeproc_io::output::{html::Html, OutputFormat};
-use citeproc_io::{Cite, CiteId, Cluster2, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
 #[salsa::database(
@@ -233,15 +233,15 @@ impl Processor {
     pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Html>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let (id, number, cites) = cluster.split();
+            let (cluster_id, number, cites) = cluster.split();
             let mut ids = Vec::new();
             for cite in cites.iter() {
-                ids.push(cite.id);
-                self.set_cite(cite.id, Arc::new(cite.clone()));
+                let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+                ids.push(cite_id);
             }
-            self.set_cluster_cites(id, Arc::new(ids));
-            self.set_cluster_note_number(id, number);
-            cluster_ids.push(id);
+            self.set_cluster_cites(cluster_id, Arc::new(ids));
+            self.set_cluster_note_number(cluster_id, number);
+            cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
@@ -249,52 +249,52 @@ impl Processor {
     // cluster_ids is maintained manually
     // the cluster_cites relation is maintained manually
 
-    pub fn remove_cluster(&mut self, id: ClusterId) {
-        self.set_cluster_cites(id, Arc::new(Vec::new()));
-        self.set_cluster_note_number(id, ClusterNumber::InText(0));
+    pub fn remove_cluster(&mut self, cluster_id: ClusterId) {
+        self.set_cluster_cites(cluster_id, Arc::new(Vec::new()));
+        self.set_cluster_note_number(cluster_id, ClusterNumber::InText(0));
         let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
-            .filter(|&i| *i != id)
+            .filter(|&i| *i != cluster_id)
             .cloned()
             .collect();
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
     pub fn insert_cluster(&mut self, cluster: Cluster2<Html>) {
-        let (id, number, cites) = cluster.split();
+        let (cluster_id, number, cites) = cluster.split();
         let cluster_ids = self.cluster_ids();
-        if !cluster_ids.contains(&id) {
+        if !cluster_ids.contains(&cluster_id) {
             let mut new_cluster_ids = (*cluster_ids).clone();
-            new_cluster_ids.push(id);
+            new_cluster_ids.push(cluster_id);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
         }
 
         let mut ids = Vec::new();
         for cite in cites.iter() {
-            ids.push(cite.id);
-            self.set_cite(cite.id, Arc::new(cite.clone()));
+            let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+            ids.push(cite_id);
         }
-        self.set_cluster_cites(id, Arc::new(ids));
-        self.set_cluster_note_number(id, number);
+        self.set_cluster_cites(cluster_id, Arc::new(ids));
+        self.set_cluster_note_number(cluster_id, number);
     }
 
     pub fn renumber_clusters(&mut self, mappings: &[(u32, ClusterNumber)]) {
         for chunk in mappings {
-            let id = chunk.0;
+            let cluster_id = chunk.0;
             let n = chunk.1;
-            self.set_cluster_note_number(id, n);
+            self.set_cluster_note_number(cluster_id, n);
         }
     }
 
     // Getters, because the query groups have too much exposed to publish.
 
     pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Html>> {
-        self.cite(id)
+        id.lookup(self)
     }
 
-    pub fn get_cluster(&self, id: ClusterId) -> Arc<<Html as OutputFormat>::Output> {
-        self.built_cluster(id)
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<<Html as OutputFormat>::Output> {
+        self.built_cluster(cluster_id)
     }
 
     pub fn get_reference(&self, ref_id: Atom) -> Option<Arc<Reference>> {

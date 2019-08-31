@@ -125,7 +125,7 @@ where
                         (IR::Rendered(content), gv)
                     }
                     TextSource::Term(term_selector, plural) => {
-                        let locale = db.locale_by_cite(ctx.cite.id);
+                        let locale = db.locale_by_cite(ctx.cite_id);
                         let content = locale
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
@@ -150,7 +150,7 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        let locale = db.locale_by_cite(ctx.cite.id);
+                        let locale = db.locale_by_cite(ctx.cite_id);
                         locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f, &af))

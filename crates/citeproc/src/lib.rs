@@ -17,10 +17,10 @@ pub mod prelude {
     pub use crate::db::update::{DocUpdate, UpdateSummary};
     pub use crate::db::Processor;
     pub use citeproc_db::{
-        CiteDatabase, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
+        CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };
     pub use citeproc_io::output::{html::Html, OutputFormat};
-    pub use citeproc_io::{Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
+    pub use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
     pub use citeproc_proc::db::IrDatabase;
     pub use csl::Atom;
 }

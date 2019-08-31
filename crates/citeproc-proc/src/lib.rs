@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-// #[macro_use]
-// extern crate serde_derive;
+#[macro_use]
+extern crate log;
 
 use citeproc_io::output::OutputFormat;
 use csl::Atom;
@@ -26,7 +26,7 @@ mod unicode;
 
 pub(crate) mod prelude {
     pub use crate::db::IrDatabase;
-    pub use citeproc_db::{CiteDatabase, LocaleDatabase, StyleDatabase};
+    pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
 
