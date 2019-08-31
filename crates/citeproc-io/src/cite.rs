@@ -207,6 +207,11 @@ pub enum Cluster2<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> Cluster2<O> {
+    pub fn id(&self) -> ClusterId {
+        match self {
+            Cluster2::InText { id, .. } | Cluster2::Note { id, .. } => *id,
+        }
+    }
     pub fn cluster_number(&self) -> ClusterNumber {
         match self {
             Cluster2::InText { in_text, .. } => ClusterNumber::InText(*in_text),

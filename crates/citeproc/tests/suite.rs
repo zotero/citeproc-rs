@@ -72,3 +72,14 @@ fn humans(path: &Path) {
     let res = test_case.execute();
     assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
 }
+
+#[datatest::files("tests/data/humans", {
+    path in r"^(.*)\.toml",
+})]
+fn humans_toml(path: &Path) {
+    use test_utils::toml::TomlTestCase;
+    let input = read_to_string(path).unwrap();
+    let mut test_case: TomlTestCase = toml::from_str(&input).unwrap();
+    // let res = test_case.execute();
+    // assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+}

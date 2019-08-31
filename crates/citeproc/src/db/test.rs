@@ -21,15 +21,15 @@ mod position {
     fn cite_positions_ibid() {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
-            Cluster {
+            Cluster2::Note {
                 id: 1,
+                note: IntraNote::Single(1),
                 cites: vec![Cite::basic(1, "one")],
-                note_number: 1,
             },
-            Cluster {
+            Cluster2::Note {
                 id: 2,
+                note: IntraNote::Single(2),
                 cites: vec![Cite::basic(2, "one")],
-                note_number: 2,
             },
         ]);
         let poss = db.cite_positions();
@@ -41,20 +41,20 @@ mod position {
     fn cite_positions_near_note() {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
-            Cluster {
+            Cluster2::Note {
                 id: 1,
+                note: IntraNote::Single(1),
                 cites: vec![Cite::basic(1, "one")],
-                note_number: 1,
             },
-            Cluster {
+            Cluster2::Note {
                 id: 2,
+                note: IntraNote::Single(2),
                 cites: vec![Cite::basic(2, "other")],
-                note_number: 2,
             },
-            Cluster {
+            Cluster2::Note {
                 id: 3,
+                note: IntraNote::Single(3),
                 cites: vec![Cite::basic(3, "one")],
-                note_number: 3,
             },
         ]);
         let poss = db.cite_positions();

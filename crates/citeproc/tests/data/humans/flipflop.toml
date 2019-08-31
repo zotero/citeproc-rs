@@ -1,0 +1,88 @@
+[test]
+mode = "citation"
+format = "html"
+
+# [result]
+# string = """\
+# Put whatever here, except we're going to use sequence instead
+# """
+
+# start with two
+[[instructions]]
+clusters = [
+  { id = 1, note = 5, cites = [{ citeId = 1, id = "jeanie" }] },
+  { id = 2, note = 6, cites = [{ citeId = 2, id = "whirl" }] },
+]
+[instructions.now]
+1 = "Jeanie"
+2 = "Whirligig"
+
+
+# insert a subsequent reference
+[[instructions]]
+clusters = [
+  { id = 3, note = 7, cites = [{ citeId = 3, id = "jeanie", locator = "54", label = "page" }] },
+]
+[[instructions.refs]]
+id = "whirl"
+type = "book"
+title = 'My Name is Whirl'
+[instructions.now]
+1 = "Jeanie"
+2 = "My Name is Whirl"
+3 = "Jeanie (n 1), 54"
+
+
+# put a different one one before everything
+[[instructions]]
+clusters = [
+  { id = 4, note = 2, cites = [{ citeId = 4, id = "other" }] },
+]
+[instructions.now]
+4 = "The Canada Geese are at it again"
+1 = "Jeanie"
+2 = "My Name is Whirl"
+3 = "Jeanie (n 2), 54" # the frnn updates itself
+
+
+[[references]]
+id = "jeanie"
+type = "book"
+title = 'Jeanie'
+[[references]]
+id = "whirl"
+type = "book"
+title = 'Whirligig'
+[[references]]
+id = "other"
+type = "book"
+title = 'The Canada Geese are at it again'
+
+[style]
+csl = """
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+  <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+  <citation>
+    <layout>
+      <group delimiter=" ">
+        <group delimiter=",">
+          <choose>
+            <if position="ibid">
+              <text value="ibid" />
+            </if>
+            <else-if position="first subsequent">
+              <text variable="title" />
+              <text prefix="(" variable="first-reference-note-number" suffix=")" />
+            </else-if>
+          </choose>
+          <text variable="locator" />
+        </group>
+      </group>
+    </layout>
+  </citation>
+</style>
+"""
+
+# [style.locales]
+# en-AU = ""

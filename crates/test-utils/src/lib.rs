@@ -7,6 +7,8 @@
 #[macro_use]
 extern crate serde_derive;
 
+pub mod toml;
+
 use citeproc::prelude::*;
 use citeproc_io::{
     Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
@@ -85,7 +87,7 @@ enum ResultKind {
 #[derive(Debug, PartialEq)]
 struct CiteResult {
     kind: ResultKind,
-    note_number: u32,
+    note: u32,
     text: String,
 }
 #[derive(Debug, PartialEq)]
@@ -121,7 +123,7 @@ impl FromStr for Results {
         fn total(inp: &str) -> IResult<&str, CiteResult> {
             map(tuple((dots, num, formatted)), |(k, n, f)| CiteResult {
                 kind: k,
-                note_number: n,
+                note: n,
                 text: String::from(f),
             })(inp)
         }
@@ -232,11 +234,11 @@ impl JsExecutor<'_> {
         let mut results = Vec::<CiteResult>::new();
         for (id, text) in updates.clusters {
             mod_clusters.insert(id, true);
-            let &note_number = self.current_note_numbers.get(&id).unwrap();
+            let &note = self.current_note_numbers.get(&id).unwrap();
             let text = (*text).clone();
             results.push(CiteResult {
                 kind: ResultKind::Arrows,
-                note_number,
+                note,
                 text,
             })
         }
@@ -244,15 +246,15 @@ impl JsExecutor<'_> {
             if mod_clusters.contains_key(&id) {
                 continue;
             }
-            let &note_number = self.current_note_numbers.get(&id).unwrap();
+            let &note = self.current_note_numbers.get(&id).unwrap();
             let text = (*self.proc.get_cluster(id)).clone();
             results.push(CiteResult {
                 kind: ResultKind::Dots,
-                note_number,
+                note,
                 text,
             })
         }
-        results.sort_by_key(|x| x.note_number);
+        results.sort_by_key(|x| x.note);
         results
     }
 
@@ -268,11 +270,7 @@ impl JsExecutor<'_> {
             output.push_str("[");
             output.push_str(&format!(
                 "{}",
-                if res.note_number == 0 {
-                    n as u32
-                } else {
-                    res.note_number
-                }
+                if res.note == 0 { n as u32 } else { res.note }
             ));
             output.push_str("] ");
             output.push_str(&res.text);
@@ -288,7 +286,7 @@ impl JsExecutor<'_> {
 
         let Instruction(cite_i, _pre, _post) = instruction;
         let id = self.get_id(&*cite_i.cluster_id);
-        let note_number = cite_i.properties.note_index;
+        let note = cite_i.properties.note_index;
 
         let mut cites = Vec::new();
         for cite_item in cite_i.citation_items.iter() {
@@ -296,9 +294,9 @@ impl JsExecutor<'_> {
             cites.push(cite_item.to_cite(self.n_cite));
             self.n_cite += 1;
         }
-        let cluster = Cluster2 {
+        let cluster = Cluster2::Note {
             id,
-            note_number,
+            note: IntraNote::Single(note),
             cites,
         };
 
@@ -309,30 +307,27 @@ impl JsExecutor<'_> {
             .filter(|&x| x != 0)
             .collect();
 
-        if note_number == 0 {
+        if note == 0 {
             let ix = cite_i.properties.index as usize;
             if ix >= self.zeroes.len() {
                 self.zeroes.push(id);
             } else {
                 self.zeroes.insert(ix, id);
             }
-            self.proc.replace_cluster(cluster);
+            self.proc.insert_cluster(cluster);
         } else if self.current_note_numbers.contains_key(&id) {
-            self.proc.replace_cluster(cluster);
+            self.proc.insert_cluster(cluster);
         } else {
-            let one_after = nonzero_cluster_ids
-                .get(note_number as usize + 1)
-                .map(|&x| x);
+            let one_after = nonzero_cluster_ids.get(note as usize + 1).map(|&x| x);
             nonzero_cluster_ids.insert(0, id);
-            self.proc.insert_cluster(cluster, one_after);
+            self.proc.insert_cluster(cluster);
         }
-        self.current_note_numbers.insert(id, note_number);
+        self.current_note_numbers.insert(id, note);
 
         nonzero_cluster_ids.sort_by_key(|id| *self.current_note_numbers.get(id).unwrap());
         let mut renum = Vec::new();
         for (n, &id) in nonzero_cluster_ids.iter().enumerate() {
-            renum.push(id);
-            renum.push(n as u32 + 1);
+            renum.push((id, ClusterNumber::Note(IntraNote::Single(n as u32))));
             self.current_note_numbers.insert(id, n as u32 + 1);
         }
         self.proc.renumber_clusters(&renum);
@@ -381,6 +376,11 @@ enum Chunk {
 pub enum Mode {
     Citation,
     Bibliography,
+}
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Citation
+    }
 }
 impl<'de> Deserialize<'de> for Mode {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -595,7 +595,7 @@ impl TestCase {
                     }
                     clusters.push(Cluster2::Note {
                         id: n_cluster,
-                        note: ClusterNumber::Note(IntraNote::Single(n_cluster)),
+                        note: IntraNote::Single(n_cluster),
                         cites,
                     });
                     n_cluster += 1;
@@ -609,7 +609,7 @@ impl TestCase {
                 }
                 clusters.push(Cluster2::Note {
                     id: 1,
-                    note: ClusterNumber::Note(IntraNote::Single(1)),
+                    note: IntraNote::Single(1),
                     cites,
                 });
             }
@@ -618,7 +618,7 @@ impl TestCase {
             proc.init_clusters(clusters.clone());
             let mut pushed = false;
             for cluster in clusters.iter() {
-                let html = proc.get_cluster(cluster.id);
+                let html = proc.get_cluster(cluster.id());
                 if pushed {
                     res.push_str("\n");
                 }

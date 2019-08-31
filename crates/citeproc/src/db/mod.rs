@@ -279,7 +279,7 @@ impl Processor {
         self.set_cluster_note_number(id, number);
     }
 
-    pub fn renumber_clusters(&mut self, mappings: Vec<(u32, ClusterNumber)>) {
+    pub fn renumber_clusters(&mut self, mappings: &[(u32, ClusterNumber)]) {
         for chunk in mappings {
             let id = chunk.0;
             let n = chunk.1;

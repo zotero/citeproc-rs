@@ -127,7 +127,7 @@ impl Driver {
     pub fn renumber_clusters(&mut self, mappings: Box<[JsValue]>) -> Result<(), JsValue> {
         let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
         let mut eng = self.engine.borrow_mut();
-        eng.renumber_clusters(mappings);
+        eng.renumber_clusters(&mappings);
         Ok(())
     }
 
