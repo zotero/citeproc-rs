@@ -207,6 +207,7 @@ dependencies = [
 name = "citeproc-proc"
 version = "0.1.0"
 dependencies = [
+ "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cfg-if 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "citeproc-db 0.1.0",
  "citeproc-io 0.1.0",

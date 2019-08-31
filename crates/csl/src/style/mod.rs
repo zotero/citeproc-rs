@@ -313,7 +313,7 @@ impl Default for Plural {
 
 impl IsIndependent for AnyVariable {
     fn is_independent(&self) -> bool {
-        false
+        unimplemented!()
     }
 }
 

@@ -5,18 +5,18 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 #![allow(dead_code)]
-
 use crate::prelude::*;
 use citeproc_io::{Cite, Reference};
 use csl::style::{
     Choose, Cond, CondSet, Conditions, CslType, Element, Formatting, Match, Position, Style,
     TextSource,
 };
-use csl::variables::{AnyVariable, NumberVariable, Variable};
+use csl::variables::{AnyVariable, NumberVariable, StandardVariable, Variable};
 use csl::IsIndependent;
 use fnv::{FnvHashMap, FnvHashSet};
 
 mod finite_automata;
+mod free;
 mod knowledge;
 pub mod old;
 
@@ -25,6 +25,7 @@ use knowledge::Knowledge;
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
 
 pub trait Disambiguation {
+    // fn disambiguation_ir(&self, db: &impl IrDatabase, state: &mut DisambiguationState) -> IrSum<O>;
     // You're gonna need an IrDatabase there
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState);
     fn independent_conds(&self, db: &impl IrDatabase, conds: &mut ConditionStack) {
@@ -314,8 +315,7 @@ macro_rules! style_layout {
                 {}
             </layout>
         </citation>
-    </style>
-        "#,
+    </style>"#,
             $ex
         ))
         .unwrap()

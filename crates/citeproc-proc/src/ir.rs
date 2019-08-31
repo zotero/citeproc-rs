@@ -7,7 +7,8 @@
 use crate::prelude::*;
 
 use csl::style::{
-    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
+    Affixes, BodyDate, Choose, Conditions, Element, Formatting, GivenNameDisambiguationRule,
+    Names as NamesEl,
 };
 use csl::Atom;
 use std::sync::Arc;
@@ -44,11 +45,15 @@ pub enum IR<O: OutputFormat> {
     // the current render
     Names(Arc<NamesEl>, O::Build),
 
-    // a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
-    // or <choose><if><conditions><condition>
-    // Should also include `if variable="year-suffix"` because that could change.
+    /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
+    /// or <choose><if><conditions><condition>
+    /// Should also include `if variable="year-suffix"` because that could change.
     ConditionalDisamb(Arc<Choose>, Box<IR<O>>),
     YearSuffix(YearSuffixHook, O::Build),
+
+    // Instead of creating a whole new IR, this variant like ConditionalDisamb but for Reference-processing.
+    // If the Conditions is satisfied, then the contents are rendered. Simple as that.
+    // Branch(Arc<Conditions>, Box<IR<O>),
 
     // Think:
     // <if disambiguate="true" ...>

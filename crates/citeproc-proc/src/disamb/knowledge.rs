@@ -98,7 +98,7 @@ impl SingleKnowledge {
         Some(folder.map_err(|_| indices))
     }
 
-    /// returns true if pushed
+    /// returns true if actually pushed
     fn push(&mut self, ix: GenerationIndex, m: Maybe) -> bool {
         self.pop_larger_than(ix);
         let poss = self.0.iter().fold(Possibility::Base, Possibility::folder);
