@@ -112,9 +112,10 @@ impl TagParser {
                 }
                 NodeData::Comment { .. } => {}
                 NodeData::Element { .. } => unreachable!(),
-                NodeData::ProcessingInstruction { target, contents } => println!(
-                    "Unknown enum tag: NodeData::ProcessingInstruction {{ {:?} {:?} }}",
-                    target, contents
+                NodeData::ProcessingInstruction { target, contents } => debug!(
+                    // "Unknown enum tag: NodeData::ProcessingInstruction {{ {:?} {:?} }}",
+                    // target, contents
+                    "Unknown enum tag: NodeData::ProcessingInstruction",
                 ),
             }
             for child in handle.children.borrow().iter() {
