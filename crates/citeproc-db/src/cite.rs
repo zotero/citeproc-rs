@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::html::Html;
-use citeproc_io::{Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
+use citeproc_io::{Cite, ClusterId, ClusterNumber, IntraNote, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -36,10 +36,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     /// Equal to `all.intersection(cited U uncited)`
     /// Also represents "the refs that will be in the bibliography if we generate one"
     fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
-
-    // priv
-    #[salsa::input]
-    fn cite(&self, key: CiteId) -> Arc<Cite<Html>>;
 
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
@@ -64,26 +60,36 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 
+    #[salsa::interned]
+    fn cite(&self, cluster: ClusterId, cite: Arc<Cite<Html>>) -> CiteId;
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
 }
 
 macro_rules! intern_key {
-    ($name:ident) => {
-        struct $name(u32);
+    ($vis:vis $name:ident) => {
+        #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+        $vis struct $name(u32);
         impl ::salsa::InternKey for $name {
             fn from_intern_id(v: ::salsa::InternId) -> Self {
                 $name(u32::from(v))
             }
             fn as_intern_id(&self) -> ::salsa::InternId {
-                self.0
+                self.0.into()
             }
         }
     };
 }
 
-// intern_key(Cluster);
+intern_key!(pub CiteId);
+
+impl CiteId {
+    pub fn lookup(&self, db: &impl CiteDatabase) -> Arc<Cite<Html>> {
+        let (_cluster_id, cite) = db.lookup_cite(*self);
+        cite
+    }
+}
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct ClusterData {
@@ -91,21 +97,6 @@ pub struct ClusterData {
     number: ClusterNumber,
     cites: Arc<Vec<CiteId>>,
 }
-
-// impl ClusterData {
-//     fn from_io(db: &impl CiteDatabase, cluster: &citeproc_io::Cluster) {
-//         ClusterData {
-//             number: cluster.note_number,
-//             cites: db.cites(Arc::new(cluster.cites)),
-//         }
-//     }
-//     fn from_io2(db: &impl CiteDatabase, cluster: &citeproc_io::Cluster2) {
-//         ClusterData {
-//             number: cluster.cluster_number(),
-//             cites: db.cites(Arc::new(cluster.cites)),
-//         }
-//     }
-// }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     if db.all_keys().contains(&key) {
@@ -116,7 +107,7 @@ fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
 }
 
 fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
-    let cite = db.cite(id);
+    let cite = id.lookup(db);
     let refr = db.reference(cite.ref_id.clone());
     refr.and_then(|r| r.language.clone())
         .map(|l| db.merged_locale(l))
@@ -136,7 +127,7 @@ fn cited_keys(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
     let mut keys = HashSet::new();
     let all_cite_ids = db.all_cite_ids();
     for &id in all_cite_ids.iter() {
-        keys.insert(db.cite(id).ref_id.clone());
+        keys.insert(id.lookup(db).ref_id.clone());
     }
     // make sure there are no keys we wouldn't recognise
     let merged = all.intersection(&keys).cloned().collect();
@@ -177,7 +168,6 @@ fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
 fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
-    let cluster_ids = db.cluster_ids();
     let clusters = db.clusters_sorted();
 
     let mut map = FnvHashMap::default();
@@ -189,12 +179,12 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
 
     for (i, cluster) in clusters.iter().enumerate() {
         for (j, &cite_id) in cluster.cites.iter().enumerate() {
-            let cite = db.cite(cite_id);
+            let cite = cite_id.lookup(db);
             let prev_cite = cluster
                 .cites
-                // 0 - 1 == u32::MAX is never going to come up with anything
+                // 0 - 1 == usize::MAX is never going to come up with anything
                 .get(j.wrapping_sub(1))
-                .map(|&prev_id| db.cite(prev_id));
+                .map(|&prev_id| prev_id.lookup(db));
             let matching_prev = prev_cite
                 .filter(|p| p.ref_id == cite.ref_id)
                 .or_else(|| {
@@ -203,10 +193,10 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                             && prev_cluster
                                 .cites
                                 .iter()
-                                .all(|&pid| db.cite(pid).ref_id == cite.ref_id)
+                                .all(|&pid| &pid.lookup(db).ref_id == &cite.ref_id)
                         {
                             // Pick the last one to match locators against
-                            prev_cluster.cites.last().map(|&pid| db.cite(pid))
+                            prev_cluster.cites.last().map(|&pid| pid.lookup(db))
                         } else {
                             None
                         }
@@ -258,7 +248,7 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
     if let Some(x) = db.cite_positions().get(&key) {
         return x.clone();
     } else {
-        panic!("called cite_position on unknown cite id, {}", key);
+        panic!("called cite_position on unknown cite id, {:?}", key);
     }
 }
 
@@ -320,7 +310,7 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
     let all_cite_ids = db.all_cite_ids();
     let mut i = 1;
     for &id in all_cite_ids.iter() {
-        let ref_id = &db.cite(id).ref_id;
+        let ref_id = &id.lookup(db).ref_id;
         if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
             preordered.push(ref_id.clone());
             citation_numbers.insert(ref_id.clone(), i as u32);
@@ -348,10 +338,10 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
 }
 
 fn bib_number(db: &impl CiteDatabase, id: CiteId) -> Option<u32> {
-    let cite = db.cite(id);
+    let cite = id.lookup(db);
     if let Some(abc) = db.sorted_refs() {
-        let (_, ref lookup) = &*abc;
-        lookup.get(&cite.ref_id).cloned()
+        let (_, ref lookup_ref_ids) = &*abc;
+        lookup_ref_ids.get(&cite.ref_id).cloned()
     } else {
         None
     }

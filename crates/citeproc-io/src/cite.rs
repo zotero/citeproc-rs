@@ -9,7 +9,6 @@ use super::{DateOrRange, NumericValue};
 use csl::terms::LocatorType;
 use csl::Atom;
 
-pub type CiteId = u32;
 pub type ClusterId = u32;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
@@ -54,9 +53,6 @@ where
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cite<O: OutputFormat> {
-    #[serde(rename = "citeId")]
-    pub id: CiteId,
-
     #[serde(rename = "id", deserialize_with = "get_ref_id")]
     pub ref_id: Atom,
 
@@ -82,10 +78,22 @@ pub struct Cite<O: OutputFormat> {
     pub locator_date: Option<DateOrRange>,
 }
 
+use std::hash::{Hash, Hasher};
+impl<O: OutputFormat> Hash for Cite<O> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.ref_id.hash(h);
+        self.prefix.hash(h);
+        self.suffix.hash(h);
+        self.suppression.hash(h);
+        self.locators.hash(h);
+        self.locator_extra.hash(h);
+        self.locator_date.hash(h);
+    }
+}
+
 impl<O: OutputFormat> Cite<O> {
-    pub fn basic(id: CiteId, ref_id: impl Into<Atom>) -> Self {
+    pub fn basic(_old: u32, ref_id: impl Into<Atom>) -> Self {
         Cite {
-            id,
             ref_id: ref_id.into(),
             prefix: Default::default(),
             suffix: Default::default(),
