@@ -72,14 +72,14 @@ fn aglc() -> String {
 // }
 
 fn bench_ir_gen<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic(0, "ok");
+    let cite = Cite::basic("ok");
     let refr = common_reference();
     let driver = Driver::new(style, formatter).unwrap();
     b.iter(move || driver.pair(&cite, &refr))
 }
 
 fn bench_ir_gen_multi<O: OutputFormat>(b: &mut Bencher, style: &str, formatter: &O) {
-    let cite = Cite::basic(0, "ok");
+    let cite = Cite::basic("ok");
     let refr = common_reference();
     let pairs: Vec<_> = std::iter::repeat((&cite, &refr)).take(40).collect();
     let driver = Driver::new(style, formatter).unwrap();

@@ -203,7 +203,7 @@ impl Processor {
     //     };
     //     let ctx = CiteContext {
     //         reference: &refr,
-    //         cite: &Cite::basic(0, "ok"),
+    //         cite: &Cite::basic("ok"),
     //         position: Position::First,
     //         format: Html::default(),
     //         citation_number: 1,

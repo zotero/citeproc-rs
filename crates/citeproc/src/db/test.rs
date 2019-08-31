@@ -24,17 +24,19 @@ mod position {
             Cluster2::Note {
                 id: 1,
                 note: IntraNote::Single(1),
-                cites: vec![Cite::basic(1, "one")],
+                cites: vec![Cite::basic("one")],
             },
             Cluster2::Note {
                 id: 2,
                 note: IntraNote::Single(2),
-                cites: vec![Cite::basic(2, "one")],
+                cites: vec![Cite::basic("one")],
             },
         ]);
         let poss = db.cite_positions();
-        assert_eq!(poss[&1], (Position::First, None));
-        assert_eq!(poss[&2], (Position::Ibid, Some(1)));
+        let id1 = db.cluster_cites(1)[0];
+        let id2 = db.cluster_cites(2)[0];
+        assert_eq!(poss[&id1], (Position::First, None));
+        assert_eq!(poss[&id2], (Position::Ibid, Some(1)));
     }
 
     #[test]
@@ -44,23 +46,27 @@ mod position {
             Cluster2::Note {
                 id: 1,
                 note: IntraNote::Single(1),
-                cites: vec![Cite::basic(1, "one")],
+                cites: vec![Cite::basic("one")],
             },
             Cluster2::Note {
                 id: 2,
                 note: IntraNote::Single(2),
-                cites: vec![Cite::basic(2, "other")],
+                cites: vec![Cite::basic("other")],
             },
             Cluster2::Note {
                 id: 3,
                 note: IntraNote::Single(3),
-                cites: vec![Cite::basic(3, "one")],
+                cites: vec![Cite::basic("one")],
             },
         ]);
+        use citeproc_db::CiteDatabase;
         let poss = db.cite_positions();
-        assert_eq!(poss[&1], (Position::First, None));
-        assert_eq!(poss[&2], (Position::First, None));
-        assert_eq!(poss[&3], (Position::NearNote, Some(1)));
+        let id1 = db.cluster_cites(1)[0];
+        let id2 = db.cluster_cites(2)[0];
+        let id3 = db.cluster_cites(3)[0];
+        assert_eq!(poss[&id1], (Position::First, None));
+        assert_eq!(poss[&id2], (Position::First, None));
+        assert_eq!(poss[&id3], (Position::NearNote, Some(1)));
     }
 }
 

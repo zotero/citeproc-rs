@@ -10,8 +10,8 @@ format = "html"
 # start with two
 [[instructions]]
 clusters = [
-  { id = 1, note = 5, cites = [{ citeId = 1, id = "jeanie" }] },
-  { id = 2, note = 6, cites = [{ citeId = 2, id = "whirl" }] },
+  { id = 1, note = 5, cites = [{ id = "jeanie" }] },
+  { id = 2, note = 6, cites = [{ id = "whirl" }] },
 ]
 [instructions.now]
 1 = "Jeanie"
@@ -21,7 +21,7 @@ clusters = [
 # insert a subsequent reference
 [[instructions]]
 clusters = [
-  { id = 3, note = 7, cites = [{ citeId = 3, id = "jeanie", locator = "54", label = "page" }] },
+  { id = 3, note = 7, cites = [{ id = "jeanie", locator = "54", label = "page" }] },
 ]
 [[instructions.refs]]
 id = "whirl"
@@ -36,7 +36,7 @@ title = 'My Name is Whirl'
 # put a different one one before everything
 [[instructions]]
 clusters = [
-  { id = 4, note = 2, cites = [{ citeId = 4, id = "other" }] },
+  { id = 4, note = 2, cites = [{ id = "other" }] },
 ]
 [instructions.now]
 4 = "The Canada Geese are at it again"

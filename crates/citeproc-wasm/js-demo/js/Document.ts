@@ -38,7 +38,6 @@ export class RenderedDocument {
 }
 
 type NonNumberedCluster = Omit<NoteCluster, "note">;
-type UnidentifiedCite = Omit<Cite, "citeId">;
 
 /**
  * A Document wraps the Driver API and stores its own copy of the cite clusters.
@@ -103,16 +102,10 @@ export class Document {
     // Clusters //
     //////////////
 
-    createCite(_cite: UnidentifiedCite): Cite {
-        let cite = _cite as Cite;
-        cite.citeId = this.nextCiteId++;
-        return cite;
-    }
-
-    createCluster(cites: UnidentifiedCite[]): NonNumberedCluster {
+    createCluster(cites: Cite[]): NonNumberedCluster {
         return {
             id: this.nextClusterId++,
-            cites: cites.map(c => this.createCite(c))
+            cites: cites,
         };
     }
 
@@ -170,7 +163,6 @@ export class Document {
                 arr.push([cl.id, { note: cl.note }]);
             }
             this.driver.insertCluster(cluster);
-            console.log(arr);
             this.driver.renumberClusters(arr)
         } else {
             if (this.clusters.length > 0) {

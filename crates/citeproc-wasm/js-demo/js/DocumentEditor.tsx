@@ -47,10 +47,10 @@ const ClusterViewer = React.memo(({note, html, touched}: { note: number | [numbe
 
 const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: NoteCluster, removeCluster: () => void, updateCluster: (cluster: NoteCluster) => void}) => {
     let [me, setMe] = useState(cluster);
-    let editors = cluster.cites.map((cite: Cite) => {
-        return <CiteEditor key={cite.citeId} cite={cite} update={ c => {
+    let editors = cluster.cites.map((cite: Cite, i) => {
+        return <CiteEditor key={i} cite={cite} update={ c => {
             let cites = me.cites.slice(0) as Cite[];
-            cites[cites.findIndex(x => x.citeId === c.citeId)] = c;
+            cites[i] = c;
             let _me = { ...me, cites };
             setMe(_me);
             updateCluster(_me);

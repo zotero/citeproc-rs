@@ -92,7 +92,7 @@ impl<O: OutputFormat> Hash for Cite<O> {
 }
 
 impl<O: OutputFormat> Cite<O> {
-    pub fn basic(_old: u32, ref_id: impl Into<Atom>) -> Self {
+    pub fn basic(ref_id: impl Into<Atom>) -> Self {
         Cite {
             ref_id: ref_id.into(),
             prefix: Default::default(),

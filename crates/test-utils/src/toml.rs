@@ -6,7 +6,7 @@
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
+    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
     Suppression,
 };
 use csl::locale::Lang;

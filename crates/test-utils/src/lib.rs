@@ -11,7 +11,7 @@ pub mod toml;
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, CiteId, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
+    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
     Suppression,
 };
 use csl::locale::Lang;
@@ -53,9 +53,8 @@ struct CitationItem {
 }
 
 impl CitationItem {
-    fn to_cite(&self, n: u32) -> Cite<Html> {
+    fn to_cite(&self) -> Cite<Html> {
         Cite {
-            id: n,
             ref_id: csl::Atom::from(self.id.as_str()),
             prefix: self.prefix.clone(),
             suffix: self.suffix.clone(),
@@ -202,7 +201,6 @@ struct JsExecutor<'a> {
     zeroes: Vec<ClusterId>,
     proc: &'a mut Processor,
     next_id: ClusterId,
-    n_cite: CiteId,
 }
 
 impl JsExecutor<'_> {
@@ -212,7 +210,6 @@ impl JsExecutor<'_> {
             current_note_numbers: HashMap::new(),
             proc,
             next_id: 1,
-            n_cite: 1,
             zeroes: Vec::new(),
         }
     }
@@ -290,9 +287,7 @@ impl JsExecutor<'_> {
 
         let mut cites = Vec::new();
         for cite_item in cite_i.citation_items.iter() {
-            // TODO: technically this is not reusing (?) n_cite as it should be doing
-            cites.push(cite_item.to_cite(self.n_cite));
-            self.n_cite += 1;
+            cites.push(cite_item.to_cite());
         }
         let cluster = Cluster2::Note {
             id,
@@ -586,12 +581,10 @@ impl TestCase {
         } else {
             if let Some(ref citation_items) = &self.citation_items {
                 let mut n_cluster = 1u32;
-                let mut n_cite = 1u32;
                 for clus in citation_items {
                     let mut cites = Vec::new();
                     for cite_item in clus.iter() {
-                        cites.push(cite_item.to_cite(n_cite));
-                        n_cite += 1;
+                        cites.push(cite_item.to_cite());
                     }
                     clusters.push(Cluster2::Note {
                         id: n_cluster,
@@ -603,9 +596,8 @@ impl TestCase {
             } else {
                 let mut cites = Vec::new();
                 // TODO: assemble cites/clusters the other few available ways
-                for (n, refr) in self.input.iter().enumerate() {
-                    let n = n as u32;
-                    cites.push(Cite::basic(n, &refr.id));
+                for refr in self.input.iter() {
+                    cites.push(Cite::basic(&refr.id));
                 }
                 clusters.push(Cluster2::Note {
                     id: 1,

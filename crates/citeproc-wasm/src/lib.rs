@@ -212,7 +212,6 @@ export type DateOrRange = DateLiteral | DateRaw | DateParts;
 export type Locator = [string, string];
 
 export type Cite<Affix = string> = {
-    citeId: number;
     id: string;
     prefix?: Affix;
     suffix?: Affix;

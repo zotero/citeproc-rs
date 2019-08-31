@@ -209,7 +209,7 @@ fn main() {
                 db.init_clusters(vec![citeproc::input::Cluster {
                     id: 0,
                     note_number: 1,
-                    cites: vec![citeproc::input::Cite::basic(0, key)],
+                    cites: vec![citeproc::input::Cite::basic(key)],
                 }]);
                 db.set_references(refs);
 
