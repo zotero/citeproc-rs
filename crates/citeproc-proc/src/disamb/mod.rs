@@ -62,6 +62,7 @@
 
 #![allow(dead_code)]
 use crate::prelude::*;
+use citeproc_io::output::html::Html;
 use citeproc_io::{Cite, Reference};
 use csl::style::{
     Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Position, Style, TextSource,
@@ -76,20 +77,32 @@ pub mod old;
 #[cfg(test)]
 mod test;
 
+use free::FreeCondSets;
 use knowledge::Knowledge;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
 
-pub trait Disambiguation {
+fn create_ref_ir<O: OutputFormat>(db: &impl IrDatabase, refr: &Reference) -> RefIR<O> {
+    let style = db.style();
+    unimplemented!()
+}
+
+pub trait Disambiguation<O: OutputFormat = Html> {
+    fn get_free_conds(&self, db: &impl IrDatabase, knowledge: &mut Knowledge) -> FreeCondSets {
+        unimplemented!()
+    }
+}
+
+pub trait DisambiguationOld<O: OutputFormat = Html> {
     // fn disambiguation_ir(&self, db: &impl IrDatabase, state: &mut DisambiguationState) -> IrSum<O>;
     // You're gonna need an IrDatabase there
-    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState);
+    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {}
     fn independent_conds(&self, db: &impl IrDatabase, conds: &mut ConditionStack) {
         // most elements don't contain conditionals
     }
 }
 
-impl Disambiguation for Style {
+impl DisambiguationOld for Style {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
         // XXX: include layout parts?
         for el in &self.citation.layout.elements {
@@ -140,7 +153,7 @@ impl From<&Reference> for ConditionStack {
     }
 }
 
-impl Disambiguation for CondSet {
+impl DisambiguationOld for CondSet {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
         match self.match_type {
             Match::Any => {
@@ -188,7 +201,7 @@ impl Disambiguation for CondSet {
     }
 }
 
-impl Disambiguation for Conditions {
+impl DisambiguationOld for Conditions {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
         // TODO(CSL-M): handle other match modes than ALL
         for cond_set in &self.1 {
@@ -204,7 +217,7 @@ impl Disambiguation for Conditions {
     }
 }
 
-impl Disambiguation for Choose {
+impl DisambiguationOld for Choose {
     fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
         let &Choose(ref ift, ref elifs, ref elset) = self;
         state.knowledge.push();
@@ -250,7 +263,7 @@ impl Disambiguation for Choose {
     }
 }
 
-impl Disambiguation for Element {
+impl DisambiguationOld for Element {
     fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
         // let mut output = FnvHashSet::default();
         match self {
@@ -299,8 +312,6 @@ impl Disambiguation for Element {
         }
     }
 }
-
-use citeproc_io::output::html::Html;
 
 pub struct DisambiguationState<'c> {
     knowledge: Knowledge,

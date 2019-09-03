@@ -6,6 +6,7 @@
 
 use crate::disamb::Edge;
 use crate::prelude::*;
+use citeproc_io::output::html::Html;
 use csl::style::{
     Affixes, BodyDate, Choose, Conditions, Element, Formatting, GivenNameDisambiguationRule,
     Names as NamesEl,
@@ -38,7 +39,7 @@ pub enum YearSuffixHook {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RefIR<O: OutputFormat> {
+pub enum RefIR<O: OutputFormat = Html> {
     /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
     /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
     ///

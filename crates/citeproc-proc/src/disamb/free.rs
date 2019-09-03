@@ -4,36 +4,110 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use crate::prelude::fnv_set_with_cap;
 use csl::style::{Cond, Position};
+use csl::style::{CondSet, Conditions, Match};
+use csl::terms::LocatorType;
 use csl::variables::{AnyVariable, NumberVariable, Variable};
 use fnv::FnvHashSet;
 
 bitflags::bitflags! {
     /// A convenient enum of the only conds that can actually change between cites
-    struct FreeCond: u32 {
-        const YEAR_SUFFIX        = 0b0000000000000001;
-        const YEAR_SUFFIX_FALSE   = 0b0000000000000010;
-        const LOCATOR           = 0b0000000000000100;
-        const LOCATOR_FALSE      = 0b0000000000001000;
-        const IBID              = 0b0000000000010000;
-        const IBID_FALSE         = 0b0000000000100000;
-        const NEAR_NOTE          = 0b0000000001000000;
-        const NEAR_NOTE_FALSE     = 0b0000000010000000;
-        const FAR_NOTE           = 0b0000000100000000;
-        const FAR_NOTE_FALSE      = 0b0000001000000000;
-        const IBID_WITH_LOCATOR      = 0b0000010000000000;
-        const IBID_WITH_LOCATOR_FALSE = 0b0000100000000000;
-        const SUBSEQUENT        = 0b0001000000000000; // Cool: FRNN = SUBSEQUENT.
-        const SUBSEQUENT_FALSE   = 0b0010000000000000;
-        const FIRST             = 0b0100000000000000;
-        const FIRST_FALSE        = 0b1000000000000000;
+    pub struct FreeCond: u64 {
+        const YEAR_SUFFIX        = 1;
+        const YEAR_SUFFIX_FALSE   = 1 << 1;
+
+        const FIRST             = 1 << 2;
+        const FIRST_FALSE        = 1 << 3;
+        const IBID              = 1 << 4;
+        const IBID_FALSE         = 1 << 5;
+        const NEAR_NOTE          = 1 << 6;
+        const NEAR_NOTE_FALSE     = 1 << 7;
+        const FAR_NOTE           = 1 << 8;
+        const FAR_NOTE_FALSE      = 1 << 9;
+        const IBID_WITH_LOCATOR      = 1 << 10;
+        const IBID_WITH_LOCATOR_FALSE = 1 << 11;
+        const SUBSEQUENT        = 1 << 12; // Cool: FRNN = SUBSEQUENT.
+        const SUBSEQUENT_FALSE   = 1 << 13;
+
+        const LOCATOR           = 1 << 14;
+        const LOCATOR_FALSE      = 1 << 15;
+
+        const LT_BOOK               = 1 << 16;
+        const LT_BOOK_FALSE         = 1 << 17;
+        const LT_CHAPTER        = 1 << 18;
+        const LT_CHAPTER_FALSE  = 1 << 19;
+        const LT_COLUMN     = 1 << 20;
+        const LT_COLUMN_FALSE = 1 << 21;
+        const LT_FIGURE     = 1 << 22;
+        const LT_FIGURE_FALSE = 1 << 23;
+        const LT_FOLIO  = 1 << 24;
+        const LT_FOLIO_FALSE = 1 << 25;
+        const LT_ISSUE  = 1 << 26;
+        const LT_ISSUE_FALSE = 1 << 27;
+        const LT_LINE   = 1 << 28;
+        const LT_LINE_FALSE = 1 << 29;
+        const LT_NOTE   = 1 << 30;
+        const LT_NOTE_FALSE = 1 << 31;
+        const LT_OPUS   = 1 << 32;
+        const LT_OPUS_FALSE = 1 << 33;
+        const LT_PAGE   = 1 << 34;
+        const LT_PAGE_FALSE = 1 << 35;
+        const LT_PARAGRAPH  = 1 << 36;
+        const LT_PARAGRAPH_FALSE = 1 << 37;
+        const LT_PART   = 1 << 38;
+        const LT_PART_FALSE = 1 << 39;
+        const LT_SECTION     = 1 << 40;
+        const LT_SECTION_FALSE = 1 << 41;
+        const LT_SUBVERBO   = 1 << 41;
+        const LT_SUBVERBO_FALSE = 1 << 43;
+        const LT_VERSE  = 1 << 44;
+        const LT_VERSE_FALSE = 1 << 45;
+        const LT_VOLUME     = 1 << 46;
+        const LT_VOLUME_FALSE = 1 << 47;
+
+        // TODO(CSL-M): enable these
+
+        // const LT_ARTICLE    = 1 << 48;
+        // const LT_ARTICLE_FALSE1 << 49;
+        // const LT_SUBPARAGRAPH   = 1 << 50;
+        // const LT_SUBPARAGRAPH_FALSE << 51;
+        // const LT_RULE   = 1 << 52;
+        // const LT_RULE_FALSE << 53;
+        // const LT_SUBSECTION     = 1 << 54;
+        // const LT_SUBSECTION_FALSE 1 << 55;
+        // const LT_SCHEDULE   = 1 << 56;
+        // const LT_SCHEDULE_FALSE << 57;
+        // const LT_TITLE  = 1 << 58;
+        // const LT_TITLE_FALSE<< 59;
+        // const LT_SUPPLEMENT     = 1 << 60;
+        // const LT_SUPPLEMENT_FALSE 1 << 61;
 
         // No disambiguate, because you can't use this to do any more disambiguation, so unhelpful.
     }
 }
 
+static LT_MASK: FreeCond = FreeCond::from_bits_truncate(std::u64::MAX << 16);
+static LT_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA << 16);
+static LT_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555 << 16);
+
+#[test]
+fn test_lt_mask() {
+    assert!(LT_MASK.contains(FreeCond::LT_VOLUME_FALSE));
+    assert!(LT_MASK.contains(FreeCond::LT_VOLUME));
+    assert!(LT_MASK.contains(FreeCond::LT_BOOK));
+    assert!(!LT_MASK.contains(FreeCond::LOCATOR));
+    assert!(!LT_MASK.contains(FreeCond::LOCATOR_FALSE));
+    assert!(LT_MASK_TRUE.contains(FreeCond::LT_PAGE));
+    assert!(LT_MASK_TRUE.contains(FreeCond::LT_VOLUME));
+    assert!(!LT_MASK_TRUE.contains(FreeCond::LT_VOLUME_FALSE));
+    assert!(LT_MASK_FALSE.contains(FreeCond::LT_VOLUME_FALSE));
+    assert!(LT_MASK_FALSE.contains(FreeCond::LT_PAGE_FALSE));
+    assert!(!LT_MASK_FALSE.contains(FreeCond::LT_PAGE));
+}
+
 impl FreeCond {
-    fn is_incompatible(self) -> bool {
+    pub fn is_incompatible(self) -> bool {
         lazy_static::lazy_static! {
             static ref INCOMPAT: Vec<FreeCond> = vec![
                 FreeCond::IBID | FreeCond::NEAR_NOTE,
@@ -61,8 +135,14 @@ impl FreeCond {
                     | FreeCond::IBID_WITH_LOCATOR_FALSE,
             ];
         }
+        if self.intersects(LT_MASK_TRUE) && self.contains(FreeCond::LOCATOR_FALSE) {
+            return true;
+        }
+        if (self & LT_MASK_TRUE).bits().count_ones() > 0 {
+            return true;
+        }
         for &x in INCOMPAT.iter() {
-            if self & x == x {
+            if self.contains(x) {
                 return true;
             }
         }
@@ -92,6 +172,9 @@ impl FreeCond {
             if self & FreeCond::FIRST != FreeCond::empty() {
                 self = self | FreeCond::SUBSEQUENT_FALSE;
             }
+            if self.intersects(LT_MASK) {
+                self = self | FreeCond::LOCATOR;
+            }
             // ugh what a pain
         }
         self
@@ -100,7 +183,6 @@ impl FreeCond {
 
 fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
     let x = match c {
-        Cond::Locator(_) => (FreeCond::LOCATOR, FreeCond::LOCATOR_FALSE),
         Cond::Position(p) => match p {
             Position::Ibid => (FreeCond::IBID, FreeCond::IBID_FALSE),
             Position::IbidWithLocator => (
@@ -127,6 +209,34 @@ fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
                 _ => return None,
             }
         }
+        Cond::Locator(lt) => match lt {
+            LocatorType::Book => (FreeCond::LT_BOOK, FreeCond::LT_BOOK_FALSE),
+            LocatorType::Chapter => (FreeCond::LT_CHAPTER, FreeCond::LT_CHAPTER_FALSE),
+            LocatorType::Column => (FreeCond::LT_COLUMN, FreeCond::LT_COLUMN_FALSE),
+            LocatorType::Figure => (FreeCond::LT_FIGURE, FreeCond::LT_FIGURE_FALSE),
+            LocatorType::Folio => (FreeCond::LT_FOLIO, FreeCond::LT_FOLIO_FALSE),
+            LocatorType::Issue => (FreeCond::LT_ISSUE, FreeCond::LT_ISSUE_FALSE),
+            LocatorType::Line => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            LocatorType::Note => (FreeCond::LT_NOTE, FreeCond::LT_NOTE_FALSE),
+            LocatorType::Opus => (FreeCond::LT_OPUS, FreeCond::LT_OPUS_FALSE),
+            LocatorType::Page => (FreeCond::LT_PAGE, FreeCond::LT_PAGE_FALSE),
+            LocatorType::Paragraph => (FreeCond::LT_PARAGRAPH, FreeCond::LT_PARAGRAPH_FALSE),
+            LocatorType::Part => (FreeCond::LT_PART, FreeCond::LT_PART_FALSE),
+            LocatorType::Section => (FreeCond::LT_SECTION, FreeCond::LT_SECTION_FALSE),
+            LocatorType::SubVerbo => (FreeCond::LT_SUBVERBO, FreeCond::LT_SUBVERBO_FALSE),
+            LocatorType::Verse => (FreeCond::LT_VERSE, FreeCond::LT_VERSE_FALSE),
+            LocatorType::Volume => (FreeCond::LT_VOLUME, FreeCond::LT_VOLUME_FALSE),
+            _ => unimplemented!("CSL-M locator types")
+
+            // TODO(CSL-M) enable
+            // Article => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Subparagraph => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Rule => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Subsection => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Schedule => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Title => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+            // Supplement => (FreeCond::LT_LINE, FreeCond::LT_LINE_FALSE),
+        },
         _ => return None,
     };
     Some(x)
@@ -139,15 +249,14 @@ fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
 /// Being made of bitflags, it is probably faster than constructing a whole knowledge database
 /// again.
 #[derive(Default, Debug, PartialEq)]
-struct FreeSets(FnvHashSet<FreeCond>);
+pub struct FreeCondSets(pub FnvHashSet<FreeCond>);
 
-impl FreeSets {
-    fn keep_compatible(&mut self) {
+impl FreeCondSets {
+    pub fn keep_compatible(&mut self) {
         self.0.retain(|&x| !x.is_incompatible());
     }
-    fn cross_product(&mut self, other: Self) {
-        let mut neu =
-            FnvHashSet::with_capacity_and_hasher(self.0.len(), fnv::FnvBuildHasher::default());
+    pub fn cross_product(&mut self, other: Self) {
+        let mut neu = fnv_set_with_cap(self.0.len());
         for &oth in other.0.iter() {
             for &set in self.0.iter() {
                 let x = set | oth;
@@ -158,15 +267,29 @@ impl FreeSets {
         }
         self.0 = neu;
     }
-    fn scalar_multiply(&mut self, k: Cond, assumed_k_to_be: bool) {
+    fn add_k_alone(neu: &mut FnvHashSet<FreeCond>, k: Cond, assumed_k_to_be: bool) {
         if let Some((a, neg_a)) = cond_to_frees(&k) {
-            let mut neu =
-                FnvHashSet::with_capacity_and_hasher(self.0.len(), fnv::FnvBuildHasher::default());
             if assumed_k_to_be == true {
                 neu.insert(neg_a);
             } else {
                 neu.insert(a);
             }
+        }
+    }
+    pub fn scalar_multiply(&self, a: FreeCond) -> Self {
+        let mut neu = fnv_set_with_cap(self.0.len());
+        for set in self.0.iter() {
+            let x = (*set | a).imply();
+            if !x.is_incompatible() {
+                neu.insert(x);
+            }
+        }
+        FreeCondSets(neu)
+    }
+    pub fn scalar_multiply_cond(&mut self, k: Cond, assumed_k_to_be: bool) {
+        if let Some((a, neg_a)) = cond_to_frees(&k) {
+            let mut neu = fnv_set_with_cap(self.0.len());
+            FreeCondSets::add_k_alone(&mut neu, k, assumed_k_to_be);
             for set in self.0.iter() {
                 if assumed_k_to_be == true {
                     let x = (*set | a).imply();
@@ -184,20 +307,171 @@ impl FreeSets {
             self.0 = neu;
         }
     }
-    pub fn all_that_comma_assuming(&mut self, k: (Cond, bool)) {
-        self.scalar_multiply(k.0, k.1);
+    pub fn all_that_assuming(&mut self, k: (Cond, bool)) {
+        self.scalar_multiply_cond(k.0, k.1);
     }
+    pub fn all_branches(
+        cond_results: impl Iterator<Item = (CondSet, Self)>,
+        else_result: Option<Self>,
+    ) -> Self {
+        let mut all = FnvHashSet::default();
+        for (cond_set, inner) in cond_results {
+            let mut outer = condset_to_frees(&cond_set, inner);
+            all.extend(outer.0.drain());
+        }
+        if let Some(mut else_result) = else_result {
+            all.extend(else_result.0.drain());
+        }
+        FreeCondSets(all)
+    }
+    pub fn insert_validated(&mut self, a: FreeCond) {
+        if !a.is_incompatible() {
+            self.0.insert(a);
+        }
+    }
+}
+
+fn condset_to_frees(c: &CondSet, inner: FreeCondSets) -> FreeCondSets {
+    let conds = &c.conds;
+    match c.match_type {
+        Match::None => {
+            // Any of these being true would kill the None matcher and cause no output from
+            // this branch. Each must be false.
+            // That means we multiply the inner result by ALL of them at once
+            let all_false: FreeCond = conds
+                .iter()
+                .filter_map(cond_to_frees)
+                .map(|(_a, neg_a)| neg_a)
+                .collect();
+            let mut outer = inner.scalar_multiply(all_false);
+            get_any_outside(conds, &mut outer.0);
+            outer
+        }
+        Match::All => {
+            // Similarly, collect all these frees in one and multiply by the lot
+            let all: FreeCond = conds
+                .iter()
+                .filter_map(cond_to_frees)
+                .map(|(a, _neg_a)| a)
+                .collect();
+            let all_false: FreeCond = conds
+                .iter()
+                .filter_map(cond_to_frees)
+                .map(|(_a, neg_a)| neg_a)
+                .collect();
+            let mut outer = inner.scalar_multiply(all);
+            outer.insert_validated(all_false);
+            outer
+        }
+        // XXX: Not sure of the correct impl here
+        Match::Any => {
+            let any = get_any_multiplied(conds, &inner);
+            // for when none of these frees were true, but some other cond was true
+            let all_false: FreeCond = conds
+                .iter()
+                .filter_map(cond_to_frees)
+                .map(|(_a, neg_a)| neg_a)
+                .collect();
+            let mut all = FreeCondSets(any);
+            all.insert_validated(all_false);
+            all
+        }
+        // Completely Untested
+        Match::Nand => {
+            // _exactly one_ of them is true
+            // So negate the rest, for each
+            let vec: Vec<_> = conds
+                .iter()
+                .filter_map(cond_to_frees)
+                .map(|(a, _neg_a)| a)
+                .collect();
+            let mut all = fnv_set_with_cap(inner.0.len());
+            for each in vec {
+                let rest: FreeCond = conds
+                    .iter()
+                    .filter_map(cond_to_frees)
+                    .filter_map(|(a, neg_a)| if a != each { Some(neg_a) } else { None })
+                    .collect();
+                all.extend(inner.scalar_multiply(rest | each).0.drain());
+            }
+            FreeCondSets(all)
+        }
+    }
+}
+
+fn get_any_outside(conds: &FnvHashSet<Cond>, outside: &mut FnvHashSet<FreeCond>) {
+    use itertools::Itertools;
+    let vec: Vec<_> = conds
+        .iter()
+        .filter_map(cond_to_frees)
+        .map(|(a, _neg_a)| a)
+        .collect();
+    for i in 1..=vec.len() {
+        let iter = vec
+            .iter()
+            .cloned()
+            .combinations(i)
+            .map(|fc_vec| fc_vec.into_iter().collect::<FreeCond>())
+            .filter_map(|mut fc| {
+                for (a, neg_a) in conds.iter().filter_map(cond_to_frees) {
+                    if !fc.contains(a) {
+                        fc = fc | neg_a;
+                    }
+                }
+                if !fc.is_incompatible() {
+                    Some(fc)
+                } else {
+                    None
+                }
+            });
+        for x in iter {
+            outside.insert(x);
+        }
+    }
+}
+
+fn get_any_multiplied(conds: &FnvHashSet<Cond>, inner: &FreeCondSets) -> FnvHashSet<FreeCond> {
+    use itertools::Itertools;
+    let vec: Vec<_> = conds
+        .iter()
+        .filter_map(cond_to_frees)
+        .map(|(a, _neg_a)| a)
+        .collect();
+    let mut any = fnv_set_with_cap(inner.0.len());
+    for i in 1..=vec.len() {
+        vec.iter()
+            .cloned()
+            .combinations(i)
+            .map(|fc_vec| fc_vec.into_iter().collect::<FreeCond>())
+            .filter_map(|mut fc| {
+                for (a, neg_a) in conds.iter().filter_map(cond_to_frees) {
+                    if !fc.contains(a) {
+                        fc = fc | neg_a;
+                    }
+                }
+                if !fc.is_incompatible() {
+                    Some(inner.scalar_multiply(fc))
+                } else {
+                    None
+                }
+            })
+            .fold(&mut any, |acc, mut x| {
+                acc.extend(x.0.drain());
+                acc
+            });
+    }
+    any
 }
 
 #[test]
 fn free_scalar_multiply() {
-    let mut sets = FreeSets::default();
+    let mut sets = FreeCondSets::default();
     sets.0.insert(FreeCond::IBID);
     sets.0.insert(FreeCond::LOCATOR);
     sets.0.insert(FreeCond::SUBSEQUENT);
-    sets.all_that_comma_assuming((Cond::Position(Position::First), true));
+    sets.all_that_assuming((Cond::Position(Position::First), true));
     dbg!(&sets);
-    let mut check = FreeSets::default();
+    let mut check = FreeCondSets::default();
     // 'branch not taken'
     check.0.insert(FreeCond::FIRST_FALSE);
     // branch taken, most combos with First are incompatible
@@ -207,13 +481,13 @@ fn free_scalar_multiply() {
 
 #[test]
 fn free_scalar_multiply_false() {
-    let mut sets = FreeSets::default();
+    let mut sets = FreeCondSets::default();
     sets.0.insert(FreeCond::IBID);
     sets.0.insert(FreeCond::LOCATOR);
     sets.0.insert(FreeCond::SUBSEQUENT);
-    sets.all_that_comma_assuming((Cond::Position(Position::First), false));
+    sets.all_that_assuming((Cond::Position(Position::First), false));
     dbg!(&sets);
-    let mut check = FreeSets::default();
+    let mut check = FreeCondSets::default();
     // 'branch not taken'
     check.0.insert(FreeCond::FIRST);
     // branch taken, many combos with FIRST_FALSE are compatible
@@ -225,13 +499,87 @@ fn free_scalar_multiply_false() {
 
 #[test]
 fn free_cross_product() {
-    let mut sets = FreeSets::default();
+    let mut sets = FreeCondSets::default();
     sets.0.insert(FreeCond::IBID);
     sets.0.insert(FreeCond::FIRST);
-    let mut othe = FreeSets::default();
+    let mut othe = FreeCondSets::default();
     othe.0.insert(FreeCond::LOCATOR);
     othe.0.insert(FreeCond::SUBSEQUENT);
     sets.cross_product(othe);
     dbg!(&sets);
     assert_eq!(sets.0.len(), 3);
+}
+
+#[test]
+fn free_all_branches_match_all() {
+    use csl::style::Position;
+    let ibid = Cond::Position(Position::Ibid);
+    let mut if_inner = FreeCondSets::default();
+    if_inner.scalar_multiply_cond(ibid, true);
+    let mut if_branch_conds = FnvHashSet::default();
+    if_branch_conds.insert(Cond::Position(Position::First));
+    let if_branch = CondSet {
+        match_type: Match::All,
+        // should not end up in the output
+        conds: if_branch_conds,
+    };
+    let cs = vec![(if_branch, if_inner)];
+    let all = FreeCondSets::all_branches(cs.into_iter(), None);
+    let mut result = FnvHashSet::default();
+    // the one where the branch is taken excludes IBID (true) because it is incompatible with FIRST
+    result.insert(FreeCond::IBID_FALSE | FreeCond::FIRST);
+    // and the one where the branch is not taken has a FIRST_FALSE
+    result.insert(FreeCond::FIRST_FALSE);
+    assert_eq!(all.0, result);
+}
+
+#[test]
+fn free_all_branches_match_none() {
+    use csl::style::Position;
+    let ibid = Cond::Position(Position::Ibid);
+    let mut if_inner = FreeCondSets::default();
+    if_inner.scalar_multiply_cond(ibid, true);
+    let mut if_branch_conds = FnvHashSet::default();
+    if_branch_conds.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
+    let if_branch = CondSet {
+        match_type: Match::None,
+        // should not end up in the output
+        conds: if_branch_conds,
+    };
+    let cs = vec![(if_branch, if_inner)];
+    let all = FreeCondSets::all_branches(cs.into_iter(), None);
+    let mut result = FnvHashSet::default();
+    // the one where the branch is taken excludes IBID (true) because it is incompatible with FIRST
+    result.insert(FreeCond::LOCATOR_FALSE | FreeCond::IBID_FALSE);
+    // and the one where the branch is not taken has a FIRST_FALSE
+    result.insert(FreeCond::LOCATOR);
+    assert_eq!(all.0, result);
+}
+
+#[test]
+fn free_all_branches_match_any() {
+    // inner = {IBID, IBID_FALSE};
+    // conds = any (LOCATOR)
+    use csl::style::Position;
+    let ibid = Cond::Position(Position::Ibid);
+    let mut if_inner = FreeCondSets::default();
+    if_inner.scalar_multiply_cond(ibid, true);
+    let mut if_branch_conds = FnvHashSet::default();
+    if_branch_conds.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
+    // if_branch_conds.insert(Cond::Position(Position::Subsequent));
+    // if_branch_conds.insert(Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix)));
+    if_branch_conds.insert(Cond::Locator(LocatorType::Page));
+    let if_branch = CondSet {
+        match_type: Match::Any,
+        // should not end up in the output
+        conds: if_branch_conds,
+    };
+    let cs = vec![(if_branch, if_inner)];
+    let all = FreeCondSets::all_branches(cs.into_iter(), None);
+    let mut result = FnvHashSet::default();
+    // the one where the branch is taken excludes IBID (true) because it is incompatible with FIRST
+    result.insert(FreeCond::LOCATOR | FreeCond::LT_PAGE_FALSE | FreeCond::IBID_FALSE);
+    // and the one where the branch is not taken has a FIRST_FALSE
+    result.insert(FreeCond::LOCATOR_FALSE | FreeCond::LT_PAGE_FALSE);
+    assert_eq!(all.0, result);
 }

@@ -142,3 +142,8 @@ pub fn to_bijective_base_26(int: u32) -> String {
     }
     s
 }
+
+use fnv::FnvHashSet;
+pub fn fnv_set_with_cap<T: std::hash::Hash + std::cmp::Eq>(cap: usize) -> FnvHashSet<T> {
+    FnvHashSet::with_capacity_and_hasher(cap, fnv::FnvBuildHasher::default())
+}
