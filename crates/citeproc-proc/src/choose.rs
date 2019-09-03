@@ -141,8 +141,6 @@ where
     O: OutputFormat,
 {
     let style = db.style();
-    use citeproc_io::DateOrRange;
-    use csl::variables::DateVariable;
 
     let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
         Some(match cond {

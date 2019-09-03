@@ -74,13 +74,23 @@ impl GetAttribute for StandardVariable {
     }
 }
 
+impl IsIndependent for AnyVariable {
+    fn is_independent(&self) -> bool {
+        match self {
+            AnyVariable::Ordinary(ov) => ov.is_independent(),
+            AnyVariable::Number(nv) => nv.is_independent(),
+            _ => false,
+        }
+    }
+}
+
 impl IsIndependent for Variable {
     fn is_independent(&self) -> bool {
         match self {
-            Variable::LocatorExtra => true,
-            Variable::CitationLabel => false,
-            Variable::YearSuffix => true,
-            Variable::Hereinafter => true,
+            Variable::LocatorExtra
+            | Variable::CitationLabel
+            | Variable::YearSuffix
+            | Variable::Hereinafter => true,
             _ => false,
         }
     }

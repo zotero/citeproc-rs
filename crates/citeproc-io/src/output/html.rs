@@ -99,7 +99,7 @@ impl MicroNode {
 
 impl FormatCmd {
     fn html_tag(&self, options: &HtmlOptions) -> (&'static str, &'static str) {
-        use FormatCmd::*;
+        use super::FormatCmd::*;
         match self {
             FontStyleItalic => ("i", ""),
             FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
@@ -128,16 +128,27 @@ impl FormatCmd {
     }
 }
 
-fn stack_formats_html(
-    s: &mut String,
-    options: &HtmlOptions,
-    inlines: &[InlineElement],
-    formatting: Formatting,
-) {
-    use self::FormatCmd::*;
+fn stack_preorder(s: &mut String, stack: &[FormatCmd], options: &HtmlOptions) {
+    for cmd in stack.iter() {
+        let tag = cmd.html_tag(options);
+        s.push_str("<");
+        s.push_str(tag.0);
+        s.push_str(tag.1);
+        s.push_str(">");
+    }
+}
 
+fn stack_postorder(s: &mut String, stack: &[FormatCmd], options: &HtmlOptions) {
+    for cmd in stack.iter().rev() {
+        let tag = cmd.html_tag(options);
+        s.push_str("</");
+        s.push_str(tag.0);
+        s.push_str(">");
+    }
+}
+fn tag_stack(options: &HtmlOptions, formatting: Formatting) -> Vec<FormatCmd> {
+    use super::FormatCmd::*;
     let mut stack = Vec::new();
-
     match formatting.font_style {
         Some(FontStyle::Italic) => stack.push(FontStyleItalic),
         Some(FontStyle::Oblique) => stack.push(FontStyleOblique),
@@ -166,24 +177,24 @@ fn stack_formats_html(
         Some(VerticalAlignment::Baseline) => stack.push(VerticalAlignmentBaseline),
         _ => {}
     }
+    stack
+}
 
-    for cmd in stack.iter() {
-        let tag = cmd.html_tag(options);
-        s.push_str("<");
-        s.push_str(tag.0);
-        s.push_str(tag.1);
-        s.push_str(">");
-    }
+fn stack_formats_html(
+    s: &mut String,
+    inlines: &[InlineElement],
+    options: &HtmlOptions,
+    formatting: Formatting,
+) {
+    use self::FormatCmd::*;
+    let stack = tag_stack(options, formatting);
+    stack_preorder(s, &stack, options);
     for inner in inlines {
         inner.to_html_inner(s, options);
     }
-    for cmd in stack.iter().rev() {
-        let tag = cmd.html_tag(options);
-        s.push_str("</");
-        s.push_str(tag.0);
-        s.push_str(">");
-    }
+    stack_postorder(s, &stack, options);
 }
+
 impl InlineElement {
     fn to_html(inlines: &[InlineElement], options: &HtmlOptions) -> String {
         let mut s = String::new();
@@ -204,7 +215,7 @@ impl InlineElement {
                 }
             }
             Formatted(inlines, formatting) => {
-                stack_formats_html(s, options, inlines, *formatting);
+                stack_formats_html(s, inlines, options, *formatting);
             }
             Quoted(_qt, inners) => {
                 s.push_str(r#"<q>"#);
@@ -358,6 +369,19 @@ impl OutputFormat for Html {
     ) -> Self::Output {
         let stack = FlipFlopState::from_formatting(format_stacked);
         self.output_with_state(intermediate, stack)
+    }
+
+    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
+        match self {
+            Html::Html(ref options) => stack_preorder(s, stack, options),
+            Html::Rtf(ref _options) => unimplemented!(),
+        }
+    }
+    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
+        match self {
+            Html::Html(ref options) => stack_postorder(s, stack, options),
+            Html::Rtf(ref _options) => unimplemented!(),
+        }
     }
 }
 

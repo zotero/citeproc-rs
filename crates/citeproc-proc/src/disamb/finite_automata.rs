@@ -5,23 +5,27 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use crate::db::IrDatabase;
+use citeproc_io::output::{html::Html, OutputFormat};
+#[cfg(test)]
+use petgraph::dot::Dot;
 use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
-use citeproc_io::output::{html::Html, OutputFormat};
-
-#[cfg(test)]
-use petgraph::dot::Dot;
-
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
 
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct EdgeData(pub <Html as OutputFormat>::Output);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum EdgeData {
+    Output(<Html as OutputFormat>::Output),
+    Locator,
+    Frnn,
+    YearSuffix,
+    // ...
+}
 
 impl Edge {
     // Adding this method is often convenient, since you can then
@@ -40,11 +44,11 @@ impl InternKey for Edge {
     }
 }
 
-impl Debug for EdgeData {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Debug for EdgeData {
+//     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {

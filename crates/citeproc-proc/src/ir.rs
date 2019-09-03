@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::disamb::Edge;
 use crate::prelude::*;
-
 use csl::style::{
     Affixes, BodyDate, Choose, Conditions, Element, Formatting, GivenNameDisambiguationRule,
     Names as NamesEl,
@@ -36,6 +36,49 @@ pub enum YearSuffixHook {
     Explicit(Element),
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefIR<O: OutputFormat> {
+    /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
+    /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
+    ///
+    /// ```txt
+    /// RefIR::Seq(vec![
+    ///     EdgeData::Output("<i>"),
+    ///     EdgeData::Locator,
+    ///     EdgeData::Output("</i>"),
+    /// ])
+    /// ```
+    Seq(Vec<RefIR<O>>),
+    /// A piece of output that a cite can match in the final DFA.
+    /// e.g.
+    ///
+    /// ```txt
+    /// EdgeData::Output(r#"<span style="font-weight: bold;">"#)
+    /// EdgeData::Output("Some title, <i>23/4/1969</i>")
+    /// EdgeData::Locator
+    /// ```
+    ///
+    /// Each is interned into an `Edge` newtype referencing the salsa database.
+    Edge(Edge),
+    /// We use this to apply a FreeCond set to a reference to create a path through the
+    /// constructed NFA.
+    /// See the module level documentation for `disamb`.
+    Branch(Arc<Conditions>, Box<IR<O>>),
+    /// When constructing RefIR, we know whether the names variables exist or not.
+    /// So we don't have to handle 'substitute' any special way -- just drill down into the
+    /// names element, apply its formatting, and end up with
+    ///
+    /// ```txt
+    /// Seq [
+    ///     Edge("<whatever formatting>"),
+    ///     // whatever the substitute element outputted
+    ///     Edge("</whatever>")
+    /// ]
+    /// ```
+    Names(Arc<NamesEl>, Box<RefIR<O>>),
+}
+
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IR<O: OutputFormat> {
@@ -50,10 +93,6 @@ pub enum IR<O: OutputFormat> {
     /// Should also include `if variable="year-suffix"` because that could change.
     ConditionalDisamb(Arc<Choose>, Box<IR<O>>),
     YearSuffix(YearSuffixHook, O::Build),
-
-    // Instead of creating a whole new IR, this variant like ConditionalDisamb but for Reference-processing.
-    // If the Conditions is satisfied, then the contents are rendered. Simple as that.
-    // Branch(Arc<Conditions>, Box<IR<O>),
 
     // Think:
     // <if disambiguate="true" ...>

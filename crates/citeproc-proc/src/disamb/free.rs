@@ -5,28 +5,28 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use csl::style::{Cond, Position};
-use csl::variables::{AnyVariable, NumberVariable, StandardVariable, Variable};
-use fnv::{FnvHashMap, FnvHashSet};
+use csl::variables::{AnyVariable, NumberVariable, Variable};
+use fnv::FnvHashSet;
 
 bitflags::bitflags! {
     /// A convenient enum of the only conds that can actually change between cites
     struct FreeCond: u32 {
-        const YearSuffix        = 0b0000000000000001;
-        const YearSuffixFalse   = 0b0000000000000010;
-        const Locator           = 0b0000000000000100;
-        const LocatorFalse      = 0b0000000000001000;
-        const Ibid              = 0b0000000000010000;
-        const IbidFalse         = 0b0000000000100000;
-        const NearNote          = 0b0000000001000000;
-        const NearNoteFalse     = 0b0000000010000000;
-        const FarNote           = 0b0000000100000000;
-        const FarNoteFalse      = 0b0000001000000000;
-        const IbidWLocator      = 0b0000010000000000;
-        const IbidWLocatorFalse = 0b0000100000000000;
-        const Subsequent        = 0b0001000000000000; // Cool: FRNN = Subsequent.
-        const SubsequentFalse   = 0b0010000000000000;
-        const First             = 0b0100000000000000;
-        const FirstFalse        = 0b1000000000000000;
+        const YEAR_SUFFIX        = 0b0000000000000001;
+        const YEAR_SUFFIX_FALSE   = 0b0000000000000010;
+        const LOCATOR           = 0b0000000000000100;
+        const LOCATOR_FALSE      = 0b0000000000001000;
+        const IBID              = 0b0000000000010000;
+        const IBID_FALSE         = 0b0000000000100000;
+        const NEAR_NOTE          = 0b0000000001000000;
+        const NEAR_NOTE_FALSE     = 0b0000000010000000;
+        const FAR_NOTE           = 0b0000000100000000;
+        const FAR_NOTE_FALSE      = 0b0000001000000000;
+        const IBID_WITH_LOCATOR      = 0b0000010000000000;
+        const IBID_WITH_LOCATOR_FALSE = 0b0000100000000000;
+        const SUBSEQUENT        = 0b0001000000000000; // Cool: FRNN = SUBSEQUENT.
+        const SUBSEQUENT_FALSE   = 0b0010000000000000;
+        const FIRST             = 0b0100000000000000;
+        const FIRST_FALSE        = 0b1000000000000000;
 
         // No disambiguate, because you can't use this to do any more disambiguation, so unhelpful.
     }
@@ -36,29 +36,29 @@ impl FreeCond {
     fn is_incompatible(self) -> bool {
         lazy_static::lazy_static! {
             static ref INCOMPAT: Vec<FreeCond> = vec![
-                FreeCond::Ibid | FreeCond::NearNote,
-                FreeCond::Ibid | FreeCond::FarNote,
-                FreeCond::IbidWLocator | FreeCond::NearNote,
-                FreeCond::IbidWLocator | FreeCond::FarNote,
-                FreeCond::IbidFalse | FreeCond::IbidWLocator,
-                FreeCond::SubsequentFalse | FreeCond::Ibid,
-                FreeCond::SubsequentFalse | FreeCond::FarNote,
-                FreeCond::SubsequentFalse | FreeCond::NearNote,
-                FreeCond::SubsequentFalse | FreeCond::IbidWLocator,
-                FreeCond::SubsequentFalse | FreeCond::FirstFalse,
-                FreeCond::First | FreeCond::Ibid,
-                FreeCond::First | FreeCond::FarNote,
-                FreeCond::First | FreeCond::NearNote,
-                FreeCond::First | FreeCond::IbidWLocator,
-                FreeCond::First | FreeCond::Subsequent,
-                FreeCond::IbidWLocator | FreeCond::LocatorFalse,
-                FreeCond::Ibid | FreeCond::IbidWLocatorFalse | FreeCond::Locator,
-                FreeCond::FirstFalse
-                    | FreeCond::IbidFalse
-                    | FreeCond::SubsequentFalse
-                    | FreeCond::FarNoteFalse
-                    | FreeCond::NearNoteFalse
-                    | FreeCond::IbidWLocatorFalse,
+                FreeCond::IBID | FreeCond::NEAR_NOTE,
+                FreeCond::IBID | FreeCond::FAR_NOTE,
+                FreeCond::IBID_WITH_LOCATOR | FreeCond::NEAR_NOTE,
+                FreeCond::IBID_WITH_LOCATOR | FreeCond::FAR_NOTE,
+                FreeCond::IBID_FALSE | FreeCond::IBID_WITH_LOCATOR,
+                FreeCond::SUBSEQUENT_FALSE | FreeCond::IBID,
+                FreeCond::SUBSEQUENT_FALSE | FreeCond::FAR_NOTE,
+                FreeCond::SUBSEQUENT_FALSE | FreeCond::NEAR_NOTE,
+                FreeCond::SUBSEQUENT_FALSE | FreeCond::IBID_WITH_LOCATOR,
+                FreeCond::SUBSEQUENT_FALSE | FreeCond::FIRST_FALSE,
+                FreeCond::FIRST | FreeCond::IBID,
+                FreeCond::FIRST | FreeCond::FAR_NOTE,
+                FreeCond::FIRST | FreeCond::NEAR_NOTE,
+                FreeCond::FIRST | FreeCond::IBID_WITH_LOCATOR,
+                FreeCond::FIRST | FreeCond::SUBSEQUENT,
+                FreeCond::IBID_WITH_LOCATOR | FreeCond::LOCATOR_FALSE,
+                FreeCond::IBID | FreeCond::IBID_WITH_LOCATOR_FALSE | FreeCond::LOCATOR,
+                FreeCond::FIRST_FALSE
+                    | FreeCond::IBID_FALSE
+                    | FreeCond::SUBSEQUENT_FALSE
+                    | FreeCond::FAR_NOTE_FALSE
+                    | FreeCond::NEAR_NOTE_FALSE
+                    | FreeCond::IBID_WITH_LOCATOR_FALSE,
             ];
         }
         for &x in INCOMPAT.iter() {
@@ -70,27 +70,27 @@ impl FreeCond {
     }
 
     fn imply(mut self) -> Self {
-        let mut prev = self;
+        let prev = self;
         while self != prev {
-            if self & FreeCond::IbidWLocator != FreeCond::empty() {
-                self = self | FreeCond::Ibid;
+            if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
+                self = self | FreeCond::IBID;
             }
-            if self & FreeCond::IbidWLocator != FreeCond::empty() {
-                self = self | FreeCond::Ibid;
+            if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
+                self = self | FreeCond::IBID;
             }
-            if self & FreeCond::Ibid != FreeCond::empty() {
-                self = self | FreeCond::Subsequent;
+            if self & FreeCond::IBID != FreeCond::empty() {
+                self = self | FreeCond::SUBSEQUENT;
             }
-            if self & FreeCond::First != FreeCond::empty() {
+            if self & FreeCond::FIRST != FreeCond::empty() {
                 self = self
-                    | FreeCond::IbidFalse
-                    | FreeCond::IbidWLocatorFalse
-                    | FreeCond::SubsequentFalse
-                    | FreeCond::NearNoteFalse
-                    | FreeCond::FarNoteFalse;
+                    | FreeCond::IBID_FALSE
+                    | FreeCond::IBID_WITH_LOCATOR_FALSE
+                    | FreeCond::SUBSEQUENT_FALSE
+                    | FreeCond::NEAR_NOTE_FALSE
+                    | FreeCond::FAR_NOTE_FALSE;
             }
-            if self & FreeCond::First != FreeCond::empty() {
-                self = self | FreeCond::SubsequentFalse;
+            if self & FreeCond::FIRST != FreeCond::empty() {
+                self = self | FreeCond::SUBSEQUENT_FALSE;
             }
             // ugh what a pain
         }
@@ -100,18 +100,21 @@ impl FreeCond {
 
 fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
     let x = match c {
-        Cond::Locator(_) => (FreeCond::Locator, FreeCond::LocatorFalse),
+        Cond::Locator(_) => (FreeCond::LOCATOR, FreeCond::LOCATOR_FALSE),
         Cond::Position(p) => match p {
-            Position::Ibid => (FreeCond::Ibid, FreeCond::IbidFalse),
-            Position::IbidWithLocator => (FreeCond::IbidWLocator, FreeCond::IbidWLocatorFalse),
-            Position::First => (FreeCond::First, FreeCond::FirstFalse),
-            Position::Subsequent => (FreeCond::Subsequent, FreeCond::SubsequentFalse),
-            Position::NearNote => (FreeCond::NearNote, FreeCond::NearNoteFalse),
-            Position::FarNote => (FreeCond::FarNote, FreeCond::FarNoteFalse),
+            Position::Ibid => (FreeCond::IBID, FreeCond::IBID_FALSE),
+            Position::IbidWithLocator => (
+                FreeCond::IBID_WITH_LOCATOR,
+                FreeCond::IBID_WITH_LOCATOR_FALSE,
+            ),
+            Position::First => (FreeCond::FIRST, FreeCond::FIRST_FALSE),
+            Position::Subsequent => (FreeCond::SUBSEQUENT, FreeCond::SUBSEQUENT_FALSE),
+            Position::NearNote => (FreeCond::NEAR_NOTE, FreeCond::NEAR_NOTE_FALSE),
+            Position::FarNote => (FreeCond::FAR_NOTE, FreeCond::FAR_NOTE_FALSE),
         },
         Cond::IsNumeric(AnyVariable::Number(nv)) | Cond::Variable(AnyVariable::Number(nv)) => {
             match nv {
-                NumberVariable::Locator => (FreeCond::Locator, FreeCond::LocatorFalse),
+                NumberVariable::Locator => (FreeCond::LOCATOR, FreeCond::LOCATOR_FALSE),
                 _ => return None,
             }
         }
@@ -119,8 +122,8 @@ fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
             match ov {
                 // Variable::LocatorExtra =>
                 // Variable::Hereinafter =>
-                // Variable::CitationLabel =>
-                Variable::YearSuffix => (FreeCond::YearSuffix, FreeCond::YearSuffixFalse),
+                // Variable::CitationLabel => // CitationLabel
+                Variable::YearSuffix => (FreeCond::YEAR_SUFFIX, FreeCond::YEAR_SUFFIX_FALSE),
                 _ => return None,
             }
         }
@@ -189,44 +192,45 @@ impl FreeSets {
 #[test]
 fn free_scalar_multiply() {
     let mut sets = FreeSets::default();
-    sets.0.insert(FreeCond::Ibid);
-    sets.0.insert(FreeCond::Locator);
-    sets.0.insert(FreeCond::Subsequent);
+    sets.0.insert(FreeCond::IBID);
+    sets.0.insert(FreeCond::LOCATOR);
+    sets.0.insert(FreeCond::SUBSEQUENT);
     sets.all_that_comma_assuming((Cond::Position(Position::First), true));
     dbg!(&sets);
     let mut check = FreeSets::default();
     // 'branch not taken'
-    check.0.insert(FreeCond::FirstFalse);
+    check.0.insert(FreeCond::FIRST_FALSE);
     // branch taken, most combos with First are incompatible
-    check.0.insert(FreeCond::Locator | FreeCond::First);
+    check.0.insert(FreeCond::LOCATOR | FreeCond::FIRST);
     assert_eq!(sets, check);
 }
+
 #[test]
 fn free_scalar_multiply_false() {
     let mut sets = FreeSets::default();
-    sets.0.insert(FreeCond::Ibid);
-    sets.0.insert(FreeCond::Locator);
-    sets.0.insert(FreeCond::Subsequent);
+    sets.0.insert(FreeCond::IBID);
+    sets.0.insert(FreeCond::LOCATOR);
+    sets.0.insert(FreeCond::SUBSEQUENT);
     sets.all_that_comma_assuming((Cond::Position(Position::First), false));
     dbg!(&sets);
     let mut check = FreeSets::default();
     // 'branch not taken'
-    check.0.insert(FreeCond::First);
-    // branch taken, many combos with FirstFalse are compatible
-    check.0.insert(FreeCond::Ibid | FreeCond::FirstFalse);
-    check.0.insert(FreeCond::Locator | FreeCond::FirstFalse);
-    check.0.insert(FreeCond::Subsequent | FreeCond::FirstFalse);
+    check.0.insert(FreeCond::FIRST);
+    // branch taken, many combos with FIRST_FALSE are compatible
+    check.0.insert(FreeCond::IBID | FreeCond::FIRST_FALSE);
+    check.0.insert(FreeCond::LOCATOR | FreeCond::FIRST_FALSE);
+    check.0.insert(FreeCond::SUBSEQUENT | FreeCond::FIRST_FALSE);
     assert_eq!(sets, check);
 }
 
 #[test]
 fn free_cross_product() {
     let mut sets = FreeSets::default();
-    sets.0.insert(FreeCond::Ibid);
-    sets.0.insert(FreeCond::First);
+    sets.0.insert(FreeCond::IBID);
+    sets.0.insert(FreeCond::FIRST);
     let mut othe = FreeSets::default();
-    othe.0.insert(FreeCond::Locator);
-    othe.0.insert(FreeCond::Subsequent);
+    othe.0.insert(FreeCond::LOCATOR);
+    othe.0.insert(FreeCond::SUBSEQUENT);
     sets.cross_product(othe);
     dbg!(&sets);
     assert_eq!(sets.0.len(), 3);

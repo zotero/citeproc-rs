@@ -32,6 +32,7 @@ pub(crate) mod prelude {
 
     pub use crate::cite_context::CiteContext;
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
+    pub(crate) use crate::disamb::Disambiguation;
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
     pub(crate) use crate::{IrState, Proc};

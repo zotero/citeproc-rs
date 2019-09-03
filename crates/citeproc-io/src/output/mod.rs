@@ -155,4 +155,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     fn with_format(&self, a: Self::Build, f: Option<Formatting>) -> Self::Build;
 
     fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build;
+
+    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
+    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);
 }

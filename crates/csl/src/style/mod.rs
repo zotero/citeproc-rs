@@ -311,12 +311,6 @@ impl Default for Plural {
     }
 }
 
-impl IsIndependent for AnyVariable {
-    fn is_independent(&self) -> bool {
-        unimplemented!()
-    }
-}
-
 impl IsIndependent for Cond {
     fn is_independent(&self) -> bool {
         match self {

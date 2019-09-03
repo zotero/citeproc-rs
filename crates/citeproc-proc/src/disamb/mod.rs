@@ -4,21 +4,77 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+//! The aim of this module is to disambiguate names and cites.
+//!
+//! This is done by constructing a finite automaton to represent all the different possible outputs
+//! a Reference could produce when formatting any particular citation. If a cite's own output
+//! matches more than one of these, it is ambiguous.
+//!
+//! If the Conditions are satisfied, then the contents are rendered, i.e. an edge is added.
+//! If the conditions are unsatisfied, then no edge is added.
+//! No epsilon edges are added, because we use multiple passes over the IR to do that.
+//! If you used an epsilon to represent 'branch not taken', then
+//!
+//! ```txt
+//! if cond
+//!   A
+//! if !cond
+//!   B
+//! ```
+//!
+//! would result in
+//!
+//!
+//! ```txt
+//! * ---- A ---> . ---- B ---> $
+//!   \___ e __/^   \___ e __/^
+//! ```
+//!
+//! equivalent to `A or AB or B or nothing`, when in fact it should be `A or B`.
+//!
+//! So we do two passes, one where cond is true for the whole style, and one where cond is
+//! false for the whole style.
+//!
+//! ```txt
+//! * ---- A ---> $
+//! * ---- B ---> $
+//! ```
+//!
+//! This is a valid NFA, as NFAs can have multiple start states in addition to multiple accepting
+//! states. Now we minimise this NFA into a DFA that can pretty quickly calculate if a cite matches
+//! or not.
+//!
+//! ```txt
+//! * ---- A ---> $
+//!   \___ B __/^
+//! ```
+//!
+//! So a cite where `cond` is true matches the `A` path, and a cite where it is false matches `B`.
+//!
+//! One important optimisation is that not every `cond` can change between cites. Most variables
+//! are set in stone for a particular reference.
+//!
+//! A second one is that you can merge ALL the NFAs, for every reference, if the accepting nodes
+//! contain the `reference.id`. Then there is only one DFA, where the accepting nodes contain a
+//! list of references that could have been behind a particular cite, so ambiguity is checked in a
+//! time roughly proportional to the length of the cite.
+//!
+
 #![allow(dead_code)]
 use crate::prelude::*;
 use citeproc_io::{Cite, Reference};
 use csl::style::{
-    Choose, Cond, CondSet, Conditions, CslType, Element, Formatting, Match, Position, Style,
-    TextSource,
+    Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Position, Style, TextSource,
 };
-use csl::variables::{AnyVariable, NumberVariable, StandardVariable, Variable};
+use csl::variables::AnyVariable;
 use csl::IsIndependent;
-use fnv::{FnvHashMap, FnvHashSet};
 
 mod finite_automata;
 mod free;
 mod knowledge;
 pub mod old;
+#[cfg(test)]
+mod test;
 
 use knowledge::Knowledge;
 
@@ -196,6 +252,7 @@ impl Disambiguation for Choose {
 
 impl Disambiguation for Element {
     fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+        // let mut output = FnvHashSet::default();
         match self {
             Element::Group(g) => {
                 // TODO: create a new conds vec, and extend the main conds if GroupVars is a hit
@@ -215,7 +272,7 @@ impl Disambiguation for Element {
                 if num_var.is_independent() {
                     stack
                         .output
-                        .push(Cond::Variable(AnyVariable::Number(*num_var)))
+                        .push(Cond::Variable(AnyVariable::Number(*num_var)));
                 }
             }
             Element::Text(src, ..) => match src {
@@ -302,88 +359,3 @@ impl DisambiguationState<'_> {
         }
     }
 }
-
-#[cfg(test)]
-macro_rules! style_layout {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str(&format!(
-            r#"<?xml version="1.0" encoding="utf-8"?>
-    <style class="in-text" version="1.0.1">
-        <citation>
-            <layout>
-                {}
-            </layout>
-        </citation>
-    </style>"#,
-            $ex
-        ))
-        .unwrap()
-    }};
-}
-
-#[test]
-fn independent_conds() {
-    use crate::test::MockProcessor;
-    let db = MockProcessor::new();
-    let style = style_layout!(
-        r#"
-    <group delimiter=" ">
-        <text variable="locator" />
-        <text variable="title" font-style="italic"/>
-        <choose>
-            <if disambiguate="true">
-                <text value="..." />
-            </if>
-            <else-if position="first" type="book">
-                <text value="..." />
-            </else-if>
-            <else-if position="subsequent" variable="title">
-                <text value="..." />
-            </else-if>
-            <else>
-                <text variable="first-reference-note-number" />
-                <text variable="ISBN" />
-            </else>
-        </choose>
-    </group>
-    "#
-    );
-    let mut refr = Reference::empty("id".into(), CslType::Book);
-    refr.ordinary.insert(Variable::Title, "Title".into());
-    let mut stack = ConditionStack::from(&refr);
-    style.independent_conds(&db, &mut stack);
-    let mut result_set = FnvHashSet::default();
-    result_set.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
-    result_set.insert(Cond::Position(Position::First));
-    result_set.insert(Cond::Disambiguate(true));
-    result_set.insert(Cond::Variable(AnyVariable::Number(
-        NumberVariable::FirstReferenceNoteNumber,
-    )));
-    // does not contain Position::Subsequent as we knew variable="title" was true
-    assert_eq!(
-        stack.output.into_iter().collect::<FnvHashSet<_>>(),
-        result_set,
-    )
-}
-
-// #[test(ignore)]
-// fn element_disamb() {
-//     use crate::test::MockProcessor;
-//     let db = MockProcessor::new();
-//     let style = style_layout!(
-//         r#"
-//     <group delimiter=" ">
-//         <text value="value" />
-//         <text value="italic" font-style="italic"/>
-//     </group>
-//     "#
-//     );
-//     let group = &style.citation.layout.elements[0];
-//     let mut state = DisambiguationState::new();
-//     group.construct_nfa(&db, &mut state);
-//     let dfa = state.nfa.brzozowski_minimise();
-//     let value = db.edge(EdgeData("value".to_string()));
-//     let italic = db.edge(EdgeData("<i>italic</i>".to_string()));
-//     assert!(dfa.accepts(&[value, italic]));
-// }

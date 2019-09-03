@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::{LocalizedQuotes, OutputFormat};
+use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::IngestOptions;
 
 use csl::style::Formatting;
@@ -89,4 +89,9 @@ impl OutputFormat for PlainText {
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         intermediate
     }
+
+    #[inline]
+    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    #[inline]
+    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {}
 }
