@@ -4,6 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use super::free::{FreeCond, FreeCondSets};
 use crate::prelude::*;
 use citeproc_io::Reference;
 use csl::style::{Cond, CslType, Position};
@@ -13,7 +14,22 @@ use fnv::FnvHashSet;
 
 use super::ConditionStack;
 
-#[cfg(test)]
+macro_rules! style_text_layout {
+    ($ex:expr) => {{
+        &format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+    <style class="in-text" version="1.0.1">
+        <citation>
+            <layout>
+                {}
+            </layout>
+        </citation>
+    </style>"#,
+            $ex
+        )
+    }};
+}
+
 macro_rules! style_layout {
     ($ex:expr) => {{
         use std::str::FromStr;
@@ -29,6 +45,13 @@ macro_rules! style_layout {
             $ex
         ))
         .unwrap()
+    }};
+}
+
+macro_rules! style {
+    ($ex:expr) => {{
+        use std::str::FromStr;
+        ::csl::style::Style::from_str($ex).unwrap()
     }};
 }
 
@@ -75,6 +98,68 @@ fn independent_conds() {
         stack.output.into_iter().collect::<FnvHashSet<_>>(),
         result_set,
     )
+}
+
+#[test]
+fn whole_apa() {
+    use crate::test::MockProcessor;
+    let mut db = MockProcessor::new();
+    use csl::style::Style;
+    use std::fs;
+    db.set_style_text(include_str!("../../tests/data/apa.csl"));
+    // let style = Style::from_str(&).unwrap();
+    use super::knowledge::Knowledge;
+    let mut k = Knowledge::new();
+    let fcs = db.style().get_free_conds(&db, &mut k);
+    dbg!(&fcs);
+}
+
+use super::knowledge::Knowledge;
+use crate::test::MockProcessor;
+use csl::style::Style;
+
+#[test]
+fn whole_agcl() {
+    let mut db = MockProcessor::new();
+    use std::fs;
+    db.set_style_text(include_str!("../../tests/data/aglc.csl"));
+    // let style = Style::from_str(&).unwrap();
+    let mut k = Knowledge::new();
+    let fcs = db.style().get_free_conds(&db, &mut k);
+    dbg!(&fcs);
+}
+
+#[test]
+fn test_locator_macro() {
+    use super::Disambiguation;
+    use crate::test::MockProcessor;
+    let mut db = MockProcessor::new();
+    use csl::style::Style;
+    use std::fs;
+    db.set_style_text(style_text_layout!(
+        r#"<choose>
+      <if locator="page">
+        <text variable="locator"/>
+      </if>
+      <else-if variable="locator">
+        <group delimiter=" " >
+          <label variable="locator" form="short" />
+          <text variable="locator" />
+        </group>
+      </else-if>
+    </choose>"#
+    ));
+    let mut k = Knowledge::new();
+    let fcs = db.style().get_free_conds(&db, &mut k);
+    let mut correct = FreeCondSets::empty();
+    correct.0.insert(FreeCond::LOCATOR | FreeCond::LT_PAGE);
+    correct
+        .0
+        .insert(FreeCond::LOCATOR | FreeCond::LT_PAGE_FALSE);
+    correct
+        .0
+        .insert(FreeCond::LOCATOR_FALSE | FreeCond::LT_PAGE_FALSE);
+    assert_eq!(fcs, correct);
 }
 
 // #[test(ignore)]

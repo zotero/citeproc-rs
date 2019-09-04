@@ -70,12 +70,16 @@ use csl::style::{
 use csl::variables::AnyVariable;
 use csl::IsIndependent;
 
+// first so the macros are defined before the other modules
+#[cfg(test)]
+#[macro_use]
+pub(crate) mod test;
+
 mod finite_automata;
 mod free;
-mod knowledge;
+pub(crate) mod implementation;
+pub(crate) mod knowledge;
 pub mod old;
-#[cfg(test)]
-mod test;
 
 use free::FreeCondSets;
 use knowledge::Knowledge;

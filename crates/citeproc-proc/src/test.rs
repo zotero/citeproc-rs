@@ -1,4 +1,4 @@
-use citeproc_db::{LocaleFetcher, PredefinedLocales};
+use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
 use csl::locale::Lang;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,5 +40,13 @@ impl MockProcessor {
         };
         citeproc_db::safe_default(&mut db);
         db
+    }
+
+    pub fn set_style_text(&mut self, style_text: &str) {
+        use csl::style::Style;
+        use std::str::FromStr;
+        let style = Style::from_str(style_text).unwrap();
+        use salsa::Durability;
+        self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
 }
