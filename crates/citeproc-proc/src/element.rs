@@ -65,7 +65,9 @@ where
                         let b = fmt.ingest(value, Default::default());
                         let txt = fmt.with_format(b, f);
                         (
-                            IR::Rendered(Some(fmt.affixed_quoted(txt, &af, quotes))),
+                            IR::Rendered(Some(CiteEdgeData::Output(
+                                fmt.affixed_quoted(txt, &af, quotes),
+                            ))),
                             GroupVars::new(),
                         )
                     }
@@ -77,7 +79,9 @@ where
                                     .tokens
                                     .insert(DisambToken::Str(base26.as_str().into()));
                                 return (
-                                    IR::Rendered(Some(fmt.text_node(base26, None))),
+                                    IR::Rendered(Some(CiteEdgeData::Output(
+                                        fmt.text_node(base26, None),
+                                    ))),
                                     GroupVars::DidRender,
                                 );
                             }
@@ -110,6 +114,7 @@ where
                                 )
                             }),
                         };
+                        let content = content.map(CiteEdgeData::Output);
                         let gv = GroupVars::rendered_if(content.is_some());
                         (IR::Rendered(content), gv)
                     }
@@ -117,7 +122,8 @@ where
                         let content = ctx
                             .locale
                             .get_text_term(term_selector, plural)
-                            .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
+                            .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes))
+                            .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }
@@ -142,15 +148,19 @@ where
                         ctx.locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f, &af))
+                            .map(CiteEdgeData::Output)
                     })
                 });
                 (IR::Rendered(content), GroupVars::new())
             }
 
             Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
-                let content = ctx.get_number(var).map(|val| {
-                    fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
-                });
+                let content = ctx
+                    .get_number(var)
+                    .map(|val| {
+                        fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
+                    })
+                    .map(CiteEdgeData::Output);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
             }

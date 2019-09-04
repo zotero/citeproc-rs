@@ -536,6 +536,6 @@ where
         let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
         let content = Some(fmt.affixed(fmt.group(rendered, delim, self.formatting), &self.affixes));
         let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content), gv)
+        (IR::Rendered(content.map(CiteEdgeData::Output)), gv)
     }
 }

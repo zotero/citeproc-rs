@@ -63,10 +63,10 @@
 #![allow(dead_code)]
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
-use citeproc_io::{Cite, Reference};
-use csl::locale::Locale;
+use citeproc_io::Reference;
+
 use csl::style::{
-    Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Position, Style, TextSource,
+    Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Style, TextSource,
 };
 use csl::variables::AnyVariable;
 use csl::IsIndependent;

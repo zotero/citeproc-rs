@@ -54,7 +54,9 @@ where
                 .filter_map(|dp| dp_render(dp, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
-            fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
+            CiteEdgeData::Output(
+                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes),
+            )
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)
@@ -86,7 +88,9 @@ where
                     .filter_map(|dp| dp_render(dp, state, ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
-                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
+                CiteEdgeData::Output(
+                    fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes),
+                )
             });
         let gv = GroupVars::rendered_if(content.is_some());
         (IR::Rendered(content), gv)

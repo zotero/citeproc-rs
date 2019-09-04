@@ -153,11 +153,11 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     Arc::new(suffixes)
 }
 
-fn disambiguate<O: OutputFormat>(
+fn disambiguate(
     db: &impl IrDatabase,
-    ir: &mut IR<O>,
+    ir: &mut IR<Html>,
     state: &mut IrState,
-    ctx: &mut CiteContext<O>,
+    ctx: &mut CiteContext<Html>,
     maybe_ys: Option<&FnvHashMap<Atom, u32>>,
 ) -> bool {
     let index = db.inverted_index();
@@ -183,7 +183,7 @@ fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
     Arc::new((
-        IR::Rendered(Some(Html::default().plain("???"))),
+        IR::Rendered(Some(CiteEdgeData::Output(Html::default().plain("???")))),
         true,
         IrState::new(),
     ))

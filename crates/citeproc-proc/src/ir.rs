@@ -79,19 +79,20 @@ pub enum RefIR<O: OutputFormat = Html> {
 }
 
 /// A version of [`EdgeData`] that has a piece of output for every
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CiteEdgeData<O: OutputFormat = Html> {
-    Output(O::Output),
-    Locator(O::Output),
-    LocatorLabel(O::Output),
-    YearSuffix(O::Output),
-    CitationNumber(O::Output),
-    BibNumber(O::Output),
-    Frnn(O::Output),
+    Output(O::Build),
+    Locator(O::Build),
+    LocatorLabel(O::Build),
+    YearSuffix(O::Build),
+    CitationNumber(O::Build),
+    BibNumber(O::Build),
+    Frnn(O::Build),
 }
 
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum IR<O: OutputFormat> {
+pub enum IR<O: OutputFormat = Html> {
     // no (further) disambiguation possible
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
@@ -119,7 +120,7 @@ pub enum IR<O: OutputFormat> {
     Seq(IrSeq<O>),
 }
 
-impl<O: OutputFormat> IR<O> {
+impl IR<Html> {
     fn is_rendered(&self) -> bool {
         match self {
             IR::Rendered(_) => true,
@@ -131,7 +132,7 @@ impl<O: OutputFormat> IR<O> {
         &mut self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, Html>,
         is_unambig: &impl Fn(&IrState) -> bool,
     ) {
         *self = match self {
@@ -163,7 +164,7 @@ impl<O: OutputFormat> IR<O> {
                     ir.disambiguate(db, state, ctx, is_unambig);
                 }
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
-                    IR::Rendered(seq.flatten_seq(&ctx.format))
+                    IR::Rendered(seq.flatten_seq(&ctx.format).map(CiteEdgeData::Output))
                 } else {
                     return;
                 }
@@ -171,11 +172,11 @@ impl<O: OutputFormat> IR<O> {
         }
     }
 
-    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
+    pub fn flatten(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {
         // must clone
         match self {
             IR::Rendered(None) => None,
-            IR::Rendered(Some(ref x)) => Some(x.clone()),
+            IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::Names(_, ref x) => Some(x.clone()),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => Some(x.clone()),
@@ -183,33 +184,67 @@ impl<O: OutputFormat> IR<O> {
         }
     }
 
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &O, formatting: Formatting) {
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Html, formatting: Formatting) {
         match self {
             IR::Rendered(None) => {}
-            IR::Rendered(Some(ed)) => edges.push(ed.into()),
+            IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
             // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
             // inside
-            IR::YearSuffix(_hook, x) => edges.push(EdgeData::Output(x.clone())),
+            IR::YearSuffix(_hook, x) => edges.push(EdgeData::Output(
+                fmt.output_in_context(x.clone(), formatting),
+            )),
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
-            IR::Names(_names, r) => edges.push(EdgeData::Output(r.clone())),
+            IR::Names(_names, r) => edges.push(EdgeData::Output(
+                fmt.output_in_context(r.clone(), formatting),
+            )),
         }
+        ()
     }
 
-    pub fn to_edge_stream(&self, fmt: &O) -> Vec<EdgeData> {
+    pub fn to_edge_stream(&self, fmt: &Html) -> Vec<EdgeData> {
         let mut edges = Vec::new();
+        self.append_edges(&mut edges, fmt, Formatting::default());
+        edges
     }
 }
 
-impl<'a> From<&'a CiteEdgeData> for EdgeData {
-    fn from(cite_edge: &CiteEdgeData) -> Self {
-        match cite_edge {
-            CiteEdgeData::Output(x) => EdgeData::Output(x.clone()),
+// impl<'a> From<&'a CiteEdgeData> for EdgeData {
+//     fn from(cite_edge: &CiteEdgeData) -> Self {
+//         match cite_edge {
+//             CiteEdgeData::Output(x) => EdgeData::Output(x.clone()),
+//             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
+//             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
+//             CiteEdgeData::Locator(_) => EdgeData::Locator,
+//             CiteEdgeData::BibNumber(_) => EdgeData::BibNumber,
+//             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
+//         }
+//     }
+// }
+
+impl CiteEdgeData<Html> {
+    fn to_edge_data(&self, fmt: &Html, formatting: Formatting) -> EdgeData {
+        match self {
+            CiteEdgeData::Output(x) => {
+                EdgeData::Output(fmt.output_in_context(x.clone(), formatting))
+            }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
             CiteEdgeData::Locator(_) => EdgeData::Locator,
+            CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
             CiteEdgeData::BibNumber(_) => EdgeData::BibNumber,
             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
+        }
+    }
+    fn inner(&self) -> <Html as OutputFormat>::Build {
+        match self {
+            CiteEdgeData::Output(x)
+            | CiteEdgeData::YearSuffix(x)
+            | CiteEdgeData::Frnn(x)
+            | CiteEdgeData::Locator(x)
+            | CiteEdgeData::LocatorLabel(x)
+            | CiteEdgeData::BibNumber(x)
+            | CiteEdgeData::CitationNumber(x) => x.clone(),
         }
     }
 }
@@ -222,33 +257,33 @@ pub struct IrSeq<O: OutputFormat> {
     pub delimiter: Atom,
 }
 
-use citeproc_io::output::FormatCmd;
-
-impl<O: OutputFormat> IrSeq<O> {
-    fn append_edges(&self, edges: &mut EdgeData, fmt: &O, formatting: Formatting) -> Vec<EdgeData> {
-        let stack = fmt.tag_stack();
+impl IrSeq<Html> {
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Html, formatting: Formatting) {
+        let stack = fmt.tag_stack(self.formatting.unwrap_or_else(Default::default));
         let sub_formatting = self
             .formatting
             .map(|mine| formatting.override_with(mine))
             .unwrap_or(formatting);
         let mut open_tags = String::new();
         let mut close_tags = String::new();
-        fmt.stack_preorder(&mut open_tags, stack);
-        fmt.stack_postorder(&mut close_tags, stack);
+        fmt.stack_preorder(&mut open_tags, &stack);
+        fmt.stack_postorder(&mut close_tags, &stack);
         edges.push(EdgeData::Output(open_tags));
         // push the innards
         let len = self.contents.len();
         for (n, ir) in self.contents.iter().enumerate() {
-            ir.append_edges(&mut edges, fmt, sub_formatting);
+            ir.append_edges(edges, fmt, sub_formatting);
             if n != len {
-                edges.push(EdgeData::Output(fmt.plain()))
+                edges.push(EdgeData::Output(fmt.output_in_context(
+                    fmt.plain(self.delimiter.as_ref()),
+                    sub_formatting,
+                )))
             }
         }
         edges.push(EdgeData::Output(close_tags));
-        edges
     }
 
-    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
+    fn flatten_seq(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {
         let xs: Vec<_> = self
             .contents
             .iter()

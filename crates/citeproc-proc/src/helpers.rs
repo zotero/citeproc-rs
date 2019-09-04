@@ -34,18 +34,20 @@ where
             // You do have to make sure that if it was a group that did not
             // end up producing output, it has a correct gv = NoneSeen.
             Rendered(None) => {}
-            Rendered(Some(bb)) => {
+            Rendered(Some(CiteEdgeData::Output(bb))) => {
                 if let Some(last) = va.pop() {
                     if let Rendered(None) = last {
-                        va.push(Rendered(Some(bb)))
-                    } else if let Rendered(Some(aa)) = last {
-                        va.push(Rendered(Some(fmt.join_delim(aa, &delimiter, bb))))
+                        va.push(Rendered(Some(CiteEdgeData::Output(bb))));
+                    } else if let Rendered(Some(CiteEdgeData::Output(aa))) = last {
+                        va.push(Rendered(Some(CiteEdgeData::Output(
+                            fmt.join_delim(aa, &delimiter, bb),
+                        ))))
                     } else {
                         va.push(last);
-                        va.push(Rendered(Some(bb)));
+                        va.push(Rendered(Some(CiteEdgeData::Output(bb))));
                     }
                 } else {
-                    va.push(Rendered(Some(bb)));
+                    va.push(Rendered(Some(CiteEdgeData::Output(bb))));
                 }
             }
             o => {
@@ -74,8 +76,13 @@ where
             ((a, gva), (Rendered(None), gvb)) => (a, gva.neighbour(gvb)),
             ((Rendered(None), gva), (b, gvb)) => (b, gva.neighbour(gvb)),
             // aa,bb
-            ((Rendered(Some(aa)), gva), (Rendered(Some(bb)), gvb)) => (
-                Rendered(Some(fmt.join_delim(aa, &delimiter, bb))),
+            (
+                (Rendered(Some(CiteEdgeData::Output(aa))), gva),
+                (Rendered(Some(CiteEdgeData::Output(bb))), gvb),
+            ) => (
+                Rendered(Some(CiteEdgeData::Output(
+                    fmt.join_delim(aa, &delimiter, bb),
+                ))),
                 gva.neighbour(gvb),
             ),
             ((Seq(mut s), gva), b) => {
@@ -110,9 +117,11 @@ where
 
     if let Rendered(None) = inner {
         (inner, gv)
-    } else if let Rendered(Some(x)) = inner {
+    } else if let Rendered(Some(CiteEdgeData::Output(x))) = inner {
         (
-            Rendered(Some(fmt.affixed(fmt.with_format(x, formatting), &affixes))),
+            Rendered(Some(CiteEdgeData::Output(
+                fmt.affixed(fmt.with_format(x, formatting), &affixes),
+            ))),
             gv,
         )
     } else if let Seq(_) = inner {
