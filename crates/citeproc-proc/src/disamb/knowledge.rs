@@ -78,7 +78,7 @@ impl SingleKnowledge {
 
     fn determinism(&self) -> Option<Result<bool, Vec<SomeOfIndex>>> {
         use Maybe::*;
-        use Possibility::*;
+        
         let mut indices = Vec::new();
         let mut folder = Err(());
         for &(_, mayb) in &self.0 {

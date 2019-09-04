@@ -81,18 +81,19 @@ pub(crate) mod implementation;
 pub(crate) mod knowledge;
 pub mod old;
 
-use free::FreeCondSets;
+pub use free::{FreeCond, FreeCondSets};
 use knowledge::Knowledge;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
 
-fn create_ref_ir<O: OutputFormat>(db: &impl IrDatabase, refr: &Reference) -> RefIR<O> {
-    let style = db.style();
+fn create_ref_ir<O: OutputFormat>(db: &impl IrDatabase, _refr: &Reference) -> RefIR<O> {
+    let _style = db.style();
+    let _fcs = db.branch_runs();
     unimplemented!()
 }
 
 pub trait Disambiguation<O: OutputFormat = Html> {
-    fn get_free_conds(&self, db: &impl IrDatabase, knowledge: &mut Knowledge) -> FreeCondSets {
+    fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
         unimplemented!()
     }
 }
@@ -100,8 +101,8 @@ pub trait Disambiguation<O: OutputFormat = Html> {
 pub trait DisambiguationOld<O: OutputFormat = Html> {
     // fn disambiguation_ir(&self, db: &impl IrDatabase, state: &mut DisambiguationState) -> IrSum<O>;
     // You're gonna need an IrDatabase there
-    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {}
-    fn independent_conds(&self, db: &impl IrDatabase, conds: &mut ConditionStack) {
+    fn construct_nfa(&self, _db: &impl IrDatabase, _state: &mut DisambiguationState) {}
+    fn independent_conds(&self, _db: &impl IrDatabase, _conds: &mut ConditionStack) {
         // most elements don't contain conditionals
     }
 }
@@ -158,7 +159,7 @@ impl From<&Reference> for ConditionStack {
 }
 
 impl DisambiguationOld for CondSet {
-    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+    fn construct_nfa(&self, _db: &impl IrDatabase, state: &mut DisambiguationState) {
         match self.match_type {
             Match::Any => {
                 state
@@ -178,7 +179,7 @@ impl DisambiguationOld for CondSet {
             _ => unimplemented!(),
         }
     }
-    fn independent_conds(&self, db: &impl IrDatabase, stack: &mut ConditionStack) {
+    fn independent_conds(&self, _db: &impl IrDatabase, stack: &mut ConditionStack) {
         let (indep, ref_based): (Vec<&Cond>, Vec<&Cond>) =
             self.conds.iter().partition(|c| c.is_independent());
         if self.match_type == Match::Any
@@ -293,7 +294,7 @@ impl DisambiguationOld for Element {
                 }
             }
             Element::Text(src, ..) => match src {
-                TextSource::Macro(m) => unimplemented!(),
+                TextSource::Macro(_m) => unimplemented!(),
                 TextSource::Variable(sv, ..) => {
                     if sv.is_independent() {
                         stack.output.push(Cond::Variable(sv.into()));
@@ -304,7 +305,7 @@ impl DisambiguationOld for Element {
             _ => {}
         }
     }
-    fn construct_nfa(&self, db: &impl IrDatabase, state: &mut DisambiguationState) {
+    fn construct_nfa(&self, _db: &impl IrDatabase, _state: &mut DisambiguationState) {
         match self {
             Element::Text(..) => {
                 // let ir = self

@@ -108,13 +108,10 @@ fn whole_apa() {
     use std::fs;
     db.set_style_text(include_str!("../../tests/data/apa.csl"));
     // let style = Style::from_str(&).unwrap();
-    use super::knowledge::Knowledge;
-    let mut k = Knowledge::new();
-    let fcs = db.style().get_free_conds(&db, &mut k);
+    let fcs = db.style().get_free_conds(&db);
     dbg!(&fcs);
 }
 
-use super::knowledge::Knowledge;
 use crate::test::MockProcessor;
 use csl::style::Style;
 
@@ -124,8 +121,7 @@ fn whole_agcl() {
     use std::fs;
     db.set_style_text(include_str!("../../tests/data/aglc.csl"));
     // let style = Style::from_str(&).unwrap();
-    let mut k = Knowledge::new();
-    let fcs = db.style().get_free_conds(&db, &mut k);
+    let fcs = db.style().get_free_conds(&db);
     dbg!(&fcs);
 }
 
@@ -149,8 +145,7 @@ fn test_locator_macro() {
       </else-if>
     </choose>"#
     ));
-    let mut k = Knowledge::new();
-    let fcs = db.style().get_free_conds(&db, &mut k);
+    let fcs = db.style().get_free_conds(&db);
     let mut correct = FreeCondSets::empty();
     correct.0.insert(FreeCond::LOCATOR | FreeCond::LT_PAGE);
     correct

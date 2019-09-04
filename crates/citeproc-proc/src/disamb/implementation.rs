@@ -5,28 +5,22 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::free::{FreeCond, FreeCondSets};
-use super::knowledge::Knowledge;
 use super::Disambiguation;
 use crate::prelude::*;
-use citeproc_io::output::html::Html;
-use citeproc_io::{Cite, Reference};
+
 use csl::{
-    style::{
-        Choose, Cond, CondSet, Conditions, Element, Formatting, Group, IfThen, Match, Position,
-        Style, TextSource,
-    },
+    style::{Choose, Cond, Element, IfThen, Match, Style, TextSource},
     variables::AnyVariable,
     IsIndependent,
 };
-use fnv::FnvHashSet;
 
-fn cross_product(db: &impl IrDatabase, knowledge: &mut Knowledge, els: &[Element]) -> FreeCondSets {
+fn cross_product(db: &impl IrDatabase, els: &[Element]) -> FreeCondSets {
     // XXX: include layout parts?
     let mut all = fnv_set_with_cap(els.len());
     all.insert(FreeCond::empty());
     let mut f = FreeCondSets(all);
     for el in els {
-        f.cross_product(el.get_free_conds(db, knowledge));
+        f.cross_product(el.get_free_conds(db));
     }
     f
 }
@@ -38,29 +32,29 @@ fn mult_identity() -> FreeCondSets {
 }
 
 impl Disambiguation for Style {
-    fn get_free_conds(&self, db: &impl IrDatabase, knowledge: &mut Knowledge) -> FreeCondSets {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         let els = &self.citation.layout.elements;
-        cross_product(db, knowledge, els)
+        cross_product(db, els)
     }
 }
 
 impl Disambiguation for Element {
-    fn get_free_conds(&self, db: &impl IrDatabase, knowledge: &mut Knowledge) -> FreeCondSets {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         match self {
             Element::Group(g) => {
                 // TODO: keep track of which empty variables caused GroupVars to not render, if
                 // they are indeed free variables.
-                cross_product(db, knowledge, &g.elements)
+                cross_product(db, &g.elements)
             }
             Element::Names(n) => {
                 // TODO: drill down into the substitute logic here
                 if let Some(subst) = &n.substitute {
-                    cross_product(db, knowledge, &subst.0)
+                    cross_product(db, &subst.0)
                 } else {
                     mult_identity()
                 }
             }
-            Element::Choose(c) => c.get_free_conds(db, knowledge),
+            Element::Choose(c) => c.get_free_conds(db),
             Element::Number(num_var, ..) | Element::Label(num_var, ..) => {
                 if num_var.is_independent() {
                     let mut implicit_var_test = FreeCondSets::default();
@@ -84,7 +78,7 @@ impl Disambiguation for Element {
                     //     );
                     // }
                     // state.macro_stack.insert(name.clone());
-                    cross_product(db, knowledge, macro_unsafe)
+                    cross_product(db, macro_unsafe)
                 }
                 TextSource::Variable(sv, ..) => {
                     if sv.is_independent() {
@@ -105,27 +99,27 @@ impl Disambiguation for Element {
 
 impl Disambiguation for Choose {
     // pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
-    fn get_free_conds(&self, db: &impl IrDatabase, knowledge: &mut Knowledge) -> FreeCondSets {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         use std::iter;
         let Choose(ifthen, elseifs, else_) = self;
         let IfThen(if_conditions, if_els) = ifthen;
         assert!(if_conditions.0 == Match::All);
         assert!(if_conditions.1.len() == 1);
-        let if_els = cross_product(db, knowledge, if_els);
+        let if_els = cross_product(db, if_els);
         let ifthen = (&if_conditions.1[0], if_els);
         let first: Vec<_> = iter::once(ifthen)
             .chain(elseifs.iter().map(|fi: &IfThen| {
                 let IfThen(if_conditions, if_els) = fi;
                 assert!(if_conditions.0 == Match::All);
                 assert!(if_conditions.1.len() == 1);
-                let if_els = cross_product(db, knowledge, if_els);
+                let if_els = cross_product(db, if_els);
                 (&if_conditions.1[0], if_els)
             }))
             .collect();
         FreeCondSets::all_branches(
             first.into_iter(),
             if else_.0.len() > 0 {
-                Some(cross_product(db, knowledge, &else_.0))
+                Some(cross_product(db, &else_.0))
             } else {
                 None
             },

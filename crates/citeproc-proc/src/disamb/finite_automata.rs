@@ -12,7 +12,7 @@ use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);

@@ -6,7 +6,7 @@
 
 use crate::prelude::fnv_set_with_cap;
 use csl::style::{Cond, Position};
-use csl::style::{CondSet, Conditions, Match};
+use csl::style::{CondSet, Match};
 use csl::terms::LocatorType;
 use csl::variables::{AnyVariable, NumberVariable, Variable};
 use fnv::FnvHashSet;
@@ -271,7 +271,7 @@ fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
 ///
 /// Being made of bitflags, it is probably faster than constructing a whole knowledge database
 /// again.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FreeCondSets(pub FnvHashSet<FreeCond>);
 
 impl Default for FreeCondSets {
@@ -363,7 +363,7 @@ impl FreeCondSets {
         let mut all = FreeCondSets::empty();
         let mut accumulator = FreeCondSets::default();
         for (cond_set, inner) in cond_results {
-            let (mut outer, mut negation) = condset_to_frees(cond_set, inner);
+            let (mut outer, negation) = condset_to_frees(cond_set, inner);
             // outer.0.extend(accumulator.0.clone().drain());
             for x in &accumulator.0 {
                 outer = outer.scalar_multiply(*x);
@@ -402,7 +402,7 @@ fn condset_to_frees(c: &CondSet, inner: FreeCondSets) -> (FreeCondSets, FreeCond
                 .filter_map(cond_to_frees)
                 .map(|(_a, neg_a)| neg_a)
                 .collect();
-            let mut none = inner.scalar_multiply(all_false);
+            let none = inner.scalar_multiply(all_false);
             let mut any = FreeCondSets::empty();
             get_any_outside(conds, &mut any.0);
             (none, any)
@@ -414,12 +414,12 @@ fn condset_to_frees(c: &CondSet, inner: FreeCondSets) -> (FreeCondSets, FreeCond
                 .filter_map(cond_to_frees)
                 .map(|(a, _neg_a)| a)
                 .collect();
-            let all_false: FreeCond = conds
+            let _all_false: FreeCond = conds
                 .iter()
                 .filter_map(cond_to_frees)
                 .map(|(_a, neg_a)| neg_a)
                 .collect();
-            let mut all = inner.scalar_multiply(all);
+            let all = inner.scalar_multiply(all);
             let mut nand = FreeCondSets::empty();
             get_nand_outside(conds, &mut nand.0);
             (all, nand)
@@ -434,7 +434,7 @@ fn condset_to_frees(c: &CondSet, inner: FreeCondSets) -> (FreeCondSets, FreeCond
                 .filter_map(cond_to_frees)
                 .map(|(_a, neg_a)| neg_a)
                 .collect();
-            let mut any = FreeCondSets(any);
+            let any = FreeCondSets(any);
             let mut none = FreeCondSets::empty();
             none.insert_validated(all_false);
             (any, none.at_least_1())

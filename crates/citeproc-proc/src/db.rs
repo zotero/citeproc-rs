@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::disamb::{Edge, EdgeData};
+use crate::disamb::{Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -39,6 +39,13 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
+
+    fn branch_runs(&self) -> Arc<FreeCondSets>;
+}
+
+fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {
+    let style = db.style();
+    Arc::new(style.get_free_conds(db))
 }
 
 // only call with real references please
