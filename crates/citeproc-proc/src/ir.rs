@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::disamb::Edge;
+use crate::disamb::{Edge, EdgeData};
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use csl::style::{
@@ -13,11 +13,6 @@ use csl::style::{
 };
 use csl::Atom;
 use std::sync::Arc;
-
-// /// Just exists to make it easier to add other tree-folded summary data.
-// /// Even if it's only `GroupVars` for now.
-// #[derive(Debug)]
-// pub struct Summary(GroupVars);
 
 pub type IrSum<O> = (IR<O>, GroupVars);
 
@@ -51,6 +46,7 @@ pub enum RefIR<O: OutputFormat = Html> {
     /// ])
     /// ```
     Seq(Vec<RefIR<O>>),
+
     /// A piece of output that a cite can match in the final DFA.
     /// e.g.
     ///
@@ -62,10 +58,12 @@ pub enum RefIR<O: OutputFormat = Html> {
     ///
     /// Each is interned into an `Edge` newtype referencing the salsa database.
     Edge(Edge),
+
     /// We use this to apply a FreeCond set to a reference to create a path through the
     /// constructed NFA.
     /// See the module level documentation for `disamb`.
     Branch(Arc<Conditions>, Box<IR<O>>),
+
     /// When constructing RefIR, we know whether the names variables exist or not.
     /// So we don't have to handle 'substitute' any special way -- just drill down into the
     /// names element, apply its formatting, and end up with
@@ -80,11 +78,22 @@ pub enum RefIR<O: OutputFormat = Html> {
     Names(Arc<NamesEl>, Box<RefIR<O>>),
 }
 
+/// A version of [`EdgeData`] that has a piece of output for every
+pub enum CiteEdgeData<O: OutputFormat = Html> {
+    Output(O::Output),
+    Locator(O::Output),
+    LocatorLabel(O::Output),
+    YearSuffix(O::Output),
+    CitationNumber(O::Output),
+    BibNumber(O::Output),
+    Frnn(O::Output),
+}
+
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IR<O: OutputFormat> {
     // no (further) disambiguation possible
-    Rendered(Option<O::Build>),
+    Rendered(Option<CiteEdgeData<O>>),
     // the name block,
     // the current render
     Names(Arc<NamesEl>, O::Build),
@@ -107,7 +116,6 @@ pub enum IR<O: OutputFormat> {
     //     YearSuffix(Explicit(Text(Variable::YearSuffix), T)),
     //     Rendered(..)
     // ]
-    // // TODO: store delimiter and affixes for later
     Seq(IrSeq<O>),
 }
 
@@ -116,18 +124,6 @@ impl<O: OutputFormat> IR<O> {
         match self {
             IR::Rendered(_) => true,
             _ => false,
-        }
-    }
-
-    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
-        // must clone
-        match self {
-            IR::Rendered(None) => None,
-            IR::Rendered(Some(ref x)) => Some(x.clone()),
-            IR::Names(_, ref x) => Some(x.clone()),
-            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
-            IR::YearSuffix(_, ref x) => Some(x.clone()),
-            IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
     }
 
@@ -174,6 +170,48 @@ impl<O: OutputFormat> IR<O> {
             }
         }
     }
+
+    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
+        // must clone
+        match self {
+            IR::Rendered(None) => None,
+            IR::Rendered(Some(ref x)) => Some(x.clone()),
+            IR::Names(_, ref x) => Some(x.clone()),
+            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
+            IR::YearSuffix(_, ref x) => Some(x.clone()),
+            IR::Seq(ref seq) => seq.flatten_seq(fmt),
+        }
+    }
+
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &O, formatting: Formatting) {
+        match self {
+            IR::Rendered(None) => {}
+            IR::Rendered(Some(ed)) => edges.push(ed.into()),
+            // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
+            // inside
+            IR::YearSuffix(_hook, x) => edges.push(EdgeData::Output(x.clone())),
+            IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
+            IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
+            IR::Names(_names, r) => edges.push(EdgeData::Output(r.clone())),
+        }
+    }
+
+    pub fn to_edge_stream(&self, fmt: &O) -> Vec<EdgeData> {
+        let mut edges = Vec::new();
+    }
+}
+
+impl<'a> From<&'a CiteEdgeData> for EdgeData {
+    fn from(cite_edge: &CiteEdgeData) -> Self {
+        match cite_edge {
+            CiteEdgeData::Output(x) => EdgeData::Output(x.clone()),
+            CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
+            CiteEdgeData::Frnn(_) => EdgeData::Frnn,
+            CiteEdgeData::Locator(_) => EdgeData::Locator,
+            CiteEdgeData::BibNumber(_) => EdgeData::BibNumber,
+            CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -184,7 +222,32 @@ pub struct IrSeq<O: OutputFormat> {
     pub delimiter: Atom,
 }
 
+use citeproc_io::output::FormatCmd;
+
 impl<O: OutputFormat> IrSeq<O> {
+    fn append_edges(&self, edges: &mut EdgeData, fmt: &O, formatting: Formatting) -> Vec<EdgeData> {
+        let stack = fmt.tag_stack();
+        let sub_formatting = self
+            .formatting
+            .map(|mine| formatting.override_with(mine))
+            .unwrap_or(formatting);
+        let mut open_tags = String::new();
+        let mut close_tags = String::new();
+        fmt.stack_preorder(&mut open_tags, stack);
+        fmt.stack_postorder(&mut close_tags, stack);
+        edges.push(EdgeData::Output(open_tags));
+        // push the innards
+        let len = self.contents.len();
+        for (n, ir) in self.contents.iter().enumerate() {
+            ir.append_edges(&mut edges, fmt, sub_formatting);
+            if n != len {
+                edges.push(EdgeData::Output(fmt.plain()))
+            }
+        }
+        edges.push(EdgeData::Output(close_tags));
+        edges
+    }
+
     fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
         let xs: Vec<_> = self
             .contents

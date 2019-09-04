@@ -16,21 +16,22 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat + Sized = Html> {
-    // can technically get this from db
     pub reference: &'c Reference,
     pub format: O,
     pub cite_id: CiteId,
-    pub cite: &'c Cite<O>,
-    // could store in the DB
-    pub position: (Position, Option<u32>),
-    //
-    pub citation_number: u32,
-    // TODO: keep track of which variables have so far been substituted
-    pub disamb_pass: Option<DisambPass>,
     pub style: &'c Style,
     pub locale: &'c Locale,
-    pub bib_number: Option<u32>,
     pub name_citation: Arc<NameEl>,
+
+    pub position: (Position, Option<u32>),
+
+    pub disamb_pass: Option<DisambPass>,
+
+    // These fields are synchronised with fields on EdgeData and IR.
+    pub cite: &'c Cite<O>,
+    pub citation_number: u32,
+    pub bib_number: Option<u32>,
+    // TODO: keep track of which variables have so far been substituted
 }
 
 // helper methods to access both cite and reference properties via Variables

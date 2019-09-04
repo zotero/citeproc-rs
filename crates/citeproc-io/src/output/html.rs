@@ -146,6 +146,7 @@ fn stack_postorder(s: &mut String, stack: &[FormatCmd], options: &HtmlOptions) {
         s.push_str(">");
     }
 }
+
 fn tag_stack(options: &HtmlOptions, formatting: Formatting) -> Vec<FormatCmd> {
     use super::FormatCmd::*;
     let mut stack = Vec::new();
@@ -380,6 +381,12 @@ impl OutputFormat for Html {
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
         match self {
             Html::Html(ref options) => stack_postorder(s, stack, options),
+            Html::Rtf(ref _options) => unimplemented!(),
+        }
+    }
+    fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
+        match self {
+            Html::Html(ref options) => tag_stack(options, formatting),
             Html::Rtf(ref _options) => unimplemented!(),
         }
     }

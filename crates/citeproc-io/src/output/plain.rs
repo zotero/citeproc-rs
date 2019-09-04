@@ -94,4 +94,8 @@ impl OutputFormat for PlainText {
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {}
     #[inline]
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    #[inline]
+    fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
+        Vec::new()
+    }
 }

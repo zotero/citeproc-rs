@@ -160,6 +160,15 @@ impl Formatting {
         f.font_variant = Some(FontVariant::SmallCaps);
         f
     }
+    pub fn override_with(self, other: Self) -> Self {
+        Formatting {
+            font_variant: other.font_variant.or(self.font_variant),
+            font_style: other.font_style.or(self.font_style),
+            font_weight: other.font_weight.or(self.font_weight),
+            vertical_alignment: other.vertical_alignment.or(self.vertical_alignment),
+            text_decoration: other.text_decoration.or(self.text_decoration),
+        }
+    }
 }
 
 impl fmt::Debug for Affixes {

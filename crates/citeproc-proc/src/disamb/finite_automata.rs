@@ -12,19 +12,40 @@ use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Edge(u32);
 
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum EdgeData {
-    Output(<Html as OutputFormat>::Output),
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EdgeData<O: OutputFormat = Html> {
+    Output(O::Output),
+    // The rest are synchronised with fields on CiteContext and IR.
     Locator,
-    Frnn,
+    LocatorLabel,
     YearSuffix,
-    // ...
+    CitationNumber,
+    BibNumber,
+    // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
+    Frnn,
+}
+
+use std::hash::{Hash, Hasher};
+
+/// Have to implement Hash ourselves because of the blanket O on EdgeData<O>>. This is basically
+/// what the derive macro spits out.
+impl Hash for EdgeData {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        use std::mem::discriminant;
+        match &*self {
+            &EdgeData::Output(ref outp) => {
+                ::core::hash::Hash::hash(&discriminant(&self), state);
+                ::core::hash::Hash::hash(&(*outp), state)
+            }
+            _ => ::core::hash::Hash::hash(&discriminant(&self), state),
+        }
+    }
 }
 
 impl Edge {
