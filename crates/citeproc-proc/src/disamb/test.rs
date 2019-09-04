@@ -5,6 +5,7 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::free::{FreeCond, FreeCondSets};
+use super::DisambiguationOld;
 use crate::prelude::*;
 use citeproc_io::Reference;
 use csl::style::{Cond, CslType, Position};

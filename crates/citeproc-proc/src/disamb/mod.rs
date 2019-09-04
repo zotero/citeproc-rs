@@ -86,14 +86,44 @@ use knowledge::Knowledge;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
 
-fn create_ref_ir<O: OutputFormat>(db: &impl IrDatabase, _refr: &Reference) -> RefIR<O> {
+/// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
+/// so we don't have to re-allocate/collect the list after sorting to exclude it.
+fn create_ref_ir<O: OutputFormat>(
+    db: &impl IrDatabase,
+    _refr: &Reference,
+) -> Vec<(FreeCond, RefIR<O>)> {
     let _style = db.style();
-    let _fcs = db.branch_runs();
-    unimplemented!()
+    let fcs = db.branch_runs();
+    let mut vec: Vec<(FreeCond, RefIR<O>)> = fcs
+        .0
+        .iter()
+        .map(|_fc| {
+            unimplemented!()
+            // let mut ctx = CiteContext {
+            // cite_id: unimplemented!(),
+            // reference: unimplemented!(),
+            // format: unimplemented!(),
+            // cite: unimplemented!(),
+            // position: unimplemented!(),
+            // citation_number: unimplemented!(),
+            // disamb_pass: None,
+            // };
+            // (*fc, style.ref_ir(db, &mut ctx))
+        })
+        .collect();
+    vec.sort_by_key(|(fc, _)| fc.bits());
+    vec
 }
 
-pub trait Disambiguation<O: OutputFormat = Html> {
+pub trait Disambiguation {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
+        unimplemented!()
+    }
+    fn ref_ir<O: OutputFormat>(
+        &self,
+        _db: &impl IrDatabase,
+        _ctx: &mut CiteContext<O>,
+    ) -> RefIR<O> {
         unimplemented!()
     }
 }
