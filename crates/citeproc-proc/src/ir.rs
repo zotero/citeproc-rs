@@ -144,18 +144,18 @@ impl<O: OutputFormat> IR<O> {
             }
             IR::Names(ref el, ref _x) => {
                 // TODO: re-eval again until names are exhausted
-                let (new_ir, _) = el.intermediate(db, state, ctx);
+                let (new_ir, _) = el.intermediate(state, ctx);
                 new_ir
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
-                let (new_ir, _) = el.intermediate(db, state, ctx);
+                let (new_ir, _) = el.intermediate(state, ctx);
                 new_ir
             }
             IR::YearSuffix(ref ysh, ref _x) => {
                 // TODO: save GroupVars state in IrSeq so a Group with a year-suffix in
                 // it can do normal group suppression
                 if let YearSuffixHook::Explicit(ref el) = ysh {
-                    let (new_ir, _) = el.intermediate(db, state, ctx);
+                    let (new_ir, _) = el.intermediate(state, ctx);
                     new_ir
                 } else {
                     // not implemented

@@ -10,16 +10,10 @@ impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O> {
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
         let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence(
-            db,
             state,
             ctx,
             &layout.elements,
@@ -34,15 +28,10 @@ impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O> {
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
         let fmt = &ctx.format;
         match *self {
-            Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
+            Element::Choose(ref ch) => ch.intermediate(state, ctx),
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
                 use citeproc_io::output::LocalizedQuotes;
@@ -52,8 +41,8 @@ where
                 match *source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
-                        let style = db.style();
-                        let macro_unsafe = style
+                        let macro_unsafe = ctx
+                            .style
                             .macros
                             .get(name)
                             .expect("macro errors not implemented!");
@@ -67,7 +56,7 @@ where
                             );
                         }
                         state.macro_stack.insert(name.clone());
-                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone());
+                        let out = sequence(state, ctx, &macro_unsafe, "".into(), f, af.clone());
                         state.macro_stack.remove(&name);
                         out
                     }
@@ -111,7 +100,7 @@ where
                                 let linked = fmt.hyperlinked(txt, maybe_link);
                                 fmt.affixed_quoted(linked, &af, quotes)
                             }),
-                            StandardVariable::Number(v) => ctx.get_number(v, db).map(|val| {
+                            StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
                                 state.tokens.insert(DisambToken::Num(val.clone()));
                                 fmt.affixed_text_quoted(
                                     val.verbatim(v.should_replace_hyphens()),
@@ -125,8 +114,8 @@ where
                         (IR::Rendered(content), gv)
                     }
                     TextSource::Term(term_selector, plural) => {
-                        let locale = db.locale_by_cite(ctx.cite_id);
-                        let content = locale
+                        let content = ctx
+                            .locale
                             .get_text_term(term_selector, plural)
                             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes));
                         (IR::Rendered(content), GroupVars::new())
@@ -141,7 +130,7 @@ where
                     var,
                     form,
                 );
-                let num_val = ctx.get_number(var, db);
+                let num_val = ctx.get_number(var);
                 let plural = match (num_val, pl) {
                     (None, _) => None,
                     (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
@@ -150,8 +139,7 @@ where
                 };
                 let content = plural.and_then(|p| {
                     selector.and_then(|sel| {
-                        let locale = db.locale_by_cite(ctx.cite_id);
-                        locale
+                        ctx.locale
                             .get_text_term(TextTermSelector::Gendered(sel), p)
                             .map(|val| fmt.affixed_text(val.to_owned(), f, &af))
                     })
@@ -160,21 +148,20 @@ where
             }
 
             Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
-                let content = ctx.get_number(var, db).map(|val| {
+                let content = ctx.get_number(var).map(|val| {
                     fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
                 });
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
             }
 
-            Element::Names(ref ns) => ns.intermediate(db, state, ctx),
+            Element::Names(ref ns) => ns.intermediate(state, ctx),
 
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => {
                 let (seq, group_vars) = sequence(
-                    db,
                     state,
                     ctx,
                     g.elements.as_ref(),
@@ -193,7 +180,7 @@ where
                 }
             }
             Element::Date(ref dt) => {
-                dt.intermediate(db, state, ctx)
+                dt.intermediate(state, ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }

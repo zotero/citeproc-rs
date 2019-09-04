@@ -220,7 +220,6 @@ impl OneName {
 
     fn render<'c, O: OutputFormat>(
         &self,
-        db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
         names_slice: &[Name],
@@ -230,7 +229,7 @@ impl OneName {
 
         let mut seen_one = false;
         let name_tokens = self.name_tokens(ctx.position.0, names_slice);
-        let locale = db.locale_by_cite(ctx.cite_id);
+        let locale = ctx.locale;
 
         if self.0.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -261,7 +260,7 @@ impl OneName {
                     pn_is_latin_cyrillic(pn),
                     self.0.form == Some(NameForm::Long),
                     self.naso(seen_one),
-                    db.style().demote_non_dropping_particle,
+                    ctx.style.demote_non_dropping_particle,
                 );
                 seen_one = true;
 
@@ -277,7 +276,7 @@ impl OneName {
                                     &given,
                                     self.0.initialize.unwrap_or(true),
                                     self.0.initialize_with.as_ref().map(|s| s.as_ref()),
-                                    db.style().initialize_with_hyphen,
+                                    ctx.style.initialize_with_hyphen,
                                 );
                                 build.push(format_with_part(name_part, &string));
                             }
@@ -514,18 +513,13 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
         let name_el = OneName(
-            db.name_citation()
+            ctx.name_citation
                 .merge(self.name.as_ref().unwrap_or(&NameEl::default())),
         );
         let rendered: Vec<_> = self
@@ -534,7 +528,7 @@ where
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
             .filter_map(|&var| ctx.get_name(var))
-            .map(|val| name_el.render(db, state, ctx, val, &self.et_al))
+            .map(|val| name_el.render(state, ctx, val, &self.et_al))
             .collect();
         if rendered.is_empty() {
             return (IR::Rendered(None), GroupVars::new());

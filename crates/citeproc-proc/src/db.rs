@@ -208,6 +208,8 @@ macro_rules! preamble {
             disamb_pass: $pass,
             style: &$style,
             locale: &$locale,
+            bib_number: $db.bib_number($id),
+            name_citation: $db.name_citation(),
         };
     }};
 }
@@ -221,7 +223,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let index = db.inverted_index();
     let mut state = IrState::new();
-    let ir = style.intermediate(db, &mut state, &ctx).0;
+    let ir = style.intermediate(&mut state, &ctx).0;
     let un = is_unambiguous(&index, None, &state);
     Arc::new((ir, un, state))
 }

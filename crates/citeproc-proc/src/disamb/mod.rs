@@ -358,34 +358,6 @@ pub struct DisambiguationState<'c> {
 }
 
 impl DisambiguationState<'_> {
-    pub fn new<'a>(
-        reference: &'a Reference,
-        cite_id: CiteId,
-        cite: &'a Cite<Html>,
-        position: (Position, Option<u32>),
-        number: u32,
-        style: &'a Style,
-        locale: &'a Locale,
-    ) -> DisambiguationState<'a> {
-        let format = Html::default();
-        DisambiguationState {
-            knowledge: Knowledge::new(),
-            format_stack: vec![],
-            format_current: Default::default(),
-            nfa: Nfa::new(),
-            cite_context: CiteContext {
-                cite_id,
-                reference,
-                format,
-                cite,
-                position,
-                citation_number: number,
-                disamb_pass: None,
-                style,
-                locale,
-            },
-        }
-    }
     /// if None, you should exit out of DFADisambiguate
     fn digest(&mut self, _token: EdgeData) -> Option<()> {
         // ... match against internal DFA, using formatting from the stack.

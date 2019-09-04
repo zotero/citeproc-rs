@@ -11,7 +11,6 @@ use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
 pub fn sequence<'c, O>(
-    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &[Element],
@@ -106,7 +105,7 @@ where
 
     let (inner, gv) = els
         .iter()
-        .map(|el| el.intermediate(db, state, ctx))
+        .map(|el| el.intermediate(state, ctx))
         .fold((IR::Rendered(None), GroupVars::new()), folder);
 
     if let Rendered(None) = inner {

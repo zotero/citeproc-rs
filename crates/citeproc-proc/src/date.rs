@@ -16,19 +16,14 @@ impl<'c, O> Proc<'c, O> for BodyDate
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
         match *self {
-            BodyDate::Indep(ref idate) => idate.intermediate(db, state, ctx),
-            BodyDate::Local(ref ldate) => ldate.intermediate(db, state, ctx),
+            BodyDate::Indep(ref idate) => idate.intermediate(state, ctx),
+            BodyDate::Local(ref ldate) => ldate.intermediate(state, ctx),
         }
     }
 }
@@ -37,17 +32,12 @@ impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let locale = db.locale_by_cite(ctx.cite_id);
+        let locale = ctx.locale;
         // TODO: handle missing
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
@@ -61,7 +51,7 @@ where
                 .date_parts
                 .iter()
                 .filter(|dp| dp_matches(dp, self.parts_selector))
-                .filter_map(|dp| dp_render(dp, db, state, ctx, &val))
+                .filter_map(|dp| dp_render(dp, state, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
             fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
@@ -75,12 +65,7 @@ impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -98,7 +83,7 @@ where
                 let each: Vec<_> = self
                     .date_parts
                     .iter()
-                    .filter_map(|dp| dp_render(dp, db, state, ctx, &val))
+                    .filter_map(|dp| dp_render(dp, state, ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
                 fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes)
@@ -156,12 +141,11 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
 
 fn dp_render<'c, O: OutputFormat>(
     part: &DatePart,
-    db: &impl IrDatabase,
     _state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     date: &Date,
 ) -> Option<O::Build> {
-    let locale = db.locale_by_cite(ctx.cite_id);
+    let locale = ctx.locale;
     let string = match part.form {
         DatePartForm::Year(form) => match form {
             YearForm::Long => Some(format!("{}", date.year)),

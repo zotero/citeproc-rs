@@ -32,7 +32,7 @@ pub(crate) mod prelude {
 
     pub use crate::cite_context::CiteContext;
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
-    pub(crate) use crate::disamb::{Disambiguation};
+    pub(crate) use crate::disamb::Disambiguation;
     pub use crate::group::GroupVars;
     pub(crate) use crate::helpers::*;
     pub use crate::ir::*;
@@ -60,12 +60,7 @@ pub(crate) trait Proc<'c, O>
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>;
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>;
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]

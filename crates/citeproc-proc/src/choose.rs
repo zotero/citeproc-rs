@@ -15,12 +15,7 @@ impl<'c, O> Proc<'c, O> for Arc<Choose>
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
+    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -32,7 +27,7 @@ where
             let BranchEval {
                 disambiguate,
                 content,
-            } = eval_ifthen(head, db, state, ctx);
+            } = eval_ifthen(head, state, ctx);
             found = content;
             disamb = disamb || disambiguate;
         }
@@ -52,7 +47,7 @@ where
                 let BranchEval {
                     disambiguate,
                     content,
-                } = eval_ifthen(branch, db, state, ctx);
+                } = eval_ifthen(branch, state, ctx);
                 found = content;
                 disamb = disamb || disambiguate;
             }
@@ -67,7 +62,7 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default());
+            let (content, gv) = sequence(state, ctx, &els, "".into(), None, Affixes::default());
             if disamb {
                 (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
@@ -85,7 +80,6 @@ struct BranchEval<O: OutputFormat> {
 
 fn eval_ifthen<'c, O>(
     branch: &'c IfThen,
-    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
 ) -> BranchEval<O>
@@ -93,10 +87,9 @@ where
     O: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, disambiguate) = eval_conditions(conditions, ctx, db);
+    let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = if matched {
         Some(sequence(
-            db,
             state,
             ctx,
             &elements,
@@ -115,16 +108,12 @@ where
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, O>(
-    conditions: &'c Conditions,
-    ctx: &CiteContext<'c, O>,
-    db: &impl IrDatabase,
-) -> (bool, bool)
+fn eval_conditions<'c, O>(conditions: &'c Conditions, ctx: &CiteContext<'c, O>) -> (bool, bool)
 where
     O: OutputFormat,
 {
     let Conditions(ref match_type, ref conditions) = *conditions;
-    let mut tests = conditions.iter().map(|c| eval_condset(c, ctx, db));
+    let mut tests = conditions.iter().map(|c| eval_condset(c, ctx));
     let disambiguate = conditions.iter().any(|c| {
         c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
     }) && ctx.disamb_pass != Some(DisambPass::Conditionals);
@@ -132,23 +121,19 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_condset<'c, O>(
-    cond_set: &'c CondSet,
-    ctx: &CiteContext<'c, O>,
-    db: &impl IrDatabase,
-) -> bool
+fn eval_condset<'c, O>(cond_set: &'c CondSet, ctx: &CiteContext<'c, O>) -> bool
 where
     O: OutputFormat,
 {
-    let style = db.style();
+    let style = ctx.style;
 
     let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
         Some(match cond {
-            Cond::Variable(var) => ctx.has_variable(*var, db),
-            Cond::IsNumeric(var) => ctx.is_numeric(*var, db),
+            Cond::Variable(var) => ctx.has_variable(*var),
+            Cond::IsNumeric(var) => ctx.is_numeric(*var),
             Cond::Disambiguate(d) => *d == (ctx.disamb_pass == Some(DisambPass::Conditionals)),
             Cond::Type(typ) => ctx.reference.csl_type == *typ,
-            Cond::Position(pos) => db.cite_position(ctx.cite_id).0.matches(*pos),
+            Cond::Position(pos) => ctx.position.0.matches(*pos),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
                 if !style.features.condition_date_parts =>

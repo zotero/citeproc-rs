@@ -7,13 +7,15 @@
 use crate::prelude::*;
 
 use super::DisambPass;
+use citeproc_io::output::html::Html;
 use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{Position, Style, VariableForm};
+use csl::style::{Name as NameEl, Position, Style, VariableForm};
 use csl::variables::*;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CiteContext<'c, O: OutputFormat + Sized> {
+pub struct CiteContext<'c, O: OutputFormat + Sized = Html> {
     // can technically get this from db
     pub reference: &'c Reference,
     pub format: O,
@@ -27,6 +29,8 @@ pub struct CiteContext<'c, O: OutputFormat + Sized> {
     pub disamb_pass: Option<DisambPass>,
     pub style: &'c Style,
     pub locale: &'c Locale,
+    pub bib_number: Option<u32>,
+    pub name_citation: Arc<NameEl>,
 }
 
 // helper methods to access both cite and reference properties via Variables
@@ -42,7 +46,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         .map(|s| s.as_str())
     }
 
-    pub fn has_variable(&self, var: AnyVariable, db: &impl IrDatabase) -> bool {
+    pub fn has_variable(&self, var: AnyVariable) -> bool {
         use csl::variables::AnyVariable::*;
         match var {
             Name(NameVariable::Dummy) => false,
@@ -50,12 +54,10 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
             Number(NumberVariable::Locator) => !self.cite.locators.is_empty(),
             // we need Page to exist and be numeric
             Number(NumberVariable::PageFirst) => {
-                self.is_numeric(AnyVariable::Number(NumberVariable::Page), db)
+                self.is_numeric(AnyVariable::Number(NumberVariable::Page))
             }
-            Number(NumberVariable::FirstReferenceNoteNumber) => {
-                db.cite_position(self.cite_id).1.is_some()
-            }
-            Number(NumberVariable::CitationNumber) => db.bib_number(self.cite_id).is_some(),
+            Number(NumberVariable::FirstReferenceNoteNumber) => self.position.1.is_some(),
+            Number(NumberVariable::CitationNumber) => self.bib_number.is_some(),
             _ => ref_has_variable(self.reference, var),
         }
     }
@@ -69,10 +71,10 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
     ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
     ///   are literal hyphens, not number ranges.
     ///   By not representing them as numbers, `is-numeric="version"` won't work.
-    pub fn is_numeric(&self, var: AnyVariable, db: &impl IrDatabase) -> bool {
+    pub fn is_numeric(&self, var: AnyVariable) -> bool {
         match var {
             AnyVariable::Number(num) => self
-                .get_number(num, db)
+                .get_number(num)
                 .map(|r| r.is_numeric())
                 .unwrap_or(false),
 
@@ -81,7 +83,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         }
     }
 
-    pub fn get_number(&self, var: NumberVariable, db: &impl IrDatabase) -> Option<NumericValue> {
+    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
         match var {
             // TODO: get all the locators?
             NumberVariable::Locator => self
@@ -90,10 +92,8 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
                 .get(0)
                 .map(Locator::value)
                 .map(Clone::clone),
-            NumberVariable::FirstReferenceNoteNumber => {
-                db.cite_position(self.cite_id).1.map(NumericValue::num)
-            }
-            NumberVariable::CitationNumber => db.bib_number(self.cite_id).map(NumericValue::num),
+            NumberVariable::FirstReferenceNoteNumber => self.position.1.map(NumericValue::num),
+            NumberVariable::CitationNumber => self.bib_number.map(NumericValue::num),
             NumberVariable::PageFirst => self
                 .reference
                 .number
