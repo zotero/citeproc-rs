@@ -7,6 +7,9 @@
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate citeproc_db;
+
 use citeproc_io::output::OutputFormat;
 use csl::Atom;
 use fnv::FnvHashMap;

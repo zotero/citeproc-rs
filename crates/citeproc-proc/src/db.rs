@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::disamb::{Edge, EdgeData, FreeCondSets};
+use crate::disamb::{Edge, EdgeData, FreeCondSets, Nfa};
 use crate::prelude::*;
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -37,10 +37,21 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
 
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
 
+    fn branch_runs(&self) -> Arc<FreeCondSets>;
+
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
 
-    fn branch_runs(&self) -> Arc<FreeCondSets>;
+    #[salsa::interned]
+    fn names_nfa(&self, e: Arc<Nfa>) -> NamesNfa;
+}
+
+intern_key!(pub NamesNfa);
+impl NamesNfa {
+    pub fn lookup(&self, db: &impl IrDatabase) -> Arc<Nfa> {
+        let nn = db.lookup_names_nfa(*self);
+        nn
+    }
 }
 
 fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {

@@ -67,6 +67,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
 }
 
+#[macro_export]
 macro_rules! intern_key {
     ($vis:vis $name:ident) => {
         #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

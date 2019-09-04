@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::db::NamesNfa;
 use crate::disamb::{Edge, EdgeData};
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
@@ -12,6 +13,7 @@ use csl::style::{
     Names as NamesEl,
 };
 use csl::Atom;
+use petgraph::graph::NodeIndex;
 use std::sync::Arc;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
@@ -75,7 +77,9 @@ pub enum RefIR<O: OutputFormat = Html> {
     ///     Edge("</whatever>")
     /// ]
     /// ```
-    Names(Arc<NamesEl>, Box<RefIR<O>>),
+    ///
+    /// The Nfa represents all the token streams that the Names block can output.
+    Names(NamesNfa, Box<RefIR<O>>),
 }
 
 /// A version of [`EdgeData`] that has a piece of output for every

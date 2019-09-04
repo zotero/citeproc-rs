@@ -104,14 +104,14 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Nfa {
     graph: NfaGraph,
     accepting: BTreeSet<NodeIndex>,
     start: BTreeSet<NodeIndex>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Dfa {
     graph: DfaGraph,
     accepting: BTreeSet<NodeIndex>,
