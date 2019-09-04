@@ -17,7 +17,7 @@ use citeproc_io::output::{
     html::{Html, HtmlOptions},
     OutputFormat,
 };
-use citeproc_io::{Cite, ClusterId, Reference};
+use citeproc_io::ClusterId;
 use csl::Atom;
 
 #[salsa::query_group(IrDatabaseStorage)]
@@ -176,23 +176,6 @@ fn disambiguate<O: OutputFormat>(
     un
 }
 
-fn ctx_for<'c, O: OutputFormat>(
-    db: &impl IrDatabase,
-    cite_id: CiteId,
-    cite: &'c Cite<O>,
-    reference: &'c Reference,
-) -> CiteContext<'c, O> {
-    CiteContext {
-        cite_id,
-        cite,
-        reference,
-        format: O::default(),
-        position: db.cite_position(cite_id).0,
-        citation_number: 0, // XXX: from db
-        disamb_pass: None,
-    }
-}
-
 type IrGen = Arc<(IR<Html>, bool, IrState)>;
 
 fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
@@ -206,101 +189,128 @@ fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
     ))
 }
 
+macro_rules! preamble {
+    ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
+        $style = $db.style();
+        $locale = $db.locale_by_cite($id);
+        $cite = $id.lookup($db);
+        $refr = match $db.reference($cite.ref_id.clone()) {
+            None => return ref_not_found(&$cite.ref_id, true),
+            Some(r) => r,
+        };
+        $ctx = CiteContext {
+            reference: &$refr,
+            format: Html::default(),
+            cite_id: $id,
+            cite: &$cite,
+            position: $db.cite_position($id),
+            citation_number: 0,
+            disamb_pass: $pass,
+            style: &$style,
+            locale: &$locale,
+        };
+    }};
+}
+
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
-    let style = db.style();
+    let style;
+    let locale;
+    let cite;
+    let refr;
+    let ctx;
+    preamble!(style, locale, cite, refr, ctx, db, id, None);
     let index = db.inverted_index();
-    let cite = id.lookup(db);
-    let refr = match db.reference(cite.ref_id.clone()) {
-        None => return ref_not_found(&cite.ref_id, true),
-        Some(r) => r,
-    };
-    let ctx = ctx_for(db, id, &cite, &refr);
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
-
     let un = is_unambiguous(&index, None, &state);
     Arc::new((ir, un, state))
 }
 
 fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
-    let style = db.style();
+    let style;
+    let locale;
+    let cite;
+    let refr;
+    let mut ctx;
+    preamble!(style, locale, cite, refr, ctx, db, id, None);
+    ctx.disamb_pass = Some(DisambPass::AddNames);
+
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
     if ir0.1 || !style.citation.disambiguate_add_names {
         return ir0.clone();
     }
-    let cite = id.lookup(db);
-    let refr = db
-        .reference(cite.ref_id.clone())
-        .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir0.2.clone();
     let mut ir = ir0.0.clone();
 
-    ctx.disamb_pass = Some(DisambPass::AddNames);
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }
 
 fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
-    let style = db.style();
+    let style;
+    let locale;
+    let cite;
+    let refr;
+    let mut ctx;
+    preamble!(style, locale, cite, refr, ctx, db, id, None);
+    let gndr = style.citation.givenname_disambiguation_rule;
+    ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
+
     let ir1 = db.ir_gen1_add_names(id);
     if ir1.1 || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
-    let cite = id.lookup(db);
-    let refr = db
-        .reference(cite.ref_id.clone())
-        .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir1.2.clone();
     let mut ir = ir1.0.clone();
 
-    let gndr = style.citation.givenname_disambiguation_rule;
-    ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }
 
 fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
-    let style = db.style();
+    let style;
+    let locale;
+    let cite;
+    let refr;
+    let mut ctx;
+    preamble!(style, locale, cite, refr, ctx, db, id, None);
+
     let ir2 = db.ir_gen2_add_given_name(id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
     // splitting the ifs means we only compute year suffixes if it's enabled
-    let cite = id.lookup(db);
     let suffixes = db.year_suffixes();
     if !suffixes.contains_key(&cite.ref_id) {
         return ir2.clone();
     }
-    let refr = db
-        .reference(cite.ref_id.clone())
-        .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir2.2.clone();
     let mut ir = ir2.0.clone();
 
     let year_suffix = suffixes[&cite.ref_id];
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
+
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes));
     Arc::new((ir, un, state))
 }
 
 fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
+    let style;
+    let locale;
+    let cite;
+    let refr;
+    let mut ctx;
+    preamble!(style, locale, cite, refr, ctx, db, id, None);
+    ctx.disamb_pass = Some(DisambPass::Conditionals);
+
     let ir3 = db.ir_gen3_add_year_suffix(id);
     if ir3.1 {
         return ir3.clone();
     }
-    let cite = id.lookup(db);
-    let refr = db
-        .reference(cite.ref_id.clone())
-        .expect("already handled missing ref");
-    let mut ctx = ctx_for(db, id, &cite, &refr);
     let mut state = ir3.2.clone();
     let mut ir = ir3.0.clone();
 
-    ctx.disamb_pass = Some(DisambPass::Conditionals);
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
     Arc::new((ir, un, state))
 }

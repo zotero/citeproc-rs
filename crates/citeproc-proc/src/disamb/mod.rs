@@ -64,6 +64,7 @@
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use citeproc_io::{Cite, Reference};
+use csl::locale::Locale;
 use csl::style::{
     Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Position, Style, TextSource,
 };
@@ -361,8 +362,10 @@ impl DisambiguationState<'_> {
         reference: &'a Reference,
         cite_id: CiteId,
         cite: &'a Cite<Html>,
-        position: Position,
+        position: (Position, Option<u32>),
         number: u32,
+        style: &'a Style,
+        locale: &'a Locale,
     ) -> DisambiguationState<'a> {
         let format = Html::default();
         DisambiguationState {
@@ -378,6 +381,8 @@ impl DisambiguationState<'_> {
                 position,
                 citation_number: number,
                 disamb_pass: None,
+                style,
+                locale,
             },
         }
     }

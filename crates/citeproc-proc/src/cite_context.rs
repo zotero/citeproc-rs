@@ -8,7 +8,8 @@ use crate::prelude::*;
 
 use super::DisambPass;
 use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
-use csl::style::{Position, VariableForm};
+use csl::locale::Locale;
+use csl::style::{Position, Style, VariableForm};
 use csl::variables::*;
 
 #[derive(Clone)]
@@ -19,11 +20,13 @@ pub struct CiteContext<'c, O: OutputFormat + Sized> {
     pub cite_id: CiteId,
     pub cite: &'c Cite<O>,
     // could store in the DB
-    pub position: Position,
+    pub position: (Position, Option<u32>),
     //
     pub citation_number: u32,
     // TODO: keep track of which variables have so far been substituted
     pub disamb_pass: Option<DisambPass>,
+    pub style: &'c Style,
+    pub locale: &'c Locale,
 }
 
 // helper methods to access both cite and reference properties via Variables

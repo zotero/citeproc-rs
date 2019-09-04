@@ -229,7 +229,7 @@ impl OneName {
         let fmt = &ctx.format;
 
         let mut seen_one = false;
-        let name_tokens = self.name_tokens(ctx.position, names_slice);
+        let name_tokens = self.name_tokens(ctx.position.0, names_slice);
         let locale = db.locale_by_cite(ctx.cite_id);
 
         if self.0.form == Some(NameForm::Count) {
