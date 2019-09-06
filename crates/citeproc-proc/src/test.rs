@@ -1,6 +1,9 @@
+use crate::prelude::*;
 use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_io::{output::html::Html, Cite, Cluster2, IntraNote, Reference};
 use csl::locale::Lang;
-use std::collections::HashMap;
+use csl::Atom;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[salsa::database(
@@ -48,5 +51,29 @@ impl MockProcessor {
         let style = Style::from_str(style_text).unwrap();
         use salsa::Durability;
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
+    }
+
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Html>>) {
+        let mut cluster_ids = Vec::new();
+        for cluster in clusters {
+            let (cluster_id, number, cites) = cluster.split();
+            let mut ids = Vec::new();
+            for cite in cites.iter() {
+                let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+                ids.push(cite_id);
+            }
+            self.set_cluster_cites(cluster_id, Arc::new(ids));
+            self.set_cluster_note_number(cluster_id, number);
+            cluster_ids.push(cluster_id);
+        }
+        self.set_cluster_ids(Arc::new(cluster_ids));
+    }
+
+    pub fn set_references(&mut self, refs: Vec<Reference>) {
+        let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
+        for r in refs {
+            self.set_reference_input(r.id.clone(), Arc::new(r));
+        }
+        self.set_all_keys(Arc::new(keys));
     }
 }

@@ -153,23 +153,67 @@ fn test_locator_macro() {
 }
 
 use crate::disamb::{create_dfa, create_ref_ir};
+use std::sync::Arc;
 
 #[test]
 fn test() {
     let db = &mut MockProcessor::new();
     db.set_style_text(style_text_layout!(
-        r#"<group>
+        r#"<group delimiter=", ">
+          <group delimiter=" ">
+              <text variable="title" />
+              <text variable="container-title" />
+          </group>
+          <group delimiter=" ">
+          <text variable="locator" />
           <label variable="locator" form="short" />
+          </group>
         </group>"#
     ));
     let mut refr = Reference::empty("ref_id".into(), CslType::Book);
     refr.ordinary.insert(Variable::Title, "The Title".into());
+    // let's be intentionally deceptive
+    let mut refr2 = Reference::empty("other_ref".into(), CslType::Book);
+    refr2.ordinary.insert(Variable::Title, "The".into());
+    refr2
+        .ordinary
+        .insert(Variable::ContainerTitle, "Title".into());
+
     let vec = create_ref_ir::<Html, MockProcessor>(db, &refr);
     for (fc, ir) in &vec {
         println!("{:?}:\n    {}", fc, ir.debug(db));
     }
     let dfa = create_dfa::<Html, MockProcessor>(db, &refr);
     println!("{}", dfa.debug_graph(db));
+
+    let vec = create_ref_ir::<Html, MockProcessor>(db, &refr2);
+    let dfa2 = create_dfa::<Html, MockProcessor>(db, &refr2);
+    println!("{}", dfa2.debug_graph(db));
+
+    use citeproc_io::{Cite, Cluster2, IntraNote};
+
+    db.set_references(vec![refr, refr2]);
+    let cluster = Cluster2::Note {
+        id: 1,
+        note: IntraNote::Single(1),
+        cites: vec![Cite::basic("ref_id")],
+    };
+    db.init_clusters(vec![cluster]);
+    let cite_ids = db.cluster_cites(1);
+
+    let get_stream = |ind: usize| {
+        let id = cite_ids[ind];
+        let gen0 = db.ir_gen0(id);
+        let (ir, bo, st) = &*gen0;
+        let fmt = Html::default();
+        ir.to_edge_stream(&fmt)
+    };
+
+    let cite_edges = get_stream(0);
+    dbg!(&cite_edges);
+    assert!(dfa.accepts_data(db, &cite_edges));
+    println!("dfa2?");
+    assert!(dfa2.accepts_data(db, &cite_edges));
 }
 
 // #[test(ignore)]

@@ -129,8 +129,36 @@ impl Disambiguation<Html> for Element {
             Element::Names(ref n) => n.ref_ir(db, ctx, stack),
             Element::Choose(ref c) => c.ref_ir(db, ctx, stack),
             Element::Date(ref d) => d.ref_ir(db, ctx, stack),
-            Element::Text(ref src, ..) => unimplemented!(),
             Element::Number(ref var, ..) => unimplemented!(),
+            Element::Text(ref src, f, ref af, quo, _sp, _tc, _disp) => match *src {
+                TextSource::Variable(var, form) => {
+                    if var == StandardVariable::Number(NumberVariable::Locator) {
+                        if let Some(loctype) = ctx.locator_type {
+                            let edge = db.edge(EdgeData::Locator);
+                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        }
+                    }
+                    let content = match var {
+                        StandardVariable::Ordinary(v) => ctx
+                            .reference
+                            .ordinary
+                            .get(&v)
+                            .map(|val| renderer.text_variable(var, val, f, af, quo)),
+                        StandardVariable::Number(v) => ctx
+                            .reference
+                            .number
+                            .get(&v)
+                            .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo)),
+                    };
+                    let content = content
+                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(EdgeData::<Html>::Output)
+                        .map(|label| db.edge(label));
+                    let gv = GroupVars::rendered_if(content.is_some());
+                    (RefIR::Edge(content), gv)
+                }
+                _ => unimplemented!(),
+            },
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 if var == NumberVariable::Locator {
                     if let Some(loctype) = ctx.locator_type {

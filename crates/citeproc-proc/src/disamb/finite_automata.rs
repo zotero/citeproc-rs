@@ -290,6 +290,66 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
+    pub fn accepts_data(&self, db: &impl IrDatabase, chunk: &[EdgeData]) -> bool {
+        self.accepts_data_inner(db, self.start, chunk)
+    }
+    pub fn accepts_data_inner(
+        &self,
+        db: &impl IrDatabase,
+        start: NodeIndex,
+        data: &[EdgeData],
+    ) -> bool {
+        use std::iter;
+        let mut cursors = Vec::new();
+        cursors.push((start, None, data));
+        while !cursors.is_empty() {
+            let (mut cursor, prepended, chunk) = cursors.pop().unwrap();
+            let first = prepended.as_ref().or(chunk.get(0));
+            if first == None && self.accepting.contains(&cursor) {
+                // we did it!
+                return true;
+            }
+            dbg!((&prepended, chunk.get(0)));
+            if let Some(token) = first {
+                for neighbour in self.graph.neighbors(cursor) {
+                    let weight = self
+                        .graph
+                        .find_edge(cursor, neighbour)
+                        .and_then(|e| self.graph.edge_weight(e))
+                        .map(|e| db.lookup_edge(*e))
+                        .expect("graph neighbours must have edges");
+                    use std::cmp::min;
+                    match (&weight, token) {
+                        (w, t) if w == t => {
+                            cursors.push((neighbour, None, &chunk[min(1, chunk.len())..]));
+                        }
+                        (EdgeData::Output(w), EdgeData::Output(t)) => {
+                            if w == t {
+                                cursors.push((neighbour, None, &chunk[min(1, chunk.len())..]));
+                            } else if t.starts_with(w) {
+                                let next = if prepended.is_some() {
+                                    // already have split this one
+                                    0
+                                } else {
+                                    1
+                                };
+                                let t_rest = &t[w.len()..];
+                                let c_rest = &chunk[min(next, chunk.len())..];
+                                cursors.push((
+                                    neighbour,
+                                    Some(EdgeData::Output(t_rest.into())),
+                                    c_rest,
+                                ));
+                            }
+                        }
+                        _ => {} // Don't continue down this path
+                    }
+                }
+            }
+        }
+        false
+    }
+
     pub fn accepts(&self, tokens: &[Edge]) -> bool {
         let mut cursor = self.start;
         for token in tokens {
