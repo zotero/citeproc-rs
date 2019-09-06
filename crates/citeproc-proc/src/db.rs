@@ -41,17 +41,6 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
-
-    #[salsa::interned]
-    fn names_nfa(&self, e: Arc<Nfa>) -> NamesNfa;
-}
-
-intern_key!(pub NamesNfa);
-impl NamesNfa {
-    pub fn lookup(&self, db: &impl IrDatabase) -> Arc<Nfa> {
-        let nn = db.lookup_names_nfa(*self);
-        nn
-    }
 }
 
 fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {

@@ -64,9 +64,11 @@
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use citeproc_io::Reference;
+use csl::terms::LocatorType;
 
+use csl::locale::Locale;
 use csl::style::{
-    Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Style, TextSource,
+    Choose, Cond, CondSet, Conditions, Element, Formatting, Match, Position, Style, TextSource,
 };
 use csl::variables::AnyVariable;
 use csl::IsIndependent;
@@ -85,46 +87,128 @@ pub mod old;
 pub use free::{FreeCond, FreeCondSets};
 use knowledge::Knowledge;
 
-pub use finite_automata::{Dfa, Edge, EdgeData, Nfa};
+pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
 /// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
 /// so we don't have to re-allocate/collect the list after sorting to exclude it.
-fn create_ref_ir<O: OutputFormat>(
-    db: &impl IrDatabase,
-    _refr: &Reference,
-) -> Vec<(FreeCond, RefIR<O>)> {
-    let _style = db.style();
+pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
+    db: &DB,
+    refr: &Reference,
+) -> Vec<(FreeCond, RefIR)> {
+    let style = db.style();
+    let locale = db.locale_by_reference(refr.id.clone());
     let fcs = db.branch_runs();
-    let mut vec: Vec<(FreeCond, RefIR<O>)> = fcs
+    let mut vec: Vec<(FreeCond, RefIR)> = fcs
         .0
         .iter()
-        .map(|_fc| {
-            unimplemented!()
-            // let mut ctx = CiteContext {
-            // cite_id: unimplemented!(),
-            // reference: unimplemented!(),
-            // format: unimplemented!(),
-            // cite: unimplemented!(),
-            // position: unimplemented!(),
-            // citation_number: unimplemented!(),
-            // disamb_pass: None,
-            // };
-            // (*fc, style.ref_ir(db, &mut ctx))
+        .map(|fc| {
+            let mut ctx = RefContext {
+                format: &Html::default(),
+                style: &style,
+                locale: &locale,
+                reference: refr,
+                locator_type: to_opt_loctype(*fc),
+                position: Position::from(*fc),
+                output: Vec::new(),
+            };
+            let (ir, _gv) =
+                Disambiguation::<Html>::ref_ir(&*style, db, &mut ctx, Formatting::default());
+            (*fc, ir)
         })
         .collect();
     vec.sort_by_key(|(fc, _)| fc.bits());
     vec
 }
 
-pub trait Disambiguation {
+pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) -> Dfa {
+    let runs = create_ref_ir::<Html, DB>(db, refr);
+    let mut nfa = Nfa::new();
+    let start = nfa.graph.add_node(());
+    let finish = nfa.graph.add_node(());
+    nfa.start.insert(start);
+    nfa.accepting.insert(finish);
+    let mut spot = (start, finish);
+    for (_fc, ir) in runs {
+        let (last, _) = add_to_graph(&mut nfa, &ir, spot);
+        nfa.graph.add_edge(last, finish, NfaEdge::Epsilon);
+    }
+    nfa.brzozowski_minimise()
+}
+
+use petgraph::graph::NodeIndex;
+
+fn add_to_graph(
+    nfa: &mut Nfa,
+    ir: &RefIR,
+    mut spot: (NodeIndex, NodeIndex),
+) -> (NodeIndex, NodeIndex) {
+    let (from, to) = spot;
+    match ir {
+        RefIR::Edge(None) => spot,
+        RefIR::Edge(Some(e)) => {
+            let mid = nfa.graph.add_node(());
+            nfa.graph.add_edge(from, mid, NfaEdge::Token(*e));
+            (mid, to)
+        }
+        RefIR::Seq(seq) => {
+            for x in seq {
+                spot = add_to_graph(nfa, x, spot);
+            }
+            spot
+        }
+        RefIR::Names(..) => unimplemented!(),
+    }
+}
+
+impl From<FreeCond> for Position {
+    fn from(pos: FreeCond) -> Self {
+        if pos.contains(FreeCond::IBID_WITH_LOCATOR) {
+            Position::IbidWithLocator
+        } else if pos.contains(FreeCond::IBID) {
+            Position::Ibid
+        } else if pos.contains(FreeCond::NEAR_NOTE) {
+            Position::NearNote
+        } else if pos.contains(FreeCond::FAR_NOTE) {
+            Position::FarNote
+        } else if pos.contains(FreeCond::SUBSEQUENT) {
+            Position::Subsequent
+        } else {
+            // TODO: check this
+            Position::First
+        }
+        // if not mentioned, it doesn't matter!
+    }
+}
+
+fn to_opt_loctype(pos: FreeCond) -> Option<LocatorType> {
+    if !pos.contains(FreeCond::LOCATOR) {
+        return None;
+    }
+    // TODO: translate back from
+    // unimplemented!()
+    Some(LocatorType::Page)
+}
+
+pub struct RefContext<'a, O: OutputFormat = Html> {
+    pub format: &'a O,
+    pub style: &'a Style,
+    pub locale: &'a Locale,
+    pub reference: &'a Reference,
+    pub locator_type: Option<LocatorType>,
+    pub position: Position,
+    pub output: Vec<RefIR>,
+}
+
+pub trait Disambiguation<O: OutputFormat = Html> {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
         unimplemented!()
     }
-    fn ref_ir<O: OutputFormat>(
+    fn ref_ir(
         &self,
         _db: &impl IrDatabase,
-        _ctx: &mut CiteContext<O>,
-    ) -> RefIR<O> {
+        ctx: &RefContext<O>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
         unimplemented!()
     }
 }

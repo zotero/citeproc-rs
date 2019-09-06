@@ -4,8 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::db::NamesNfa;
-use crate::disamb::{Edge, EdgeData};
+use crate::disamb::{Edge, EdgeData, Nfa};
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use csl::style::{
@@ -35,20 +34,8 @@ pub enum YearSuffixHook {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RefIR<O: OutputFormat = Html> {
-    /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
-    /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
-    ///
-    /// ```txt
-    /// RefIR::Seq(vec![
-    ///     EdgeData::Output("<i>"),
-    ///     EdgeData::Locator,
-    ///     EdgeData::Output("</i>"),
-    /// ])
-    /// ```
-    Seq(Vec<RefIR<O>>),
-
+#[derive(Clone, Debug)]
+pub enum RefIR {
     /// A piece of output that a cite can match in the final DFA.
     /// e.g.
     ///
@@ -59,19 +46,14 @@ pub enum RefIR<O: OutputFormat = Html> {
     /// ```
     ///
     /// Each is interned into an `Edge` newtype referencing the salsa database.
-    Edge(Edge),
-
-    /// We use this to apply a FreeCond set to a reference to create a path through the
-    /// constructed NFA.
-    /// See the module level documentation for `disamb`.
-    Branch(Arc<Conditions>, Box<IR<O>>),
+    Edge(Option<Edge>),
 
     /// When constructing RefIR, we know whether the names variables exist or not.
     /// So we don't have to handle 'substitute' any special way -- just drill down into the
     /// names element, apply its formatting, and end up with
     ///
     /// ```txt
-    /// Seq [
+    /// [
     ///     Edge("<whatever formatting>"),
     ///     // whatever the substitute element outputted
     ///     Edge("</whatever>")
@@ -79,7 +61,42 @@ pub enum RefIR<O: OutputFormat = Html> {
     /// ```
     ///
     /// The Nfa represents all the token streams that the Names block can output.
-    Names(NamesNfa, Box<RefIR<O>>),
+    Names(Nfa, NodeIndex, NodeIndex, Box<RefIR>),
+
+    /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
+    /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
+    ///
+    /// ```txt
+    /// RefIR::Seq(vec![
+    ///     EdgeData::Output("<i>"),
+    ///     EdgeData::Locator,
+    ///     EdgeData::Output("</i>"),
+    /// ])
+    /// ```
+    Seq(Vec<RefIR>),
+    // Could use this to apply a FreeCond set to a reference to create a path through the
+    // constructed NFA.
+    // See the module level documentation for `disamb`.
+    // Branch(Arc<Conditions>, Box<IR<O>>),
+}
+
+use std::fmt::{self, Debug, Formatter};
+
+impl RefIR {
+    pub fn debug(&self, db: &impl IrDatabase) -> String {
+        match self {
+            RefIR::Edge(Some(e)) => format!("{:?}", db.lookup_edge(*e)),
+            RefIR::Edge(None) => "None".into(),
+            RefIR::Seq(seq) => {
+                let mut s = String::new();
+                for x in seq {
+                    s.push_str(&x.debug(db));
+                }
+                s
+            }
+            RefIR::Names(_nfa, _start, _end, ir) => ir.debug(db),
+        }
+    }
 }
 
 /// A version of [`EdgeData`] that has a piece of output for every

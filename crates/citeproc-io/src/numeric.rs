@@ -115,15 +115,10 @@ impl NumericValue {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn verbatim(&self, replace_hyphens: bool) -> String {
-        let s = match self {
-            NumericValue::Tokens(verb, _) => verb,
-            NumericValue::Str(s) => s,
-        };
-        if replace_hyphens {
-            s.replace('-', "\u{2013}")
-        } else {
-            s.clone()
+    pub fn verbatim(&self) -> &str {
+        match self {
+            NumericValue::Tokens(verb, _) => verb.as_str(),
+            NumericValue::Str(s) => s.as_str(),
         }
     }
 

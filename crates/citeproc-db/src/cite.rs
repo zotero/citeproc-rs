@@ -55,6 +55,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
+    fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
 
     fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
 
@@ -109,7 +110,11 @@ fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
 
 fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
     let cite = id.lookup(db);
-    let refr = db.reference(cite.ref_id.clone());
+    db.locale_by_reference(cite.ref_id.clone())
+}
+
+fn locale_by_reference(db: &impl CiteDatabase, ref_id: Atom) -> Arc<Locale> {
+    let refr = db.reference(ref_id);
     refr.and_then(|r| r.language.clone())
         .map(|l| db.merged_locale(l))
         .unwrap_or_else(|| db.default_locale())

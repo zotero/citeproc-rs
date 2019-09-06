@@ -7,7 +7,10 @@
 use super::free::{FreeCond, FreeCondSets};
 use super::DisambiguationOld;
 use crate::prelude::*;
+use crate::test::MockProcessor;
+use citeproc_io::output::html::Html;
 use citeproc_io::Reference;
+use csl::style::Style;
 use csl::style::{Cond, CslType, Position};
 use csl::variables::{AnyVariable, NumberVariable, Variable};
 use csl::IsIndependent;
@@ -58,7 +61,6 @@ macro_rules! style {
 
 #[test]
 fn independent_conds() {
-    use crate::test::MockProcessor;
     let db = MockProcessor::new();
     let style = style_layout!(
         r#"
@@ -103,7 +105,6 @@ fn independent_conds() {
 
 #[test]
 fn whole_apa() {
-    use crate::test::MockProcessor;
     let mut db = MockProcessor::new();
     use csl::style::Style;
     use std::fs;
@@ -112,9 +113,6 @@ fn whole_apa() {
     let fcs = db.style().get_free_conds(&db);
     dbg!(&fcs);
 }
-
-use crate::test::MockProcessor;
-use csl::style::Style;
 
 #[test]
 fn whole_agcl() {
@@ -128,11 +126,7 @@ fn whole_agcl() {
 
 #[test]
 fn test_locator_macro() {
-    use super::Disambiguation;
-    use crate::test::MockProcessor;
     let mut db = MockProcessor::new();
-    use csl::style::Style;
-    use std::fs;
     db.set_style_text(style_text_layout!(
         r#"<choose>
       <if locator="page">
@@ -156,6 +150,26 @@ fn test_locator_macro() {
         .0
         .insert(FreeCond::LOCATOR_FALSE | FreeCond::LT_PAGE_FALSE);
     assert_eq!(fcs, correct);
+}
+
+use crate::disamb::{create_dfa, create_ref_ir};
+
+#[test]
+fn test() {
+    let db = &mut MockProcessor::new();
+    db.set_style_text(style_text_layout!(
+        r#"<group>
+          <label variable="locator" form="short" />
+        </group>"#
+    ));
+    let mut refr = Reference::empty("ref_id".into(), CslType::Book);
+    refr.ordinary.insert(Variable::Title, "The Title".into());
+    let vec = create_ref_ir::<Html, MockProcessor>(db, &refr);
+    for (fc, ir) in &vec {
+        println!("{:?}:\n    {}", fc, ir.debug(db));
+    }
+    let dfa = create_dfa::<Html, MockProcessor>(db, &refr);
+    println!("{}", dfa.debug_graph(db));
 }
 
 // #[test(ignore)]

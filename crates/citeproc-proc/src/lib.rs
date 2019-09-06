@@ -25,6 +25,7 @@ mod group;
 mod helpers;
 mod ir;
 mod names;
+mod renderer;
 mod unicode;
 
 pub(crate) mod prelude {
@@ -35,10 +36,12 @@ pub(crate) mod prelude {
 
     pub use crate::cite_context::CiteContext;
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
-    pub(crate) use crate::disamb::Disambiguation;
     pub use crate::group::GroupVars;
-    pub(crate) use crate::helpers::*;
     pub use crate::ir::*;
+
+    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
+    pub(crate) use crate::helpers::*;
+    pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
 }
 

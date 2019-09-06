@@ -30,6 +30,7 @@ where
 {
     fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
         let fmt = &ctx.format;
+        let renderer = Renderer::cite(ctx);
         match *self {
             Element::Choose(ref ch) => ch.intermediate(state, ctx),
 
@@ -62,14 +63,9 @@ where
                     }
                     TextSource::Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
-                        let b = fmt.ingest(value, Default::default());
-                        let txt = fmt.with_format(b, f);
-                        (
-                            IR::Rendered(Some(CiteEdgeData::Output(
-                                fmt.affixed_quoted(txt, &af, quotes),
-                            ))),
-                            GroupVars::new(),
-                        )
+                        let content =
+                            Some(renderer.text_value(value, f, af, quo)).map(CiteEdgeData::Output);
+                        (IR::Rendered(content), GroupVars::new())
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
@@ -79,7 +75,7 @@ where
                                     .tokens
                                     .insert(DisambToken::Str(base26.as_str().into()));
                                 return (
-                                    IR::Rendered(Some(CiteEdgeData::Output(
+                                    IR::Rendered(Some(CiteEdgeData::YearSuffix(
                                         fmt.text_node(base26, None),
                                     ))),
                                     GroupVars::DidRender,
@@ -94,24 +90,11 @@ where
                         let content = match var {
                             StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {
                                 state.tokens.insert(DisambToken::Str(val.into()));
-                                let options = IngestOptions {
-                                    replace_hyphens: v.should_replace_hyphens(),
-                                };
-                                let b = fmt.ingest(val, options);
-                                let txt = fmt.with_format(b, f);
-
-                                let maybe_link = v.hyperlink(val);
-                                let linked = fmt.hyperlinked(txt, maybe_link);
-                                fmt.affixed_quoted(linked, &af, quotes)
+                                renderer.text_variable(var, val, f, af, quo)
                             }),
                             StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
                                 state.tokens.insert(DisambToken::Num(val.clone()));
-                                fmt.affixed_text_quoted(
-                                    val.verbatim(v.should_replace_hyphens()),
-                                    f,
-                                    &af,
-                                    quotes,
-                                )
+                                renderer.text_variable(var, val.verbatim(), f, af, quo)
                             }),
                         };
                         let content = content.map(CiteEdgeData::Output);
@@ -119,10 +102,8 @@ where
                         (IR::Rendered(content), gv)
                     }
                     TextSource::Term(term_selector, plural) => {
-                        let content = ctx
-                            .locale
-                            .get_text_term(term_selector, plural)
-                            .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, &af, quotes))
+                        let content = renderer
+                            .text_term(term_selector, plural, f, &af, quo)
                             .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::new())
                     }
@@ -130,36 +111,17 @@ where
             }
 
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
-                use csl::style::Plural;
-                let selector = GenderedTermSelector::from_number_variable(
-                    &ctx.cite.locators.get(0).map(Locator::type_of),
-                    var,
-                    form,
-                );
-                let num_val = ctx.get_number(var);
-                let plural = match (num_val, pl) {
-                    (None, _) => None,
-                    (Some(ref val), Plural::Contextual) => Some(val.is_multiple()),
-                    (Some(_), Plural::Always) => Some(true),
-                    (Some(_), Plural::Never) => Some(false),
-                };
-                let content = plural.and_then(|p| {
-                    selector.and_then(|sel| {
-                        ctx.locale
-                            .get_text_term(TextTermSelector::Gendered(sel), p)
-                            .map(|val| fmt.affixed_text(val.to_owned(), f, &af))
-                            .map(CiteEdgeData::Output)
-                    })
-                });
+                let content = ctx
+                    .get_number(var)
+                    .and_then(|val| renderer.label(var, form, val, pl, f, af))
+                    .map(CiteEdgeData::Output);
                 (IR::Rendered(content), GroupVars::new())
             }
 
             Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
                 let content = ctx
                     .get_number(var)
-                    .map(|val| {
-                        fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, &af)
-                    })
+                    .map(|val| renderer.number(var, val, f, af))
                     .map(CiteEdgeData::Output);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)

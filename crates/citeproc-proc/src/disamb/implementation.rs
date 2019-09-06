@@ -6,10 +6,14 @@
 
 use super::free::{FreeCond, FreeCondSets};
 use super::Disambiguation;
+use super::EdgeData;
 use crate::prelude::*;
+use citeproc_io::output::html::Html;
+use csl::style::{Affixes, Formatting, Position};
+use csl::variables::*;
 
 use csl::{
-    style::{Choose, Cond, Element, IfThen, Match, Style, TextSource},
+    style::{BodyDate, Choose, Cond, Element, Group, IfThen, Match, Names, Style, TextSource},
     variables::AnyVariable,
     IsIndependent,
 };
@@ -31,29 +35,133 @@ fn mult_identity() -> FreeCondSets {
     f
 }
 
-impl Disambiguation for Style {
+impl Disambiguation<Html> for Style {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         let els = &self.citation.layout.elements;
         cross_product(db, els)
     }
+
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        let els = &self.citation.layout.elements;
+        ref_sequence(db, ctx, &els, "".into(), None, Affixes::default())
+    }
 }
 
-impl Disambiguation for Element {
+impl Disambiguation<Html> for Group {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        // TODO: keep track of which empty variables caused GroupVars to not render, if
+        // they are indeed free variables.
+        cross_product(db, &self.elements)
+    }
+
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        let stack = self.formatting.map(|mine| stack.override_with(mine));
+        let els = &self.elements;
+        ref_sequence(
+            db,
+            ctx,
+            &els,
+            self.delimiter.0.clone(),
+            stack,
+            self.affixes.clone(),
+        )
+    }
+}
+
+impl Disambiguation<Html> for BodyDate {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        mult_identity()
+    }
+
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        unimplemented!()
+    }
+}
+
+impl Disambiguation<Html> for Names {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        // TODO: drill down into the substitute logic here
+        if let Some(subst) = &self.substitute {
+            cross_product(db, &subst.0)
+        } else {
+            mult_identity()
+        }
+    }
+
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        unimplemented!()
+    }
+}
+
+impl Disambiguation<Html> for Element {
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        let renderer = Renderer::refr(ctx);
+        let fmt = ctx.format;
+        match *self {
+            // TODO: keep track of which empty variables caused GroupVars to not render, if
+            // they are indeed free variables.
+            Element::Group(ref g) => g.ref_ir(db, ctx, stack),
+            Element::Names(ref n) => n.ref_ir(db, ctx, stack),
+            Element::Choose(ref c) => c.ref_ir(db, ctx, stack),
+            Element::Date(ref d) => d.ref_ir(db, ctx, stack),
+            Element::Text(ref src, ..) => unimplemented!(),
+            Element::Number(ref var, ..) => unimplemented!(),
+            Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
+                if var == NumberVariable::Locator {
+                    if let Some(loctype) = ctx.locator_type {
+                        let edge = db.edge(EdgeData::LocatorLabel);
+                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                    }
+                }
+                if var == NumberVariable::FirstReferenceNoteNumber {
+                    if ctx.position == Position::Subsequent {
+                        let edge = db.edge(EdgeData::LocatorLabel);
+                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                    }
+                }
+                let content = ctx
+                    .reference
+                    .number
+                    .get(&var)
+                    .and_then(|val| renderer.label(var, form, val.clone(), pl, f, af))
+                    .map(|x| fmt.output_in_context(x, stack))
+                    .map(EdgeData::<Html>::Output)
+                    .map(|label| db.edge(label));
+                (RefIR::Edge(content), GroupVars::new())
+            }
+        }
+    }
+
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         match self {
-            Element::Group(g) => {
-                // TODO: keep track of which empty variables caused GroupVars to not render, if
-                // they are indeed free variables.
-                cross_product(db, &g.elements)
-            }
-            Element::Names(n) => {
-                // TODO: drill down into the substitute logic here
-                if let Some(subst) = &n.substitute {
-                    cross_product(db, &subst.0)
-                } else {
-                    mult_identity()
-                }
-            }
+            Element::Group(g) => g.get_free_conds(db),
+            Element::Names(n) => n.get_free_conds(db),
+            Element::Date(d) => d.get_free_conds(db),
             Element::Choose(c) => c.get_free_conds(db),
             Element::Number(num_var, ..) | Element::Label(num_var, ..) => {
                 if num_var.is_independent() {
@@ -97,8 +205,8 @@ impl Disambiguation for Element {
     }
 }
 
-impl Disambiguation for Choose {
-    // pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
+// pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
+impl Disambiguation<Html> for Choose {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         use std::iter;
         let Choose(ifthen, elseifs, else_) = self;
@@ -124,5 +232,14 @@ impl Disambiguation for Choose {
                 None
             },
         )
+    }
+
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        unimplemented!()
     }
 }

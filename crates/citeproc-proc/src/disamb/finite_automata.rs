@@ -104,18 +104,47 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Nfa {
-    graph: NfaGraph,
-    accepting: BTreeSet<NodeIndex>,
-    start: BTreeSet<NodeIndex>,
+    pub graph: NfaGraph,
+    pub accepting: BTreeSet<NodeIndex>,
+    pub start: BTreeSet<NodeIndex>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone)]
 pub struct Dfa {
-    graph: DfaGraph,
-    accepting: BTreeSet<NodeIndex>,
-    start: NodeIndex,
+    pub graph: DfaGraph,
+    pub accepting: BTreeSet<NodeIndex>,
+    pub start: NodeIndex,
+}
+
+#[derive(Debug)]
+enum DebugNode {
+    Node,
+    Start,
+    Accepting,
+    StartAndAccepting,
+}
+
+impl Dfa {
+    pub fn debug_graph(&self, db: &impl IrDatabase) -> String {
+        let g = self.graph.map(
+            |node, _| {
+                let cont = self.accepting.contains(&node);
+                if node == self.start && cont {
+                    DebugNode::StartAndAccepting
+                } else if node == self.start {
+                    DebugNode::Start
+                } else if cont {
+                    DebugNode::Accepting
+                } else {
+                    DebugNode::Node
+                }
+            },
+            |_, edge| db.lookup_edge(*edge),
+        );
+        format!("{:?}", Dot::with_config(&g, &[]))
+    }
 }
 
 impl Nfa {
@@ -171,6 +200,20 @@ impl Nfa {
             }
         };
         to_dfa(&rev2)
+    }
+}
+
+use std::fmt::{self, Formatter};
+
+impl Debug for Dfa {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "start:{:?}\naccepting:{:?}\n{:?}\n---\n",
+            &self.start,
+            &self.accepting,
+            Dot::with_config(&self.graph, &[])
+        )
     }
 }
 
