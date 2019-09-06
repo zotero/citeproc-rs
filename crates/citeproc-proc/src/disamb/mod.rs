@@ -89,6 +89,23 @@ use knowledge::Knowledge;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
+pub fn cross_product(db: &impl IrDatabase, els: &[Element]) -> FreeCondSets {
+    // XXX: include layout parts?
+    let mut all = fnv_set_with_cap(els.len());
+    all.insert(FreeCond::empty());
+    let mut f = FreeCondSets(all);
+    for el in els {
+        f.cross_product(el.get_free_conds(db));
+    }
+    f
+}
+
+pub fn mult_identity() -> FreeCondSets {
+    let mut f = FreeCondSets::default();
+    f.0.insert(FreeCond::empty());
+    f
+}
+
 /// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
 /// so we don't have to re-allocate/collect the list after sorting to exclude it.
 pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(

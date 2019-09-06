@@ -72,6 +72,54 @@ where
     }
 }
 
+// pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
+impl Disambiguation<Html> for Choose {
+    fn ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Html>,
+        stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        let Choose(head, rest, last) = self;
+        if let Some(els) = eval_ifthen_ref(head, ctx).0 {
+            return ref_sequence(db, ctx, els, "".into(), None, Affixes::default());
+        }
+        for branch in rest {
+            if let Some(els) = eval_ifthen_ref(branch, ctx).0 {
+                return ref_sequence(db, ctx, els, "".into(), None, Affixes::default());
+            }
+        }
+        return ref_sequence(db, ctx, &last.0, "".into(), None, Affixes::default());
+    }
+
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        use std::iter;
+        let Choose(ifthen, elseifs, else_) = self;
+        let IfThen(if_conditions, if_els) = ifthen;
+        assert!(if_conditions.0 == Match::All);
+        assert!(if_conditions.1.len() == 1);
+        let if_els = cross_product(db, if_els);
+        let ifthen = (&if_conditions.1[0], if_els);
+        let first: Vec<_> = iter::once(ifthen)
+            .chain(elseifs.iter().map(|fi: &IfThen| {
+                let IfThen(if_conditions, if_els) = fi;
+                assert!(if_conditions.0 == Match::All);
+                assert!(if_conditions.1.len() == 1);
+                let if_els = cross_product(db, if_els);
+                (&if_conditions.1[0], if_els)
+            }))
+            .collect();
+        FreeCondSets::all_branches(
+            first.into_iter(),
+            if else_.0.len() > 0 {
+                Some(cross_product(db, &else_.0))
+            } else {
+                None
+            },
+        )
+    }
+}
+
 struct BranchEval<O: OutputFormat> {
     // the bools indicate if disambiguate was set
     disambiguate: bool,
@@ -106,34 +154,167 @@ where
     }
 }
 
+fn eval_ifthen_ref<'c, Ck>(branch: &'c IfThen, checker: &Ck) -> (Option<&'c [Element]>, bool)
+where
+    Ck: CondChecker,
+{
+    let IfThen(ref conditions, ref elements) = *branch;
+    let (matched, disambiguate) = eval_conditions(conditions, checker);
+    let content = if matched {
+        Some(elements.as_slice())
+    } else {
+        None
+    };
+    (content, disambiguate)
+}
+
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, O>(conditions: &'c Conditions, ctx: &CiteContext<'c, O>) -> (bool, bool)
+fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck) -> (bool, bool)
 where
-    O: OutputFormat,
+    Ck: CondChecker,
 {
     let Conditions(ref match_type, ref conditions) = *conditions;
-    let mut tests = conditions.iter().map(|c| eval_condset(c, ctx));
+    let mut tests = conditions.iter().map(|c| eval_condset(c, checker));
     let disambiguate = conditions.iter().any(|c| {
         c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
-    }) && ctx.disamb_pass != Some(DisambPass::Conditionals);
+    }) && !checker.is_disambiguate();
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_condset<'c, O>(cond_set: &'c CondSet, ctx: &CiteContext<'c, O>) -> bool
+use csl::variables::{AnyVariable, DateVariable};
+trait CondChecker {
+    fn has_variable(&self, var: AnyVariable) -> bool;
+    fn is_numeric(&self, var: AnyVariable) -> bool;
+    fn is_disambiguate(&self) -> bool;
+    fn csl_type(&self) -> &CslType;
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;
+    fn position(&self) -> Position;
+    fn style(&self) -> &Style;
+    fn has_year_only(&self, dvar: DateVariable) -> bool {
+        self.get_date(dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.month == 0 && d.day == 0,
+                DateOrRange::Range(d1, d2) => {
+                    d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    }
+    fn has_month_or_season(&self, dvar: DateVariable) -> bool {
+        self.get_date(dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.month != 0,
+                DateOrRange::Range(d1, d2) => {
+                    // XXX: is OR the right operator here?
+                    d1.month != 0 || d2.month != 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    }
+    fn has_day(&self, dvar: DateVariable) -> bool {
+        self.get_date(dvar)
+            .map(|dor| match dor {
+                DateOrRange::Single(d) => d.day != 0,
+                DateOrRange::Range(d1, d2) => {
+                    // XXX: is OR the right operator here?
+                    d1.day != 0 || d2.day != 0
+                }
+                _ => false,
+            })
+            .unwrap_or(false)
+    }
+    // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
+    // work.
+    // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
+}
+
+use csl::style::{CslType, Element, Position, Style};
+
+impl<'c, O> CondChecker for CiteContext<'c, O>
 where
     O: OutputFormat,
 {
-    let style = ctx.style;
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        CiteContext::has_variable(self, var)
+    }
+    fn is_numeric(&self, var: AnyVariable) -> bool {
+        CiteContext::is_numeric(self, var)
+    }
+    fn csl_type(&self) -> &CslType {
+        &self.reference.csl_type
+    }
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+        self.reference.date.get(&dvar)
+    }
+    fn position(&self) -> Position {
+        self.position.0
+    }
+    fn is_disambiguate(&self) -> bool {
+        self.disamb_pass == Some(DisambPass::Conditionals)
+    }
+    fn style(&self) -> &Style {
+        self.style
+    }
+}
+
+impl<'c, O> CondChecker for RefContext<'c, O>
+where
+    O: OutputFormat,
+{
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        match &var {
+            AnyVariable::Name(v) => self.reference.name.contains_key(v),
+            AnyVariable::Date(v) => self.reference.date.contains_key(v),
+            AnyVariable::Ordinary(v) => self.reference.ordinary.contains_key(v),
+            AnyVariable::Number(v) => self.reference.number.contains_key(v),
+        }
+    }
+    fn is_numeric(&self, var: AnyVariable) -> bool {
+        match &var {
+            AnyVariable::Number(num) => self
+                .reference
+                .number
+                .get(num)
+                .map(|r| r.is_numeric())
+                .unwrap_or(false),
+            _ => false,
+            // TODO: not very useful; implement for non-number variables (see CiteContext)
+        }
+    }
+    fn csl_type(&self) -> &CslType {
+        &self.reference.csl_type
+    }
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+        self.reference.date.get(&dvar)
+    }
+    fn position(&self) -> Position {
+        self.position
+    }
+    fn is_disambiguate(&self) -> bool {
+        false
+    }
+    fn style(&self) -> &Style {
+        self.style
+    }
+}
+
+fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck) -> bool
+where
+    Ck: CondChecker,
+{
+    let style = checker.style();
 
     let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
         Some(match cond {
-            Cond::Variable(var) => ctx.has_variable(*var),
-            Cond::IsNumeric(var) => ctx.is_numeric(*var),
-            Cond::Disambiguate(d) => *d == (ctx.disamb_pass == Some(DisambPass::Conditionals)),
-            Cond::Type(typ) => ctx.reference.csl_type == *typ,
-            Cond::Position(pos) => ctx.position.0.matches(*pos),
+            Cond::Variable(var) => checker.has_variable(*var),
+            Cond::IsNumeric(var) => checker.is_numeric(*var),
+            Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
+            Cond::Type(typ) => checker.csl_type() == typ,
+            Cond::Position(pos) => checker.position().matches(*pos),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
                 if !style.features.condition_date_parts =>
@@ -141,48 +322,10 @@ where
                 return None;
             }
 
-            Cond::HasYearOnly(dvar) => ctx
-                .reference
-                .date
-                .get(dvar)
-                .map(|dor| match dor {
-                    DateOrRange::Single(d) => d.month == 0 && d.day == 0,
-                    DateOrRange::Range(d1, d2) => {
-                        d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
-                    }
-                    _ => false,
-                })
-                .unwrap_or(false),
-            Cond::HasMonthOrSeason(dvar) => ctx
-                .reference
-                .date
-                .get(dvar)
-                .map(|dor| match dor {
-                    DateOrRange::Single(d) => d.month != 0,
-                    DateOrRange::Range(d1, d2) => {
-                        // XXX: is OR the right operator here?
-                        d1.month != 0 || d2.month != 0
-                    }
-                    _ => false,
-                })
-                .unwrap_or(false),
-            Cond::HasDay(dvar) => ctx
-                .reference
-                .date
-                .get(dvar)
-                .map(|dor| match dor {
-                    DateOrRange::Single(d) => d.day != 0,
-                    DateOrRange::Range(d1, d2) => {
-                        // XXX: is OR the right operator here?
-                        d1.day != 0 || d2.day != 0
-                    }
-                    _ => false,
-                })
-                .unwrap_or(false),
+            Cond::HasYearOnly(dvar) => checker.has_year_only(*dvar),
+            Cond::HasMonthOrSeason(dvar) => checker.has_month_or_season(*dvar),
+            Cond::HasDay(dvar) => checker.has_day(*dvar),
             _ => return None,
-            // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
-            // work.
-            // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
         })
     });
 

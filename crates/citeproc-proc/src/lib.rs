@@ -31,15 +31,21 @@ mod unicode;
 pub(crate) mod prelude {
     pub use crate::db::IrDatabase;
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
+    pub use citeproc_io::output::html::Html;
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
+
+    pub use csl::style::{Affixes, Formatting};
 
     pub use crate::cite_context::CiteContext;
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
 
-    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
+    pub(crate) use crate::disamb::{
+        cross_product, mult_identity, Disambiguation, Edge, EdgeData, FreeCond, FreeCondSets,
+        RefContext,
+    };
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};

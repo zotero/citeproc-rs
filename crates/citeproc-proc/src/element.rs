@@ -63,8 +63,9 @@ where
                     }
                     TextSource::Value(ref value) => {
                         state.tokens.insert(DisambToken::Str(value.clone()));
-                        let content =
-                            Some(renderer.text_value(value, f, af, quo)).map(CiteEdgeData::Output);
+                        let content = renderer
+                            .text_value(value, f, af, quo)
+                            .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::new())
                     }
                     TextSource::Variable(var, form) => {

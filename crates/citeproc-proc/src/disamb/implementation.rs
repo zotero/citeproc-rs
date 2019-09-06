@@ -4,9 +4,9 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::free::{FreeCond, FreeCondSets};
 use super::Disambiguation;
 use super::EdgeData;
+use super::{cross_product, mult_identity, FreeCond, FreeCondSets};
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use csl::style::{Affixes, Formatting, Position};
@@ -17,23 +17,6 @@ use csl::{
     variables::AnyVariable,
     IsIndependent,
 };
-
-fn cross_product(db: &impl IrDatabase, els: &[Element]) -> FreeCondSets {
-    // XXX: include layout parts?
-    let mut all = fnv_set_with_cap(els.len());
-    all.insert(FreeCond::empty());
-    let mut f = FreeCondSets(all);
-    for el in els {
-        f.cross_product(el.get_free_conds(db));
-    }
-    f
-}
-
-fn mult_identity() -> FreeCondSets {
-    let mut f = FreeCondSets::default();
-    f.0.insert(FreeCond::empty());
-    f
-}
 
 impl Disambiguation<Html> for Style {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
@@ -157,7 +140,33 @@ impl Disambiguation<Html> for Element {
                     let gv = GroupVars::rendered_if(content.is_some());
                     (RefIR::Edge(content), gv)
                 }
-                _ => unimplemented!(),
+                TextSource::Value(ref val) => {
+                    let content = renderer
+                        .text_value(&val, f, af, quo)
+                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(EdgeData::<Html>::Output)
+                        .map(|label| db.edge(label));
+                    (RefIR::Edge(content), GroupVars::new())
+                }
+                TextSource::Term(term_selector, plural) => {
+                    let content = renderer
+                        .text_term(term_selector, plural, f, &af, quo)
+                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(EdgeData::<Html>::Output)
+                        .map(|label| db.edge(label));
+                    (RefIR::Edge(content), GroupVars::new())
+                }
+                TextSource::Macro(ref name) => {
+                    let macro_unsafe = ctx
+                        .style
+                        .macros
+                        .get(name)
+                        .expect("macro errors not implemented!");
+                    // state.macro_stack.insert(name.clone());
+                    let out = ref_sequence(db, ctx, &macro_unsafe, "".into(), f, af.clone());
+                    // state.macro_stack.remove(&name);
+                    out
+                }
             },
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 if var == NumberVariable::Locator {
@@ -230,44 +239,5 @@ impl Disambiguation<Html> for Element {
             },
             _ => mult_identity(),
         }
-    }
-}
-
-// pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
-impl Disambiguation<Html> for Choose {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        use std::iter;
-        let Choose(ifthen, elseifs, else_) = self;
-        let IfThen(if_conditions, if_els) = ifthen;
-        assert!(if_conditions.0 == Match::All);
-        assert!(if_conditions.1.len() == 1);
-        let if_els = cross_product(db, if_els);
-        let ifthen = (&if_conditions.1[0], if_els);
-        let first: Vec<_> = iter::once(ifthen)
-            .chain(elseifs.iter().map(|fi: &IfThen| {
-                let IfThen(if_conditions, if_els) = fi;
-                assert!(if_conditions.0 == Match::All);
-                assert!(if_conditions.1.len() == 1);
-                let if_els = cross_product(db, if_els);
-                (&if_conditions.1[0], if_els)
-            }))
-            .collect();
-        FreeCondSets::all_branches(
-            first.into_iter(),
-            if else_.0.len() > 0 {
-                Some(cross_product(db, &else_.0))
-            } else {
-                None
-            },
-        )
-    }
-
-    fn ref_ir(
-        &self,
-        db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
-        stack: Formatting,
-    ) -> (RefIR, GroupVars) {
-        unimplemented!()
     }
 }

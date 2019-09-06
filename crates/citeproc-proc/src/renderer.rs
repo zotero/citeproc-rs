@@ -117,12 +117,15 @@ impl<O: OutputFormat> Renderer<'_, O> {
         af: &Affixes,
         quo: bool,
         // sp, tc, disp
-    ) -> O::Build {
+    ) -> Option<O::Build> {
+        if value.len() == 0 {
+            return None;
+        }
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(quo);
         let b = fmt.ingest(value, Default::default());
         let txt = fmt.with_format(b, f);
-        fmt.affixed_quoted(txt, af, quotes.as_ref())
+        Some(fmt.affixed_quoted(txt, af, quotes.as_ref()))
     }
 
     pub fn text_term(
