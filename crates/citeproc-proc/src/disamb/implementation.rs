@@ -112,7 +112,25 @@ impl Disambiguation<Html> for Element {
             Element::Names(ref n) => n.ref_ir(db, ctx, stack),
             Element::Choose(ref c) => c.ref_ir(db, ctx, stack),
             Element::Date(ref d) => d.ref_ir(db, ctx, stack),
-            Element::Number(ref var, ..) => unimplemented!(),
+            Element::Number(var, form, f, ref af, _tc, _dm) => {
+                let content = match var {
+                    NumberVariable::Locator => {
+                        let e = ctx.locator_type.map(|_| db.edge(EdgeData::Locator));
+                        return (RefIR::Edge(e), GroupVars::DidRender);
+                    }
+                    v => ctx
+                        .reference
+                        .number
+                        .get(&v)
+                        .map(|val| renderer.number(var, val.clone(), f, af)),
+                };
+                let content = content
+                    .map(|x| fmt.output_in_context(x, stack))
+                    .map(EdgeData::<Html>::Output)
+                    .map(|label| db.edge(label));
+                let gv = GroupVars::rendered_if(content.is_some());
+                (RefIR::Edge(content), gv)
+            }
             Element::Text(ref src, f, ref af, quo, _sp, _tc, _disp) => match *src {
                 TextSource::Variable(var, form) => {
                     if var == StandardVariable::Number(NumberVariable::Locator) {
