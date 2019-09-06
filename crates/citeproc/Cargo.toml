@@ -50,6 +50,7 @@ pretty_assertions = "0.6.1"
 lazy_static = "1.4.0"
 serde_yaml = "0.8.9"
 toml = "0.5.3"
+env_logger = "0.6.2"
 
 # [[bench]]
 # name = "some"

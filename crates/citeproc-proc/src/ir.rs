@@ -33,6 +33,13 @@ pub enum YearSuffixHook {
     Explicit(Element),
 }
 
+impl Eq for RefIR {}
+impl PartialEq for RefIR {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum RefIR {
@@ -73,11 +80,19 @@ pub enum RefIR {
     ///     EdgeData::Output("</i>"),
     /// ])
     /// ```
-    Seq(Vec<RefIR>),
+    Seq(RefIrSeq),
     // Could use this to apply a FreeCond set to a reference to create a path through the
     // constructed NFA.
     // See the module level documentation for `disamb`.
     // Branch(Arc<Conditions>, Box<IR<O>>),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RefIrSeq {
+    pub contents: Vec<RefIR>,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub delimiter: Atom,
 }
 
 use std::fmt::{self, Debug, Formatter};
@@ -89,7 +104,7 @@ impl RefIR {
             RefIR::Edge(None) => "None".into(),
             RefIR::Seq(seq) => {
                 let mut s = String::new();
-                for x in seq {
+                for x in &seq.contents {
                     s.push_str(&x.debug(db));
                 }
                 s
@@ -107,8 +122,31 @@ pub enum CiteEdgeData<O: OutputFormat = Html> {
     LocatorLabel(O::Build),
     YearSuffix(O::Build),
     CitationNumber(O::Build),
-    BibNumber(O::Build),
     Frnn(O::Build),
+}
+
+use csl::variables::{NumberVariable, StandardVariable, Variable};
+impl<O: OutputFormat> CiteEdgeData<O> {
+    pub fn from_number_variable(var: NumberVariable) -> fn(O::Build) -> Self {
+        match var {
+            NumberVariable::Locator => CiteEdgeData::Locator,
+            NumberVariable::FirstReferenceNoteNumber => CiteEdgeData::Frnn,
+            NumberVariable::CitationNumber => CiteEdgeData::CitationNumber,
+            _ => CiteEdgeData::Output,
+        }
+    }
+    pub fn from_ordinary_variable(var: Variable) -> fn(O::Build) -> Self {
+        match var {
+            Variable::YearSuffix => CiteEdgeData::YearSuffix,
+            _ => CiteEdgeData::Output,
+        }
+    }
+    pub fn from_standard_variable(var: StandardVariable) -> fn(O::Build) -> Self {
+        match var {
+            StandardVariable::Number(nv) => CiteEdgeData::from_number_variable(nv),
+            StandardVariable::Ordinary(v) => CiteEdgeData::from_ordinary_variable(v),
+        }
+    }
 }
 
 // Intermediate Representation
@@ -211,9 +249,12 @@ impl IR<Html> {
             IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
             // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
             // inside
-            IR::YearSuffix(_hook, x) => edges.push(EdgeData::Output(
-                fmt.output_in_context(x.clone(), formatting),
-            )),
+            IR::YearSuffix(_hook, x) => {
+                let out = fmt.output_in_context(x.clone(), formatting);
+                if out.len() > 0 {
+                    edges.push(EdgeData::Output(out))
+                }
+            }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
             IR::Names(_names, r) => edges.push(EdgeData::Output(
@@ -237,7 +278,6 @@ impl IR<Html> {
 //             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
 //             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
 //             CiteEdgeData::Locator(_) => EdgeData::Locator,
-//             CiteEdgeData::BibNumber(_) => EdgeData::BibNumber,
 //             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
 //         }
 //     }
@@ -253,7 +293,6 @@ impl CiteEdgeData<Html> {
             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
             CiteEdgeData::Locator(_) => EdgeData::Locator,
             CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
-            CiteEdgeData::BibNumber(_) => EdgeData::BibNumber,
             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
         }
     }
@@ -264,7 +303,6 @@ impl CiteEdgeData<Html> {
             | CiteEdgeData::Frnn(x)
             | CiteEdgeData::Locator(x)
             | CiteEdgeData::LocatorLabel(x)
-            | CiteEdgeData::BibNumber(x)
             | CiteEdgeData::CitationNumber(x) => x.clone(),
         }
     }
@@ -280,6 +318,9 @@ pub struct IrSeq<O: OutputFormat> {
 
 impl IrSeq<Html> {
     fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Html, formatting: Formatting) {
+        if self.contents.len() == 0 {
+            return;
+        }
         let stack = fmt.tag_stack(self.formatting.unwrap_or_else(Default::default));
         let sub_formatting = self
             .formatting
@@ -289,19 +330,30 @@ impl IrSeq<Html> {
         let mut close_tags = String::new();
         fmt.stack_preorder(&mut open_tags, &stack);
         fmt.stack_postorder(&mut close_tags, &stack);
-        edges.push(EdgeData::Output(open_tags));
+        if open_tags.len() > 0 {
+            edges.push(EdgeData::Output(open_tags));
+        }
         // push the innards
         let len = self.contents.len();
+        let mut seen = false;
+        let mut sub = Vec::new();
         for (n, ir) in self.contents.iter().enumerate() {
-            ir.append_edges(edges, fmt, sub_formatting);
-            if n != len {
-                edges.push(EdgeData::Output(fmt.output_in_context(
-                    fmt.plain(self.delimiter.as_ref()),
-                    sub_formatting,
-                )))
+            ir.append_edges(&mut sub, fmt, sub_formatting);
+            if sub.len() > 0 {
+                if seen {
+                    edges.push(EdgeData::Output(fmt.output_in_context(
+                        fmt.plain(self.delimiter.as_ref()),
+                        sub_formatting,
+                    )));
+                } else {
+                    seen = true;
+                }
+                edges.extend(sub.drain(..));
             }
         }
-        edges.push(EdgeData::Output(close_tags));
+        if close_tags.len() > 0 {
+            edges.push(EdgeData::Output(close_tags));
+        }
     }
 
     fn flatten_seq(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {

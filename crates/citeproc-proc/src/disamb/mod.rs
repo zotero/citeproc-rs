@@ -127,9 +127,10 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     let finish = nfa.graph.add_node(());
     nfa.start.insert(start);
     nfa.accepting.insert(finish);
+    let fmt = Html::default();
     let mut spot = (start, finish);
     for (_fc, ir) in runs {
-        let (last, _) = add_to_graph(&mut nfa, &ir, spot);
+        let (last, _) = add_to_graph(db, &fmt, &mut nfa, &ir, spot);
         nfa.graph.add_edge(last, finish, NfaEdge::Epsilon);
     }
     nfa.brzozowski_minimise()
@@ -138,6 +139,8 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
 use petgraph::graph::NodeIndex;
 
 fn add_to_graph(
+    db: &impl IrDatabase,
+    fmt: &Html,
     nfa: &mut Nfa,
     ir: &RefIR,
     mut spot: (NodeIndex, NodeIndex),
@@ -150,10 +153,47 @@ fn add_to_graph(
             nfa.graph.add_edge(from, mid, NfaEdge::Token(*e));
             (mid, to)
         }
-        RefIR::Seq(seq) => {
-            for x in seq {
-                spot = add_to_graph(nfa, x, spot);
+        RefIR::Seq(ref seq) => {
+            let RefIrSeq {
+                contents,
+                formatting,
+                affixes,
+                delimiter,
+            } = seq;
+            let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
+            let mut open_tags = String::new();
+            let mut close_tags = String::new();
+            fmt.stack_preorder(&mut open_tags, &stack);
+            fmt.stack_postorder(&mut close_tags, &stack);
+            let mkedge = |s: &str| {
+                RefIR::Edge(if s.len() > 0 {
+                    Some(db.edge(EdgeData::Output(
+                        fmt.output_in_context(fmt.plain(s), Default::default()),
+                    )))
+                } else {
+                    None
+                })
+            };
+            let delim = &mkedge(&*delimiter);
+            let open_tags = &mkedge(&*open_tags);
+            let close_tags = &mkedge(&*close_tags);
+            let pre = &mkedge(&*affixes.prefix);
+            let suf = &mkedge(&*affixes.suffix);
+
+            spot = add_to_graph(db, fmt, nfa, pre, spot);
+            spot = add_to_graph(db, fmt, nfa, open_tags, spot);
+            let mut seen = false;
+            for x in contents {
+                if x != &RefIR::Edge(None) {
+                    if seen {
+                        spot = add_to_graph(db, fmt, nfa, delim, spot);
+                    }
+                    seen = true;
+                }
+                spot = add_to_graph(db, fmt, nfa, x, spot);
             }
+            spot = add_to_graph(db, fmt, nfa, close_tags, spot);
+            spot = add_to_graph(db, fmt, nfa, suf, spot);
             spot
         }
         RefIR::Names(..) => unimplemented!(),

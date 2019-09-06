@@ -162,13 +162,13 @@ impl Disambiguation<Html> for Element {
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 if var == NumberVariable::Locator {
                     if let Some(loctype) = ctx.locator_type {
-                        let edge = db.edge(EdgeData::LocatorLabel);
+                        let edge = db.edge(EdgeData::Locator);
                         return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }
                 }
                 if var == NumberVariable::FirstReferenceNoteNumber {
                     if ctx.position == Position::Subsequent {
-                        let edge = db.edge(EdgeData::LocatorLabel);
+                        let edge = db.edge(EdgeData::Frnn);
                         return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }
                 }

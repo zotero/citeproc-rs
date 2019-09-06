@@ -34,7 +34,7 @@ where
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
-struct CitationItem {
+pub struct CitationItem {
     #[serde(deserialize_with = "get_ref_id")]
     id: String,
 
@@ -58,9 +58,12 @@ impl CitationItem {
             ref_id: csl::Atom::from(self.id.as_str()),
             prefix: self.prefix.clone(),
             suffix: self.suffix.clone(),
-            locators: match (self.locator.as_ref(), self.label.as_ref()) {
-                (Some(loc), Some(lab)) => vec![Locator(
-                    LocatorType::from_str(&lab).expect("unknown locator type"),
+            locators: match self.locator.as_ref() {
+                Some(loc) => vec![Locator(
+                    self.label
+                        .as_ref()
+                        .map(|x| LocatorType::from_str(x).expect("unknown locator type"))
+                        .unwrap_or(LocatorType::Page),
                     NumericValue::from(std::borrow::Cow::from(loc)),
                 )],
                 _ => vec![],
@@ -135,7 +138,7 @@ impl FromStr for Results {
 
 use serde::de::{Deserialize, Deserializer};
 
-enum InstructionMode {
+pub enum InstructionMode {
     Composite,
     AuthorOnly,
     SuppressAuthor,
@@ -158,7 +161,7 @@ impl<'de> Deserialize<'de> for InstructionMode {
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "mode")]
-enum ModeProperties {
+pub enum ModeProperties {
     #[serde(rename = "composite")]
     Composite {
         #[serde(default)]
@@ -181,7 +184,7 @@ struct Properties {
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-struct CiteInstruction {
+pub struct CiteInstruction {
     #[serde(rename = "citationID")]
     cluster_id: String,
     #[serde(rename = "citationItems")]
@@ -189,9 +192,9 @@ struct CiteInstruction {
     properties: Properties,
 }
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-struct PrePost(String, u32);
+pub struct PrePost(String, u32);
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-struct Instruction(CiteInstruction, Vec<PrePost>, Vec<PrePost>);
+pub struct Instruction(CiteInstruction, Vec<PrePost>, Vec<PrePost>);
 
 use std::collections::HashMap;
 
@@ -394,11 +397,11 @@ impl<'de> Deserialize<'de> for Mode {
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TestCase {
     pub mode: Mode,
-    csl: String,
-    input: Vec<Reference>,
+    pub csl: String,
+    pub input: Vec<Reference>,
     pub result: String,
-    citation_items: Option<Vec<Vec<CitationItem>>>,
-    citations: Option<Vec<Instruction>>,
+    pub citation_items: Option<Vec<Vec<CitationItem>>>,
+    pub citations: Option<Vec<Instruction>>,
 }
 
 fn format_human_test(test_case: &TestCase) -> String {

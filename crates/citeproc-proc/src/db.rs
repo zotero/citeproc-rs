@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::disamb::{Edge, EdgeData, FreeCondSets, Nfa};
+use crate::disamb::{Dfa, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 
 use fnv::{FnvHashMap, FnvHashSet};
@@ -25,6 +25,8 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
     fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
     fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
 
+    fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
+
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> IrGen;
@@ -41,6 +43,16 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
+}
+
+use crate::disamb::create_dfa;
+
+fn ref_dfa<DB: IrDatabase>(db: &DB, key: Atom) -> Option<Arc<Dfa>> {
+    if let Some(refr) = db.reference(key) {
+        Some(Arc::new(create_dfa::<Html, DB>(db, &refr)))
+    } else {
+        None
+    }
 }
 
 fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {
@@ -214,6 +226,8 @@ macro_rules! preamble {
     }};
 }
 
+use log::Level::Warn;
+
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style;
     let locale;
@@ -224,7 +238,26 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let index = db.inverted_index();
     let mut state = IrState::new();
     let ir = style.intermediate(&mut state, &ctx).0;
-    let un = is_unambiguous(&index, None, &state);
+    let fmt = Html::default();
+    let edges = ir.to_edge_stream(&fmt);
+
+    let mut n = 0;
+    for k in db.cited_keys().iter() {
+        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+        let acc = dfa.accepts_data(db, &edges);
+        if acc {
+            n += 1;
+        }
+        if k == &refr.id && !acc && log_enabled!(Warn) {
+            warn!("Own reference did not match\n{}", dfa.debug_graph(db));
+            debug!("{:#?}", &edges);
+        }
+        if n > 1 {
+            break;
+        }
+    }
+    let un = n <= 1;
+    println!("ir_gen0: cite was {:?} ambiguous", !un);
     Arc::new((ir, un, state))
 }
 

@@ -56,10 +56,20 @@ fn run_test(path: &Path) {
     assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
 }
 
+use std::sync::Once;
+
+static INIT: Once = Once::new();
+fn setup() {
+    INIT.call_once(|| {
+        let _ = env_logger::init();
+    });
+}
+
 #[datatest::files("tests/data/test-suite/processor-tests/humans", {
     path in r"^(.*)\.txt" if !is_ignore,
 })]
 fn csl_test_suite(path: &Path) {
+    setup();
     run_test(path)
 }
 
@@ -67,6 +77,7 @@ fn csl_test_suite(path: &Path) {
     path in r"^(.*)\.yml",
 })]
 fn humans(path: &Path) {
+    setup();
     let input = read_to_string(path).unwrap();
     let mut test_case: TestCase = serde_yaml::from_str(&input).unwrap();
     let res = test_case.execute();
@@ -77,6 +88,7 @@ fn humans(path: &Path) {
     path in r"^(.*)\.toml",
 })]
 fn humans_toml(path: &Path) {
+    setup();
     use test_utils::toml::TomlTestCase;
     let input = read_to_string(path).unwrap();
     let mut test_case: TomlTestCase = toml::from_str(&input).unwrap();

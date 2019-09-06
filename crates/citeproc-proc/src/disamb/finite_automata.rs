@@ -6,7 +6,6 @@
 
 use crate::db::IrDatabase;
 use citeproc_io::output::{html::Html, OutputFormat};
-#[cfg(test)]
 use petgraph::dot::Dot;
 use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternId, InternKey};
@@ -26,7 +25,6 @@ pub enum EdgeData<O: OutputFormat = Html> {
     LocatorLabel,
     YearSuffix,
     CitationNumber,
-    BibNumber,
     // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
     Frnn,
 }
@@ -116,6 +114,15 @@ pub struct Dfa {
     pub graph: DfaGraph,
     pub accepting: BTreeSet<NodeIndex>,
     pub start: NodeIndex,
+}
+
+// This is not especially useful for comparing Dfas, but it allows Salsa to cache it as opposed to
+// not at all.
+impl Eq for Dfa {}
+impl PartialEq for Dfa {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug)]
@@ -290,18 +297,10 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    pub fn accepts_data(&self, db: &impl IrDatabase, chunk: &[EdgeData]) -> bool {
-        self.accepts_data_inner(db, self.start, chunk)
-    }
-    pub fn accepts_data_inner(
-        &self,
-        db: &impl IrDatabase,
-        start: NodeIndex,
-        data: &[EdgeData],
-    ) -> bool {
+    pub fn accepts_data(&self, db: &impl IrDatabase, data: &[EdgeData]) -> bool {
         use std::iter;
         let mut cursors = Vec::new();
-        cursors.push((start, None, data));
+        cursors.push((self.start, None, data));
         while !cursors.is_empty() {
             let (mut cursor, prepended, chunk) = cursors.pop().unwrap();
             let first = prepended.as_ref().or(chunk.get(0));
@@ -309,7 +308,6 @@ impl Dfa {
                 // we did it!
                 return true;
             }
-            dbg!((&prepended, chunk.get(0)));
             if let Some(token) = first {
                 for neighbour in self.graph.neighbors(cursor) {
                     let weight = self

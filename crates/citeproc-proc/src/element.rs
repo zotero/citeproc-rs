@@ -97,7 +97,7 @@ where
                                 renderer.text_variable(var, val.verbatim(), f, af, quo)
                             }),
                         };
-                        let content = content.map(CiteEdgeData::Output);
+                        let content = content.map(CiteEdgeData::from_standard_variable(var));
                         let gv = GroupVars::rendered_if(content.is_some());
                         (IR::Rendered(content), gv)
                     }
@@ -114,7 +114,7 @@ where
                 let content = ctx
                     .get_number(var)
                     .and_then(|val| renderer.label(var, form, val, pl, f, af))
-                    .map(CiteEdgeData::Output);
+                    .map(CiteEdgeData::from_number_variable(var));
                 (IR::Rendered(content), GroupVars::new())
             }
 

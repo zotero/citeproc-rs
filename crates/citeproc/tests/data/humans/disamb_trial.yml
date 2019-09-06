@@ -1,0 +1,35 @@
+mode: citation
+result: 'Title a; Title b; Title c, 54'
+
+input:
+  - id: ITEM-1
+    type: book
+    title: 'Title'
+  - id: ITEM-2
+    type: book
+    title: 'Title'
+  - id: ITEM-3
+    type: book
+    title: 'Title'
+
+citation_items:
+  - - { id: "ITEM-1" }
+    - { id: "ITEM-2" }
+    - { id: "ITEM-3", locator: "54" }
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <group delimiter=" ">
+            <text variable="title" />
+            <text variable="year-suffix" />
+          </group>
+          <text variable="locator" />
+        </group>
+      </layout>
+    </citation>
+  </style>
