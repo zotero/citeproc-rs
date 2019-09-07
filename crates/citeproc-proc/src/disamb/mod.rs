@@ -117,15 +117,12 @@ pub fn mult_identity() -> FreeCondSets {
 pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) -> Dfa {
     let runs = create_ref_ir::<Html, DB>(db, refr);
     let mut nfa = Nfa::new();
-    let start = nfa.graph.add_node(());
-    let finish = nfa.graph.add_node(());
-    nfa.start.insert(start);
-    nfa.accepting.insert(finish);
     let fmt = Html::default();
-    let spot = (start, finish);
     for (_fc, ir) in runs {
-        let (last, _) = add_to_graph(db, &fmt, &mut nfa, &ir, spot);
-        nfa.graph.add_edge(last, finish, NfaEdge::Epsilon);
+        let first = nfa.graph.add_node(());
+        nfa.start.insert(first);
+        let last = add_to_graph(db, &fmt, &mut nfa, &ir, first);
+        nfa.accepting.insert(last);
     }
     nfa.brzozowski_minimise()
 }
@@ -161,15 +158,14 @@ fn add_to_graph(
     fmt: &Html,
     nfa: &mut Nfa,
     ir: &RefIR,
-    mut spot: (NodeIndex, NodeIndex),
-) -> (NodeIndex, NodeIndex) {
-    let (from, to) = spot;
+    mut spot: NodeIndex,
+) -> NodeIndex {
     match ir {
         RefIR::Edge(None) => spot,
         RefIR::Edge(Some(e)) => {
-            let mid = nfa.graph.add_node(());
-            nfa.graph.add_edge(from, mid, NfaEdge::Token(*e));
-            (mid, to)
+            let to = nfa.graph.add_node(());
+            nfa.graph.add_edge(spot, to, NfaEdge::Token(*e));
+            to
         }
         RefIR::Seq(ref seq) => {
             let RefIrSeq {
