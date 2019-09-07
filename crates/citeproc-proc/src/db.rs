@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::helpers::to_bijective_base_26;
-use crate::{CiteContext, DisambPass, DisambToken, IrState, Proc, IR};
+use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{
     html::{Html, HtmlOptions},
     OutputFormat,
@@ -22,9 +22,6 @@ use csl::Atom;
 
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
-    fn disamb_tokens(&self, key: Atom) -> Arc<HashSet<DisambToken>>;
-    fn inverted_index(&self) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>>;
-
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
 
     // If these don't run any additional disambiguation, they just clone the
@@ -60,81 +57,6 @@ fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {
     Arc::new(style.get_free_conds(db))
 }
 
-// only call with real references please
-fn disamb_tokens(db: &impl CiteDatabase, key: Atom) -> Arc<HashSet<DisambToken>> {
-    let refr = db.reference_input(key);
-    let mut set = HashSet::new();
-    refr.add_tokens_index(&mut set);
-    Arc::new(set)
-}
-
-fn inverted_index(db: &impl IrDatabase) -> Arc<FnvHashMap<DisambToken, HashSet<Atom>>> {
-    let mut index = FnvHashMap::default();
-    for key in db.disamb_participants().iter() {
-        for tok in db.disamb_tokens(key.clone()).iter() {
-            let ids = index.entry(tok.clone()).or_insert_with(|| HashSet::new());
-            ids.insert(key.clone());
-        }
-    }
-    Arc::new(index)
-}
-
-/// the inverted index is constant for a particular set of cited+uncited references
-/// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
-/// the parallelization of IR <= 2
-fn is_unambiguous(
-    index: &FnvHashMap<DisambToken, HashSet<Atom>>,
-    year_suffixes: Option<&FnvHashMap<Atom, u32>>,
-    state: &IrState,
-) -> bool {
-    let mut refs = FnvHashSet::default();
-    let invert_ysuffix: Option<FnvHashMap<_, _>> = year_suffixes.map(|ys| {
-        ys.iter()
-            .map(|(a, &b)| (Atom::from(to_bijective_base_26(b)), a))
-            .collect()
-    });
-    let lookup_ysuffix = |tok: &DisambToken| match tok {
-        DisambToken::Str(s) => invert_ysuffix.as_ref().and_then(|iys| iys.get(&s)),
-        _ => None,
-    };
-    // Build up all possible citekeys it could match
-    for tok in state.tokens.iter() {
-        if let Some(ids) = index.get(tok) {
-            for x in ids {
-                refs.insert(x.clone());
-            }
-        }
-        if let Some(id) = lookup_ysuffix(tok) {
-            refs.insert((*id).clone());
-        }
-    }
-    // Remove any that didn't appear in the index for ALL tokens
-    for tok in state.tokens.iter() {
-        if let Some(ids) = index.get(tok) {
-            refs.retain(|already| ids.contains(already));
-        }
-        if let Some(id) = lookup_ysuffix(tok) {
-            refs.retain(|already| *id == already);
-        }
-    }
-    // dbg!(&state.tokens);
-    // dbg!(&refs);
-    // ignore tokens which matched NO references; they are just part of the style,
-    // like <text value="xxx"/>. Of course:
-    //   - <text value="xxx"/> WILL match any references that have a field with
-    //     "xxx" in it.
-    //   - You have to make sure all text is transformed equivalently.
-    //   So TODO: make all text ASCII uppercase first!
-
-    // len == 0 is for "ibid" or "[1]", etc. They are clearly unambiguous, and we will assume
-    // that any time it happens is intentional.
-    // len == 1 means there was only one ref. Great!
-    //
-    // TODO Of course, that whole 'compare IR output for ambiguous cites' thing.
-    let len = refs.len();
-    len < 2
-}
-
 fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     let style = db.style();
     if !style.citation.disambiguate_add_year_suffix {
@@ -163,25 +85,6 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         }
     }
     Arc::new(suffixes)
-}
-
-fn disambiguate(
-    db: &impl IrDatabase,
-    ir: &mut IR<Html>,
-    state: &mut IrState,
-    ctx: &mut CiteContext<Html>,
-    maybe_ys: Option<&FnvHashMap<Atom, u32>>,
-) -> bool {
-    let index = db.inverted_index();
-    let is_unambig = |state: &IrState| is_unambiguous(&index, maybe_ys, state);
-    // TODO: (BUG) Restore original IrState before running again?
-    // Maybe maintain token sets per-name-el. Add an ID to each <names> and reuse IrStates, but
-    // clear the relevant names tokens when you're re-evaluating one.
-    // Currently, the state being reset means disambiguate doesn't add many tokens at all,
-    // and suddently is_unambiguous is running on less than its full range of tokens.
-    ir.disambiguate(db, state, ctx, &is_unambig);
-    let un = is_unambiguous(&index, maybe_ys, state);
-    un
 }
 
 type IrGen = Arc<(IR<Html>, bool, IrState)>;
@@ -222,7 +125,45 @@ macro_rules! preamble {
     }};
 }
 
-use log::Level::Warn;
+fn disambiguate(
+    db: &impl IrDatabase,
+    ir: &mut IR<Html>,
+    state: &mut IrState,
+    ctx: &mut CiteContext<Html>,
+    maybe_ys: Option<&FnvHashMap<Atom, u32>>,
+    own_id: Atom,
+) -> bool {
+    let mut un = is_unambiguous(db, ir, own_id.clone());
+    // disambiguate returns true if it can do more for this DisambPass (i.e. more names to add)
+    while !un && ir.disambiguate(db, state, ctx) {
+        un = is_unambiguous(db, ir, own_id.clone());
+    }
+    un
+}
+
+/// the inverted index is constant for a particular set of cited+uncited references
+/// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
+/// the parallelization of IR <= 2
+fn is_unambiguous(db: &impl IrDatabase, ir: &IR<Html>, own_id: Atom) -> bool {
+    use log::Level::Warn;
+    let edges = ir.to_edge_stream(&Html::default());
+    let mut n = 0;
+    for k in db.cited_keys().iter() {
+        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+        let acc = dfa.accepts_data(db, &edges);
+        if acc {
+            n += 1;
+        }
+        if *k == own_id && !acc && log_enabled!(Warn) {
+            warn!("Own reference {} did not match\n{}", k, dfa.debug_graph(db));
+            warn!("{:#?}", &edges);
+        }
+        if n > 1 {
+            break;
+        }
+    }
+    n <= 1
+}
 
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style;
@@ -234,25 +175,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = IrState::new();
     let ir = style.intermediate(&mut state, &ctx).0;
     let fmt = Html::default();
-    let edges = ir.to_edge_stream(&fmt);
-
-    let mut n = 0;
-    for k in db.cited_keys().iter() {
-        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
-        let acc = dfa.accepts_data(db, &edges);
-        if acc {
-            n += 1;
-        }
-        if k == &refr.id && !acc && log_enabled!(Warn) {
-            warn!("Own reference {} did not match\n{}", k, dfa.debug_graph(db));
-            debug!("{:#?}", &edges);
-        }
-        if n > 1 {
-            break;
-        }
-    }
-    let un = n <= 1;
-    println!("ir_gen0: cite was {:?} ambiguous", !un);
+    let un = is_unambiguous(db, &ir, refr.id.clone());
     Arc::new((ir, un, state))
 }
 
@@ -273,7 +196,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir0.2.clone();
     let mut ir = ir0.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
     Arc::new((ir, un, state))
 }
 
@@ -294,7 +217,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir1.2.clone();
     let mut ir = ir1.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
     Arc::new((ir, un, state))
 }
 
@@ -321,7 +244,14 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let year_suffix = suffixes[&cite.ref_id];
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes));
+    let un = disambiguate(
+        db,
+        &mut ir,
+        &mut state,
+        &mut ctx,
+        Some(&suffixes),
+        refr.id.clone(),
+    );
     Arc::new((ir, un, state))
 }
 
@@ -341,7 +271,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir3.2.clone();
     let mut ir = ir3.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None);
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
     Arc::new((ir, un, state))
 }
 

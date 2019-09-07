@@ -60,7 +60,6 @@ where
                         out
                     }
                     TextSource::Value(ref value) => {
-                        state.tokens.insert(DisambToken::Str(value.clone()));
                         let content = renderer
                             .text_value(value, f, af, quo)
                             .map(CiteEdgeData::Output);
@@ -70,12 +69,11 @@ where
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
                                 let base26 = citeproc_io::utils::to_bijective_base_26(i);
-                                state
-                                    .tokens
-                                    .insert(DisambToken::Str(base26.as_str().into()));
                                 return (
                                     IR::Rendered(Some(CiteEdgeData::YearSuffix(
-                                        renderer.text_value(base26, f, af, quo),
+                                        renderer
+                                            .text_value(&base26, f, af, quo)
+                                            .expect("we made base26 ourselves, it is not empty"),
                                     ))),
                                     GroupVars::DidRender,
                                 );
@@ -84,14 +82,12 @@ where
                             return (IR::YearSuffix(ysh, None), GroupVars::OnlyEmpty);
                         }
                         let content = match var {
-                            StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {
-                                state.tokens.insert(DisambToken::Str(val.into()));
-                                renderer.text_variable(var, val, f, af, quo)
-                            }),
-                            StandardVariable::Number(v) => ctx.get_number(v).map(|val| {
-                                state.tokens.insert(DisambToken::Num(val.clone()));
-                                renderer.text_variable(var, val.verbatim(), f, af, quo)
-                            }),
+                            StandardVariable::Ordinary(v) => ctx
+                                .get_ordinary(v, form)
+                                .map(|val| renderer.text_variable(var, val, f, af, quo)),
+                            StandardVariable::Number(v) => ctx
+                                .get_number(v)
+                                .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo)),
                         };
                         let content = content.map(CiteEdgeData::from_standard_variable(var));
                         let gv = GroupVars::rendered_if(content.is_some());

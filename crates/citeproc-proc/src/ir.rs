@@ -189,14 +189,15 @@ impl IR<Html> {
         db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, Html>,
-        is_unambig: &impl Fn(&IrState) -> bool,
-    ) {
+    ) -> bool {
+        let mut ret = false;
         *self = match self {
             IR::Rendered(_) => {
-                return;
+                return ret;
             }
             IR::Names(ref el, ref _x) => {
                 // TODO: re-eval again until names are exhausted
+                // i.e. return true until then
                 let (new_ir, _) = el.intermediate(state, ctx);
                 new_ir
             }
@@ -211,21 +212,23 @@ impl IR<Html> {
                     let (new_ir, _) = el.intermediate(state, ctx);
                     new_ir
                 } else {
-                    // not implemented
-                    return;
+                    warn!("YearSuffixHook::Date not implemented");
+                    return ret;
                 }
             }
             IR::Seq(ref mut seq) => {
-                for ir in seq.contents.iter_mut() {
-                    ir.disambiguate(db, state, ctx, is_unambig);
-                }
+                ret = seq
+                    .contents
+                    .iter_mut()
+                    .any(|ir| ir.disambiguate(db, state, ctx));
                 if seq.contents.iter().all(|ir| ir.is_rendered()) {
                     IR::Rendered(seq.flatten_seq(&ctx.format).map(CiteEdgeData::Output))
                 } else {
-                    return;
+                    return ret;
                 }
             }
-        }
+        };
+        ret
     }
 
     pub fn flatten(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {

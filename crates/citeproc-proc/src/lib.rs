@@ -39,7 +39,6 @@ pub(crate) mod prelude {
     pub use csl::style::{Affixes, Element, Formatting};
 
     pub use crate::cite_context::CiteContext;
-    pub use crate::disamb::old::{AddDisambTokens, DisambToken};
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
 
@@ -56,7 +55,6 @@ use prelude::*;
 #[cfg(test)]
 mod test;
 
-pub use self::disamb::old::DisambToken;
 pub use self::ir::IR;
 
 // TODO: function to walk the entire tree for a <text variable="year-suffix"> to work out which
@@ -77,8 +75,6 @@ where
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
-    pub tokens: HashSet<DisambToken>,
-    pub name_tokens: FnvHashMap<u64, HashSet<DisambToken>>,
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.

@@ -58,16 +58,17 @@ where
         let locale_date = locale.dates.get(&self.form).unwrap();
         // TODO: render date ranges
         // TODO: TextCase
-        let date = ctx.reference.date.get(&self.variable).and_then(|r| {
-            mask_range(r, &self.date_parts, state);
-            r.single_or_first()
-        });
+        let date = ctx
+            .reference
+            .date
+            .get(&self.variable)
+            .and_then(|r| r.single_or_first());
         let content = date.map(|val| {
             let each: Vec<_> = locale_date
                 .date_parts
                 .iter()
                 .filter(|dp| dp_matches(dp, self.parts_selector))
-                .filter_map(|dp| dp_render(dp, state, ctx, &val))
+                .filter_map(|dp| dp_render(dp, ctx, &val))
                 .collect();
             let delim = &locale_date.delimiter.0;
             CiteEdgeData::Output(
@@ -93,15 +94,12 @@ where
             .date
             .get(&self.variable)
             // TODO: render date ranges
-            .and_then(|r| {
-                mask_range(r, &self.date_parts, state);
-                r.single_or_first()
-            })
+            .and_then(|r| r.single_or_first())
             .map(|val| {
                 let each: Vec<_> = self
                     .date_parts
                     .iter()
-                    .filter_map(|dp| dp_render(dp, state, ctx, &val))
+                    .filter_map(|dp| dp_render(dp, ctx, &val))
                     .collect();
                 let delim = &self.delimiter.0;
                 CiteEdgeData::Output(
@@ -124,33 +122,6 @@ fn dp_fold(mut a: DatePartAcc, form: DatePartForm) -> DatePartAcc {
     a
 }
 
-fn mask(d: Date, date_parts: &[DatePart]) -> Date {
-    let a = date_parts
-        .iter()
-        .map(|dp| dp.form)
-        .fold((false, false, false), dp_fold);
-    Date {
-        year: if a.0 { d.year } else { 0 },
-        month: if a.1 { d.month } else { 0 },
-        day: if a.2 { d.day } else { 0 },
-    }
-}
-
-fn mask_range(r: &DateOrRange, date_parts: &[DatePart], state: &mut IrState) {
-    match *r {
-        DateOrRange::Single(d) => {
-            mask(d, date_parts).add_tokens(&mut state.tokens);
-        }
-        DateOrRange::Range(d1, d2) => {
-            mask(d1, date_parts).add_tokens(&mut state.tokens);
-            mask(d2, date_parts).add_tokens(&mut state.tokens);
-        }
-        DateOrRange::Literal(ref lit) => {
-            state.tokens.insert(DisambToken::Str(lit.as_str().into()));
-        }
-    }
-}
-
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
     match part.form {
         DatePartForm::Day(_) => selector == DateParts::YearMonthDay,
@@ -161,7 +132,6 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
 
 fn dp_render<'c, O: OutputFormat>(
     part: &DatePart,
-    _state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     date: &Date,
 ) -> Option<O::Build> {
