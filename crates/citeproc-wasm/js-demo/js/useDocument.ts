@@ -126,6 +126,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         inFlight,
         resetReferences,
         updateReferences,
+        references,
     };
 }
 

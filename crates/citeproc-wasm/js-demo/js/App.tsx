@@ -3,25 +3,22 @@ import { asyncComponent } from 'react-async-component';
 import { Reference, Cluster, Driver, StyleError, ParseError, Invalid } from '../../pkg';
 import { useState } from 'react';
 import { DocumentEditor } from './DocumentEditor';
+import { GraphViz } from './GraphViz';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { useDocument } from './useDocument';
 import { string } from 'prop-types';
 
 let initialStyle = `<style class="note">
-  <features>
-    <feature name="conditions" />
-    <feature name="condition-date-parts" />
-  </features>
   <locale>
     <terms>
       <term name="ibid">ibid</term>
     </terms>
   </locale>
-  <citation et-al-min="3">
+  <citation et-al-min="3" disambiguate-add-year-suffix="true">
     <layout delimiter="; " suffix=".">
       <choose>
         <if position="ibid-with-locator">
-          <group delimiter=" ">
+          <group delimiter=", ">
             <text term="ibid" />
             <text variable="locator" />
           </group>
@@ -30,24 +27,21 @@ let initialStyle = `<style class="note">
           <text term="ibid" />
         </else-if>
         <else-if position="subsequent">
-          <group delimiter=" ">
-            <text variable="title" font-style="italic" />
-            <text prefix="(n " variable="first-reference-note-number" suffix=")" />
+          <group delimiter=", ">
+            <group delimiter=" ">
+              <text variable="title" font-style="italic" />
+              <text variable="year-suffix" />
+              <text prefix="(n " variable="first-reference-note-number" suffix=")" />
+            </group>
             <text variable="locator" />
           </group>
         </else-if>
         <else>
           <group delimiter=", ">
-            <text variable="title" font-style="italic" />
-            <names variable="author" />
-            <choose>
-              <if>
-                <conditions match="all">
-                  <condition has-day="issued" />
-                </conditions>
-                <date variable="issued" form="numeric" />
-              </if>
-            </choose>
+            <group delimiter=" ">
+              <text variable="title" font-style="italic" />
+              <text variable="year-suffix" />
+            </group>
             <text variable="locator" />
           </group>
         </else>
@@ -63,7 +57,11 @@ const initialReferences: Reference[] = [
         author: [{ given: "Kurt", family: "Camembert" }],
         title: "Where The Vile Things Are",
         issued: { "raw": "1999-08-09" },
-        language: 'en-GB',
+    },
+    {
+        id: 'citekey2',
+        type: 'book',
+        title: "Where The Vile Things Are",
     },
     {
         id: 'foreign',
@@ -84,7 +82,7 @@ const initialClusters: Cluster[] = [
     {
         id: 2,
         cites: [
-            { id: "citekey" }
+            { id: "citekey2" }
         ],
         note: 2,
     },
@@ -195,6 +193,7 @@ const App = () => {
         setStyle,
         inFlight,
         setDocument,
+        references,
         resetReferences,
         updateReferences,
     } = useDocument(initialStyle, initialReferences, initialClusters);
@@ -218,8 +217,15 @@ const App = () => {
                 </a>
             </header>
             <AsyncEditor style={style} setStyle={setStyle} inFlight={inFlight} setReferences={resetReferences} />
-            <Results style={style} driver={driver} />
-            { docEditor }
+            <div  style={{display: 'flex'}}>
+                <section style={{flexGrow: 1}}>
+                    <Results style={style} driver={driver} />
+                    { docEditor }
+                </section>
+                <section style={{flexGrow: 1}}>
+                    <GraphViz references={references} driver={driver} />
+                </section>
+            </div>
         </div>
     );
 };

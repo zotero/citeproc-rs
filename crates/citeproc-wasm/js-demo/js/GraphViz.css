@@ -1,0 +1,33 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+.footnote {
+    font-family: serif;
+}
+
+/* This sets the color for "TK" nodes to a light blue green. */
+g.type-Accepting > rect {
+  fill: #00ffd0;
+}
+
+g.type-BuiltIn .edgeLabel {
+    color: red;
+}
+
+text {
+  font-weight: 300;
+  font-size: 14px;
+}
+
+.node rect {
+  stroke: #999;
+  fill: #fff;
+  stroke-width: 1.5px;
+}
+
+.edgePath path {
+  stroke: #333;
+  stroke-width: 1.5px;
+}
+

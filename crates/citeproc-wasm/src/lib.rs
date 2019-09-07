@@ -170,6 +170,16 @@ impl Driver {
         };
         future_to_promise(future)
     }
+
+    #[wasm_bindgen(js_name = "disambiguationDfaDot")]
+    pub fn disambiguation_dfa_dot(&self, key: &str) -> String {
+        let id = Atom::from(key);
+        let eng = self.engine.borrow();
+        if let Some(graph) = eng.ref_dfa(id) {
+            return graph.debug_graph(&*eng);
+        }
+        "".to_string()
+    }
 }
 
 #[wasm_bindgen]

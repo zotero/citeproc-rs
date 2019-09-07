@@ -42,7 +42,7 @@ const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: Render
 
 const ClusterViewer = React.memo(({note, html, touched}: { note: number | [number, number], html: string, touched: boolean }) => {
     let style = touched ? { backgroundColor: 'lightgoldenrodyellow' } : {};
-    return <p style={style} dangerouslySetInnerHTML={{ __html: note + ". " + html }}></p>
+    return <p className={"footnote"} style={style} dangerouslySetInnerHTML={{ __html: note + ". " + html }}></p>
 });
 
 const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: NoteCluster, removeCluster: () => void, updateCluster: (cluster: NoteCluster) => void}) => {
