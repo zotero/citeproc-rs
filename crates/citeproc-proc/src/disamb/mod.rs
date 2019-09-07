@@ -143,12 +143,10 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .0
         .iter()
         .map(|fc| {
-            debug!("branch run {}: {:?}", &refr.id, fc);
             let fmt = Html::default();
             let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
                 Disambiguation::<Html>::ref_ir(&*style, db, &mut ctx, Formatting::default());
-            debug!("{:#?}", ir);
             (*fc, ir)
         })
         .collect();
