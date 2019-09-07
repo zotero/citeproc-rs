@@ -75,7 +75,7 @@ where
                                     .insert(DisambToken::Str(base26.as_str().into()));
                                 return (
                                     IR::Rendered(Some(CiteEdgeData::YearSuffix(
-                                        fmt.text_node(base26, None),
+                                        renderer.text_value(base26, f, af, quo),
                                     ))),
                                     GroupVars::DidRender,
                                 );

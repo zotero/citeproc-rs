@@ -181,10 +181,6 @@ fn disambiguate(
     // and suddently is_unambiguous is running on less than its full range of tokens.
     ir.disambiguate(db, state, ctx, &is_unambig);
     let un = is_unambiguous(&index, maybe_ys, state);
-    debug!("{:?} trying to disam {:?}", ctx.disamb_pass, ctx.cite_id);
-    if un {
-        debug!("{:?} disambiguated {:?}", ctx.disamb_pass, ctx.cite_id);
-    }
     un
 }
 
