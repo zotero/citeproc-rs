@@ -18,7 +18,7 @@ export class RenderedDocument {
     constructor(clusters: NoteCluster[], driver: Driver) {
         this[immerable] = true;
         for (let cluster of clusters) {
-            this.builtClusters[cluster.id] = stringifyInlines(driver.builtCluster(cluster.id));
+            this.builtClusters[cluster.id] = driver.builtCluster(cluster.id);
             // TODO: send note through a round trip and get it from builtCluster
             this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
@@ -29,7 +29,7 @@ export class RenderedDocument {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
             for (let [id, built] of summary.clusters) {
-                draft.builtClusters[id] = stringifyInlines(built);
+                draft.builtClusters[id] = built;
                 draft.updatedLastRevision[id] = true;
             }
         })

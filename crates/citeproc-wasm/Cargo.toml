@@ -17,6 +17,8 @@ crate-type = ["cdylib", "rlib"]
 [features]
 # use --features console
 console = ["console_error_panic_hook", "console_log", "fern"]
+# disable the source of js-demo's visualisation for the public API
+dot = []
 default = []
 
 [dependencies]

@@ -139,7 +139,7 @@ impl PartialOrd for IntraNote {
 }
 
 #[derive(Deserialize, Ord, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 #[derive(Clone, Copy, Debug)]
 pub enum ClusterNumber {
     InText(u32),
@@ -182,7 +182,7 @@ impl PartialOrd for ClusterNumber {
 /// [`csl::variables::NumberVariable::FirstReferenceNoteNumber`]
 ///
 /// Clusters can appear in footnotes, or in the body text of a document.
-/// In JSON, that is `{ "note": 8, "id": ..., "cites": ... }` or `{ "in_text": 5, ...}`.
+/// In JSON, that is `{ "note": 8, "id": ..., "cites": ... }` or `{ "inText": 5, ...}`.
 ///
 /// Because footnotes can sometimes contain more than one cite cluster, there is a facility for
 /// providing one extra value to discriminate between these. The following would be the second
@@ -258,7 +258,7 @@ fn json_clusters() {
         }
     );
     let c3: Cluster2<Html> =
-        serde_json::from_str(r#"{ "in_text": 32, "id": 5, "cites": [] }"#).unwrap();
+        serde_json::from_str(r#"{ "inText": 32, "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c3,
         Cluster2::InText {

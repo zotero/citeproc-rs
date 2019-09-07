@@ -28,12 +28,18 @@ use csl::locale::Lang;
 #[wasm_bindgen]
 pub struct Driver {
     engine: Rc<RefCell<Processor>>,
-    fetcher: PromiseFetcher,
+    fetcher: Lifecycle,
 }
 
 #[wasm_bindgen]
 impl Driver {
-    pub fn new(style: &str, promise_fetcher: PromiseFetcher) -> Result<Driver, JsValue> {
+    /// Creates a new Driver.
+    ///
+    /// * `style` is a CSL style as a string. Independent styles only.
+    /// * `lifecycle` must implement the `Lifecycle` interface
+    ///
+    /// Throws an error if it cannot parse the style you gave it.
+    pub fn new(style: &str, lifecycle: Lifecycle) -> Result<Driver, JsValue> {
         utils::set_panic_hook();
         utils::init_log();
 
@@ -44,14 +50,15 @@ impl Driver {
             .map(Rc::new)
             .map_err(|e| JsValue::from_serde(&e).unwrap())?;
 
-        // The Driver manually adds locales fetched via PromiseFetcher, which asks the consumer
+        // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.
         Ok(Driver {
             engine,
-            fetcher: promise_fetcher,
+            fetcher: lifecycle,
         })
     }
 
+    /// Sets the style (which will also cause everything to be recomputed)
     #[wasm_bindgen(js_name = "setStyle")]
     pub fn set_style(&mut self, style_text: &str) -> JsValue {
         self.engine
@@ -62,15 +69,19 @@ impl Driver {
             .unwrap_or(JsValue::UNDEFINED)
     }
 
+    /// Inserts or overwrites references as a batch operation.
     #[wasm_bindgen(js_name = "setReferences")]
     pub fn set_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
         Ok(self.engine.borrow_mut().set_references(refs))
     }
 
+    /// Inserts or overwrites a reference.
+    ///
+    /// * `refr` is a 
     #[wasm_bindgen(js_name = "insertReference")]
-    pub fn insert_reference(&mut self, js_refr: JsValue) -> Result<(), JsValue> {
-        let refr = js_refr
+    pub fn insert_reference(&mut self, refr: JsValue) -> Result<(), JsValue> {
+        let refr = refr
             .into_serde()
             .map_err(|_| ErrorPlaceholder::throw("could not parse Reference from host"))?;
         // inserting & replacing are the same
@@ -78,6 +89,9 @@ impl Driver {
         Ok(())
     }
 
+    /// Gets a list of locales in use by the references currently loaded.
+    ///
+    /// Note that Driver comes pre-loaded with the `en-US` locale.
     #[wasm_bindgen(js_name = "toFetch")]
     pub fn locales_to_fetch(&self) -> JsValue {
         let langs: Vec<String> = self
@@ -90,39 +104,68 @@ impl Driver {
         JsValue::from_serde(&langs).unwrap()
     }
 
+    /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(
         &mut self,
-        cluster: JsValue,
+        cluster_id: JsValue,
     ) -> Result<(), JsValue> {
-        let cluster = cluster
+        let cluster = cluster_id
             .into_serde()
             .map_err(|e| ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e)))?;
         let mut eng = self.engine.borrow_mut();
         Ok(eng.insert_cluster(cluster))
     }
 
+    /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
     pub fn remove_cluster(
         &mut self,
-        cluster: u32,
+        cluster_id: u32,
     ) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
-        Ok(eng.remove_cluster(cluster))
+        Ok(eng.remove_cluster(cluster_id))
     }
 
+    /// Resets all the clusters in the processor to a new list.
+    ///
+    /// * `clusters` is a Cluster[]
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
         let clusters = utils::read_js_array(clusters)?;
         Ok(self.engine.borrow_mut().init_clusters(clusters))
     }
 
+    /// Returns the formatted citation cluster for `cluster_id`.
+    /// 
+    /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
+    /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]
     pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
         let built = (*self.engine.borrow().get_cluster(id)).clone();
         Ok(JsValue::from_serde(&built).unwrap())
     }
 
+    /// Replaces cluster numberings in one go.
+    ///
+    /// * `mappings` is an `Array<[ ClusterId, ClusterNumber ]>` where `ClusterNumber`
+    ///   is, e.g. `{ note: 1 }`, `{ note: [3, 1] }` or `{ inText: 5 }` in the same way a
+    ///   Cluster must contain one of those three numberings.
+    ///
+    /// Not every ClusterId must appear in the array, just the ones you wish to renumber.
+    ///
+    /// The library consumer is responsible for ensuring that clusters are well-ordered. Clusters
+    /// are sorted for determining cite positions (ibid, subsequent, etc). If a footnote is
+    /// deleted, you will likely need to shift all cluster numbers after it back by one.
+    ///
+    /// The second note numbering, `{note: [3, 1]}`, is for having multiple clusters in a single
+    /// footnote. This is possible in many editors. The second number acts as a second sorting
+    /// key.
+    ///
+    /// The third note numbering, `{ inText: 5 }`, is for ordering in-text references that appear
+    /// within the body of a document. These will be sorted but won't cause
+    /// `first-reference-note-number` to become available.
+    ///
     #[wasm_bindgen(js_name = "renumberClusters")]
     pub fn renumber_clusters(&mut self, mappings: Box<[JsValue]>) -> Result<(), JsValue> {
         let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
@@ -131,6 +174,13 @@ impl Driver {
         Ok(())
     }
 
+    /// Retrieve any clusters that have been touched since last time `batchedUpdates` was
+    /// called. Intended to be called every time an edit has been made. Every cluster in the
+    /// returned summary should then be reflected in any UI.
+    ///
+    /// Some built clusters may occasionally have identical contents to before.
+    ///
+    /// * returns an `UpdateSummary`
     #[wasm_bindgen(js_name = "batchedUpdates")]
     pub fn batched_updates(&self) -> JsValue {
         let eng = self.engine.borrow();
@@ -138,13 +188,16 @@ impl Driver {
         JsValue::from_serde(&summary).unwrap()
     }
 
-    /// This asynchronously fetches all the locales that may be required, and saves them into the
-    /// engine. It holds a mutable borrow for the duration of the fetches, and any other Driver
-    /// method will fail until all fetches return.
-    ///
-    /// This needs improvement -- a fully queued architecture that is aware of any 'locks' would be
-    /// better. You could enqueue `SetReferences` (which might trigger fetching) and be notified
-    /// when your document needed updating.
+    /// Drains the `batchedUpdates` queue manually. Use it to avoid serializing an unneeded
+    /// `UpdateSummary`.
+    #[wasm_bindgen(js_name = "drain")]
+    pub fn drain(&self) {
+        let mut eng = self.engine.borrow_mut();
+        eng.drain();
+    }
+
+    /// Asynchronously fetches all the locales that may be required, and saves them into the
+    /// engine. Uses your provided `Lifecycle.fetchLocale` function.
     #[wasm_bindgen(js_name = "fetchAll")]
     pub fn fetch_all(&self) -> Promise {
         let rc = self.engine.clone();
@@ -171,6 +224,9 @@ impl Driver {
         future_to_promise(future)
     }
 
+    #[cfg(feature = "dot")]
+    /// Spits out a GraphViz DOT-formatted representation of the internal representation of a
+    /// Reference constructed for disambiguation purposes.
     #[wasm_bindgen(js_name = "disambiguationDfaDot")]
     pub fn disambiguation_dfa_dot(&self, key: &str) -> String {
         let id = Atom::from(key);
@@ -186,10 +242,10 @@ impl Driver {
 extern "C" {
     #[derive(Clone)]
     #[wasm_bindgen(js_name = "Lifecycle")]
-    pub type PromiseFetcher;
+    pub type Lifecycle;
 
     #[wasm_bindgen(method, js_name = "fetchLocale")]
-    fn fetch_locale(this: &PromiseFetcher, lang: &str) -> Promise;
+    fn fetch_locale(this: &Lifecycle, lang: &str) -> Promise;
 
     #[wasm_bindgen(js_name = "error", js_namespace = console)]
     fn log_js_error(val: JsValue);
@@ -231,6 +287,12 @@ export type Cite<Affix = string> = {
     locatorDate?: DateOrRange | null;
 };
 
+export type ClusterNumber = {
+    note: number | [number, number]
+} | {
+    inText: number
+};
+
 export type NoteCluster = {
     id: number;
     cites: Cite[];
@@ -253,8 +315,8 @@ export type Reference = {
 
 export type CslType = "book" | "article" | "legal_case" | "article-journal";
 
-export type UpdateSummary = {
-    clusters: [number, any[]][];
+export type UpdateSummary<Output = string> = {
+    clusters: [number, Output][];
 };
 
 type InvalidCsl = {
@@ -278,7 +340,7 @@ type StyleError = Partial<ParseError & Invalid>;
 "#;
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
-async fn fetch_all(inner: &PromiseFetcher, langs: Vec<Lang>) -> Vec<(Lang, String)> {
+async fn fetch_all(inner: &Lifecycle, langs: Vec<Lang>) -> Vec<(Lang, String)> {
     // Promises are push-, not pull-based, so this kicks all of the requests off at once. If the JS
     // consumer is making HTTP requests for extra locales, they will run in parallel.
     let thunks: Vec<_> = langs
