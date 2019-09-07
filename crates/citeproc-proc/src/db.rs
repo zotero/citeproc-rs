@@ -248,7 +248,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
             n += 1;
         }
         if k == &refr.id && !acc && log_enabled!(Warn) {
-            warn!("Own reference did not match\n{}", dfa.debug_graph(db));
+            warn!("Own reference {} did not match\n{}", k, dfa.debug_graph(db));
             debug!("{:#?}", &edges);
         }
         if n > 1 {

@@ -153,6 +153,12 @@ impl Disambiguation<Html> for Element {
                             return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                         }
                     }
+                    if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber) {
+                        if ctx.position == Position::Subsequent {
+                            let edge = db.edge(EdgeData::Frnn);
+                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        }
+                    }
                     let content = match var {
                         StandardVariable::Ordinary(v) => ctx
                             .reference
