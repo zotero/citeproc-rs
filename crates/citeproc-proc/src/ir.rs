@@ -159,7 +159,7 @@ pub enum IR<O: OutputFormat = Html> {
     /// or <choose><if><conditions><condition>
     /// Should also include `if variable="year-suffix"` because that could change.
     ConditionalDisamb(Arc<Choose>, Box<IR<O>>),
-    YearSuffix(YearSuffixHook, O::Build),
+    YearSuffix(YearSuffixHook, Option<O::Build>),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -235,7 +235,7 @@ impl IR<Html> {
             IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::Names(_, ref x) => Some(x.clone()),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
-            IR::YearSuffix(_, ref x) => Some(x.clone()),
+            IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
     }
@@ -247,9 +247,13 @@ impl IR<Html> {
             // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
             // inside
             IR::YearSuffix(_hook, x) => {
-                let out = fmt.output_in_context(x.clone(), formatting);
-                if out.len() > 0 {
-                    edges.push(EdgeData::Output(out))
+                let out = x
+                    .as_ref()
+                    .map(|x| fmt.output_in_context(x.clone(), formatting));
+                if let Some(o) = out {
+                    if o.len() > 0 {
+                        edges.push(EdgeData::Output(o))
+                    }
                 }
             }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),

@@ -81,10 +81,7 @@ where
                                 );
                             }
                             let ysh = YearSuffixHook::Explicit(self.clone());
-                            return (
-                                IR::YearSuffix(ysh, O::Build::default()),
-                                GroupVars::OnlyEmpty,
-                            );
+                            return (IR::YearSuffix(ysh, None), GroupVars::OnlyEmpty);
                         }
                         let content = match var {
                             StandardVariable::Ordinary(v) => ctx.get_ordinary(v, form).map(|val| {

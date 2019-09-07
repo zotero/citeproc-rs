@@ -48,16 +48,26 @@ impl Disambiguation<Html> for Group {
         ctx: &RefContext<Html>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
+        // TODO: handle GroupVars
         let stack = self.formatting.map(|mine| stack.override_with(mine));
         let els = &self.elements;
-        ref_sequence(
+        let (seq, group_vars) = ref_sequence(
             db,
             ctx,
             &els,
             self.delimiter.0.clone(),
             stack,
             self.affixes.clone(),
-        )
+        );
+        if group_vars.should_render_tree() {
+            // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
+            // render the NoneSeen part. Groups shouldn't look inside inner
+            // groups.
+            (seq, group_vars)
+        } else {
+            // Don't render the group!
+            (RefIR::Edge(None), GroupVars::NoneSeen)
+        }
     }
 }
 
@@ -77,7 +87,8 @@ impl Disambiguation<Html> for Names {
         _ctx: &RefContext<Html>,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        unimplemented!()
+        warn!("ref_ir not implemented for Names");
+        (RefIR::Edge(None), GroupVars::new())
     }
 }
 
@@ -118,9 +129,27 @@ impl Disambiguation<Html> for Element {
             }
             Element::Text(ref src, f, ref af, quo, _sp, _tc, _disp) => match *src {
                 TextSource::Variable(var, form) => {
+                    // let fmt_plain_edge = |e: Edge| {
+                    //     if f.is_some() || af != &Affixes::default() {
+                    //         RefIR::Seq(RefIrSeq {
+                    //             contents: vec![RefIR::Edge(Some(e))],
+                    //             delimiter: csl::Atom::from(""),
+                    //             affixes: af.clone(),
+                    //             formatting: f,
+                    //         })
+                    //     } else {
+                    //         RefIR::Edge(Some(e))
+                    //     }
+                    // };
                     if var == StandardVariable::Number(NumberVariable::Locator) {
-                        if let Some(loctype) = ctx.locator_type {
+                        if let Some(_loctype) = ctx.locator_type {
                             let edge = db.edge(EdgeData::Locator);
+                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        }
+                    }
+                    if var == StandardVariable::Ordinary(Variable::YearSuffix) {
+                        if ctx.year_suffix {
+                            let edge = db.edge(EdgeData::YearSuffix);
                             return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                         }
                     }

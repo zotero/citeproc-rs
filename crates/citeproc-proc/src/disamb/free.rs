@@ -153,6 +153,20 @@ macro_rules! match_fc {
     };
 }
 
+#[test]
+fn test_free_to_loc_type() {
+    let x = FreeCond::LT_PART;
+    assert_eq!(x.to_loc_type(), Some(LocatorType::Part));
+    let x = FreeCond::LT_PART_FALSE;
+    assert_eq!(x.to_loc_type(), None);
+    let x = FreeCond::LT_PART_FALSE | FreeCond::LT_VERSE;
+    assert_eq!(x.to_loc_type(), Some(LocatorType::Verse));
+    let x = FreeCond::LOCATOR;
+    assert_eq!(x.to_loc_type(), Some(LocatorType::Page));
+    let x = FreeCond::IBID | FreeCond::IBID_WITH_LOCATOR_FALSE;
+    assert_eq!(x.to_loc_type(), None);
+}
+
 impl FreeCond {
     pub fn to_loc_type(self) -> Option<LocatorType> {
         // the run doesn't use or check variable="locator", doesn't check locator="XXX", or
@@ -172,7 +186,9 @@ impl FreeCond {
             let opposite = deductive.invert();
             match_fc!(@locator_type opposite);
         }
-        // The style *really* doesn't care.
+        if (self.contains(FreeCond::LOCATOR)) {
+            return Some(LocatorType::Page);
+        }
         None
     }
 

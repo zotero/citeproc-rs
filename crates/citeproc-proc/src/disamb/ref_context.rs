@@ -86,7 +86,7 @@ where
                 match v {
                     // TODO: make Hereinafter a FreeCond
                     Variable::Hereinafter => unimplemented!("Hereinafter as a FreeCond"),
-                    Variable::YearSuffix => unimplemented!("year_suffix: bool, in RefContext"),
+                    Variable::YearSuffix => self.year_suffix,
                     _ => self.reference.ordinary.contains_key(&v),
                 }
             }

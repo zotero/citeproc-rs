@@ -122,7 +122,7 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     nfa.start.insert(start);
     nfa.accepting.insert(finish);
     let fmt = Html::default();
-    let mut spot = (start, finish);
+    let spot = (start, finish);
     for (_fc, ir) in runs {
         let (last, _) = add_to_graph(db, &fmt, &mut nfa, &ir, spot);
         nfa.graph.add_edge(last, finish, NfaEdge::Epsilon);
@@ -143,10 +143,12 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .0
         .iter()
         .map(|fc| {
+            debug!("branch run {}: {:?}", &refr.id, fc);
             let fmt = Html::default();
             let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
                 Disambiguation::<Html>::ref_ir(&*style, db, &mut ctx, Formatting::default());
+            debug!("{:#?}", ir);
             (*fc, ir)
         })
         .collect();

@@ -99,12 +99,6 @@ mod roman {
     ///
     /// Works for integer between 1 and 3999 inclusive, returns None otherwise.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// let x = roman::to(14);
-    /// assert_eq!(x.unwrap(), "xiv");
-    /// ```
     ///
     pub fn to(n: i32) -> Option<String> {
         if n <= 0 || n > MAX {
@@ -138,12 +132,6 @@ mod roman {
     ///
     /// Works for integer between 1 and 3999 inclusive, returns None otherwise.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// let x = roman::from("xiv");
-    /// assert_eq!(x.unwrap(), 14);
-    /// ```
     ///
     pub fn from(txt: &str) -> Option<i32> {
         let n = match from_lax(txt) {

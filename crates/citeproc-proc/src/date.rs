@@ -39,7 +39,8 @@ impl Disambiguation<Html> for BodyDate {
         _ctx: &RefContext<Html>,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        unimplemented!()
+        warn!("ref_ir not implemented for BodyDate");
+        (RefIR::Edge(None), GroupVars::new())
     }
 }
 
