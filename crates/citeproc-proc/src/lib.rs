@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate log;
 
-#[macro_use]
+// #[macro_use]
 extern crate citeproc_db;
 
 use citeproc_io::output::OutputFormat;
@@ -25,6 +25,7 @@ mod group;
 mod helpers;
 mod ir;
 mod names;
+mod number;
 mod renderer;
 mod unicode;
 
@@ -35,7 +36,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
 
-    pub use csl::style::{Affixes, Formatting};
+    pub use csl::style::{Affixes, Element, Formatting};
 
     pub use crate::cite_context::CiteContext;
     pub use crate::disamb::old::{AddDisambTokens, DisambToken};
@@ -43,8 +44,7 @@ pub(crate) mod prelude {
     pub use crate::ir::*;
 
     pub(crate) use crate::disamb::{
-        cross_product, mult_identity, Disambiguation, Edge, EdgeData, FreeCond, FreeCondSets,
-        RefContext,
+        cross_product, mult_identity, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
     };
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;

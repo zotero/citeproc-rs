@@ -7,6 +7,13 @@
 use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
+pub enum NumericValue {
+    Tokens(String, Vec<NumericToken>),
+    /// For values that could not be parsed.
+    Str(String),
+}
+
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub enum NumericToken {
     Num(u32),
     Affixed(String),
@@ -18,7 +25,7 @@ pub enum NumericToken {
 use self::NumericToken::*;
 
 impl NumericToken {
-    fn get_num(&self) -> Option<u32> {
+    pub fn get_num(&self) -> Option<u32> {
         match *self {
             Num(u) => Some(u),
             _ => None,
@@ -73,13 +80,6 @@ fn tokens_to_string(ts: &[NumericToken]) -> String {
 ///
 /// It's a number, then a { comma|hyphen|ampersand } with any whitespace, then another number, and
 /// so on. All numbers are unsigned.
-
-#[derive(Debug, PartialEq, Hash, Eq, Clone)]
-pub enum NumericValue {
-    Tokens(String, Vec<NumericToken>),
-    /// For values that could not be parsed.
-    Str(String),
-}
 
 impl NumericValue {
     pub fn num(i: u32) -> Self {

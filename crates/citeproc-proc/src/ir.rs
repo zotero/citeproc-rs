@@ -4,12 +4,11 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::disamb::{Edge, EdgeData, Nfa};
+use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use csl::style::{
-    Affixes, BodyDate, Choose, Conditions, Element, Formatting, GivenNameDisambiguationRule,
-    Names as NamesEl,
+    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
 use csl::Atom;
 use petgraph::graph::NodeIndex;
@@ -94,8 +93,6 @@ pub struct RefIrSeq {
     pub affixes: Affixes,
     pub delimiter: Atom,
 }
-
-use std::fmt::{self, Debug, Formatter};
 
 impl RefIR {
     pub fn debug(&self, db: &impl IrDatabase) -> String {

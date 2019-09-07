@@ -28,6 +28,21 @@ where
     }
 }
 
+impl Disambiguation<Html> for BodyDate {
+    fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
+        mult_identity()
+    }
+
+    fn ref_ir(
+        &self,
+        _db: &impl IrDatabase,
+        _ctx: &RefContext<Html>,
+        _stack: Formatting,
+    ) -> (RefIR, GroupVars) {
+        unimplemented!()
+    }
+}
+
 impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,

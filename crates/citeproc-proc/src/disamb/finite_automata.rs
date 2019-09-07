@@ -120,7 +120,7 @@ pub struct Dfa {
 // not at all.
 impl Eq for Dfa {}
 impl PartialEq for Dfa {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
@@ -298,7 +298,6 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
 
 impl Dfa {
     pub fn accepts_data(&self, db: &impl IrDatabase, data: &[EdgeData]) -> bool {
-        use std::iter;
         let mut cursors = Vec::new();
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {

@@ -5,7 +5,7 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::free::{FreeCond, FreeCondSets};
-use super::DisambiguationOld;
+use super::old::DisambiguationOld;
 use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::html::Html;
@@ -15,8 +15,6 @@ use csl::style::{Cond, CslType, Position};
 use csl::variables::{AnyVariable, NumberVariable, Variable};
 use csl::IsIndependent;
 use fnv::FnvHashSet;
-
-use super::ConditionStack;
 
 macro_rules! style_text_layout {
     ($ex:expr) => {{
@@ -57,50 +55,6 @@ macro_rules! style {
         use std::str::FromStr;
         ::csl::style::Style::from_str($ex).unwrap()
     }};
-}
-
-#[test]
-fn independent_conds() {
-    let db = MockProcessor::new();
-    let style = style_layout!(
-        r#"
-    <group delimiter=" ">
-        <text variable="locator" />
-        <text variable="title" font-style="italic"/>
-        <choose>
-            <if disambiguate="true">
-                <text value="..." />
-            </if>
-            <else-if position="first" type="book">
-                <text value="..." />
-            </else-if>
-            <else-if position="subsequent" variable="title">
-                <text value="..." />
-            </else-if>
-            <else>
-                <text variable="first-reference-note-number" />
-                <text variable="ISBN" />
-            </else>
-        </choose>
-    </group>
-    "#
-    );
-    let mut refr = Reference::empty("id".into(), CslType::Book);
-    refr.ordinary.insert(Variable::Title, "Title".into());
-    let mut stack = ConditionStack::from(&refr);
-    style.independent_conds(&db, &mut stack);
-    let mut result_set = FnvHashSet::default();
-    result_set.insert(Cond::Variable(AnyVariable::Number(NumberVariable::Locator)));
-    result_set.insert(Cond::Position(Position::First));
-    result_set.insert(Cond::Disambiguate(true));
-    result_set.insert(Cond::Variable(AnyVariable::Number(
-        NumberVariable::FirstReferenceNoteNumber,
-    )));
-    // does not contain Position::Subsequent as we knew variable="title" was true
-    assert_eq!(
-        stack.output.into_iter().collect::<FnvHashSet<_>>(),
-        result_set,
-    )
 }
 
 #[test]

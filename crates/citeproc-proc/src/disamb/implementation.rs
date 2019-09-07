@@ -6,14 +6,14 @@
 
 use super::Disambiguation;
 use super::EdgeData;
-use super::{cross_product, mult_identity, FreeCond, FreeCondSets};
+use super::{cross_product, mult_identity, FreeCondSets};
 use crate::prelude::*;
 use citeproc_io::output::html::Html;
 use csl::style::{Affixes, Formatting, Position};
 use csl::variables::*;
 
 use csl::{
-    style::{BodyDate, Choose, Cond, Element, Group, IfThen, Match, Names, Style, TextSource},
+    style::{Cond, Element, Group, Names, Style, TextSource},
     variables::AnyVariable,
     IsIndependent,
 };
@@ -31,7 +31,7 @@ impl Disambiguation<Html> for Style {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(db, ctx, &els, "".into(), None, Affixes::default())
+        ref_sequence(db, ctx, &els, "".into(), Some(stack), Affixes::default())
     }
 }
 
@@ -61,21 +61,6 @@ impl Disambiguation<Html> for Group {
     }
 }
 
-impl Disambiguation<Html> for BodyDate {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        mult_identity()
-    }
-
-    fn ref_ir(
-        &self,
-        db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
-        stack: Formatting,
-    ) -> (RefIR, GroupVars) {
-        unimplemented!()
-    }
-}
-
 impl Disambiguation<Html> for Names {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         // TODO: drill down into the substitute logic here
@@ -88,9 +73,9 @@ impl Disambiguation<Html> for Names {
 
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
-        stack: Formatting,
+        _db: &impl IrDatabase,
+        _ctx: &RefContext<Html>,
+        _stack: Formatting,
     ) -> (RefIR, GroupVars) {
         unimplemented!()
     }
@@ -122,7 +107,7 @@ impl Disambiguation<Html> for Element {
                         .reference
                         .number
                         .get(&v)
-                        .map(|val| renderer.number(var, val.clone(), f, af)),
+                        .map(|val| renderer.number(var, form, &val.clone(), f, af)),
                 };
                 let content = content
                     .map(|x| fmt.output_in_context(x, stack))
@@ -255,7 +240,6 @@ impl Disambiguation<Html> for Element {
                 }
                 TextSource::Value(_) | TextSource::Term(..) => mult_identity(),
             },
-            _ => mult_identity(),
         }
     }
 }

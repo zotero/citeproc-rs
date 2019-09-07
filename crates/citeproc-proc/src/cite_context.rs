@@ -7,10 +7,11 @@
 use crate::prelude::*;
 
 use super::DisambPass;
+use crate::choose::CondChecker;
 use citeproc_io::output::html::Html;
-use citeproc_io::{Cite, Locator, Name, NumericValue, Reference};
+use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{Name as NameEl, Position, Style, VariableForm};
+use csl::style::{CslType, Name as NameEl, Position, Style, VariableForm};
 use csl::variables::*;
 use std::sync::Arc;
 
@@ -123,5 +124,32 @@ fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
         AnyVariable::Number(v) => refr.number.contains_key(&v),
         AnyVariable::Name(v) => refr.name.contains_key(&v),
         AnyVariable::Date(v) => refr.date.contains_key(&v),
+    }
+}
+
+impl<'c, O> CondChecker for CiteContext<'c, O>
+where
+    O: OutputFormat,
+{
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        CiteContext::has_variable(self, var)
+    }
+    fn is_numeric(&self, var: AnyVariable) -> bool {
+        CiteContext::is_numeric(self, var)
+    }
+    fn csl_type(&self) -> &CslType {
+        &self.reference.csl_type
+    }
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+        self.reference.date.get(&dvar)
+    }
+    fn position(&self) -> Position {
+        self.position.0
+    }
+    fn is_disambiguate(&self) -> bool {
+        self.disamb_pass == Some(DisambPass::Conditionals)
+    }
+    fn style(&self) -> &Style {
+        self.style
     }
 }

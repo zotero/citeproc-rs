@@ -1,8 +1,6 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use citeproc_io::Locator;
 use csl::style::{Affixes, Element, Style};
-use csl::terms::{GenderedTermSelector, TextTermSelector};
 use csl::variables::*;
 use csl::Atom;
 
@@ -119,10 +117,10 @@ where
                 (IR::Rendered(content), GroupVars::new())
             }
 
-            Element::Number(var, _form, f, ref af, ref _tc, _disp) => {
+            Element::Number(var, form, f, ref af, ref _tc, _disp) => {
                 let content = ctx
                     .get_number(var)
-                    .map(|val| renderer.number(var, val, f, af))
+                    .map(|val| renderer.number(var, form, &val, f, af))
                     .map(CiteEdgeData::Output);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)

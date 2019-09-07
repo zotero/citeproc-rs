@@ -8,7 +8,12 @@ use crate::prelude::*;
 
 use crate::helpers::sequence;
 use citeproc_io::DateOrRange;
-use csl::style::{Affixes, Choose, Cond, CondSet, Conditions, Else, IfThen, Match};
+use csl::style::{
+    Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
+    Style,
+};
+use csl::variables::{AnyVariable, DateVariable};
+
 use std::sync::Arc;
 
 impl<'c, O> Proc<'c, O> for Arc<Choose>
@@ -72,7 +77,6 @@ where
     }
 }
 
-// pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 impl Disambiguation<Html> for Choose {
     fn ref_ir(
         &self,
@@ -82,14 +86,14 @@ impl Disambiguation<Html> for Choose {
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx).0 {
-            return ref_sequence(db, ctx, els, "".into(), None, Affixes::default());
+            return ref_sequence(db, ctx, els, "".into(), Some(stack), Affixes::default());
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx).0 {
-                return ref_sequence(db, ctx, els, "".into(), None, Affixes::default());
+                return ref_sequence(db, ctx, els, "".into(), Some(stack), Affixes::default());
             }
         }
-        return ref_sequence(db, ctx, &last.0, "".into(), None, Affixes::default());
+        return ref_sequence(db, ctx, &last.0, "".into(), Some(stack), Affixes::default());
     }
 
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
@@ -168,6 +172,15 @@ where
     (content, disambiguate)
 }
 
+fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {
+    match *match_type {
+        Match::Any => bools.any(|b| b),
+        Match::Nand => bools.any(|b| !b),
+        Match::All => bools.all(|b| b),
+        Match::None => bools.all(|b| !b),
+    }
+}
+
 // first bool is the match result
 // second bool is disambiguate=true
 fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck) -> (bool, bool)
@@ -183,8 +196,37 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-use csl::variables::{AnyVariable, DateVariable};
-trait CondChecker {
+fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck) -> bool
+where
+    Ck: CondChecker,
+{
+    let style = checker.style();
+
+    let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
+        Some(match cond {
+            Cond::Variable(var) => checker.has_variable(*var),
+            Cond::IsNumeric(var) => checker.is_numeric(*var),
+            Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
+            Cond::Type(typ) => checker.csl_type() == typ,
+            Cond::Position(pos) => checker.position().matches(*pos),
+
+            Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
+                if !style.features.condition_date_parts =>
+            {
+                return None;
+            }
+
+            Cond::HasYearOnly(dvar) => checker.has_year_only(*dvar),
+            Cond::HasMonthOrSeason(dvar) => checker.has_month_or_season(*dvar),
+            Cond::HasDay(dvar) => checker.has_day(*dvar),
+            _ => return None,
+        })
+    });
+
+    run_matcher(&mut iter_all, &cond_set.match_type)
+}
+
+pub trait CondChecker {
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
     fn is_disambiguate(&self) -> bool;
@@ -230,113 +272,4 @@ trait CondChecker {
     // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
     // work.
     // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
-}
-
-use csl::style::{CslType, Element, Position, Style};
-
-impl<'c, O> CondChecker for CiteContext<'c, O>
-where
-    O: OutputFormat,
-{
-    fn has_variable(&self, var: AnyVariable) -> bool {
-        CiteContext::has_variable(self, var)
-    }
-    fn is_numeric(&self, var: AnyVariable) -> bool {
-        CiteContext::is_numeric(self, var)
-    }
-    fn csl_type(&self) -> &CslType {
-        &self.reference.csl_type
-    }
-    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
-        self.reference.date.get(&dvar)
-    }
-    fn position(&self) -> Position {
-        self.position.0
-    }
-    fn is_disambiguate(&self) -> bool {
-        self.disamb_pass == Some(DisambPass::Conditionals)
-    }
-    fn style(&self) -> &Style {
-        self.style
-    }
-}
-
-impl<'c, O> CondChecker for RefContext<'c, O>
-where
-    O: OutputFormat,
-{
-    fn has_variable(&self, var: AnyVariable) -> bool {
-        match &var {
-            AnyVariable::Name(v) => self.reference.name.contains_key(v),
-            AnyVariable::Date(v) => self.reference.date.contains_key(v),
-            AnyVariable::Ordinary(v) => self.reference.ordinary.contains_key(v),
-            AnyVariable::Number(v) => self.reference.number.contains_key(v),
-        }
-    }
-    fn is_numeric(&self, var: AnyVariable) -> bool {
-        match &var {
-            AnyVariable::Number(num) => self
-                .reference
-                .number
-                .get(num)
-                .map(|r| r.is_numeric())
-                .unwrap_or(false),
-            _ => false,
-            // TODO: not very useful; implement for non-number variables (see CiteContext)
-        }
-    }
-    fn csl_type(&self) -> &CslType {
-        &self.reference.csl_type
-    }
-    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
-        self.reference.date.get(&dvar)
-    }
-    fn position(&self) -> Position {
-        self.position
-    }
-    fn is_disambiguate(&self) -> bool {
-        false
-    }
-    fn style(&self) -> &Style {
-        self.style
-    }
-}
-
-fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck) -> bool
-where
-    Ck: CondChecker,
-{
-    let style = checker.style();
-
-    let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
-        Some(match cond {
-            Cond::Variable(var) => checker.has_variable(*var),
-            Cond::IsNumeric(var) => checker.is_numeric(*var),
-            Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
-            Cond::Type(typ) => checker.csl_type() == typ,
-            Cond::Position(pos) => checker.position().matches(*pos),
-
-            Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
-                if !style.features.condition_date_parts =>
-            {
-                return None;
-            }
-
-            Cond::HasYearOnly(dvar) => checker.has_year_only(*dvar),
-            Cond::HasMonthOrSeason(dvar) => checker.has_month_or_season(*dvar),
-            Cond::HasDay(dvar) => checker.has_day(*dvar),
-            _ => return None,
-        })
-    });
-
-    run_matcher(&mut iter_all, &cond_set.match_type)
-}
-
-fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> bool {
-    match *match_type {
-        Match::Any => bools.any(|b| b),
-        Match::Nand => bools.any(|b| !b),
-        Match::All => bools.all(|b| b),
-        Match::None => bools.all(|b| !b),
-    }
 }

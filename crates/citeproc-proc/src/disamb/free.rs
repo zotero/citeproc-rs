@@ -87,12 +87,12 @@ bitflags::bitflags! {
     }
 }
 
-static LT_MASK: FreeCond = FreeCond::from_bits_truncate(std::u64::MAX << 16);
-static LT_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555 << 16);
-static LT_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA << 16);
+const LT_MASK: FreeCond = FreeCond::from_bits_truncate(std::u64::MAX << 16);
+const LT_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555 << 16);
+const LT_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA << 16);
 
-static FC_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555);
-static FC_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA);
+const FC_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555);
+const FC_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA);
 
 #[test]
 fn test_lt_mask() {
@@ -121,7 +121,61 @@ fn test_invert() {
     );
 }
 
+macro_rules! match_fc {
+    (@internal match ($pos:expr) { $($c:ident => $lt:path,)+ }) => {
+        $(
+            if ($pos).contains(FreeCond::$c) {
+                return Some($lt);
+            }
+        )*
+    };
+    (@locator_type $pos:expr) => {
+        match_fc! { @internal
+            match ($pos) {
+                LT_BOOK       => LocatorType::Book,
+                LT_CHAPTER    => LocatorType::Chapter,
+                LT_COLUMN     => LocatorType::Chapter,
+                LT_FIGURE     => LocatorType::Figure,
+                LT_FOLIO      => LocatorType::Folio,
+                LT_ISSUE      => LocatorType::Issue,
+                LT_LINE       => LocatorType::Line,
+                LT_NOTE       => LocatorType::Note,
+                LT_OPUS       => LocatorType::Opus,
+                LT_PAGE       => LocatorType::Page,
+                LT_PARAGRAPH  => LocatorType::Paragraph,
+                LT_PART       => LocatorType::Part,
+                LT_SECTION    => LocatorType::Section,
+                LT_SUBVERBO   => LocatorType::SubVerbo,
+                LT_VERSE      => LocatorType::Verse,
+                LT_VOLUME     => LocatorType::Volume,
+            }
+        }
+    };
+}
+
 impl FreeCond {
+    pub fn to_loc_type(self) -> Option<LocatorType> {
+        // the run doesn't use or check variable="locator", doesn't check locator="XXX", or
+        // relies on FORALL XXX match="none" locator="XXX" (i.e. 'no locator type so no
+        // locator')
+        if (!self.contains(FreeCond::LOCATOR) && !self.intersects(LT_MASK_TRUE))
+            || self.contains(LT_MASK_FALSE)
+        {
+            return None;
+        }
+        match_fc!(@locator_type self);
+        let deductive = self & LT_MASK_FALSE;
+        // Could do this with xor, but can't be bothered
+        if deductive.bits().count_zeros() >= 1 {
+            // At least one possible locator type, but the run doesn't care which as long as its
+            // not one of the ones it didn't want.
+            let opposite = deductive.invert();
+            match_fc!(@locator_type opposite);
+        }
+        // The style *really* doesn't care.
+        None
+    }
+
     pub fn invert(self) -> Self {
         FreeCond::from_bits_truncate(
             (self & FC_MASK_TRUE).bits() << 1 | ((self & FC_MASK_FALSE).bits() >> 1),

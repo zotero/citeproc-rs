@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, NumericValue};
+use citeproc_io::{Locator, NumericToken, NumericValue};
 use csl::locale::Locale;
-use csl::style::{Affixes, Formatting, Plural, Style};
+use csl::style::{NumericForm, Plural};
 use csl::terms::{GenderedTermSelector, LocatorType, TermForm, TextTermSelector};
 use csl::variables::{NumberVariable, StandardVariable};
 use csl::Atom;
@@ -63,15 +63,25 @@ impl<O: OutputFormat> Renderer<'_, O> {
     pub fn number(
         &self,
         var: NumberVariable,
-        val: NumericValue,
+        form: NumericForm,
+        val: &NumericValue,
         f: Option<Formatting>,
         af: &Affixes,
     ) -> O::Build {
+        use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
-        let options = IngestOptions {
-            replace_hyphens: var.should_replace_hyphens(),
-        };
-        fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, af)
+        match (val, form) {
+            (NumericValue::Tokens(_, ts), NumericForm::Roman) if roman_representable(&val) => {
+                let options = IngestOptions {
+                    replace_hyphens: var.should_replace_hyphens(),
+                };
+                let string = roman_lower(&ts);
+                let b = fmt.ingest(&string, options);
+                let b = fmt.with_format(b, f);
+                fmt.affixed(b, af)
+            }
+            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, af),
+        }
     }
 
     fn quotes(quo: bool) -> Option<LocalizedQuotes> {

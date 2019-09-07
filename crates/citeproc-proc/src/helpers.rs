@@ -21,7 +21,6 @@ pub fn sequence<'c, O>(
 where
     O: OutputFormat,
 {
-    use super::ir::IR::*;
     let fmt = &ctx.format;
 
     let (inner, gv) = els.iter().map(|el| el.intermediate(state, ctx)).fold(
