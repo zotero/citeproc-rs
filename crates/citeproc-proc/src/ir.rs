@@ -202,17 +202,25 @@ impl IR<Html> {
                 new_ir
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
-                let (new_ir, _) = el.intermediate(state, ctx);
-                new_ir
+                if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
+                    let (new_ir, _) = el.intermediate(state, ctx);
+                    new_ir
+                } else {
+                    return ret;
+                }
             }
             IR::YearSuffix(ref ysh, ref _x) => {
                 // TODO: save GroupVars state in IrSeq so a Group with a year-suffix in
                 // it can do normal group suppression
-                if let YearSuffixHook::Explicit(ref el) = ysh {
-                    let (new_ir, _) = el.intermediate(state, ctx);
-                    new_ir
+                if let Some(DisambPass::AddYearSuffix(_)) = ctx.disamb_pass {
+                    if let YearSuffixHook::Explicit(ref el) = ysh {
+                        let (new_ir, _gv) = el.intermediate(state, ctx);
+                        new_ir
+                    } else {
+                        warn!("YearSuffixHook::Date not implemented");
+                        return ret;
+                    }
                 } else {
-                    warn!("YearSuffixHook::Date not implemented");
                     return ret;
                 }
             }
@@ -221,11 +229,7 @@ impl IR<Html> {
                     .contents
                     .iter_mut()
                     .any(|ir| ir.disambiguate(db, state, ctx));
-                if seq.contents.iter().all(|ir| ir.is_rendered()) {
-                    IR::Rendered(seq.flatten_seq(&ctx.format).map(CiteEdgeData::Output))
-                } else {
-                    return ret;
-                }
+                return ret;
             }
         };
         ret

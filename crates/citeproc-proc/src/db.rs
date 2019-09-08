@@ -131,12 +131,12 @@ fn disambiguate(
     state: &mut IrState,
     ctx: &mut CiteContext<Html>,
     maybe_ys: Option<&FnvHashMap<Atom, u32>>,
-    own_id: Atom,
+    own_id: &Atom,
 ) -> bool {
-    let mut un = is_unambiguous(db, ir, own_id.clone());
+    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, own_id);
     // disambiguate returns true if it can do more for this DisambPass (i.e. more names to add)
     while !un && ir.disambiguate(db, state, ctx) {
-        un = is_unambiguous(db, ir, own_id.clone());
+        un = is_unambiguous(db, ctx.disamb_pass, ir, own_id);
     }
     un
 }
@@ -144,7 +144,12 @@ fn disambiguate(
 /// the inverted index is constant for a particular set of cited+uncited references
 /// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
 /// the parallelization of IR <= 2
-fn is_unambiguous(db: &impl IrDatabase, ir: &IR<Html>, own_id: Atom) -> bool {
+fn is_unambiguous(
+    db: &impl IrDatabase,
+    pass: Option<DisambPass>,
+    ir: &IR<Html>,
+    own_id: &Atom,
+) -> bool {
     use log::Level::Warn;
     let edges = ir.to_edge_stream(&Html::default());
     let mut n = 0;
@@ -154,8 +159,13 @@ fn is_unambiguous(db: &impl IrDatabase, ir: &IR<Html>, own_id: Atom) -> bool {
         if acc {
             n += 1;
         }
-        if *k == own_id && !acc && log_enabled!(Warn) {
-            warn!("Own reference {} did not match\n{}", k, dfa.debug_graph(db));
+        if k == own_id && !acc && log_enabled!(Warn) {
+            warn!(
+                "Own reference {} did not match during {:?}:\n{}",
+                k,
+                pass,
+                dfa.debug_graph(db)
+            );
             warn!("{:#?}", &edges);
         }
         if n > 1 {
@@ -175,7 +185,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = IrState::new();
     let ir = style.intermediate(&mut state, &ctx).0;
     let fmt = Html::default();
-    let un = is_unambiguous(db, &ir, refr.id.clone());
+    let un = is_unambiguous(db, None, &ir, &refr.id);
     Arc::new((ir, un, state))
 }
 
@@ -196,7 +206,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir0.2.clone();
     let mut ir = ir0.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
     Arc::new((ir, un, state))
 }
 
@@ -217,7 +227,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir1.2.clone();
     let mut ir = ir1.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
     Arc::new((ir, un, state))
 }
 
@@ -244,14 +254,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let year_suffix = suffixes[&cite.ref_id];
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
-    let un = disambiguate(
-        db,
-        &mut ir,
-        &mut state,
-        &mut ctx,
-        Some(&suffixes),
-        refr.id.clone(),
-    );
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes), &refr.id);
     Arc::new((ir, un, state))
 }
 
@@ -271,7 +274,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = ir3.2.clone();
     let mut ir = ir3.0.clone();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, refr.id.clone());
+    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
     Arc::new((ir, un, state))
 }
 
