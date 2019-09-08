@@ -19,7 +19,7 @@ mod choose;
 mod cite_context;
 mod date;
 pub mod db;
-mod disamb;
+pub mod disamb;
 mod element;
 mod group;
 mod helpers;

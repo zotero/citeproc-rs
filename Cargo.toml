@@ -6,6 +6,7 @@
 
 [workspace]
 members = [ "crates/*" ]
+default-members = [ "crates/citeproc-proc", "crates/citeproc", "crates/csl", "crates/citeproc-db", "crates/citeproc-io" ]
 
 [profile.bench]
 lto = "thin"
