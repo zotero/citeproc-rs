@@ -280,16 +280,8 @@ impl JsExecutor<'_> {
         output
     }
 
-    fn to_renumbering(
-        &mut self,
-        renum: &mut Vec<(ClusterId, ClusterNumber)>,
-        prepost: &[PrePost],
-        mine: u32,
-    ) {
+    fn to_renumbering(&mut self, renum: &mut Vec<(ClusterId, ClusterNumber)>, prepost: &[PrePost]) {
         for &PrePost(ref string, note_number) in prepost.iter() {
-            if (note_number != mine) {
-                continue;
-            }
             let id = self.get_id(&string);
             let count = renum
                 .iter()
@@ -319,14 +311,9 @@ impl JsExecutor<'_> {
 
         let mut renum = Vec::new();
         let n_sub = pre.iter().filter(|PrePost(st, n)| *n == note).count() as u32;
-        let mine = note;
-        self.to_renumbering(&mut renum, pre, mine);
-        self.to_renumbering(
-            &mut renum,
-            &[PrePost(cite_i.cluster_id.clone(), note)],
-            mine,
-        );
-        self.to_renumbering(&mut renum, post, mine);
+        self.to_renumbering(&mut renum, pre);
+        self.to_renumbering(&mut renum, &[PrePost(cite_i.cluster_id.clone(), note)]);
+        self.to_renumbering(&mut renum, post);
         let cluster = Cluster2::Note {
             id,
             note: IntraNote::Multi(note, n_sub),
