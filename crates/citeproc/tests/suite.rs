@@ -91,7 +91,7 @@ fn humans_toml(path: &Path) {
     setup();
     use test_utils::toml::TomlTestCase;
     let input = read_to_string(path).unwrap();
-    let mut test_case: TomlTestCase = toml::from_str(&input).unwrap();
+    let _test_case: TomlTestCase = toml::from_str(&input).unwrap();
     // let res = test_case.execute();
     // assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
 }

@@ -89,7 +89,8 @@ enum ResultKind {
 #[derive(Debug, PartialEq)]
 struct CiteResult {
     kind: ResultKind,
-    note: u32,
+    id: u32,
+    note: ClusterNumber,
     text: String,
 }
 #[derive(Debug, PartialEq)]
@@ -125,7 +126,10 @@ impl FromStr for Results {
         fn total(inp: &str) -> IResult<&str, CiteResult> {
             map(tuple((dots, num, formatted)), |(k, n, f)| CiteResult {
                 kind: k,
-                note: n,
+                id: n,
+                // incorrect, but we don't actually know except by looking at the instructions what
+                // the right note number is
+                note: ClusterNumber::Note(IntraNote::Single(n)),
                 text: String::from(f),
             })(inp)
         }
@@ -200,8 +204,7 @@ use std::collections::HashMap;
 
 struct JsExecutor<'a> {
     cluster_ids_mapping: HashMap<String, ClusterId>,
-    current_note_numbers: HashMap<ClusterId, u32>,
-    zeroes: Vec<ClusterId>,
+    current_note_numbers: HashMap<ClusterId, ClusterNumber>,
     proc: &'a mut Processor,
     next_id: ClusterId,
 }
@@ -212,8 +215,7 @@ impl JsExecutor<'_> {
             cluster_ids_mapping: HashMap::new(),
             current_note_numbers: HashMap::new(),
             proc,
-            next_id: 1,
-            zeroes: Vec::new(),
+            next_id: 0,
         }
     }
     fn get_id(&mut self, string_id: &str) -> ClusterId {
@@ -238,6 +240,7 @@ impl JsExecutor<'_> {
             let text = (*text).clone();
             results.push(CiteResult {
                 kind: ResultKind::Arrows,
+                id,
                 note,
                 text,
             })
@@ -250,6 +253,7 @@ impl JsExecutor<'_> {
             let text = (*self.proc.get_cluster(id)).clone();
             results.push(CiteResult {
                 kind: ResultKind::Dots,
+                id,
                 note,
                 text,
             })
@@ -268,10 +272,7 @@ impl JsExecutor<'_> {
                 ".."
             });
             output.push_str("[");
-            output.push_str(&format!(
-                "{}",
-                if res.note == 0 { n as u32 } else { res.note }
-            ));
+            output.push_str(&format!("{}", n));
             output.push_str("] ");
             output.push_str(&res.text);
             output.push_str("\n");
@@ -279,12 +280,35 @@ impl JsExecutor<'_> {
         output
     }
 
+    fn to_renumbering(
+        &mut self,
+        renum: &mut Vec<(ClusterId, ClusterNumber)>,
+        prepost: &[PrePost],
+        mine: u32,
+    ) {
+        for &PrePost(ref string, note_number) in prepost.iter() {
+            if (note_number != mine) {
+                continue;
+            }
+            let id = self.get_id(&string);
+            let count = renum
+                .iter()
+                .filter_map(|(_, n)| match n {
+                    ClusterNumber::Note(IntraNote::Multi(x, x2)) if *x == note_number => Some(x2),
+                    _ => None,
+                })
+                .count() as u32;
+            let nn = ClusterNumber::Note(IntraNote::Multi(note_number, count));
+            renum.push((id, nn))
+        }
+    }
+
     /// Note: this does not work very well. The way citeproc-js runs its own cannot easily be
     /// deciphered.
     fn execute(&mut self, instruction: &Instruction) {
         self.proc.drain();
 
-        let Instruction(cite_i, _pre, _post) = instruction;
+        let Instruction(cite_i, pre, post) = instruction;
         let id = self.get_id(&*cite_i.cluster_id);
         let note = cite_i.properties.note_index;
 
@@ -292,43 +316,27 @@ impl JsExecutor<'_> {
         for cite_item in cite_i.citation_items.iter() {
             cites.push(cite_item.to_cite());
         }
+
+        let mut renum = Vec::new();
+        let n_sub = pre.iter().filter(|PrePost(st, n)| *n == note).count() as u32;
+        let mine = note;
+        self.to_renumbering(&mut renum, pre, mine);
+        self.to_renumbering(
+            &mut renum,
+            &[PrePost(cite_i.cluster_id.clone(), note)],
+            mine,
+        );
+        self.to_renumbering(&mut renum, post, mine);
         let cluster = Cluster2::Note {
             id,
-            note: IntraNote::Single(note),
+            note: IntraNote::Multi(note, n_sub),
             cites,
         };
-
-        let mut nonzero_cluster_ids: Vec<u32> = self
-            .current_note_numbers
-            .keys()
-            .map(|&x| x)
-            .filter(|&x| x != 0)
-            .collect();
-
-        if note == 0 {
-            let ix = cite_i.properties.index as usize;
-            if ix >= self.zeroes.len() {
-                self.zeroes.push(id);
-            } else {
-                self.zeroes.insert(ix, id);
-            }
-            self.proc.insert_cluster(cluster);
-        } else if self.current_note_numbers.contains_key(&id) {
-            self.proc.insert_cluster(cluster);
-        } else {
-            let one_after = nonzero_cluster_ids.get(note as usize + 1).map(|&x| x);
-            nonzero_cluster_ids.insert(0, id);
-            self.proc.insert_cluster(cluster);
-        }
-        self.current_note_numbers.insert(id, note);
-
-        nonzero_cluster_ids.sort_by_key(|id| *self.current_note_numbers.get(id).unwrap());
-        let mut renum = Vec::new();
-        for (n, &id) in nonzero_cluster_ids.iter().enumerate() {
-            renum.push((id, ClusterNumber::Note(IntraNote::Single(n as u32))));
-            self.current_note_numbers.insert(id, n as u32 + 1);
-        }
+        self.proc.insert_cluster(cluster);
         self.proc.renumber_clusters(&renum);
+        for (i, nn) in renum {
+            self.current_note_numbers.insert(i, nn);
+        }
     }
 }
 
