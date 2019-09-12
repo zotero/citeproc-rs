@@ -1,5 +1,5 @@
 import { Document, RenderedDocument } from './Document';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NoteCluster, Cite } from '../../pkg';
 
 const btnStyle = {
@@ -66,25 +66,27 @@ const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: NoteCl
 }
 
 const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) => {
-    let initT: string, initL: string = "";
-    if (cite.locators && cite.locators.length > 0) {
-        [initT, initL] = cite.locators[0];
-    }
     let [key, setKey] = useState(cite.id);
-    let [locType, setLocType] = useState(initT);
-    let [locator, setLocator] = useState(initL);
-    const up = useCallback((k?: string) => {
+    let [locator, setLocator] = useState(cite.locator);
+
+    const upKey = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        let k = e.target.value;
         setKey(k);
-        update({ ...cite, id: k });
-    }, [ locator, locType ]);
-    const upLocator = useCallback((l: string, ty = "page") => {
+    }, []);
+    const upLocator = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        let l = e.target.value;
+        if (l == "") {
+            l = undefined;
+        }
         setLocator(l);
-        setLocType(ty);
-        let neu: [string, string][] = l ? [[ty, l]] : undefined;
-        update({ ...cite, locators: neu });
-    }, [ key ]);
+    }, []);
+
+    useEffect(() => {
+        update({ ...cite, id: key, locators: undefined, locator });
+    }, [key, locator]);
+
     return <>
-        <input value={key} onChange={(e) => up(e.target.value)} />
-        <input value={locator} onChange={(e) => upLocator(e.target.value)} />
+        <input value={key} onChange={upKey} />
+        <input value={locator} onChange={upLocator} />
     </>;
 }

@@ -264,22 +264,23 @@ export type DatePartsDate = [number] | [number, number] | [number, number, numbe
 export type DatePartsSingle = { "date-parts": [DatePartsDate]; };
 export type DatePartsRange = { "date-parts": [DatePartsDate, DatePartsDate]; };
 export type DateParts = DatePartsSingle | DatePartsRange;
-
-/** Locator type, and a locator string, e.g. `["page", "56"]`. */
 export type DateOrRange = DateLiteral | DateRaw | DateParts;
 
-/** Locator type, and a locator string, e.g. `["page", "56"]`. */
-export type Locator = [string, string];
+/** Locator type, and a locator string */
+export type Locator = {
+    label?: string;
+    locator?: string;
+    locators: undefined;
+};
+
+export type CiteLocator = Locator | { locator: undefined; locators: Locator[] };
 
 export type Cite<Affix = string> = {
     id: string;
     prefix?: Affix;
     suffix?: Affix;
     suppression?: "InText" | "Rest" | null;
-    locators?: Locator[];
-    locatorExtra?: string;
-    locatorDate?: DateOrRange | null;
-};
+} & CiteLocator;
 
 export type ClusterNumber = {
     note: number | [number, number]
