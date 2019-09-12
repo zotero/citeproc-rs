@@ -63,7 +63,7 @@ where
                         let content = renderer
                             .text_value(value, f, af, quo)
                             .map(CiteEdgeData::Output);
-                        (IR::Rendered(content), GroupVars::new())
+                        (IR::Rendered(content), GroupVars::NoneSeen)
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {

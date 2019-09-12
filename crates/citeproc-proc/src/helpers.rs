@@ -26,7 +26,7 @@ where
     let (inner, gv) = els.iter().map(|el| el.intermediate(state, ctx)).fold(
         (Vec::new(), GroupVars::new()),
         |(mut acc, acc_gv), (ir, gv)| match ir {
-            IR::Rendered(None) => (acc, acc_gv),
+            IR::Rendered(None) => (acc, acc_gv.neighbour(gv)),
             _ => {
                 acc.push(ir);
                 (acc, acc_gv.neighbour(gv))
@@ -65,7 +65,7 @@ pub fn ref_sequence<'c>(
         .fold(
             (Vec::new(), GroupVars::new()),
             |(mut acc, acc_gv), (ir, gv)| match ir {
-                RefIR::Edge(None) => (acc, acc_gv),
+                RefIR::Edge(None) => (acc, acc_gv.neighbour(gv)),
                 _ => {
                     acc.push(ir);
                     (acc, acc_gv.neighbour(gv))
