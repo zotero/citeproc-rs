@@ -210,13 +210,15 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                         None
                     }
                 })
-                .map(|prev| match (&prev.locators[..], &cite.locators[..]) {
-                    (&[], &[]) => Position::Ibid,
-                    (&[], _cur) => Position::IbidWithLocator,
-                    (_pre, &[]) => Position::Subsequent,
-                    (pre, cur) if pre == cur => Position::Ibid,
-                    _ => Position::IbidWithLocator,
-                });
+                .map(
+                    |prev| match (prev.locators.as_ref(), cite.locators.as_ref()) {
+                        (None, None) => Position::Ibid,
+                        (None, Some(_cur)) => Position::IbidWithLocator,
+                        (Some(_pre), None) => Position::Subsequent,
+                        (Some(pre), Some(cur)) if pre == cur => Position::Ibid,
+                        _ => Position::IbidWithLocator,
+                    },
+                );
             if let Some(&first_note_number) = seen.get(&cite.ref_id) {
                 let first_number = ClusterNumber::Note(first_note_number);
                 assert!(

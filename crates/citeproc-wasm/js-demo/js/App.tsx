@@ -89,7 +89,7 @@ const initialClusters: Cluster[] = [
     {
         id: 3,
         cites: [
-            { id: "citekey", locators: [["page", "56"]] }
+            { id: "citekey", locator: "56" }
         ],
         note: 3,
     },

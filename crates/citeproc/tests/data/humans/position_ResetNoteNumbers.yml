@@ -1,0 +1,155 @@
+mode: citation
+result: |-
+  ..[0] Book A (note 1)
+  ..[1] Book C (note 1)
+  ..[2] Book A, n 1 (note 2)
+  ..[3] ibid (note 2)
+  ..[4] Book C, n 1 (note 3)
+  ..[5] Book A, n 1 (note 3)
+  ..[6] Book C, n 1 (note 4)
+  >>[7] Book A, n 1 (note 5)
+
+input:
+  - id: ITEM-1
+    title: Book A
+    type: book
+  - id: ITEM-2
+    title: Book B
+    type: book
+  - id: ITEM-3
+    title: Book C
+    type: book
+
+process-citation-clusters:
+  - cluster:
+      citationID: CITATION-1
+      citationItems:
+        - id: ITEM-1
+          suffix: ' (note 1)'
+      properties:
+        noteIndex: 1
+    pre: []
+    post: []
+  - cluster:
+      citationID: CITATION-2
+      citationItems:
+        - id: ITEM-1
+          suffix: ' (note 2)'
+      properties:
+        noteIndex: 2
+    pre:
+      - ["CITATION-1", 1]
+    post: []
+  - cluster:
+      citationID: CITATION-3
+      citationItems:
+        - id: ITEM-3
+          suffix: ' (note 3)'
+      properties:
+        noteIndex: 3
+    pre:
+      - ["CITATION-1", 1]
+      - ["CITATION-2", 2]
+    post: []
+  - cluster:
+      citationID: CITATION-4
+      citationItems:
+        - id: ITEM-3
+          suffix: ' (note 1)'
+      properties:
+        noteIndex: 1
+    pre: []
+    post:
+      - ["CITATION-1", 1]
+      - ["CITATION-2", 2]
+      - ["CITATION-3", 3]
+  - cluster:
+      citationID: CITATION-5
+      citationItems:
+        - id: ITEM-1
+          suffix: ' (note 2)'
+      properties:
+        noteIndex: 2
+    pre:
+      - ["CITATION-1", 1]
+      - ["CITATION-4", 2]
+    post:
+      - ["CITATION-2", 2]
+      - ["CITATION-3", 3]
+  - cluster:
+      citationID: CITATION-6
+      citationItems:
+        - id: ITEM-1
+          suffix: ' (note 3)'
+      properties:
+        noteIndex: 3
+    pre:
+      - ["CITATION-1", 1]
+      - ["CITATION-4", 1]
+      - ["CITATION-2", 2]
+      - ["CITATION-5", 2]
+      - ["CITATION-3", 3]
+    post: []
+  - cluster:
+      citationID: CITATION-7
+      citationItems:
+        - id: ITEM-3
+          suffix: ' (note 4)'
+      properties:
+        noteIndex: 4
+    pre:
+      - ["CITATION-1", 1]
+      - ["CITATION-4", 1]
+      - ["CITATION-2", 2]
+      - ["CITATION-5", 2]
+      - ["CITATION-3", 3]
+      - ["CITATION-6", 3]
+    post: []
+  - cluster:
+      citationID: CITATION-8
+      citationItems:
+        - id: ITEM-1
+          suffix: ' (note 5)'
+      properties:
+        noteIndex: 5
+    pre:
+      - ["CITATION-1", 1]
+      - ["CITATION-4", 1]
+      - ["CITATION-2", 2]
+      - ["CITATION-5", 2]
+      - ["CITATION-3", 3]
+      - ["CITATION-6", 3]
+      - ["CITATION-7", 4]
+    post: []
+
+csl: |
+  <style 
+        xmlns="http://purl.org/net/xbiblio/csl"
+        class="note"
+        version="1.0">
+    <info>
+      <id />
+      <title />
+      <updated>2009-08-10T04:49:00+09:00</updated>
+    </info>
+    <citation>
+      <layout delimiter="; ">
+        <choose>
+          <if position="ibid">
+            <text value="ibid"/>
+          </if>
+          <else>
+            <group delimiter=", ">
+              <text variable="title"/>
+              <group delimiter=" ">
+                <text value="n"/>
+                <text variable="first-reference-note-number"/>
+              </group>
+            </group>
+          </else>
+        </choose>
+      </layout>
+    </citation>
+  </style>
+
+

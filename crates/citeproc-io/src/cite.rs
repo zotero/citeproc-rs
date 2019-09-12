@@ -24,14 +24,18 @@ pub enum Suppression {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
-pub struct Locator(pub LocatorType, pub NumericValue);
+pub struct Locator {
+    pub locator: NumericValue,
+    #[serde(default, rename = "label")]
+    pub loc_type: LocatorType,
+}
 
 impl Locator {
     pub fn type_of(&self) -> LocatorType {
-        self.0
+        self.loc_type
     }
     pub fn value(&self) -> &NumericValue {
-        &self.1
+        &self.locator
     }
 }
 
@@ -65,17 +69,52 @@ pub struct Cite<O: OutputFormat> {
     #[serde(default)]
     pub suppression: Option<Suppression>,
 
-    // TODO: parse these out of the locator string
-    // Enforce len() == 1 in CSL mode
-    #[serde(default)]
-    pub locators: Vec<Locator>,
+    // TODO: Enforce len() == 1 in CSL mode
+    #[serde(default, flatten)]
+    pub locators: Option<Locators>,
+}
 
-    // CSL-M only
-    #[serde(default)]
-    pub locator_extra: Option<String>,
-    // CSL-M only
-    #[serde(default)]
-    pub locator_date: Option<DateOrRange>,
+/// Accepts either
+/// `{ "locator": "54", "label": "page" }` or
+/// `{ "locators": [["chapter", "19"], ["page", "581"]] }`.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[serde(untagged)]
+pub enum Locators {
+    Single(Locator),
+    Multiple { locators: Vec<Locator> },
+}
+
+impl Locators {
+    pub fn single(&self) -> Option<&Locator> {
+        match self {
+            Locators::Single(l) => Some(l),
+            Locators::Multiple { locators } => locators.get(0),
+        }
+    }
+    fn into_option(self) -> Option<Self> {
+        match self {
+            Locators::Multiple { locators } => {
+                if locators.len() == 0 {
+                    None
+                } else if locators.len() == 1 {
+                    let first = locators.into_iter().nth(0).unwrap();
+                    Some(Locators::Single(first))
+                } else {
+                    Some(Locators::Multiple { locators })
+                }
+            }
+            l => Some(l),
+        }
+    }
+}
+
+/// Single length locators arrays => Some(Locators::Single)
+/// Zero length => None
+fn get_locators<'de, D>(d: D) -> Result<Option<Locators>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<Locators>::deserialize(d)?.and_then(|me| me.into_option()))
 }
 
 use std::hash::{Hash, Hasher};
@@ -86,8 +125,6 @@ impl<O: OutputFormat> Hash for Cite<O> {
         self.suffix.hash(h);
         self.suppression.hash(h);
         self.locators.hash(h);
-        self.locator_extra.hash(h);
-        self.locator_date.hash(h);
     }
 }
 
@@ -98,9 +135,7 @@ impl<O: OutputFormat> Cite<O> {
             prefix: Default::default(),
             suffix: Default::default(),
             suppression: None,
-            locators: Vec::new(),
-            locator_extra: None,
-            locator_date: None,
+            locators: None,
         }
     }
 }
@@ -208,6 +243,7 @@ pub enum Cluster2<O: OutputFormat> {
         cites: Vec<Cite<O>>,
     },
     InText {
+        #[serde(rename = "inText")]
         in_text: u32,
         id: ClusterId,
         cites: Vec<Cite<O>>,
