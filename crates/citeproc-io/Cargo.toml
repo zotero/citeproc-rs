@@ -19,10 +19,9 @@ pandoc_types = { path = "../pandoc-types", optional = true }
 fnv = "1.0.6"
 nom = "5.0.1"
 csl = { path = "../csl" }
-serde = { version = "1.0.99", features = ["rc"] }
-serde_derive = "1.0.99"
+serde = { version = "1.0.100", features = ["rc"] }
+serde_derive = "1.0.100"
 itertools = "0.8.0"
-markup5ever = "0.9.0"
 stringreader = "0.1.1"
 v_htmlescape = "0.4.5"
 log = "0.4.8"

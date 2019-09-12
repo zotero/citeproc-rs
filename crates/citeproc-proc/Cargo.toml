@@ -11,8 +11,8 @@ test = []
 [dependencies]
 csl = { path = "../csl" }
 citeproc-io = { path = "../citeproc-io" }
-serde = "1.0.99"
-serde_derive = "1.0.99"
+serde = "1.0.100"
+serde_derive = "1.0.100"
 fnv = "1.0.6"
 ucd-trie = "0.1.2"
 petgraph = "0.4.13"
