@@ -53,7 +53,7 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
         match var {
             Name(NameVariable::Dummy) => false,
             // TODO: finish this list
-            Number(NumberVariable::Locator) => !self.cite.locators.is_empty(),
+            Number(NumberVariable::Locator) => self.cite.locators.is_some(),
             // we need Page to exist and be numeric
             Number(NumberVariable::PageFirst) => {
                 self.is_numeric(AnyVariable::Number(NumberVariable::Page))
@@ -87,11 +87,13 @@ impl<'c, O: OutputFormat> CiteContext<'c, O> {
 
     pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
         match var {
-            // TODO: get all the locators?
             NumberVariable::Locator => self
                 .cite
                 .locators
-                .get(0)
+                .as_ref()
+                // You'd need new CSL syntax to render more than one locator properly.
+                // For now we'll just ignore any more than the one.
+                .and_then(|ls| ls.single())
                 .map(Locator::value)
                 .map(Clone::clone),
             NumberVariable::FirstReferenceNoteNumber => self.position.1.map(NumericValue::num),

@@ -15,7 +15,12 @@ enum GenericContext<'a, O: OutputFormat> {
 impl<O: OutputFormat> GenericContext<'_, O> {
     fn locator_type(&self) -> Option<LocatorType> {
         match self {
-            Cit(ctx) => ctx.cite.locators.get(0).map(Locator::type_of),
+            Cit(ctx) => ctx
+                .cite
+                .locators
+                .as_ref()
+                .and_then(|ls| ls.single())
+                .map(Locator::type_of),
             Ref(ctx) => ctx.locator_type,
         }
     }

@@ -7,7 +7,7 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(datatest::runner)]
 
-use test_utils::{parse_human_test, TestCase};
+use test_utils::{humans::parse_human_test, TestCase};
 
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
@@ -49,13 +49,6 @@ fn is_ignore(path: &Path) -> bool {
     BIB_TESTS.contains(&fname.into_owned())
 }
 
-fn run_test(path: &Path) {
-    let input = read_to_string(path).unwrap();
-    let mut test_case = parse_human_test(&input);
-    let res = test_case.execute();
-    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
-}
-
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -70,7 +63,10 @@ fn setup() {
 })]
 fn csl_test_suite(path: &Path) {
     setup();
-    run_test(path)
+    let input = read_to_string(path).unwrap();
+    let mut test_case = parse_human_test(&input);
+    let res = test_case.execute();
+    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
 }
 
 #[datatest::files("tests/data/humans", {
@@ -78,20 +74,10 @@ fn csl_test_suite(path: &Path) {
 })]
 fn humans(path: &Path) {
     setup();
+    use test_utils::yaml::YamlTestCase;
     let input = read_to_string(path).unwrap();
-    let mut test_case: TestCase = serde_yaml::from_str(&input).unwrap();
+    let yaml_test_case: YamlTestCase = serde_yaml::from_str(&input).unwrap();
+    let mut test_case: TestCase = yaml_test_case.into();
     let res = test_case.execute();
     assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
-}
-
-#[datatest::files("tests/data/humans", {
-    path in r"^(.*)\.toml",
-})]
-fn humans_toml(path: &Path) {
-    setup();
-    use test_utils::toml::TomlTestCase;
-    let input = read_to_string(path).unwrap();
-    let _test_case: TomlTestCase = toml::from_str(&input).unwrap();
-    // let res = test_case.execute();
-    // assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
 }

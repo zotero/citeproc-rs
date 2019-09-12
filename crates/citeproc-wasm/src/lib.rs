@@ -21,8 +21,8 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
-use citeproc::Processor;
 use citeproc::prelude::*;
+use citeproc::Processor;
 use csl::locale::Lang;
 
 #[wasm_bindgen]
@@ -78,7 +78,7 @@ impl Driver {
 
     /// Inserts or overwrites a reference.
     ///
-    /// * `refr` is a 
+    /// * `refr` is a
     #[wasm_bindgen(js_name = "insertReference")]
     pub fn insert_reference(&mut self, refr: JsValue) -> Result<(), JsValue> {
         let refr = refr
@@ -106,23 +106,17 @@ impl Driver {
 
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(
-        &mut self,
-        cluster_id: JsValue,
-    ) -> Result<(), JsValue> {
-        let cluster = cluster_id
-            .into_serde()
-            .map_err(|e| ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e)))?;
+    pub fn insert_cluster(&mut self, cluster_id: JsValue) -> Result<(), JsValue> {
+        let cluster = cluster_id.into_serde().map_err(|e| {
+            ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e))
+        })?;
         let mut eng = self.engine.borrow_mut();
         Ok(eng.insert_cluster(cluster))
     }
 
     /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
-    pub fn remove_cluster(
-        &mut self,
-        cluster_id: u32,
-    ) -> Result<(), JsValue> {
+    pub fn remove_cluster(&mut self, cluster_id: u32) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
         Ok(eng.remove_cluster(cluster_id))
     }
@@ -137,7 +131,7 @@ impl Driver {
     }
 
     /// Returns the formatted citation cluster for `cluster_id`.
-    /// 
+    ///
     /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
     /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]

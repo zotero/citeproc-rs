@@ -360,6 +360,12 @@ pub enum LocatorType {
     Supplement,
 }
 
+impl Default for LocatorType {
+    fn default() -> Self {
+        LocatorType::Page
+    }
+}
+
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#quotes)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]

@@ -62,8 +62,15 @@ function run(testCase) {
     MODE: parsed.mode,
     INPUT: parsed.input,
     CSL: parsed.csl,
-    CITATIONS: parsed.citations,
-    'CITATION-ITEMS': parsed["citation-items"],
+    CITATIONS: parsed.process_citation_clusters,
+    'CITATION-ITEMS': parsed.clusters && parsed.clusters.map(clust => {
+      if (clust.cites) {
+        // under `- cites:`
+        return clust.cites;
+      }
+      // plain vec of cites
+      return clust;
+    }) || undefined,
   };
   let logger_queue = [];
 

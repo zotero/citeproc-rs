@@ -12,8 +12,9 @@ input:
     type: book
     title: 'Title'
 
-citation_items:
-  - - { id: "ITEM-1" }
+clusters:
+  - cites:
+    - { id: "ITEM-1" }
     - { id: "ITEM-2" }
     - { id: "ITEM-3", locator: "54" }
 
