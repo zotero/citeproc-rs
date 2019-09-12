@@ -9,6 +9,7 @@ use super::{Mode, TestCase};
 use citeproc_io::{Cite, Cluster2, Reference};
 
 #[derive(Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct YamlTestCase {
     pub mode: Mode,
     pub csl: String,

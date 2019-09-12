@@ -62,7 +62,7 @@ function run(testCase) {
     MODE: parsed.mode,
     INPUT: parsed.input,
     CSL: parsed.csl,
-    CITATIONS: parsed.process_citation_clusters,
+    CITATIONS: parsed['process-citation-clusters'],
     'CITATION-ITEMS': parsed.clusters && parsed.clusters.map(clust => {
       if (clust.cites) {
         // under `- cites:`
@@ -97,8 +97,8 @@ function to_yml(txtFile) {
     mode: x.MODE,
     result: x.RESULT,
     input: x.INPUT,
-    citations: x.CITATIONS,
-    'citation-items': x['CITATION-ITEMS'],
+    'process-citation-clusters': x.CITATIONS && x.CITATIONS.map(([cluster, pre, post]) => ({ cluster, pre, post })),
+    clusters: x['CITATION-ITEMS'] && x['CITATION-ITEMS'].map(cites => ({ cites })),
     'bib-entries': x['BIBENTRIES'],
     'bib-section': x['BIBSECTION'],
     csl: x.CSL,
