@@ -6,7 +6,15 @@
 
 [workspace]
 members = [ "crates/*" ]
-default-members = [ "crates/citeproc-proc", "crates/citeproc", "crates/csl", "crates/citeproc-db", "crates/citeproc-io" ]
+# for running `cargo test`, `cargo doc` etc at the workspace root
+default-members = [
+  "crates/csl",
+  "crates/citeproc-io",
+  "crates/citeproc-db",
+  "crates/citeproc-proc",
+  "crates/citeproc",
+  "crates/citeproc-wasm"
+]
 
 [profile.bench]
 lto = "thin"
