@@ -317,12 +317,6 @@ impl InlineElement {
     }
 }
 
-fn rtf_escape(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len());
-    rtf_escape_into(s, &mut buf);
-    buf
-}
-
 fn rtf_escape_into(s: &str, buf: &mut String) {
     let mut utf16_buffer = [0; 2];
     for c in s.chars() {
@@ -337,20 +331,24 @@ fn rtf_escape_into(s: &str, buf: &mut String) {
             _unicode => {
                 let slice = c.encode_utf16(&mut utf16_buffer);
                 for &u16c in slice.iter() {
-                    buf.push_str("\\uc0\\u");
-
+                    use std::fmt::Write;
                     // The spec says 'most control words' accept signed 16-bit, but Word and
                     // TextEdit both produce unsigned 16-bit, and even convert signed to unsigned
-                    // when saving.
-                    // let signed = u16c as i16;
-                    buf.push_str(&format!("{}", u16c));
-
-                    // terminate the \uN keyword with a space
-                    buf.push_str(" ");
+                    // when saving. So we'll do that here. (citeproc-js does this too.)
+                    //
+                    // Terminates the \uN keyword with a space, where citeproc-js uses \uN{}
+                    let _result = write!(buf, "\\uc0\\u{} ", u16c);
                 }
             }
         }
     }
+}
+
+#[cfg(test)]
+fn rtf_escape(s: &str) -> String {
+    let mut buf = String::with_capacity(s.len());
+    rtf_escape_into(s, &mut buf);
+    buf
 }
 
 #[test]
