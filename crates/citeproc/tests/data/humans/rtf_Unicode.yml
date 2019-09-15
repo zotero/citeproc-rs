@@ -1,0 +1,30 @@
+mode: citation
+format: rtf
+
+# sets the # of chars to skip to 0 (\uc0) because we're assuming
+# a unicode-capable word processor as they all should be by now
+# {} afterwards is not technically necessary, but helps in case
+# you have decimal digits right afterward in the input
+result: 'Hello \uc0\u10084 ; Hello \uc0\u55357 \uc0\u56489 ; tab \tab  after'
+
+input:
+  - id: ITEM-1
+    type: book
+    title: "Hello \u2764" # solid love heart
+  - id: ITEM-2
+    type: book
+    title: "Hello 💩"
+  - id: ITEM-3
+    type: book
+    title: "tab \t after"
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; ">
+        <text variable="title" />
+      </layout>
+    </citation>
+  </style>

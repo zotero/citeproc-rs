@@ -1,0 +1,27 @@
+mode: citation
+format: rtf
+
+result: 'Pre {\i italic} post; Pre {\b bold multiword} post; Pre {\b {\b0 flipped}} post'
+
+input:
+  - id: ITEM-1
+    type: book
+    title: "italic"
+  - id: ITEM-2
+    type: book
+    annote: "bold multiword"
+  - id: ITEM-3
+    type: book
+    annote: "<b>flipped</b>"
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; ">
+        <text variable="title" prefix="Pre " suffix=" post" font-style="italic" />
+        <text variable="annote" prefix="Pre " suffix=" post" font-weight="bold" />
+      </layout>
+    </citation>
+  </style>
