@@ -14,10 +14,11 @@ extern crate log;
 
 use self::utils::ErrorPlaceholder;
 
-use js_sys::Promise;
+use js_sys::{Promise, Error};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
@@ -37,18 +38,21 @@ impl Driver {
     ///
     /// * `style` is a CSL style as a string. Independent styles only.
     /// * `lifecycle` must implement the `Lifecycle` interface
+    /// * `format` is one of { "html", "rtf" }
     ///
     /// Throws an error if it cannot parse the style you gave it.
-    pub fn new(style: &str, lifecycle: Lifecycle) -> Result<Driver, JsValue> {
+    pub fn new(style: &str, lifecycle: Lifecycle, format: &str) -> Result<Driver, JsValue> {
         utils::set_panic_hook();
         utils::init_log();
 
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
         let us_fetcher = Arc::new(utils::USFetcher);
-        let engine = Processor::new(style, us_fetcher, true)
+        let format = SupportedFormat::from_str(format)
+            .map_err(|_| Error::new(&format!("unknown format `{}`", format)))?;
+        let engine = Processor::new(style, us_fetcher, true, format)
             .map(RefCell::new)
             .map(Rc::new)
-            .map_err(|e| JsValue::from_serde(&e).unwrap())?;
+            .map_err(|e| Error::new(&serde_json::to_string(&e).unwrap()))?;
 
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.

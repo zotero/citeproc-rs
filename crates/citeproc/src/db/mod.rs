@@ -42,6 +42,7 @@ pub struct Processor {
     pub fetcher: Arc<dyn LocaleFetcher>,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
     save_updates: bool,
+    formatter: Html,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -84,6 +85,7 @@ impl ParallelDatabase for Processor {
             fetcher: self.fetcher.clone(),
             queue: self.queue.clone(),
             save_updates: self.save_updates,
+            formatter: self.formatter.clone(),
         })
     }
 }
@@ -91,6 +93,12 @@ impl ParallelDatabase for Processor {
 impl HasFetcher for Processor {
     fn get_fetcher(&self) -> Arc<dyn LocaleFetcher> {
         self.fetcher.clone()
+    }
+}
+
+impl HasFormatter for Processor {
+    fn get_formatter(&self) -> Html {
+        self.formatter.clone()
     }
 }
 
@@ -105,6 +113,37 @@ impl Clone for Snap {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum SupportedFormat {
+    Html,
+    Rtf,
+    #[cfg(feature = "test")]
+    TestHtml,
+}
+
+impl FromStr for SupportedFormat {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "html" => Ok(SupportedFormat::Html),
+            "rtf" => Ok(SupportedFormat::Rtf),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        use serde::de::Error as DeError;
+        SupportedFormat::from_str(s.as_str())
+            .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
+    }
+}
+
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut db = Processor {
@@ -112,6 +151,7 @@ impl Processor {
             fetcher,
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
+            formatter: Html::default(),
         };
         citeproc_db::safe_default(&mut db);
         db
@@ -121,9 +161,19 @@ impl Processor {
         style_string: &str,
         fetcher: Arc<dyn LocaleFetcher>,
         save_updates: bool,
+        format: SupportedFormat,
     ) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
         db.save_updates = save_updates;
+        db.formatter = match format {
+            SupportedFormat::Html => Html::html(),
+            SupportedFormat::Rtf => Html::rtf(),
+            #[cfg(feature = "test")]
+            SupportedFormat::TestHtml => {
+                use citeproc_io::output::html::HtmlOptions;
+                Html::Html(HtmlOptions::test_suite())
+            }
+        };
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style_with_durability(style, Durability::MEDIUM);
         Ok(db)

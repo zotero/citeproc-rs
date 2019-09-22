@@ -158,7 +158,7 @@ fn test() {
         let id = cite_ids[ind];
         let gen0 = db.ir_gen0(id);
         let (ir, bo, st) = &*gen0;
-        let fmt = Html::default();
+        let fmt = db.get_formatter();
         ir.to_edge_stream(&fmt)
     };
 

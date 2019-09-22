@@ -15,12 +15,12 @@ pub use self::db::Processor;
 
 pub mod prelude {
     pub use crate::db::update::{DocUpdate, UpdateSummary};
-    pub use crate::db::Processor;
+    pub use crate::db::{Processor, SupportedFormat};
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };
     pub use citeproc_io::output::{html::Html, OutputFormat};
     pub use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
-    pub use citeproc_proc::db::IrDatabase;
+    pub use citeproc_proc::db::{HasFormatter, IrDatabase};
     pub use csl::Atom;
 }

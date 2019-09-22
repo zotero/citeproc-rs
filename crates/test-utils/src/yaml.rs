@@ -5,13 +5,15 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::humans::{CitationItem, CiteprocJsInstruction};
-use super::{Mode, TestCase};
+use super::{Format, Mode, TestCase};
 use citeproc_io::{Cite, Cluster2, Reference};
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct YamlTestCase {
     pub mode: Mode,
+    #[serde(default)]
+    pub format: Format,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -23,6 +25,7 @@ impl From<YamlTestCase> for TestCase {
     fn from(yaml: YamlTestCase) -> Self {
         TestCase {
             mode: yaml.mode,
+            format: yaml.format,
             csl: yaml.csl,
             input: yaml.input,
             result: yaml.result,

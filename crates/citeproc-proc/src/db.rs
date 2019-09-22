@@ -20,8 +20,12 @@ use citeproc_io::output::{
 use citeproc_io::ClusterId;
 use csl::Atom;
 
+pub trait HasFormatter {
+    fn get_formatter(&self) -> Html;
+}
+
 #[salsa::query_group(IrDatabaseStorage)]
-pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase {
+pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
 
     // If these don't run any additional disambiguation, they just clone the
@@ -89,12 +93,12 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 
 type IrGen = Arc<(IR<Html>, bool, IrState)>;
 
-fn ref_not_found(ref_id: &Atom, log: bool) -> IrGen {
+fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> IrGen {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
     Arc::new((
-        IR::Rendered(Some(CiteEdgeData::Output(Html::default().plain("???")))),
+        IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
         true,
         IrState::new(),
     ))
@@ -106,12 +110,12 @@ macro_rules! preamble {
         $locale = $db.locale_by_cite($id);
         $cite = $id.lookup($db);
         $refr = match $db.reference($cite.ref_id.clone()) {
-            None => return ref_not_found(&$cite.ref_id, true),
+            None => return ref_not_found($db, &$cite.ref_id, true),
             Some(r) => r,
         };
         $ctx = CiteContext {
             reference: &$refr,
-            format: Html::default(),
+            format: $db.get_formatter(),
             cite_id: $id,
             cite: &$cite,
             position: $db.cite_position($id),
@@ -151,7 +155,7 @@ fn is_unambiguous(
     own_id: &Atom,
 ) -> bool {
     use log::Level::Warn;
-    let edges = ir.to_edge_stream(&Html::default());
+    let edges = ir.to_edge_stream(&db.get_formatter());
     let mut n = 0;
     for k in db.cited_keys().iter() {
         let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
@@ -184,7 +188,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
     let ir = style.intermediate(&mut state, &ctx).0;
-    let fmt = Html::default();
+    let fmt = db.get_formatter();
     let un = is_unambiguous(db, None, &ir, &refr.id);
     Arc::new((ir, un, state))
 }
@@ -278,19 +282,11 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
     Arc::new((ir, un, state))
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "test")] {
-        fn html_options() -> HtmlOptions { HtmlOptions::test_suite() }
-    } else {
-        fn html_options() -> HtmlOptions { HtmlOptions::default() }
-    }
-}
-
 fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
 ) -> Arc<<Html as OutputFormat>::Output> {
-    let fmt = Html::Html(html_options());
+    let fmt = db.get_formatter();
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();
     let layout = &style.citation.layout;

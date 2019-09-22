@@ -41,7 +41,16 @@ pub enum InlineElement {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl Html {
+    pub fn html() -> Self {
+        Html::Html(HtmlOptions::default())
+    }
+    pub fn rtf() -> Self {
+        Html::Rtf(RtfOptions::default())
+    }
+}
+
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct RtfOptions {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,6 +77,28 @@ impl HtmlOptions {
 }
 
 impl MicroNode {
+    fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
+        use MicroNode::*;
+        match self {
+            Text(text) => {
+                rtf_escape_into(text, s);
+            }
+            Formatted(nodes, cmd) => {
+                let tag = cmd.rtf_tag(options);
+                *s += "{";
+                *s += tag;
+                for node in nodes {
+                    node.to_rtf_inner(s, options);
+                }
+                *s += "}";
+            }
+            NoCase(inners) => {
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+            }
+        }
+    }
     fn to_html_inner(&self, s: &mut String, options: &HtmlOptions) {
         use MicroNode::*;
         match self {
@@ -98,6 +129,30 @@ impl MicroNode {
 }
 
 impl FormatCmd {
+    fn rtf_tag(&self, options: &RtfOptions) -> &'static str {
+        use super::FormatCmd::*;
+        match self {
+            FontStyleItalic => "\\i ",
+            FontStyleOblique => "\\i ",
+            FontStyleNormal => "\\i0 ",
+
+            FontWeightBold => "\\b ",
+            FontWeightNormal => "\\b0 ",
+
+            // Not supported?
+            FontWeightLight => "\\b0 ",
+
+            FontVariantSmallCaps => "\\scaps ",
+            FontVariantNormal => "\\scaps0 ",
+
+            TextDecorationUnderline => "\\ul ",
+            TextDecorationNone => "\\ul0 ",
+
+            VerticalAlignmentSuperscript => "\\super ",
+            VerticalAlignmentSubscript => "\\sub ",
+            VerticalAlignmentBaseline => "\\nosupersub ",
+        }
+    }
     fn html_tag(&self, options: &HtmlOptions) -> (&'static str, &'static str) {
         use super::FormatCmd::*;
         match self {
@@ -147,7 +202,21 @@ fn stack_postorder(s: &mut String, stack: &[FormatCmd], options: &HtmlOptions) {
     }
 }
 
-fn tag_stack(options: &HtmlOptions, formatting: Formatting) -> Vec<FormatCmd> {
+fn stack_preorder_rtf(s: &mut String, stack: &[FormatCmd], options: &RtfOptions) {
+    for cmd in stack.iter() {
+        let tag = cmd.rtf_tag(options);
+        s.push('{');
+        s.push_str(tag);
+    }
+}
+
+fn stack_postorder_rtf(s: &mut String, stack: &[FormatCmd], options: &RtfOptions) {
+    for cmd in stack.iter() {
+        s.push('}');
+    }
+}
+
+fn tag_stack(formatting: Formatting) -> Vec<FormatCmd> {
     use super::FormatCmd::*;
     let mut stack = Vec::new();
     match formatting.font_style {
@@ -188,12 +257,26 @@ fn stack_formats_html(
     formatting: Formatting,
 ) {
     use self::FormatCmd::*;
-    let stack = tag_stack(options, formatting);
+    let stack = tag_stack(formatting);
     stack_preorder(s, &stack, options);
     for inner in inlines {
         inner.to_html_inner(s, options);
     }
     stack_postorder(s, &stack, options);
+}
+
+fn stack_formats_rtf(
+    s: &mut String,
+    inlines: &[InlineElement],
+    options: &RtfOptions,
+    formatting: Formatting,
+) {
+    let stack = tag_stack(formatting);
+    stack_preorder_rtf(s, &stack, options);
+    for inner in inlines {
+        inner.to_rtf_inner(s, options);
+    }
+    stack_postorder_rtf(s, &stack, options);
 }
 
 impl InlineElement {
@@ -243,6 +326,52 @@ impl InlineElement {
     }
 }
 
+fn rtf_escape_into(s: &str, buf: &mut String) {
+    let mut utf16_buffer = [0; 2];
+    for c in s.chars() {
+        match c {
+            '\\' | '{' | '}' => {
+                buf.push('\\');
+                buf.push(c);
+            }
+            '\t' => buf.push_str("\\tab "),
+            '\n' => buf.push_str("\\line "),
+            '\x20'..='\x7e' => buf.push(c),
+            _unicode => {
+                let slice = c.encode_utf16(&mut utf16_buffer);
+                for &u16c in slice.iter() {
+                    use std::fmt::Write;
+                    // The spec says 'most control words' accept signed 16-bit, but Word and
+                    // TextEdit both produce unsigned 16-bit, and even convert signed to unsigned
+                    // when saving. So we'll do that here. (citeproc-js does this too.)
+                    //
+                    // Terminates the \uN keyword with a space, where citeproc-js uses \uN{}
+                    let _result = write!(buf, "\\uc0\\u{} ", u16c);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+fn rtf_escape(s: &str) -> String {
+    let mut buf = String::with_capacity(s.len());
+    rtf_escape_into(s, &mut buf);
+    buf
+}
+
+#[test]
+fn test_rtf_escape_unicode() {
+    let tab = "Hello \t";
+    assert_eq!(rtf_escape(tab), r"Hello \tab ");
+
+    let heart = "Hello \u{2764}";
+    assert_eq!(rtf_escape(heart), r"Hello \uc0\u10084 ");
+
+    let poop = "Hello 💩";
+    assert_eq!(rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
+}
+
 impl InlineElement {
     fn to_rtf(inlines: &[InlineElement], options: &RtfOptions) -> String {
         let mut s = String::new();
@@ -251,8 +380,43 @@ impl InlineElement {
         }
         s
     }
-    fn to_rtf_inner(&self, _s: &mut String, _options: &RtfOptions) {
-        unimplemented!()
+
+    fn to_rtf_inner(&self, s: &mut String, options: &RtfOptions) {
+        match self {
+            Text(text) => {
+                rtf_escape_into(text, s);
+            }
+            Micro(micros) => {
+                for micro in micros {
+                    micro.to_rtf_inner(s, options);
+                }
+            }
+            Formatted(inlines, formatting) => {
+                stack_formats_rtf(s, inlines, options, *formatting);
+            }
+            Quoted(_qt, inners) => {
+                s.push('"');
+                for i in inners {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push('"');
+            }
+            Anchor {
+                title: _,
+                url,
+                content,
+            } => {
+                // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
+                // TODO: HTML-quoted-escape? the url?
+                s.push_str(r#"<a href=""#);
+                s.push_str(&url);
+                s.push_str(r#"">"#);
+                for i in content {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str("</a>");
+            }
+        }
     }
 }
 
@@ -375,20 +539,17 @@ impl OutputFormat for Html {
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
         match self {
             Html::Html(ref options) => stack_preorder(s, stack, options),
-            Html::Rtf(ref _options) => unimplemented!(),
+            Html::Rtf(ref options) => stack_preorder_rtf(s, stack, options),
         }
     }
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
         match self {
             Html::Html(ref options) => stack_postorder(s, stack, options),
-            Html::Rtf(ref _options) => unimplemented!(),
+            Html::Rtf(ref options) => stack_postorder_rtf(s, stack, options),
         }
     }
     fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
-        match self {
-            Html::Html(ref options) => tag_stack(options, formatting),
-            Html::Rtf(ref _options) => unimplemented!(),
-        }
+        tag_stack(formatting)
     }
 }
 
