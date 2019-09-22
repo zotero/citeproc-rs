@@ -4,8 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::Mode;
-use super::TestCase;
+use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
@@ -471,8 +470,10 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         match chunk {
             Chunk::Mode(m) => {
                 mode = mode.or_else(|| match m.as_str() {
-                    "citation" => Some(Mode::Citation),
-                    "bibliography" => Some(Mode::Bibliography),
+                    "citation" => Some((Mode::Citation, SupportedFormat::Html)),
+                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::Html)),
+                    "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf)),
+                    "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf)),
                     _ => panic!("unknown mode {}", m),
                 })
             }
@@ -500,7 +501,10 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         }
     }
     TestCase {
-        mode: mode.unwrap_or(Mode::Citation),
+        mode: mode.map(|(m, _)| m).unwrap_or(Mode::Citation),
+        format: mode
+            .map(|(_, f)| Format(f))
+            .unwrap_or(Format(SupportedFormat::TestHtml)),
         input: input.expect("test case without an INPUT section"),
         result: result.expect("test case without a RESULT section"),
         csl: csl.expect("test case without a CSL section"),

@@ -31,6 +31,8 @@ use humans::{CiteprocJsInstruction, JsExecutor};
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TestCase {
     pub mode: Mode,
+    #[serde(default)]
+    pub format: Format,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -48,6 +50,7 @@ impl Default for Mode {
         Mode::Citation
     }
 }
+
 impl<'de> Deserialize<'de> for Mode {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -62,13 +65,21 @@ impl<'de> Deserialize<'de> for Mode {
     }
 }
 
+#[derive(Deserialize, Copy, Clone, Debug, PartialEq)]
+pub struct Format(SupportedFormat);
+impl Default for Format {
+    fn default() -> Self {
+        Format(SupportedFormat::TestHtml)
+    }
+}
+
 impl TestCase {
     pub fn execute(&mut self) -> String {
         if self.mode == Mode::Bibliography {
             panic!("bib tests not implemented");
         }
         let fet = Arc::new(Filesystem::project_dirs());
-        let mut proc = Processor::new(&self.csl, fet, true, SupportedFormat::TestHtml)
+        let mut proc = Processor::new(&self.csl, fet, true, self.format.0)
             .expect("could not construct processor");
 
         let mut res = String::new();

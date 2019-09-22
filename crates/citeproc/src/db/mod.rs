@@ -113,7 +113,7 @@ impl Clone for Snap {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SupportedFormat {
     Html,
     Rtf,
@@ -129,6 +129,18 @@ impl FromStr for SupportedFormat {
             "rtf" => Ok(SupportedFormat::Rtf),
             _ => Err(()),
         }
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        use serde::de::Error as DeError;
+        SupportedFormat::from_str(s.as_str())
+            .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
     }
 }
 
@@ -157,7 +169,7 @@ impl Processor {
             SupportedFormat::Html => Html::html(),
             SupportedFormat::Rtf => Html::rtf(),
             #[cfg(feature = "test")]
-            SupportedFormat::Html => {
+            SupportedFormat::TestHtml => {
                 use citeproc_io::output::html::HtmlOptions;
                 Html::Html(HtmlOptions::test_suite())
             }
