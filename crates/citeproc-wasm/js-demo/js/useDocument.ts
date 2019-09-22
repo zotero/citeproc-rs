@@ -47,7 +47,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         // make sure it's not loading wasm in the initial chunk
         const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
-            let d = CreateDriver.new(style, fetcher);
+            let d = CreateDriver.new(style, fetcher, "html");
             d.setReferences(references);
             return d;
         });

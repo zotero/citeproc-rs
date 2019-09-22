@@ -68,7 +68,8 @@ impl TestCase {
             panic!("bib tests not implemented");
         }
         let fet = Arc::new(Filesystem::project_dirs());
-        let mut proc = Processor::new(&self.csl, fet, true).expect("could not construct processor");
+        let mut proc = Processor::new(&self.csl, fet, true, SupportedFormat::TestHtml)
+            .expect("could not construct processor");
 
         let mut res = String::new();
         if let Some(ref instructions) = &self.process_citation_clusters {

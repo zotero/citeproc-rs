@@ -41,6 +41,15 @@ pub enum InlineElement {
     },
 }
 
+impl Html {
+    pub fn html() -> Self {
+        Html::Html(HtmlOptions::default())
+    }
+    pub fn rtf() -> Self {
+        Html::Rtf(RtfOptions::default())
+    }
+}
+
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct RtfOptions {}
 

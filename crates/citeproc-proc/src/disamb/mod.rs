@@ -116,7 +116,7 @@ pub fn mult_identity() -> FreeCondSets {
 pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) -> Dfa {
     let runs = create_ref_ir::<Html, DB>(db, refr);
     let mut nfa = Nfa::new();
-    let fmt = Html::default();
+    let fmt = db.get_formatter();
     for (_fc, ir) in runs {
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
@@ -139,7 +139,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .0
         .iter()
         .map(|fc| {
-            let fmt = Html::default();
+            let fmt = db.get_formatter();
             let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
                 Disambiguation::<Html>::ref_ir(&*style, db, &mut ctx, Formatting::default());
