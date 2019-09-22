@@ -28,7 +28,7 @@ where
     }
 }
 
-impl Disambiguation<Html> for BodyDate {
+impl Disambiguation<Markup> for BodyDate {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
         mult_identity()
     }
@@ -36,7 +36,7 @@ impl Disambiguation<Html> for BodyDate {
     fn ref_ir(
         &self,
         _db: &impl IrDatabase,
-        _ctx: &RefContext<Html>,
+        _ctx: &RefContext<Markup>,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
         warn!("ref_ir not implemented for BodyDate");

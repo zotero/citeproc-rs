@@ -36,7 +36,7 @@ pub struct TestCase {
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
-    pub clusters: Option<Vec<Cluster2<Html>>>,
+    pub clusters: Option<Vec<Cluster2<Markup>>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
 }
 

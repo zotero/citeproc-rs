@@ -37,7 +37,7 @@ pub enum CitationItem {
 }
 
 impl CitationItem {
-    pub fn to_note_cluster(self, index: u32) -> Cluster2<Html> {
+    pub fn to_note_cluster(self, index: u32) -> Cluster2<Markup> {
         let v = match self {
             CitationItem::Array(v) => v,
             CitationItem::Map { cites } => cites,
@@ -71,7 +71,7 @@ pub struct CiteprocJsCite {
 }
 
 impl CiteprocJsCite {
-    fn to_cite(&self) -> Cite<Html> {
+    fn to_cite(&self) -> Cite<Markup> {
         Cite {
             ref_id: csl::Atom::from(self.id.as_str()),
             prefix: self.prefix.clone(),

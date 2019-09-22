@@ -272,8 +272,8 @@ impl<O: OutputFormat> Cluster2<O> {
 
 #[test]
 fn json_clusters() {
-    use crate::output::html::Html;
-    let c: Cluster2<Html> =
+    use crate::output::markup::Markup;
+    let c: Cluster2<Markup> =
         serde_json::from_str(r#"{ "note": 32, "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c,
@@ -283,7 +283,7 @@ fn json_clusters() {
             cites: vec![]
         }
     );
-    let c2: Cluster2<Html> =
+    let c2: Cluster2<Markup> =
         serde_json::from_str(r#"{ "note": [8, 2], "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c2,
@@ -293,7 +293,7 @@ fn json_clusters() {
             cites: vec![]
         }
     );
-    let c3: Cluster2<Html> =
+    let c3: Cluster2<Markup> =
         serde_json::from_str(r#"{ "inText": 32, "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c3,

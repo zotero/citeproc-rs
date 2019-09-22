@@ -27,7 +27,7 @@ use csl::error::StyleError;
 use csl::locale::Lang;
 use csl::style::Style;
 
-use citeproc_io::output::{html::Html, OutputFormat};
+use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
@@ -42,7 +42,7 @@ pub struct Processor {
     pub fetcher: Arc<dyn LocaleFetcher>,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
     save_updates: bool,
-    formatter: Html,
+    formatter: Markup,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -97,7 +97,7 @@ impl HasFetcher for Processor {
 }
 
 impl HasFormatter for Processor {
-    fn get_formatter(&self) -> Html {
+    fn get_formatter(&self) -> Markup {
         self.formatter.clone()
     }
 }
@@ -151,7 +151,7 @@ impl Processor {
             fetcher,
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
-            formatter: Html::default(),
+            formatter: Markup::default(),
         };
         citeproc_db::safe_default(&mut db);
         db
@@ -166,12 +166,12 @@ impl Processor {
         let mut db = Processor::safe_default(fetcher);
         db.save_updates = save_updates;
         db.formatter = match format {
-            SupportedFormat::Html => Html::html(),
-            SupportedFormat::Rtf => Html::rtf(),
+            SupportedFormat::Html => Markup::html(),
+            SupportedFormat::Rtf => Markup::rtf(),
             #[cfg(feature = "test")]
             SupportedFormat::TestHtml => {
-                use citeproc_io::output::html::HtmlOptions;
-                Html::Html(HtmlOptions::test_suite())
+                use citeproc_io::output::markup::HtmlOptions;
+                Markup::Html(HtmlOptions::test_suite())
             }
         };
         let style = Arc::new(Style::from_str(style_string)?);
@@ -245,8 +245,8 @@ impl Processor {
     }
 
     // // TODO: make this use a function exported from citeproc_proc
-    // pub fn single(&self, ref_id: &Atom) -> <Html as OutputFormat>::Output {
-    //     let fmt = Html::default();
+    // pub fn single(&self, ref_id: &Atom) -> <Markup as OutputFormat>::Output {
+    //     let fmt = Markup::default();
     //     let refr = match self.reference(ref_id.clone()) {
     //         None => return fmt.output(fmt.plain("Reference not found")),
     //         Some(r) => r,
@@ -255,7 +255,7 @@ impl Processor {
     //         reference: &refr,
     //         cite: &Cite::basic("ok"),
     //         position: Position::First,
-    //         format: Html::default(),
+    //         format: Markup::default(),
     //         citation_number: 1,
     //         disamb_pass: None,
     //     };
@@ -265,7 +265,7 @@ impl Processor {
     //     let ir = style.intermediate(self, &mut state, &ctx).0;
     //     ir.flatten(&fmt)
     //         .map(|flat| fmt.output(flat))
-    //         .unwrap_or(<Html as OutputFormat>::Output::default())
+    //         .unwrap_or(<Markup as OutputFormat>::Output::default())
     // }
 
     pub fn set_references(&mut self, refs: Vec<Reference>) {
@@ -280,7 +280,7 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Html>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
             let (cluster_id, number, cites) = cluster.split();
@@ -311,7 +311,7 @@ impl Processor {
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
-    pub fn insert_cluster(&mut self, cluster: Cluster2<Html>) {
+    pub fn insert_cluster(&mut self, cluster: Cluster2<Markup>) {
         let (cluster_id, number, cites) = cluster.split();
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {
@@ -339,11 +339,11 @@ impl Processor {
 
     // Getters, because the query groups have too much exposed to publish.
 
-    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Html>> {
+    pub fn get_cite(&self, id: CiteId) -> Arc<Cite<Markup>> {
         id.lookup(self)
     }
 
-    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<<Html as OutputFormat>::Output> {
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<<Markup as OutputFormat>::Output> {
         self.built_cluster(cluster_id)
     }
 

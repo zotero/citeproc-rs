@@ -19,7 +19,7 @@ pub mod prelude {
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };
-    pub use citeproc_io::output::{html::Html, OutputFormat};
+    pub use citeproc_io::output::{markup::Markup, OutputFormat};
     pub use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Reference};
     pub use citeproc_proc::db::{HasFormatter, IrDatabase};
     pub use csl::Atom;

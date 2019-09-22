@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use super::DisambPass;
 use crate::choose::CondChecker;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
 use csl::style::{CslType, Name as NameEl, Position, Style, VariableForm};
@@ -16,7 +16,7 @@ use csl::variables::*;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CiteContext<'c, O: OutputFormat + Sized = Html> {
+pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub reference: &'c Reference,
     pub format: O,
     pub cite_id: CiteId,

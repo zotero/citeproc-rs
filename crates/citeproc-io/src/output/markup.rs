@@ -13,7 +13,7 @@ use csl::style::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Html {
+pub enum Markup {
     Html(HtmlOptions),
     Rtf(RtfOptions),
 }
@@ -41,12 +41,12 @@ pub enum InlineElement {
     },
 }
 
-impl Html {
+impl Markup {
     pub fn html() -> Self {
-        Html::Html(HtmlOptions::default())
+        Markup::Html(HtmlOptions::default())
     }
     pub fn rtf() -> Self {
-        Html::Rtf(RtfOptions::default())
+        Markup::Rtf(RtfOptions::default())
     }
 }
 
@@ -422,13 +422,13 @@ impl InlineElement {
 
 use self::InlineElement::*;
 
-impl Default for Html {
+impl Default for Markup {
     fn default() -> Self {
-        Html::Html(HtmlOptions::default())
+        Markup::Html(HtmlOptions::default())
     }
 }
 
-impl Html {
+impl Markup {
     /// Wrap some nodes with formatting
     ///
     /// In pandoc, Emph, Strong and SmallCaps, Superscript and Subscript are all single-use styling
@@ -448,7 +448,7 @@ impl Html {
     }
 }
 
-impl OutputFormat for Html {
+impl OutputFormat for Markup {
     type Input = String;
     type Build = Vec<InlineElement>;
     type Output = String;
@@ -538,14 +538,14 @@ impl OutputFormat for Html {
 
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
         match self {
-            Html::Html(ref options) => stack_preorder(s, stack, options),
-            Html::Rtf(ref options) => stack_preorder_rtf(s, stack, options),
+            Markup::Html(ref options) => stack_preorder(s, stack, options),
+            Markup::Rtf(ref options) => stack_preorder_rtf(s, stack, options),
         }
     }
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
         match self {
-            Html::Html(ref options) => stack_postorder(s, stack, options),
-            Html::Rtf(ref options) => stack_postorder_rtf(s, stack, options),
+            Markup::Html(ref options) => stack_postorder(s, stack, options),
+            Markup::Rtf(ref options) => stack_postorder_rtf(s, stack, options),
         }
     }
     fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
@@ -553,7 +553,7 @@ impl OutputFormat for Html {
     }
 }
 
-impl Html {
+impl Markup {
     fn output_with_state(
         &self,
         intermediate: <Self as OutputFormat>::Build,
@@ -561,8 +561,8 @@ impl Html {
     ) -> <Self as OutputFormat>::Output {
         let flipped = flip_flop_inlines(&intermediate, &initial_state);
         let string = match self {
-            Html::Html(ref options) => InlineElement::to_html(&flipped, options),
-            Html::Rtf(ref options) => InlineElement::to_rtf(&flipped, options),
+            Markup::Html(ref options) => InlineElement::to_html(&flipped, options),
+            Markup::Rtf(ref options) => InlineElement::to_rtf(&flipped, options),
         };
         string
     }

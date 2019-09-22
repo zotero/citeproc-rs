@@ -7,7 +7,7 @@
 use super::free::{FreeCond, FreeCondSets};
 use crate::prelude::*;
 use crate::test::MockProcessor;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
 use csl::style::Style;
 use csl::style::{Cond, CslType, Position};

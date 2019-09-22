@@ -7,21 +7,19 @@
 use crate::IngestOptions;
 use csl::Atom;
 
-#[cfg(feature = "html")]
-pub mod html;
+#[cfg(feature = "markup")]
+pub mod markup;
 pub mod micro_html;
 #[cfg(feature = "pandoc")]
 pub mod pandoc;
 #[cfg(feature = "plain")]
 pub mod plain;
-#[cfg(feature = "rtf")]
-pub mod rtf;
 
 use std::marker::{Send, Sync};
 
 // pub use self::pandoc::Pandoc;
 // pub use self::plain::PlainText;
-// pub use self::html::Html;
+// pub use self::markup::Markup;
 
 use csl::style::{Affixes, Formatting};
 use serde::{de::DeserializeOwned, Serialize};

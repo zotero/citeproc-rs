@@ -6,7 +6,7 @@
 
 use crate::prelude::*;
 
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
@@ -51,7 +51,7 @@ where
 
 pub fn ref_sequence<'c>(
     db: &impl IrDatabase,
-    ctx: &RefContext<'c, Html>,
+    ctx: &RefContext<'c, Markup>,
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
@@ -61,7 +61,7 @@ pub fn ref_sequence<'c>(
 
     let (inner, gv) = els
         .iter()
-        .map(|el| Disambiguation::<Html>::ref_ir(el, db, ctx, formatting.unwrap_or_default()))
+        .map(|el| Disambiguation::<Markup>::ref_ir(el, db, ctx, formatting.unwrap_or_default()))
         .fold(
             (Vec::new(), GroupVars::new()),
             |(mut acc, acc_gv), (ir, gv)| match ir {

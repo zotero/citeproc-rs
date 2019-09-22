@@ -8,7 +8,7 @@ use super::Disambiguation;
 use super::EdgeData;
 use super::{cross_product, mult_identity, FreeCondSets};
 use crate::prelude::*;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use csl::style::{Affixes, Formatting, Position};
 use csl::variables::*;
 
@@ -18,7 +18,7 @@ use csl::{
     IsIndependent,
 };
 
-impl Disambiguation<Html> for Style {
+impl Disambiguation<Markup> for Style {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         let els = &self.citation.layout.elements;
         cross_product(db, els)
@@ -27,7 +27,7 @@ impl Disambiguation<Html> for Style {
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
+        ctx: &RefContext<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
@@ -35,7 +35,7 @@ impl Disambiguation<Html> for Style {
     }
 }
 
-impl Disambiguation<Html> for Group {
+impl Disambiguation<Markup> for Group {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         // TODO: keep track of which empty variables caused GroupVars to not render, if
         // they are indeed free variables.
@@ -45,7 +45,7 @@ impl Disambiguation<Html> for Group {
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
+        ctx: &RefContext<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         // TODO: handle GroupVars
@@ -71,7 +71,7 @@ impl Disambiguation<Html> for Group {
     }
 }
 
-impl Disambiguation<Html> for Names {
+impl Disambiguation<Markup> for Names {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         // TODO: drill down into the substitute logic here
         if let Some(subst) = &self.substitute {
@@ -84,7 +84,7 @@ impl Disambiguation<Html> for Names {
     fn ref_ir(
         &self,
         _db: &impl IrDatabase,
-        _ctx: &RefContext<Html>,
+        _ctx: &RefContext<Markup>,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
         warn!("ref_ir not implemented for Names");
@@ -92,11 +92,11 @@ impl Disambiguation<Html> for Names {
     }
 }
 
-impl Disambiguation<Html> for Element {
+impl Disambiguation<Markup> for Element {
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
+        ctx: &RefContext<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let renderer = Renderer::refr(ctx);
@@ -122,7 +122,7 @@ impl Disambiguation<Html> for Element {
                 };
                 let content = content
                     .map(|x| fmt.output_in_context(x, stack))
-                    .map(EdgeData::<Html>::Output)
+                    .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
@@ -173,7 +173,7 @@ impl Disambiguation<Html> for Element {
                     };
                     let content = content
                         .map(|x| fmt.output_in_context(x, stack))
-                        .map(EdgeData::<Html>::Output)
+                        .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     let gv = GroupVars::rendered_if(content.is_some());
                     (RefIR::Edge(content), gv)
@@ -182,7 +182,7 @@ impl Disambiguation<Html> for Element {
                     let content = renderer
                         .text_value(&val, f, af, quo)
                         .map(|x| fmt.output_in_context(x, stack))
-                        .map(EdgeData::<Html>::Output)
+                        .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     (RefIR::Edge(content), GroupVars::new())
                 }
@@ -190,7 +190,7 @@ impl Disambiguation<Html> for Element {
                     let content = renderer
                         .text_term(term_selector, plural, f, &af, quo)
                         .map(|x| fmt.output_in_context(x, stack))
-                        .map(EdgeData::<Html>::Output)
+                        .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     (RefIR::Edge(content), GroupVars::new())
                 }
@@ -225,7 +225,7 @@ impl Disambiguation<Html> for Element {
                     .get(&var)
                     .and_then(|val| renderer.label(var, form, val.clone(), pl, f, af))
                     .map(|x| fmt.output_in_context(x, stack))
-                    .map(EdgeData::<Html>::Output)
+                    .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));
                 (RefIR::Edge(content), GroupVars::new())
             }

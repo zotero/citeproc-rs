@@ -12,7 +12,7 @@ use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, ClusterId, ClusterNumber, IntraNote, Reference};
 use csl::Atom;
 
@@ -62,7 +62,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 
     #[salsa::interned]
-    fn cite(&self, cluster: ClusterId, cite: Arc<Cite<Html>>) -> CiteId;
+    fn cite(&self, cluster: ClusterId, cite: Arc<Cite<Markup>>) -> CiteId;
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
@@ -87,7 +87,7 @@ macro_rules! intern_key {
 intern_key!(pub CiteId);
 
 impl CiteId {
-    pub fn lookup(&self, db: &impl CiteDatabase) -> Arc<Cite<Html>> {
+    pub fn lookup(&self, db: &impl CiteDatabase) -> Arc<Cite<Markup>> {
         let (_cluster_id, cite) = db.lookup_cite(*self);
         cite
     }

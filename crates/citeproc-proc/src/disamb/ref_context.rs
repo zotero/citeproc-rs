@@ -1,6 +1,6 @@
 use crate::choose::CondChecker;
 use crate::prelude::*;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::locale::Locale;
 use csl::style::{CslType, Position, Style, VariableForm};
@@ -9,7 +9,7 @@ use csl::variables::*;
 
 use crate::disamb::FreeCond;
 
-pub struct RefContext<'a, O: OutputFormat = Html> {
+pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub format: &'a O,
     pub style: &'a Style,
     pub locale: &'a Locale,

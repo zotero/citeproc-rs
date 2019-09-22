@@ -57,7 +57,7 @@
 //!
 
 use crate::prelude::*;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
 
 // first so the macros are defined before the other modules
@@ -76,7 +76,7 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
-pub trait Disambiguation<O: OutputFormat = Html> {
+pub trait Disambiguation<O: OutputFormat = Markup> {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
         unimplemented!()
     }
@@ -114,7 +114,7 @@ pub fn mult_identity() -> FreeCondSets {
 /// Creates a Dfa that will match any cite that could have been made by a particular reference.
 /// A cite's output matching more than one reference's Dfa is our definition of "ambiguous".
 pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) -> Dfa {
-    let runs = create_ref_ir::<Html, DB>(db, refr);
+    let runs = create_ref_ir::<Markup, DB>(db, refr);
     let mut nfa = Nfa::new();
     let fmt = db.get_formatter();
     for (_fc, ir) in runs {
@@ -142,7 +142,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
             let fmt = db.get_formatter();
             let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
-                Disambiguation::<Html>::ref_ir(&*style, db, &mut ctx, Formatting::default());
+                Disambiguation::<Markup>::ref_ir(&*style, db, &mut ctx, Formatting::default());
             (*fc, ir)
         })
         .collect();
@@ -154,7 +154,7 @@ use petgraph::graph::NodeIndex;
 
 fn add_to_graph(
     db: &impl IrDatabase,
-    fmt: &Html,
+    fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,
     mut spot: NodeIndex,

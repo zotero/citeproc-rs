@@ -6,7 +6,7 @@
 
 #![allow(dead_code)]
 
-use citeproc_io::output::{html::Html, OutputFormat};
+use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
 use citeproc_proc::db::IrDatabase;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ pub enum DocUpdate {
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateSummary<O: OutputFormat = Html> {
+pub struct UpdateSummary<O: OutputFormat = Markup> {
     // A list of clusters that were updated, paired with the formatted output for each
     pub clusters: Vec<(ClusterId, Arc<O::Output>)>,
     // Not sure if this way is better than DocUpdate::BibEntry(id)

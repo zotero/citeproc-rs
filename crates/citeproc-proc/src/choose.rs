@@ -77,11 +77,11 @@ where
     }
 }
 
-impl Disambiguation<Html> for Choose {
+impl Disambiguation<Markup> for Choose {
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
-        ctx: &RefContext<Html>,
+        ctx: &RefContext<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;

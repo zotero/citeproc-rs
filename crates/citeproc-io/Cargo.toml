@@ -8,9 +8,9 @@ edition = "2018"
 
 
 [features]
-default = ["plain", "html"]
+default = ["plain", "markup"]
 plain = []
-html = ["html5ever"]
+markup = ["html5ever"]
 pandoc = ["pandoc_types"]
 
 [dependencies]

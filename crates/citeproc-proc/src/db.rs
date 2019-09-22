@@ -13,15 +13,12 @@ use std::sync::Arc;
 
 use crate::helpers::to_bijective_base_26;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
-use citeproc_io::output::{
-    html::{Html, HtmlOptions},
-    OutputFormat,
-};
+use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
 use csl::Atom;
 
 pub trait HasFormatter {
-    fn get_formatter(&self) -> Html;
+    fn get_formatter(&self) -> Markup;
 }
 
 #[salsa::query_group(IrDatabaseStorage)]
@@ -36,7 +33,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     fn ir_gen3_add_year_suffix(&self, key: CiteId) -> IrGen;
     fn ir_gen4_conditionals(&self, key: CiteId) -> IrGen;
 
-    fn built_cluster(&self, key: ClusterId) -> Arc<<Html as OutputFormat>::Output>;
+    fn built_cluster(&self, key: ClusterId) -> Arc<<Markup as OutputFormat>::Output>;
 
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
 
@@ -50,7 +47,7 @@ use crate::disamb::create_dfa;
 
 fn ref_dfa<DB: IrDatabase>(db: &DB, key: Atom) -> Option<Arc<Dfa>> {
     if let Some(refr) = db.reference(key) {
-        Some(Arc::new(create_dfa::<Html, DB>(db, &refr)))
+        Some(Arc::new(create_dfa::<Markup, DB>(db, &refr)))
     } else {
         None
     }
@@ -91,7 +88,7 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     Arc::new(suffixes)
 }
 
-type IrGen = Arc<(IR<Html>, bool, IrState)>;
+type IrGen = Arc<(IR<Markup>, bool, IrState)>;
 
 fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> IrGen {
     if log {
@@ -131,9 +128,9 @@ macro_rules! preamble {
 
 fn disambiguate(
     db: &impl IrDatabase,
-    ir: &mut IR<Html>,
+    ir: &mut IR<Markup>,
     state: &mut IrState,
-    ctx: &mut CiteContext<Html>,
+    ctx: &mut CiteContext<Markup>,
     maybe_ys: Option<&FnvHashMap<Atom, u32>>,
     own_id: &Atom,
 ) -> bool {
@@ -151,7 +148,7 @@ fn disambiguate(
 fn is_unambiguous(
     db: &impl IrDatabase,
     pass: Option<DisambPass>,
-    ir: &IR<Html>,
+    ir: &IR<Markup>,
     own_id: &Atom,
 ) -> bool {
     use log::Level::Warn;
@@ -285,7 +282,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
 fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
-) -> Arc<<Html as OutputFormat>::Output> {
+) -> Arc<<Markup as OutputFormat>::Output> {
     let fmt = db.get_formatter();
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();

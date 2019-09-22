@@ -5,7 +5,7 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use crate::db::IrDatabase;
-use citeproc_io::output::{html::Html, OutputFormat};
+use citeproc_io::output::{markup::Markup, OutputFormat};
 use petgraph::dot::Dot;
 use petgraph::graph::{Graph, NodeIndex};
 use salsa::{InternId, InternKey};
@@ -18,7 +18,7 @@ pub struct Edge(u32);
 
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EdgeData<O: OutputFormat = Html> {
+pub enum EdgeData<O: OutputFormat = Markup> {
     Output(O::Output),
     // The rest are synchronised with fields on CiteContext and IR.
     Locator,

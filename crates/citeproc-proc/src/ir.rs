@@ -6,7 +6,7 @@
 
 use crate::disamb::Nfa;
 use crate::prelude::*;
-use citeproc_io::output::html::Html;
+use citeproc_io::output::markup::Markup;
 use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
@@ -113,7 +113,7 @@ impl RefIR {
 
 /// A version of [`EdgeData`] that has a piece of output for every
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum CiteEdgeData<O: OutputFormat = Html> {
+pub enum CiteEdgeData<O: OutputFormat = Markup> {
     Output(O::Build),
     Locator(O::Build),
     LocatorLabel(O::Build),
@@ -148,7 +148,7 @@ impl<O: OutputFormat> CiteEdgeData<O> {
 
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum IR<O: OutputFormat = Html> {
+pub enum IR<O: OutputFormat = Markup> {
     // no (further) disambiguation possible
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
@@ -176,7 +176,7 @@ pub enum IR<O: OutputFormat = Html> {
     Seq(IrSeq<O>),
 }
 
-impl IR<Html> {
+impl IR<Markup> {
     fn is_rendered(&self) -> bool {
         match self {
             IR::Rendered(_) => true,
@@ -188,7 +188,7 @@ impl IR<Html> {
         &mut self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, Html>,
+        ctx: &CiteContext<'c, Markup>,
     ) -> bool {
         let mut ret = false;
         *self = match self {
@@ -235,7 +235,7 @@ impl IR<Html> {
         ret
     }
 
-    pub fn flatten(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {
+    pub fn flatten(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {
         // must clone
         match self {
             IR::Rendered(None) => None,
@@ -247,7 +247,7 @@ impl IR<Html> {
         }
     }
 
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Html, formatting: Formatting) {
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
         match self {
             IR::Rendered(None) => {}
             IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
@@ -272,7 +272,7 @@ impl IR<Html> {
         ()
     }
 
-    pub fn to_edge_stream(&self, fmt: &Html) -> Vec<EdgeData> {
+    pub fn to_edge_stream(&self, fmt: &Markup) -> Vec<EdgeData> {
         let mut edges = Vec::new();
         self.append_edges(&mut edges, fmt, Formatting::default());
         edges
@@ -291,8 +291,8 @@ impl IR<Html> {
 //     }
 // }
 
-impl CiteEdgeData<Html> {
-    fn to_edge_data(&self, fmt: &Html, formatting: Formatting) -> EdgeData {
+impl CiteEdgeData<Markup> {
+    fn to_edge_data(&self, fmt: &Markup, formatting: Formatting) -> EdgeData {
         match self {
             CiteEdgeData::Output(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting))
@@ -304,7 +304,7 @@ impl CiteEdgeData<Html> {
             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
         }
     }
-    fn inner(&self) -> <Html as OutputFormat>::Build {
+    fn inner(&self) -> <Markup as OutputFormat>::Build {
         match self {
             CiteEdgeData::Output(x)
             | CiteEdgeData::YearSuffix(x)
@@ -324,8 +324,8 @@ pub struct IrSeq<O: OutputFormat> {
     pub delimiter: Atom,
 }
 
-impl IrSeq<Html> {
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Html, formatting: Formatting) {
+impl IrSeq<Markup> {
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
         if self.contents.len() == 0 {
             return;
         }
@@ -364,7 +364,7 @@ impl IrSeq<Html> {
         }
     }
 
-    fn flatten_seq(&self, fmt: &Html) -> Option<<Html as OutputFormat>::Build> {
+    fn flatten_seq(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {
         let xs: Vec<_> = self
             .contents
             .iter()
