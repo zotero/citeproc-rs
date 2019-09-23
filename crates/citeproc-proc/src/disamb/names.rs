@@ -1,6 +1,9 @@
 use super::mult_identity;
+use crate::names::OneName;
 use crate::prelude::*;
 use csl::style::{Citation, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names};
+use csl::variables::NameVariable;
+use csl::Atom;
 
 impl Disambiguation<Markup> for Names {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
@@ -22,7 +25,33 @@ impl Disambiguation<Markup> for Names {
     }
 }
 
-use csl::Atom;
+impl OneName {
+    /// This is used directly for *global name disambiguation*
+    fn single_name_ref_ir(
+        &self,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Markup>,
+        stack: Formatting,
+        variable: NameVariable,
+        pass: Option<NameDisambPass>,
+    ) -> (RefIR, GroupVars) {
+        let fmt = ctx.format;
+        let style = ctx.style;
+        let locale = ctx.locale;
+        let position = ctx.position;
+        let val = ctx.reference.name.get(&variable);
+        let edge = val
+            .map(|val| {
+                self.render(
+                    position, fmt, locale, style, val, // TODO: store et_al on OneName
+                    &None,
+                )
+            })
+            .map(|x| fmt.output_in_context(x, stack))
+            .map(|o| db.edge(EdgeData::Output(o)));
+        (RefIR::Edge(edge), GroupVars::new())
+    }
+}
 
 /// The GivenNameDisambiguationRule variants are poorly worded. "-with-initials" doesn't *add*
 /// steps, it removes steps / limits the expansion. This is a bit clearer to work with, and mixes
