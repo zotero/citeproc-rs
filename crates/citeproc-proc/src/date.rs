@@ -29,10 +29,6 @@ where
 }
 
 impl Disambiguation<Markup> for BodyDate {
-    fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
-        mult_identity()
-    }
-
     fn ref_ir(
         &self,
         _db: &impl IrDatabase,

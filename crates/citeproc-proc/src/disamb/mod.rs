@@ -78,7 +78,7 @@ pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
 pub trait Disambiguation<O: OutputFormat = Markup> {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
-        unimplemented!()
+        mult_identity()
     }
     fn ref_ir(
         &self,
