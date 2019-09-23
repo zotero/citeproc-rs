@@ -68,7 +68,8 @@ pub(crate) mod test;
 mod finite_automata;
 mod free;
 pub(crate) mod implementation;
-pub(crate) mod knowledge;
+// pub(crate) mod knowledge;
+mod names;
 mod ref_context;
 
 pub use free::{FreeCond, FreeCondSets};

@@ -71,27 +71,6 @@ impl Disambiguation<Markup> for Group {
     }
 }
 
-impl Disambiguation<Markup> for Names {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        // TODO: drill down into the substitute logic here
-        if let Some(subst) = &self.substitute {
-            cross_product(db, &subst.0)
-        } else {
-            mult_identity()
-        }
-    }
-
-    fn ref_ir(
-        &self,
-        _db: &impl IrDatabase,
-        _ctx: &RefContext<Markup>,
-        _stack: Formatting,
-    ) -> (RefIR, GroupVars) {
-        warn!("ref_ir not implemented for Names");
-        (RefIR::Edge(None), GroupVars::new())
-    }
-}
-
 impl Disambiguation<Markup> for Element {
     fn ref_ir(
         &self,
