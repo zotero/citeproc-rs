@@ -312,7 +312,9 @@ impl NumberVariable {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(
+    AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd,
+)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameVariable {
     /// author

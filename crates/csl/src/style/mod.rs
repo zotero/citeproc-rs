@@ -592,7 +592,7 @@ pub enum InstitutionUseFirst {
     Substitute(u32),
 }
 
-#[derive(Debug, Eq, Clone, PartialEq, Default)]
+#[derive(Debug, Eq, Clone, PartialEq, Default, Hash)]
 pub struct Name {
     pub and: Option<NameAnd>,
     pub delimiter: Option<Delimiter>,
@@ -958,6 +958,15 @@ impl Default for Style {
             demote_non_dropping_particle: Default::default(),
             initialize_with_hyphen: true,
         }
+    }
+}
+
+impl Style {
+    pub fn name_citation(&self) -> Name {
+        let default = Name::root_default();
+        let root = &self.name_inheritance;
+        let citation = &self.citation.name_inheritance;
+        default.merge(root).merge(citation)
     }
 }
 
