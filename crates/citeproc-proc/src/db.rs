@@ -11,10 +11,12 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::disamb::{DisambName, DisambNameData};
 use crate::helpers::to_bijective_base_26;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::ClusterId;
+use citeproc_io::{ClusterId, Name, PersonName};
+use csl::variables::NameVariable;
 use csl::Atom;
 
 pub trait HasFormatter {
@@ -39,8 +41,51 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
+    fn all_person_names(&self) -> Arc<Vec<DisambName>>;
+
+    #[salsa::invoke(crate::disamb::names::disambiguated_person_names)]
+    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, IR<Markup>>>;
+
+    // fn name_expansions(&self) -> Arc<NameExpansions>;
+
+    #[salsa::interned]
+    fn disamb_name(&self, e: Arc<DisambNameData>) -> DisambName;
+
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
+}
+
+fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
+    let style = db.style();
+    let name_configurations = db.name_configurations();
+    let refs = db.disamb_participants();
+    let mut collector = Vec::new();
+    // -> for each ref
+    //    for each <names var="v" />
+    //    for each name in ref["v"]
+    //    .. push a DisambName
+    for ref_id in refs.iter() {
+        if let Some(refr) = db.reference(ref_id.clone()) {
+            for (var, el) in name_configurations.iter() {
+                if let Some(names) = refr.name.get(&var) {
+                    let mut seen_one = false;
+                    for name in names {
+                        if let Name::Person(val) = name {
+                            collector.push(db.disamb_name(Arc::new(DisambNameData {
+                                ref_id: ref_id.clone(),
+                                var: *var,
+                                el: el.clone(),
+                                value: val.clone(),
+                                primary: !seen_one,
+                            })))
+                        }
+                        seen_one = true;
+                    }
+                }
+            }
+        }
+    }
+    Arc::new(collector)
 }
 
 use crate::disamb::create_dfa;
@@ -239,11 +284,13 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let refr;
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
+    db.disambiguated_person_names();
 
     let ir2 = db.ir_gen2_add_given_name(id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
+    // TODO: remove
     // splitting the ifs means we only compute year suffixes if it's enabled
     let suffixes = db.year_suffixes();
     if !suffixes.contains_key(&cite.ref_id) {

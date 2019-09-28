@@ -69,10 +69,11 @@ mod finite_automata;
 mod free;
 pub(crate) mod implementation;
 // pub(crate) mod knowledge;
-mod names;
+pub(crate) mod names;
 mod ref_context;
 
 pub use free::{FreeCond, FreeCondSets};
+pub use names::{DisambName, DisambNameData};
 pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
@@ -153,7 +154,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
 
 use petgraph::graph::NodeIndex;
 
-fn add_to_graph(
+pub fn add_to_graph(
     db: &impl IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,

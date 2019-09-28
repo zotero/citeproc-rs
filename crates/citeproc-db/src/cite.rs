@@ -37,6 +37,9 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     /// Also represents "the refs that will be in the bibliography if we generate one"
     fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
 
+    /// All the names that may need to be disambiguated among themselves
+    fn names_to_disambiguate(&self) -> Arc<Vec<Name>>;
+
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
 
@@ -146,6 +149,27 @@ fn disamb_participants(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
     // make sure there are no keys we wouldn't recognise
     let merged = cited.union(&uncited).cloned().collect();
     Arc::new(merged)
+}
+
+use citeproc_io::Name;
+use csl::style::GivenNameDisambiguationRule;
+fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
+    let style = db.style();
+    if GivenNameDisambiguationRule::ByCite == style.citation.givenname_disambiguation_rule {
+        return Arc::new(Vec::new());
+    }
+    let uncited = db.disamb_participants();
+    let mut v = Vec::new();
+    for atom in uncited.iter() {
+        if let Some(refr) = db.reference(atom.clone()) {
+            for (_var, names) in refr.name.iter() {
+                for name in names.iter() {
+                    v.push(name.clone());
+                }
+            }
+        }
+    }
+    Arc::new(v)
 }
 
 fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {

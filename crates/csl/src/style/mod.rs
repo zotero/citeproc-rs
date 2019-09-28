@@ -118,7 +118,7 @@ impl Default for NumericForm {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Affixes {
     pub prefix: Atom,
     pub suffix: Atom,
@@ -303,7 +303,7 @@ impl Default for VerticalAlignment {
     }
 }
 
-#[derive(Default, Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq, Hash)]
 pub struct Delimiter(pub Atom);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
@@ -505,7 +505,7 @@ pub struct Names {
 /// The attributes name-form and name-delimiter correspond to the form and delimiter attributes on
 /// cs:name. Similarly, names-delimiter corresponds to the delimiter attribute on cs:names.
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAnd {
     Text,
@@ -707,14 +707,14 @@ pub struct NameLabel {
     pub strip_periods: StripPeriods,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NameEtAl {
     // TODO: only accept "et-al" or "and others"
     pub term: String,
     pub formatting: Option<Formatting>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DemoteNonDroppingParticle {
     Never,
@@ -728,7 +728,7 @@ impl Default for DemoteNonDroppingParticle {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
@@ -743,7 +743,7 @@ impl Default for DelimiterPrecedes {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameForm {
     Long,
@@ -751,21 +751,21 @@ pub enum NameForm {
     Count,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAsSortOrder {
     First,
     All,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NamePartName {
     Given,
     Family,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct NamePart {
     pub name: NamePartName,
     pub affixes: Affixes,

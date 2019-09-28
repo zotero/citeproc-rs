@@ -14,6 +14,7 @@ use csl::style::{
     Names, Position,
 };
 use csl::variables::NameVariable;
+use csl::Atom;
 
 mod initials;
 use self::initials::initialize;
@@ -104,7 +105,11 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
         })
 }
 
-fn should_delimit_after(prec: DelimiterPrecedes, name: &OneName, count_before_spot: usize) -> bool {
+fn should_delimit_after<O: OutputFormat>(
+    prec: DelimiterPrecedes,
+    name: &OneNameVar<'_, O>,
+    count_before_spot: usize,
+) -> bool {
     match prec {
         DelimiterPrecedes::Contextual => count_before_spot >= 2,
         // anticipate whether name_as_sort_order would kick in for the
@@ -125,12 +130,16 @@ enum NameToken<'a> {
     Space,
 }
 
-pub(crate) struct OneName {
-    pub name_el: NameEl,
-    pub variable: NameVariable,
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct OneNameVar<'a, O: OutputFormat> {
+    pub name_el: &'a NameEl,
+    // From Style
+    pub demote_non_dropping_particle: csl::style::DemoteNonDroppingParticle,
+    pub initialize_with_hyphen: bool,
+    pub fmt: &'a O,
 }
 
-impl OneName {
+impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     #[inline]
     fn naso(&self, seen_one: bool) -> bool {
         match self.name_el.name_as_sort_order {
@@ -222,15 +231,80 @@ impl OneName {
         }
     }
 
-    pub(crate) fn render<'c, O: OutputFormat>(
+    pub(crate) fn render_person_name(&self, pn: &PersonName, seen_one: bool) -> O::Build {
+        let fmt = self.fmt;
+        let format_with_part = |o_part: &Option<NamePart>, s: &str| {
+            match o_part {
+                None => fmt.plain(s),
+                Some(ref part) => {
+                    // TODO: text-case
+                    fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
+                }
+            }
+        };
+
+        let order = get_display_order(
+            pn_is_latin_cyrillic(pn),
+            self.name_el.form == Some(NameForm::Long),
+            self.naso(seen_one),
+            self.demote_non_dropping_particle,
+        );
+
+        let mut build = vec![];
+        for part in pn_filtered_parts(pn, order) {
+            // We already tested is_some() for all these Some::unwrap() calls
+            match part {
+                NamePartToken::Given => {
+                    if let Some(ref given) = pn.given {
+                        let name_part = &self.name_el.name_part_given;
+                        // TODO: parametrize for disambiguation
+                        let string = initialize(
+                            &given,
+                            self.name_el.initialize.unwrap_or(true),
+                            self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
+                            self.initialize_with_hyphen,
+                        );
+                        build.push(format_with_part(name_part, &string));
+                    }
+                }
+                NamePartToken::Family => {
+                    let name_part = &self.name_el.name_part_family;
+                    let string = pn.family.as_ref().unwrap();
+                    build.push(format_with_part(name_part, &string));
+                }
+                NamePartToken::NonDroppingParticle => {
+                    build.push(fmt.plain(&pn.non_dropping_particle.as_ref().unwrap()));
+                }
+                NamePartToken::DroppingParticle => {
+                    build.push(fmt.plain(pn.dropping_particle.as_ref().unwrap()));
+                }
+                NamePartToken::Suffix => {
+                    build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
+                }
+                NamePartToken::Space => {
+                    build.push(fmt.plain(" "));
+                }
+                NamePartToken::SortSeparator => {
+                    build.push(if let Some(sep) = &self.name_el.sort_separator {
+                        fmt.plain(&sep)
+                    } else {
+                        fmt.plain(", ")
+                    })
+                }
+            }
+        }
+
+        fmt.seq(build.into_iter())
+    }
+
+    pub(crate) fn render_names(
         &self,
-        position: Position,
-        fmt: &O,
-        locale: &csl::locale::Locale,
-        style: &csl::style::Style,
         names_slice: &[Name],
+        position: Position,
+        locale: &csl::locale::Locale,
         et_al: &Option<NameEtAl>,
     ) -> O::Build {
+        let fmt = self.fmt;
         let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice);
 
@@ -247,70 +321,11 @@ impl OneName {
             );
         }
 
-        let format_with_part = |o_part: &Option<NamePart>, s: &str| {
-            match o_part {
-                None => fmt.plain(s),
-                Some(ref part) => {
-                    // TODO: text-case
-                    fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
-                }
-            }
-        };
-
         let st = name_tokens.iter().map(|n| match n {
             NameToken::Name(Name::Person(ref pn)) => {
-                let order = get_display_order(
-                    pn_is_latin_cyrillic(pn),
-                    self.name_el.form == Some(NameForm::Long),
-                    self.naso(seen_one),
-                    style.demote_non_dropping_particle,
-                );
+                let ret = self.render_person_name(pn, seen_one);
                 seen_one = true;
-
-                let mut build = vec![];
-                for part in pn_filtered_parts(pn, order) {
-                    // We already tested is_some() for all these Some::unwrap() calls
-                    match part {
-                        NamePartToken::Given => {
-                            if let Some(ref given) = pn.given {
-                                let name_part = &self.name_el.name_part_given;
-                                // TODO: parametrize for disambiguation
-                                let string = initialize(
-                                    &given,
-                                    self.name_el.initialize.unwrap_or(true),
-                                    self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
-                                    style.initialize_with_hyphen,
-                                );
-                                build.push(format_with_part(name_part, &string));
-                            }
-                        }
-                        NamePartToken::Family => {
-                            let name_part = &self.name_el.name_part_family;
-                            let string = pn.family.as_ref().unwrap();
-                            build.push(format_with_part(name_part, &string));
-                        }
-                        NamePartToken::NonDroppingParticle => {
-                            build.push(fmt.plain(&pn.non_dropping_particle.as_ref().unwrap()));
-                        }
-                        NamePartToken::DroppingParticle => {
-                            build.push(fmt.plain(pn.dropping_particle.as_ref().unwrap()));
-                        }
-                        NamePartToken::Suffix => {
-                            build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
-                        }
-                        NamePartToken::Space => {
-                            build.push(fmt.plain(" "));
-                        }
-                        NamePartToken::SortSeparator => {
-                            build.push(if let Some(sep) = &self.name_el.sort_separator {
-                                fmt.plain(&sep)
-                            } else {
-                                fmt.plain(", ")
-                            })
-                        }
-                    }
-                }
-                fmt.seq(build.into_iter())
+                ret
             }
             NameToken::Name(Name::Literal { ref literal }) => {
                 seen_one = true;
@@ -327,7 +342,7 @@ impl OneName {
                 use csl::terms::*;
                 let mut term = MiscTerm::EtAl;
                 let mut formatting = None;
-                if let Some(ref etal_element) = &et_al {
+                if let Some(ref etal_element) = et_al {
                     if etal_element.term == "and others" {
                         term = MiscTerm::AndOthers;
                     }
@@ -525,11 +540,15 @@ where
         let locale = ctx.locale;
         let position = ctx.position.0;
 
-        let name_el = OneName {
-            name_el: ctx
-                .name_citation
-                .merge(self.name.as_ref().unwrap_or(&NameEl::default())),
-            variable: NameVariable::Dummy,
+        let name_el = ctx
+            .name_citation
+            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+
+        let runner = OneNameVar {
+            name_el: &name_el,
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+            fmt,
         };
 
         let rendered: Vec<_> = self
@@ -538,7 +557,7 @@ where
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
             .filter_map(|&var| ctx.get_name(var))
-            .map(|val| name_el.render(position, fmt, locale, style, val, &self.et_al))
+            .map(|val| runner.render_names(val, position, locale, &self.et_al))
             .collect();
         if rendered.is_empty() {
             return (IR::Rendered(None), GroupVars::new());

@@ -49,6 +49,14 @@ macro_rules! style_layout {
     }};
 }
 
+macro_rules! style_xml {
+    ($ex:expr) => {{
+        use std::str::FromStr;
+        ::csl::style::Style::from_str(&format!(r#"<?xml version="1.0" encoding="utf-8"?>{}"#, $ex))
+            .unwrap()
+    }};
+}
+
 macro_rules! style {
     ($ex:expr) => {{
         use std::str::FromStr;
