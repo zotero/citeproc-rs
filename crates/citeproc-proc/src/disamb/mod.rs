@@ -59,6 +59,8 @@
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
+use fnv::FnvHashMap;
+use petgraph::visit::EdgeRef;
 
 // first so the macros are defined before the other modules
 #[cfg(test)]
@@ -211,7 +213,40 @@ pub fn add_to_graph(
             spot = add_to_graph(db, fmt, nfa, suf, spot);
             spot
         }
-        RefIR::Names(..) => unimplemented!(),
+        RefIR::Names(names_nfa, boxed_ir) => {
+            // We're going to graft the names_nfa onto our own by translating all the node_ids, and
+            // adding the same edges between them.
+            let mut node_mapping = FnvHashMap::default();
+            let mut get_node = |nfa: &mut Nfa, incoming: NodeIndex| {
+                node_mapping
+                    .entry(incoming)
+                    .or_insert_with(|| nfa.graph.add_node(()))
+                    .clone()
+            };
+            // collected because iterator uses a mutable reference to nfa
+            let incoming_edges: Vec<_> = names_nfa
+                .graph
+                .edge_references()
+                .map(|e| {
+                    (
+                        get_node(nfa, e.source()),
+                        get_node(nfa, e.target()),
+                        e.weight(),
+                    )
+                })
+                .collect();
+            nfa.graph.extend_with_edges(incoming_edges.into_iter());
+            for &start_node in &names_nfa.start {
+                let start_node = get_node(nfa, start_node);
+                nfa.graph.add_edge(spot, start_node, NfaEdge::Epsilon);
+            }
+            let finish = nfa.graph.add_node(());
+            for &acc_node in &names_nfa.accepting {
+                let acc_node = get_node(nfa, acc_node);
+                nfa.graph.add_edge(acc_node, finish, NfaEdge::Epsilon);
+            }
+            finish
+        }
     }
 }
 

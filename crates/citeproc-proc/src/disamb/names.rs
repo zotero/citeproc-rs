@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        // TODO: Position may be involved for NASO and primary disambiguation
         // TODO: drill down into the substitute logic here
         if let Some(subst) = &self.substitute {
             cross_product(db, &subst.0)
@@ -20,12 +21,59 @@ impl Disambiguation<Markup> for Names {
     }
     fn ref_ir(
         &self,
-        _db: &impl IrDatabase,
-        _ctx: &RefContext<Markup>,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Markup>,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        warn!("ref_ir not implemented for Names");
-        (RefIR::Edge(None), GroupVars::new())
+        let fmt = ctx.format;
+        let style = ctx.style;
+        let locale = ctx.locale;
+        let name_el = db
+            .name_citation()
+            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+        let runner = OneNameVar {
+            name_el: &name_el,
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+            fmt,
+        };
+
+        let mut any = false;
+        let mut nfa = Nfa::new();
+        let mut builds = Vec::new();
+        for var in &self.variables {
+            if let Some(vec_of_names) = ctx.reference.name.get(var) {
+                any = true;
+                builds.push(runner.render_names(
+                    vec_of_names,
+                    ctx.position,
+                    ctx.locale,
+                    &self.et_al,
+                ));
+            }
+        }
+
+        if !any {
+            // null object pattern
+            let start = nfa.graph.add_node(());
+            nfa.start.insert(start);
+            nfa.accepting.insert(start);
+            // TODO: substitute
+            // TODO: suppress once substituted
+            return (
+                RefIR::Names(nfa, Box::new(RefIR::Edge(None))),
+                GroupVars::OnlyEmpty,
+            );
+        }
+
+        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
+        let content = Some(fmt.affixed(fmt.group(builds, delim, self.formatting), &self.affixes))
+            .map(|build| fmt.output_in_context(build, _stack))
+            .map(|out| db.edge(EdgeData::Output(out)));
+        (
+            RefIR::Names(nfa, Box::new(RefIR::Edge(content))),
+            GroupVars::DidRender,
+        )
     }
 }
 

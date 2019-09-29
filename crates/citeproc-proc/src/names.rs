@@ -510,7 +510,6 @@ mod ord {
         One(Given),
         One(Suffix),
     ];
-
     static LATIN_SORT: SortOrdering = &[
         One(Family),
         Two(DroppingParticle, NonDroppingParticle),
@@ -560,7 +559,7 @@ where
             .map(|val| runner.render_names(val, position, locale, &self.et_al))
             .collect();
         if rendered.is_empty() {
-            return (IR::Rendered(None), GroupVars::new());
+            return (IR::Rendered(None), GroupVars::OnlyEmpty);
         }
         let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
         let content = Some(fmt.affixed(fmt.group(rendered, delim, self.formatting), &self.affixes));

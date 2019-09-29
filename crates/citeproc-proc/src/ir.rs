@@ -67,7 +67,7 @@ pub enum RefIR {
     /// ```
     ///
     /// The Nfa represents all the token streams that the Names block can output.
-    Names(Nfa, NodeIndex, NodeIndex, Box<RefIR>),
+    Names(Nfa, Box<RefIR>),
 
     /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
     /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
@@ -106,7 +106,7 @@ impl RefIR {
                 }
                 s
             }
-            RefIR::Names(_nfa, _start, _end, ir) => ir.debug(db),
+            RefIR::Names(_nfa, ir) => ir.debug(db),
         }
     }
 }
