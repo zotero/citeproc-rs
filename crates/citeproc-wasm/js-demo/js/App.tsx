@@ -14,7 +14,7 @@ let initialStyle = `<style class="note">
       <term name="ibid">ibid</term>
     </terms>
   </locale>
-  <citation et-al-min="1" et-al-use-first="1" disambiguate-add-names="true">
+  <citation et-al-min="1" et-al-use-first="1" disambiguate-add-givenname="true" givenname-disambiguation-rule="all-names" disambiguate-add-names="true">
     <layout delimiter="; " suffix=".">
       <choose>
         <if position="ibid-with-locator">

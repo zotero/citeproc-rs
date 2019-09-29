@@ -33,7 +33,7 @@ impl Disambiguation<Markup> for Names {
         let _locale = ctx.locale;
         let name_el = db
             .name_citation()
-            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+            .merge(self.name.as_ref().unwrap_or(&NameEl::empty()));
 
         let mut runner = OneNameVar {
             name_el: &name_el,
@@ -61,22 +61,15 @@ impl Disambiguation<Markup> for Names {
                 let last_per_var = nfa.graph.add_node(());
                 let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference);
                 for nir in name_irs {
+                    use crate::names::ntb_len;
                     any = true;
-                    fn ntb_len(v: &[NameTokenBuilt<'_, <Markup as OutputFormat>::Build>]) -> usize {
-                        v.iter()
-                            .filter(|x| match x {
-                                NameTokenBuilt::Ratchet(_) => true,
-                                _ => false,
-                            })
-                            .count()
-                    }
                     let mut ntbs = runner.names_to_builds(
                         &nir.disamb_names,
                         ctx.position,
                         ctx.locale,
                         &self.et_al,
                     );
-                    let mut max_counted_tokens = 0;
+                    let mut max_counted_tokens = 0u16;
                     let mut counted_tokens = ntb_len(&ntbs);
 
                     while counted_tokens > max_counted_tokens {
@@ -290,12 +283,11 @@ enum NameDisambState {
 }
 
 impl SingleNameDisambIter {
-    pub fn new(method: SingleNameDisambMethod, name_options: &NameEl) -> Self {
+    pub fn new(method: SingleNameDisambMethod, name_el: &NameEl) -> Self {
         SingleNameDisambIter {
             method,
-            initialize_with: name_options.initialize_with.is_some()
-                && name_options.initialize == Some(true),
-            name_form: name_options.form.unwrap_or(NameForm::Long),
+            initialize_with: name_el.initialize_with.is_some() && name_el.initialize == Some(true),
+            name_form: name_el.form.unwrap_or(NameForm::Long),
             state: NameDisambState::Original,
         }
     }
@@ -372,7 +364,7 @@ fn test(name: &NameEl, rule: GivenNameDisambiguationRule, primary: bool) -> Vec<
 
 #[test]
 fn test_name_disamb_iter() {
-    let mut name = NameEl::default();
+    let mut name = NameEl::root_default();
     name.form = Some(NameForm::Long); // default
     name.initialize = Some(true); // default
     assert_eq!(
@@ -449,11 +441,19 @@ fn add_expanded_name_to_graph(
 }
 
 /// Performs 'global name disambiguation'
-pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<DisambName, IR<Markup>>> {
-    let dns = db.all_person_names();
+pub fn disambiguated_person_names(
+    db: &impl IrDatabase,
+) -> Arc<FnvHashMap<DisambName, DisambNameData>> {
     let style = db.style();
-    let fmt = &db.get_formatter();
     let rule = style.citation.givenname_disambiguation_rule;
+    let dagn = style.citation.disambiguate_add_givenname;
+
+    if !dagn || rule == GivenNameDisambiguationRule::ByCite {
+        return Arc::new(Default::default());
+    }
+
+    let dns = db.all_person_names();
+    let fmt = &db.get_formatter();
     let mut dfas = Vec::new();
     let mut results = FnvHashMap::default();
 
@@ -501,12 +501,15 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
                 ir = dn.single_name_ir(db, fmt, &style, Formatting::default());
                 edges = ir.to_edge_stream(fmt);
             } else {
+                // failed, so we must reset
+                dn = dn_id.lookup(db);
+                // ir = dn.single_name_ir(db, fmt, &style, Formatting::default());
                 break;
             }
         }
-        results.insert(dn_id, ir);
+        // discard the ir, it is easier to just reconstruct it later
+        results.insert(dn_id, dn);
     }
-    warn!("disambiguated_person_names {:#?}", &results);
     Arc::new(results)
 }
 
@@ -514,7 +517,10 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
 pub struct NameIR<B> {
     pub names_el: Names,
     pub variable: NameVariable,
+    pub max_name_count: u16,
+    pub current_name_count: u16,
     pub bump_name_count: u16,
+    pub gn_iter_index: usize,
     pub disamb_names: Vec<DisambNameRatchet<B>>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -529,18 +535,44 @@ pub struct PersonDisambNameRatchet {
     pub iter: SingleNameDisambIter,
 }
 impl PersonDisambNameRatchet {
-    pub fn new(db: &impl IrDatabase, data: DisambNameData) -> Self {
+    pub fn new(db: &impl IrDatabase, id: DisambName, data: DisambNameData) -> Self {
         let style = db.style();
         let rule = style.citation.givenname_disambiguation_rule;
         let method = SingleNameDisambMethod::from_rule(rule, data.primary);
         let iter = SingleNameDisambIter::new(method, &data.el);
-        let id = db.disamb_name(data.clone());
         PersonDisambNameRatchet { id, iter, data }
     }
 }
 
 impl<B> NameIR<B> {
-    pub fn crank(&mut self, _pass: Option<DisambPass>) {
-        // TODO: apply disambiguations
+    pub fn crank(&mut self, pass: Option<DisambPass>) -> bool {
+        if let Some(DisambPass::AddNames) = pass {
+            self.bump_name_count += 1;
+            true
+        } else if let Some(DisambPass::AddGivenName(_rule)) = pass {
+            let mut res = false;
+            while res == false {
+                if let Some(at_index) = self.disamb_names.get_mut(self.gn_iter_index) {
+                    match at_index {
+                        DisambNameRatchet::Person(ratchet) => {
+                            if let Some(next) = ratchet.iter.next() {
+                                ratchet.data.apply_pass(next);
+                                res = true;
+                            } else {
+                                self.gn_iter_index += 1;
+                            }
+                        }
+                        DisambNameRatchet::Literal(_) => {
+                            self.gn_iter_index += 1;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            res
+        } else {
+            false
+        }
     }
 }

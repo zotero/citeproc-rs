@@ -29,7 +29,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
 ) -> impl Iterator<Item = NameIR<O::Build>> + 'a {
     let name_el = db
         .name_citation()
-        .merge(names.name.as_ref().unwrap_or(&NameEl::default()));
+        .merge(names.name.as_ref().unwrap_or(&NameEl::empty()));
 
     let mut primary = true;
     names
@@ -42,14 +42,19 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                     if primary {
                         primary = false;
                     }
-                    let data = DisambNameData {
+                    let mut data = DisambNameData {
                         ref_id: refr.id.clone(),
                         var,
                         el: name_el.clone(),
                         value: pn,
                         primary,
                     };
-                    let ratchet = PersonDisambNameRatchet::new(db, data);
+                    let id = db.disamb_name(data.clone());
+                    let globally_disambiguated = db.disambiguated_person_names();
+                    if let Some(my_data) = globally_disambiguated.get(&id) {
+                        data = my_data.clone();
+                    }
+                    let ratchet = PersonDisambNameRatchet::new(db, id, data);
                     DisambNameRatchet::Person(ratchet)
                 }
                 Name::Literal { literal } => {
@@ -63,6 +68,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                 names_el: names.clone(),
                 variable: var,
                 bump_name_count: 0,
+                max_name_count: 0,
+                current_name_count: 0,
+                gn_iter_index: 0,
                 disamb_names: ratchets.collect(),
             }
         })
@@ -83,9 +91,16 @@ where
     {
         let fmt = &ctx.format;
         let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference)
-            .map(|nir| {
-                let (ir, _gv) = nir.intermediate(db, state, ctx);
-                IR::Names(nir, Box::new(ir))
+            .map(|mut nir| {
+                if let Some((ir, _gv)) = nir.intermediate_custom(db, state, ctx) {
+                    IR::Names(nir, Box::new(ir))
+                } else {
+                    // shouldn't happen; intermediate_custom should return Some the first time
+                    // round in any situation, and only retun None if it's impossible to crank any
+                    // further for a disamb pass
+                    error!("nir.intermediate_custom returned None the first time round");
+                    IR::Rendered(None)
+                }
             })
             .collect();
         if name_irs.iter().all(|ir| match ir {
@@ -115,35 +130,53 @@ where
     }
 }
 
-impl<'c, O: OutputFormat> Proc<'c, O> for NameIR<O::Build> {
-    fn intermediate(
-        &self,
-        _db: &impl IrDatabase,
+impl<'c, B: std::fmt::Debug + Clone + PartialEq + Eq + Send + Sync + Default> NameIR<B> {
+    pub fn intermediate_custom<O>(
+        &mut self,
+        db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O> {
+    ) -> Option<IrSum<O>>
+    where
+        O: OutputFormat<Build = B>,
+    {
         let style = ctx.style;
         let locale = ctx.locale;
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
-        let runner = OneNameVar {
-            // replace this
-            name_el: &NameEl::root_default(),
+        let name_el = db
+            .name_citation()
+            .merge(self.names_el.name.as_ref().unwrap_or(&NameEl::empty()));
+
+        let mut runner = OneNameVar {
+            name_el: &name_el,
             bump_name_count: self.bump_name_count,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
             fmt,
         };
 
-        let iter = runner
-            .names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al)
+        let ntbs =
+            runner.names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al);
+        self.current_name_count = ntb_len(&ntbs);
+        if ctx.disamb_pass == Some(DisambPass::AddNames)
+            && self.current_name_count <= self.max_name_count
+        {
+            return None;
+        }
+        self.max_name_count = self.current_name_count;
+
+        let iter = ntbs
             .into_iter()
             .map(|ntb| match ntb {
                 NameTokenBuilt::Built(b) => b,
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => b.clone(),
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
-                    runner.render_person_name(&pn.data.value, !pn.data.primary)
+                    runner.name_el = &pn.data.el;
+                    let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
+                    runner.name_el = &name_el;
+                    ret
                 }
             })
             .filter(|x| !fmt.is_empty(&x))
@@ -155,11 +188,20 @@ impl<'c, O: OutputFormat> Proc<'c, O> for NameIR<O::Build> {
             delimiter: Atom::from(""),
         };
         if seq.contents.is_empty() {
-            (IR::Rendered(None), GroupVars::OnlyEmpty)
+            Some((IR::Rendered(None), GroupVars::OnlyEmpty))
         } else {
-            (IR::Seq(seq), GroupVars::DidRender)
+            Some((IR::Seq(seq), GroupVars::DidRender))
         }
     }
+}
+
+pub fn ntb_len<B>(v: &[NameTokenBuilt<'_, B>]) -> u16 {
+    v.iter()
+        .filter(|x| match x {
+            NameTokenBuilt::Ratchet(_) => true,
+            _ => false,
+        })
+        .count() as u16
 }
 
 fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {

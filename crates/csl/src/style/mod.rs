@@ -596,7 +596,7 @@ pub enum InstitutionUseFirst {
     Substitute(u32),
 }
 
-#[derive(Debug, Eq, Clone, PartialEq, Default, Hash)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct Name {
     pub and: Option<NameAnd>,
     /// Between individual names for the same variable
@@ -619,7 +619,37 @@ pub struct Name {
     pub name_part_family: Option<NamePart>,
 }
 
+impl Default for Name {
+    fn default() -> Self {
+        Name::empty()
+    }
+}
+
 impl Name {
+    pub fn empty() -> Self {
+        Name {
+            and: None,
+            delimiter: None,
+            delimiter_precedes_et_al: None,
+            delimiter_precedes_last: None,
+            et_al_min: None,
+            et_al_use_first: None,
+            et_al_use_last: None,
+            et_al_subsequent_min: None,
+            et_al_subsequent_use_first: None,
+            form: None,
+            initialize: None,
+            initialize_with: None,
+            name_as_sort_order: None,
+            sort_separator: None,
+            // these four aren't inherited
+            formatting: None,
+            affixes: Default::default(),
+            name_part_given: None,
+            name_part_family: None,
+        }
+    }
+
     /// All properties on a Name may be inherited from elsewhere. Therefore while the
     /// `Default::default()` implementation will give you lots of `None`s, you need to define what
     /// those Nones should default to absent a parent giving a concrete definition.

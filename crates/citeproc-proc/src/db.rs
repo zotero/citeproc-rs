@@ -43,8 +43,10 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     fn all_person_names(&self) -> Arc<Vec<DisambName>>;
 
+    /// The *Data indexed here are ratcheted as far as was required to do global name
+    /// disambiguation.
     #[salsa::invoke(crate::disamb::names::disambiguated_person_names)]
-    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, IR<Markup>>>;
+    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, DisambNameData>>;
 
     /// The DisambNameData here correspond to "global identity" -- so each DisambName points to
     /// exactly one Ref/NameEl/Variable/PersonName. Even if there are two identical NameEls
@@ -183,10 +185,16 @@ fn disambiguate(
     _maybe_ys: Option<&FnvHashMap<Atom, u32>>,
     own_id: &Atom,
 ) -> bool {
-    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, own_id);
+    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
+    info!(
+        "{:?} was {}ambiguous in pass {:?}",
+        ctx.cite_id,
+        if un { "un" } else { "" },
+        ctx.disamb_pass
+    );
     // disambiguate returns true if it can do more for this DisambPass (i.e. more names to add)
     while !un && ir.disambiguate(db, state, ctx) {
-        un = is_unambiguous(db, ctx.disamb_pass, ir, own_id);
+        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
     }
     un
 }
@@ -198,9 +206,10 @@ fn is_unambiguous(
     db: &impl IrDatabase,
     pass: Option<DisambPass>,
     ir: &IR<Markup>,
+    cite_id: CiteId,
     own_id: &Atom,
 ) -> bool {
-    use log::Level::Warn;
+    use log::Level::{Info, Warn};
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut n = 0;
     for k in db.cited_keys().iter() {
@@ -211,12 +220,19 @@ fn is_unambiguous(
         }
         if k == own_id && !acc && log_enabled!(Warn) {
             warn!(
-                "Own reference {} did not match during {:?}:\n{}",
+                "{:?} Own reference {} did not match during {:?}:\n{}",
+                cite_id,
                 k,
                 pass,
                 dfa.debug_graph(db)
             );
             warn!("{:#?}", &edges);
+        }
+        if k != own_id && acc && log_enabled!(Info) {
+            info!(
+                "cite {:?} matched other reference {} during {:?}",
+                cite_id, k, pass
+            );
         }
         if n > 1 {
             break;
@@ -235,7 +251,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
     let _fmt = db.get_formatter();
-    let un = is_unambiguous(db, None, &ir, &refr.id);
+    let un = is_unambiguous(db, None, &ir, id, &refr.id);
     Arc::new((ir, un, state))
 }
 
@@ -288,8 +304,6 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let refr;
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
-    db.disambiguated_person_names();
-
     let ir2 = db.ir_gen2_add_given_name(id);
     if ir2.1 || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
