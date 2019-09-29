@@ -5,7 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::output::OutputFormat;
-use super::{DateOrRange, NumericValue};
+use super::{NumericValue};
 use csl::terms::LocatorType;
 use csl::Atom;
 
@@ -94,7 +94,7 @@ impl Locators {
     fn into_option(self) -> Option<Self> {
         match self {
             Locators::Multiple { locators } => {
-                if locators.len() == 0 {
+                if locators.is_empty() {
                     None
                 } else if locators.len() == 1 {
                     let first = locators.into_iter().nth(0).unwrap();

@@ -324,7 +324,7 @@ impl<'de> Deserialize<'de> for NumericValue {
             where
                 E: de::Error,
             {
-                Ok(NumericValue::num(u32::from(value)))
+                Ok(NumericValue::num(value))
             }
 
             fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
@@ -369,7 +369,7 @@ impl<'de> Deserialize<'de> for DateInt {
                 value
                     .parse::<i32>()
                     .map_err(|_| de::Error::invalid_value(de::Unexpected::Str(value), &self))
-                    .map(|i| DateInt(i))
+                    .map(DateInt)
             }
 
             fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
@@ -390,7 +390,7 @@ impl<'de> Deserialize<'de> for DateInt {
             where
                 E: de::Error,
             {
-                Ok(DateInt(i32::from(value)))
+                Ok(DateInt(value))
             }
 
             fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
@@ -445,7 +445,7 @@ impl<'de> Deserialize<'de> for DateUInt {
                 value
                     .parse::<u32>()
                     .map_err(|_| de::Error::invalid_value(de::Unexpected::Str(value), &self))
-                    .map(|i| DateUInt(i))
+                    .map(DateUInt)
             }
 
             fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
@@ -466,7 +466,7 @@ impl<'de> Deserialize<'de> for DateUInt {
             where
                 E: de::Error,
             {
-                Ok(DateUInt(u32::from(value)))
+                Ok(DateUInt(value))
             }
 
             fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
