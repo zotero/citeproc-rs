@@ -1,19 +1,44 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, NumericValue};
+use citeproc_io::{Locator, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{NumericForm, Plural};
+use csl::style::{NumericForm, Plural, Style};
 use csl::terms::{GenderedTermSelector, LocatorType, TermForm, TextTermSelector};
 use csl::variables::{NumberVariable, StandardVariable};
 use csl::Atom;
 
-enum GenericContext<'a, O: OutputFormat> {
+#[derive(Clone)]
+pub enum GenericContext<'a, O: OutputFormat> {
     Ref(&'a RefContext<'a, O>),
     Cit(&'a CiteContext<'a, O>),
 }
 
 impl<O: OutputFormat> GenericContext<'_, O> {
-    fn locator_type(&self) -> Option<LocatorType> {
+    pub fn locale(&self) -> &Locale {
+        match self {
+            GenericContext::Cit(ctx) => ctx.locale,
+            GenericContext::Ref(ctx) => ctx.locale,
+        }
+    }
+    pub fn style(&self) -> &Style {
+        match self {
+            GenericContext::Cit(ctx) => ctx.style,
+            GenericContext::Ref(ctx) => ctx.style,
+        }
+    }
+    pub fn reference(&self) -> &Reference {
+        match self {
+            GenericContext::Cit(ctx) => ctx.reference,
+            GenericContext::Ref(ctx) => ctx.reference,
+        }
+    }
+    pub fn format(&self) -> &O {
+        match self {
+            GenericContext::Cit(ctx) => &ctx.format,
+            GenericContext::Ref(ctx) => ctx.format,
+        }
+    }
+    pub fn locator_type(&self) -> Option<LocatorType> {
         match self {
             Cit(ctx) => ctx
                 .cite
@@ -22,12 +47,6 @@ impl<O: OutputFormat> GenericContext<'_, O> {
                 .and_then(|ls| ls.single())
                 .map(Locator::type_of),
             Ref(ctx) => ctx.locator_type,
-        }
-    }
-    fn locale(&self) -> &Locale {
-        match self {
-            Cit(ctx) => ctx.locale,
-            Ref(ctx) => ctx.locale,
         }
     }
     // fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {

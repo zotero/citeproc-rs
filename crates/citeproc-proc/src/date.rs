@@ -27,8 +27,8 @@ where
     {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
         match *self {
-            BodyDate::Indep(ref idate) => idate.intermediate(db, state, ctx),
-            BodyDate::Local(ref ldate) => ldate.intermediate(db, state, ctx),
+            BodyDate::Indep(ref idate) => intermediate_generic_indep(idate, db, GenericContext::Cit(ctx)),
+            BodyDate::Local(ref ldate) => intermediate_generic_local(ldate, db, GenericContext::Cit(ctx)),
         }
     }
 }
@@ -45,81 +45,69 @@ impl Disambiguation<Markup> for BodyDate {
     }
 }
 
-impl<'c, O> Proc<'c, O> for LocalizedDate
+fn intermediate_generic_local<'c, O>(
+    local: &LocalizedDate,
+    _db: &impl IrDatabase,
+    ctx: GenericContext<'c, O>,
+) -> IrSum<O>
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        _db: &impl IrDatabase,
-        _state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
-        let fmt = &ctx.format;
-        let locale = ctx.locale;
-        // TODO: handle missing
-        let locale_date = locale.dates.get(&self.form).unwrap();
-        // TODO: render date ranges
-        // TODO: TextCase
-        let date = ctx
-            .reference
-            .date
-            .get(&self.variable)
-            .and_then(|r| r.single_or_first());
-        let content = date.map(|val| {
-            let each: Vec<_> = locale_date
-                .date_parts
-                .iter()
-                .filter(|dp| dp_matches(dp, self.parts_selector))
-                .filter_map(|dp| dp_render(dp, ctx, &val))
-                .collect();
-            let delim = &locale_date.delimiter.0;
-            CiteEdgeData::Output(
-                fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes),
-            )
-        });
-        let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content), gv)
-    }
+    let fmt = ctx.format();
+    let locale = ctx.locale();
+    let refr = ctx.reference();
+    // TODO: handle missing
+    let locale_date = locale.dates.get(&local.form).unwrap();
+    // TODO: render date ranges
+    // TODO: TextCase
+    let date = refr
+        .date
+        .get(&local.variable)
+        .and_then(|r| r.single_or_first());
+    let content = date.map(|val| {
+        let each: Vec<_> = locale_date
+            .date_parts
+            .iter()
+            .filter(|dp| dp_matches(dp, local.parts_selector))
+            .filter_map(|dp| dp_render(dp, ctx.clone(), &val))
+            .collect();
+        let delim = &locale_date.delimiter.0;
+        CiteEdgeData::Output(
+            fmt.affixed(fmt.group(each, delim, local.formatting), &local.affixes),
+        )
+    });
+    let gv = GroupVars::rendered_if(content.is_some());
+    (IR::Rendered(content), gv)
 }
 
-impl<'c, O> Proc<'c, O> for IndependentDate
+fn intermediate_generic_indep<'c, O>(
+    indep: &IndependentDate,
+    _db: &impl IrDatabase,
+    ctx: GenericContext<'c, O>,
+) -> IrSum<O>
 where
     O: OutputFormat,
 {
-    fn intermediate(
-        &self,
-        _db: &impl IrDatabase,
-        _state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
-        let fmt = &ctx.format;
-        let content = ctx
-            .reference
-            .date
-            .get(&self.variable)
-            // TODO: render date ranges
-            .and_then(|r| r.single_or_first())
-            .map(|val| {
-                let each: Vec<_> = self
-                    .date_parts
-                    .iter()
-                    .filter_map(|dp| dp_render(dp, ctx, &val))
-                    .collect();
-                let delim = &self.delimiter.0;
-                CiteEdgeData::Output(
-                    fmt.affixed(fmt.group(each, delim, self.formatting), &self.affixes),
-                )
-            });
-        let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content), gv)
-    }
+    let fmt = ctx.format();
+    let content = ctx
+        .reference()
+        .date
+        .get(&indep.variable)
+        // TODO: render date ranges
+        .and_then(|r| r.single_or_first())
+        .map(|val| {
+            let each: Vec<_> = indep
+                .date_parts
+                .iter()
+                .filter_map(|dp| dp_render(dp, ctx.clone(), &val))
+                .collect();
+            let delim = &indep.delimiter.0;
+            CiteEdgeData::Output(
+                fmt.affixed(fmt.group(each, delim, indep.formatting), &indep.affixes),
+            )
+        });
+    let gv = GroupVars::rendered_if(content.is_some());
+    (IR::Rendered(content), gv)
 }
 
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
@@ -132,10 +120,10 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
 
 fn dp_render<'c, O: OutputFormat>(
     part: &DatePart,
-    ctx: &CiteContext<'c, O>,
+    ctx: GenericContext<'c, O>,
     date: &Date,
 ) -> Option<O::Build> {
-    let locale = ctx.locale;
+    let locale = ctx.locale();
     let string = match part.form {
         DatePartForm::Year(form) => match form {
             YearForm::Long => Some(format!("{}", date.year)),
@@ -212,7 +200,7 @@ fn dp_render<'c, O: OutputFormat>(
             }
         },
     };
-    string.map(|s| ctx.format.affixed_text(s, part.formatting, &part.affixes))
+    string.map(|s| ctx.format().affixed_text(s, part.formatting, &part.affixes))
 }
 
 const MONTHS_SHORT: &[&str] = &[
