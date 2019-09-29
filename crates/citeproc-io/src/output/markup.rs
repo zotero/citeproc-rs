@@ -256,7 +256,6 @@ fn stack_formats_html(
     options: &HtmlOptions,
     formatting: Formatting,
 ) {
-    
     let stack = tag_stack(formatting);
     stack_preorder(s, &stack, options);
     for inner in inlines {
