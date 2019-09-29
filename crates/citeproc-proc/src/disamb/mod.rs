@@ -156,6 +156,41 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
 
 use petgraph::graph::NodeIndex;
 
+pub fn graph_with_stack(
+    db: &impl IrDatabase,
+    fmt: &Markup,
+    nfa: &mut Nfa,
+    formatting: &Option<Formatting>,
+    affixes: &Affixes,
+    mut spot: NodeIndex,
+    f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
+) -> NodeIndex {
+    let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
+    let mut open_tags = String::new();
+    let mut close_tags = String::new();
+    fmt.stack_preorder(&mut open_tags, &stack);
+    fmt.stack_postorder(&mut close_tags, &stack);
+    let mkedge = |s: &str| {
+        RefIR::Edge(if s.len() > 0 {
+            Some(db.edge(EdgeData::Output(
+                fmt.output_in_context(fmt.plain(s), Default::default()),
+            )))
+        } else {
+            None
+        })
+    };
+    let open_tags = &mkedge(&*open_tags);
+    let close_tags = &mkedge(&*close_tags);
+    let pre = &mkedge(&*affixes.prefix);
+    let suf = &mkedge(&*affixes.suffix);
+    spot = add_to_graph(db, fmt, nfa, pre, spot);
+    spot = add_to_graph(db, fmt, nfa, open_tags, spot);
+    spot = f(nfa, spot);
+    spot = add_to_graph(db, fmt, nfa, close_tags, spot);
+    spot = add_to_graph(db, fmt, nfa, suf, spot);
+    spot
+}
+
 pub fn add_to_graph(
     db: &impl IrDatabase,
     fmt: &Markup,
@@ -177,11 +212,6 @@ pub fn add_to_graph(
                 affixes,
                 delimiter,
             } = seq;
-            let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
-            let mut open_tags = String::new();
-            let mut close_tags = String::new();
-            fmt.stack_preorder(&mut open_tags, &stack);
-            fmt.stack_postorder(&mut close_tags, &stack);
             let mkedge = |s: &str| {
                 RefIR::Edge(if s.len() > 0 {
                     Some(db.edge(EdgeData::Output(
@@ -192,26 +222,19 @@ pub fn add_to_graph(
                 })
             };
             let delim = &mkedge(&*delimiter);
-            let open_tags = &mkedge(&*open_tags);
-            let close_tags = &mkedge(&*close_tags);
-            let pre = &mkedge(&*affixes.prefix);
-            let suf = &mkedge(&*affixes.suffix);
-
-            spot = add_to_graph(db, fmt, nfa, pre, spot);
-            spot = add_to_graph(db, fmt, nfa, open_tags, spot);
-            let mut seen = false;
-            for x in contents {
-                if x != &RefIR::Edge(None) {
-                    if seen {
-                        spot = add_to_graph(db, fmt, nfa, delim, spot);
+            graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
+                let mut seen = false;
+                for x in contents {
+                    if x != &RefIR::Edge(None) {
+                        if seen {
+                            spot = add_to_graph(db, fmt, nfa, delim, spot);
+                        }
+                        seen = true;
                     }
-                    seen = true;
+                    spot = add_to_graph(db, fmt, nfa, x, spot);
                 }
-                spot = add_to_graph(db, fmt, nfa, x, spot);
-            }
-            spot = add_to_graph(db, fmt, nfa, close_tags, spot);
-            spot = add_to_graph(db, fmt, nfa, suf, spot);
-            spot
+                spot
+            })
         }
         RefIR::Names(names_nfa, boxed_ir) => {
             // We're going to graft the names_nfa onto our own by translating all the node_ids, and
