@@ -297,14 +297,15 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         fmt.seq(build.into_iter())
     }
 
-    pub(crate) fn render_names(
+    /// without the <name /> formatting and affixes applied
+    pub(crate) fn names_to_builds(
         &self,
         names_slice: &[Name],
         position: Position,
         locale: &csl::locale::Locale,
         et_al: &Option<NameEtAl>,
-    ) -> O::Build {
-        let fmt = self.fmt;
+    ) -> Vec<O::Build> {
+        let fmt = self.fmt.clone();
         let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice);
 
@@ -314,73 +315,83 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 _ => acc,
             });
             // This isn't sort-mode, you can render NameForm::Count as text.
-            return fmt.affixed_text(
-                format!("{}", count),
-                self.name_el.formatting,
-                &self.name_el.affixes,
-            );
+            return vec![fmt.text_node(format!("{}", count), None)];
         }
 
-        let st = name_tokens.iter().map(|n| match n {
-            NameToken::Name(Name::Person(ref pn)) => {
-                let ret = self.render_person_name(pn, seen_one);
-                seen_one = true;
-                ret
-            }
-            NameToken::Name(Name::Literal { ref literal }) => {
-                seen_one = true;
-                fmt.plain(literal.as_str())
-            }
-            NameToken::Delimiter => {
-                if let Some(delim) = &self.name_el.delimiter {
-                    fmt.plain(&delim.0)
-                } else {
-                    fmt.plain(", ")
+        name_tokens
+            .iter()
+            .map(|n| match n {
+                NameToken::Name(Name::Person(ref pn)) => {
+                    let ret = self.render_person_name(pn, seen_one);
+                    seen_one = true;
+                    ret
                 }
-            }
-            NameToken::EtAl => {
-                use csl::terms::*;
-                let mut term = MiscTerm::EtAl;
-                let mut formatting = None;
-                if let Some(ref etal_element) = et_al {
-                    if etal_element.term == "and others" {
-                        term = MiscTerm::AndOthers;
+                NameToken::Name(Name::Literal { ref literal }) => {
+                    seen_one = true;
+                    fmt.plain(literal.as_str())
+                }
+                NameToken::Delimiter => {
+                    if let Some(delim) = &self.name_el.delimiter {
+                        fmt.plain(&delim.0)
+                    } else {
+                        fmt.plain(", ")
                     }
-                    formatting = etal_element.formatting;
                 }
-                let text = locale
-                    .get_text_term(
-                        TextTermSelector::Simple(SimpleTermSelector::Misc(
-                            term,
-                            TermFormExtended::Long,
-                        )),
-                        false,
-                    )
-                    .unwrap_or("et al");
-                fmt.text_node(text.to_string(), formatting)
-            }
-            NameToken::Ellipsis => fmt.plain("…"),
-            NameToken::Space => fmt.plain(" "),
-            NameToken::And => {
-                use csl::terms::*;
-                let select = |form: TermFormExtended| {
-                    TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
-                };
-                // If an And token shows up, we already know self.name_el.and is Some.
-                let form = match self.name_el.and {
-                    Some(NameAnd::Symbol) => locale
-                        .get_text_term(select(TermFormExtended::Symbol), false)
-                        .unwrap_or("&"),
-                    _ => locale
-                        .get_text_term(select(TermFormExtended::Long), false)
-                        .unwrap_or("and"),
-                };
-                fmt.plain(form)
-            }
-        });
+                NameToken::EtAl => {
+                    use csl::terms::*;
+                    let mut term = MiscTerm::EtAl;
+                    let mut formatting = None;
+                    if let Some(ref etal_element) = et_al {
+                        if etal_element.term == "and others" {
+                            term = MiscTerm::AndOthers;
+                        }
+                        formatting = etal_element.formatting;
+                    }
+                    let text = locale
+                        .get_text_term(
+                            TextTermSelector::Simple(SimpleTermSelector::Misc(
+                                term,
+                                TermFormExtended::Long,
+                            )),
+                            false,
+                        )
+                        .unwrap_or("et al");
+                    fmt.text_node(text.to_string(), formatting)
+                }
+                NameToken::Ellipsis => fmt.plain("…"),
+                NameToken::Space => fmt.plain(" "),
+                NameToken::And => {
+                    use csl::terms::*;
+                    let select = |form: TermFormExtended| {
+                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
+                    };
+                    // If an And token shows up, we already know self.name_el.and is Some.
+                    let form = match self.name_el.and {
+                        Some(NameAnd::Symbol) => locale
+                            .get_text_term(select(TermFormExtended::Symbol), false)
+                            .unwrap_or("&"),
+                        _ => locale
+                            .get_text_term(select(TermFormExtended::Long), false)
+                            .unwrap_or("and"),
+                    };
+                    fmt.plain(form)
+                }
+            })
+            .collect()
+    }
+
+    pub(crate) fn render_names(
+        &self,
+        names_slice: &[Name],
+        position: Position,
+        locale: &csl::locale::Locale,
+        et_al: &Option<NameEtAl>,
+    ) -> O::Build {
+        let fmt = self.fmt;
+        let st = self.names_to_builds(names_slice, position, locale, et_al);
 
         fmt.affixed(
-            fmt.with_format(fmt.seq(st), self.name_el.formatting),
+            fmt.with_format(fmt.seq(st.into_iter()), self.name_el.formatting),
             &self.name_el.affixes,
         )
     }
@@ -550,20 +561,47 @@ where
             fmt,
         };
 
-        let rendered: Vec<_> = self
+        let irs: Vec<_> = self
             .variables
             .iter()
             // TODO: &[editor, translator] => &[editor], and use editortranslator on
             // the label
             .filter_map(|&var| ctx.get_name(var))
-            .map(|val| runner.render_names(val, position, locale, &self.et_al))
+            .filter_map(|val| {
+                let iter = runner
+                    .names_to_builds(val, position, locale, &self.et_al)
+                    .into_iter()
+                    .filter(|x| !fmt.is_empty(&x))
+                    .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
+                let seq = IrSeq {
+                    contents: iter.collect(),
+                    formatting: runner.name_el.formatting,
+                    affixes: runner.name_el.affixes.clone(),
+                    delimiter: Atom::from(""),
+                };
+                if seq.contents.is_empty() {
+                    None
+                } else {
+                    Some(IR::Seq(seq))
+                }
+            })
             .collect();
-        if rendered.is_empty() {
+
+        if irs.is_empty() {
             return (IR::Rendered(None), GroupVars::OnlyEmpty);
         }
-        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
-        let content = Some(fmt.affixed(fmt.group(rendered, delim, self.formatting), &self.affixes));
-        let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content.map(CiteEdgeData::Output)), gv)
+        (
+            IR::Seq(IrSeq {
+                contents: irs,
+                formatting: self.formatting,
+                affixes: self.affixes.clone(),
+                delimiter: self
+                    .delimiter
+                    .as_ref()
+                    .map(|d| d.0.clone())
+                    .unwrap_or_else(|| Atom::from("")),
+            }),
+            GroupVars::DidRender,
+        )
     }
 }

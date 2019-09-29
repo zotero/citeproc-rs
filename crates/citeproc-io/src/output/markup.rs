@@ -522,6 +522,11 @@ impl OutputFormat for Markup {
         }
     }
 
+    #[inline]
+    fn is_empty(&self, a: &Self::Build) -> bool {
+        a.is_empty()
+    }
+
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         let null = FlipFlopState::default();
         self.output_with_state(intermediate, null)

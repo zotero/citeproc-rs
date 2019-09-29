@@ -349,10 +349,12 @@ impl IrSeq<Markup> {
             ir.append_edges(&mut sub, fmt, sub_formatting);
             if sub.len() > 0 {
                 if seen {
-                    edges.push(EdgeData::Output(fmt.output_in_context(
-                        fmt.plain(self.delimiter.as_ref()),
-                        sub_formatting,
-                    )));
+                    if !self.delimiter.is_empty() {
+                        edges.push(EdgeData::Output(fmt.output_in_context(
+                            fmt.plain(self.delimiter.as_ref()),
+                            sub_formatting,
+                        )));
+                    }
                 } else {
                     seen = true;
                 }

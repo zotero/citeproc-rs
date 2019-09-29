@@ -23,7 +23,7 @@ impl Disambiguation<Markup> for Names {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
-        _stack: Formatting,
+        stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let style = ctx.style;
@@ -40,38 +40,62 @@ impl Disambiguation<Markup> for Names {
 
         let mut any = false;
         let mut nfa = Nfa::new();
-        let mut builds = Vec::new();
+        let mut irs = Vec::new();
         for var in &self.variables {
             if let Some(vec_of_names) = ctx.reference.name.get(var) {
                 any = true;
-                builds.push(runner.render_names(
-                    vec_of_names,
-                    ctx.position,
-                    ctx.locale,
-                    &self.et_al,
-                ));
+                let iter = runner
+                    .names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al)
+                    .into_iter()
+                    .filter(|x| !fmt.is_empty(&x))
+                    .map(|x| fmt.output_in_context(x, stack))
+                    .map(|x| db.edge(EdgeData::Output(x)))
+                    .map(|e| RefIR::Edge(Some(e)));
+                let seq = RefIrSeq {
+                    contents: iter.collect(),
+                    formatting: runner.name_el.formatting,
+                    affixes: runner.name_el.affixes.clone(),
+                    // delimiter is built-in
+                    delimiter: Atom::from(""),
+                };
+                if !seq.contents.is_empty() {
+                    irs.push(RefIR::Seq(seq));
+                }
             }
         }
 
-        if !any {
+        if irs.is_empty() {
             // null object pattern
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
             nfa.accepting.insert(start);
             // TODO: substitute
             // TODO: suppress once substituted
-            return (
-                RefIR::Names(nfa, Box::new(RefIR::Edge(None))),
-                GroupVars::OnlyEmpty,
-            );
+            return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
 
-        let delim = self.delimiter.as_ref().map(|d| d.0.as_ref()).unwrap_or("");
-        let content = Some(fmt.affixed(fmt.group(builds, delim, self.formatting), &self.affixes))
-            .map(|build| fmt.output_in_context(build, _stack))
-            .map(|out| db.edge(EdgeData::Output(out)));
+        let seq = RefIR::Seq(RefIrSeq {
+            contents: irs,
+            formatting: self.formatting,
+            affixes: self.affixes.clone(),
+            delimiter: self
+                .delimiter
+                .as_ref()
+                .map(|d| d.0.clone())
+                .unwrap_or_else(|| Atom::from("")),
+        });
+
+        use super::add_to_graph;
+
+        let mut spot = nfa.graph.add_node(());
+        nfa.start.insert(spot);
+        spot = add_to_graph(db, fmt, &mut nfa, &seq, spot);
+        nfa.accepting.insert(spot);
+
+        // TODO: rerun with more names etc
+
         (
-            RefIR::Names(nfa, Box::new(RefIR::Edge(content))),
+            RefIR::Names(nfa, Box::new(RefIR::Edge(None))),
             GroupVars::DidRender,
         )
     }

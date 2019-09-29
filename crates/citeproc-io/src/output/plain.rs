@@ -86,6 +86,11 @@ impl OutputFormat for PlainText {
     }
 
     #[inline]
+    fn is_empty(&self, a: &Self::Build) -> bool {
+        a.is_empty()
+    }
+
+    #[inline]
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         intermediate
     }

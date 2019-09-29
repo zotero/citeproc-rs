@@ -595,6 +595,7 @@ pub enum InstitutionUseFirst {
 #[derive(Debug, Eq, Clone, PartialEq, Default, Hash)]
 pub struct Name {
     pub and: Option<NameAnd>,
+    /// Between individual names for the same variable
     pub delimiter: Option<Delimiter>,
     pub delimiter_precedes_et_al: Option<DelimiterPrecedes>,
     pub delimiter_precedes_last: Option<DelimiterPrecedes>,
@@ -626,7 +627,7 @@ impl Name {
     pub fn root_default() -> Self {
         Name {
             and: None,
-            delimiter: Some(Delimiter(",".into())),
+            delimiter: Some(Delimiter(", ".into())),
             delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
             delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
             et_al_min: None,

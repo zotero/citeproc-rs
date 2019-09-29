@@ -38,6 +38,9 @@ let initialStyle = `<style class="note">
         </else-if>
         <else>
           <group delimiter=", ">
+            <names variable="author">
+                <name initialize="true" initialize-with="." />
+            </names>
             <group delimiter=" ">
               <text variable="title" font-style="italic" />
               <text variable="year-suffix" />
@@ -54,7 +57,10 @@ const initialReferences: Reference[] = [
     {
         id: 'citekey',
         type: 'book',
-        author: [{ given: "Kurt", family: "Camembert" }],
+        author: [
+            { given: "Kurt", family: "Camembert" },
+            { given: "Andrew", family: "Blart" }
+        ],
         title: "Where The Vile Things Are",
         issued: { "raw": "1999-08-09" },
     },
