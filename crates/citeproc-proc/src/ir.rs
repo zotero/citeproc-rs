@@ -7,9 +7,7 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{
-    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
-};
+use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
 use csl::Atom;
 
 use std::sync::Arc;
@@ -146,6 +144,8 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     }
 }
 
+use crate::disamb::names::NamesIR;
+
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IR<O: OutputFormat = Markup> {
@@ -153,7 +153,7 @@ pub enum IR<O: OutputFormat = Markup> {
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
     // the current render
-    Names(Arc<NamesEl>, O::Build),
+    Names(NamesIR<O::Build>, Box<IR<O>>),
 
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
@@ -176,6 +176,8 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
+use std::mem;
+
 impl IR<Markup> {
     pub fn disambiguate<'c>(
         &mut self,
@@ -183,16 +185,21 @@ impl IR<Markup> {
         state: &mut IrState,
         ctx: &CiteContext<'c, Markup>,
     ) -> bool {
+        info!(
+            "attempting to disambiguate {:?} with {:?}",
+            ctx.cite_id, ctx.disamb_pass
+        );
         let mut ret = false;
         *self = match self {
             IR::Rendered(_) => {
                 return ret;
             }
-            IR::Names(ref el, ref _x) => {
+            IR::Names(ref mut names_ir, ref _x) => {
                 // TODO: re-eval again until names are exhausted
                 // i.e. return true until then
-                let (new_ir, _) = el.intermediate(db, state, ctx);
-                new_ir
+                names_ir.crank(ctx.disamb_pass);
+                let (new_ir, _) = names_ir.intermediate(db, state, ctx);
+                IR::Names(mem::replace(names_ir, NamesIR::default()), Box::new(new_ir))
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
@@ -233,7 +240,7 @@ impl IR<Markup> {
         match self {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Names(_, ref x) => Some(x.clone()),
+            IR::Names(_, ref x) => (*x).flatten(fmt),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
@@ -258,9 +265,7 @@ impl IR<Markup> {
             }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
-            IR::Names(_names, r) => edges.push(EdgeData::Output(
-                fmt.output_in_context(r.clone(), formatting),
-            )),
+            IR::Names(_names_ir, r) => r.append_edges(edges, fmt, formatting),
         }
         ()
     }

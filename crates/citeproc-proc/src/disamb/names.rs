@@ -235,7 +235,7 @@ impl DisambNameData {
 /// The GivenNameDisambiguationRule variants are poorly worded. "-with-initials" doesn't *add*
 /// steps, it removes steps / limits the expansion. This is a bit clearer to work with, and mixes
 /// in the information about whether a name is primary or not.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SingleNameDisambMethod {
     None,
     AddInitials,
@@ -264,7 +264,7 @@ impl SingleNameDisambMethod {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct SingleNameDisambIter {
     /// If this is None, the iterator won't produce anything. Essentially the null object
     /// pattern.
@@ -276,7 +276,7 @@ pub struct SingleNameDisambIter {
     state: NameDisambState,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NameDisambState {
     Original,
     AddedInitials,
@@ -504,31 +504,41 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
     Arc::new(results)
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NamesIR<B> {
     pub names_el: Names,
     pub names: Vec<NameIR<B>>,
 }
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NameIR<B> {
     pub variable: NameVariable,
     pub bump_name_count: u16,
     pub disamb_names: Vec<DisambNameRatchet<B>>,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DisambNameRatchet<B> {
     Literal(B),
     Person(PersonDisambNameRatchet),
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonDisambNameRatchet {
     pub id: DisambName,
     pub data: DisambNameData,
     pub iter: SingleNameDisambIter,
 }
 impl PersonDisambNameRatchet {
-    fn new(db: &impl IrDatabase, data: DisambNameData) -> Self {
+    pub fn new(db: &impl IrDatabase, data: DisambNameData) -> Self {
         let style = db.style();
         let rule = style.citation.givenname_disambiguation_rule;
         let method = SingleNameDisambMethod::from_rule(rule, data.primary);
         let iter = SingleNameDisambIter::new(method, &data.el);
         let id = db.disamb_name(data.clone());
         PersonDisambNameRatchet { id, iter, data }
+    }
+}
+
+impl<B> NamesIR<B> {
+    pub fn crank(&mut self, _pass: Option<DisambPass>) {
+        // TODO: apply disambiguations
     }
 }

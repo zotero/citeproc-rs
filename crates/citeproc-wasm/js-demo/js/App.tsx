@@ -14,7 +14,7 @@ let initialStyle = `<style class="note">
       <term name="ibid">ibid</term>
     </terms>
   </locale>
-  <citation et-al-min="3" disambiguate-add-year-suffix="true">
+  <citation et-al-min="1" et-al-use-first="1" disambiguate-add-names="true">
     <layout delimiter="; " suffix=".">
       <choose>
         <if position="ibid-with-locator">
@@ -67,6 +67,10 @@ const initialReferences: Reference[] = [
     {
         id: 'citekey2',
         type: 'book',
+        author: [
+            { given: "Kurt", family: "Camembert" },
+            { given: "Ariadne", family: "Blart" }
+        ],
         title: "Where The Vile Things Are",
     },
     {

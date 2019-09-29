@@ -51,7 +51,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        _db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
@@ -92,7 +92,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        _db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>

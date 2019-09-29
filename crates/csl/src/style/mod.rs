@@ -482,7 +482,7 @@ pub struct Else(pub Vec<Element>);
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct Names {
     // inheritable.
     pub delimiter: Option<Delimiter>,

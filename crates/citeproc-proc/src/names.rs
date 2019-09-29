@@ -36,6 +36,7 @@ where
     where
         O: OutputFormat,
     {
+        let fmt = &ctx.format;
         let name_el = ctx
             .name_citation
             .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
@@ -58,14 +59,14 @@ where
                             value: pn,
                             primary,
                         };
-                        // let ratchet = PersonDisambNameRatchet::new(unimplemented!(), data);
-                        DisambNameRatchet::Person(unimplemented!())
+                        let ratchet = PersonDisambNameRatchet::new(db, data);
+                        DisambNameRatchet::Person(ratchet)
                     }
                     Name::Literal { literal } => {
                         if primary {
                             primary = false;
                         }
-                        DisambNameRatchet::Literal(literal)
+                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
                     }
                 });
                 NameIR {
@@ -74,11 +75,16 @@ where
                     disamb_names: ratchets.collect(),
                 }
             });
+
         let names_ir = NamesIR {
             names_el: self.clone(),
             names: names.collect(),
         };
-        let fmt = &ctx.format;
+        if names_ir.names.iter().all(|nir| nir.disamb_names.is_empty()) {
+            // TODO: substitute
+            return (IR::Rendered(None), GroupVars::OnlyEmpty);
+        }
+
         let style = ctx.style;
         let locale = ctx.locale;
         let position = ctx.position.0;
@@ -125,17 +131,36 @@ where
             return (IR::Rendered(None), GroupVars::OnlyEmpty);
         }
         (
-            IR::Seq(IrSeq {
-                contents: irs,
-                formatting: self.formatting,
-                affixes: self.affixes.clone(),
-                delimiter: self
-                    .delimiter
-                    .as_ref()
-                    .map(|d| d.0.clone())
-                    .unwrap_or_else(|| Atom::from("")),
-            }),
+            IR::Names(
+                names_ir,
+                Box::new(IR::Seq(IrSeq {
+                    contents: irs,
+                    formatting: self.formatting,
+                    affixes: self.affixes.clone(),
+                    delimiter: self
+                        .delimiter
+                        .as_ref()
+                        .map(|d| d.0.clone())
+                        .unwrap_or_else(|| Atom::from("")),
+                })),
+            ),
             GroupVars::DidRender,
+        )
+    }
+}
+
+impl<'c, O: OutputFormat> Proc<'c, O> for NamesIR<O::Build> {
+    fn intermediate(
+        &self,
+        _db: &impl IrDatabase,
+        _state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O> {
+        (
+            IR::Rendered(Some(CiteEdgeData::<O>::Output(
+                ctx.format.plain("replaced names block"),
+            ))),
+            GroupVars::NoneSeen,
         )
     }
 }

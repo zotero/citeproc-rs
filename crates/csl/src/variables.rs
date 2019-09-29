@@ -357,6 +357,12 @@ pub enum NameVariable {
     Dummy,
 }
 
+impl Default for NameVariable {
+    fn default() -> Self {
+        NameVariable::Dummy
+    }
+}
+
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DateVariable {
