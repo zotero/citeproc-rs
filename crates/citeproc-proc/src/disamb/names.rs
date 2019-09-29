@@ -1,4 +1,4 @@
-use super::finite_automata::{Dfa, Nfa};
+use super::finite_automata::{Dfa, Nfa, NfaEdge};
 use super::mult_identity;
 use crate::names::OneNameVar;
 use crate::prelude::*;
@@ -358,6 +358,41 @@ fn test_name_disamb_iter() {
     );
 }
 
+/// Original + expansions
+fn add_expanded_name_to_graph(
+    db: &impl IrDatabase,
+    nfa: &mut Nfa,
+    mut dn: DisambNameData,
+    spot: NodeIndex,
+) -> NodeIndex {
+    let style = db.style();
+    let rule = style.citation.givenname_disambiguation_rule;
+    let fmt = &db.get_formatter();
+    let ir = dn.single_name_ref_ir(
+        db,
+        fmt,
+        &style,
+        /* TODO: store format stck with DND */ Formatting::default(),
+    );
+    let next_spot = nfa.graph.add_node(());
+    let last = add_to_graph(db, fmt, nfa, &ir, spot);
+    nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
+    for pass in dn.disamb_iter(rule) {
+        dn.apply_pass(pass);
+        let first = nfa.graph.add_node(());
+        nfa.start.insert(first);
+        let ir = dn.single_name_ref_ir(
+            db,
+            fmt,
+            &style,
+            /* TODO: store format stck with DND */ Formatting::default(),
+        );
+        let last = add_to_graph(db, fmt, nfa, &ir, spot);
+        nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
+    }
+    next_spot
+}
+
 pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<DisambName, IR<Markup>>> {
     let dns = db.all_person_names();
     let style = db.style();
@@ -371,33 +406,12 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
 
     // preamble: build all the names
     for dn in dns.iter() {
-        let mut dn: DisambNameData = (*dn.lookup(db)).clone();
+        let dn: DisambNameData = (*dn.lookup(db)).clone();
         let mut nfa = Nfa::new();
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
-        let ir = dn.single_name_ref_ir(
-            db,
-            fmt,
-            &style,
-            /* TODO: store format stck with DND */ Formatting::default(),
-        );
-        debug!("ir = {:?}", ir.debug(db));
-        let last = add_to_graph(db, fmt, &mut nfa, &ir, first);
+        let last = add_expanded_name_to_graph(db, &mut nfa, dn, first);
         nfa.accepting.insert(last);
-        for pass in dn.disamb_iter(rule) {
-            dn.apply_pass(pass);
-            let first = nfa.graph.add_node(());
-            nfa.start.insert(first);
-            let ir = dn.single_name_ref_ir(
-                db,
-                fmt,
-                &style,
-                /* TODO: store format stck with DND */ Formatting::default(),
-            );
-            debug!("ir = {:#?}", ir);
-            let last = add_to_graph(db, fmt, &mut nfa, &ir, first);
-            nfa.accepting.insert(last);
-        }
         let dfa = nfa.brzozowski_minimise();
         debug! {"{}", dfa.debug_graph(db)};
         dfas.push(dfa);
