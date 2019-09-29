@@ -214,3 +214,34 @@ pub fn add_to_graph(
         RefIR::Names(..) => unimplemented!(),
     }
 }
+
+#[test]
+fn test_determinism() {
+    let _ = env_logger::init();
+    use crate::test::MockProcessor;
+    let mut db = MockProcessor::new();
+    let fmt = db.get_formatter();
+    let aa = db.edge(EdgeData::Output("aa".into()));
+    let bb = db.edge(EdgeData::Output("bb".into()));
+
+    let make_dfa = || {
+        let mut nfa = Nfa::new();
+        for ir in &[RefIR::Edge(Some(aa)), RefIR::Edge(Some(bb))] {
+            let first = nfa.graph.add_node(());
+            nfa.start.insert(first);
+            let last = add_to_graph(&db, &fmt, &mut nfa, ir, first);
+            nfa.accepting.insert(last);
+        }
+        nfa.brzozowski_minimise()
+    };
+
+    let mut count = 0;
+    for _ in 0..100 {
+        let dfa = make_dfa();
+        debug!("{}", dfa.debug_graph(&db));
+        if dfa.accepts_data(&db, &[aa.lookup(&db)]) {
+            count += 1;
+        }
+    }
+    assert_eq!(count, 100);
+}
