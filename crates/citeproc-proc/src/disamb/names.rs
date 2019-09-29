@@ -34,8 +34,10 @@ impl Disambiguation<Markup> for Names {
         let name_el = db
             .name_citation()
             .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
-        let runner = OneNameVar {
+
+        let mut runner = OneNameVar {
             name_el: &name_el,
+            bump_name_count: 0,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
             fmt,
@@ -54,50 +56,81 @@ impl Disambiguation<Markup> for Names {
             &self.formatting,
             &self.affixes,
             start,
-            |nfa, mut per_var_spot| {
+            |nfa, start_var| {
+                let mut did_add_any_for_var = false;
+                let last_per_var = nfa.graph.add_node(());
                 for vec_of_names in self
                     .variables
                     .iter()
                     .filter_map(|var| ctx.reference.name.get(var))
                 {
                     any = true;
-                    let ntbs =
+                    fn ntb_len(v: &[NameTokenBuilt<'_, Markup>]) -> usize {
+                        v.iter()
+                            .filter(|x| match x {
+                                NameTokenBuilt::Literal(_) | NameTokenBuilt::PN(..) => true,
+                                _ => false,
+                            })
+                            .count()
+                    }
+                    let mut ntbs =
                         runner.names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al);
-                    per_var_spot = graph_with_stack(
-                        db,
-                        fmt,
-                        nfa,
-                        &runner.name_el.formatting,
-                        &runner.name_el.affixes,
-                        per_var_spot,
-                        |nfa, mut spot| {
-                            for ntb in ntbs {
-                                match ntb {
-                                    NameTokenBuilt::Built(b) => {
-                                        if !fmt.is_empty(&b) {
-                                            let out = fmt.output_in_context(b, stack);
-                                            let e = db.edge(EdgeData::Output(out));
-                                            let ir = RefIR::Edge(Some(e));
-                                            spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                    let mut max_counted_tokens = 0;
+                    let mut counted_tokens = ntb_len(&ntbs);
+
+                    while counted_tokens > max_counted_tokens {
+                        let one_run = graph_with_stack(
+                            db,
+                            fmt,
+                            nfa,
+                            &runner.name_el.formatting,
+                            &runner.name_el.affixes,
+                            start_var,
+                            |nfa, mut spot| {
+                                for ntb in ntbs {
+                                    match ntb {
+                                        NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => {
+                                            if !fmt.is_empty(&b) {
+                                                let out = fmt.output_in_context(b, stack);
+                                                let e = db.edge(EdgeData::Output(out));
+                                                let ir = RefIR::Edge(Some(e));
+                                                spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                                did_add_any_for_var = true;
+                                            }
+                                        }
+                                        NameTokenBuilt::PN(pn, seen_one) => {
+                                            let dn = DisambNameData {
+                                                ref_id: ctx.reference.id.clone(),
+                                                var: NameVariable::Dummy,
+                                                el: runner.name_el.clone(),
+                                                value: pn.clone(),
+                                                primary: !seen_one,
+                                            };
+                                            spot = add_expanded_name_to_graph(db, nfa, dn, spot);
+                                            did_add_any_for_var = true;
                                         }
                                     }
-                                    NameTokenBuilt::PN(pn, seen_one) => {
-                                        let dn = DisambNameData {
-                                            ref_id: ctx.reference.id.clone(),
-                                            var: NameVariable::Dummy,
-                                            el: runner.name_el.clone(),
-                                            value: pn.clone(),
-                                            primary: !seen_one,
-                                        };
-                                        spot = add_expanded_name_to_graph(db, nfa, dn, spot);
-                                    }
                                 }
-                            }
-                            spot
-                        },
-                    );
+                                spot
+                            },
+                        );
+                        nfa.graph.add_edge(one_run, last_per_var, NfaEdge::Epsilon);
+                        runner.bump_name_count += 1;
+                        ntbs = runner.names_to_builds(
+                            vec_of_names,
+                            ctx.position,
+                            ctx.locale,
+                            &self.et_al,
+                        );
+                        max_counted_tokens = counted_tokens;
+                        counted_tokens = ntb_len(&ntbs);
+                    }
                 }
-                per_var_spot
+                if did_add_any_for_var {
+                    last_per_var
+                } else {
+                    start_var
+                }
             },
         );
         nfa.accepting.insert(end);
@@ -107,8 +140,6 @@ impl Disambiguation<Markup> for Names {
             // TODO: suppress once substituted
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
-
-        // TODO: rerun with more names etc
 
         (
             RefIR::Names(nfa, Box::new(RefIR::Edge(None))),
@@ -155,6 +186,7 @@ impl DisambNameData {
                 let builder = OneNameVar {
                     fmt,
                     name_el: &self.el,
+                    bump_name_count: 0,
                     demote_non_dropping_particle: style.demote_non_dropping_particle,
                     initialize_with_hyphen: style.initialize_with_hyphen,
                 };
@@ -181,6 +213,7 @@ impl DisambNameData {
             let builder = OneNameVar {
                 fmt,
                 name_el: &self.el,
+                bump_name_count: 0,
                 demote_non_dropping_particle: style.demote_non_dropping_particle,
                 initialize_with_hyphen: style.initialize_with_hyphen,
             };

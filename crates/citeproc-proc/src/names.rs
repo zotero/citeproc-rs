@@ -133,6 +133,7 @@ enum NameToken<'a> {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct OneNameVar<'a, O: OutputFormat> {
     pub name_el: &'a NameEl,
+    pub bump_name_count: u16,
     // From Style
     pub demote_non_dropping_particle: csl::style::DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool,
@@ -162,11 +163,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     #[inline]
     fn ea_use_first(&self, pos: Position) -> usize {
         let first = self.name_el.et_al_use_first.unwrap_or(1);
-        if pos == Position::First {
+        let use_first = if pos == Position::First {
             first as usize
         } else {
             self.name_el.et_al_subsequent_use_first.unwrap_or(first) as usize
-        }
+        };
+        use_first + self.bump_name_count as usize
     }
 
     fn name_tokens<'s>(&self, position: Position, names_slice: &'s [Name]) -> Vec<NameToken<'s>> {
@@ -330,7 +332,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
                 NameToken::Name(Name::Literal { ref literal }) => {
                     seen_one = true;
-                    NameTokenBuilt::Built(fmt.plain(literal.as_str()))
+                    NameTokenBuilt::Literal(fmt.plain(literal.as_str()))
                 }
                 NameToken::Delimiter => {
                     NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
@@ -386,6 +388,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 pub enum NameTokenBuilt<'a, O: OutputFormat> {
     PN(&'a PersonName, /* seen_one */ bool),
     Built(O::Build),
+    /// So literals can be counted with PersonNames to check if any names were added during a
+    /// disamb round
+    Literal(O::Build),
 }
 
 use self::ord::{get_display_order, DisplayOrdering, NamePartToken};
@@ -547,6 +552,7 @@ where
 
         let runner = OneNameVar {
             name_el: &name_el,
+            bump_name_count: 0,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
             fmt,
@@ -563,7 +569,7 @@ where
                     .names_to_builds(val, position, locale, &self.et_al)
                     .into_iter()
                     .map(|ntb| match ntb {
-                        NameTokenBuilt::Built(b) => b,
+                        NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => b,
                         NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
                     })
                     .filter(|x| !fmt.is_empty(&x))
