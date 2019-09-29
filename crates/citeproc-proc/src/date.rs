@@ -107,17 +107,6 @@ where
     }
 }
 
-type DatePartAcc = (bool, bool, bool);
-
-fn dp_fold(mut a: DatePartAcc, form: DatePartForm) -> DatePartAcc {
-    match form {
-        DatePartForm::Year(..) => a.0 = true,
-        DatePartForm::Month(..) => a.1 = true,
-        DatePartForm::Day(..) => a.2 = true,
-    }
-    a
-}
-
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
     match part.form {
         DatePartForm::Day(_) => selector == DateParts::YearMonthDay,

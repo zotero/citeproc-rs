@@ -8,18 +8,15 @@
 extern crate serde_derive;
 
 use citeproc::prelude::*;
-use citeproc_io::{
-    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
-    Suppression,
-};
+use citeproc_io::{Cite, Cluster2, IntraNote, Reference};
 use csl::locale::Lang;
-use csl::terms::LocatorType;
+
 use directories::ProjectDirs;
-use lazy_static::lazy_static;
+
 use serde::{Deserialize, Deserializer};
-use std::mem;
+
 use std::path::PathBuf;
-use std::str::FromStr;
+
 use std::sync::Arc;
 
 pub mod humans;

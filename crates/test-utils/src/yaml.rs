@@ -6,7 +6,7 @@
 
 use super::humans::{CitationItem, CiteprocJsInstruction};
 use super::{Format, Mode, TestCase};
-use citeproc_io::{Cite, Cluster2, Reference};
+use citeproc_io::{Reference};
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]

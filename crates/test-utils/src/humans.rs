@@ -8,16 +8,12 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, Locators, NumericValue,
-    Reference, Suppression,
+    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression,
 };
-use csl::locale::Lang;
-use csl::terms::LocatorType;
-use directories::ProjectDirs;
+
 use lazy_static::lazy_static;
 use std::mem;
 use std::str::FromStr;
-use std::sync::Arc;
 
 /// Techincally reference IDs are allowed to be numbers.
 fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>

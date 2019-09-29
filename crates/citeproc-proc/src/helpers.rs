@@ -88,17 +88,6 @@ pub fn ref_sequence<'c>(
     }
 }
 
-pub fn to_bijective_base_26(int: u32) -> String {
-    let mut n = int;
-    let mut s = String::new();
-    while n > 0 {
-        n -= 1;
-        s.push(char::from((65 + 32 + (n % 26)) as u8));
-        n /= 26;
-    }
-    s
-}
-
 use fnv::FnvHashSet;
 pub fn fnv_set_with_cap<T: std::hash::Hash + std::cmp::Eq>(cap: usize) -> FnvHashSet<T> {
     FnvHashSet::with_capacity_and_hasher(cap, fnv::FnvBuildHasher::default())

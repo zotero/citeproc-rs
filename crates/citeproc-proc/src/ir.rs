@@ -177,13 +177,6 @@ pub enum IR<O: OutputFormat = Markup> {
 }
 
 impl IR<Markup> {
-    fn is_rendered(&self) -> bool {
-        match self {
-            IR::Rendered(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn disambiguate<'c>(
         &mut self,
         db: &impl IrDatabase,
