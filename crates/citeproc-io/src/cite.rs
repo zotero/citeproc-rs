@@ -5,7 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::output::OutputFormat;
-use super::{NumericValue};
+use super::NumericValue;
 use csl::terms::LocatorType;
 use csl::Atom;
 
@@ -70,7 +70,7 @@ pub struct Cite<O: OutputFormat> {
     pub suppression: Option<Suppression>,
 
     // TODO: Enforce len() == 1 in CSL mode
-    #[serde(default, flatten)]
+    #[serde(default, flatten, deserialize_with = "get_locators")]
     pub locators: Option<Locators>,
 }
 
