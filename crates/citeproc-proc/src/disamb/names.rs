@@ -466,7 +466,6 @@ pub fn disambiguated_person_names(
         let last = add_expanded_name_to_graph(db, &mut nfa, dn, first);
         nfa.accepting.insert(last);
         let dfa = nfa.brzozowski_minimise();
-        debug! {"{}", dfa.debug_graph(db)};
         dfas.push(dfa);
     }
     let is_ambiguous = |edges: &[EdgeData]| -> bool {
@@ -480,11 +479,8 @@ pub fn disambiguated_person_names(
                 break;
             }
         }
-        debug!("had edges: {:?}", &edges);
-        debug!("is it ambiguous: n = {}", n);
         n > 1
     };
-    // round 1:
     for &dn_id in dns.iter() {
         let mut dn: DisambNameData = dn_id.lookup(db);
         let mut ir = dn.single_name_ir(
@@ -540,6 +536,7 @@ impl PersonDisambNameRatchet {
         let rule = style.citation.givenname_disambiguation_rule;
         let method = SingleNameDisambMethod::from_rule(rule, data.primary);
         let iter = SingleNameDisambIter::new(method, &data.el);
+        // debug!("{} ratchet started with state {:?}", &data.ref_id, iter);
         PersonDisambNameRatchet { id, iter, data }
     }
 }
@@ -556,6 +553,7 @@ impl<B> NameIR<B> {
                     match at_index {
                         DisambNameRatchet::Person(ratchet) => {
                             if let Some(next) = ratchet.iter.next() {
+                                // debug!("{} ratchet clicked at index {}: {:?}, now in state {:?}", &ratchet.data.ref_id, self.gn_iter_index, next, ratchet.iter.state);
                                 ratchet.data.apply_pass(next);
                                 res = true;
                             } else {

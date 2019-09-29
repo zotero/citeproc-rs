@@ -39,9 +39,6 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
         .map(move |(var, value)| {
             let ratchets = value.into_iter().map(|value| match value {
                 Name::Person(pn) => {
-                    if primary {
-                        primary = false;
-                    }
                     let mut data = DisambNameData {
                         ref_id: refr.id.clone(),
                         var,
@@ -49,6 +46,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                         value: pn,
                         primary,
                     };
+                    if primary {
+                        primary = false;
+                    }
                     let id = db.disamb_name(data.clone());
                     let globally_disambiguated = db.disambiguated_person_names();
                     if let Some(my_data) = globally_disambiguated.get(&id) {
