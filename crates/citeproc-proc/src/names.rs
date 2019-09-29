@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use super::unicode::is_latin_cyrillic;
 use citeproc_io::utils::Intercalate;
-use citeproc_io::{Name, PersonName};
+use citeproc_io::{Name, PersonName, Reference};
 use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
@@ -20,6 +20,53 @@ mod initials;
 use self::initials::initialize;
 
 use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
+
+pub fn to_individual_name_irs<'a, O: OutputFormat>(
+    names: &'a Names,
+    db: &'a impl IrDatabase,
+    fmt: &'a O,
+    refr: &'a Reference,
+) -> impl Iterator<Item = NameIR<O::Build>> + 'a {
+    let name_el = db
+        .name_citation()
+        .merge(names.name.as_ref().unwrap_or(&NameEl::default()));
+
+    let mut primary = true;
+    names
+        .variables
+        .iter()
+        .filter_map(move |var| refr.name.get(var).map(|val| (*var, val.clone())))
+        .map(move |(var, value)| {
+            let ratchets = value.into_iter().map(|value| match value {
+                Name::Person(pn) => {
+                    if primary {
+                        primary = false;
+                    }
+                    let data = DisambNameData {
+                        ref_id: refr.id.clone(),
+                        var,
+                        el: name_el.clone(),
+                        value: pn,
+                        primary,
+                    };
+                    let ratchet = PersonDisambNameRatchet::new(db, data);
+                    DisambNameRatchet::Person(ratchet)
+                }
+                Name::Literal { literal } => {
+                    if primary {
+                        primary = false;
+                    }
+                    DisambNameRatchet::Literal(fmt.text_node(literal, None))
+                }
+            });
+            NameIR {
+                names_el: names.clone(),
+                variable: var,
+                bump_name_count: 0,
+                disamb_names: ratchets.collect(),
+            }
+        })
+}
 
 impl<'c, O> Proc<'c, O> for Names
 where
@@ -35,50 +82,13 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let name_el = ctx
-            .name_citation
-            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
-
-        let mut primary = true;
-        let names: Vec<IR<O>> = self
-            .variables
-            .iter()
-            .filter_map(|var| ctx.reference.name.get(var).map(|val| (*var, val.clone())))
-            .map(|(var, value)| {
-                let ratchets = value.into_iter().map(|value| match value {
-                    Name::Person(pn) => {
-                        if primary {
-                            primary = false;
-                        }
-                        let data = DisambNameData {
-                            ref_id: ctx.reference.id.clone(),
-                            var,
-                            el: name_el.clone(),
-                            value: pn,
-                            primary,
-                        };
-                        let ratchet = PersonDisambNameRatchet::new(db, data);
-                        DisambNameRatchet::Person(ratchet)
-                    }
-                    Name::Literal { literal } => {
-                        if primary {
-                            primary = false;
-                        }
-                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
-                    }
-                });
-                let nir = NameIR {
-                    names_el: self.clone(),
-                    variable: var,
-                    bump_name_count: 0,
-                    disamb_names: ratchets.collect(),
-                };
+        let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference)
+            .map(|nir| {
                 let (ir, _gv) = nir.intermediate(db, state, ctx);
                 IR::Names(nir, Box::new(ir))
             })
             .collect();
-
-        if names.iter().all(|ir| match ir {
+        if name_irs.iter().all(|ir| match ir {
             IR::Names(nir, _) => nir.disamb_names.is_empty(),
             _ => true,
         }) {
@@ -91,7 +101,7 @@ where
 
         (
             IR::Seq(IrSeq {
-                contents: names,
+                contents: name_irs,
                 formatting: self.formatting,
                 affixes: self.affixes.clone(),
                 delimiter: self
@@ -108,13 +118,14 @@ where
 impl<'c, O: OutputFormat> Proc<'c, O> for NameIR<O::Build> {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        _db: &impl IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O> {
         let style = ctx.style;
         let locale = ctx.locale;
         let fmt = &ctx.format;
+        let position = ctx.position.0;
 
         let runner = OneNameVar {
             // replace this
@@ -125,42 +136,29 @@ impl<'c, O: OutputFormat> Proc<'c, O> for NameIR<O::Build> {
             fmt,
         };
 
-        // let val = &self.disamb_names;
-
-        // let irs: Vec<_> = self
-        //     .variables
-        //     .iter()
-        //     .filter_map(|&var| ctx.get_name(var))
-        //     .filter_map(|val| {
-        //         let iter = runner
-        //             .names_to_builds(val, position, locale, &self.et_al)
-        //             .into_iter()
-        //             .map(|ntb| match ntb {
-        //                 NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => b,
-        //                 NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
-        //             })
-        //             .filter(|x| !fmt.is_empty(&x))
-        //             .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
-        //         let seq = IrSeq {
-        //             contents: iter.collect(),
-        //             formatting: runner.name_el.formatting,
-        //             affixes: runner.name_el.affixes.clone(),
-        //             delimiter: Atom::from(""),
-        //         };
-        //         if seq.contents.is_empty() {
-        //             None
-        //         } else {
-        //             Some(IR::Seq(seq))
-        //         }
-        //     })
-        //     .collect();
-
-        (
-            IR::Rendered(Some(CiteEdgeData::<O>::Output(
-                ctx.format.plain("replaced name"),
-            ))),
-            GroupVars::NoneSeen,
-        )
+        let iter = runner
+            .names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al)
+            .into_iter()
+            .map(|ntb| match ntb {
+                NameTokenBuilt::Built(b) => b,
+                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => b.clone(),
+                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
+                    runner.render_person_name(&pn.data.value, !pn.data.primary)
+                }
+            })
+            .filter(|x| !fmt.is_empty(&x))
+            .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
+        let seq = IrSeq {
+            contents: iter.collect(),
+            formatting: runner.name_el.formatting,
+            affixes: runner.name_el.affixes.clone(),
+            delimiter: Atom::from(""),
+        };
+        if seq.contents.is_empty() {
+            (IR::Rendered(None), GroupVars::OnlyEmpty)
+        } else {
+            (IR::Seq(seq), GroupVars::DidRender)
+        }
     }
 }
 
@@ -266,8 +264,8 @@ fn should_delimit_after<O: OutputFormat>(
 }
 
 #[derive(Eq, PartialEq, Clone)]
-enum NameToken<'a> {
-    Name(&'a Name),
+enum NameToken<'a, B> {
+    Name(&'a DisambNameRatchet<B>),
     EtAl,
     Ellipsis,
     Delimiter,
@@ -316,7 +314,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         use_first + self.bump_name_count as usize
     }
 
-    fn name_tokens<'s>(&self, position: Position, names_slice: &'s [Name]) -> Vec<NameToken<'s>> {
+    fn name_tokens<'s>(
+        &self,
+        position: Position,
+        names_slice: &'s [DisambNameRatchet<O::Build>],
+    ) -> Vec<NameToken<'s, O::Build>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
@@ -447,11 +449,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     /// without the <name /> formatting and affixes applied
     pub(crate) fn names_to_builds<'b: 'a>(
         &self,
-        names_slice: &'b [Name],
+        names_slice: &'b [DisambNameRatchet<O::Build>],
         position: Position,
         locale: &csl::locale::Locale,
         et_al: &Option<NameEtAl>,
-    ) -> Vec<NameTokenBuilt<'b, O>> {
+    ) -> Vec<NameTokenBuilt<'b, O::Build>> {
         let fmt = self.fmt.clone();
         let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice);
@@ -470,14 +472,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         name_tokens
             .iter()
             .map(|n| match n {
-                NameToken::Name(Name::Person(ref pn)) => {
-                    let old_seen_one = seen_one;
+                NameToken::Name(ratchet) => {
                     seen_one = true;
-                    NameTokenBuilt::PN(pn, old_seen_one)
-                }
-                NameToken::Name(Name::Literal { ref literal }) => {
-                    seen_one = true;
-                    NameTokenBuilt::Literal(fmt.plain(literal.as_str()))
+                    NameTokenBuilt::Ratchet(ratchet)
                 }
                 NameToken::Delimiter => {
                     NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
@@ -530,12 +527,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     }
 }
 
-pub enum NameTokenBuilt<'a, O: OutputFormat> {
-    PN(&'a PersonName, /* seen_one */ bool),
-    Built(O::Build),
-    /// So literals can be counted with PersonNames to check if any names were added during a
-    /// disamb round
-    Literal(O::Build),
+pub enum NameTokenBuilt<'a, B> {
+    Ratchet(&'a DisambNameRatchet<B>),
+    Built(B),
 }
 
 use self::ord::{get_display_order, DisplayOrdering, NamePartToken};

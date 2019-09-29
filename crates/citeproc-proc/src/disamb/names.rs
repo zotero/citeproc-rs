@@ -59,22 +59,23 @@ impl Disambiguation<Markup> for Names {
             |nfa, start_var| {
                 let mut did_add_any_for_var = false;
                 let last_per_var = nfa.graph.add_node(());
-                for vec_of_names in self
-                    .variables
-                    .iter()
-                    .filter_map(|var| ctx.reference.name.get(var))
-                {
+                let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference);
+                for nir in name_irs {
                     any = true;
-                    fn ntb_len(v: &[NameTokenBuilt<'_, Markup>]) -> usize {
+                    fn ntb_len(v: &[NameTokenBuilt<'_, <Markup as OutputFormat>::Build>]) -> usize {
                         v.iter()
                             .filter(|x| match x {
-                                NameTokenBuilt::Literal(_) | NameTokenBuilt::PN(..) => true,
+                                NameTokenBuilt::Ratchet(_) => true,
                                 _ => false,
                             })
                             .count()
                     }
-                    let mut ntbs =
-                        runner.names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al);
+                    let mut ntbs = runner.names_to_builds(
+                        &nir.disamb_names,
+                        ctx.position,
+                        ctx.locale,
+                        &self.et_al,
+                    );
                     let mut max_counted_tokens = 0;
                     let mut counted_tokens = ntb_len(&ntbs);
 
@@ -89,7 +90,16 @@ impl Disambiguation<Markup> for Names {
                             |nfa, mut spot| {
                                 for ntb in ntbs {
                                     match ntb {
-                                        NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => {
+                                        NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
+                                            if !fmt.is_empty(b) {
+                                                let out = fmt.output_in_context(b.clone(), stack);
+                                                let e = db.edge(EdgeData::Output(out));
+                                                let ir = RefIR::Edge(Some(e));
+                                                spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                                did_add_any_for_var = true;
+                                            }
+                                        }
+                                        NameTokenBuilt::Built(b) => {
                                             if !fmt.is_empty(&b) {
                                                 let out = fmt.output_in_context(b, stack);
                                                 let e = db.edge(EdgeData::Output(out));
@@ -98,14 +108,10 @@ impl Disambiguation<Markup> for Names {
                                                 did_add_any_for_var = true;
                                             }
                                         }
-                                        NameTokenBuilt::PN(pn, seen_one) => {
-                                            let dn = DisambNameData {
-                                                ref_id: ctx.reference.id.clone(),
-                                                var: NameVariable::Dummy,
-                                                el: runner.name_el.clone(),
-                                                value: pn.clone(),
-                                                primary: !seen_one,
-                                            };
+                                        NameTokenBuilt::Ratchet(DisambNameRatchet::Person(
+                                            ratchet,
+                                        )) => {
+                                            let dn = ratchet.data.clone();
                                             spot = add_expanded_name_to_graph(db, nfa, dn, spot);
                                             did_add_any_for_var = true;
                                         }
@@ -117,7 +123,7 @@ impl Disambiguation<Markup> for Names {
                         nfa.graph.add_edge(one_run, last_per_var, NfaEdge::Epsilon);
                         runner.bump_name_count += 1;
                         ntbs = runner.names_to_builds(
-                            vec_of_names,
+                            &nir.disamb_names,
                             ctx.position,
                             ctx.locale,
                             &self.et_al,
