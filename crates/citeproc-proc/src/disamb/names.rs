@@ -1,12 +1,14 @@
+use super::add_to_graph;
 use super::finite_automata::{Dfa, Nfa, NfaEdge};
 use super::mult_identity;
-use crate::names::OneNameVar;
+use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
 use csl::style::{Citation, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
 use csl::variables::NameVariable;
 use csl::Atom;
 use fnv::FnvHashMap;
+use petgraph::graph::NodeIndex;
 use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
@@ -39,36 +41,43 @@ impl Disambiguation<Markup> for Names {
         };
 
         let mut any = false;
+
         let mut nfa = Nfa::new();
+        let mut spot = nfa.graph.add_node(());
+        nfa.start.insert(spot);
+
         let mut irs = Vec::new();
-        for var in &self.variables {
-            if let Some(vec_of_names) = ctx.reference.name.get(var) {
-                any = true;
-                let iter = runner
-                    .names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al)
-                    .into_iter()
-                    .filter(|x| !fmt.is_empty(&x))
-                    .map(|x| fmt.output_in_context(x, stack))
-                    .map(|x| db.edge(EdgeData::Output(x)))
-                    .map(|e| RefIR::Edge(Some(e)));
-                let seq = RefIrSeq {
-                    contents: iter.collect(),
-                    formatting: runner.name_el.formatting,
-                    affixes: runner.name_el.affixes.clone(),
-                    // delimiter is built-in
-                    delimiter: Atom::from(""),
-                };
-                if !seq.contents.is_empty() {
-                    irs.push(RefIR::Seq(seq));
-                }
+
+        for vec_of_names in self
+            .variables
+            .iter()
+            .filter_map(|var| ctx.reference.name.get(var))
+        {
+            any = true;
+            let iter = runner
+                .names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al)
+                .into_iter()
+                .map(|ntb| match ntb {
+                    NameTokenBuilt::Built(b) => b,
+                    NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
+                })
+                .filter(|x| !fmt.is_empty(&x))
+                .map(|x| fmt.output_in_context(x, stack))
+                .map(|x| db.edge(EdgeData::Output(x)))
+                .map(|e| RefIR::Edge(Some(e)));
+            let seq = RefIrSeq {
+                contents: iter.collect(),
+                formatting: runner.name_el.formatting,
+                affixes: runner.name_el.affixes.clone(),
+                // delimiter is built-in
+                delimiter: Atom::from(""),
+            };
+            if !seq.contents.is_empty() {
+                irs.push(RefIR::Seq(seq));
             }
         }
 
         if irs.is_empty() {
-            // null object pattern
-            let start = nfa.graph.add_node(());
-            nfa.start.insert(start);
-            nfa.accepting.insert(start);
             // TODO: substitute
             // TODO: suppress once substituted
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
@@ -85,10 +94,6 @@ impl Disambiguation<Markup> for Names {
                 .unwrap_or_else(|| Atom::from("")),
         });
 
-        use super::add_to_graph;
-
-        let mut spot = nfa.graph.add_node(());
-        nfa.start.insert(spot);
         spot = add_to_graph(db, fmt, &mut nfa, &seq, spot);
         nfa.accepting.insert(spot);
 

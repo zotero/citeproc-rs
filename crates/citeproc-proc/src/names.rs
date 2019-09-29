@@ -298,13 +298,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     }
 
     /// without the <name /> formatting and affixes applied
-    pub(crate) fn names_to_builds(
+    pub(crate) fn names_to_builds<'b: 'a>(
         &self,
-        names_slice: &[Name],
+        names_slice: &'b [Name],
         position: Position,
         locale: &csl::locale::Locale,
         et_al: &Option<NameEtAl>,
-    ) -> Vec<O::Build> {
+    ) -> Vec<NameTokenBuilt<'b, O>> {
         let fmt = self.fmt.clone();
         let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice);
@@ -315,27 +315,29 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 _ => acc,
             });
             // This isn't sort-mode, you can render NameForm::Count as text.
-            return vec![fmt.text_node(format!("{}", count), None)];
+            return vec![NameTokenBuilt::Built(
+                fmt.text_node(format!("{}", count), None),
+            )];
         }
 
         name_tokens
             .iter()
             .map(|n| match n {
                 NameToken::Name(Name::Person(ref pn)) => {
-                    let ret = self.render_person_name(pn, seen_one);
+                    let old_seen_one = seen_one;
                     seen_one = true;
-                    ret
+                    NameTokenBuilt::PN(pn, old_seen_one)
                 }
                 NameToken::Name(Name::Literal { ref literal }) => {
                     seen_one = true;
-                    fmt.plain(literal.as_str())
+                    NameTokenBuilt::Built(fmt.plain(literal.as_str()))
                 }
                 NameToken::Delimiter => {
-                    if let Some(delim) = &self.name_el.delimiter {
+                    NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
                         fmt.plain(&delim.0)
                     } else {
                         fmt.plain(", ")
-                    }
+                    })
                 }
                 NameToken::EtAl => {
                     use csl::terms::*;
@@ -356,10 +358,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             false,
                         )
                         .unwrap_or("et al");
-                    fmt.text_node(text.to_string(), formatting)
+                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), formatting))
                 }
-                NameToken::Ellipsis => fmt.plain("…"),
-                NameToken::Space => fmt.plain(" "),
+                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
+                NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
                 NameToken::And => {
                     use csl::terms::*;
                     let select = |form: TermFormExtended| {
@@ -374,27 +376,18 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             .get_text_term(select(TermFormExtended::Long), false)
                             .unwrap_or("and"),
                     };
-                    fmt.plain(form)
+                    NameTokenBuilt::Built(fmt.plain(form))
                 }
             })
             .collect()
     }
+}
 
-    pub(crate) fn render_names(
-        &self,
-        names_slice: &[Name],
-        position: Position,
-        locale: &csl::locale::Locale,
-        et_al: &Option<NameEtAl>,
-    ) -> O::Build {
-        let fmt = self.fmt;
-        let st = self.names_to_builds(names_slice, position, locale, et_al);
+use super::disamb::DisambName;
 
-        fmt.affixed(
-            fmt.with_format(fmt.seq(st.into_iter()), self.name_el.formatting),
-            &self.name_el.affixes,
-        )
-    }
+pub enum NameTokenBuilt<'a, O: OutputFormat> {
+    PN(&'a PersonName, /* seen_one */ bool),
+    Built(O::Build),
 }
 
 use self::ord::{get_display_order, DisplayOrdering, NamePartToken};
@@ -571,6 +564,10 @@ where
                 let iter = runner
                     .names_to_builds(val, position, locale, &self.et_al)
                     .into_iter()
+                    .map(|ntb| match ntb {
+                        NameTokenBuilt::Built(b) => b,
+                        NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
+                    })
                     .filter(|x| !fmt.is_empty(&x))
                     .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
                 let seq = IrSeq {
