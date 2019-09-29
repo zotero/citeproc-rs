@@ -186,7 +186,7 @@ impl FreeCond {
             let opposite = deductive.invert();
             match_fc!(@locator_type opposite);
         }
-        if (self.contains(FreeCond::LOCATOR)) {
+        if self.contains(FreeCond::LOCATOR) {
             return Some(LocatorType::Page);
         }
         None

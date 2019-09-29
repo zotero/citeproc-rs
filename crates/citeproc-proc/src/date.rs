@@ -6,7 +6,7 @@
 
 use crate::prelude::*;
 
-use citeproc_io::{Date, DateOrRange};
+use citeproc_io::Date;
 use csl::style::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
@@ -44,7 +44,7 @@ impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -80,7 +80,7 @@ impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {

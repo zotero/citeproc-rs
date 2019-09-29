@@ -13,7 +13,7 @@ use csl::style::{Affixes, Formatting, Position};
 use csl::variables::*;
 
 use csl::{
-    style::{Cond, Element, Group, Names, Style, TextSource},
+    style::{Cond, Element, Group, Style, TextSource},
     variables::AnyVariable,
     IsIndependent,
 };
@@ -107,7 +107,7 @@ impl Disambiguation<Markup> for Element {
                 (RefIR::Edge(content), gv)
             }
             Element::Text(ref src, f, ref af, quo, _sp, _tc, _disp) => match *src {
-                TextSource::Variable(var, form) => {
+                TextSource::Variable(var, _form) => {
                     // let fmt_plain_edge = |e: Edge| {
                     //     if f.is_some() || af != &Affixes::default() {
                     //         RefIR::Seq(RefIrSeq {
@@ -187,7 +187,7 @@ impl Disambiguation<Markup> for Element {
             },
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 if var == NumberVariable::Locator {
-                    if let Some(loctype) = ctx.locator_type {
+                    if let Some(_loctype) = ctx.locator_type {
                         let edge = db.edge(EdgeData::Locator);
                         return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }

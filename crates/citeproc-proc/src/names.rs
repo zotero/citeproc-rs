@@ -13,7 +13,7 @@ use csl::style::{
     DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
     Names, Position,
 };
-use csl::variables::NameVariable;
+
 use csl::Atom;
 
 mod initials;
@@ -383,8 +383,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     }
 }
 
-use super::disamb::DisambName;
-
 pub enum NameTokenBuilt<'a, O: OutputFormat> {
     PN(&'a PersonName, /* seen_one */ bool),
     Built(O::Build),
@@ -534,7 +532,7 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
     where
         O: OutputFormat,
     {

@@ -1,11 +1,11 @@
 use super::add_to_graph;
-use super::finite_automata::{Dfa, Nfa, NfaEdge};
+use super::finite_automata::{Nfa, NfaEdge};
 use super::graph_with_stack;
 use super::mult_identity;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
-use csl::style::{Citation, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
+use csl::style::{GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
 use csl::variables::NameVariable;
 use csl::Atom;
 use fnv::FnvHashMap;
@@ -30,7 +30,7 @@ impl Disambiguation<Markup> for Names {
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let style = ctx.style;
-        let locale = ctx.locale;
+        let _locale = ctx.locale;
         let name_el = db
             .name_citation()
             .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
@@ -101,7 +101,6 @@ impl Disambiguation<Markup> for Names {
             },
         );
         nfa.accepting.insert(end);
-        let dfa = nfa.clone().brzozowski_minimise();
 
         if end == start {
             // TODO: substitute
@@ -152,7 +151,7 @@ impl DisambNameData {
     ) -> RefIR {
         let val = Some(());
         let edge = val
-            .map(|val| {
+            .map(|_val| {
                 let builder = OneNameVar {
                     fmt,
                     name_el: &self.el,
@@ -172,12 +171,12 @@ impl DisambNameData {
 
     pub(crate) fn single_name_ir(
         &self,
-        db: &impl IrDatabase,
+        _db: &impl IrDatabase,
         fmt: &Markup,
         style: &Style,
-        stack: Formatting,
+        _stack: Formatting,
     ) -> IR {
-        let val = Some(());
+        let _val = Some(());
         let val = {
             let builder = OneNameVar {
                 fmt,
@@ -417,9 +416,6 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
     let rule = style.citation.givenname_disambiguation_rule;
     let mut dfas = Vec::new();
     let mut results = FnvHashMap::default();
-    use crate::disamb::add_to_graph;
-    use crate::disamb::names::{NameDisambPass, SingleNameDisambIter, SingleNameDisambMethod};
-    use csl::style::NameForm;
 
     // preamble: build all the names
     for dn in dns.iter() {

@@ -12,7 +12,7 @@ extern crate citeproc_db;
 
 use citeproc_io::output::OutputFormat;
 use csl::Atom;
-use fnv::FnvHashMap;
+
 use std::collections::HashSet;
 
 mod choose;
@@ -43,7 +43,7 @@ pub(crate) mod prelude {
     pub use crate::ir::*;
 
     pub(crate) use crate::disamb::{
-        cross_product, mult_identity, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
+        cross_product, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
     };
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;

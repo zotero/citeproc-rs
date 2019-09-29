@@ -196,7 +196,7 @@ pub fn add_to_graph(
     fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,
-    mut spot: NodeIndex,
+    spot: NodeIndex,
 ) -> NodeIndex {
     match ir {
         RefIR::Edge(None) => spot,
@@ -236,7 +236,7 @@ pub fn add_to_graph(
                 spot
             })
         }
-        RefIR::Names(names_nfa, boxed_ir) => {
+        RefIR::Names(names_nfa, _boxed_ir) => {
             // We're going to graft the names_nfa onto our own by translating all the node_ids, and
             // adding the same edges between them.
             let mut node_mapping = FnvHashMap::default();

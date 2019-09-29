@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, NumericToken, NumericValue};
+use citeproc_io::{Locator, NumericValue};
 use csl::locale::Locale;
 use csl::style::{NumericForm, Plural};
 use csl::terms::{GenderedTermSelector, LocatorType, TermForm, TextTermSelector};

@@ -7,16 +7,16 @@
 use crate::disamb::{Dfa, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 
-use fnv::{FnvHashMap, FnvHashSet};
-use std::collections::HashSet;
+use fnv::FnvHashMap;
+
 use std::sync::Arc;
 
 use crate::disamb::{DisambName, DisambNameData};
-use crate::helpers::to_bijective_base_26;
+
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{ClusterId, Name, PersonName};
-use csl::variables::NameVariable;
+use citeproc_io::{ClusterId, Name};
+
 use csl::Atom;
 
 pub trait HasFormatter {
@@ -56,7 +56,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 }
 
 fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
-    let style = db.style();
+    let _style = db.style();
     let name_configurations = db.name_configurations();
     let refs = db.disamb_participants();
     let mut collector = Vec::new();
@@ -176,7 +176,7 @@ fn disambiguate(
     ir: &mut IR<Markup>,
     state: &mut IrState,
     ctx: &mut CiteContext<Markup>,
-    maybe_ys: Option<&FnvHashMap<Atom, u32>>,
+    _maybe_ys: Option<&FnvHashMap<Atom, u32>>,
     own_id: &Atom,
 ) -> bool {
     let mut un = is_unambiguous(db, ctx.disamb_pass, ir, own_id);
@@ -230,7 +230,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
     let ir = style.intermediate(&mut state, &ctx).0;
-    let fmt = db.get_formatter();
+    let _fmt = db.get_formatter();
     let un = is_unambiguous(db, None, &ir, &refr.id);
     Arc::new((ir, un, state))
 }

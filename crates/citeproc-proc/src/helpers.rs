@@ -21,7 +21,7 @@ pub fn sequence<'c, O>(
 where
     O: OutputFormat,
 {
-    let fmt = &ctx.format;
+    let _fmt = &ctx.format;
 
     let (inner, gv) = els.iter().map(|el| el.intermediate(state, ctx)).fold(
         (Vec::new(), GroupVars::new()),
@@ -57,7 +57,7 @@ pub fn ref_sequence<'c>(
     formatting: Option<Formatting>,
     affixes: Affixes,
 ) -> (RefIR, GroupVars) {
-    let fmt = &ctx.format;
+    let _fmt = &ctx.format;
 
     let (inner, gv) = els
         .iter()

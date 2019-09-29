@@ -27,7 +27,7 @@ where
     O: OutputFormat,
 {
     fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
-        let fmt = &ctx.format;
+        let _fmt = &ctx.format;
         let renderer = Renderer::cite(ctx);
         match *self {
             Element::Choose(ref ch) => ch.intermediate(state, ctx),
@@ -36,7 +36,7 @@ where
                 use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-                let quotes = if quo { Some(&q) } else { None };
+                let _quotes = if quo { Some(&q) } else { None };
                 match *source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors

@@ -11,7 +11,7 @@ use csl::style::{
     Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
 };
 use csl::Atom;
-use petgraph::graph::NodeIndex;
+
 use std::sync::Arc;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
@@ -34,7 +34,7 @@ pub enum YearSuffixHook {
 
 impl Eq for RefIR {}
 impl PartialEq for RefIR {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
@@ -342,10 +342,10 @@ impl IrSeq<Markup> {
             edges.push(EdgeData::Output(open_tags));
         }
         // push the innards
-        let len = self.contents.len();
+        let _len = self.contents.len();
         let mut seen = false;
         let mut sub = Vec::new();
-        for (n, ir) in self.contents.iter().enumerate() {
+        for (_n, ir) in self.contents.iter().enumerate() {
             ir.append_edges(&mut sub, fmt, sub_formatting);
             if sub.len() > 0 {
                 if seen {
