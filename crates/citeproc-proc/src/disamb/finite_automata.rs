@@ -70,7 +70,7 @@ impl InternKey for Edge {
 //     }
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {
     Epsilon,
     Token(Edge),
@@ -247,22 +247,18 @@ pub fn to_dfa(nfa: &Nfa) -> Dfa {
         let (dfa_state, current_node) = work.pop().unwrap();
         let mut by_edge_weight = HashMap::<Edge, BTreeSet<NodeIndex>>::new();
         for nfa_node in dfa_state {
-            for neigh in nfa.graph.neighbors(nfa_node) {
-                let weight = nfa
-                    .graph
-                    .find_edge(nfa_node, neigh)
-                    .and_then(|e| nfa.graph.edge_weight(e))
-                    .cloned()
-                    .unwrap();
+            for edge in nfa.graph.edges(nfa_node) {
+                let &weight = edge.weight();
+                let target = edge.target();
                 if let NfaEdge::Token(t) = weight {
                     by_edge_weight
                         .entry(t)
                         .and_modify(|set| {
-                            set.insert(neigh);
+                            set.insert(target);
                         })
                         .or_insert_with(|| {
                             let mut set = BTreeSet::new();
-                            set.insert(neigh);
+                            set.insert(target);
                             set
                         });
                 }
