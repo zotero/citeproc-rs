@@ -1,5 +1,6 @@
 use super::add_to_graph;
 use super::finite_automata::{Dfa, Nfa, NfaEdge};
+use super::graph_with_stack;
 use super::mult_identity;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
@@ -43,59 +44,70 @@ impl Disambiguation<Markup> for Names {
         let mut any = false;
 
         let mut nfa = Nfa::new();
-        let mut spot = nfa.graph.add_node(());
-        nfa.start.insert(spot);
+        let start = nfa.graph.add_node(());
+        nfa.start.insert(start);
 
-        let mut irs = Vec::new();
+        let end = graph_with_stack(
+            db,
+            fmt,
+            &mut nfa,
+            &self.formatting,
+            &self.affixes,
+            start,
+            |nfa, mut per_var_spot| {
+                for vec_of_names in self
+                    .variables
+                    .iter()
+                    .filter_map(|var| ctx.reference.name.get(var))
+                {
+                    any = true;
+                    let ntbs =
+                        runner.names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al);
+                    per_var_spot = graph_with_stack(
+                        db,
+                        fmt,
+                        nfa,
+                        &runner.name_el.formatting,
+                        &runner.name_el.affixes,
+                        per_var_spot,
+                        |nfa, mut spot| {
+                            for ntb in ntbs {
+                                match ntb {
+                                    NameTokenBuilt::Built(b) => {
+                                        if !fmt.is_empty(&b) {
+                                            let out = fmt.output_in_context(b, stack);
+                                            let e = db.edge(EdgeData::Output(out));
+                                            let ir = RefIR::Edge(Some(e));
+                                            spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                        }
+                                    }
+                                    NameTokenBuilt::PN(pn, seen_one) => {
+                                        let dn = DisambNameData {
+                                            ref_id: ctx.reference.id.clone(),
+                                            var: NameVariable::Dummy,
+                                            el: runner.name_el.clone(),
+                                            value: pn.clone(),
+                                            primary: !seen_one,
+                                        };
+                                        spot = add_expanded_name_to_graph(db, nfa, dn, spot);
+                                    }
+                                }
+                            }
+                            spot
+                        },
+                    );
+                }
+                per_var_spot
+            },
+        );
+        nfa.accepting.insert(end);
+        let dfa = nfa.clone().brzozowski_minimise();
 
-        for vec_of_names in self
-            .variables
-            .iter()
-            .filter_map(|var| ctx.reference.name.get(var))
-        {
-            any = true;
-            let iter = runner
-                .names_to_builds(vec_of_names, ctx.position, ctx.locale, &self.et_al)
-                .into_iter()
-                .map(|ntb| match ntb {
-                    NameTokenBuilt::Built(b) => b,
-                    NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
-                })
-                .filter(|x| !fmt.is_empty(&x))
-                .map(|x| fmt.output_in_context(x, stack))
-                .map(|x| db.edge(EdgeData::Output(x)))
-                .map(|e| RefIR::Edge(Some(e)));
-            let seq = RefIrSeq {
-                contents: iter.collect(),
-                formatting: runner.name_el.formatting,
-                affixes: runner.name_el.affixes.clone(),
-                // delimiter is built-in
-                delimiter: Atom::from(""),
-            };
-            if !seq.contents.is_empty() {
-                irs.push(RefIR::Seq(seq));
-            }
-        }
-
-        if irs.is_empty() {
+        if end == start {
             // TODO: substitute
             // TODO: suppress once substituted
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
-
-        let seq = RefIR::Seq(RefIrSeq {
-            contents: irs,
-            formatting: self.formatting,
-            affixes: self.affixes.clone(),
-            delimiter: self
-                .delimiter
-                .as_ref()
-                .map(|d| d.0.clone())
-                .unwrap_or_else(|| Atom::from("")),
-        });
-
-        spot = add_to_graph(db, fmt, &mut nfa, &seq, spot);
-        nfa.accepting.insert(spot);
 
         // TODO: rerun with more names etc
 
