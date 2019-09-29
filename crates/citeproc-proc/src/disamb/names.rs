@@ -150,7 +150,7 @@ impl Disambiguation<Markup> for Names {
 
 citeproc_db::intern_key!(pub DisambName);
 impl DisambName {
-    pub fn lookup(&self, db: &impl IrDatabase) -> Arc<DisambNameData> {
+    pub fn lookup(&self, db: &impl IrDatabase) -> DisambNameData {
         db.lookup_disamb_name(*self)
     }
 }
@@ -236,7 +236,7 @@ impl DisambNameData {
 /// steps, it removes steps / limits the expansion. This is a bit clearer to work with, and mixes
 /// in the information about whether a name is primary or not.
 #[derive(Clone, Copy, Debug)]
-enum SingleNameDisambMethod {
+pub enum SingleNameDisambMethod {
     None,
     AddInitials,
     AddInitialsThenGivenName,
@@ -244,7 +244,7 @@ enum SingleNameDisambMethod {
 
 impl SingleNameDisambMethod {
     /// `is_primary` refers to whether this is the first name to be rendered in a Names element.
-    fn from_rule(rule: GivenNameDisambiguationRule, is_primary: bool) -> Self {
+    pub fn from_rule(rule: GivenNameDisambiguationRule, is_primary: bool) -> Self {
         match (rule, is_primary) {
             (GivenNameDisambiguationRule::ByCite, _)
             | (GivenNameDisambiguationRule::AllNames, _) => {
@@ -284,7 +284,7 @@ enum NameDisambState {
 }
 
 impl SingleNameDisambIter {
-    fn new(method: SingleNameDisambMethod, name_options: &NameEl) -> Self {
+    pub fn new(method: SingleNameDisambMethod, name_options: &NameEl) -> Self {
         SingleNameDisambIter {
             method,
             initialize_with: name_options.initialize_with.is_some()
@@ -442,6 +442,7 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
+/// Performs 'global name disambiguation'
 pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<DisambName, IR<Markup>>> {
     let dns = db.all_person_names();
     let style = db.style();
@@ -452,7 +453,7 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
 
     // preamble: build all the names
     for dn in dns.iter() {
-        let dn: DisambNameData = (*dn.lookup(db)).clone();
+        let dn: DisambNameData = dn.lookup(db);
         let mut nfa = Nfa::new();
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
@@ -479,7 +480,7 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
     };
     // round 1:
     for &dn_id in dns.iter() {
-        let mut dn: DisambNameData = (*dn_id.lookup(db)).clone();
+        let mut dn: DisambNameData = dn_id.lookup(db);
         let mut ir = dn.single_name_ir(
             db,
             fmt,
@@ -501,4 +502,33 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
     }
     warn!("disambiguated_person_names {:#?}", &results);
     Arc::new(results)
+}
+
+pub struct NamesIR<B> {
+    pub names_el: Names,
+    pub names: Vec<NameIR<B>>,
+}
+pub struct NameIR<B> {
+    pub variable: NameVariable,
+    pub bump_name_count: u16,
+    pub disamb_names: Vec<DisambNameRatchet<B>>,
+}
+pub enum DisambNameRatchet<B> {
+    Literal(B),
+    Person(PersonDisambNameRatchet),
+}
+pub struct PersonDisambNameRatchet {
+    pub id: DisambName,
+    pub data: DisambNameData,
+    pub iter: SingleNameDisambIter,
+}
+impl PersonDisambNameRatchet {
+    fn new(db: &impl IrDatabase, data: DisambNameData) -> Self {
+        let style = db.style();
+        let rule = style.citation.givenname_disambiguation_rule;
+        let method = SingleNameDisambMethod::from_rule(rule, data.primary);
+        let iter = SingleNameDisambIter::new(method, &data.el);
+        let id = db.disamb_name(data.clone());
+        PersonDisambNameRatchet { id, iter, data }
+    }
 }

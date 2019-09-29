@@ -19,6 +19,122 @@ use csl::Atom;
 mod initials;
 use self::initials::initialize;
 
+use crate::disamb::names::{
+    DisambNameData, DisambNameRatchet, NameIR, NamesIR, PersonDisambNameRatchet,
+};
+
+impl<'c, O> Proc<'c, O> for Names
+where
+    O: OutputFormat,
+{
+    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    where
+        O: OutputFormat,
+    {
+        let name_el = ctx
+            .name_citation
+            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
+
+        let mut primary = true;
+        let names = self
+            .variables
+            .iter()
+            .filter_map(|var| ctx.reference.name.get(var).map(|val| (*var, val.clone())))
+            .map(|(var, value)| {
+                let ratchets = value.into_iter().map(|value| match value {
+                    Name::Person(pn) => {
+                        if primary {
+                            primary = false;
+                        }
+                        let data = DisambNameData {
+                            ref_id: ctx.reference.id.clone(),
+                            var,
+                            el: name_el.clone(),
+                            value: pn,
+                            primary,
+                        };
+                        // let ratchet = PersonDisambNameRatchet::new(unimplemented!(), data);
+                        DisambNameRatchet::Person(unimplemented!())
+                    }
+                    Name::Literal { literal } => {
+                        if primary {
+                            primary = false;
+                        }
+                        DisambNameRatchet::Literal(literal)
+                    }
+                });
+                NameIR {
+                    variable: var,
+                    bump_name_count: 0,
+                    disamb_names: ratchets.collect(),
+                }
+            });
+        let names_ir = NamesIR {
+            names_el: self.clone(),
+            names: names.collect(),
+        };
+        let fmt = &ctx.format;
+        let style = ctx.style;
+        let locale = ctx.locale;
+        let position = ctx.position.0;
+
+        let runner = OneNameVar {
+            name_el: &name_el,
+            bump_name_count: 0,
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+            fmt,
+        };
+
+        let irs: Vec<_> = self
+            .variables
+            .iter()
+            // TODO: &[editor, translator] => &[editor], and use editortranslator on
+            // the label
+            .filter_map(|&var| ctx.get_name(var))
+            .filter_map(|val| {
+                let iter = runner
+                    .names_to_builds(val, position, locale, &self.et_al)
+                    .into_iter()
+                    .map(|ntb| match ntb {
+                        NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => b,
+                        NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
+                    })
+                    .filter(|x| !fmt.is_empty(&x))
+                    .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
+                let seq = IrSeq {
+                    contents: iter.collect(),
+                    formatting: runner.name_el.formatting,
+                    affixes: runner.name_el.affixes.clone(),
+                    delimiter: Atom::from(""),
+                };
+                if seq.contents.is_empty() {
+                    None
+                } else {
+                    Some(IR::Seq(seq))
+                }
+            })
+            .collect();
+
+        if irs.is_empty() {
+            return (IR::Rendered(None), GroupVars::OnlyEmpty);
+        }
+        (
+            IR::Seq(IrSeq {
+                contents: irs,
+                formatting: self.formatting,
+                affixes: self.affixes.clone(),
+                delimiter: self
+                    .delimiter
+                    .as_ref()
+                    .map(|d| d.0.clone())
+                    .unwrap_or_else(|| Atom::from("")),
+            }),
+            GroupVars::DidRender,
+        )
+    }
+}
+
 fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
     pn.family
         .as_ref()
@@ -531,78 +647,4 @@ mod ord {
     static NON_LATIN_SHORT: DisplayOrdering = &[Family];
     static NON_LATIN_SORT_LONG: SortOrdering = &[One(Family), One(Given)];
     static NON_LATIN_SORT_SHORT: SortOrdering = &[One(Family)];
-}
-
-impl<'c, O> Proc<'c, O> for Names
-where
-    O: OutputFormat,
-{
-    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
-        let fmt = &ctx.format;
-        let style = ctx.style;
-        let locale = ctx.locale;
-        let position = ctx.position.0;
-
-        let name_el = ctx
-            .name_citation
-            .merge(self.name.as_ref().unwrap_or(&NameEl::default()));
-
-        let runner = OneNameVar {
-            name_el: &name_el,
-            bump_name_count: 0,
-            demote_non_dropping_particle: style.demote_non_dropping_particle,
-            initialize_with_hyphen: style.initialize_with_hyphen,
-            fmt,
-        };
-
-        let irs: Vec<_> = self
-            .variables
-            .iter()
-            // TODO: &[editor, translator] => &[editor], and use editortranslator on
-            // the label
-            .filter_map(|&var| ctx.get_name(var))
-            .filter_map(|val| {
-                let iter = runner
-                    .names_to_builds(val, position, locale, &self.et_al)
-                    .into_iter()
-                    .map(|ntb| match ntb {
-                        NameTokenBuilt::Literal(b) | NameTokenBuilt::Built(b) => b,
-                        NameTokenBuilt::PN(pn, seen_one) => runner.render_person_name(pn, seen_one),
-                    })
-                    .filter(|x| !fmt.is_empty(&x))
-                    .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
-                let seq = IrSeq {
-                    contents: iter.collect(),
-                    formatting: runner.name_el.formatting,
-                    affixes: runner.name_el.affixes.clone(),
-                    delimiter: Atom::from(""),
-                };
-                if seq.contents.is_empty() {
-                    None
-                } else {
-                    Some(IR::Seq(seq))
-                }
-            })
-            .collect();
-
-        if irs.is_empty() {
-            return (IR::Rendered(None), GroupVars::OnlyEmpty);
-        }
-        (
-            IR::Seq(IrSeq {
-                contents: irs,
-                formatting: self.formatting,
-                affixes: self.affixes.clone(),
-                delimiter: self
-                    .delimiter
-                    .as_ref()
-                    .map(|d| d.0.clone())
-                    .unwrap_or_else(|| Atom::from("")),
-            }),
-            GroupVars::DidRender,
-        )
-    }
 }

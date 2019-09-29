@@ -486,17 +486,21 @@ pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 pub struct Names {
     // inheritable.
     pub delimiter: Option<Delimiter>,
+
     // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
-    pub institution: Option<Institution>,
     pub label: Option<NameLabel>,
     pub et_al: Option<NameEtAl>,
-    pub with: Option<NameWith>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
     pub affixes: Affixes,
+
+    /// CSL-M: institutions
+    pub with: Option<NameWith>,
+    /// CSL-M: institutions
+    pub institution: Option<Institution>,
 }
 
 /// The available inheritable attributes for cs:name are and, delimiter-precedes-et-al,

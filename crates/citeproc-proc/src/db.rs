@@ -46,10 +46,14 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     #[salsa::invoke(crate::disamb::names::disambiguated_person_names)]
     fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, IR<Markup>>>;
 
-    // fn name_expansions(&self) -> Arc<NameExpansions>;
-
+    /// The DisambNameData here correspond to "global identity" -- so each DisambName points to
+    /// exactly one Ref/NameEl/Variable/PersonName. Even if there are two identical NameEls
+    /// rendering the same name, that's fine, because they would each have the same global
+    /// disambiguation done.
+    ///
+    /// After global disambiguation, any modifications to DisambNameData are stored within the IR.
     #[salsa::interned]
-    fn disamb_name(&self, e: Arc<DisambNameData>) -> DisambName;
+    fn disamb_name(&self, e: DisambNameData) -> DisambName;
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
@@ -71,13 +75,13 @@ fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
                     let mut seen_one = false;
                     for name in names {
                         if let Name::Person(val) = name {
-                            collector.push(db.disamb_name(Arc::new(DisambNameData {
+                            collector.push(db.disamb_name(DisambNameData {
                                 ref_id: ref_id.clone(),
                                 var: *var,
                                 el: el.clone(),
                                 value: val.clone(),
                                 primary: !seen_one,
-                            })))
+                            }))
                         }
                         seen_one = true;
                     }
