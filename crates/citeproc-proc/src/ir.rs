@@ -144,7 +144,7 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     }
 }
 
-use crate::disamb::names::NamesIR;
+use crate::disamb::names::NameIR;
 
 // Intermediate Representation
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -153,7 +153,7 @@ pub enum IR<O: OutputFormat = Markup> {
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
     // the current render
-    Names(NamesIR<O::Build>, Box<IR<O>>),
+    Names(NameIR<O::Build>, Box<IR<O>>),
 
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
@@ -199,7 +199,7 @@ impl IR<Markup> {
                 // i.e. return true until then
                 names_ir.crank(ctx.disamb_pass);
                 let (new_ir, _) = names_ir.intermediate(db, state, ctx);
-                IR::Names(mem::replace(names_ir, NamesIR::default()), Box::new(new_ir))
+                IR::Names(mem::replace(names_ir, NameIR::default()), Box::new(new_ir))
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {

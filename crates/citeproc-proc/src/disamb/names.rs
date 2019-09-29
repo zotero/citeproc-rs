@@ -505,12 +505,8 @@ pub fn disambiguated_person_names(db: &impl IrDatabase) -> Arc<FnvHashMap<Disamb
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct NamesIR<B> {
-    pub names_el: Names,
-    pub names: Vec<NameIR<B>>,
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NameIR<B> {
+    pub names_el: Names,
     pub variable: NameVariable,
     pub bump_name_count: u16,
     pub disamb_names: Vec<DisambNameRatchet<B>>,
@@ -537,7 +533,7 @@ impl PersonDisambNameRatchet {
     }
 }
 
-impl<B> NamesIR<B> {
+impl<B> NameIR<B> {
     pub fn crank(&mut self, _pass: Option<DisambPass>) {
         // TODO: apply disambiguations
     }
