@@ -191,12 +191,12 @@ impl IR<Markup> {
             IR::Names(ref el, ref _x) => {
                 // TODO: re-eval again until names are exhausted
                 // i.e. return true until then
-                let (new_ir, _) = el.intermediate(state, ctx);
+                let (new_ir, _) = el.intermediate(db, state, ctx);
                 new_ir
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
-                    let (new_ir, _) = el.intermediate(state, ctx);
+                    let (new_ir, _) = el.intermediate(db, state, ctx);
                     new_ir
                 } else {
                     return ret;
@@ -207,7 +207,7 @@ impl IR<Markup> {
                 // it can do normal group suppression
                 if let Some(DisambPass::AddYearSuffix(_)) = ctx.disamb_pass {
                     if let YearSuffixHook::Explicit(ref el) = ysh {
-                        let (new_ir, _gv) = el.intermediate(state, ctx);
+                        let (new_ir, _gv) = el.intermediate(db, state, ctx);
                         new_ir
                     } else {
                         warn!("YearSuffixHook::Date not implemented");

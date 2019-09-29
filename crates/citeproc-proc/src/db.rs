@@ -233,7 +233,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
-    let ir = style.intermediate(&mut state, &ctx).0;
+    let ir = style.intermediate(db, &mut state, &ctx).0;
     let _fmt = db.get_formatter();
     let un = is_unambiguous(db, None, &ir, &refr.id);
     Arc::new((ir, un, state))

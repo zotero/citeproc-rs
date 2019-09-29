@@ -11,6 +11,7 @@ use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
 pub fn sequence<'c, O>(
+    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &[Element],
@@ -23,7 +24,7 @@ where
 {
     let _fmt = &ctx.format;
 
-    let (inner, gv) = els.iter().map(|el| el.intermediate(state, ctx)).fold(
+    let (inner, gv) = els.iter().map(|el| el.intermediate(db, state, ctx)).fold(
         (Vec::new(), GroupVars::new()),
         |(mut acc, acc_gv), (ir, gv)| match ir {
             IR::Rendered(None) => (acc, acc_gv.neighbour(gv)),

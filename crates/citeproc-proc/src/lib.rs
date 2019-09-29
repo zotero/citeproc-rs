@@ -70,7 +70,12 @@ pub(crate) trait Proc<'c, O>
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>;
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>;
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]

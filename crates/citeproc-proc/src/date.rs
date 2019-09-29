@@ -16,14 +16,19 @@ impl<'c, O> Proc<'c, O> for BodyDate
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
         match *self {
-            BodyDate::Indep(ref idate) => idate.intermediate(state, ctx),
-            BodyDate::Local(ref ldate) => ldate.intermediate(state, ctx),
+            BodyDate::Indep(ref idate) => idate.intermediate(db, state, ctx),
+            BodyDate::Local(ref ldate) => ldate.intermediate(db, state, ctx),
         }
     }
 }
@@ -44,7 +49,12 @@ impl<'c, O> Proc<'c, O> for LocalizedDate
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        _state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -80,7 +90,12 @@ impl<'c, O> Proc<'c, O> for IndependentDate
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        _state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {

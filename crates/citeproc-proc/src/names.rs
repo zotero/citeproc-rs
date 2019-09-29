@@ -27,7 +27,12 @@ impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, _state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        _state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
