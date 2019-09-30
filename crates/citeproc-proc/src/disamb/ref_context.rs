@@ -43,13 +43,13 @@ impl<'c, O> RefContext<'c, O>
 where
     O: OutputFormat,
 {
-    pub fn from_cite_context(ctx: &'c CiteContext<'c, O>) -> Self {
+    pub fn from_cite_context(refr: &'c Reference, ctx: &'c CiteContext<'c, O>) -> Self {
         use citeproc_io::Locators;
         RefContext {
             format: &ctx.format,
             style: ctx.style,
             locale: ctx.locale,
-            reference: ctx.reference,
+            reference: refr,
             locator_type: ctx.cite.locators.as_ref().and_then(|locs| match locs {
                 Locators::Single(l) => Some(l.loc_type),
                 // XXX

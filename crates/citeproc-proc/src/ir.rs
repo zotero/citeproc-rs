@@ -38,6 +38,8 @@ impl PartialEq for RefIR {
     }
 }
 
+use crate::disamb::names::RefNameIR;
+
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum RefIR {
@@ -67,7 +69,7 @@ pub enum RefIR {
     ///
     /// The Nfa represents all the edge streams that a Names block can output for one of its
     /// variables.
-    Name(NameVariable, Nfa),
+    Name(RefNameIR, Nfa),
 
     /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
     /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
@@ -106,7 +108,7 @@ impl RefIR {
                 }
                 s
             }
-            RefIR::Name(nvar, _nfa) => format!("NameVariable::{:?}", nvar),
+            RefIR::Name(rnir, _nfa) => format!("NameVariable::{:?}", rnir.variable),
         }
     }
 }
@@ -197,16 +199,17 @@ impl IR<Markup> {
                 return ret;
             }
             IR::Names(ref mut names_ir, ref _x) => {
-                return false;
-                // TODO: re-eval again until names are exhausted
-                // i.e. return true until then
-                // ret = names_ir.crank(ctx.disamb_pass);
-                // match names_ir.intermediate_custom(db, state, ctx) {
-                //     Some((new_ir, _)) => {
-                //         IR::Names(mem::replace(names_ir, NameIR::default()), Arc::new(new_ir))
-                //     }
-                //     None => return false,
-                // }
+                ret = names_ir.crank(ctx.disamb_pass);
+                if ret {
+                    match names_ir.intermediate_custom(db, ctx) {
+                        Some((new_ir, _)) => {
+                            IR::Names(mem::replace(names_ir, NameIR::default()), Box::new(new_ir))
+                        }
+                        None => return false,
+                    }
+                } else {
+                    return false;
+                }
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {

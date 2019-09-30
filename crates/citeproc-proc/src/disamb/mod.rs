@@ -130,10 +130,7 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     nfa.brzozowski_minimise()
 }
 
-pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(
-    db: &DB,
-    ctx: &RefContext,
-) -> RefIR {
+pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefContext) -> RefIR {
     let style = ctx.style;
     let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, Formatting::default());
     ir

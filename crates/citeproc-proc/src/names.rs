@@ -27,6 +27,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     db: &'a impl IrDatabase,
     fmt: &'a O,
     refr: &'a Reference,
+    should_start_with_global: bool,
 ) -> impl Iterator<Item = NameIR<O::Build>> + 'a {
     let name_el = db
         .name_citation()
@@ -51,9 +52,12 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                         primary = false;
                     }
                     let id = db.disamb_name(data.clone());
-                    let globally_disambiguated = db.disambiguated_person_names();
-                    if let Some(my_data) = globally_disambiguated.get(&id) {
-                        data = my_data.clone();
+                    // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
+                    if should_start_with_global {
+                        let globally_disambiguated = db.disambiguated_person_names();
+                        if let Some(my_data) = globally_disambiguated.get(&id) {
+                            data = my_data.clone();
+                        }
                     }
                     let ratchet = PersonDisambNameRatchet::new(db, id, data);
                     DisambNameRatchet::Person(ratchet)
@@ -84,16 +88,16 @@ where
     fn intermediate(
         &self,
         db: &impl IrDatabase,
-        state: &mut IrState,
+        _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference)
+        let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference, true)
             .map(|mut nir| {
-                if let Some((ir, _gv)) = nir.intermediate_custom(db, state, ctx) {
+                if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx) {
                     IR::Names(nir, Box::new(ir))
                 } else {
                     // shouldn't happen; intermediate_custom should return Some the first time
@@ -135,7 +139,6 @@ impl<'c, B: std::fmt::Debug + Clone + PartialEq + Eq + Send + Sync + Default> Na
     pub fn intermediate_custom<O>(
         &mut self,
         db: &impl IrDatabase,
-        _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> Option<IrSum<O>>
     where

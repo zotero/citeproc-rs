@@ -50,22 +50,18 @@ impl Disambiguation<Markup> for Names {
             delimiter: match &self.delimiter {
                 Some(x) => x.0.clone(),
                 None => Atom::from(""),
-            }
+            },
         };
 
-        let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference);
+        let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference, false);
         for nir in name_irs {
             use crate::names::ntb_len;
 
             let mut nfa = Nfa::new();
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
-            let mut ntbs = runner.names_to_builds(
-                &nir.disamb_names,
-                ctx.position,
-                ctx.locale,
-                &self.et_al,
-            );
+            let mut ntbs =
+                runner.names_to_builds(&nir.disamb_names, ctx.position, ctx.locale, &self.et_al);
             let mut max_counted_tokens = 0u16;
             let mut counted_tokens = ntb_len(&ntbs);
 
@@ -96,9 +92,7 @@ impl Disambiguation<Markup> for Names {
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                     }
                                 }
-                                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(
-                                    ratchet,
-                                )) => {
+                                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(ratchet)) => {
                                     let dn = ratchet.data.clone();
                                     spot = add_expanded_name_to_graph(db, nfa, dn, spot);
                                 }
@@ -123,7 +117,8 @@ impl Disambiguation<Markup> for Names {
                 counted_tokens = ntb_len(&ntbs);
             }
             if !nfa.accepting.is_empty() {
-                seq.contents.push(RefIR::Name(nir.variable, nfa))
+                seq.contents
+                    .push(RefIR::Name(RefNameIR::from_name_ir(&nir), nfa))
             }
         }
 
@@ -133,10 +128,7 @@ impl Disambiguation<Markup> for Names {
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
 
-        (
-            RefIR::Seq(seq),
-            GroupVars::DidRender,
-        )
+        (RefIR::Seq(seq), GroupVars::DidRender)
     }
 }
 
@@ -433,6 +425,18 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
+use super::finite_automata::Dfa;
+pub fn single_name_dfa(db: &impl IrDatabase, dn: DisambName) -> Dfa {
+    let data: DisambNameData = dn.lookup(db);
+    let mut nfa = Nfa::new();
+    let first = nfa.graph.add_node(());
+    nfa.start.insert(first);
+    let last = add_expanded_name_to_graph(db, &mut nfa, data, first);
+    nfa.accepting.insert(last);
+    let dfa = nfa.brzozowski_minimise();
+    dfa
+}
+
 /// Performs 'global name disambiguation'
 pub fn disambiguated_person_names(
     db: &impl IrDatabase,
@@ -451,15 +455,8 @@ pub fn disambiguated_person_names(
     let mut results = FnvHashMap::default();
 
     // preamble: build all the names
-    for dn in dns.iter() {
-        let dn: DisambNameData = dn.lookup(db);
-        let mut nfa = Nfa::new();
-        let first = nfa.graph.add_node(());
-        nfa.start.insert(first);
-        let last = add_expanded_name_to_graph(db, &mut nfa, dn, first);
-        nfa.accepting.insert(last);
-        let dfa = nfa.brzozowski_minimise();
-        dfas.push(dfa);
+    for &dn in dns.iter() {
+        dfas.push(single_name_dfa(db, dn));
     }
     let is_ambiguous = |edges: &[EdgeData]| -> bool {
         let mut n = 0;
@@ -503,6 +500,28 @@ pub fn disambiguated_person_names(
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RefNameIR {
+    pub variable: NameVariable,
+    pub disamb_name_ids: Vec<DisambName>,
+}
+
+impl RefNameIR {
+    fn from_name_ir<B>(name_ir: &NameIR<B>) -> Self {
+        let mut vec = Vec::with_capacity(name_ir.disamb_names.len());
+        for dnr in &name_ir.disamb_names {
+            match dnr {
+                DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) => vec.push(*id),
+                _ => {}
+            }
+        }
+        RefNameIR {
+            variable: name_ir.variable,
+            disamb_name_ids: vec,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct NameIR<B> {
     pub names_el: Names,
     pub variable: NameVariable,
@@ -539,29 +558,6 @@ impl<B> NameIR<B> {
         if let Some(DisambPass::AddNames) = pass {
             self.bump_name_count += 1;
             true
-        } else if let Some(DisambPass::AddGivenName(_rule)) = pass {
-            let mut res = false;
-            while res == false {
-                if let Some(at_index) = self.disamb_names.get_mut(self.gn_iter_index) {
-                    match at_index {
-                        DisambNameRatchet::Person(ratchet) => {
-                            if let Some(next) = ratchet.iter.next() {
-                                // debug!("{} ratchet clicked at index {}: {:?}, now in state {:?}", &ratchet.data.ref_id, self.gn_iter_index, next, ratchet.iter.state);
-                                ratchet.data.apply_pass(next);
-                                res = true;
-                            } else {
-                                self.gn_iter_index += 1;
-                            }
-                        }
-                        DisambNameRatchet::Literal(_) => {
-                            self.gn_iter_index += 1;
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-            res
         } else {
             false
         }
