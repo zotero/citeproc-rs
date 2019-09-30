@@ -197,15 +197,16 @@ impl IR<Markup> {
                 return ret;
             }
             IR::Names(ref mut names_ir, ref _x) => {
+                return false;
                 // TODO: re-eval again until names are exhausted
                 // i.e. return true until then
-                ret = names_ir.crank(ctx.disamb_pass);
-                match names_ir.intermediate_custom(db, state, ctx) {
-                    Some((new_ir, _)) => {
-                        IR::Names(mem::replace(names_ir, NameIR::default()), Box::new(new_ir))
-                    }
-                    None => return false,
-                }
+                // ret = names_ir.crank(ctx.disamb_pass);
+                // match names_ir.intermediate_custom(db, state, ctx) {
+                //     Some((new_ir, _)) => {
+                //         IR::Names(mem::replace(names_ir, NameIR::default()), Arc::new(new_ir))
+                //     }
+                //     None => return false,
+                // }
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {

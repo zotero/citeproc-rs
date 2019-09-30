@@ -4,19 +4,15 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::disamb::{Dfa, Edge, EdgeData, FreeCondSets};
-use crate::prelude::*;
-
+use std::sync::Arc;
 use fnv::FnvHashMap;
 
-use std::sync::Arc;
-
-use crate::disamb::{DisambName, DisambNameData};
-
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
+use crate::prelude::*;
+use crate::disamb::{Dfa, Edge, EdgeData, FreeCondSets, DisambName, DisambNameData};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{ClusterId, Name};
-
+use csl::variables::NameVariable;
 use csl::Atom;
 
 pub trait HasFormatter {
@@ -272,14 +268,71 @@ fn refs_accepting_cite(
 ///    minimised DFA.) 
 ///
 ///    This step is done by `make_identical_name_formatter`.
-fn make_identical_name_formatter<'a, DB: IrDatabase>(db: &DB, cite_ctx: &'a CiteContext<'a, Markup>) {
+///
+/// 3. We can then use this narrowed-down Dfa to test, locally, whether name expansions are narrowing
+///    down the cite's ambiguity, without having to zip in and out or use a mutex.
+
+fn make_identical_name_formatter<'a, DB: IrDatabase>(db: &DB, cite_ctx: &'a CiteContext<'a, Markup>, nvar: NameVariable) -> Option<Dfa> {
     use crate::disamb::create_single_ref_ir;
     let ref_ctx = RefContext::from_cite_context(cite_ctx);
     let ref_ir = create_single_ref_ir::<Markup, DB>(db, &ref_ctx);
-    // XXX
+    use crate::disamb::Nfa;
+    fn find_name_block(nvar: NameVariable, ref_ir: &RefIR) -> Option<&Nfa> {
+        match ref_ir {
+            RefIR::Edge(_) => None,
+            RefIR::Name(v, ref nfa) => if *v == nvar { Some(nfa) } else { None },
+            RefIR::Seq(seq) => {
+                // assumes it's the first one that appears
+                seq.contents.iter().filter_map(|x| find_name_block(nvar, x)).nth(0)
+            }
+        }
+    }
+    find_name_block(nvar, &ref_ir).cloned().map(Nfa::brzozowski_minimise)
 }
 
-// fn disambiguate_add_names() {}
+/// This should be refactored to produce an iterator of mutable NameIRs, one per variable
+fn find_cite_name_block(nvar: NameVariable, ir: &mut IR<Markup>) -> Option<&mut NameIR<<Markup as OutputFormat>::Build>> {
+    match ir {
+        IR::YearSuffix(..) |
+        IR::Rendered(_) => None,
+        IR::Names(ref mut nir, _) => if nir.variable == nvar { Some(nir) } else { None },
+        IR::ConditionalDisamb(_, boxed) => find_cite_name_block(nvar, &mut *boxed),
+        IR::Seq(seq) => {
+            // assumes it's the first one that appears
+            seq.contents.iter_mut().filter_map(|x| find_cite_name_block(nvar, x)).nth(0)
+        }
+    }
+}
+
+type MarkupBuild = <Markup as OutputFormat>::Build;
+
+use crate::disamb::names::{DisambNameRatchet, PersonDisambNameRatchet, NameIR};
+fn disambiguate_add_givennames(db: &impl IrDatabase, ir: &mut IR<Markup>, state: &mut IrState, ctx: &CiteContext<'_, Markup>) -> Option<bool> {
+    let fmt = db.get_formatter();
+    let refs = refs_accepting_cite(db, ir);
+    let name_ir: &mut NameIR<MarkupBuild> = find_cite_name_block(NameVariable::Author, ir)?;
+    // This should be done for each NameIR/variable found in the cite IR rather than once for
+    // Author!
+    let mut dfas = Vec::<Dfa>::with_capacity(refs.len());
+    for r in refs {
+        if let Some(x) = make_identical_name_formatter(db, ctx, /* XXX */ NameVariable::Author) {
+            dfas.push(x);
+        }
+    }
+    let ambiguity_number = |ir: &IR| {
+        let edges = ir.to_edge_stream(&fmt);
+        dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count()
+    };
+    let mut ids = Vec::with_capacity(name_ir.disamb_names.len());
+    let cloned = name_ir.disamb_names.clone();
+    for ratchet in &name_ir.disamb_names {
+        match ratchet {
+            DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) => ids.push(*id),
+            _ => {}
+        }
+    }
+    None
+}
 
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style;
