@@ -389,7 +389,8 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
-pub struct NameVariantMatcher(Vec<Edge>);
+use smallvec::SmallVec;
+pub struct NameVariantMatcher(SmallVec<[Edge; 3]>);
 
 impl NameVariantMatcher {
     pub fn accepts(&self, edge: Edge) -> bool {
@@ -403,7 +404,7 @@ impl NameVariantMatcher {
 
         let mut data: DisambNameData = dn.lookup(db);
         let iter = data.disamb_iter(rule);
-        let mut edges = Vec::with_capacity(iter.clone().count() + 1);
+        let mut edges = SmallVec::new();
         let edge = data.single_name_edge(db, Formatting::default());
         edges.push(edge);
         for pass in iter {
