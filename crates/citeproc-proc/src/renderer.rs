@@ -13,6 +13,7 @@ pub enum GenericContext<'a, O: OutputFormat> {
     Cit(&'a CiteContext<'a, O>),
 }
 
+#[allow(dead_code)]
 impl<O: OutputFormat> GenericContext<'_, O> {
     pub fn locale(&self) -> &Locale {
         match self {

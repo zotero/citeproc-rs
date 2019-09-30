@@ -19,29 +19,47 @@ where
     fn intermediate(
         &self,
         db: &impl IrDatabase,
-        state: &mut IrState,
+        _state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
-        match *self {
-            BodyDate::Indep(ref idate) => intermediate_generic_indep(idate, db, GenericContext::Cit(ctx)),
-            BodyDate::Local(ref ldate) => intermediate_generic_local(ldate, db, GenericContext::Cit(ctx)),
+        let content = match *self {
+            BodyDate::Indep(ref idate) => {
+                intermediate_generic_indep(idate, db, GenericContext::Cit(ctx))
+            }
+            BodyDate::Local(ref ldate) => {
+                intermediate_generic_local(ldate, db, GenericContext::Cit(ctx))
+            }
         }
+        .map(|o| CiteEdgeData::Output(o));
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
     }
 }
 
 impl Disambiguation<Markup> for BodyDate {
     fn ref_ir(
         &self,
-        _db: &impl IrDatabase,
-        _ctx: &RefContext<Markup>,
-        _stack: Formatting,
+        db: &impl IrDatabase,
+        ctx: &RefContext<Markup>,
+        stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        warn!("ref_ir not implemented for BodyDate");
-        (RefIR::Edge(None), GroupVars::new())
+        let fmt = ctx.format;
+        let edge = match *self {
+            BodyDate::Indep(ref idate) => {
+                intermediate_generic_indep(idate, db, GenericContext::Ref(ctx))
+            }
+            BodyDate::Local(ref ldate) => {
+                intermediate_generic_local(ldate, db, GenericContext::Ref(ctx))
+            }
+        }
+        .map(|b| fmt.output_in_context(b, stack))
+        .map(|o| db.edge(EdgeData::Output(o)));
+        let gv = GroupVars::rendered_if(edge.is_some());
+        (RefIR::Edge(edge), gv)
     }
 }
 
@@ -49,7 +67,7 @@ fn intermediate_generic_local<'c, O>(
     local: &LocalizedDate,
     _db: &impl IrDatabase,
     ctx: GenericContext<'c, O>,
-) -> IrSum<O>
+) -> Option<O::Build>
 where
     O: OutputFormat,
 {
@@ -64,7 +82,7 @@ where
         .date
         .get(&local.variable)
         .and_then(|r| r.single_or_first());
-    let content = date.map(|val| {
+    date.map(|val| {
         let each: Vec<_> = locale_date
             .date_parts
             .iter()
@@ -72,25 +90,20 @@ where
             .filter_map(|dp| dp_render(dp, ctx.clone(), &val))
             .collect();
         let delim = &locale_date.delimiter.0;
-        CiteEdgeData::Output(
-            fmt.affixed(fmt.group(each, delim, local.formatting), &local.affixes),
-        )
-    });
-    let gv = GroupVars::rendered_if(content.is_some());
-    (IR::Rendered(content), gv)
+        fmt.affixed(fmt.group(each, delim, local.formatting), &local.affixes)
+    })
 }
 
 fn intermediate_generic_indep<'c, O>(
     indep: &IndependentDate,
     _db: &impl IrDatabase,
     ctx: GenericContext<'c, O>,
-) -> IrSum<O>
+) -> Option<O::Build>
 where
     O: OutputFormat,
 {
     let fmt = ctx.format();
-    let content = ctx
-        .reference()
+    ctx.reference()
         .date
         .get(&indep.variable)
         // TODO: render date ranges
@@ -102,12 +115,8 @@ where
                 .filter_map(|dp| dp_render(dp, ctx.clone(), &val))
                 .collect();
             let delim = &indep.delimiter.0;
-            CiteEdgeData::Output(
-                fmt.affixed(fmt.group(each, delim, indep.formatting), &indep.affixes),
-            )
-        });
-    let gv = GroupVars::rendered_if(content.is_some());
-    (IR::Rendered(content), gv)
+            fmt.affixed(fmt.group(each, delim, indep.formatting), &indep.affixes)
+        })
 }
 
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {

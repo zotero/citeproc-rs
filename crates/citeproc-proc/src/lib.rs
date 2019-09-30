@@ -30,8 +30,8 @@ mod renderer;
 mod unicode;
 
 pub(crate) mod prelude {
-    pub use crate::renderer::GenericContext;
     pub use crate::db::{HasFormatter, IrDatabase};
+    pub use crate::renderer::GenericContext;
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;

@@ -27,6 +27,10 @@ pub trait HasFormatter {
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
 
+    // TODO: cache this
+    // #[salsa::invoke(crate::disamb::create_ref_ir)]
+    // fn ref_ir(&self, key: Atom) -> Arc<Vec<(FreeCond, RefIR)>>;
+
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> IrGen;
@@ -196,12 +200,12 @@ fn disambiguate(
     while !un && ir.disambiguate(db, state, ctx) {
         un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
     }
+    if !un {
+        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
+    }
     un
 }
 
-/// the inverted index is constant for a particular set of cited+uncited references
-/// year_suffixes should not be present before ir_gen3_add_year_suffix, because that would mean you would mess up
-/// the parallelization of IR <= 2
 fn is_unambiguous(
     db: &impl IrDatabase,
     pass: Option<DisambPass>,
@@ -240,6 +244,42 @@ fn is_unambiguous(
     }
     n <= 1
 }
+
+/// Returns the set of Reference IDs that could have produced a cite's IR
+fn refs_accepting_cite(
+    db: &impl IrDatabase,
+    ir: &IR<Markup>,
+) -> Vec<Atom> {
+    let edges = ir.to_edge_stream(&db.get_formatter());
+    let mut v = Vec::with_capacity(1);
+    for k in db.cited_keys().iter() {
+        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+        let acc = dfa.accepts_data(db, &edges);
+        if acc {
+            v.push(k.clone());
+        }
+    }
+    v
+}
+
+///
+/// 1. We assume you only get clashes from the exact same name_el (even if it could be slightly
+///    different but produce clashing results).
+///
+/// 2. We construct the specific RefContext that would have produced the <names/> that would have
+///    made the Names NFA that accepted this cite's IR. This is the 'exact same name_el' referred
+///    to in step 1. (This is technically redundant, but it's not possible to pull it back out of a
+///    minimised DFA.) 
+///
+///    This step is done by `make_identical_name_formatter`.
+fn make_identical_name_formatter<'a, DB: IrDatabase>(db: &DB, cite_ctx: &'a CiteContext<'a, Markup>) {
+    use crate::disamb::create_single_ref_ir;
+    let ref_ctx = RefContext::from_cite_context(cite_ctx);
+    let ref_ir = create_single_ref_ir::<Markup, DB>(db, &ref_ctx);
+    // XXX
+}
+
+// fn disambiguate_add_names() {}
 
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style;

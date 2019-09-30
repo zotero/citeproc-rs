@@ -130,6 +130,15 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     nfa.brzozowski_minimise()
 }
 
+pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(
+    db: &DB,
+    ctx: &RefContext,
+) -> RefIR {
+    let style = ctx.style;
+    let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, Formatting::default());
+    ir
+}
+
 /// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
 /// so we don't have to re-allocate/collect the list after sorting to exclude it.
 pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
@@ -144,9 +153,9 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .iter()
         .map(|fc| {
             let fmt = db.get_formatter();
-            let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
+            let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
-                Disambiguation::<Markup>::ref_ir(&*style, db, &mut ctx, Formatting::default());
+                Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, Formatting::default());
             (*fc, ir)
         })
         .collect();
