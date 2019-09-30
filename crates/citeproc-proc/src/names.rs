@@ -342,12 +342,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     #[inline]
     fn ea_min(&self, pos: Position) -> usize {
         let first = self.name_el.et_al_min.unwrap_or(0);
-        let use_first = if pos == Position::First {
+        let min = if pos == Position::First {
             first as usize
         } else {
             self.name_el.et_al_subsequent_min.unwrap_or(first) as usize
         };
-        use_first + self.bump_name_count as usize
+        let use_first = self.ea_use_first(pos);
+        std::cmp::max(min, use_first + 1)
     }
 
     #[inline]

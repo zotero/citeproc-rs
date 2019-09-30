@@ -189,16 +189,16 @@ impl IR<Markup> {
         state: &mut IrState,
         ctx: &CiteContext<'c, Markup>,
     ) -> bool {
-        info!(
-            "attempting to disambiguate {:?} with {:?}",
-            ctx.cite_id, ctx.disamb_pass
-        );
         let mut ret = false;
         *self = match self {
             IR::Rendered(_) => {
                 return ret;
             }
             IR::Names(ref mut names_ir, ref _x) => {
+                info!(
+                    "attempting to disambiguate {:?} ({}) with {:?}",
+                    ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
+                );
                 ret = names_ir.crank(ctx.disamb_pass);
                 if ret {
                     match names_ir.intermediate_custom(db, ctx) {
@@ -213,6 +213,10 @@ impl IR<Markup> {
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
+                    info!(
+                        "attempting to disambiguate {:?} ({}) with {:?}",
+                        ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
+                    );
                     let (new_ir, _) = el.intermediate(db, state, ctx);
                     ret = false;
                     new_ir
