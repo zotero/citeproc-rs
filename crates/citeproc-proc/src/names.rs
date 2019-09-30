@@ -21,6 +21,7 @@ use self::initials::initialize;
 
 use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
 
+/// One NameIR per variable
 pub fn to_individual_name_irs<'a, O: OutputFormat>(
     names: &'a Names,
     db: &'a impl IrDatabase,

@@ -43,105 +43,98 @@ impl Disambiguation<Markup> for Names {
             fmt,
         };
 
-        let mut any = false;
+        let mut seq = RefIrSeq {
+            contents: Vec::with_capacity(self.variables.len()),
+            formatting: self.formatting,
+            affixes: self.affixes.clone(),
+            delimiter: match &self.delimiter {
+                Some(x) => x.0.clone(),
+                None => Atom::from(""),
+            }
+        };
 
-        let mut nfa = Nfa::new();
-        let start = nfa.graph.add_node(());
-        nfa.start.insert(start);
+        let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference);
+        for nir in name_irs {
+            use crate::names::ntb_len;
 
-        let end = graph_with_stack(
-            db,
-            fmt,
-            &mut nfa,
-            &self.formatting,
-            &self.affixes,
-            start,
-            |nfa, start_var| {
-                let mut did_add_any_for_var = false;
-                let last_per_var = nfa.graph.add_node(());
-                let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference);
-                for nir in name_irs {
-                    use crate::names::ntb_len;
-                    any = true;
-                    let mut ntbs = runner.names_to_builds(
-                        &nir.disamb_names,
-                        ctx.position,
-                        ctx.locale,
-                        &self.et_al,
-                    );
-                    let mut max_counted_tokens = 0u16;
-                    let mut counted_tokens = ntb_len(&ntbs);
+            let mut nfa = Nfa::new();
+            let start = nfa.graph.add_node(());
+            nfa.start.insert(start);
+            let mut ntbs = runner.names_to_builds(
+                &nir.disamb_names,
+                ctx.position,
+                ctx.locale,
+                &self.et_al,
+            );
+            let mut max_counted_tokens = 0u16;
+            let mut counted_tokens = ntb_len(&ntbs);
 
-                    while counted_tokens > max_counted_tokens {
-                        let one_run = graph_with_stack(
-                            db,
-                            fmt,
-                            nfa,
-                            &runner.name_el.formatting,
-                            &runner.name_el.affixes,
-                            start_var,
-                            |nfa, mut spot| {
-                                for ntb in ntbs {
-                                    match ntb {
-                                        NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
-                                            if !fmt.is_empty(b) {
-                                                let out = fmt.output_in_context(b.clone(), stack);
-                                                let e = db.edge(EdgeData::Output(out));
-                                                let ir = RefIR::Edge(Some(e));
-                                                spot = add_to_graph(db, fmt, nfa, &ir, spot);
-                                                did_add_any_for_var = true;
-                                            }
-                                        }
-                                        NameTokenBuilt::Built(b) => {
-                                            if !fmt.is_empty(&b) {
-                                                let out = fmt.output_in_context(b, stack);
-                                                let e = db.edge(EdgeData::Output(out));
-                                                let ir = RefIR::Edge(Some(e));
-                                                spot = add_to_graph(db, fmt, nfa, &ir, spot);
-                                                did_add_any_for_var = true;
-                                            }
-                                        }
-                                        NameTokenBuilt::Ratchet(DisambNameRatchet::Person(
-                                            ratchet,
-                                        )) => {
-                                            let dn = ratchet.data.clone();
-                                            spot = add_expanded_name_to_graph(db, nfa, dn, spot);
-                                            did_add_any_for_var = true;
-                                        }
+            while counted_tokens > max_counted_tokens {
+                let one_run = graph_with_stack(
+                    db,
+                    fmt,
+                    &mut nfa,
+                    &runner.name_el.formatting,
+                    &runner.name_el.affixes,
+                    start,
+                    |nfa, mut spot| {
+                        for ntb in &ntbs {
+                            match ntb {
+                                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
+                                    if !fmt.is_empty(b) {
+                                        let out = fmt.output_in_context(b.clone(), stack);
+                                        let e = db.edge(EdgeData::Output(out));
+                                        let ir = RefIR::Edge(Some(e));
+                                        spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                     }
                                 }
-                                spot
-                            },
-                        );
-                        nfa.graph.add_edge(one_run, last_per_var, NfaEdge::Epsilon);
-                        runner.bump_name_count += 1;
-                        ntbs = runner.names_to_builds(
-                            &nir.disamb_names,
-                            ctx.position,
-                            ctx.locale,
-                            &self.et_al,
-                        );
-                        max_counted_tokens = counted_tokens;
-                        counted_tokens = ntb_len(&ntbs);
-                    }
+                                NameTokenBuilt::Built(b) => {
+                                    if !fmt.is_empty(&b) {
+                                        let out = fmt.output_in_context(b.to_vec(), stack);
+                                        let e = db.edge(EdgeData::Output(out));
+                                        let ir = RefIR::Edge(Some(e));
+                                        spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                    }
+                                }
+                                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(
+                                    ratchet,
+                                )) => {
+                                    let dn = ratchet.data.clone();
+                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot);
+                                }
+                            }
+                        }
+                        spot
+                    },
+                );
+                if one_run == start {
+                    // XXX: not sure about this
+                    continue;
                 }
-                if did_add_any_for_var {
-                    last_per_var
-                } else {
-                    start_var
-                }
-            },
-        );
-        nfa.accepting.insert(end);
+                nfa.accepting.insert(one_run);
+                runner.bump_name_count += 1;
+                ntbs = runner.names_to_builds(
+                    &nir.disamb_names,
+                    ctx.position,
+                    ctx.locale,
+                    &self.et_al,
+                );
+                max_counted_tokens = counted_tokens;
+                counted_tokens = ntb_len(&ntbs);
+            }
+            if !nfa.accepting.is_empty() {
+                seq.contents.push(RefIR::Name(nir.variable, nfa))
+            }
+        }
 
-        if end == start {
+        if seq.contents.is_empty() {
             // TODO: substitute
             // TODO: suppress once substituted
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
 
         (
-            RefIR::Names(nfa, Box::new(RefIR::Edge(None))),
+            RefIR::Seq(seq),
             GroupVars::DidRender,
         )
     }

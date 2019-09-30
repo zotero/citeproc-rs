@@ -8,6 +8,7 @@ use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
+use csl::variables::NameVariable;
 use csl::Atom;
 
 use std::sync::Arc;
@@ -64,8 +65,9 @@ pub enum RefIR {
     /// ]
     /// ```
     ///
-    /// The Nfa represents all the token streams that the Names block can output.
-    Names(Nfa, Box<RefIR>),
+    /// The Nfa represents all the edge streams that a Names block can output for one of its
+    /// variables.
+    Name(NameVariable, Nfa),
 
     /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
     /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
@@ -104,7 +106,7 @@ impl RefIR {
                 }
                 s
             }
-            RefIR::Names(_nfa, ir) => ir.debug(db),
+            RefIR::Name(nvar, _nfa) => format!("NameVariable::{:?}", nvar),
         }
     }
 }

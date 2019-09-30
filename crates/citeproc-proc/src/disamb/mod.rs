@@ -245,7 +245,7 @@ pub fn add_to_graph(
                 spot
             })
         }
-        RefIR::Names(names_nfa, _boxed_ir) => {
+        RefIR::Name(_nvar, name_nfa) => {
             // We're going to graft the names_nfa onto our own by translating all the node_ids, and
             // adding the same edges between them.
             let mut node_mapping = FnvHashMap::default();
@@ -256,7 +256,7 @@ pub fn add_to_graph(
                     .clone()
             };
             // collected because iterator uses a mutable reference to nfa
-            let incoming_edges: Vec<_> = names_nfa
+            let incoming_edges: Vec<_> = name_nfa
                 .graph
                 .edge_references()
                 .map(|e| {
@@ -268,12 +268,12 @@ pub fn add_to_graph(
                 })
                 .collect();
             nfa.graph.extend_with_edges(incoming_edges.into_iter());
-            for &start_node in &names_nfa.start {
+            for &start_node in &name_nfa.start {
                 let start_node = get_node(nfa, start_node);
                 nfa.graph.add_edge(spot, start_node, NfaEdge::Epsilon);
             }
             let finish = nfa.graph.add_node(());
-            for &acc_node in &names_nfa.accepting {
+            for &acc_node in &name_nfa.accepting {
                 let acc_node = get_node(nfa, acc_node);
                 nfa.graph.add_edge(acc_node, finish, NfaEdge::Epsilon);
             }
