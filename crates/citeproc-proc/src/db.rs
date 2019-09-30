@@ -299,8 +299,7 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
             }
         }
     }
-    find_name_block(nvar, &ref_ir)
-        .map(|rnir| rnir.clone())
+    find_name_block(nvar, &ref_ir).map(|rnir| rnir.clone())
 }
 
 /// This should be refactored to produce an iterator of mutable NameIRs, one per variable
@@ -355,7 +354,7 @@ fn stamp_modified_name_ir(
 type MarkupBuild = <Markup as OutputFormat>::Build;
 
 use crate::disamb::names::{
-    single_name_matcher, DisambNameRatchet, NameIR, PersonDisambNameRatchet, RefNameIR,
+    DisambNameRatchet, NameIR, NameVariantMatcher, PersonDisambNameRatchet, RefNameIR,
 };
 fn disambiguate_add_givennames(
     db: &impl IrDatabase,
@@ -368,7 +367,7 @@ fn disambiguate_add_givennames(
     let name_ir: &mut NameIR<MarkupBuild> = find_cite_name_block(NameVariable::Author, ir)?;
     // This should be done for each NameIR/variable found in the cite IR rather than once for
     // Author!
-    let mut double_vec: Vec<Vec<Vec<Edge>>> = Vec::new();
+    let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
 
     for r in refs {
         if let Some(rnir) =
@@ -380,7 +379,7 @@ fn disambiguate_add_givennames(
                 double_vec.resize_with(len, || Vec::with_capacity(name_ir.disamb_names.len()));
             }
             for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                let matcher = single_name_matcher(db, id);
+                let matcher = NameVariantMatcher::from_disamb_name(db, id);
                 if let Some(slot) = double_vec.get_mut(n) {
                     slot.push(matcher);
                 }
@@ -388,10 +387,8 @@ fn disambiguate_add_givennames(
         }
     }
 
-    let name_ambiguity_number = |edge: Edge, slot: &[Vec<Edge>]| -> u32 {
-        slot.iter()
-            .filter(|matcher| matcher.contains(&edge))
-            .count() as u32
+    let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
+        slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
     };
 
     let mut n = 0usize;
@@ -401,10 +398,7 @@ fn disambiguate_add_givennames(
                 if let Some(ref slot) = double_vec.get(n) {
                     // First, get the initial count
                     /* TODO: store format stack */
-                    let mut edge =
-                        ratchet
-                            .data
-                            .single_name_edge(db, Formatting::default());
+                    let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
                     let mut min = name_ambiguity_number(edge, slot);
                     debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
                     let mut stage_dn = ratchet.data.clone();

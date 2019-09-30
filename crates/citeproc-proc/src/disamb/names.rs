@@ -171,18 +171,11 @@ impl DisambNameData {
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
         };
-        builder.render_person_name(
-            &self.value,
-            !self.primary
-        )
+        builder.render_person_name(&self.value, !self.primary)
     }
 
     /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_edge(
-        &self,
-        db: &impl IrDatabase,
-        stack: Formatting,
-    ) -> Edge {
+    pub(crate) fn single_name_edge(&self, db: &impl IrDatabase, stack: Formatting) -> Edge {
         let fmt = &db.get_formatter();
         let style = db.style();
         let built = self.single_name(fmt, &style);
@@ -396,23 +389,30 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
-use super::finite_automata::Dfa;
-pub fn single_name_matcher(db: &impl IrDatabase, dn: DisambName) -> Vec<Edge> {
-    let style = db.style();
-    let fmt = &db.get_formatter();
-    let rule = style.citation.givenname_disambiguation_rule;
+pub struct NameVariantMatcher(Vec<Edge>);
 
-    let mut data: DisambNameData = dn.lookup(db);
-    let iter = data.disamb_iter(rule);
-    let mut edges = Vec::with_capacity(iter.clone().count() + 1);
-    let edge = data.single_name_edge(db, Formatting::default());
-    edges.push(edge);
-    for pass in iter {
-        data.apply_pass(pass);
+impl NameVariantMatcher {
+    pub fn accepts(&self, edge: Edge) -> bool {
+        self.0.contains(&edge)
+    }
+
+    pub fn from_disamb_name(db: &impl IrDatabase, dn: DisambName) -> Self {
+        let style = db.style();
+        let fmt = &db.get_formatter();
+        let rule = style.citation.givenname_disambiguation_rule;
+
+        let mut data: DisambNameData = dn.lookup(db);
+        let iter = data.disamb_iter(rule);
+        let mut edges = Vec::with_capacity(iter.clone().count() + 1);
         let edge = data.single_name_edge(db, Formatting::default());
         edges.push(edge);
+        for pass in iter {
+            data.apply_pass(pass);
+            let edge = data.single_name_edge(db, Formatting::default());
+            edges.push(edge);
+        }
+        NameVariantMatcher(edges)
     }
-    edges
 }
 
 /// Performs 'global name disambiguation'
@@ -434,12 +434,12 @@ pub fn disambiguated_person_names(
 
     // preamble: build all the names
     for &dn in dns.iter() {
-        matchers.push(single_name_matcher(db, dn));
+        matchers.push(NameVariantMatcher::from_disamb_name(db, dn));
     }
     let is_ambiguous = |edge: Edge| -> bool {
         let mut n = 0;
         for m in &matchers {
-            let acc = m.contains(&edge);
+            let acc = m.accepts(edge);
             if acc {
                 n += 1;
             }
