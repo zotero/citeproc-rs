@@ -301,11 +301,13 @@ impl InlineElement {
                 stack_formats_html(s, inlines, options, *formatting);
             }
             Quoted(_qt, inners) => {
-                s.push_str(r#"<q>"#);
+                // TODO: use localized quotes
+                // TODO: move punctuation
+                s.push('“');
                 for i in inners {
                     i.to_html_inner(s, options);
                 }
-                s.push_str("</q>");
+                s.push('”');
             }
             Anchor {
                 title: _,
