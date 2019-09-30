@@ -262,11 +262,12 @@ fn refs_accepting_cite(db: &impl IrDatabase, ir: &IR<Markup>) -> Vec<Atom> {
 /// 2. We construct the specific RefContext that would have produced the <names/> that would have
 ///    made the Names NFA that accepted this cite's IR. This is the 'exact same name_el' referred
 ///    to in step 1. (This is technically redundant, but it's not possible to pull it back out of a
-///    minimised DFA.)
+///    minimised DFA.) We know the structure of the NFA, so we can avoid constructing one by just
+///    having a Vec<Edge> of options.
 ///
 ///    This step is done by `make_identical_name_formatter`.
 ///
-/// 3. We can then use this narrowed-down Dfa to test, locally, whether name expansions are narrowing
+/// 3. We can then use this narrowed-down matcher to test, locally, whether name expansions are narrowing
 ///    down the cite's ambiguity, without having to zip in and out or use a mutex.
 
 fn make_identical_name_formatter<'a, DB: IrDatabase>(
@@ -274,18 +275,17 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     ref_id: Atom,
     cite_ctx: &'a CiteContext<'a, Markup>,
     nvar: NameVariable,
-) -> Option<(RefNameIR, Dfa)> {
+) -> Option<RefNameIR> {
     use crate::disamb::create_single_ref_ir;
     let refr = db.reference(ref_id)?;
     let ref_ctx = RefContext::from_cite_context(&refr, cite_ctx);
     let ref_ir = create_single_ref_ir::<Markup, DB>(db, &ref_ctx);
-    use crate::disamb::Nfa;
-    fn find_name_block(nvar: NameVariable, ref_ir: &RefIR) -> Option<(&RefNameIR, &Nfa)> {
+    fn find_name_block(nvar: NameVariable, ref_ir: &RefIR) -> Option<&RefNameIR> {
         match ref_ir {
             RefIR::Edge(_) => None,
             RefIR::Name(nir, ref nfa) => {
                 if nir.variable == nvar {
-                    Some((nir, nfa))
+                    Some(nir)
                 } else {
                     None
                 }
@@ -300,7 +300,7 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
         }
     }
     find_name_block(nvar, &ref_ir)
-        .map(|(rnir, nfa)| (rnir.clone(), Nfa::brzozowski_minimise(nfa.clone())))
+        .map(|rnir| rnir.clone())
 }
 
 /// This should be refactored to produce an iterator of mutable NameIRs, one per variable
@@ -371,7 +371,7 @@ fn disambiguate_add_givennames(
     let mut double_vec: Vec<Vec<Vec<Edge>>> = Vec::new();
 
     for r in refs {
-        if let Some((rnir, dfa)) =
+        if let Some(rnir) =
             make_identical_name_formatter(db, r, ctx, /* XXX */ NameVariable::Author)
         {
             let var = rnir.variable;
@@ -394,8 +394,6 @@ fn disambiguate_add_givennames(
             .count() as u32
     };
 
-    let rule = style.citation.givenname_disambiguation_rule;
-
     let mut n = 0usize;
     for dnr in name_ir.disamb_names.iter_mut() {
         match dnr {
@@ -409,7 +407,6 @@ fn disambiguate_add_givennames(
                             .single_name_edge(db, Formatting::default());
                     let mut min = name_ambiguity_number(edge, slot);
                     debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
-                    let initial_min = min;
                     let mut stage_dn = ratchet.data.clone();
                     // Then, try to improve it
                     let mut iter = ratchet.iter.clone();
