@@ -35,6 +35,9 @@ impl Disambiguation<Markup> for Names {
             .name_citation()
             .merge(self.name.as_ref().unwrap_or(&NameEl::empty()));
 
+        // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
+        // and get a reduced formatting to work with
+
         let mut runner = OneNameVar {
             name_el: &name_el,
             bump_name_count: 0,
@@ -94,7 +97,7 @@ impl Disambiguation<Markup> for Names {
                                 }
                                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(ratchet)) => {
                                     let dn = ratchet.data.clone();
-                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot);
+                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot, stack);
                                 }
                             }
                         }
@@ -156,58 +159,35 @@ impl DisambNameData {
         }
     }
 
-    /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_ref_ir(
+    pub(crate) fn single_name(
         &self,
-        db: &impl IrDatabase,
         fmt: &Markup,
         style: &Style,
-        stack: Formatting,
-    ) -> RefIR {
-        let val = Some(());
-        let edge = val
-            .map(|_val| {
-                let builder = OneNameVar {
-                    fmt,
-                    name_el: &self.el,
-                    bump_name_count: 0,
-                    demote_non_dropping_particle: style.demote_non_dropping_particle,
-                    initialize_with_hyphen: style.initialize_with_hyphen,
-                };
-                builder.render_person_name(
-                    &self.value,
-                    // XXX: seen_one?
-                    false,
-                )
-            })
-            .map(|x| fmt.output_in_context(x, stack))
-            .map(|o| db.edge(EdgeData::Output(o)));
-        RefIR::Edge(edge)
+    ) -> <Markup as OutputFormat>::Build {
+        let builder = OneNameVar {
+            fmt,
+            name_el: &self.el,
+            bump_name_count: 0,
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+        };
+        builder.render_person_name(
+            &self.value,
+            !self.primary
+        )
     }
 
-    pub(crate) fn single_name_ir(
+    /// This is used directly for *global name disambiguation*
+    pub(crate) fn single_name_edge(
         &self,
-        _db: &impl IrDatabase,
-        fmt: &Markup,
-        style: &Style,
-        _stack: Formatting,
-    ) -> IR {
-        let _val = Some(());
-        let val = {
-            let builder = OneNameVar {
-                fmt,
-                name_el: &self.el,
-                bump_name_count: 0,
-                demote_non_dropping_particle: style.demote_non_dropping_particle,
-                initialize_with_hyphen: style.initialize_with_hyphen,
-            };
-            builder.render_person_name(
-                &self.value,
-                // XXX: seen_one?
-                false,
-            )
-        };
-        IR::Rendered(Some(CiteEdgeData::Output(val)))
+        db: &impl IrDatabase,
+        stack: Formatting,
+    ) -> Edge {
+        let fmt = &db.get_formatter();
+        let style = db.style();
+        let built = self.single_name(fmt, &style);
+        let o = fmt.output_in_context(built, stack);
+        db.edge(EdgeData::Output(o))
     }
 
     pub fn disamb_iter(&self, rule: GivenNameDisambiguationRule) -> SingleNameDisambIter {
@@ -396,45 +376,43 @@ fn add_expanded_name_to_graph(
     nfa: &mut Nfa,
     mut dn: DisambNameData,
     spot: NodeIndex,
+    stack: Formatting,
 ) -> NodeIndex {
     let style = db.style();
     let rule = style.citation.givenname_disambiguation_rule;
     let fmt = &db.get_formatter();
-    let ir = dn.single_name_ref_ir(
-        db,
-        fmt,
-        &style,
-        /* TODO: store format stck with DND */ Formatting::default(),
-    );
+    let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
-    let last = add_to_graph(db, fmt, nfa, &ir, spot);
+    let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     for pass in dn.disamb_iter(rule) {
         dn.apply_pass(pass);
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
-        let ir = dn.single_name_ref_ir(
-            db,
-            fmt,
-            &style,
-            /* TODO: store format stck with DND */ Formatting::default(),
-        );
-        let last = add_to_graph(db, fmt, nfa, &ir, spot);
+        let edge = dn.single_name_edge(db, stack);
+        let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
         nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     }
     next_spot
 }
 
 use super::finite_automata::Dfa;
-pub fn single_name_dfa(db: &impl IrDatabase, dn: DisambName) -> Dfa {
-    let data: DisambNameData = dn.lookup(db);
-    let mut nfa = Nfa::new();
-    let first = nfa.graph.add_node(());
-    nfa.start.insert(first);
-    let last = add_expanded_name_to_graph(db, &mut nfa, data, first);
-    nfa.accepting.insert(last);
-    let dfa = nfa.brzozowski_minimise();
-    dfa
+pub fn single_name_matcher(db: &impl IrDatabase, dn: DisambName) -> Vec<Edge> {
+    let style = db.style();
+    let fmt = &db.get_formatter();
+    let rule = style.citation.givenname_disambiguation_rule;
+
+    let mut data: DisambNameData = dn.lookup(db);
+    let iter = data.disamb_iter(rule);
+    let mut edges = Vec::with_capacity(iter.clone().count() + 1);
+    let edge = data.single_name_edge(db, Formatting::default());
+    edges.push(edge);
+    for pass in iter {
+        data.apply_pass(pass);
+        let edge = data.single_name_edge(db, Formatting::default());
+        edges.push(edge);
+    }
+    edges
 }
 
 /// Performs 'global name disambiguation'
@@ -451,17 +429,17 @@ pub fn disambiguated_person_names(
 
     let dns = db.all_person_names();
     let fmt = &db.get_formatter();
-    let mut dfas = Vec::new();
+    let mut matchers = Vec::new();
     let mut results = FnvHashMap::default();
 
     // preamble: build all the names
     for &dn in dns.iter() {
-        dfas.push(single_name_dfa(db, dn));
+        matchers.push(single_name_matcher(db, dn));
     }
-    let is_ambiguous = |edges: &[EdgeData]| -> bool {
+    let is_ambiguous = |edge: Edge| -> bool {
         let mut n = 0;
-        for dfa in &dfas {
-            let acc = dfa.accepts_data(db, &edges);
+        for m in &matchers {
+            let acc = m.contains(&edge);
             if acc {
                 n += 1;
             }
@@ -471,29 +449,21 @@ pub fn disambiguated_person_names(
         }
         n > 1
     };
+
     for &dn_id in dns.iter() {
         let mut dn: DisambNameData = dn_id.lookup(db);
-        let mut ir = dn.single_name_ir(
-            db,
-            fmt,
-            &style,
-            /* TODO: store format stack */ Formatting::default(),
-        );
-        let mut edges = ir.to_edge_stream(fmt);
+        let mut edge = dn.single_name_edge(db, Formatting::default());
         let mut iter = dn.disamb_iter(rule);
-        while is_ambiguous(&edges) {
+        while is_ambiguous(edge) {
             if let Some(pass) = iter.next() {
                 dn.apply_pass(pass);
-                ir = dn.single_name_ir(db, fmt, &style, Formatting::default());
-                edges = ir.to_edge_stream(fmt);
+                edge = dn.single_name_edge(db, Formatting::default());
             } else {
                 // failed, so we must reset
                 dn = dn_id.lookup(db);
-                // ir = dn.single_name_ir(db, fmt, &style, Formatting::default());
                 break;
             }
         }
-        // discard the ir, it is easier to just reconstruct it later
         results.insert(dn_id, dn);
     }
     Arc::new(results)

@@ -355,7 +355,7 @@ fn stamp_modified_name_ir(
 type MarkupBuild = <Markup as OutputFormat>::Build;
 
 use crate::disamb::names::{
-    single_name_dfa, DisambNameRatchet, NameIR, PersonDisambNameRatchet, RefNameIR,
+    single_name_matcher, DisambNameRatchet, NameIR, PersonDisambNameRatchet, RefNameIR,
 };
 fn disambiguate_add_givennames(
     db: &impl IrDatabase,
@@ -368,42 +368,30 @@ fn disambiguate_add_givennames(
     let name_ir: &mut NameIR<MarkupBuild> = find_cite_name_block(NameVariable::Author, ir)?;
     // This should be done for each NameIR/variable found in the cite IR rather than once for
     // Author!
-    let mut whole_name_block_dfas = Vec::<Dfa>::with_capacity(refs.len());
-
-    let mut double_vec: Vec<Vec<Dfa>> = Vec::new();
+    let mut double_vec: Vec<Vec<Vec<Edge>>> = Vec::new();
 
     for r in refs {
         if let Some((rnir, dfa)) =
             make_identical_name_formatter(db, r, ctx, /* XXX */ NameVariable::Author)
         {
-            whole_name_block_dfas.push(dfa);
             let var = rnir.variable;
             let len = rnir.disamb_name_ids.len();
             if len > double_vec.len() {
                 double_vec.resize_with(len, || Vec::with_capacity(name_ir.disamb_names.len()));
             }
             for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                let dfa = single_name_dfa(db, id);
+                let matcher = single_name_matcher(db, id);
                 if let Some(slot) = double_vec.get_mut(n) {
-                    slot.push(dfa);
+                    slot.push(matcher);
                 }
             }
         }
     }
 
-    let name_ambiguity_number = |ir: &IR, slot: &[Dfa]| -> u32 {
-        let edges = ir.to_edge_stream(&fmt);
+    let name_ambiguity_number = |edge: Edge, slot: &[Vec<Edge>]| -> u32 {
         slot.iter()
-            .filter(|dfa| dfa.accepts_data(db, &edges))
+            .filter(|matcher| matcher.contains(&edge))
             .count() as u32
-    };
-
-    let total_ambiguity_number = |ir: &IR| {
-        let edges = ir.to_edge_stream(&fmt);
-        whole_name_block_dfas
-            .iter()
-            .filter(|dfa| dfa.accepts_data(db, &edges))
-            .count()
     };
 
     let rule = style.citation.givenname_disambiguation_rule;
@@ -415,12 +403,12 @@ fn disambiguate_add_givennames(
                 if let Some(ref slot) = double_vec.get(n) {
                     // First, get the initial count
                     /* TODO: store format stack */
-                    let mut ir =
+                    let mut edge =
                         ratchet
                             .data
-                            .single_name_ir(db, &fmt, &style, Formatting::default());
-                    let mut min = name_ambiguity_number(&ir, slot);
-                    debug!("nan for {}-th ({:?}) initially {}", n, ir, min);
+                            .single_name_edge(db, Formatting::default());
+                    let mut min = name_ambiguity_number(edge, slot);
+                    debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
                     let initial_min = min;
                     let mut stage_dn = ratchet.data.clone();
                     // Then, try to improve it
@@ -428,15 +416,15 @@ fn disambiguate_add_givennames(
                     while min > 1 {
                         if let Some(next) = iter.next() {
                             stage_dn.apply_pass(next);
-                            ir = stage_dn.single_name_ir(db, &fmt, &style, Formatting::default());
-                            let new_count = name_ambiguity_number(&ir, slot);
+                            edge = stage_dn.single_name_edge(db, Formatting::default());
+                            let new_count = name_ambiguity_number(edge, slot);
                             if new_count < min {
                                 // save the improvement
                                 min = new_count;
                                 ratchet.data = stage_dn.clone();
                                 ratchet.iter = iter.clone();
                             }
-                            debug!("nan for {}-th ({:?}) got to {}", n, ir, min);
+                            debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
                         } else {
                             break;
                         }
