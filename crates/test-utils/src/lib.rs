@@ -127,6 +127,8 @@ impl TestCase {
         // Slashes are fine if they're not next to angle braces
         // let's hope they're not
         res.replace("&#x2f;", "/")
+            // citeproc-js uses the #38 version
+            .replace("&amp;", "&#38;")
     }
 }
 

@@ -338,11 +338,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     #[inline]
     fn ea_min(&self, pos: Position) -> usize {
         let first = self.name_el.et_al_min.unwrap_or(0);
-        if pos == Position::First {
+        let use_first = if pos == Position::First {
             first as usize
         } else {
             self.name_el.et_al_subsequent_min.unwrap_or(first) as usize
-        }
+        };
+        use_first + self.bump_name_count as usize
     }
 
     #[inline]
@@ -555,9 +556,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     };
                     // If an And token shows up, we already know self.name_el.and is Some.
                     let form = match self.name_el.and {
-                        Some(NameAnd::Symbol) => locale
-                            .get_text_term(select(TermFormExtended::Symbol), false)
-                            .unwrap_or("&"),
+                        Some(NameAnd::Symbol) => "&",
+                        // locale
+                        //     .get_text_term(select(TermFormExtended::Symbol), false)
+                        //     .unwrap_or("&"),
                         _ => locale
                             .get_text_term(select(TermFormExtended::Long), false)
                             .unwrap_or("and"),
