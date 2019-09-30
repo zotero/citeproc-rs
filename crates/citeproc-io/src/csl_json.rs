@@ -87,50 +87,19 @@ enum Field {
     Any(WrapVar),
 }
 
-pub struct IdOrNumber(pub String);
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum IdOrNumber {
+    S(String),
+    N(i32),
+}
 
-impl<'de> Deserialize<'de> for IdOrNumber {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ParseIntVisitor;
-        impl<'de> Visitor<'de> for ParseIntVisitor {
-            type Value = IdOrNumber;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("an integer or a string that's actually just an integer")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(value).map(|i| IdOrNumber(i.to_string()))
-            }
-
-            fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
-            }
-
-            fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
-            }
-
-            fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(value as u32).map(|i| IdOrNumber(i.to_string()))
-            }
+impl IdOrNumber {
+    pub fn to_string(self) -> String {
+        match self {
+            IdOrNumber::S(s) => s,
+            IdOrNumber::N(i) => i.to_string(),
         }
-        deserializer.deserialize_any(ParseIntVisitor)
     }
 }
 
@@ -254,7 +223,7 @@ impl<'de> Deserialize<'de> for Reference {
                 }
                 Ok(Reference {
                     id: id
-                        .map(|i| csl::Atom::from(i.0))
+                        .map(|i| csl::Atom::from(i.to_string()))
                         .ok_or_else(|| de::Error::missing_field("id"))?,
                     csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
                     language,

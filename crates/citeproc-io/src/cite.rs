@@ -42,13 +42,13 @@ impl Locator {
 use serde::de::{Deserialize, Deserializer};
 
 /// Techincally reference IDs are allowed to be numbers.
-fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
+pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
 where
     D: Deserializer<'de>,
 {
     use super::csl_json::IdOrNumber;
     let s = IdOrNumber::deserialize(d)?;
-    Ok(Atom::from(s.0))
+    Ok(Atom::from(s.to_string()))
 }
 
 /// Represents one cite in someone's document, to exactly one reference.

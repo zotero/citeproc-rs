@@ -22,7 +22,7 @@ where
 {
     use citeproc_io::IdOrNumber;
     let s = IdOrNumber::deserialize(d)?;
-    Ok(s.0)
+    Ok(s.to_string())
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
