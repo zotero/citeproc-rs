@@ -59,7 +59,8 @@ const initialReferences: Reference[] = [
         type: 'book',
         author: [
             { given: "Kurt", family: "Camembert" },
-            { given: "Amadeus", family: "Rossi" }
+            { given: "Amadeus", family: "Rossi" },
+            { given: "Ignatius", family: "Irrelevant" }
         ],
         title: "Where The Vile Things Are",
         issued: { "raw": "1999-08-09" },
@@ -69,7 +70,8 @@ const initialReferences: Reference[] = [
         type: 'book',
         author: [
             { given: "Kurt", family: "Camembert" },
-            { given: "Ariadne", family: "Rossi" }
+            { given: "Ariadne", family: "Rossi" },
+            { given: "Ignatius", family: "Irrelevant" }
         ],
         title: "Where The Vile Things Are",
     },
