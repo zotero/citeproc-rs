@@ -492,20 +492,6 @@ impl RefNameIR {
     }
 }
 
-// TODO: make most fields private
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct NameIR<O: OutputFormat> {
-    pub names_el: Names,
-    pub variable: NameVariable,
-    pub max_name_count: u16,
-    pub current_name_count: u16,
-    pub bump_name_count: u16,
-    pub gn_iter_index: usize,
-    pub disamb_names: Vec<DisambNameRatchet<O::Build>>,
-    pub achieved_at: (u16, u16),
-    pub ir: Box<IR<O>>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DisambNameRatchet<B> {
     Literal(B),
@@ -528,24 +514,68 @@ impl PersonDisambNameRatchet {
     }
 }
 
-impl<O> NameIR<O> where O : OutputFormat {
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct NameCounter {
+    /// How much to increase ea_use_first by
+    pub bump: u16,
+    /// Max recorded number of names rendered
+    pub max_recorded: u16,
+    ///
+    pub current: u16,
+}
+
+// TODO: make most fields private
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct NameIR<O: OutputFormat> {
+    pub names_el: Names,
+    pub variable: NameVariable,
+
+    pub name_counter: NameCounter,
+    achieved_at: (u16, NameCounter),
+
+    pub disamb_names: Vec<DisambNameRatchet<O::Build>>,
+    pub ir: Box<IR<O>>,
+}
+
+impl<O> NameIR<O>
+where
+    O: OutputFormat,
+{
+    pub fn new(
+        names_el: Names,
+        variable: NameVariable,
+        ratchets: Vec<DisambNameRatchet<O::Build>>,
+        ir: Box<IR<O>>,
+    ) -> Self {
+        NameIR {
+            names_el,
+            variable,
+            disamb_names: ratchets,
+            ir,
+            name_counter: NameCounter::default(),
+            achieved_at: (std::u16::MAX, NameCounter::default()),
+        }
+    }
     pub fn achieved_count(&mut self, count: u16) {
         let (prev_best, _at) = self.achieved_at;
         if count < prev_best {
-            self.achieved_at = (count, self.bump_name_count);
+            self.achieved_at = (count, self.name_counter);
         }
     }
     pub fn rollback(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) {
         let (_prev_best, at) = self.achieved_at;
-        self.bump_name_count = at;
-        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
+        if self.name_counter.bump > at.bump {
+            info!("{:?} rolling back to {:?} names", ctx.cite_id, at);
+        }
+        self.name_counter = at;
+        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx, None) {
             *self.ir = ir;
         }
     }
 
     // returns false if couldn't add any more names
     pub fn add_name(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
-        self.bump_name_count += 1;
+        self.name_counter.bump += 1;
         match self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
             Some((new_ir, _)) => {
                 *self.ir = new_ir;

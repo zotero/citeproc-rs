@@ -395,10 +395,16 @@ fn disambiguate_add_names(
             let edges = MutexGuard::unlocked(this_nir, || {
                 ir.to_edge_stream(fmt)
             });
-            dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count() as u16
+            let count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count() as u16;
+            if count == 0 {
+                warn!("should not get to zero matching refs");
+            }
+            count
         };
 
         let mut nir = nir_arc.lock();
+        // So we can roll back to { bump = 0 }
+        nir.achieved_count(best);
 
         // TODO: save, within NameIR, new_count and the lowest bump_name_count to achieve it,
         // so that it can roll back to that number easily
@@ -411,7 +417,7 @@ fn disambiguate_add_names(
                 expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir);
             }
             let new_count = total_ambiguity_number(&mut nir);
-            nir.achieved_count(new_count as u16);
+            nir.achieved_count(new_count);
             best = std::cmp::min(best, new_count);
         }
         nir.rollback(db, ctx);

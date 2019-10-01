@@ -4,9 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use crate::prelude::*;
 
 use super::unicode::is_latin_cyrillic;
 use citeproc_io::utils::Intercalate;
@@ -71,18 +71,12 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                     DisambNameRatchet::Literal(fmt.text_node(literal, None))
                 }
             });
-            NameIR {
-                names_el: names.clone(),
-                variable: var,
-                bump_name_count: 0,
-                max_name_count: 0,
-                current_name_count: 0,
-                gn_iter_index: 0,
-                disamb_names: ratchets.collect(),
-                achieved_at: (std::u16::MAX, 0),
-                // must replace this if you want to use it for a cite IR
-                ir: Box::new(IR::Rendered(None))
-            }
+            NameIR::new(
+                names.clone(),
+                var,
+                ratchets.collect(),
+                Box::new(IR::Rendered(None)),
+            )
         })
 }
 
@@ -159,7 +153,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
 
         let mut runner = OneNameVar {
             name_el: &name_el,
-            bump_name_count: self.bump_name_count,
+            bump_name_count: self.name_counter.bump,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
             fmt,
@@ -167,13 +161,15 @@ impl<'c, O: OutputFormat> NameIR<O> {
 
         let ntbs =
             runner.names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al);
-        self.current_name_count = ntb_len(&ntbs);
+
+        // TODO: refactor into a method on NameCounter
+        self.name_counter.current = ntb_len(&ntbs);
         if pass == Some(DisambPass::AddNames)
-            && self.current_name_count <= self.max_name_count
+            && self.name_counter.current <= self.name_counter.max_recorded
         {
             return None;
         }
-        self.max_name_count = self.current_name_count;
+        self.name_counter.max_recorded = self.name_counter.current;
 
         let iter = ntbs
             .into_iter()
