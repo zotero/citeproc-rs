@@ -369,29 +369,41 @@ impl IrSeq<Markup> {
         if self.contents.len() == 0 {
             return;
         }
+        let IrSeq {
+            contents,
+            affixes,
+            formatting: seq_formatting,
+            delimiter,
+        } = self;
+
         let stack = fmt.tag_stack(self.formatting.unwrap_or_else(Default::default));
-        let sub_formatting = self
-            .formatting
+        let sub_formatting = seq_formatting
             .map(|mine| formatting.override_with(mine))
             .unwrap_or(formatting);
         let mut open_tags = String::new();
         let mut close_tags = String::new();
         fmt.stack_preorder(&mut open_tags, &stack);
         fmt.stack_postorder(&mut close_tags, &stack);
+
+        if !affixes.prefix.is_empty() {
+            edges.push(EdgeData::Output(affixes.prefix.to_string()));
+        }
+
         if open_tags.len() > 0 {
             edges.push(EdgeData::Output(open_tags));
         }
+
         // push the innards
-        let _len = self.contents.len();
+        let _len = contents.len();
         let mut seen = false;
         let mut sub = Vec::new();
-        for (_n, ir) in self.contents.iter().enumerate() {
+        for (_n, ir) in contents.iter().enumerate() {
             ir.append_edges(&mut sub, fmt, sub_formatting);
             if sub.len() > 0 {
                 if seen {
-                    if !self.delimiter.is_empty() {
+                    if !delimiter.is_empty() {
                         edges.push(EdgeData::Output(fmt.output_in_context(
-                            fmt.plain(self.delimiter.as_ref()),
+                            fmt.plain(delimiter.as_ref()),
                             sub_formatting,
                         )));
                     }
@@ -404,6 +416,11 @@ impl IrSeq<Markup> {
         if close_tags.len() > 0 {
             edges.push(EdgeData::Output(close_tags));
         }
+
+        if !affixes.suffix.is_empty() {
+            edges.push(EdgeData::Output(affixes.suffix.to_string()));
+        }
+
     }
 
     fn flatten_seq(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {
