@@ -31,7 +31,7 @@ cfg_if! {
     if #[cfg(feature = "console")] {
         pub fn init_log() {
             fern::Dispatch::new()
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Warn)
                 .level_for("salsa", log::LevelFilter::Info)
                 .level_for("salsa::derived", log::LevelFilter::Warn)
                 .level_for("html5ever", log::LevelFilter::Off)

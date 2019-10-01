@@ -87,6 +87,7 @@ bitflags::bitflags! {
     }
 }
 
+#[allow(dead_code)]
 const LT_MASK: FreeCond = FreeCond::from_bits_truncate(std::u64::MAX << 16);
 const LT_MASK_TRUE: FreeCond = FreeCond::from_bits_truncate(0x5555_5555_5555_5555 << 16);
 const LT_MASK_FALSE: FreeCond = FreeCond::from_bits_truncate(0xAAAA_AAAA_AAAA_AAAA << 16);
@@ -186,7 +187,7 @@ impl FreeCond {
             let opposite = deductive.invert();
             match_fc!(@locator_type opposite);
         }
-        if (self.contains(FreeCond::LOCATOR)) {
+        if self.contains(FreeCond::LOCATOR) {
             return Some(LocatorType::Page);
         }
         None

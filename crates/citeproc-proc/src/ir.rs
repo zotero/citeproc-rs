@@ -7,11 +7,10 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{
-    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, Names as NamesEl,
-};
+use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
+use csl::variables::NameVariable;
 use csl::Atom;
-use petgraph::graph::NodeIndex;
+
 use std::sync::Arc;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
@@ -34,10 +33,12 @@ pub enum YearSuffixHook {
 
 impl Eq for RefIR {}
 impl PartialEq for RefIR {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         false
     }
 }
+
+use crate::disamb::names::RefNameIR;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -66,8 +67,9 @@ pub enum RefIR {
     /// ]
     /// ```
     ///
-    /// The Nfa represents all the token streams that the Names block can output.
-    Names(Nfa, NodeIndex, NodeIndex, Box<RefIR>),
+    /// The Nfa represents all the edge streams that a Names block can output for one of its
+    /// variables.
+    Name(RefNameIR, Nfa),
 
     /// A non-string EdgeData can be surrounded by a Seq with other strings to apply its
     /// formatting. This will use `OutputFormat::stack_preorder() / ::stack_postorder()`.
@@ -106,7 +108,7 @@ impl RefIR {
                 }
                 s
             }
-            RefIR::Names(_nfa, _start, _end, ir) => ir.debug(db),
+            RefIR::Name(rnir, _nfa) => format!("NameVariable::{:?}", rnir.variable),
         }
     }
 }
@@ -146,14 +148,16 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     }
 }
 
+use parking_lot::Mutex;
+use crate::disamb::names::NameIR;
+
 // Intermediate Representation
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum IR<O: OutputFormat = Markup> {
     // no (further) disambiguation possible
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
-    // the current render
-    Names(Arc<NamesEl>, O::Build),
+    Name(Arc<Mutex<NameIR<O>>>),
 
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
@@ -176,15 +180,51 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
-impl IR<Markup> {
-    fn is_rendered(&self) -> bool {
-        match self {
-            IR::Rendered(_) => true,
+impl<O> Eq for IR<O> where O : OutputFormat + PartialEq + Eq {}
+impl<O> PartialEq for IR<O> where O : OutputFormat + PartialEq {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
+            (IR::Seq(s), IR::Seq(o)) if s == o => true,
+            (IR::YearSuffix(s1, s2), IR::YearSuffix(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::ConditionalDisamb(s1, s2), IR::ConditionalDisamb(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::Name(self_nir), IR::Name(other_nir)) => {
+                let s = self_nir.lock();
+                let o = other_nir.lock();
+                *s == *o
+            }
             _ => false,
         }
     }
+}
 
-    pub fn disambiguate<'c>(
+impl<O: OutputFormat> Default for IR<O> {
+    fn default() -> Self {
+        IR::Rendered(None)
+    }
+}
+
+use std::mem;
+
+impl IR<Markup> {
+    pub(crate) fn visit_names_mut<F>(&mut self, callback: F) where F : (Fn(&mut NameIR<Markup>) -> ()) + Clone {
+        match self {
+            IR::YearSuffix(..) | IR::Rendered(_) => {},
+            IR::Name(ref nir) => {
+                callback(&mut nir.lock());
+            }
+            IR::ConditionalDisamb(_, ref mut boxed) => {
+                boxed.visit_names_mut(callback.clone());
+            }
+            IR::Seq(seq) => {
+                for ir in seq.contents.iter_mut() {
+                    ir.visit_names_mut(callback.clone());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn disambiguate<'c>(
         &mut self,
         db: &impl IrDatabase,
         state: &mut IrState,
@@ -195,15 +235,17 @@ impl IR<Markup> {
             IR::Rendered(_) => {
                 return ret;
             }
-            IR::Names(ref el, ref _x) => {
-                // TODO: re-eval again until names are exhausted
-                // i.e. return true until then
-                let (new_ir, _) = el.intermediate(state, ctx);
-                new_ir
+            IR::Name(ref nir) => {
+                return ret;
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
-                    let (new_ir, _) = el.intermediate(state, ctx);
+                    info!(
+                        "attempting to disambiguate {:?} ({}) with {:?}",
+                        ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
+                    );
+                    let (new_ir, _) = el.intermediate(db, state, ctx);
+                    ret = false;
                     new_ir
                 } else {
                     return ret;
@@ -214,7 +256,7 @@ impl IR<Markup> {
                 // it can do normal group suppression
                 if let Some(DisambPass::AddYearSuffix(_)) = ctx.disamb_pass {
                     if let YearSuffixHook::Explicit(ref el) = ysh {
-                        let (new_ir, _gv) = el.intermediate(state, ctx);
+                        let (new_ir, _gv) = el.intermediate(db, state, ctx);
                         new_ir
                     } else {
                         warn!("YearSuffixHook::Date not implemented");
@@ -240,7 +282,7 @@ impl IR<Markup> {
         match self {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Names(_, ref x) => Some(x.clone()),
+            IR::Name(nir) => nir.lock().ir.flatten(fmt),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
@@ -265,9 +307,7 @@ impl IR<Markup> {
             }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
-            IR::Names(_names, r) => edges.push(EdgeData::Output(
-                fmt.output_in_context(r.clone(), formatting),
-            )),
+            IR::Name(nir) => nir.lock().ir.append_edges(edges, fmt, formatting),
         }
         ()
     }
@@ -329,30 +369,44 @@ impl IrSeq<Markup> {
         if self.contents.len() == 0 {
             return;
         }
+        let IrSeq {
+            contents,
+            affixes,
+            formatting: seq_formatting,
+            delimiter,
+        } = self;
+
         let stack = fmt.tag_stack(self.formatting.unwrap_or_else(Default::default));
-        let sub_formatting = self
-            .formatting
+        let sub_formatting = seq_formatting
             .map(|mine| formatting.override_with(mine))
             .unwrap_or(formatting);
         let mut open_tags = String::new();
         let mut close_tags = String::new();
         fmt.stack_preorder(&mut open_tags, &stack);
         fmt.stack_postorder(&mut close_tags, &stack);
+
+        if !affixes.prefix.is_empty() {
+            edges.push(EdgeData::Output(affixes.prefix.to_string()));
+        }
+
         if open_tags.len() > 0 {
             edges.push(EdgeData::Output(open_tags));
         }
+
         // push the innards
-        let len = self.contents.len();
+        let _len = contents.len();
         let mut seen = false;
         let mut sub = Vec::new();
-        for (n, ir) in self.contents.iter().enumerate() {
+        for (_n, ir) in contents.iter().enumerate() {
             ir.append_edges(&mut sub, fmt, sub_formatting);
             if sub.len() > 0 {
                 if seen {
-                    edges.push(EdgeData::Output(fmt.output_in_context(
-                        fmt.plain(self.delimiter.as_ref()),
-                        sub_formatting,
-                    )));
+                    if !delimiter.is_empty() {
+                        edges.push(EdgeData::Output(fmt.output_in_context(
+                            fmt.plain(delimiter.as_ref()),
+                            sub_formatting,
+                        )));
+                    }
                 } else {
                     seen = true;
                 }
@@ -362,6 +416,11 @@ impl IrSeq<Markup> {
         if close_tags.len() > 0 {
             edges.push(EdgeData::Output(close_tags));
         }
+
+        if !affixes.suffix.is_empty() {
+            edges.push(EdgeData::Output(affixes.suffix.to_string()));
+        }
+
     }
 
     fn flatten_seq(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {

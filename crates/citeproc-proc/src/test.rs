@@ -17,6 +17,12 @@ pub struct MockProcessor {
     fetcher: Arc<dyn LocaleFetcher>,
 }
 
+impl HasFormatter for MockProcessor {
+    fn get_formatter(&self) -> Markup {
+        Markup::html()
+    }
+}
+
 impl salsa::Database for MockProcessor {
     fn salsa_runtime(&self) -> &salsa::Runtime<MockProcessor> {
         &self.runtime

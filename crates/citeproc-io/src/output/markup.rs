@@ -129,7 +129,7 @@ impl MicroNode {
 }
 
 impl FormatCmd {
-    fn rtf_tag(&self, options: &RtfOptions) -> &'static str {
+    fn rtf_tag(&self, _options: &RtfOptions) -> &'static str {
         use super::FormatCmd::*;
         match self {
             FontStyleItalic => "\\i ",
@@ -210,8 +210,8 @@ fn stack_preorder_rtf(s: &mut String, stack: &[FormatCmd], options: &RtfOptions)
     }
 }
 
-fn stack_postorder_rtf(s: &mut String, stack: &[FormatCmd], options: &RtfOptions) {
-    for cmd in stack.iter() {
+fn stack_postorder_rtf(s: &mut String, stack: &[FormatCmd], _options: &RtfOptions) {
+    for _cmd in stack.iter() {
         s.push('}');
     }
 }
@@ -256,7 +256,6 @@ fn stack_formats_html(
     options: &HtmlOptions,
     formatting: Formatting,
 ) {
-    use self::FormatCmd::*;
     let stack = tag_stack(formatting);
     stack_preorder(s, &stack, options);
     for inner in inlines {
@@ -302,11 +301,13 @@ impl InlineElement {
                 stack_formats_html(s, inlines, options, *formatting);
             }
             Quoted(_qt, inners) => {
-                s.push_str(r#"<q>"#);
+                // TODO: use localized quotes
+                // TODO: move punctuation
+                s.push('“');
                 for i in inners {
                     i.to_html_inner(s, options);
                 }
-                s.push_str("</q>");
+                s.push('”');
             }
             Anchor {
                 title: _,
@@ -522,6 +523,11 @@ impl OutputFormat for Markup {
         }
     }
 
+    #[inline]
+    fn is_empty(&self, a: &Self::Build) -> bool {
+        a.is_empty()
+    }
+
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         let null = FlipFlopState::default();
         self.output_with_state(intermediate, null)
@@ -676,7 +682,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             }
             if let Some(fw) = f.font_weight {
                 let want = fw == FontWeight::Bold;
-                if flop.in_strong == want && want == true {
+                if flop.in_strong == want && want {
                     new_f.font_weight = None;
                 }
                 flop.in_strong = want;

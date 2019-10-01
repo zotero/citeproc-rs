@@ -112,7 +112,10 @@ impl TagParser {
                 }
                 NodeData::Comment { .. } => {}
                 NodeData::Element { .. } => unreachable!(),
-                NodeData::ProcessingInstruction { target, contents } => debug!(
+                NodeData::ProcessingInstruction {
+                    target: _,
+                    contents: _,
+                } => debug!(
                     // "Unknown enum tag: NodeData::ProcessingInstruction {{ {:?} {:?} }}",
                     // target, contents
                     "Unknown enum tag: NodeData::ProcessingInstruction",

@@ -26,14 +26,137 @@ pub trait StyleDatabase {
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
     fn name_citation(&self) -> Arc<Name>;
+
+    /// Lists every <names> block in the style, with each name variable it is used for
+    fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
 }
 
 fn name_citation(db: &impl StyleDatabase) -> Arc<Name> {
     let style = db.style();
-    let default = Name::root_default();
-    let root = &style.name_inheritance;
-    let citation = &style.citation.name_inheritance;
-    Arc::new(default.merge(root).merge(citation))
+    Arc::new(style.name_citation())
+}
+
+use csl::style::Element;
+use csl::variables::NameVariable;
+
+fn name_configurations_inner(
+    style: &Style,
+    base: &Name,
+    el: &Element,
+    buf: &mut Vec<(NameVariable, Name)>,
+) {
+    match el {
+        Element::Names(n) => {
+            if let Some(name) = n.name.clone() {
+                let name = base.merge(&name);
+                for &var in &n.variables {
+                    buf.push((var, name.clone()));
+                }
+                // recurse with the name properties as a new base
+                if let Some(subs) = &n.substitute {
+                    for e in &subs.0 {
+                        name_configurations_inner(style, &name, e, buf);
+                    }
+                }
+            } else {
+                for &var in &n.variables {
+                    buf.push((var, base.clone()));
+                }
+            }
+        }
+        // Otherwise recurse
+        Element::Group(g) => {
+            for e in &g.elements {
+                name_configurations_inner(style, base, e, buf);
+            }
+        }
+        Element::Choose(c) => {
+            let c: &csl::style::Choose = &*c;
+            let csl::style::Choose(ref iff, ref elseifs, ref elsee) = c;
+            for e in &iff.1 {
+                name_configurations_inner(style, base, e, buf);
+            }
+            for elseif in elseifs {
+                for e in &elseif.1 {
+                    name_configurations_inner(style, base, e, buf);
+                }
+            }
+            for e in &elsee.0 {
+                name_configurations_inner(style, base, e, buf);
+            }
+        }
+        Element::Text(csl::style::TextSource::Macro(m), ..) => {
+            if let Some(mac) = style.macros.get(m) {
+                for e in mac {
+                    name_configurations_inner(style, base, e, buf);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+macro_rules! style_xml {
+    ($ex:expr) => {{
+        use std::str::FromStr;
+        ::csl::style::Style::from_str(&format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+            {}"#,
+            $ex
+        ))
+        .unwrap()
+    }};
+}
+
+fn name_configurations_middle(style: &Style) -> Vec<(NameVariable, Name)> {
+    let base = style.name_citation();
+    let mut vec = Vec::new();
+    for el in &style.citation.layout.elements {
+        name_configurations_inner(style, &base, el, &mut vec);
+    }
+    vec
+}
+
+fn name_configurations(db: &impl StyleDatabase) -> Arc<Vec<(NameVariable, Name)>> {
+    let style = db.style();
+    Arc::new(name_configurations_middle(&style))
+}
+
+#[test]
+fn test_name_configurations() {
+    let sty = style_xml!(
+        r#"<style class="note" version="1.0">
+        <macro name="blah">
+            <names variable="translator"/>
+        </macro>
+        <citation et-al-min="10">
+            <layout>
+                <names variable="author editor"/>
+                <group>
+                    <names variable="editor">
+                        <name et-al-min="11" />
+                    </names>
+                </group>
+                <text macro="blah" />
+            </layout>
+        </citation>
+    </style>"#
+    );
+    let confs = name_configurations_middle(&sty);
+    let mut conf = Name::root_default();
+    conf.et_al_min = Some(10);
+    let mut conf2 = Name::root_default();
+    conf2.et_al_min = Some(11);
+    assert_eq!(
+        &confs,
+        &[
+            (NameVariable::Author, conf.clone()),
+            (NameVariable::Editor, conf.clone()),
+            (NameVariable::Editor, conf2),
+            (NameVariable::Translator, conf)
+        ]
+    );
 }
 
 /// Salsa interface to locales, including merging.

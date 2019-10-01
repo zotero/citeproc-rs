@@ -86,16 +86,21 @@ impl OutputFormat for PlainText {
     }
 
     #[inline]
+    fn is_empty(&self, a: &Self::Build) -> bool {
+        a.is_empty()
+    }
+
+    #[inline]
     fn output(&self, intermediate: Self::Build) -> Self::Output {
         intermediate
     }
 
     #[inline]
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    fn stack_preorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
     #[inline]
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
     #[inline]
-    fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
+    fn tag_stack(&self, _formatting: Formatting) -> Vec<FormatCmd> {
         Vec::new()
     }
 }

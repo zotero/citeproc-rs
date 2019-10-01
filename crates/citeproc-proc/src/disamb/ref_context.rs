@@ -43,6 +43,24 @@ impl<'c, O> RefContext<'c, O>
 where
     O: OutputFormat,
 {
+    pub fn from_cite_context(refr: &'c Reference, ctx: &'c CiteContext<'c, O>) -> Self {
+        use citeproc_io::Locators;
+        RefContext {
+            format: &ctx.format,
+            style: ctx.style,
+            locale: ctx.locale,
+            reference: refr,
+            locator_type: ctx.cite.locators.as_ref().and_then(|locs| match locs {
+                Locators::Single(l) => Some(l.loc_type),
+                // XXX
+                Locators::Multiple { .. } => None,
+            }),
+            position: ctx.position.0,
+            // XXX: technically Cites need to know this during the Conditionals pass as well,
+            // so it should be promoted beyond that single DisambPass::AddYearSuffix(ys) variant.
+            year_suffix: false,
+        }
+    }
     pub fn from_free_cond(
         fc: FreeCond,
         format: &'c O,

@@ -11,6 +11,7 @@ use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
 pub fn sequence<'c, O>(
+    db: &impl IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
     els: &[Element],
@@ -21,9 +22,9 @@ pub fn sequence<'c, O>(
 where
     O: OutputFormat,
 {
-    let fmt = &ctx.format;
+    let _fmt = &ctx.format;
 
-    let (inner, gv) = els.iter().map(|el| el.intermediate(state, ctx)).fold(
+    let (inner, gv) = els.iter().map(|el| el.intermediate(db, state, ctx)).fold(
         (Vec::new(), GroupVars::new()),
         |(mut acc, acc_gv), (ir, gv)| match ir {
             IR::Rendered(None) => (acc, acc_gv.neighbour(gv)),
@@ -57,7 +58,7 @@ pub fn ref_sequence<'c>(
     formatting: Option<Formatting>,
     affixes: Affixes,
 ) -> (RefIR, GroupVars) {
-    let fmt = &ctx.format;
+    let _fmt = &ctx.format;
 
     let (inner, gv) = els
         .iter()
@@ -86,17 +87,6 @@ pub fn ref_sequence<'c>(
             gv,
         )
     }
-}
-
-pub fn to_bijective_base_26(int: u32) -> String {
-    let mut n = int;
-    let mut s = String::new();
-    while n > 0 {
-        n -= 1;
-        s.push(char::from((65 + 32 + (n % 26)) as u8));
-        n /= 26;
-    }
-    s
 }
 
 use fnv::FnvHashSet;

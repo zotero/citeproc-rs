@@ -83,6 +83,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
 
     fn join_delim(&self, a: Self::Build, delim: &str, b: Self::Build) -> Self::Build;
 
+    fn is_empty(&self, a: &Self::Build) -> bool;
     fn output(&self, intermediate: Self::Build) -> Self::Output;
     fn output_in_context(
         &self,

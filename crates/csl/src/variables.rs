@@ -312,7 +312,9 @@ impl NumberVariable {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(
+    AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd,
+)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameVariable {
     /// author
@@ -353,6 +355,12 @@ pub enum NameVariable {
     /// rendering to be suppressed through the remainder of the current cite.
     #[strum(props(csl = "0", cslM = "1"))]
     Dummy,
+}
+
+impl Default for NameVariable {
+    fn default() -> Self {
+        NameVariable::Dummy
+    }
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]

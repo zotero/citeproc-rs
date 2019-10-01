@@ -254,7 +254,7 @@ where
                 }
             })
             .collect();
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             Err(errors)
         } else {
             Ok(oks)

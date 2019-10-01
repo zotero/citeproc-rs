@@ -12,22 +12,6 @@ pub fn roman_representable(val: &NumericValue) -> bool {
     }
 }
 
-fn tokens_to_string(ts: &[NumericToken]) -> String {
-    let mut s = String::with_capacity(ts.len());
-    for t in ts {
-        match t {
-            // TODO: ordinals, etc
-            Num(i) => s.push_str(&format!("{}", i)),
-            Affixed(a) => s.push_str(&a),
-            Comma => s.push_str(", "),
-            // en-dash
-            Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
-        }
-    }
-    s
-}
-
 pub fn roman_lower(ts: &[NumericToken]) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;
@@ -61,6 +45,7 @@ fn test_roman_lower() {
     assert_eq!(&roman_lower(&ts[..]), "iii\u{2013}xi, 2E");
 }
 
+#[allow(dead_code)]
 mod roman {
     //! Conversion between integers and roman numerals.
     //!

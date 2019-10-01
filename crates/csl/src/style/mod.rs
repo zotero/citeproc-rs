@@ -118,7 +118,7 @@ impl Default for NumericForm {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Affixes {
     pub prefix: Atom,
     pub suffix: Atom,
@@ -303,7 +303,7 @@ impl Default for VerticalAlignment {
     }
 }
 
-#[derive(Default, Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq, Hash)]
 pub struct Delimiter(pub Atom);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
@@ -482,21 +482,25 @@ pub struct Else(pub Vec<Element>);
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct Names {
     // inheritable.
     pub delimiter: Option<Delimiter>,
+
     // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
-    pub institution: Option<Institution>,
     pub label: Option<NameLabel>,
     pub et_al: Option<NameEtAl>,
-    pub with: Option<NameWith>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
     pub affixes: Affixes,
+
+    /// CSL-M: institutions
+    pub with: Option<NameWith>,
+    /// CSL-M: institutions
+    pub institution: Option<Institution>,
 }
 
 /// The available inheritable attributes for cs:name are and, delimiter-precedes-et-al,
@@ -505,7 +509,7 @@ pub struct Names {
 /// The attributes name-form and name-delimiter correspond to the form and delimiter attributes on
 /// cs:name. Similarly, names-delimiter corresponds to the delimiter attribute on cs:names.
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAnd {
     Text,
@@ -592,9 +596,10 @@ pub enum InstitutionUseFirst {
     Substitute(u32),
 }
 
-#[derive(Debug, Eq, Clone, PartialEq, Default)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct Name {
     pub and: Option<NameAnd>,
+    /// Between individual names for the same variable
     pub delimiter: Option<Delimiter>,
     pub delimiter_precedes_et_al: Option<DelimiterPrecedes>,
     pub delimiter_precedes_last: Option<DelimiterPrecedes>,
@@ -614,7 +619,37 @@ pub struct Name {
     pub name_part_family: Option<NamePart>,
 }
 
+impl Default for Name {
+    fn default() -> Self {
+        Name::empty()
+    }
+}
+
 impl Name {
+    pub fn empty() -> Self {
+        Name {
+            and: None,
+            delimiter: None,
+            delimiter_precedes_et_al: None,
+            delimiter_precedes_last: None,
+            et_al_min: None,
+            et_al_use_first: None,
+            et_al_use_last: None,
+            et_al_subsequent_min: None,
+            et_al_subsequent_use_first: None,
+            form: None,
+            initialize: None,
+            initialize_with: None,
+            name_as_sort_order: None,
+            sort_separator: None,
+            // these four aren't inherited
+            formatting: None,
+            affixes: Default::default(),
+            name_part_given: None,
+            name_part_family: None,
+        }
+    }
+
     /// All properties on a Name may be inherited from elsewhere. Therefore while the
     /// `Default::default()` implementation will give you lots of `None`s, you need to define what
     /// those Nones should default to absent a parent giving a concrete definition.
@@ -626,7 +661,7 @@ impl Name {
     pub fn root_default() -> Self {
         Name {
             and: None,
-            delimiter: Some(Delimiter(",".into())),
+            delimiter: Some(Delimiter(", ".into())),
             delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
             delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
             et_al_min: None,
@@ -707,14 +742,14 @@ pub struct NameLabel {
     pub strip_periods: StripPeriods,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NameEtAl {
     // TODO: only accept "et-al" or "and others"
     pub term: String,
     pub formatting: Option<Formatting>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DemoteNonDroppingParticle {
     Never,
@@ -728,7 +763,7 @@ impl Default for DemoteNonDroppingParticle {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DelimiterPrecedes {
     Contextual,
@@ -743,7 +778,7 @@ impl Default for DelimiterPrecedes {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameForm {
     Long,
@@ -751,21 +786,21 @@ pub enum NameForm {
     Count,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NameAsSortOrder {
     First,
     All,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum NamePartName {
     Given,
     Family,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct NamePart {
     pub name: NamePartName,
     pub affixes: Affixes,
@@ -958,6 +993,15 @@ impl Default for Style {
             demote_non_dropping_particle: Default::default(),
             initialize_with_hyphen: true,
         }
+    }
+}
+
+impl Style {
+    pub fn name_citation(&self) -> Name {
+        let default = Name::root_default();
+        let root = &self.name_inheritance;
+        let citation = &self.citation.name_inheritance;
+        default.merge(root).merge(citation)
     }
 }
 

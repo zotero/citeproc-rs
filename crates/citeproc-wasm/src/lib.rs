@@ -14,11 +14,11 @@ extern crate log;
 
 use self::utils::ErrorPlaceholder;
 
-use js_sys::{Promise, Error};
+use js_sys::{Error, Promise};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 

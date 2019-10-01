@@ -8,6 +8,7 @@ use crate::db::IrDatabase;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use petgraph::dot::Dot;
 use petgraph::graph::{Graph, NodeIndex};
+use petgraph::visit::EdgeRef;
 use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -69,7 +70,7 @@ impl InternKey for Edge {
 //     }
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {
     Epsilon,
     Token(Edge),
@@ -88,15 +89,12 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     let mut work: Vec<_> = closure.iter().cloned().collect();
     while !work.is_empty() {
         let s = work.pop().unwrap();
-        for node in nfa.neighbors(s) {
-            let is_epsilon = nfa
-                .find_edge(s, node)
-                .and_then(|e| nfa.edge_weight(e))
-                .map(|e| e == &NfaEdge::Epsilon)
-                .unwrap_or(false);
-            if is_epsilon && !closure.contains(&node) {
-                work.push(node);
-                closure.insert(node);
+        for edge in nfa.edges(s) {
+            let is_epsilon = *edge.weight() == NfaEdge::Epsilon;
+            let target = edge.target();
+            if is_epsilon && !closure.contains(&target) {
+                work.push(target);
+                closure.insert(target);
             }
         }
     }
@@ -226,7 +224,7 @@ impl Debug for Dfa {
 
 // TODO: find the quotient automaton of the resulting DFA?
 // Use Brzozowski's double-reversal algorithm
-fn to_dfa(nfa: &Nfa) -> Dfa {
+pub fn to_dfa(nfa: &Nfa) -> Dfa {
     let mut dfa = DfaGraph::new();
 
     let mut work = Vec::new();
@@ -249,22 +247,18 @@ fn to_dfa(nfa: &Nfa) -> Dfa {
         let (dfa_state, current_node) = work.pop().unwrap();
         let mut by_edge_weight = HashMap::<Edge, BTreeSet<NodeIndex>>::new();
         for nfa_node in dfa_state {
-            for neigh in nfa.graph.neighbors(nfa_node) {
-                let weight = nfa
-                    .graph
-                    .find_edge(nfa_node, neigh)
-                    .and_then(|e| nfa.graph.edge_weight(e))
-                    .cloned()
-                    .unwrap();
+            for edge in nfa.graph.edges(nfa_node) {
+                let &weight = edge.weight();
+                let target = edge.target();
                 if let NfaEdge::Token(t) = weight {
                     by_edge_weight
                         .entry(t)
                         .and_modify(|set| {
-                            set.insert(neigh);
+                            set.insert(target);
                         })
                         .or_insert_with(|| {
                             let mut set = BTreeSet::new();
-                            set.insert(neigh);
+                            set.insert(target);
                             set
                         });
                 }
@@ -301,28 +295,24 @@ impl Dfa {
         let mut cursors = Vec::new();
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {
-            let (mut cursor, prepended, chunk) = cursors.pop().unwrap();
+            let (cursor, prepended, chunk) = cursors.pop().unwrap();
             let first = prepended.as_ref().or(chunk.get(0));
             if first == None && self.accepting.contains(&cursor) {
                 // we did it!
                 return true;
             }
             if let Some(token) = first {
-                for neighbour in self.graph.neighbors(cursor) {
-                    let weight = self
-                        .graph
-                        .find_edge(cursor, neighbour)
-                        .and_then(|e| self.graph.edge_weight(e))
-                        .map(|e| db.lookup_edge(*e))
-                        .expect("graph neighbours must have edges");
+                for edge in self.graph.edges(cursor) {
+                    let weight = db.lookup_edge(*edge.weight());
+                    let target = edge.target();
                     use std::cmp::min;
                     match (&weight, token) {
                         (w, t) if w == t => {
-                            cursors.push((neighbour, None, &chunk[min(1, chunk.len())..]));
+                            cursors.push((target, None, &chunk[min(1, chunk.len())..]));
                         }
                         (EdgeData::Output(w), EdgeData::Output(t)) => {
                             if w == t {
-                                cursors.push((neighbour, None, &chunk[min(1, chunk.len())..]));
+                                cursors.push((target, None, &chunk[min(1, chunk.len())..]));
                             } else if t.starts_with(w) {
                                 let next = if prepended.is_some() {
                                     // already have split this one
@@ -333,7 +323,7 @@ impl Dfa {
                                 let t_rest = &t[w.len()..];
                                 let c_rest = &chunk[min(next, chunk.len())..];
                                 cursors.push((
-                                    neighbour,
+                                    target,
                                     Some(EdgeData::Output(t_rest.into())),
                                     c_rest,
                                 ));

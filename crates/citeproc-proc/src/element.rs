@@ -8,10 +8,16 @@ impl<'c, O> Proc<'c, O> for Style
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O> {
         let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence(
+            db,
             state,
             ctx,
             &layout.elements,
@@ -26,17 +32,22 @@ impl<'c, O> Proc<'c, O> for Element
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O> {
-        let fmt = &ctx.format;
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O> {
+        let _fmt = &ctx.format;
         let renderer = Renderer::cite(ctx);
         match *self {
-            Element::Choose(ref ch) => ch.intermediate(state, ctx),
+            Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
                 use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-                let quotes = if quo { Some(&q) } else { None };
+                let _quotes = if quo { Some(&q) } else { None };
                 match *source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
@@ -55,7 +66,7 @@ where
                             );
                         }
                         state.macro_stack.insert(name.clone());
-                        let out = sequence(state, ctx, &macro_unsafe, "".into(), f, af.clone());
+                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone());
                         state.macro_stack.remove(&name);
                         out
                     }
@@ -119,13 +130,14 @@ where
                 (IR::Rendered(content), gv)
             }
 
-            Element::Names(ref ns) => ns.intermediate(state, ctx),
+            Element::Names(ref ns) => ns.intermediate(db, state, ctx),
 
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => {
                 let (seq, group_vars) = sequence(
+                    db,
                     state,
                     ctx,
                     g.elements.as_ref(),
@@ -144,7 +156,7 @@ where
                 }
             }
             Element::Date(ref dt) => {
-                dt.intermediate(state, ctx)
+                dt.intermediate(db, state, ctx)
                 // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
             }
         }

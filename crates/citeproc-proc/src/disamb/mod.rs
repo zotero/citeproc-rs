@@ -59,6 +59,8 @@
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
+use fnv::FnvHashMap;
+use petgraph::visit::EdgeRef;
 
 // first so the macros are defined before the other modules
 #[cfg(test)]
@@ -68,17 +70,19 @@ pub(crate) mod test;
 mod finite_automata;
 mod free;
 pub(crate) mod implementation;
-pub(crate) mod knowledge;
+// pub(crate) mod knowledge;
+pub(crate) mod names;
 mod ref_context;
 
 pub use free::{FreeCond, FreeCondSets};
+pub use names::{DisambName, DisambNameData};
 pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
 pub trait Disambiguation<O: OutputFormat = Markup> {
     fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
-        unimplemented!()
+        mult_identity()
     }
     fn ref_ir(
         &self,
@@ -126,6 +130,12 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     nfa.brzozowski_minimise()
 }
 
+pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefContext) -> RefIR {
+    let style = ctx.style;
+    let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, Formatting::default());
+    ir
+}
+
 /// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
 /// so we don't have to re-allocate/collect the list after sorting to exclude it.
 pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
@@ -140,9 +150,9 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .iter()
         .map(|fc| {
             let fmt = db.get_formatter();
-            let mut ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
+            let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
             let (ir, _gv) =
-                Disambiguation::<Markup>::ref_ir(&*style, db, &mut ctx, Formatting::default());
+                Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, Formatting::default());
             (*fc, ir)
         })
         .collect();
@@ -152,12 +162,47 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
 
 use petgraph::graph::NodeIndex;
 
-fn add_to_graph(
+pub fn graph_with_stack(
+    db: &impl IrDatabase,
+    fmt: &Markup,
+    nfa: &mut Nfa,
+    formatting: &Option<Formatting>,
+    affixes: &Affixes,
+    mut spot: NodeIndex,
+    f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
+) -> NodeIndex {
+    let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
+    let mut open_tags = String::new();
+    let mut close_tags = String::new();
+    fmt.stack_preorder(&mut open_tags, &stack);
+    fmt.stack_postorder(&mut close_tags, &stack);
+    let mkedge = |s: &str| {
+        RefIR::Edge(if s.len() > 0 {
+            Some(db.edge(EdgeData::Output(
+                fmt.output_in_context(fmt.plain(s), Default::default()),
+            )))
+        } else {
+            None
+        })
+    };
+    let open_tags = &mkedge(&*open_tags);
+    let close_tags = &mkedge(&*close_tags);
+    let pre = &mkedge(&*affixes.prefix);
+    let suf = &mkedge(&*affixes.suffix);
+    spot = add_to_graph(db, fmt, nfa, pre, spot);
+    spot = add_to_graph(db, fmt, nfa, open_tags, spot);
+    spot = f(nfa, spot);
+    spot = add_to_graph(db, fmt, nfa, close_tags, spot);
+    spot = add_to_graph(db, fmt, nfa, suf, spot);
+    spot
+}
+
+pub fn add_to_graph(
     db: &impl IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,
-    mut spot: NodeIndex,
+    spot: NodeIndex,
 ) -> NodeIndex {
     match ir {
         RefIR::Edge(None) => spot,
@@ -173,11 +218,6 @@ fn add_to_graph(
                 affixes,
                 delimiter,
             } = seq;
-            let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
-            let mut open_tags = String::new();
-            let mut close_tags = String::new();
-            fmt.stack_preorder(&mut open_tags, &stack);
-            fmt.stack_postorder(&mut close_tags, &stack);
             let mkedge = |s: &str| {
                 RefIR::Edge(if s.len() > 0 {
                     Some(db.edge(EdgeData::Output(
@@ -188,27 +228,84 @@ fn add_to_graph(
                 })
             };
             let delim = &mkedge(&*delimiter);
-            let open_tags = &mkedge(&*open_tags);
-            let close_tags = &mkedge(&*close_tags);
-            let pre = &mkedge(&*affixes.prefix);
-            let suf = &mkedge(&*affixes.suffix);
-
-            spot = add_to_graph(db, fmt, nfa, pre, spot);
-            spot = add_to_graph(db, fmt, nfa, open_tags, spot);
-            let mut seen = false;
-            for x in contents {
-                if x != &RefIR::Edge(None) {
-                    if seen {
-                        spot = add_to_graph(db, fmt, nfa, delim, spot);
+            graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
+                let mut seen = false;
+                for x in contents {
+                    if x != &RefIR::Edge(None) {
+                        if seen {
+                            spot = add_to_graph(db, fmt, nfa, delim, spot);
+                        }
+                        seen = true;
                     }
-                    seen = true;
+                    spot = add_to_graph(db, fmt, nfa, x, spot);
                 }
-                spot = add_to_graph(db, fmt, nfa, x, spot);
-            }
-            spot = add_to_graph(db, fmt, nfa, close_tags, spot);
-            spot = add_to_graph(db, fmt, nfa, suf, spot);
-            spot
+                spot
+            })
         }
-        RefIR::Names(..) => unimplemented!(),
+        RefIR::Name(_nvar, name_nfa) => {
+            // We're going to graft the names_nfa onto our own by translating all the node_ids, and
+            // adding the same edges between them.
+            let mut node_mapping = FnvHashMap::default();
+            let mut get_node = |nfa: &mut Nfa, incoming: NodeIndex| {
+                node_mapping
+                    .entry(incoming)
+                    .or_insert_with(|| nfa.graph.add_node(()))
+                    .clone()
+            };
+            // collected because iterator uses a mutable reference to nfa
+            let incoming_edges: Vec<_> = name_nfa
+                .graph
+                .edge_references()
+                .map(|e| {
+                    (
+                        get_node(nfa, e.source()),
+                        get_node(nfa, e.target()),
+                        e.weight(),
+                    )
+                })
+                .collect();
+            nfa.graph.extend_with_edges(incoming_edges.into_iter());
+            for &start_node in &name_nfa.start {
+                let start_node = get_node(nfa, start_node);
+                nfa.graph.add_edge(spot, start_node, NfaEdge::Epsilon);
+            }
+            let finish = nfa.graph.add_node(());
+            for &acc_node in &name_nfa.accepting {
+                let acc_node = get_node(nfa, acc_node);
+                nfa.graph.add_edge(acc_node, finish, NfaEdge::Epsilon);
+            }
+            finish
+        }
     }
+}
+
+#[test]
+fn test_determinism() {
+    let _ = env_logger::init();
+    use crate::test::MockProcessor;
+    let mut db = MockProcessor::new();
+    let fmt = db.get_formatter();
+    let aa = db.edge(EdgeData::Output("aa".into()));
+    let bb = db.edge(EdgeData::Output("bb".into()));
+
+    let make_dfa = || {
+        let mut nfa = Nfa::new();
+        for ir in &[RefIR::Edge(Some(aa)), RefIR::Edge(Some(bb))] {
+            let first = nfa.graph.add_node(());
+            nfa.start.insert(first);
+            let last = add_to_graph(&db, &fmt, &mut nfa, ir, first);
+            nfa.accepting.insert(last);
+        }
+        nfa.brzozowski_minimise()
+    };
+
+    let mut count = 0;
+    for _ in 0..100 {
+        let dfa = make_dfa();
+        debug!("{}", dfa.debug_graph(&db));
+        if dfa.accepts_data(&db, &[aa.lookup(&db)]) {
+            count += 1;
+        }
+    }
+    assert_eq!(count, 100);
 }

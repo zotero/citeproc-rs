@@ -5,7 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::output::OutputFormat;
-use super::{DateOrRange, NumericValue};
+use super::NumericValue;
 use csl::terms::LocatorType;
 use csl::Atom;
 
@@ -42,13 +42,13 @@ impl Locator {
 use serde::de::{Deserialize, Deserializer};
 
 /// Techincally reference IDs are allowed to be numbers.
-fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
+pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
 where
     D: Deserializer<'de>,
 {
     use super::csl_json::IdOrNumber;
     let s = IdOrNumber::deserialize(d)?;
-    Ok(Atom::from(s.0))
+    Ok(Atom::from(s.to_string()))
 }
 
 /// Represents one cite in someone's document, to exactly one reference.
@@ -70,7 +70,7 @@ pub struct Cite<O: OutputFormat> {
     pub suppression: Option<Suppression>,
 
     // TODO: Enforce len() == 1 in CSL mode
-    #[serde(default, flatten)]
+    #[serde(default, flatten, deserialize_with = "get_locators")]
     pub locators: Option<Locators>,
 }
 
@@ -94,7 +94,7 @@ impl Locators {
     fn into_option(self) -> Option<Self> {
         match self {
             Locators::Multiple { locators } => {
-                if locators.len() == 0 {
+                if locators.is_empty() {
                     None
                 } else if locators.len() == 1 {
                     let first = locators.into_iter().nth(0).unwrap();

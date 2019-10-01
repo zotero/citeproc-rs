@@ -12,7 +12,7 @@ extern crate citeproc_db;
 
 use citeproc_io::output::OutputFormat;
 use csl::Atom;
-use fnv::FnvHashMap;
+
 use std::collections::HashSet;
 
 mod choose;
@@ -30,7 +30,8 @@ mod renderer;
 mod unicode;
 
 pub(crate) mod prelude {
-    pub use crate::db::IrDatabase;
+    pub use crate::db::{HasFormatter, IrDatabase};
+    pub use crate::renderer::GenericContext;
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;
@@ -43,11 +44,13 @@ pub(crate) mod prelude {
     pub use crate::ir::*;
 
     pub(crate) use crate::disamb::{
-        cross_product, mult_identity, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
+        cross_product, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
     };
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
+
+    pub type MarkupBuild = <Markup as OutputFormat>::Build;
 }
 
 use prelude::*;
@@ -70,7 +73,12 @@ pub(crate) trait Proc<'c, O>
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>;
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>;
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
@@ -86,3 +94,4 @@ impl IrState {
         IrState::default()
     }
 }
+

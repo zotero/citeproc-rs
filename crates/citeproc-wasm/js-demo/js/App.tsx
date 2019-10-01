@@ -14,7 +14,7 @@ let initialStyle = `<style class="note">
       <term name="ibid">ibid</term>
     </terms>
   </locale>
-  <citation et-al-min="3" disambiguate-add-year-suffix="true">
+  <citation et-al-min="1" et-al-use-first="1" disambiguate-add-givenname="true" givenname-disambiguation-rule="by-cite" disambiguate-add-names="true">
     <layout delimiter="; " suffix=".">
       <choose>
         <if position="ibid-with-locator">
@@ -38,6 +38,9 @@ let initialStyle = `<style class="note">
         </else-if>
         <else>
           <group delimiter=", ">
+            <names variable="author">
+                <name initialize="true" initialize-with="." />
+            </names>
             <group delimiter=" ">
               <text variable="title" font-style="italic" />
               <text variable="year-suffix" />
@@ -54,13 +57,20 @@ const initialReferences: Reference[] = [
     {
         id: 'citekey',
         type: 'book',
-        author: [{ given: "Kurt", family: "Camembert" }],
+        author: [
+            { given: "Kurt", family: "Camembert" },
+            { given: "Amadeus", family: "Rossi" }
+        ],
         title: "Where The Vile Things Are",
         issued: { "raw": "1999-08-09" },
     },
     {
         id: 'citekey2',
         type: 'book',
+        author: [
+            { given: "Kurt", family: "Camembert" },
+            { given: "Ariadne", family: "Rossi" }
+        ],
         title: "Where The Vile Things Are",
     },
     {

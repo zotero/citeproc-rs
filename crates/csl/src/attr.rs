@@ -35,7 +35,7 @@ pub(crate) fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<b
         Some("true") => Ok(true),
         Some("false") => Ok(false),
         None => Ok(default),
-        Some(s) => Err(InvalidCsl::attr_val(node, attr, s))?,
+        Some(s) => return Err(InvalidCsl::attr_val(node, attr, s)),
     }
 }
 
@@ -44,7 +44,7 @@ pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bo
         Some("true") => Ok(Some(true)),
         Some("false") => Ok(Some(false)),
         None => Ok(None),
-        Some(s) => Err(InvalidCsl::attr_val(node, attr, s))?,
+        Some(s) => return Err(InvalidCsl::attr_val(node, attr, s)),
     }
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn attribute_array_var<T: GetAttribute>(
         Some(array) => {
             let split: Result<Vec<_>, _> = array
                 .split(' ')
-                .filter(|a| a.len() > 0)
+                .filter(|a| !a.is_empty())
                 .map(|a| T::get_attr(a, &info.features))
                 .collect();
             match split {
@@ -199,7 +199,7 @@ pub(crate) fn attribute_array<T: GetAttribute>(
         Some(array) => {
             let split: Result<Vec<_>, _> = array
                 .split(' ')
-                .filter(|a| a.len() > 0)
+                .filter(|a| !a.is_empty())
                 .map(|a| T::get_attr(a, &info.features))
                 .collect();
             match split {

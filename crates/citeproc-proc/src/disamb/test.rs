@@ -49,6 +49,14 @@ macro_rules! style_layout {
     }};
 }
 
+macro_rules! style_xml {
+    ($ex:expr) => {{
+        use std::str::FromStr;
+        ::csl::style::Style::from_str(&format!(r#"<?xml version="1.0" encoding="utf-8"?>{}"#, $ex))
+            .unwrap()
+    }};
+}
+
 macro_rules! style {
     ($ex:expr) => {{
         use std::str::FromStr;
@@ -132,15 +140,15 @@ fn test() {
         .ordinary
         .insert(Variable::ContainerTitle, "Title".into());
 
-    let vec = create_ref_ir::<Html, MockProcessor>(db, &refr);
+    let vec = create_ref_ir::<Markup, MockProcessor>(db, &refr);
     for (fc, ir) in &vec {
         println!("{:?}:\n    {}", fc, ir.debug(db));
     }
-    let dfa = create_dfa::<Html, MockProcessor>(db, &refr);
+    let dfa = create_dfa::<Markup, MockProcessor>(db, &refr);
     println!("{}", dfa.debug_graph(db));
 
-    let vec = create_ref_ir::<Html, MockProcessor>(db, &refr2);
-    let dfa2 = create_dfa::<Html, MockProcessor>(db, &refr2);
+    let vec = create_ref_ir::<Markup, MockProcessor>(db, &refr2);
+    let dfa2 = create_dfa::<Markup, MockProcessor>(db, &refr2);
     println!("{}", dfa2.debug_graph(db));
 
     use citeproc_io::{Cite, Cluster2, IntraNote};

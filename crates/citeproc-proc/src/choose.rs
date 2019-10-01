@@ -20,7 +20,12 @@ impl<'c, O> Proc<'c, O> for Arc<Choose>
 where
     O: OutputFormat,
 {
-    fn intermediate(&self, state: &mut IrState, ctx: &CiteContext<'c, O>) -> IrSum<O>
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O>
     where
         O: OutputFormat,
     {
@@ -32,7 +37,7 @@ where
             let BranchEval {
                 disambiguate,
                 content,
-            } = eval_ifthen(head, state, ctx);
+            } = eval_ifthen(db, head, state, ctx);
             found = content;
             disamb = disamb || disambiguate;
         }
@@ -52,7 +57,7 @@ where
                 let BranchEval {
                     disambiguate,
                     content,
-                } = eval_ifthen(branch, state, ctx);
+                } = eval_ifthen(db, branch, state, ctx);
                 found = content;
                 disamb = disamb || disambiguate;
             }
@@ -67,7 +72,7 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence(state, ctx, &els, "".into(), None, Affixes::default());
+            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default());
             if disamb {
                 (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
@@ -131,6 +136,7 @@ struct BranchEval<O: OutputFormat> {
 }
 
 fn eval_ifthen<'c, O>(
+    db: &impl IrDatabase,
     branch: &'c IfThen,
     state: &mut IrState,
     ctx: &CiteContext<'c, O>,
@@ -142,6 +148,7 @@ where
     let (matched, disambiguate) = eval_conditions(conditions, ctx);
     let content = if matched {
         Some(sequence(
+            db,
             state,
             ctx,
             &elements,
