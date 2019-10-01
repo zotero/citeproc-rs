@@ -49,6 +49,8 @@ pub(crate) mod prelude {
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
+
+    pub type MarkupBuild = <Markup as OutputFormat>::Build;
 }
 
 use prelude::*;
@@ -92,3 +94,4 @@ impl IrState {
         IrState::default()
     }
 }
+

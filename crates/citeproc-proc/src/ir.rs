@@ -148,16 +148,16 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     }
 }
 
+use parking_lot::Mutex;
 use crate::disamb::names::NameIR;
 
 // Intermediate Representation
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum IR<O: OutputFormat = Markup> {
     // no (further) disambiguation possible
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
-    // the current render
-    Names(NameIR<O::Build>, Box<IR<O>>),
+    Name(Arc<Mutex<NameIR<O>>>),
 
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
@@ -180,10 +180,51 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
+impl<O> Eq for IR<O> where O : OutputFormat + PartialEq + Eq {}
+impl<O> PartialEq for IR<O> where O : OutputFormat + PartialEq {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
+            (IR::Seq(s), IR::Seq(o)) if s == o => true,
+            (IR::YearSuffix(s1, s2), IR::YearSuffix(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::ConditionalDisamb(s1, s2), IR::ConditionalDisamb(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::Name(self_nir), IR::Name(other_nir)) => {
+                let s = self_nir.lock();
+                let o = other_nir.lock();
+                *s == *o
+            }
+            _ => false,
+        }
+    }
+}
+
+impl<O: OutputFormat> Default for IR<O> {
+    fn default() -> Self {
+        IR::Rendered(None)
+    }
+}
+
 use std::mem;
 
 impl IR<Markup> {
-    pub fn disambiguate<'c>(
+    pub(crate) fn visit_names_mut<F>(&mut self, callback: F) where F : (Fn(&mut NameIR<Markup>) -> ()) + Clone {
+        match self {
+            IR::YearSuffix(..) | IR::Rendered(_) => {},
+            IR::Name(ref nir) => {
+                callback(&mut nir.lock());
+            }
+            IR::ConditionalDisamb(_, ref mut boxed) => {
+                boxed.visit_names_mut(callback.clone());
+            }
+            IR::Seq(seq) => {
+                for ir in seq.contents.iter_mut() {
+                    ir.visit_names_mut(callback.clone());
+                }
+            }
+        }
+    }
+
+    pub(crate) fn disambiguate<'c>(
         &mut self,
         db: &impl IrDatabase,
         state: &mut IrState,
@@ -194,16 +235,18 @@ impl IR<Markup> {
             IR::Rendered(_) => {
                 return ret;
             }
-            IR::Names(ref mut names_ir, ref _x) => {
+            IR::Name(ref nir) => {
+                let mut nir = nir.lock();
                 info!(
                     "attempting to disambiguate {:?} ({}) with {:?}",
                     ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
                 );
-                ret = names_ir.crank(ctx.disamb_pass);
+                ret = nir.crank(ctx.disamb_pass);
                 if ret {
-                    match names_ir.intermediate_custom(db, ctx) {
+                    match nir.intermediate_custom(db, ctx) {
                         Some((new_ir, _)) => {
-                            IR::Names(mem::replace(names_ir, NameIR::default()), Box::new(new_ir))
+                            *nir.ir = new_ir;
+                            return ret;
                         }
                         None => return false,
                     }
@@ -255,7 +298,7 @@ impl IR<Markup> {
         match self {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Names(_, ref x) => (*x).flatten(fmt),
+            IR::Name(nir) => nir.lock().ir.flatten(fmt),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
@@ -280,7 +323,7 @@ impl IR<Markup> {
             }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
-            IR::Names(_names_ir, r) => r.append_edges(edges, fmt, formatting),
+            IR::Name(nir) => nir.lock().ir.append_edges(edges, fmt, formatting),
         }
         ()
     }

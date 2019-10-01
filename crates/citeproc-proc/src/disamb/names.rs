@@ -477,7 +477,7 @@ pub struct RefNameIR {
 }
 
 impl RefNameIR {
-    fn from_name_ir<B>(name_ir: &NameIR<B>) -> Self {
+    fn from_name_ir<O: OutputFormat>(name_ir: &NameIR<O>) -> Self {
         let mut vec = Vec::with_capacity(name_ir.disamb_names.len());
         for dnr in &name_ir.disamb_names {
             match dnr {
@@ -492,16 +492,20 @@ impl RefNameIR {
     }
 }
 
+// TODO: make most fields private
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct NameIR<B> {
+pub struct NameIR<O: OutputFormat> {
     pub names_el: Names,
     pub variable: NameVariable,
     pub max_name_count: u16,
     pub current_name_count: u16,
     pub bump_name_count: u16,
     pub gn_iter_index: usize,
-    pub disamb_names: Vec<DisambNameRatchet<B>>,
+    pub disamb_names: Vec<DisambNameRatchet<O::Build>>,
+    pub achieved_at: (u16, u16),
+    pub ir: Box<IR<O>>,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DisambNameRatchet<B> {
     Literal(B),
@@ -524,13 +528,26 @@ impl PersonDisambNameRatchet {
     }
 }
 
-impl<B> NameIR<B> {
+impl<O> NameIR<O> where O : OutputFormat {
     pub fn crank(&mut self, pass: Option<DisambPass>) -> bool {
         if let Some(DisambPass::AddNames) = pass {
             self.bump_name_count += 1;
             true
         } else {
             false
+        }
+    }
+    pub fn achieved_count(&mut self, count: u16) {
+        let (prev_best, _at) = self.achieved_at;
+        if count < prev_best {
+            self.achieved_at = (count, self.bump_name_count);
+        }
+    }
+    pub fn rollback(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) {
+        let (_prev_best, at) = self.achieved_at;
+        self.bump_name_count = at;
+        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx) {
+            *self.ir = ir;
         }
     }
 }

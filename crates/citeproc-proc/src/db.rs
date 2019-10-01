@@ -15,6 +15,8 @@ use citeproc_io::{ClusterId, Name};
 use csl::variables::NameVariable;
 use csl::Atom;
 
+use parking_lot::Mutex;
+
 pub trait HasFormatter {
     fn get_formatter(&self) -> Markup;
 }
@@ -121,7 +123,7 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         .map(|&id| (id, id.lookup(db)))
         .map(|(id, cite)| (cite.ref_id.clone(), db.ir_gen2_add_given_name(id)))
         .filter_map(|(ref_id, ir2)| {
-            match ir2.1 {
+            match ir2.unambiguous {
                 // if ambiguous (false), add a suffix
                 false => Some(ref_id),
                 _ => None,
@@ -139,17 +141,47 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     Arc::new(suffixes)
 }
 
-type IrGen = Arc<(IR<Markup>, bool, IrState)>;
+#[derive(Debug, Clone)]
+pub struct IrGen{
+    unambiguous: bool,
+    ir_and_state: Arc<(IR<Markup>, IrState)>
+}
+
+impl IrGen {
+    fn new(ir: IR<Markup>, unambiguous: bool, state: IrState) -> Self {
+        IrGen{
+            unambiguous,
+            ir_and_state: Arc::new((ir, state))
+        }
+    }
+    fn fresh_copy(&self) -> (IR<Markup>, IrState) {
+        let ir = self.ir_and_state.0.clone();
+        let state = self.ir_and_state.1.clone();
+        (ir, state)
+    }
+    fn ir<'a>(&'a self) -> &'a IR<Markup> {
+        &self.ir_and_state.0
+    }
+}
+
+impl Eq for IrGen {}
+impl PartialEq<IrGen> for IrGen {
+    fn eq(&self, other: &Self) -> bool {
+            self.unambiguous == other.unambiguous
+            && &self.ir_and_state.1 == &other.ir_and_state.1
+            && &self.ir_and_state.0 == &other.ir_and_state.0
+    }
+}
 
 fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> IrGen {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
-    Arc::new((
+    IrGen::new(
         IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
         true,
         IrState::new(),
-    ))
+    )
 }
 
 macro_rules! preamble {
@@ -302,137 +334,171 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     find_name_block(nvar, &ref_ir).map(|rnir| rnir.clone())
 }
 
-/// This should be refactored to produce an iterator of mutable NameIRs, one per variable
-fn find_cite_name_block(
-    nvar: NameVariable,
-    ir: &mut IR<Markup>,
-) -> Option<&mut NameIR<<Markup as OutputFormat>::Build>> {
-    match ir {
-        IR::YearSuffix(..) | IR::Rendered(_) => None,
-        IR::Names(ref mut nir, _) => {
-            if nir.variable == nvar {
-                Some(nir)
-            } else {
-                None
-            }
-        }
-        IR::ConditionalDisamb(_, boxed) => find_cite_name_block(nvar, &mut *boxed),
-        IR::Seq(seq) => {
-            // assumes it's the first one that appears
-            seq.contents
-                .iter_mut()
-                .filter_map(|x| find_cite_name_block(nvar, x))
-                .nth(0)
-        }
-    }
-}
+type NameRef = Arc<Mutex<NameIR<Markup>>>;
 
-fn stamp_modified_name_ir(
-    db: &impl IrDatabase,
-    ctx: &CiteContext<'_, Markup>,
-    nvar: NameVariable,
-    ir: &mut IR<Markup>,
+fn list_all_name_blocks(
+    ir: &IR<Markup>,
+    vec: &mut Vec<NameRef>,
 ) {
     match ir {
-        IR::YearSuffix(..) | IR::Rendered(_) => {}
-        IR::Names(ref mut nir, ref mut boxed) => {
-            if nir.variable == nvar {
-                if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx) {
-                    **boxed = new_ir;
-                }
-            }
+        IR::YearSuffix(..) | IR::Rendered(_) => {},
+        IR::Name(ref nir) => {
+            vec.push(nir.clone());
         }
-        IR::ConditionalDisamb(_, boxed) => stamp_modified_name_ir(db, ctx, nvar, &mut *boxed),
+        IR::ConditionalDisamb(_, boxed) => list_all_name_blocks(&**boxed, vec),
         IR::Seq(seq) => {
-            seq.contents
-                .iter_mut()
-                .for_each(|x| stamp_modified_name_ir(db, ctx, nvar, x));
+            // assumes it's the first one that appears
+            for x in &seq.contents {
+                list_all_name_blocks(x, vec)
+            }
         }
     }
 }
-
-type MarkupBuild = <Markup as OutputFormat>::Build;
 
 use crate::disamb::names::{
     DisambNameRatchet, NameIR, NameVariantMatcher, PersonDisambNameRatchet, RefNameIR,
 };
+
+fn disambiguate_add_names(
+    db: &impl IrDatabase,
+    ir: &mut IR<Markup>,
+    state: &mut IrState,
+    ctx: &CiteContext<'_, Markup>,
+    also_expand: bool,
+) -> bool {
+    let fmt = &db.get_formatter();
+    let style = db.style();
+    // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
+    // initial_refs after adding names. We'll see how that holds up.
+    let initial_refs = refs_accepting_cite(db, ir);
+    let mut best = initial_refs.len();
+    if best <= 1 {
+        return true;
+    }
+    let mut dfas = Vec::with_capacity(best);
+    for k in &initial_refs {
+        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+        dfas.push(dfa);
+    }
+    // TODO: save, within NameIR, new_count and the lowest bump_name_count to achieve it,
+    // so that it can roll back to that number easily
+    while best > 1 {
+        let ret = ir.disambiguate(db, state, ctx);
+        let edges = ir.to_edge_stream(fmt);
+        let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
+        ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
+        best = std::cmp::min(best, new_count);
+        if !ret {
+            break;
+        }
+    }
+    if also_expand {
+        disambiguate_add_givennames(db, ir, state, ctx, false);
+        let edges = ir.to_edge_stream(fmt);
+        let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
+        best = new_count;
+        ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
+    }
+    ir.visit_names_mut(|nir| nir.rollback(db, ctx));
+    let edges = ir.to_edge_stream(fmt);
+    best = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
+    best <= 1
+}
+
 fn disambiguate_add_givennames(
     db: &impl IrDatabase,
     ir: &mut IR<Markup>,
+    state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
+    also_add: bool,
 ) -> Option<bool> {
     let fmt = db.get_formatter();
     let style = db.style();
     let refs = refs_accepting_cite(db, ir);
-    let name_ir: &mut NameIR<MarkupBuild> = find_cite_name_block(NameVariable::Author, ir)?;
-    // This should be done for each NameIR/variable found in the cite IR rather than once for
-    // Author!
-    let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
+    let mut name_refs = Vec::new();
+    list_all_name_blocks(ir, &mut name_refs);
+    for nir_arc in name_refs {
+        let mut nir = nir_arc.lock();
+        let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
 
-    for r in refs {
-        if let Some(rnir) =
-            make_identical_name_formatter(db, r, ctx, /* XXX */ NameVariable::Author)
-        {
-            let var = rnir.variable;
-            let len = rnir.disamb_name_ids.len();
-            if len > double_vec.len() {
-                double_vec.resize_with(len, || Vec::with_capacity(name_ir.disamb_names.len()));
-            }
-            for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                let matcher = NameVariantMatcher::from_disamb_name(db, id);
-                if let Some(slot) = double_vec.get_mut(n) {
-                    slot.push(matcher);
+        for r in &refs {
+            if let Some(rnir) =
+                make_identical_name_formatter(db, r.clone(), ctx, /* XXX */ NameVariable::Author)
+            {
+                let var = rnir.variable;
+                let len = rnir.disamb_name_ids.len();
+                if len > double_vec.len() {
+                    double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
                 }
-            }
-        }
-    }
-
-    let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
-        slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
-    };
-
-    let mut n = 0usize;
-    for dnr in name_ir.disamb_names.iter_mut() {
-        match dnr {
-            DisambNameRatchet::Person(ratchet) => {
-                if let Some(ref slot) = double_vec.get(n) {
-                    // First, get the initial count
-                    /* TODO: store format stack */
-                    let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
-                    let mut min = name_ambiguity_number(edge, slot);
-                    debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
-                    let mut stage_dn = ratchet.data.clone();
-                    // Then, try to improve it
-                    let mut iter = ratchet.iter.clone();
-                    while min > 1 {
-                        if let Some(next) = iter.next() {
-                            stage_dn.apply_pass(next);
-                            edge = stage_dn.single_name_edge(db, Formatting::default());
-                            let new_count = name_ambiguity_number(edge, slot);
-                            if new_count < min {
-                                // save the improvement
-                                min = new_count;
-                                ratchet.data = stage_dn.clone();
-                                ratchet.iter = iter.clone();
-                            }
-                            debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
-                        } else {
-                            break;
-                        }
+                for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
+                    let matcher = NameVariantMatcher::from_disamb_name(db, id);
+                    if let Some(slot) = double_vec.get_mut(n) {
+                        slot.push(matcher);
                     }
-                } else {
-                    // We've gone past the end of the slots.
-                    // None of the ambiguous references had this many names
-                    // so it's impossible to improve disamb by expanding this one (though adding it would
-                    // help. Since this name block was ambiguous, we know this name wasn't
-                    // initially rendered.)
                 }
-                n += 1;
             }
-            _ => {}
+        }
+
+        let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
+            slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
+        };
+
+        let total_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
+            use parking_lot::MutexGuard;
+            // unlock the nir briefly
+            MutexGuard::unlocked(&mut nir, || {
+                refs_accepting_cite(db, ir).len() as u32
+            })
+        };
+
+        let mut n = 0usize;
+        for dnr in nir.disamb_names.iter_mut() {
+            match dnr {
+                DisambNameRatchet::Person(ratchet) => {
+                    if let Some(ref slot) = double_vec.get(n) {
+                        // First, get the initial count
+                        /* TODO: store format stack */
+                        let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
+                        let mut min = name_ambiguity_number(edge, slot);
+                        debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
+                        let mut stage_dn = ratchet.data.clone();
+                        // Then, try to improve it
+                        let mut iter = ratchet.iter.clone();
+                        while min > 1 {
+                            if let Some(next) = iter.next() {
+                                stage_dn.apply_pass(next);
+                                edge = stage_dn.single_name_edge(db, Formatting::default());
+                                let new_count = name_ambiguity_number(edge, slot);
+                                if new_count < min {
+                                    // save the improvement
+                                    min = new_count;
+                                    ratchet.data = stage_dn.clone();
+                                    ratchet.iter = iter.clone();
+                                }
+                                debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
+                            } else {
+                                break;
+                            }
+                        }
+                    } else {
+                        // We've gone past the end of the slots.
+                        // None of the ambiguous references had this many names
+                        // so it's impossible to improve disamb by expanding this one (though adding it would
+                        // help. Since this name block was ambiguous, we know this name wasn't
+                        // initially rendered.)
+                    }
+                    n += 1;
+                }
+                _ => {}
+            }
+        }
+        if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx) {
+            *nir.ir = new_ir;
         }
     }
-    stamp_modified_name_ir(db, ctx, NameVariable::Author, ir);
+    if also_add {
+        disambiguate_add_names(db, ir, state, ctx, true);
+    }
     None
 }
 
@@ -447,7 +513,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let ir = style.intermediate(db, &mut state, &ctx).0;
     let _fmt = db.get_formatter();
     let un = is_unambiguous(db, None, &ir, id, &refr.id);
-    Arc::new((ir, un, state))
+    IrGen::new(ir, un, state)
 }
 
 fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
@@ -461,14 +527,13 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
 
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
-    if ir0.1 || !style.citation.disambiguate_add_names {
+    if ir0.unambiguous || !style.citation.disambiguate_add_names {
         return ir0.clone();
     }
-    let mut state = ir0.2.clone();
-    let mut ir = ir0.0.clone();
+    let (mut ir, mut state) = ir0.fresh_copy();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
-    Arc::new((ir, un, state))
+    let un = disambiguate_add_names(db, &mut ir, &mut state, &ctx, false);
+    IrGen::new(ir, un, state)
 }
 
 fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
@@ -482,16 +547,14 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
 
     let ir1 = db.ir_gen1_add_names(id);
-    if ir1.1 || !style.citation.disambiguate_add_givenname {
+    if ir1.unambiguous || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
-    let mut state = ir1.2.clone();
-    let mut ir = ir1.0.clone();
+    let (mut ir, mut state) = ir1.fresh_copy();
 
-    // let un = disambiguate(db, &mut ir, &mut state, &mut ct&x, None, &refr.id);
-    disambiguate_add_givennames(db, &mut ir, &ctx);
+    disambiguate_add_givennames(db, &mut ir, &mut state, &ctx, true);
     let un = is_unambiguous(db, ctx.disamb_pass, &ir, id, &refr.id);
-    Arc::new((ir, un, state))
+    IrGen::new(ir, un, state)
 }
 
 fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
@@ -502,7 +565,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let ir2 = db.ir_gen2_add_given_name(id);
-    if ir2.1 || !style.citation.disambiguate_add_year_suffix {
+    if ir2.unambiguous || !style.citation.disambiguate_add_year_suffix {
         return ir2.clone();
     }
     // TODO: remove
@@ -511,14 +574,13 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     if !suffixes.contains_key(&cite.ref_id) {
         return ir2.clone();
     }
-    let mut state = ir2.2.clone();
-    let mut ir = ir2.0.clone();
+    let (mut ir, mut state) = ir2.fresh_copy();
 
     let year_suffix = suffixes[&cite.ref_id];
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes), &refr.id);
-    Arc::new((ir, un, state))
+    IrGen::new(ir, un, state)
 }
 
 fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
@@ -531,14 +593,13 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
     ctx.disamb_pass = Some(DisambPass::Conditionals);
 
     let ir3 = db.ir_gen3_add_year_suffix(id);
-    if ir3.1 {
+    if ir3.unambiguous {
         return ir3.clone();
     }
-    let mut state = ir3.2.clone();
-    let mut ir = ir3.0.clone();
+    let (mut ir, mut state) = ir3.fresh_copy();
 
     let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
-    Arc::new((ir, un, state))
+    IrGen::new(ir, un, state)
 }
 
 fn built_cluster(
@@ -552,7 +613,8 @@ fn built_cluster(
     let built_cites: Vec<_> = cite_ids
         .iter()
         .map(|&id| {
-            let ir = &db.ir_gen4_conditionals(id).0;
+            let gen4 = db.ir_gen4_conditionals(id);
+            let ir = gen4.ir();
             let cite = id.lookup(db);
             let flattened = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
             // TODO: strip punctuation on these

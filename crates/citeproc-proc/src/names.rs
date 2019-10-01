@@ -4,6 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use parking_lot::Mutex;
+use std::sync::Arc;
 use crate::prelude::*;
 
 use super::unicode::is_latin_cyrillic;
@@ -28,7 +30,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     fmt: &'a O,
     refr: &'a Reference,
     should_start_with_global: bool,
-) -> impl Iterator<Item = NameIR<O::Build>> + 'a {
+) -> impl Iterator<Item = NameIR<O>> + 'a {
     let name_el = db
         .name_citation()
         .merge(names.name.as_ref().unwrap_or(&NameEl::empty()));
@@ -77,6 +79,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                 current_name_count: 0,
                 gn_iter_index: 0,
                 disamb_names: ratchets.collect(),
+                achieved_at: (std::u16::MAX, 0),
+                // must replace this if you want to use it for a cite IR
+                ir: Box::new(IR::Rendered(None))
             }
         })
 }
@@ -98,7 +103,8 @@ where
         let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference, true)
             .map(|mut nir| {
                 if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx) {
-                    IR::Names(nir, Box::new(ir))
+                    *nir.ir = ir;
+                    IR::Name(Arc::new(Mutex::new(nir)))
                 } else {
                     // shouldn't happen; intermediate_custom should return Some the first time
                     // round in any situation, and only retun None if it's impossible to crank any
@@ -109,7 +115,7 @@ where
             })
             .collect();
         if name_irs.iter().all(|ir| match ir {
-            IR::Names(nir, _) => nir.disamb_names.is_empty(),
+            IR::Name(nir) => nir.lock().disamb_names.is_empty(),
             _ => true,
         }) {
             // TODO: substitute
@@ -135,15 +141,12 @@ where
     }
 }
 
-impl<'c, B: std::fmt::Debug + Clone + PartialEq + Eq + Send + Sync + Default> NameIR<B> {
-    pub fn intermediate_custom<O>(
+impl<'c, O: OutputFormat> NameIR<O> {
+    pub fn intermediate_custom(
         &mut self,
         db: &impl IrDatabase,
         ctx: &CiteContext<'c, O>,
-    ) -> Option<IrSum<O>>
-    where
-        O: OutputFormat<Build = B>,
-    {
+    ) -> Option<IrSum<O>> {
         let style = ctx.style;
         let locale = ctx.locale;
         let fmt = &ctx.format;
