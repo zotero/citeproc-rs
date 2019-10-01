@@ -94,4 +94,3 @@ impl IrState {
         IrState::default()
     }
 }
-

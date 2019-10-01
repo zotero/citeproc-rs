@@ -148,8 +148,8 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     }
 }
 
-use parking_lot::Mutex;
 use crate::disamb::names::NameIR;
+use parking_lot::Mutex;
 
 // Intermediate Representation
 #[derive(Debug, Clone)]
@@ -180,14 +180,21 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
-impl<O> Eq for IR<O> where O : OutputFormat + PartialEq + Eq {}
-impl<O> PartialEq for IR<O> where O : OutputFormat + PartialEq {
+impl<O> Eq for IR<O> where O: OutputFormat + PartialEq + Eq {}
+impl<O> PartialEq for IR<O>
+where
+    O: OutputFormat + PartialEq,
+{
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
             (IR::Seq(s), IR::Seq(o)) if s == o => true,
             (IR::YearSuffix(s1, s2), IR::YearSuffix(o1, o2)) if s1 == o1 && s2 == o2 => true,
-            (IR::ConditionalDisamb(s1, s2), IR::ConditionalDisamb(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::ConditionalDisamb(s1, s2), IR::ConditionalDisamb(o1, o2))
+                if s1 == o1 && s2 == o2 =>
+            {
+                true
+            }
             (IR::Name(self_nir), IR::Name(other_nir)) => {
                 let s = self_nir.lock();
                 let o = other_nir.lock();
@@ -207,9 +214,12 @@ impl<O: OutputFormat> Default for IR<O> {
 use std::mem;
 
 impl IR<Markup> {
-    pub(crate) fn visit_names_mut<F>(&mut self, callback: F) where F : (Fn(&mut NameIR<Markup>) -> ()) + Clone {
+    pub(crate) fn visit_names_mut<F>(&mut self, callback: F)
+    where
+        F: (Fn(&mut NameIR<Markup>) -> ()) + Clone,
+    {
         match self {
-            IR::YearSuffix(..) | IR::Rendered(_) => {},
+            IR::YearSuffix(..) | IR::Rendered(_) => {}
             IR::Name(ref nir) => {
                 callback(&mut nir.lock());
             }
@@ -402,10 +412,9 @@ impl IrSeq<Markup> {
             if sub.len() > 0 {
                 if seen {
                     if !delimiter.is_empty() {
-                        edges.push(EdgeData::Output(fmt.output_in_context(
-                            fmt.plain(delimiter.as_ref()),
-                            sub_formatting,
-                        )));
+                        edges.push(EdgeData::Output(
+                            fmt.output_in_context(fmt.plain(delimiter.as_ref()), sub_formatting),
+                        ));
                     }
                 } else {
                     seen = true;
@@ -420,7 +429,6 @@ impl IrSeq<Markup> {
         if !affixes.suffix.is_empty() {
             edges.push(EdgeData::Output(affixes.suffix.to_string()));
         }
-
     }
 
     fn flatten_seq(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {

@@ -142,16 +142,16 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 }
 
 #[derive(Debug, Clone)]
-pub struct IrGen{
+pub struct IrGen {
     unambiguous: bool,
-    ir_and_state: Arc<(IR<Markup>, IrState)>
+    ir_and_state: Arc<(IR<Markup>, IrState)>,
 }
 
 impl IrGen {
     fn new(ir: IR<Markup>, unambiguous: bool, state: IrState) -> Self {
-        IrGen{
+        IrGen {
             unambiguous,
-            ir_and_state: Arc::new((ir, state))
+            ir_and_state: Arc::new((ir, state)),
         }
     }
     fn fresh_copy(&self) -> (IR<Markup>, IrState) {
@@ -167,7 +167,7 @@ impl IrGen {
 impl Eq for IrGen {}
 impl PartialEq<IrGen> for IrGen {
     fn eq(&self, other: &Self) -> bool {
-            self.unambiguous == other.unambiguous
+        self.unambiguous == other.unambiguous
             && &self.ir_and_state.1 == &other.ir_and_state.1
             && &self.ir_and_state.0 == &other.ir_and_state.0
     }
@@ -339,7 +339,7 @@ type NameRef = Arc<Mutex<NameIR<Markup>>>;
 fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
     fn list_all_name_blocks_inner(ir: &IR<Markup>, vec: &mut Vec<NameRef>) {
         match ir {
-            IR::YearSuffix(..) | IR::Rendered(_) => {},
+            IR::YearSuffix(..) | IR::Rendered(_) => {}
             IR::Name(ref nir) => {
                 vec.push(nir.clone());
             }
@@ -392,10 +392,11 @@ fn disambiguate_add_names(
 
         let total_ambiguity_number = |this_nir: &mut MutexGuard<'_, NameIR<Markup>>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
-            let edges = MutexGuard::unlocked(this_nir, || {
-                ir.to_edge_stream(fmt)
-            });
-            let count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count() as u16;
+            let edges = MutexGuard::unlocked(this_nir, || ir.to_edge_stream(fmt));
+            let count = dfas
+                .iter()
+                .filter(|dfa| dfa.accepts_data(db, &edges))
+                .count() as u16;
             if count == 0 {
                 warn!("should not get to zero matching refs");
             }
@@ -435,7 +436,6 @@ fn expand_one_name_ir(
     refs_accepting: &[Atom],
     nir: &mut NameMutexGuard,
 ) {
-
     let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
 
     for r in refs_accepting {
@@ -459,7 +459,6 @@ fn expand_one_name_ir(
     let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
         slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
     };
-
 
     let mut n = 0usize;
     for dnr in nir.disamb_names.iter_mut() {
