@@ -364,7 +364,6 @@ use crate::disamb::names::{
 fn disambiguate_add_names(
     db: &impl IrDatabase,
     ir: &mut IR<Markup>,
-    state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
     also_expand: bool,
 ) -> bool {
@@ -408,16 +407,12 @@ fn disambiguate_add_names(
             if !ret {
                 break;
             }
+            if also_expand {
+                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir);
+            }
             let new_count = total_ambiguity_number(&mut nir);
             nir.achieved_count(new_count as u16);
             best = std::cmp::min(best, new_count);
-        }
-        if also_expand {
-            // disambiguate_add_givennames(db, ir, state, ctx, false);
-            // let edges = ir.to_edge_stream(fmt);
-            // let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
-            // best = new_count;
-            // ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
         }
         nir.rollback(db, ctx);
         best = total_ambiguity_number(&mut nir);
@@ -425,90 +420,102 @@ fn disambiguate_add_names(
     best <= 1
 }
 
+type NameMutexGuard<'a> = MutexGuard<'a, NameIR<Markup>>;
+
+fn expand_one_name_ir(
+    db: &impl IrDatabase,
+    ir: &IR<Markup>,
+    ctx: &CiteContext<'_, Markup>,
+    refs_accepting: &[Atom],
+    nir: &mut NameMutexGuard,
+) {
+
+    let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
+
+    for r in refs_accepting {
+        if let Some(rnir) =
+            make_identical_name_formatter(db, r.clone(), ctx, /* XXX */ NameVariable::Author)
+        {
+            let var = rnir.variable;
+            let len = rnir.disamb_name_ids.len();
+            if len > double_vec.len() {
+                double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
+            }
+            for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
+                let matcher = NameVariantMatcher::from_disamb_name(db, id);
+                if let Some(slot) = double_vec.get_mut(n) {
+                    slot.push(matcher);
+                }
+            }
+        }
+    }
+
+    let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
+        slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
+    };
+
+
+    let mut n = 0usize;
+    for dnr in nir.disamb_names.iter_mut() {
+        match dnr {
+            DisambNameRatchet::Person(ratchet) => {
+                if let Some(ref slot) = double_vec.get(n) {
+                    // First, get the initial count
+                    /* TODO: store format stack */
+                    let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
+                    let mut min = name_ambiguity_number(edge, slot);
+                    debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
+                    let mut stage_dn = ratchet.data.clone();
+                    // Then, try to improve it
+                    let mut iter = ratchet.iter.clone();
+                    while min > 1 {
+                        if let Some(next) = iter.next() {
+                            stage_dn.apply_pass(next);
+                            edge = stage_dn.single_name_edge(db, Formatting::default());
+                            let new_count = name_ambiguity_number(edge, slot);
+                            if new_count < min {
+                                // save the improvement
+                                min = new_count;
+                                ratchet.data = stage_dn.clone();
+                                ratchet.iter = iter.clone();
+                            }
+                            debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    // We've gone past the end of the slots.
+                    // None of the ambiguous references had this many names
+                    // so it's impossible to improve disamb by expanding this one (though adding it would
+                    // help. Since this name block was ambiguous, we know this name wasn't
+                    // initially rendered.)
+                }
+                n += 1;
+            }
+            _ => {}
+        }
+    }
+    if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+        *nir.ir = new_ir;
+    }
+}
+
 fn disambiguate_add_givennames(
     db: &impl IrDatabase,
     ir: &mut IR<Markup>,
-    state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
     let fmt = db.get_formatter();
-    let style = db.style();
     let refs = refs_accepting_cite(db, ir);
     let name_refs = list_all_name_blocks(ir);
     for nir_arc in name_refs {
         let mut nir = nir_arc.lock();
-        let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
-
-        for r in &refs {
-            if let Some(rnir) =
-                make_identical_name_formatter(db, r.clone(), ctx, /* XXX */ NameVariable::Author)
-            {
-                let var = rnir.variable;
-                let len = rnir.disamb_name_ids.len();
-                if len > double_vec.len() {
-                    double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
-                }
-                for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                    let matcher = NameVariantMatcher::from_disamb_name(db, id);
-                    if let Some(slot) = double_vec.get_mut(n) {
-                        slot.push(matcher);
-                    }
-                }
-            }
-        }
-
-        let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
-            slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
-        };
-
-        let mut n = 0usize;
-        for dnr in nir.disamb_names.iter_mut() {
-            match dnr {
-                DisambNameRatchet::Person(ratchet) => {
-                    if let Some(ref slot) = double_vec.get(n) {
-                        // First, get the initial count
-                        /* TODO: store format stack */
-                        let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
-                        let mut min = name_ambiguity_number(edge, slot);
-                        debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
-                        let mut stage_dn = ratchet.data.clone();
-                        // Then, try to improve it
-                        let mut iter = ratchet.iter.clone();
-                        while min > 1 {
-                            if let Some(next) = iter.next() {
-                                stage_dn.apply_pass(next);
-                                edge = stage_dn.single_name_edge(db, Formatting::default());
-                                let new_count = name_ambiguity_number(edge, slot);
-                                if new_count < min {
-                                    // save the improvement
-                                    min = new_count;
-                                    ratchet.data = stage_dn.clone();
-                                    ratchet.iter = iter.clone();
-                                }
-                                debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
-                            } else {
-                                break;
-                            }
-                        }
-                    } else {
-                        // We've gone past the end of the slots.
-                        // None of the ambiguous references had this many names
-                        // so it's impossible to improve disamb by expanding this one (though adding it would
-                        // help. Since this name block was ambiguous, we know this name wasn't
-                        // initially rendered.)
-                    }
-                    n += 1;
-                }
-                _ => {}
-            }
-        }
-        if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
-            *nir.ir = new_ir;
-        }
+        expand_one_name_ir(db, ir, ctx, &refs, &mut nir);
     }
     if also_add {
-        disambiguate_add_names(db, ir, state, ctx, true);
+        disambiguate_add_names(db, ir, ctx, true);
     }
     None
 }
@@ -543,7 +550,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
     }
     let (mut ir, mut state) = ir0.fresh_copy();
 
-    let un = disambiguate_add_names(db, &mut ir, &mut state, &ctx, false);
+    let un = disambiguate_add_names(db, &mut ir, &ctx, false);
     IrGen::new(ir, un, state)
 }
 
@@ -563,7 +570,8 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     }
     let (mut ir, mut state) = ir1.fresh_copy();
 
-    disambiguate_add_givennames(db, &mut ir, &mut state, &ctx, true);
+    let also_add_names = style.citation.disambiguate_add_names;
+    disambiguate_add_givennames(db, &mut ir, &ctx, also_add_names);
     let un = is_unambiguous(db, ctx.disamb_pass, &ir, id, &refr.id);
     IrGen::new(ir, un, state)
 }

@@ -552,8 +552,6 @@ impl<O> NameIR<O> where O : OutputFormat {
                 return true;
             }
             None => {
-                // XXX
-                self.bump_name_count -= 1;
                 return false;
             }
         }
