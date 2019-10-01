@@ -15,7 +15,7 @@ use citeproc_io::{ClusterId, Name};
 use csl::variables::NameVariable;
 use csl::Atom;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
 pub trait HasFormatter {
     fn get_formatter(&self) -> Markup;
@@ -336,23 +336,25 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
 
 type NameRef = Arc<Mutex<NameIR<Markup>>>;
 
-fn list_all_name_blocks(
-    ir: &IR<Markup>,
-    vec: &mut Vec<NameRef>,
-) {
-    match ir {
-        IR::YearSuffix(..) | IR::Rendered(_) => {},
-        IR::Name(ref nir) => {
-            vec.push(nir.clone());
-        }
-        IR::ConditionalDisamb(_, boxed) => list_all_name_blocks(&**boxed, vec),
-        IR::Seq(seq) => {
-            // assumes it's the first one that appears
-            for x in &seq.contents {
-                list_all_name_blocks(x, vec)
+fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
+    fn list_all_name_blocks_inner(ir: &IR<Markup>, vec: &mut Vec<NameRef>) {
+        match ir {
+            IR::YearSuffix(..) | IR::Rendered(_) => {},
+            IR::Name(ref nir) => {
+                vec.push(nir.clone());
+            }
+            IR::ConditionalDisamb(_, boxed) => list_all_name_blocks_inner(&**boxed, vec),
+            IR::Seq(seq) => {
+                // assumes it's the first one that appears
+                for x in &seq.contents {
+                    list_all_name_blocks_inner(x, vec)
+                }
             }
         }
     }
+    let mut vec = Vec::new();
+    list_all_name_blocks_inner(ir, &mut vec);
+    vec
 }
 
 use crate::disamb::names::{
@@ -371,37 +373,55 @@ fn disambiguate_add_names(
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
     let initial_refs = refs_accepting_cite(db, ir);
-    let mut best = initial_refs.len();
-    if best <= 1 {
-        return true;
-    }
-    let mut dfas = Vec::with_capacity(best);
-    for k in &initial_refs {
-        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
-        dfas.push(dfa);
-    }
-    // TODO: save, within NameIR, new_count and the lowest bump_name_count to achieve it,
-    // so that it can roll back to that number easily
-    while best > 1 {
-        let ret = ir.disambiguate(db, state, ctx);
-        let edges = ir.to_edge_stream(fmt);
-        let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
-        ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
-        best = std::cmp::min(best, new_count);
-        if !ret {
-            break;
+    let mut best = initial_refs.len() as u16;
+    let name_refs = list_all_name_blocks(ir);
+
+    info!(
+        "attempting to disambiguate {:?} ({}) with {:?}",
+        ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
+    );
+
+    for nir_arc in name_refs {
+        if best <= 1 {
+            return true;
         }
+        let mut dfas = Vec::with_capacity(best as usize);
+        for k in &initial_refs {
+            let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+            dfas.push(dfa);
+        }
+
+        let total_ambiguity_number = |this_nir: &mut MutexGuard<'_, NameIR<Markup>>| -> u16 {
+            // unlock the nir briefly, so we can access it during to_edge_stream
+            let edges = MutexGuard::unlocked(this_nir, || {
+                ir.to_edge_stream(fmt)
+            });
+            dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count() as u16
+        };
+
+        let mut nir = nir_arc.lock();
+
+        // TODO: save, within NameIR, new_count and the lowest bump_name_count to achieve it,
+        // so that it can roll back to that number easily
+        while best > 1 {
+            let ret = nir.add_name(db, ctx);
+            if !ret {
+                break;
+            }
+            let new_count = total_ambiguity_number(&mut nir);
+            nir.achieved_count(new_count as u16);
+            best = std::cmp::min(best, new_count);
+        }
+        if also_expand {
+            // disambiguate_add_givennames(db, ir, state, ctx, false);
+            // let edges = ir.to_edge_stream(fmt);
+            // let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
+            // best = new_count;
+            // ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
+        }
+        nir.rollback(db, ctx);
+        best = total_ambiguity_number(&mut nir);
     }
-    if also_expand {
-        disambiguate_add_givennames(db, ir, state, ctx, false);
-        let edges = ir.to_edge_stream(fmt);
-        let new_count = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
-        best = new_count;
-        ir.visit_names_mut(|nir| nir.achieved_count(new_count as u16));
-    }
-    ir.visit_names_mut(|nir| nir.rollback(db, ctx));
-    let edges = ir.to_edge_stream(fmt);
-    best = dfas.iter().filter(|dfa| dfa.accepts_data(db, &edges)).count();
     best <= 1
 }
 
@@ -415,8 +435,7 @@ fn disambiguate_add_givennames(
     let fmt = db.get_formatter();
     let style = db.style();
     let refs = refs_accepting_cite(db, ir);
-    let mut name_refs = Vec::new();
-    list_all_name_blocks(ir, &mut name_refs);
+    let name_refs = list_all_name_blocks(ir);
     for nir_arc in name_refs {
         let mut nir = nir_arc.lock();
         let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
@@ -441,14 +460,6 @@ fn disambiguate_add_givennames(
 
         let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
             slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
-        };
-
-        let total_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
-            use parking_lot::MutexGuard;
-            // unlock the nir briefly
-            MutexGuard::unlocked(&mut nir, || {
-                refs_accepting_cite(db, ir).len() as u32
-            })
         };
 
         let mut n = 0usize;
@@ -492,7 +503,7 @@ fn disambiguate_add_givennames(
                 _ => {}
             }
         }
-        if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx) {
+        if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
             *nir.ir = new_ir;
         }
     }

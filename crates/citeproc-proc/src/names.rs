@@ -102,7 +102,7 @@ where
         let fmt = &ctx.format;
         let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference, true)
             .map(|mut nir| {
-                if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx) {
+                if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
                     *nir.ir = ir;
                     IR::Name(Arc::new(Mutex::new(nir)))
                 } else {
@@ -146,6 +146,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         &mut self,
         db: &impl IrDatabase,
         ctx: &CiteContext<'c, O>,
+        pass: Option<DisambPass>,
     ) -> Option<IrSum<O>> {
         let style = ctx.style;
         let locale = ctx.locale;
@@ -167,7 +168,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let ntbs =
             runner.names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al);
         self.current_name_count = ntb_len(&ntbs);
-        if ctx.disamb_pass == Some(DisambPass::AddNames)
+        if pass == Some(DisambPass::AddNames)
             && self.current_name_count <= self.max_name_count
         {
             return None;

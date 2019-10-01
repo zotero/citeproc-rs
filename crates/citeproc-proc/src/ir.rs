@@ -236,23 +236,7 @@ impl IR<Markup> {
                 return ret;
             }
             IR::Name(ref nir) => {
-                let mut nir = nir.lock();
-                info!(
-                    "attempting to disambiguate {:?} ({}) with {:?}",
-                    ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
-                );
-                ret = nir.crank(ctx.disamb_pass);
-                if ret {
-                    match nir.intermediate_custom(db, ctx) {
-                        Some((new_ir, _)) => {
-                            *nir.ir = new_ir;
-                            return ret;
-                        }
-                        None => return false,
-                    }
-                } else {
-                    return false;
-                }
+                return ret;
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {
                 if let Some(DisambPass::Conditionals) = ctx.disamb_pass {

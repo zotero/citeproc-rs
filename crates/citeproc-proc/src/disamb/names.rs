@@ -529,14 +529,6 @@ impl PersonDisambNameRatchet {
 }
 
 impl<O> NameIR<O> where O : OutputFormat {
-    pub fn crank(&mut self, pass: Option<DisambPass>) -> bool {
-        if let Some(DisambPass::AddNames) = pass {
-            self.bump_name_count += 1;
-            true
-        } else {
-            false
-        }
-    }
     pub fn achieved_count(&mut self, count: u16) {
         let (prev_best, _at) = self.achieved_at;
         if count < prev_best {
@@ -546,8 +538,24 @@ impl<O> NameIR<O> where O : OutputFormat {
     pub fn rollback(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) {
         let (_prev_best, at) = self.achieved_at;
         self.bump_name_count = at;
-        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx) {
+        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
             *self.ir = ir;
+        }
+    }
+
+    // returns false if couldn't add any more names
+    pub fn add_name(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
+        self.bump_name_count += 1;
+        match self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
+            Some((new_ir, _)) => {
+                *self.ir = new_ir;
+                return true;
+            }
+            None => {
+                // XXX
+                self.bump_name_count -= 1;
+                return false;
+            }
         }
     }
 }
