@@ -9,7 +9,7 @@ pub fn to_bijective_base_26(int: u32) -> String {
     let mut s = String::new();
     while n > 0 {
         n -= 1;
-        s.push(char::from((65 + 32 + (n % 26)) as u8));
+        s.insert(0, char::from((65 + 32 + (n % 26)) as u8));
         n /= 26;
     }
     s

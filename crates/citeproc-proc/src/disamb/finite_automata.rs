@@ -24,6 +24,8 @@ pub enum EdgeData<O: OutputFormat = Markup> {
     // The rest are synchronised with fields on CiteContext and IR.
     Locator,
     LocatorLabel,
+    /// TODO: add Output to this, and add a parameter to Dfa::accepts_data to supply the actual
+    /// year suffix for the particular reference.
     YearSuffix,
     CitationNumber,
     // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
@@ -307,6 +309,7 @@ impl Dfa {
                     let target = edge.target();
                     use std::cmp::min;
                     match (&weight, token) {
+                        // TODO: add an output check that EdgeData::YearSuffix contains the RIGHT 
                         (w, t) if w == t => {
                             cursors.push((target, None, &chunk[min(1, chunk.len())..]));
                         }

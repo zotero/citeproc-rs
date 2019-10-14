@@ -7,8 +7,8 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
-use csl::variables::NameVariable;
+use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, VariableForm, TextCase, TextSource, GivenNameDisambiguationRule};
+use csl::variables::{NumberVariable, NameVariable, StandardVariable, Variable};
 use csl::Atom;
 
 use std::sync::Arc;
@@ -27,8 +27,8 @@ pub enum DisambPass {
 pub enum YearSuffixHook {
     Date(Arc<BodyDate>),
     // Clone element into here, because we already know it's a <text variable="" />
-    // And it's cheap to clone those
     Explicit(Element),
+    Plain,
 }
 
 impl Eq for RefIR {}
@@ -113,18 +113,17 @@ impl RefIR {
     }
 }
 
-/// A version of [`EdgeData`] that has a piece of output for every
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CiteEdgeData<O: OutputFormat = Markup> {
     Output(O::Build),
     Locator(O::Build),
     LocatorLabel(O::Build),
+    /// Used for representing a YearSuffix that has actually been rendered during disambiguation.
     YearSuffix(O::Build),
     CitationNumber(O::Build),
     Frnn(O::Build),
 }
 
-use csl::variables::{NumberVariable, StandardVariable, Variable};
 impl<O: OutputFormat> CiteEdgeData<O> {
     pub fn from_number_variable(var: NumberVariable) -> fn(O::Build) -> Self {
         match var {
@@ -214,23 +213,29 @@ impl<O: OutputFormat> Default for IR<O> {
 use std::mem;
 
 impl IR<Markup> {
-    pub(crate) fn visit_names_mut<F>(&mut self, callback: F)
+    pub(crate) fn visit_year_suffix_hooks<F>(&mut self, callback: &mut F) -> bool
     where
-        F: (Fn(&mut NameIR<Markup>) -> ()) + Clone,
+        F: (FnMut(&mut IR<Markup>) -> bool),
     {
         match self {
-            IR::YearSuffix(..) | IR::Rendered(_) => {}
-            IR::Name(ref nir) => {
-                callback(&mut nir.lock());
+            IR::YearSuffix(..) => {
+                callback(self)
             }
             IR::ConditionalDisamb(_, ref mut boxed) => {
-                boxed.visit_names_mut(callback.clone());
+                // XXX(check this): boxed has already been rendered, so the `if` was with
+                // disambiguate=false, probably. So you can visit it.
+                boxed.visit_year_suffix_hooks(callback)
             }
             IR::Seq(seq) => {
                 for ir in seq.contents.iter_mut() {
-                    ir.visit_names_mut(callback.clone());
+                    let done = ir.visit_year_suffix_hooks(callback);
+                    if done {
+                        return true;
+                    }
                 }
+                return false;
             }
+            _ => false,
         }
     }
 
@@ -239,6 +244,7 @@ impl IR<Markup> {
         db: &impl IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, Markup>,
+        applied_suffix: &mut bool,
     ) -> bool {
         let mut ret = false;
         *self = match self {
@@ -265,12 +271,33 @@ impl IR<Markup> {
                 // TODO: save GroupVars state in IrSeq so a Group with a year-suffix in
                 // it can do normal group suppression
                 if let Some(DisambPass::AddYearSuffix(_)) = ctx.disamb_pass {
-                    if let YearSuffixHook::Explicit(ref el) = ysh {
-                        let (new_ir, _gv) = el.intermediate(db, state, ctx);
-                        new_ir
-                    } else {
-                        warn!("YearSuffixHook::Date not implemented");
+                    if *applied_suffix == true {
                         return ret;
+                    }
+                    match ysh {
+                        YearSuffixHook::Explicit(ref el) => {
+                            *applied_suffix = true;
+                            let (new_ir, _gv) = el.intermediate(db, state, ctx);
+                            new_ir
+                        }
+                        YearSuffixHook::Plain => {
+                            *applied_suffix = true;
+                            let el = Element::Text(
+                                TextSource::Variable(
+                                    StandardVariable::Ordinary(Variable::YearSuffix),
+                                    VariableForm::Long
+                                ),
+                                None,
+                                Affixes::default(),
+                                false,
+                                false,
+                                TextCase::None,
+                                None,
+                            );
+                            let (new_ir, _gv) = el.intermediate(db, state, ctx);
+                            new_ir
+                        }
+                        _ => return ret,
                     }
                 } else {
                     return ret;
@@ -280,7 +307,7 @@ impl IR<Markup> {
                 ret = seq
                     .contents
                     .iter_mut()
-                    .any(|ir| ir.disambiguate(db, state, ctx));
+                    .any(|ir| ir.disambiguate(db, state, ctx, applied_suffix));
                 return ret;
             }
         };
@@ -342,7 +369,7 @@ impl IR<Markup> {
 // }
 
 impl CiteEdgeData<Markup> {
-    fn to_edge_data(&self, fmt: &Markup, formatting: Formatting) -> EdgeData {
+    pub(crate) fn to_edge_data(&self, fmt: &Markup, formatting: Formatting) -> EdgeData {
         match self {
             CiteEdgeData::Output(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting))

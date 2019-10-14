@@ -209,8 +209,7 @@ macro_rules! preamble {
     }};
 }
 
-fn disambiguate(
-    db: &impl IrDatabase,
+fn disambiguate( db: &impl IrDatabase,
     ir: &mut IR<Markup>,
     state: &mut IrState,
     ctx: &mut CiteContext<Markup>,
@@ -225,7 +224,8 @@ fn disambiguate(
         ctx.disamb_pass
     );
     // disambiguate returns true if it can do more for this DisambPass (i.e. more names to add)
-    while !un && ir.disambiguate(db, state, ctx) {
+    let mut applied_suffix = false;
+    while !un && ir.disambiguate(db, state, ctx, &mut applied_suffix) {
         un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
     }
     if !un {
@@ -525,6 +525,66 @@ fn disambiguate_add_givennames(
     None
 }
 
+use csl::style::Element;
+fn plain_suffix_element() -> Element {
+    use csl::style::{Affixes, Element, VariableForm, TextCase, TextSource};
+    use csl::variables::{StandardVariable, Variable};
+    Element::Text(
+        TextSource::Variable(
+            StandardVariable::Ordinary(Variable::YearSuffix),
+            VariableForm::Long
+        ),
+        None,
+        Default::default(),
+        false,
+        false,
+        TextCase::None,
+        None,
+    )
+}
+
+fn disambiguate_add_year_suffix(db: &impl IrDatabase, ir: &mut IR<Markup>, state: &mut IrState, ctx: &CiteContext<'_, Markup>) {
+    use csl::style::{Affixes, Element, VariableForm, TextCase, TextSource};
+    use csl::variables::{StandardVariable, Variable};
+    // First see if we can do it with an explicit one
+    let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
+        *piece = match piece {
+            IR::YearSuffix(ref mut hook, ref mut _built) => {
+                match hook {
+                    YearSuffixHook::Explicit(ref el) => {
+                        let (new_ir, _gv) = el.intermediate(db, state, ctx);
+                        new_ir
+                    }
+                    _ => return false,
+                }
+            }
+            _ => unreachable!(),
+        };
+        true
+    });
+
+    if asuf {
+        return;
+    }
+
+    // Then attempt to do it for the ones that are embedded in date output
+    ir.visit_year_suffix_hooks(&mut |piece| {
+        *piece = match piece {
+            IR::YearSuffix(ref mut hook, ref mut _built) => {
+                match hook {
+                    YearSuffixHook::Plain => {
+                        let (new_ir, _gv) = plain_suffix_element().intermediate(db, state, ctx);
+                        new_ir
+                    }
+                    _ => return false,
+                }
+            }
+            _ => unreachable!(),
+        };
+        true
+    });
+}
+
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let style;
     let locale;
@@ -602,8 +662,11 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
 
     let year_suffix = suffixes[&cite.ref_id];
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
+    warn!("YearSuffixHook suffixes for {}: {:#?}\n{:#?}", &cite.ref_id, ctx.disamb_pass, ir);
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, Some(&suffixes), &refr.id);
+    disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
+    let un = is_unambiguous(db, ctx.disamb_pass, &ir, id, &refr.id);
+    warn!("YearSuffixHook after, for {}: {:#?}", &cite.ref_id, ir);
     IrGen::new(ir, un, state)
 }
 

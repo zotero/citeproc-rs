@@ -39,6 +39,12 @@ impl<O: OutputFormat> GenericContext<'_, O> {
             GenericContext::Ref(ctx) => ctx.format,
         }
     }
+    pub fn should_add_year_suffix_hook(&self) -> bool {
+        match self {
+            GenericContext::Cit(ctx) => true,
+            GenericContext::Ref(ctx) => ctx.year_suffix,
+        }
+    }
     pub fn locator_type(&self) -> Option<LocatorType> {
         match self {
             Cit(ctx) => ctx
