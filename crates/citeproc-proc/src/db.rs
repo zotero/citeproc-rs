@@ -159,7 +159,7 @@ impl IrGen {
         let state = self.ir_and_state.1.clone();
         (ir, state)
     }
-    fn ir<'a>(&'a self) -> &'a IR<Markup> {
+    pub(crate) fn ir<'a>(&'a self) -> &'a IR<Markup> {
         &self.ir_and_state.0
     }
 }
