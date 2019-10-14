@@ -103,9 +103,16 @@ impl RefIR {
             RefIR::Edge(None) => "None".into(),
             RefIR::Seq(seq) => {
                 let mut s = String::new();
+                s.push_str("[");
+                let mut seen = false;
                 for x in &seq.contents {
+                    if seen {
+                        s.push_str(",");
+                    }
+                    seen = true;
                     s.push_str(&x.debug(db));
                 }
+                s.push_str("]");
                 s
             }
             RefIR::Name(rnir, _nfa) => format!("NameVariable::{:?}", rnir.variable),
@@ -115,23 +122,23 @@ impl RefIR {
     pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_edge: Edge) {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
-            if *found {
-                *opt_e = None;
-                true
-            } else {
+            if !*found {
+                // first time
                 *found = true;
                 *opt_e = Some(ysh_edge);
-                false
+            } else {
+                // subsequent ones are extraneous, so make them disappear
+                *opt_e  = None;
             }
+            false
         });
         self.visit_ysh(ysh_edge, &mut |opt_e| {
-            if *found {
-                *opt_e = None;
-                true
-            } else {
+            if !*found {
                 *found = true;
-                false
+            } else {
+                *opt_e  = None;
             }
+            false
         });
     }
 
