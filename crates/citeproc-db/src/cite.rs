@@ -65,7 +65,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 
     #[salsa::interned]
-    fn cite(&self, cluster: ClusterId, cite: Arc<Cite<Markup>>) -> CiteId;
+    fn cite(&self, cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>>) -> CiteId;
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
@@ -91,7 +91,7 @@ intern_key!(pub CiteId);
 
 impl CiteId {
     pub fn lookup(&self, db: &impl CiteDatabase) -> Arc<Cite<Markup>> {
-        let (_cluster_id, cite) = db.lookup_cite(*self);
+        let (_cluster_id, _index, cite) = db.lookup_cite(*self);
         cite
     }
 }

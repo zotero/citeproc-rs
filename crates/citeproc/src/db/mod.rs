@@ -285,8 +285,8 @@ impl Processor {
         for cluster in clusters {
             let (cluster_id, number, cites) = cluster.split();
             let mut ids = Vec::new();
-            for cite in cites.iter() {
-                let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+            for (index, cite) in cites.iter().enumerate() {
+                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
@@ -321,8 +321,8 @@ impl Processor {
         }
 
         let mut ids = Vec::new();
-        for cite in cites.iter() {
-            let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+        for (index, cite) in cites.iter().enumerate() {
+            let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
