@@ -89,14 +89,35 @@ enum ResultKind {
     Arrows,
 }
 #[derive(Debug, PartialEq)]
-struct CiteResult {
+pub struct CiteResult {
     kind: ResultKind,
     id: u32,
     note: ClusterNumber,
     text: String,
 }
 #[derive(Debug, PartialEq)]
-struct Results(Vec<CiteResult>);
+pub struct Results(pub Vec<CiteResult>);
+
+impl Results {
+    pub fn output_independent(&self) -> String {
+        let mut output = String::new();
+        for (n, res) in self.0.iter().enumerate() {
+            // Whether or not something is recomputed is not part of the CSL spec. We will simply
+            // ignore this.
+            // output.push_str(if res.kind == ResultKind::Arrows {
+            //     ">>"
+            // } else {
+            //     ".."
+            // });
+            output.push_str("[");
+            output.push_str(&format!("{}", n));
+            output.push_str("] ");
+            output.push_str(&res.text);
+            output.push_str("\n");
+        }
+        output
+    }
+}
 
 impl FromStr for Results {
     type Err = ();
@@ -250,7 +271,7 @@ impl JsExecutor<'_> {
         }
     }
 
-    fn get_results(&self) -> Vec<CiteResult> {
+    pub fn get_results(&self) -> Results {
         let updates = self.proc.batched_updates();
         let mut mod_clusters = HashMap::new();
         let mut results = Vec::<CiteResult>::new();
@@ -262,7 +283,10 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Arrows,
                 id,
                 note,
-                text,
+                text: text
+                    .replace("&#x2f;", "/")
+                    // citeproc-js uses the #38 version
+                    .replace("&amp;", "&#38;"),
             })
         }
         for &id in self.current_note_numbers.keys() {
@@ -275,29 +299,14 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Dots,
                 id,
                 note,
-                text,
+                text: text
+                    .replace("&#x2f;", "/")
+                    // citeproc-js uses the #38 version
+                    .replace("&amp;", "&#38;"),
             })
         }
         results.sort_by_key(|x| x.note);
-        results
-    }
-
-    pub fn format_results(&self) -> String {
-        let results = self.get_results();
-        let mut output = String::new();
-        for (n, res) in results.iter().enumerate() {
-            output.push_str(if res.kind == ResultKind::Arrows {
-                ">>"
-            } else {
-                ".."
-            });
-            output.push_str("[");
-            output.push_str(&format!("{}", n));
-            output.push_str("] ");
-            output.push_str(&res.text);
-            output.push_str("\n");
-        }
-        output
+        Results(results)
     }
 
     fn to_renumbering(&mut self, renum: &mut Vec<(ClusterId, ClusterNumber)>, prepost: &[PrePost]) {

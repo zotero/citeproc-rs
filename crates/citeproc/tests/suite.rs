@@ -65,8 +65,9 @@ fn csl_test_suite(path: &Path) {
     setup();
     let input = read_to_string(path).unwrap();
     let mut test_case = parse_human_test(&input);
-    let res = test_case.execute();
-    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    if let Some(res) = test_case.execute() {
+        assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    }
 }
 
 #[datatest::files("tests/data/humans", {
@@ -78,6 +79,7 @@ fn humans(path: &Path) {
     let input = read_to_string(path).unwrap();
     let yaml_test_case: YamlTestCase = serde_yaml::from_str(&input).unwrap();
     let mut test_case: TestCase = yaml_test_case.into();
-    let res = test_case.execute();
-    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    if let Some(res) = test_case.execute() {
+        assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    }
 }

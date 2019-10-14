@@ -23,7 +23,7 @@ pub mod humans;
 // pub mod toml;
 pub mod yaml;
 
-use humans::{CiteprocJsInstruction, JsExecutor};
+use humans::{CiteprocJsInstruction, JsExecutor, Results};
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TestCase {
@@ -71,7 +71,7 @@ impl Default for Format {
 }
 
 impl TestCase {
-    pub fn execute(&mut self) -> String {
+    pub fn execute(&mut self) -> Option<String> {
         if self.mode == Mode::Bibliography {
             panic!("bib tests not implemented");
         }
@@ -87,9 +87,12 @@ impl TestCase {
             for instruction in instructions.iter() {
                 executor.execute(instruction);
             }
-            // let desired = Results::from_str(&self.result).unwrap();
-            // turns out it's easier to just produce the string the same way
-            res = executor.format_results();
+            use std::str::FromStr;
+            let desired = Results::from_str(&self.result).unwrap();
+            self.result = desired.output_independent();
+            let actual = executor.get_results();
+            Some(actual.output_independent())
+        // turns out it's easier to just produce the string the same way
         } else {
             let mut clusters_auto = Vec::new();
             let clusters = if let Some(ref clusters) = &self.clusters {
@@ -119,16 +122,18 @@ impl TestCase {
                 res.push_str(&*html);
                 pushed = true;
             }
+            if self.result == "[CSL STYLE ERROR: reference with no printed form.]" {
+                self.result = String::new()
+            }
+            // Because citeproc-rs is a bit keen to escape things
+            // Slashes are fine if they're not next to angle braces
+            // let's hope they're not
+            Some(
+                res.replace("&#x2f;", "/")
+                    // citeproc-js uses the #38 version
+                    .replace("&amp;", "&#38;"),
+            )
         }
-        if self.result == "[CSL STYLE ERROR: reference with no printed form.]" {
-            self.result = String::new()
-        }
-        // Because citeproc-rs is a bit keen to escape things
-        // Slashes are fine if they're not next to angle braces
-        // let's hope they're not
-        res.replace("&#x2f;", "/")
-            // citeproc-js uses the #38 version
-            .replace("&amp;", "&#38;")
     }
 }
 
