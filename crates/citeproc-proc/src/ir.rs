@@ -111,6 +111,51 @@ impl RefIR {
             RefIR::Name(rnir, _nfa) => format!("NameVariable::{:?}", rnir.variable),
         }
     }
+
+    pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_edge: Edge) {
+        let found = &mut false;
+        self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
+            if *found {
+                *opt_e = None;
+                true
+            } else {
+                *found = true;
+                *opt_e = Some(ysh_edge);
+                false
+            }
+        });
+        self.visit_ysh(ysh_edge, &mut |opt_e| {
+            if *found {
+                *opt_e = None;
+                true
+            } else {
+                *found = true;
+                false
+            }
+        });
+    }
+
+    pub(crate) fn visit_ysh<F>(&mut self, ysh_edge: Edge, callback: &mut F) -> bool
+    where
+        F: (FnMut(&mut Option<Edge>) -> bool),
+    {
+        match self {
+            RefIR::Edge(ref mut opt_e) if opt_e == &Some(ysh_edge) => {
+                callback(opt_e)
+            }
+            RefIR::Seq(seq) => {
+                for ir in seq.contents.iter_mut() {
+                    let done = ir.visit_ysh(ysh_edge, callback);
+                    if done {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            _ => false,
+        }
+    }
+
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -268,40 +313,7 @@ impl IR<Markup> {
                 }
             }
             IR::YearSuffix(ref ysh, ref _x) => {
-                // TODO: save GroupVars state in IrSeq so a Group with a year-suffix in
-                // it can do normal group suppression
-                if let Some(DisambPass::AddYearSuffix(_)) = ctx.disamb_pass {
-                    if *applied_suffix == true {
-                        return ret;
-                    }
-                    match ysh {
-                        YearSuffixHook::Explicit(ref el) => {
-                            *applied_suffix = true;
-                            let (new_ir, _gv) = el.intermediate(db, state, ctx);
-                            new_ir
-                        }
-                        YearSuffixHook::Plain => {
-                            *applied_suffix = true;
-                            let el = Element::Text(
-                                TextSource::Variable(
-                                    StandardVariable::Ordinary(Variable::YearSuffix),
-                                    VariableForm::Long
-                                ),
-                                None,
-                                Affixes::default(),
-                                false,
-                                false,
-                                TextCase::None,
-                                None,
-                            );
-                            let (new_ir, _gv) = el.intermediate(db, state, ctx);
-                            new_ir
-                        }
-                        _ => return ret,
-                    }
-                } else {
-                    return ret;
-                }
+                return ret;
             }
             IR::Seq(ref mut seq) => {
                 ret = seq

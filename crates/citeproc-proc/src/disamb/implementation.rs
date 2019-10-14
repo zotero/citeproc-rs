@@ -128,7 +128,7 @@ impl Disambiguation<Markup> for Element {
                     }
                     if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                         if ctx.year_suffix {
-                            let edge = db.edge(EdgeData::YearSuffix);
+                            let edge = db.edge(EdgeData::YearSuffixExplicit);
                             return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                         }
                     }

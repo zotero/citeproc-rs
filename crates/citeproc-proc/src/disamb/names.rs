@@ -5,7 +5,7 @@ use super::mult_identity;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
-use csl::style::{GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
+use csl::style::{Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style, Position};
 use csl::variables::NameVariable;
 use csl::Atom;
 use fnv::FnvHashMap;
@@ -13,15 +13,20 @@ use petgraph::graph::NodeIndex;
 use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
+
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        // TODO: Position may be involved for NASO and primary disambiguation
         // TODO: drill down into the substitute logic here
-        if let Some(subst) = &self.substitute {
+        let mut base = if let Some(subst) = &self.substitute {
             cross_product(db, &subst.0)
         } else {
             mult_identity()
-        }
+        };
+        // Position may be involved for NASO and primary disambiguation
+        let cond = Cond::Position(Position::First);
+        base.scalar_multiply_cond(cond, true);
+        base
     }
+
     fn ref_ir(
         &self,
         db: &impl IrDatabase,

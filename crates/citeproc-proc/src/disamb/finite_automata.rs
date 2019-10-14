@@ -21,13 +21,19 @@ pub struct Edge(u32);
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EdgeData<O: OutputFormat = Markup> {
     Output(O::Output),
+
     // The rest are synchronised with fields on CiteContext and IR.
     Locator,
     LocatorLabel,
-    /// TODO: add Output to this, and add a parameter to Dfa::accepts_data to supply the actual
-    /// year suffix for the particular reference.
+
+    /// TODO: add a parameter to Dfa::accepts_data to supply the actual year suffix for the particular reference.
     YearSuffix,
+
+    /// Not for DFA matching, must be turned into YearSuffix via `RefIR::keep_first_ysh` before DFA construction
+    YearSuffixExplicit,
+
     CitationNumber,
+
     // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
     Frnn,
 }

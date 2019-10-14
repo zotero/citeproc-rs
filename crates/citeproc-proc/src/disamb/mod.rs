@@ -144,6 +144,8 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
 ) -> Vec<(FreeCond, RefIR)> {
     let style = db.style();
     let locale = db.locale_by_reference(refr.id.clone());
+    let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
+    let ysh_edge = db.edge(EdgeData::YearSuffix);
     let fcs = db.branch_runs();
     let mut vec: Vec<(FreeCond, RefIR)> = fcs
         .0
@@ -151,8 +153,9 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .map(|fc| {
             let fmt = db.get_formatter();
             let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
-            let (ir, _gv) =
+            let (mut ir, _gv) =
                 Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, Formatting::default());
+            ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
             (*fc, ir)
         })
         .collect();

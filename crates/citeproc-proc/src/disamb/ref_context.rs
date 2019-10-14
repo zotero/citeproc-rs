@@ -29,7 +29,7 @@ impl From<FreeCond> for Position {
             Position::NearNote
         } else if pos.contains(FreeCond::FAR_NOTE) {
             Position::FarNote
-        } else if pos.contains(FreeCond::SUBSEQUENT) {
+        } else if pos.contains(FreeCond::SUBSEQUENT) || pos.contains(FreeCond::FIRST_FALSE) {
             Position::Subsequent
         } else {
             // TODO: check this
