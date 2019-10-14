@@ -315,7 +315,7 @@ impl Dfa {
                     let target = edge.target();
                     use std::cmp::min;
                     match (&weight, token) {
-                        // TODO: add an output check that EdgeData::YearSuffix contains the RIGHT 
+                        // TODO: add an output check that EdgeData::YearSuffix contains the RIGHT
                         (w, t) if w == t => {
                             cursors.push((target, None, &chunk[min(1, chunk.len())..]));
                         }

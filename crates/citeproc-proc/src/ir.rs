@@ -7,8 +7,11 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, VariableForm, TextCase, TextSource, GivenNameDisambiguationRule};
-use csl::variables::{NumberVariable, NameVariable, StandardVariable, Variable};
+use csl::style::{
+    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, TextCase,
+    TextSource, VariableForm,
+};
+use csl::variables::{NameVariable, NumberVariable, StandardVariable, Variable};
 use csl::Atom;
 
 use std::sync::Arc;
@@ -128,7 +131,7 @@ impl RefIR {
                 *opt_e = Some(ysh_edge);
             } else {
                 // subsequent ones are extraneous, so make them disappear
-                *opt_e  = None;
+                *opt_e = None;
             }
             false
         });
@@ -136,7 +139,7 @@ impl RefIR {
             if !*found {
                 *found = true;
             } else {
-                *opt_e  = None;
+                *opt_e = None;
             }
             false
         });
@@ -147,9 +150,7 @@ impl RefIR {
         F: (FnMut(&mut Option<Edge>) -> bool),
     {
         match self {
-            RefIR::Edge(ref mut opt_e) if opt_e == &Some(ysh_edge) => {
-                callback(opt_e)
-            }
+            RefIR::Edge(ref mut opt_e) if opt_e == &Some(ysh_edge) => callback(opt_e),
             RefIR::Seq(seq) => {
                 for ir in seq.contents.iter_mut() {
                     let done = ir.visit_ysh(ysh_edge, callback);
@@ -162,7 +163,6 @@ impl RefIR {
             _ => false,
         }
     }
-
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -270,9 +270,7 @@ impl IR<Markup> {
         F: (FnMut(&mut IR<Markup>) -> bool),
     {
         match self {
-            IR::YearSuffix(..) => {
-                callback(self)
-            }
+            IR::YearSuffix(..) => callback(self),
             IR::ConditionalDisamb(_, ref mut boxed) => {
                 // XXX(check this): boxed has already been rendered, so the `if` was with
                 // disambiguate=false, probably. So you can visit it.

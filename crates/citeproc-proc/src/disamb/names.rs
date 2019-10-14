@@ -5,7 +5,9 @@ use super::mult_identity;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
-use csl::style::{Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style, Position};
+use csl::style::{
+    Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Position, Style,
+};
 use csl::variables::NameVariable;
 use csl::Atom;
 use fnv::FnvHashMap;
@@ -13,7 +15,6 @@ use petgraph::graph::NodeIndex;
 use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
-
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         // TODO: drill down into the substitute logic here
         let mut base = if let Some(subst) = &self.substitute {
