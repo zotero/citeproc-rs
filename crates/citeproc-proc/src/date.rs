@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::prelude::*;
+use crate::disamb::mult_identity;
 
 use std::mem;
 use citeproc_io::Date;
@@ -122,6 +123,16 @@ where
 }
 
 impl Disambiguation<Markup> for BodyDate {
+    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
+        use csl::style::Cond;
+        use csl::variables::{AnyVariable, Variable};
+        // Position may be involved for NASO and primary disambiguation
+        let mut base = mult_identity();
+        let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
+        base.scalar_multiply_cond(cond, true);
+        base
+    }
+
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
@@ -261,7 +272,6 @@ where
             .filter(|dp| dp_matches(dp, local.parts_selector))
             .filter_map(|dp| {
                 dp_render_either(dp, ctx.clone(), &val)
-                    .map(|built| (dp.form, built))
             });
         let mut builder = PartBuilder::new(gen_date, len_hint);
         for (form, either) in rendered_parts {
@@ -297,7 +307,6 @@ where
             .iter()
             .filter_map(|dp| {
                 dp_render_either(dp, ctx.clone(), &val)
-                    .map(|built| (dp.form, built))
             });
         let mut builder = PartBuilder::new(gen_date, len_hint);
         for (form, either) in each {
@@ -319,7 +328,7 @@ fn dp_render_either<'c, O: OutputFormat>(
     part: &DatePart,
     ctx: GenericContext<'c, O>,
     date: &Date,
-) -> Option<Either<O>> {
+) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
     let string = dp_render_string(part, &ctx, date);
     string.map(|s| {
@@ -343,15 +352,7 @@ fn dp_render_either<'c, O: OutputFormat>(
             Either::Build(Some(fmt.affixed_text(s, part.formatting, &part.affixes)))
         }
     })
-}
-
-fn dp_render<'c, O: OutputFormat>(
-    part: &DatePart,
-    ctx: GenericContext<'c, O>,
-    date: &Date,
-) -> Option<O::Build> {
-    let string = dp_render_string(part, &ctx, date);
-    string.map(|s| ctx.format().affixed_text(s, part.formatting, &part.affixes))
+    .map(|x| (part.form, x))
 }
 
 fn dp_render_string<'c, O: OutputFormat>(
