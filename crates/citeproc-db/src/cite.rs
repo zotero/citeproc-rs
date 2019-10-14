@@ -60,9 +60,10 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
     fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
 
-    fn sorted_refs(&self) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>>;
+    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
 
     fn bib_number(&self, id: CiteId) -> Option<u32>;
+    // fn ref_bib_number(&self, id: Atom) -> u32;
 
     #[salsa::interned]
     fn cite(&self, cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>>) -> CiteId;
@@ -324,12 +325,11 @@ fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Or
     ord
 }
 
-fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>> {
+fn sorted_refs(db: &impl CiteDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
     let style = db.style();
-    // TODO: also return None to avoid work if no bibliography was requested by the user
     let bib = match style.bibliography {
-        None => return None,
-        Some(ref b) => b,
+        None => None,
+        Some(ref b) => b.sort.as_ref(),
     };
 
     let mut citation_numbers = FnvHashMap::default();
@@ -338,8 +338,8 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
-    let mut preordered = Vec::new();
     let all_cite_ids = db.all_cite_ids();
+    let mut preordered = Vec::with_capacity(all.len());
     let mut i = 1;
     for &id in all_cite_ids.iter() {
         let ref_id = &id.lookup(db).ref_id;
@@ -349,32 +349,28 @@ fn sorted_refs(db: &impl CiteDatabase) -> Option<Arc<(Vec<Atom>, FnvHashMap<Atom
             i += 1;
         }
     }
-    let refs = if let Some(ref sort) = bib.sort {
+    let refs = if let Some(ref sort) = bib {
         // dbg!(sort);
         preordered.sort_by(|a, b| {
             let ar = db.reference_input(a.clone());
             let br = db.reference_input(b.clone());
             bib_ordering(&ar, &br, sort, &style)
         });
-        for (i, ref_id) in preordered.iter().enumerate() {
-            citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
-        }
         preordered
     } else {
         // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
         // they are cited.
         preordered
     };
-    // dbg!(&refs);
-    Some(Arc::new((refs, citation_numbers)))
+    for (i, ref_id) in refs.iter().enumerate() {
+        citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
+    }
+    Arc::new((refs, citation_numbers))
 }
 
 fn bib_number(db: &impl CiteDatabase, id: CiteId) -> Option<u32> {
     let cite = id.lookup(db);
-    if let Some(abc) = db.sorted_refs() {
-        let (_, ref lookup_ref_ids) = &*abc;
-        lookup_ref_ids.get(&cite.ref_id).cloned()
-    } else {
-        None
-    }
+    let arc = db.sorted_refs();
+    let (_, ref lookup_ref_ids) = &*arc;
+    lookup_ref_ids.get(&cite.ref_id).cloned()
 }

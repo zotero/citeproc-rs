@@ -31,11 +31,11 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
-    fn ir_gen0(&self, key: CiteId) -> IrGen;
-    fn ir_gen1_add_names(&self, key: CiteId) -> IrGen;
-    fn ir_gen2_add_given_name(&self, key: CiteId) -> IrGen;
-    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> IrGen;
-    fn ir_gen4_conditionals(&self, key: CiteId) -> IrGen;
+    fn ir_gen0(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen1_add_names(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen2_add_given_name(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen4_conditionals(&self, key: CiteId) -> Arc<IrGen>;
 
     fn built_cluster(&self, key: ClusterId) -> Arc<<Markup as OutputFormat>::Output>;
 
@@ -117,78 +117,171 @@ fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {
     ys.get(&ref_id).cloned()
 }
 
+/// This deviates from citeproc-js in one important way.
+///
+/// Since there are no 'groups of ambiguous cites', it is not quite simple
+/// to have separate numbering for different such 'groups'.
+///
+///               `Doe 2007,  Doe 2007,  Smith 2008,  Smith 2008`
+/// should become `Doe 2007a, Doe 2007b, Smith 2008a, Smith 2008b`
+///
+/// The best way to do this is:
+///
+/// 1. Store the set of `refs_accepting_cite`
+/// 2. Find the distinct transitive closures of the `A.refs intersects B.refs` relation
+///    a. Groups = {}
+///    b. For each cite A with more than its own, find, if any, a Group whose total refs intersects A.refs
+///    c. If found G, add A to that group, and G.total_refs = G.total_refs UNION A.refs
 fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
+    use fnv::FnvHashSet;
+
+    type Group = FnvHashSet<Atom>;
+
+    let mut groups: Vec<_> = db
+        .all_keys()
+        .iter()
+        .cloned()
+        .map(|i| {
+            let mut s = FnvHashSet::default();
+            s.insert(i);
+            s
+        })
+        .collect();
+
+    // equivalent to `!self.is_disjoint(other)` from std, but with earlier exit
+    // enumerating lists results in less allocation than converting Vec to HashSet every time
+    fn intersects(set: &FnvHashSet<Atom>, list: &[Atom]) -> bool {
+        if set.len() <= list.len() {
+            set.iter().any(|v| list.contains(v))
+        } else {
+            list.iter().any(|v| set.contains(v))
+        }
+    }
 
     let style = db.style();
     if !style.citation.disambiguate_add_year_suffix {
         return Arc::new(FnvHashMap::default());
     }
 
+    use std::mem;
+
+    // TODO: sort based on the bibliography's sort mechanism, not just document order
     let all_cites_ordered = db.all_cite_ids();
-    let refs_to_add_suffixes_to = all_cites_ordered
+    all_cites_ordered
         .iter()
-        .map(|&id| (id, id.lookup(db)))
+        .map(|id| (*id, id.lookup(db)))
         .map(|(id, cite)| (cite.ref_id.clone(), db.ir_gen2_add_given_name(id)))
-        .filter_map(|(ref_id, ir2)| {
-            match ir2.unambiguous {
-                // if ambiguous (false), add a suffix
-                false => Some(ref_id),
-                _ => None,
+        .for_each(|(ref_id, ir2)| {
+            if ir2.unambiguous() {
+                // no need to check if own id is in a group, it will receive a suffix already
+            } else {
+                // we make sure ref_id is included, even if there was a bug with RefIR and a
+                // cite didn't match its own reference
+                let mut coalesce: Option<(usize, Group)> = None;
+                for (n, group) in groups.iter_mut().enumerate() {
+                    if group.contains(&ref_id) || intersects(group, &ir2.matching_refs) {
+                        group.insert(ref_id.clone());
+                        for id in &ir2.matching_refs {
+                            group.insert(id.clone());
+                        }
+                        if let Some((_n, ref mut already)) = coalesce {
+                            let g = mem::replace(group, FnvHashSet::default());
+                            *already = already.intersection(&g).cloned().collect();
+                        } else {
+                            // Move it cheaply out of the iterator to add to it later
+                            let g = mem::replace(group, FnvHashSet::default());
+                            coalesce = Some((n, g));
+                        }
+                    }
+                }
+                if let Some((n, group)) = coalesce {
+                    groups[n] = group;
+                }
+                groups.retain(|x| !x.is_empty());
             }
         });
 
     let mut suffixes = FnvHashMap::default();
-    let mut i = 1; // "a" = 1
-    for ref_id in refs_to_add_suffixes_to {
-        if !suffixes.contains_key(&ref_id) {
-            suffixes.insert(ref_id, i);
-            i += 1;
+    let mut vec = Vec::new();
+    for group in groups {
+        vec.clear();
+        if group.len() <= 1 {
+            continue;
+        }
+        for atom in group {
+            vec.push(atom);
+        }
+        vec.sort_by_key(|ref_id| ref_bib_number(db, ref_id));
+        let mut i = 1; // "a" = 1
+        for ref_id in &vec {
+            if !suffixes.contains_key(ref_id) {
+                suffixes.insert(ref_id.clone(), i);
+                i += 1;
+            }
         }
     }
     Arc::new(suffixes)
 }
 
+// Not cached
+fn ref_bib_number(db: &impl CiteDatabase, ref_id: &Atom) -> u32 {
+    let srs = db.sorted_refs();
+    let (_, ref lookup_ref_ids) = &*srs;
+    let ret = lookup_ref_ids.get(ref_id).cloned();
+    if let Some(ret) = ret {
+        ret
+    } else {
+        error!(
+            "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
+            ref_id
+        );
+        std::u32::MAX
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IrGen {
-    unambiguous: bool,
-    ir_and_state: Arc<(IR<Markup>, IrState)>,
+    pub(crate) ir: IR<Markup>,
+    pub(crate) state: IrState,
+    pub(crate) matching_refs: Vec<Atom>,
 }
 
 impl IrGen {
-    fn new(ir: IR<Markup>, unambiguous: bool, state: IrState) -> Self {
+    fn new(ir: IR<Markup>, matching_refs: Vec<Atom>, state: IrState) -> Self {
         IrGen {
-            unambiguous,
-            ir_and_state: Arc::new((ir, state)),
+            ir,
+            state,
+            matching_refs,
         }
     }
-    fn fresh_copy(&self) -> (IR<Markup>, IrState) {
-        let ir = self.ir_and_state.0.clone();
-        let state = self.ir_and_state.1.clone();
-        (ir, state)
+    fn unambiguous(&self) -> bool {
+        self.matching_refs.len() <= 1
     }
-    pub(crate) fn ir<'a>(&'a self) -> &'a IR<Markup> {
-        &self.ir_and_state.0
+    fn fresh_copy(&self) -> (IR<Markup>, IrState) {
+        let ir = self.ir.clone();
+        let state = self.state.clone();
+        (ir, state)
     }
 }
 
 impl Eq for IrGen {}
 impl PartialEq<IrGen> for IrGen {
     fn eq(&self, other: &Self) -> bool {
-        self.unambiguous == other.unambiguous
-            && &self.ir_and_state.1 == &other.ir_and_state.1
-            && &self.ir_and_state.0 == &other.ir_and_state.0
+        self.matching_refs == other.matching_refs
+            && &self.state == &other.state
+            && &self.ir == &other.ir
     }
 }
 
-fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> IrGen {
+fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
-    IrGen::new(
+    Arc::new(IrGen::new(
         IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
-        true,
+        Vec::new(),
         IrState::new(),
-    )
+    ))
 }
 
 macro_rules! preamble {
@@ -594,7 +687,7 @@ fn disambiguate_add_year_suffix(
     });
 }
 
-fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
+fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -604,11 +697,11 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> IrGen {
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
     let _fmt = db.get_formatter();
-    let un = is_unambiguous(db, None, &ir, id, &refr.id);
-    IrGen::new(ir, un, state)
+    let matching = refs_accepting_cite(db, &ir);
+    Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
+fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -619,16 +712,17 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> IrGen {
 
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
-    if ir0.unambiguous || !style.citation.disambiguate_add_names {
+    if ir0.unambiguous() || !style.citation.disambiguate_add_names {
         return ir0.clone();
     }
     let (mut ir, mut state) = ir0.fresh_copy();
 
-    let un = disambiguate_add_names(db, &mut ir, &ctx, false);
-    IrGen::new(ir, un, state)
+    disambiguate_add_names(db, &mut ir, &ctx, false);
+    let matching = refs_accepting_cite(db, &ir);
+    Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
+fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -639,18 +733,18 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> IrGen {
     ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
 
     let ir1 = db.ir_gen1_add_names(id);
-    if ir1.unambiguous || !style.citation.disambiguate_add_givenname {
+    if ir1.unambiguous() || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
     let (mut ir, mut state) = ir1.fresh_copy();
 
     let also_add_names = style.citation.disambiguate_add_names;
     disambiguate_add_givennames(db, &mut ir, &ctx, also_add_names);
-    let un = is_unambiguous(db, ctx.disamb_pass, &ir, id, &refr.id);
-    IrGen::new(ir, un, state)
+    let matching = refs_accepting_cite(db, &ir);
+    Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
+fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -670,11 +764,11 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> IrGen {
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
     disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
-    let un = is_unambiguous(db, ctx.disamb_pass, &ir, id, &refr.id);
-    IrGen::new(ir, un, state)
+    let matching = refs_accepting_cite(db, &ir);
+    Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
+fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -684,13 +778,15 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> IrGen {
     ctx.disamb_pass = Some(DisambPass::Conditionals);
 
     let ir3 = db.ir_gen3_add_year_suffix(id);
-    if ir3.unambiguous {
+    if ir3.unambiguous() {
         return ir3.clone();
     }
     let (mut ir, mut state) = ir3.fresh_copy();
 
-    let un = disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
-    IrGen::new(ir, un, state)
+    disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
+    // No point recomputing when nothing more can be done.
+    let matching = Vec::new();
+    Arc::new(IrGen::new(ir, matching, state))
 }
 
 fn built_cluster(
@@ -705,7 +801,7 @@ fn built_cluster(
         .iter()
         .map(|&id| {
             let gen4 = db.ir_gen4_conditionals(id);
-            let ir = gen4.ir();
+            let ir = &gen4.ir;
             let cite = id.lookup(db);
             let flattened = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
             // TODO: strip punctuation on these
