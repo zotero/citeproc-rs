@@ -1003,6 +1003,16 @@ impl Style {
         let citation = &self.citation.name_inheritance;
         default.merge(root).merge(citation)
     }
+    pub fn name_bibliography(&self) -> Name {
+        let default = Name::root_default();
+        let root = &self.name_inheritance;
+        let root = default.merge(root);
+        if let Some(bib) = &self.bibliography {
+            root.merge(&bib.name_inheritance)
+        } else {
+            root
+        }
+    }
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]

@@ -11,7 +11,7 @@ use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSet
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{ClusterId, Name};
+use citeproc_io::{ClusterId, Cite, Name};
 use csl::variables::NameVariable;
 use csl::Atom;
 
@@ -20,6 +20,11 @@ use parking_lot::{Mutex, MutexGuard};
 pub trait HasFormatter {
     fn get_formatter(&self) -> Markup;
 }
+
+#[allow(dead_code)]
+type MarkupBuild = <Markup as OutputFormat>::Build;
+#[allow(dead_code)]
+type MarkupOutput = <Markup as OutputFormat>::Output;
 
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
@@ -37,10 +42,11 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     fn ir_gen3_add_year_suffix(&self, key: CiteId) -> Arc<IrGen>;
     fn ir_gen4_conditionals(&self, key: CiteId) -> Arc<IrGen>;
 
-    fn built_cluster(&self, key: ClusterId) -> Arc<<Markup as OutputFormat>::Output>;
-
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
     fn year_suffix_for(&self, ref_id: Atom) -> Option<u32>;
+
+    fn built_cluster(&self, key: ClusterId) -> Arc<MarkupOutput>;
+    fn bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput>;
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
@@ -296,7 +302,7 @@ macro_rules! preamble {
         $ctx = CiteContext {
             reference: &$refr,
             format: $db.get_formatter(),
-            cite_id: $id,
+            cite_id: Some($id),
             cite: &$cite,
             position: $db.cite_position($id),
             citation_number: 0,
@@ -305,6 +311,7 @@ macro_rules! preamble {
             locale: &$locale,
             bib_number: $db.bib_number($id),
             name_citation: $db.name_citation(),
+            in_bibliography: false,
         };
     }};
 }
@@ -339,7 +346,7 @@ fn is_unambiguous(
     db: &impl IrDatabase,
     pass: Option<DisambPass>,
     ir: &IR<Markup>,
-    cite_id: CiteId,
+    cite_id: Option<CiteId>,
     own_id: &Atom,
 ) -> bool {
     use log::Level::{Info, Warn};
@@ -832,4 +839,50 @@ fn built_cluster(
         layout.formatting,
     );
     Arc::new(fmt.output(build))
+}
+
+// TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then
+// mutate.
+
+fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
+    use csl::style::Position;
+    let fmt = db.get_formatter();
+    let sorted_refs_arc = db.sorted_refs();
+    let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
+    let bib_number = citation_numbers_by_id.get(&ref_id).expect("sorted_refs should contain a bib_item key").clone();
+    let style = db.style();
+    let locale = db.locale_by_reference(ref_id.clone());
+    let cite = Cite::basic(ref_id.clone());
+    let refr = match db.reference(ref_id.clone()) {
+        None => return Arc::new(fmt.output(fmt.plain("missing reference in bibliography"))),
+        Some(r) => r,
+    };
+    let ctx = CiteContext {
+        reference: &refr,
+        format: db.get_formatter(),
+        cite_id: None,
+        cite: &cite,
+        position: (Position::First, None),
+        citation_number: 0,
+        disamb_pass: None,
+        style: &style,
+        locale: &locale,
+        bib_number: Some(bib_number),
+        name_citation: db.name_bibliography(),
+        in_bibliography: true,
+    };
+    if let Some(bib) = &style.bibliography {
+        let layout = &bib.layout;
+        let mut state = IrState::new();
+        let ir = bib.intermediate(db, &mut state, &ctx).0;
+        let flat = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
+        let build = fmt.with_format(
+            fmt.affixed(flat, &layout.affixes),
+            layout.formatting,
+        );
+        Arc::new(fmt.output(build))
+    } else {
+        // Whatever
+        Arc::new(fmt.output(fmt.plain("")))
+    }
 }

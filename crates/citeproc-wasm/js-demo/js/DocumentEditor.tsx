@@ -37,7 +37,14 @@ const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: Render
         let touched = renderedDocument.updatedLastRevision[c.id];
         return <ClusterViewer key={c.id} note={c.note} html={html} touched={touched} />
     });
-    return <div>{clusters}</div>;
+    let bibs = renderedDocument.bibliography.map((str, x) => {
+        return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
+    });
+    return <div>
+        {clusters}
+        <h2>Bibliography</h2>
+        {bibs}
+    </div>;
 });
 
 const ClusterViewer = React.memo(({note, html, touched}: { note: number | [number, number], html: string, touched: boolean }) => {

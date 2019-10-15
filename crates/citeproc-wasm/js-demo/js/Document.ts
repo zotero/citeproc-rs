@@ -10,6 +10,8 @@ export class RenderedDocument {
     /** Caches HTML for a ClusterId, that is pulled from the driver */
     public builtClusters: { [id: number]: string } = {};
 
+    public bibliography: Array<string>;
+
     public orderedClusterIds: Array<OrderedClusterIds> = [];
 
     /** For showing a paint splash when clusters are updated */
@@ -22,12 +24,14 @@ export class RenderedDocument {
             // TODO: send note through a round trip and get it from builtCluster
             this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
+        this.bibliography = driver.makeBibliography();
     }
 
-    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>) {
+    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>, bib: Array<string>) {
         return produce(this, draft => {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
+            draft.bibliography = bib;
             for (let [id, built] of summary.clusters) {
                 draft.builtClusters[id] = built;
                 draft.updatedLastRevision[id] = true;
@@ -94,7 +98,8 @@ export class Document {
         return produce(this, draft => {
             fn(draft);
             let summary = driver.batchedUpdates();
-            draft.rendered = draft.rendered.update(summary, this.ordered());
+            let bib = driver.makeBibliography();
+            draft.rendered = draft.rendered.update(summary, this.ordered(), bib);
         });
     };
 

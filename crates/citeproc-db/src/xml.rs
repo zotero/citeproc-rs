@@ -26,6 +26,7 @@ pub trait StyleDatabase {
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
     fn name_citation(&self) -> Arc<Name>;
+    fn name_bibliography(&self) -> Arc<Name>;
 
     /// Lists every <names> block in the style, with each name variable it is used for
     fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
@@ -34,6 +35,11 @@ pub trait StyleDatabase {
 fn name_citation(db: &impl StyleDatabase) -> Arc<Name> {
     let style = db.style();
     Arc::new(style.name_citation())
+}
+
+fn name_bibliography(db: &impl StyleDatabase) -> Arc<Name> {
+    let style = db.style();
+    Arc::new(style.name_bibliography())
 }
 
 use csl::style::Element;

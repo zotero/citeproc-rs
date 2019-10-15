@@ -19,7 +19,7 @@ use std::sync::Arc;
 pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub reference: &'c Reference,
     pub format: O,
-    pub cite_id: CiteId,
+    pub cite_id: Option<CiteId>,
     pub style: &'c Style,
     pub locale: &'c Locale,
     pub name_citation: Arc<NameEl>,
@@ -32,7 +32,11 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub cite: &'c Cite<O>,
     pub citation_number: u32,
     pub bib_number: Option<u32>,
+
+    pub in_bibliography: bool,
+
     // TODO: keep track of which variables have so far been substituted
+    
 }
 
 // helper methods to access both cite and reference properties via Variables

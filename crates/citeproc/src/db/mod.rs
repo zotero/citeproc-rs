@@ -31,6 +31,11 @@ use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
+#[allow(dead_code)]
+type MarkupBuild = <Markup as OutputFormat>::Build;
+#[allow(dead_code)]
+type MarkupOutput = <Markup as OutputFormat>::Output;
+
 #[salsa::database(
     StyleDatabaseStorage,
     LocaleDatabaseStorage,
@@ -343,8 +348,19 @@ impl Processor {
         id.lookup(self)
     }
 
-    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<<Markup as OutputFormat>::Output> {
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<MarkupOutput> {
         self.built_cluster(cluster_id)
+    }
+
+    pub fn get_bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput> {
+        self.bib_item(ref_id)
+    }
+
+    pub fn get_bibliography(&self) -> Vec<MarkupOutput> {
+        self.sorted_refs().0.iter().map(|k| {
+            (*self.bib_item(k.clone())).clone()
+        })
+        .collect()
     }
 
     pub fn get_reference(&self, ref_id: Atom) -> Option<Arc<Reference>> {

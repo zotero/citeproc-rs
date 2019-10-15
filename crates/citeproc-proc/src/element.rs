@@ -1,6 +1,6 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use csl::style::{Affixes, Element, Style};
+use csl::style::{Affixes, Element, Style, Bibliography};
 use csl::variables::*;
 use csl::Atom;
 
@@ -15,6 +15,30 @@ where
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
+        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
+        sequence(
+            db,
+            state,
+            ctx,
+            &layout.elements,
+            "".into(),
+            None,
+            Affixes::default(),
+        )
+    }
+}
+
+impl<'c, O> Proc<'c, O> for Bibliography
+where
+    O: OutputFormat,
+{
+    fn intermediate(
+        &self,
+        db: &impl IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O>,
+    ) -> IrSum<O> {
+        let layout = &self.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence(
             db,

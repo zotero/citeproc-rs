@@ -144,6 +144,12 @@ impl Driver {
         Ok(JsValue::from_serde(&built).unwrap())
     }
 
+    #[wasm_bindgen(js_name = "makeBibliography")]
+    pub fn full_bibliography(&self) -> Result<JsValue, JsValue> {
+        let built = self.engine.borrow().get_bibliography();
+        Ok(JsValue::from_serde(&built).unwrap())
+    }
+
     /// Replaces cluster numberings in one go.
     ///
     /// * `mappings` is an `Array<[ ClusterId, ClusterNumber ]>` where `ClusterNumber`

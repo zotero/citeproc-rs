@@ -6,7 +6,6 @@ import { DocumentEditor } from './DocumentEditor';
 import { GraphViz } from './GraphViz';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { useDocument } from './useDocument';
-import { string } from 'prop-types';
 
 let initialStyle = `<style class="note">
   <locale>
@@ -51,6 +50,11 @@ let initialStyle = `<style class="note">
       </choose>
     </layout>
   </citation>
+  <bibliography>
+  <layout>
+    <text value="done" />
+  </layout>
+  </bibliography>
 </style>`;
 
 const initialReferences: Reference[] = [
@@ -74,6 +78,7 @@ const initialReferences: Reference[] = [
             { given: "Ignatius", family: "Irrelevant" }
         ],
         title: "Where The Vile Things Are",
+        issued: { "raw": "1999-08-09" },
     },
     {
         id: 'foreign',
