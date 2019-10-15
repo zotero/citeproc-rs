@@ -58,7 +58,10 @@ impl Disambiguation<Markup> for Names {
             affixes: self.affixes.clone(),
             delimiter: match &self.delimiter {
                 Some(x) => x.0.clone(),
-                None => Atom::from(""),
+                None => match ctx.names_delimiter.as_ref().map(|x| x.0.clone()) {
+                    Some(x) => x,
+                    None => Atom::from(""),
+                },
             },
         };
 

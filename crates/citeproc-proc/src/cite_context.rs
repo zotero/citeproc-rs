@@ -11,7 +11,7 @@ use crate::choose::CondChecker;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Name as NameEl, Position, Style, VariableForm};
+use csl::style::{CslType, Name as NameEl, Position, Style, VariableForm, Delimiter};
 use csl::variables::*;
 use std::sync::Arc;
 
@@ -23,6 +23,7 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub style: &'c Style,
     pub locale: &'c Locale,
     pub name_citation: Arc<NameEl>,
+    pub names_delimiter: Option<Delimiter>,
 
     pub position: (Position, Option<u32>),
 
@@ -44,8 +45,15 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
 impl<'c, O: OutputFormat> CiteContext<'c, O> {
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
+            (Variable::TitleShort, _) |
             (Variable::Title, VariableForm::Short) => {
                 self.reference.ordinary.get(&Variable::TitleShort)
+                    .or(self.reference.ordinary.get(&Variable::Title))
+            }
+            (Variable::ContainerTitleShort, _) |
+            (Variable::ContainerTitle, VariableForm::Short) => {
+                self.reference.ordinary.get(&Variable::ContainerTitleShort)
+                    .or(self.reference.ordinary.get(&Variable::ContainerTitle))
             }
             _ => self.reference.ordinary.get(&var),
         })

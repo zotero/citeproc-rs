@@ -299,6 +299,8 @@ macro_rules! preamble {
             None => return ref_not_found($db, &$cite.ref_id, true),
             Some(r) => r,
         };
+        let ni = $style.names_delimiter.clone();
+        let citation_ni = $style.citation.names_delimiter.clone();
         $ctx = CiteContext {
             reference: &$refr,
             format: $db.get_formatter(),
@@ -312,6 +314,7 @@ macro_rules! preamble {
             bib_number: $db.bib_number($id),
             name_citation: $db.name_citation(),
             in_bibliography: false,
+            names_delimiter: citation_ni.or(ni),
         };
     }};
 }
@@ -857,21 +860,24 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         None => return Arc::new(fmt.output(fmt.plain("missing reference in bibliography"))),
         Some(r) => r,
     };
-    let ctx = CiteContext {
-        reference: &refr,
-        format: db.get_formatter(),
-        cite_id: None,
-        cite: &cite,
-        position: (Position::First, None),
-        citation_number: 0,
-        disamb_pass: None,
-        style: &style,
-        locale: &locale,
-        bib_number: Some(bib_number),
-        name_citation: db.name_bibliography(),
-        in_bibliography: true,
-    };
     if let Some(bib) = &style.bibliography {
+        let ni = style.names_delimiter.clone();
+        let bib_ni = bib.names_delimiter.clone();
+        let ctx = CiteContext {
+            reference: &refr,
+            format: db.get_formatter(),
+            cite_id: None,
+            cite: &cite,
+            position: (Position::First, None),
+            citation_number: 0,
+            disamb_pass: None,
+            style: &style,
+            locale: &locale,
+            bib_number: Some(bib_number),
+            name_citation: db.name_bibliography(),
+            in_bibliography: true,
+            names_delimiter: bib_ni.or(ni),
+        };
         let layout = &bib.layout;
         let mut state = IrState::new();
         let ir = bib.intermediate(db, &mut state, &ctx).0;

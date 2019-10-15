@@ -3,7 +3,7 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Position, Style, VariableForm};
+use csl::style::{CslType, Position, Style, VariableForm, Delimiter};
 use csl::terms::LocatorType;
 use csl::variables::*;
 
@@ -17,6 +17,7 @@ pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub locator_type: Option<LocatorType>,
     pub position: Position,
     pub year_suffix: bool,
+    pub names_delimiter: Option<Delimiter>,
 }
 
 impl From<FreeCond> for Position {
@@ -59,6 +60,7 @@ where
             // XXX: technically Cites need to know this during the Conditionals pass as well,
             // so it should be promoted beyond that single DisambPass::AddYearSuffix(ys) variant.
             year_suffix: false,
+            names_delimiter: ctx.names_delimiter.clone(),
         }
     }
     pub fn from_free_cond(
@@ -68,6 +70,8 @@ where
         locale: &'c Locale,
         reference: &'c Reference,
     ) -> Self {
+        let ni = style.names_delimiter.clone();
+        let citation_ni = style.citation.names_delimiter.clone();
         RefContext {
             format,
             style,
@@ -76,12 +80,20 @@ where
             locator_type: fc.to_loc_type(),
             position: Position::from(fc),
             year_suffix: fc.contains(FreeCond::YEAR_SUFFIX),
+            names_delimiter: citation_ni.or(ni),
         }
     }
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
+            (Variable::TitleShort, _) |
             (Variable::Title, VariableForm::Short) => {
                 self.reference.ordinary.get(&Variable::TitleShort)
+                    .or(self.reference.ordinary.get(&Variable::Title))
+            }
+            (Variable::ContainerTitleShort, _) |
+            (Variable::ContainerTitle, VariableForm::Short) => {
+                self.reference.ordinary.get(&Variable::ContainerTitleShort)
+                    .or(self.reference.ordinary.get(&Variable::ContainerTitle))
             }
             _ => self.reference.ordinary.get(&var),
         })

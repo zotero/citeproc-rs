@@ -124,9 +124,7 @@ where
                 contents: name_irs,
                 formatting: self.formatting,
                 affixes: self.affixes.clone(),
-                delimiter: self
-                    .delimiter
-                    .as_ref()
+                delimiter: self.delimiter.as_ref().or(ctx.names_delimiter.as_ref())
                     .map(|d| d.0.clone())
                     .unwrap_or_else(|| Atom::from("")),
             }),
