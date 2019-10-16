@@ -19,6 +19,9 @@ use self::rtf::RtfWriter;
 mod html;
 use self::html::HtmlWriter;
 
+mod plain;
+use self::plain::PlainWriter;
+
 mod flip_flop;
 use self::flip_flop::FlipFlopState;
 
@@ -26,6 +29,7 @@ use self::flip_flop::FlipFlopState;
 pub enum Markup {
     Html(HtmlWriter),
     Rtf(RtfWriter),
+    Plain(PlainWriter),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -60,6 +64,9 @@ impl Markup {
     }
     pub fn rtf() -> Self {
         Markup::Rtf(RtfWriter::default())
+    }
+    pub fn plain() -> Self {
+        Markup::Plain(PlainWriter::default())
     }
 }
 
@@ -175,6 +182,7 @@ impl OutputFormat for Markup {
         match self {
             Markup::Html(ref writer) => writer.stack_preorder(s, stack),
             Markup::Rtf(ref writer) => writer.stack_preorder(s, stack),
+            Markup::Plain(ref writer) => writer.stack_preorder(s, stack),
         }
     }
 
@@ -183,6 +191,7 @@ impl OutputFormat for Markup {
         match self {
             Markup::Html(ref writer) => writer.stack_postorder(s, stack),
             Markup::Rtf(ref writer) => writer.stack_postorder(s, stack),
+            Markup::Plain(ref writer) => writer.stack_postorder(s, stack),
         }
     }
 
@@ -215,6 +224,7 @@ impl Markup {
         match self {
             Markup::Html(ref writer) => writer.write_inlines(&mut string, &flipped),
             Markup::Rtf(ref writer) => writer.write_inlines(&mut string, &flipped),
+            Markup::Plain(ref writer) => writer.write_inlines(&mut string, &flipped),
         }
         string
     }

@@ -122,6 +122,7 @@ impl Clone for Snap {
 pub enum SupportedFormat {
     Html,
     Rtf,
+    Plain,
     #[cfg(feature = "test")]
     TestHtml,
 }
@@ -132,6 +133,7 @@ impl FromStr for SupportedFormat {
         match s {
             "html" => Ok(SupportedFormat::Html),
             "rtf" => Ok(SupportedFormat::Rtf),
+            "plain" => Ok(SupportedFormat::Plain),
             _ => Err(()),
         }
     }
@@ -173,6 +175,7 @@ impl Processor {
         db.formatter = match format {
             SupportedFormat::Html => Markup::html(),
             SupportedFormat::Rtf => Markup::rtf(),
+            SupportedFormat::Plain => Markup::plain(),
             #[cfg(feature = "test")]
             SupportedFormat::TestHtml => Markup::test_html(),
         };
