@@ -174,10 +174,7 @@ impl Processor {
             SupportedFormat::Html => Markup::html(),
             SupportedFormat::Rtf => Markup::rtf(),
             #[cfg(feature = "test")]
-            SupportedFormat::TestHtml => {
-                use citeproc_io::output::markup::HtmlOptions;
-                Markup::Html(HtmlOptions::test_suite())
-            }
+            SupportedFormat::TestHtml => Markup::test_html(),
         };
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style_with_durability(style, Durability::MEDIUM);

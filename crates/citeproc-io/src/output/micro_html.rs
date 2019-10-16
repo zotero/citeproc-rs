@@ -1,4 +1,5 @@
 use super::FormatCmd;
+use crate::IngestOptions;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct MicroHtml(pub String);
@@ -13,16 +14,100 @@ pub enum MicroNode {
     NoCase(Vec<MicroNode>),
 }
 
+impl MicroNode {
+    /// TODO: catch errors and get the input back as a String
+    pub fn parse(fragment: &str, options: IngestOptions) -> Vec<MicroNode> {
+        let mut tag_parser = TagParser::new(&fragment);
+        let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
+        result
+    }
+}
+
+pub trait HtmlReader<T> {
+    fn constructor(&self, tag: &Tag, children: Vec<T>) -> Vec<T>;
+    fn plain(&self, s: &str) -> Option<T>;
+    fn filter(&self, tag: &mut Tag) {
+        if tag.name == "html" || tag.name == "body" {
+            // ignore <html> and <body> tags, but still parse their children
+            tag.ignore_self();
+        } else if tag.name == "i" || tag.name == "b" || tag.name == "sup" || tag.name == "sub" {
+            // ok
+        } else if tag.name == "span" {
+            tag.allow_attribute(String::from("style"));
+            tag.allow_attribute(String::from("class"));
+        } else {
+            tag.ignore_self();
+        }
+    }
+}
+
+struct MicroHtmlReader {
+    options: IngestOptions,
+}
+
+impl HtmlReader<MicroNode> for MicroHtmlReader {
+    fn constructor(&self, tag: &Tag, children: Vec<MicroNode>) -> Vec<MicroNode> {
+        let single = match tag.name {
+            "i" => MicroNode::Formatted(children, FormatCmd::FontStyleItalic),
+            "b" => MicroNode::Formatted(children, FormatCmd::FontWeightBold),
+            "sup" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript),
+            "sub" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript),
+            "span" => match tag.attrs {
+                // very specific!
+                [("style", "font-variant:small-caps;")]
+                | [("style", "font-variant: small-caps;")] => {
+                    MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
+                }
+                [("class", "nocase")] => MicroNode::NoCase(children),
+                _ => return vec![],
+            },
+            _ => return vec![],
+        };
+        vec![single]
+    }
+
+    fn plain(&self, s: &str) -> Option<MicroNode> {
+        let x = if self.options.replace_hyphens {
+            s.replace('-', "\u{2013}")
+        } else {
+            s.to_string()
+        };
+        Some(MicroNode::Text(x))
+    }
+}
+
+#[test]
+fn test_sanitize() {
+    let fragment =
+        r#"<span class="nocase"><i class="whatever">Italic</i></span> <img src="5" /> <b>Bold</b>"#;
+    let result = MicroNode::parse(fragment, Default::default());
+    use FormatCmd::*;
+    use MicroNode::*;
+    assert_eq!(
+        result,
+        &[
+            NoCase(vec![Formatted(
+                vec![Text("Italic".to_string())],
+                FontStyleItalic
+            ),]),
+            Text(" ".to_string()),
+            Text(" ".to_string()),
+            Formatted(vec![Text("Bold".to_string())], FontWeightBold)
+        ]
+    );
+}
+
+// The following is based on the MIT-licensed html_sanitizer crate,
+// and adjusted to work on *inline* HTML, not entire documents.
+//
+// https://github.com/Trangar/html_sanitizer/blob/master/src/lib.rs
+
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
 use html5ever::rcdom::{Handle, NodeData, RcDom};
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::{local_name, parse_fragment, Namespace};
-
-// Based on the MIT-licensed html_sanitizer crate:
-//
-// https://github.com/Trangar/html_sanitizer/blob/master/src/lib.rs
 
 struct TagParser {
     dom: RcDom,
@@ -193,87 +278,3 @@ impl<'a> Tag<'a> {
     }
 }
 
-pub trait HtmlReader<T> {
-    fn constructor(&self, tag: &Tag, children: Vec<T>) -> Vec<T>;
-    fn plain(&self, s: &str) -> Option<T>;
-    fn filter(&self, tag: &mut Tag) {
-        if tag.name == "html" || tag.name == "body" {
-            // ignore <html> and <body> tags, but still parse their children
-            tag.ignore_self();
-        } else if tag.name == "i" || tag.name == "b" || tag.name == "sup" || tag.name == "sub" {
-            // ok
-        } else if tag.name == "span" {
-            tag.allow_attribute(String::from("style"));
-            tag.allow_attribute(String::from("class"));
-        } else {
-            tag.ignore_self();
-        }
-    }
-}
-
-struct MicroHtmlReader {
-    options: IngestOptions,
-}
-
-impl HtmlReader<MicroNode> for MicroHtmlReader {
-    fn constructor(&self, tag: &Tag, children: Vec<MicroNode>) -> Vec<MicroNode> {
-        let single = match tag.name {
-            "i" => MicroNode::Formatted(children, FormatCmd::FontStyleItalic),
-            "b" => MicroNode::Formatted(children, FormatCmd::FontWeightBold),
-            "sup" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript),
-            "sub" => MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript),
-            "span" => match tag.attrs {
-                // very specific!
-                [("style", "font-variant:small-caps;")]
-                | [("style", "font-variant: small-caps;")] => {
-                    MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
-                }
-                [("class", "nocase")] => MicroNode::NoCase(children),
-                _ => return vec![],
-            },
-            _ => return vec![],
-        };
-        vec![single]
-    }
-
-    fn plain(&self, s: &str) -> Option<MicroNode> {
-        let x = if self.options.replace_hyphens {
-            s.replace('-', "\u{2013}")
-        } else {
-            s.to_string()
-        };
-        Some(MicroNode::Text(x))
-    }
-}
-
-use crate::IngestOptions;
-
-impl MicroNode {
-    /// TODO: catch errors and get the input back as a String
-    pub fn parse(fragment: &str, options: IngestOptions) -> Vec<MicroNode> {
-        let mut tag_parser = TagParser::new(&fragment);
-        let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
-        result
-    }
-}
-
-#[test]
-fn test_sanitize() {
-    let fragment =
-        r#"<span class="nocase"><i class="whatever">Italic</i></span> <img src="5" /> <b>Bold</b>"#;
-    let result = MicroNode::parse(fragment, Default::default());
-    use FormatCmd::*;
-    use MicroNode::*;
-    assert_eq!(
-        result,
-        &[
-            NoCase(vec![Formatted(
-                vec![Text("Italic".to_string())],
-                FontStyleItalic
-            ),]),
-            Text(" ".to_string()),
-            Text(" ".to_string()),
-            Formatted(vec![Text("Bold".to_string())], FontWeightBold)
-        ]
-    );
-}
