@@ -36,7 +36,7 @@ lazy_static! {
     static ref BIB_TESTS: HashSet<String> = {
         let mut m = HashSet::new();
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
-        let bibtests = include_str!("./data/bibtests.txt");
+        let bibtests = include_str!("./data/ignore.txt");
         for bibtest in bibtests.lines() {
             m.insert(bibtest.to_string());
         }
