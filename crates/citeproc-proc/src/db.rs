@@ -423,19 +423,20 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     db: &DB,
     ref_id: Atom,
     cite_ctx: &'a CiteContext<'a, Markup>,
-    nvar: NameVariable,
+    index: u32,
 ) -> Option<RefNameIR> {
     use crate::disamb::create_single_ref_ir;
     let refr = db.reference(ref_id)?;
     let ref_ctx = RefContext::from_cite_context(&refr, cite_ctx);
     let ref_ir = create_single_ref_ir::<Markup, DB>(db, &ref_ctx);
-    fn find_name_block(nvar: NameVariable, ref_ir: &RefIR) -> Option<&RefNameIR> {
+    fn find_name_block<'a>(ref_ir: &'a RefIR, nth: &mut u32) -> Option<&'a RefNameIR> {
         match ref_ir {
             RefIR::Edge(_) => None,
             RefIR::Name(nir, ref nfa) => {
-                if nir.variable == nvar {
+                if *nth == 0 {
                     Some(nir)
                 } else {
+                    *nth = nth.saturating_sub(1);
                     None
                 }
             }
@@ -443,12 +444,14 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
                 // assumes it's the first one that appears
                 seq.contents
                     .iter()
-                    .filter_map(|x| find_name_block(nvar, x))
+                    .filter_map(|x| find_name_block(x, nth))
                     .nth(0)
             }
         }
     }
-    find_name_block(nvar, &ref_ir).map(|rnir| rnir.clone())
+    info!("searching for the nth {} name block", index);
+    let mut nth = index;
+    find_name_block(&ref_ir, &mut nth).map(|rnir| rnir.clone())
 }
 
 type NameRef = Arc<Mutex<NameIR<Markup>>>;
@@ -497,7 +500,7 @@ fn disambiguate_add_names(
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
 
-    for nir_arc in name_refs {
+    for (n, nir_arc) in name_refs.into_iter().enumerate() {
         if best <= 1 {
             return true;
         }
@@ -532,7 +535,7 @@ fn disambiguate_add_names(
                 break;
             }
             if also_expand {
-                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir);
+                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir, n as u32);
             }
             let new_count = total_ambiguity_number(&mut nir);
             nir.achieved_count(new_count);
@@ -552,12 +555,13 @@ fn expand_one_name_ir(
     ctx: &CiteContext<'_, Markup>,
     refs_accepting: &[Atom],
     nir: &mut NameMutexGuard,
+    index: u32,
 ) {
     let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
 
     for r in refs_accepting {
         if let Some(rnir) =
-            make_identical_name_formatter(db, r.clone(), ctx, /* XXX */ NameVariable::Author)
+            make_identical_name_formatter(db, r.clone(), ctx, index)
         {
             let var = rnir.variable;
             let len = rnir.disamb_name_ids.len();
@@ -632,9 +636,9 @@ fn disambiguate_add_givennames(
     let fmt = db.get_formatter();
     let refs = refs_accepting_cite(db, ir, ctx);
     let name_refs = list_all_name_blocks(ir);
-    for nir_arc in name_refs {
+    for (n, nir_arc) in name_refs.into_iter().enumerate() {
         let mut nir = nir_arc.lock();
-        expand_one_name_ir(db, ir, ctx, &refs, &mut nir);
+        expand_one_name_ir(db, ir, ctx, &refs, &mut nir, n as u32);
     }
     if also_add {
         disambiguate_add_names(db, ir, ctx, true);
