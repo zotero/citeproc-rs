@@ -91,7 +91,7 @@ impl Disambiguation<Markup> for Element {
             Element::Names(ref n) => n.ref_ir(db, ctx, state, stack),
             Element::Choose(ref c) => c.ref_ir(db, ctx, state, stack),
             Element::Date(ref d) => d.ref_ir(db, ctx, state, stack),
-            Element::Number(var, form, f, ref af, _tc, _dm) => {
+            Element::Number(var, form, f, ref af, tc, _dm) => {
                 let content = match var {
                     NumberVariable::Locator => {
                         let e = ctx.locator_type.map(|_| db.edge(EdgeData::Locator));
@@ -101,7 +101,7 @@ impl Disambiguation<Markup> for Element {
                         .reference
                         .number
                         .get(&v)
-                        .map(|val| renderer.number(var, form, &val.clone(), f, af)),
+                        .map(|val| renderer.number(var, form, &val.clone(), f, af, tc)),
                 };
                 let content = content
                     .map(|x| fmt.output_in_context(x, stack))
@@ -110,7 +110,7 @@ impl Disambiguation<Markup> for Element {
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
             }
-            Element::Text(ref src, f, ref af, quo, _sp, _tc, _disp) => match *src {
+            Element::Text(ref src, f, ref af, quo, _sp, tc, _disp) => match *src {
                 TextSource::Variable(var, _form) => {
                     // let fmt_plain_edge = |e: Edge| {
                     //     if f.is_some() || af != &Affixes::default() {
@@ -147,12 +147,12 @@ impl Disambiguation<Markup> for Element {
                             .reference
                             .ordinary
                             .get(&v)
-                            .map(|val| renderer.text_variable(var, val, f, af, quo)),
+                            .map(|val| renderer.text_variable(var, val, f, af, quo, tc)),
                         StandardVariable::Number(v) => ctx
                             .reference
                             .number
                             .get(&v)
-                            .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo)),
+                            .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo, tc)),
                     };
                     let content = content
                         .map(|x| fmt.output_in_context(x, stack))
@@ -163,7 +163,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 TextSource::Value(ref val) => {
                     let content = renderer
-                        .text_value(&val, f, af, quo)
+                        .text_value(&val, f, af, quo, tc)
                         .map(|x| fmt.output_in_context(x, stack))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
@@ -189,7 +189,7 @@ impl Disambiguation<Markup> for Element {
                     out
                 }
             },
-            Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
+            Element::Label(var, form, f, ref af, _sp, tc, pl) => {
                 if var == NumberVariable::Locator {
                     if let Some(_loctype) = ctx.locator_type {
                         let edge = db.edge(EdgeData::Locator);
@@ -206,7 +206,7 @@ impl Disambiguation<Markup> for Element {
                     .reference
                     .number
                     .get(&var)
-                    .and_then(|val| renderer.numeric_label(var, form, val.clone(), pl, f, af))
+                    .and_then(|val| renderer.numeric_label(var, form, val.clone(), pl, f, af, tc))
                     .map(|x| fmt.output_in_context(x, stack))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));

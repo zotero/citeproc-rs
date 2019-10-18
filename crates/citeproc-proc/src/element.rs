@@ -67,7 +67,7 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
-            Element::Text(ref source, f, ref af, quo, _sp, _tc, _disp) => {
+            Element::Text(ref source, f, ref af, quo, _sp, tc, _disp) => {
                 use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
@@ -96,7 +96,7 @@ where
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer
-                            .text_value(value, f, af, quo)
+                            .text_value(value, f, af, quo, tc)
                             .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::NoneSeen)
                     }
@@ -107,7 +107,7 @@ where
                                 return (
                                     IR::Rendered(Some(CiteEdgeData::YearSuffix(
                                         renderer
-                                            .text_value(&base26, f, af, quo)
+                                            .text_value(&base26, f, af, quo, tc)
                                             .expect("we made base26 ourselves, it is not empty"),
                                     ))),
                                     GroupVars::DidRender,
@@ -124,7 +124,7 @@ where
                                     state.maybe_suppress_ordinary(v);
                                     ctx
                                         .get_ordinary(v, form)
-                                        .map(|val| renderer.text_variable(var, val, f, af, quo))
+                                        .map(|val| renderer.text_variable(var, val, f, af, quo, tc))
                                 }
                             },
                             StandardVariable::Number(v) => {
@@ -134,7 +134,7 @@ where
                                     state.maybe_suppress_num(v);
                                     ctx
                                         .get_number(v)
-                                        .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo))
+                                        .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo, tc))
                                 }
                             },
                         };
@@ -151,26 +151,26 @@ where
                 }
             }
 
-            Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
+            Element::Label(var, form, f, ref af, _sp, tc, pl) => {
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
                     ctx
                         .get_number(var)
-                        .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af))
+                        .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af, tc))
                         .map(CiteEdgeData::from_number_variable(var))
                 };
                 (IR::Rendered(content), GroupVars::new())
             }
 
-            Element::Number(var, form, f, ref af, ref _tc, _disp) => {
+            Element::Number(var, form, f, ref af, tc, _disp) => {
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
                     state.maybe_suppress_num(var);
                     ctx
                         .get_number(var)
-                        .map(|val| renderer.number(var, form, &val, f, af))
+                        .map(|val| renderer.number(var, form, &val, f, af, tc))
                         .map(CiteEdgeData::Output)
                 };
                 let gv = GroupVars::rendered_if(content.is_some());

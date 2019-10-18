@@ -3,7 +3,7 @@ use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{NameLabel, NumericForm, Plural, Style};
+use csl::style::{NameLabel, NumericForm, Plural, Style, TextCase};
 use csl::terms::{
     GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
     TextTermSelector,
@@ -109,6 +109,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         val: &NumericValue,
         f: Option<Formatting>,
         af: &Affixes,
+        text_case: TextCase,
     ) -> O::Build {
         use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
@@ -116,6 +117,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
             (NumericValue::Tokens(_, ts), NumericForm::Roman) if roman_representable(&val) => {
                 let options = IngestOptions {
                     replace_hyphens: var.should_replace_hyphens(),
+                    text_case,
                 };
                 let string = roman_lower(&ts);
                 let b = fmt.ingest(&string, options);
@@ -139,6 +141,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         f: Option<Formatting>,
         af: &Affixes,
         quo: bool,
+        text_case: TextCase,
         // sp, tc, disp
     ) -> O::Build {
         let fmt = self.fmt();
@@ -148,6 +151,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
                 StandardVariable::Number(v) => v.should_replace_hyphens(),
             },
+            text_case
         };
         let b = fmt.ingest(value, options);
         let txt = fmt.with_format(b, f);
@@ -168,6 +172,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         f: Option<Formatting>,
         af: &Affixes,
         quo: bool,
+        text_case: TextCase,
         // sp, tc, disp
     ) -> Option<O::Build> {
         if value.len() == 0 {
@@ -175,7 +180,10 @@ impl<O: OutputFormat> Renderer<'_, O> {
         }
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(quo);
-        let b = fmt.ingest(value, Default::default());
+        let b = fmt.ingest(value, IngestOptions {
+            text_case,
+            ..Default::default()
+        });
         let txt = fmt.with_format(b, f);
         Some(fmt.affixed_quoted(txt, af, quotes.as_ref()))
     }
@@ -236,6 +244,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         plural: Plural,
         f: Option<Formatting>,
         af: &Affixes,
+        text_case: TextCase,
     ) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector =
@@ -246,10 +255,14 @@ impl<O: OutputFormat> Renderer<'_, O> {
             (_, Plural::Never) => false,
         };
         selector.and_then(|sel| {
+            let options = IngestOptions {
+                text_case,
+                ..Default::default()
+            };
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
-                .map(|val| fmt.affixed_text(val.to_owned(), f, &af))
+                .map(|val| fmt.affixed(fmt.with_format(fmt.ingest(val, options), f), &af))
         })
     }
 }
