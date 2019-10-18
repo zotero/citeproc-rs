@@ -5,9 +5,9 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::InlineElement;
+use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
-use super::MarkupWriter;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct RtfWriter {}
@@ -178,4 +178,3 @@ fn test_rtf_escape_unicode() {
     let poop = "Hello 💩";
     assert_eq!(rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
 }
-

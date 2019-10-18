@@ -4,12 +4,11 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::output::micro_html::MicroNode;
-use crate::output::FormatCmd;
 use super::InlineElement;
 use super::QuoteType;
+use crate::output::micro_html::MicroNode;
+use crate::output::FormatCmd;
 use csl::style::{FontStyle, FontVariant, FontWeight, Formatting};
-
 
 #[derive(Default, Debug, Clone)]
 pub struct FlipFlopState {
@@ -161,4 +160,3 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> 
         }
     }
 }
-

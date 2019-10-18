@@ -81,8 +81,10 @@ where
     ) -> IrSum<O>;
 }
 
-use csl::style::{Delimiter, Name, NameLabel, NameEtAl, NameLabelInput, Names, DisplayMode, Affixes, Formatting};
-use csl::variables::{NameVariable, AnyVariable, NumberVariable, DateVariable, Variable};
+use csl::style::{
+    Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabel, NameLabelInput, Names,
+};
+use csl::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamesInheritance {
@@ -100,7 +102,6 @@ pub struct NamesInheritance {
 }
 
 impl NamesInheritance {
-
     fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
@@ -109,8 +110,17 @@ impl NamesInheritance {
             // The rest will just replace whatever's in the inheritance
             et_al: names.et_al.as_ref().or(self.et_al.as_ref()).cloned(),
             label: names.label.as_ref().or(self.label.as_ref()).cloned(),
-            delimiter: names.delimiter.as_ref().map(|x| &x.0).or_else(|| self.delimiter.as_ref()).cloned(),
-            formatting: names.formatting.as_ref().or(self.formatting.as_ref()).cloned(),
+            delimiter: names
+                .delimiter
+                .as_ref()
+                .map(|x| &x.0)
+                .or_else(|| self.delimiter.as_ref())
+                .cloned(),
+            formatting: names
+                .formatting
+                .as_ref()
+                .or(self.formatting.as_ref())
+                .cloned(),
             display: names.display.as_ref().or(self.display.as_ref()).cloned(),
             affixes: names.affixes.as_ref().or(self.affixes.as_ref()).cloned(),
         }
@@ -144,7 +154,6 @@ pub struct IrState {
 }
 
 impl IrState {
-
     pub fn inherited_names_options(
         &self,
         ctx_name: &Name,
@@ -157,7 +166,10 @@ impl IrState {
         }
     }
 
-    pub fn replace_name_overrides_for_substitute(&mut self, inheritance: NamesInheritance) -> Option<NamesInheritance> {
+    pub fn replace_name_overrides_for_substitute(
+        &mut self,
+        inheritance: NamesInheritance,
+    ) -> Option<NamesInheritance> {
         self.in_substitute = true;
         let old = std::mem::replace(&mut self.name_override, Some(inheritance));
         old
@@ -211,7 +223,6 @@ impl IrState {
     pub fn is_suppressed_date(&self, var: DateVariable) -> bool {
         self.suppressed.contains(&AnyVariable::Date(var))
     }
-
 }
 
 impl IrState {

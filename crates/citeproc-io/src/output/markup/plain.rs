@@ -5,9 +5,9 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::InlineElement;
+use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
-use super::MarkupWriter;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct PlainWriter {}
@@ -44,7 +44,6 @@ impl MicroNode {
 }
 
 impl InlineElement {
-
     fn to_plain_inner(&self, s: &mut String, options: &PlainWriter) {
         use super::InlineElement::*;
         match self {
@@ -81,4 +80,3 @@ impl InlineElement {
         }
     }
 }
-

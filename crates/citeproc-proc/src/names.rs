@@ -87,8 +87,7 @@ fn render_label<O: OutputFormat>(
     var: NameVariable,
 ) -> IR<O> {
     let renderer = Renderer::cite(ctx);
-    let o = renderer.name_label(label, var)
-        .map(CiteEdgeData::Output);
+    let o = renderer.name_label(label, var).map(CiteEdgeData::Output);
     IR::Rendered(o)
 }
 
@@ -106,27 +105,31 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let names_inheritance = state.inherited_names_options(
-            &ctx.name_citation,
-            &ctx.names_delimiter,
-            self,
-        );
+        let names_inheritance =
+            state.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, self);
 
-        let name_irs: Vec<IR<O>> =
-            to_individual_name_irs(self, &names_inheritance, db, state, fmt, &ctx.reference, true)
-                .map(|mut nir| {
-                    if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
-                        *nir.ir = ir;
-                        IR::Name(Arc::new(Mutex::new(nir)))
-                    } else {
-                        // shouldn't happen; intermediate_custom should return Some the first time
-                        // round in any situation, and only retun None if it's impossible to crank any
-                        // further for a disamb pass
-                        error!("nir.intermediate_custom returned None the first time round");
-                        IR::Rendered(None)
-                    }
-                })
-                .collect();
+        let name_irs: Vec<IR<O>> = to_individual_name_irs(
+            self,
+            &names_inheritance,
+            db,
+            state,
+            fmt,
+            &ctx.reference,
+            true,
+        )
+        .map(|mut nir| {
+            if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+                *nir.ir = ir;
+                IR::Name(Arc::new(Mutex::new(nir)))
+            } else {
+                // shouldn't happen; intermediate_custom should return Some the first time
+                // round in any situation, and only retun None if it's impossible to crank any
+                // further for a disamb pass
+                error!("nir.intermediate_custom returned None the first time round");
+                IR::Rendered(None)
+            }
+        })
+        .collect();
 
         // Wait until iteration is done to collect
         state.maybe_suppress_name_vars(&self.variables);
@@ -143,7 +146,8 @@ where
                     // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
                     // substitution later on
                     let mut new_state = state.clone();
-                    let old = new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
+                    let old =
+                        new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
                     let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
                     if !ir.is_empty() {
                         new_state.restore_name_overrides(old);
@@ -163,7 +167,9 @@ where
                 contents: name_irs,
                 formatting: names_inheritance.formatting,
                 affixes: names_inheritance.affixes.clone().unwrap_or_default(),
-                delimiter: names_inheritance.delimiter.unwrap_or_else(|| Atom::from("")),
+                delimiter: names_inheritance
+                    .delimiter
+                    .unwrap_or_else(|| Atom::from("")),
             }),
             GroupVars::DidRender,
         )
@@ -196,8 +202,12 @@ impl<'c, O: OutputFormat> NameIR<O> {
             fmt,
         };
 
-        let ntbs =
-            runner.names_to_builds(&self.disamb_names, position, locale, &names_inheritance.et_al);
+        let ntbs = runner.names_to_builds(
+            &self.disamb_names,
+            position,
+            locale,
+            &names_inheritance.et_al,
+        );
 
         // TODO: refactor into a method on NameCounter
         self.name_counter.current = ntb_len(&ntbs);

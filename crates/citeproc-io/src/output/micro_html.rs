@@ -277,4 +277,3 @@ impl<'a> Tag<'a> {
         self.ignore_self = true;
     }
 }
-

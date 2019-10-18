@@ -63,8 +63,11 @@ pub fn ref_sequence<'c>(
 
     let (inner, gv) = els
         .iter()
-        .map(|el| Disambiguation::<Markup>::ref_ir(el, db, ctx, state, formatting.unwrap_or_default()))
-        .fold( (Vec::new(), GroupVars::new()),
+        .map(|el| {
+            Disambiguation::<Markup>::ref_ir(el, db, ctx, state, formatting.unwrap_or_default())
+        })
+        .fold(
+            (Vec::new(), GroupVars::new()),
             |(mut acc, acc_gv), (ir, gv)| match ir {
                 RefIR::Edge(None) => (acc, acc_gv.neighbour(gv)),
                 _ => {

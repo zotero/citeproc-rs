@@ -4,6 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use self::InlineElement::*;
 use super::micro_html::MicroNode;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
@@ -11,7 +12,6 @@ use crate::IngestOptions;
 use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
-use self::InlineElement::*;
 
 mod rtf;
 use self::rtf::RtfWriter;
@@ -241,12 +241,7 @@ pub trait MarkupWriter {
     }
 
     /// Use this to write an InlineElement::Formatted
-    fn stack_formats(
-        &self,
-        s: &mut String,
-        inlines: &[InlineElement],
-        formatting: Formatting,
-    ) {
+    fn stack_formats(&self, s: &mut String, inlines: &[InlineElement], formatting: Formatting) {
         let stack = tag_stack(formatting);
         self.stack_preorder(s, &stack);
         for inner in inlines {
@@ -289,4 +284,3 @@ fn tag_stack(formatting: Formatting) -> Vec<FormatCmd> {
     }
     stack
 }
-
