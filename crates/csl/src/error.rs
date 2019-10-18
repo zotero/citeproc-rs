@@ -173,6 +173,17 @@ impl InvalidCsl {
         }
     }
 
+    pub fn unknown_element(node: &Node) -> Self {
+        let tag = node.tag_name().name();
+        let range = node.range();
+        InvalidCsl {
+            range,
+            message: format!("Unknown element <{}>", tag),
+            hint: "".to_string(),
+            severity: Severity::Error,
+        }
+    }
+
     pub fn wrong_var_type(
         node: &Node,
         attr: &str,

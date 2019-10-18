@@ -860,14 +860,44 @@ impl FromNode for MacroMap {
     }
 }
 
+fn write_slot_once<T: FromNode>(el: &Node, info: &ParseInfo, slot: &mut Option<T>) -> FromNodeResult<()> {
+    if slot.is_some() {
+        return Err(InvalidCsl::new(
+                &el,
+                &format!(
+                    "There can only be one <{}> in a <names> block.",
+                    el.tag_name().name(),
+                ),
+        ))?;
+    }
+    let t = T::from_node(el, info)?;
+    *slot = Some(t);
+    Ok(())
+}
+
 impl FromNode for Names {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let name = max1_child("names", "name", node.children(), info)?;
-        let institution = max1_child("names", "institution", node.children(), info)?;
-        let et_al = max1_child("names", "et-al", node.children(), info)?;
-        let label = max1_child("names", "label", node.children(), info)?;
-        let with = max1_child("names", "with", node.children(), info)?;
-        let substitute = max1_child("names", "substitute", node.children(), info)?;
+        let mut name = None;
+        let mut label = None;
+        let mut et_al = None;
+        let mut with = None;
+        let mut institution = None;
+        let mut substitute = None;
+        for child in node.children().filter(|node| node.is_element()) {
+            let tag_name = child.tag_name().name();
+            match tag_name {
+                "name" => write_slot_once(&child, info, &mut name)?,
+                "institution" => write_slot_once(&child, info, &mut institution)?,
+                "et-al" => write_slot_once(&child, info, &mut et_al)?,
+                "label" => write_slot_once(&child, info, &mut label)?,
+                "with" => write_slot_once(&child, info, &mut with)?,
+                "substitute" => write_slot_once(&child, info, &mut substitute)?,
+                _ => {
+                    return Err(InvalidCsl::unknown_element(&child).into());
+                }
+            }
+        }
+
         Ok(Names {
             variables: attribute_array_var(node, "variable", NeedVarType::Name, info)?,
             name,
