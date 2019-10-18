@@ -5,21 +5,23 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::InlineElement;
+use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
-use super::MarkupWriter;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlWriter {
     // TODO: is it enough to have one set of localized quotes for the entire style?
     // quotes: LocalizedQuotes,
     use_b_for_strong: bool,
+    link_anchors: bool,
 }
 
 impl Default for HtmlWriter {
     fn default() -> Self {
         HtmlWriter {
             use_b_for_strong: false,
+            link_anchors: true,
         }
     }
 }
@@ -28,10 +30,10 @@ impl HtmlWriter {
     pub fn test_suite() -> Self {
         HtmlWriter {
             use_b_for_strong: true,
+            link_anchors: false,
         }
     }
 }
-
 
 impl MarkupWriter for HtmlWriter {
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
@@ -156,16 +158,19 @@ impl InlineElement {
                 url,
                 content,
             } => {
-                s.push_str(r#"<a href=""#);
-                // TODO: HTML-quoted-escape? the url?
-                s.push_str(&url);
-                s.push_str(r#"">"#);
-                for i in content {
-                    i.to_html_inner(s, options);
+                if options.link_anchors {
+                    s.push_str(r#"<a href=""#);
+                    // TODO: HTML-quoted-escape? the url?
+                    s.push_str(&url.trim());
+                    s.push_str(r#"">"#);
+                    for i in content {
+                        i.to_html_inner(s, options);
+                    }
+                    s.push_str("</a>");
+                } else {
+                    s.push_str(&url.trim());
                 }
-                s.push_str("</a>");
             }
         }
     }
 }
-

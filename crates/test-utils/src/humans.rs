@@ -475,8 +475,8 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         match chunk {
             Chunk::Mode(m) => {
                 mode = mode.or_else(|| match m.as_str() {
-                    "citation" => Some((Mode::Citation, SupportedFormat::Html)),
-                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::Html)),
+                    "citation" => Some((Mode::Citation, SupportedFormat::TestHtml)),
+                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml)),
                     "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf)),
                     "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf)),
                     _ => panic!("unknown mode {}", m),
