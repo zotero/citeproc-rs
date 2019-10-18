@@ -135,7 +135,7 @@ pub struct IrState {
     /// When you exit a frame, delete from the set.
     pub macro_stack: HashSet<Atom>,
     /// Second field is names_delimiter
-    pub name_override: Option<NamesInheritance>,
+    name_override: Option<NamesInheritance>,
 }
 
 impl IrState {

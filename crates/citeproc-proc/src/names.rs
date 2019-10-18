@@ -229,7 +229,12 @@ impl<'c, O: OutputFormat> NameIR<O> {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))
         } else {
             if let Some(label) = names_inheritance.label.as_ref() {
-                seq.contents.push(render_label(ctx, &label.concrete(), variable));
+                let label_ir = render_label(ctx, &label.concrete(), variable);
+                if label.after_name {
+                    seq.contents.push(label_ir);
+                } else {
+                    seq.contents.insert(0, label_ir);
+                }
             }
             Some((IR::Seq(seq), GroupVars::DidRender))
         }

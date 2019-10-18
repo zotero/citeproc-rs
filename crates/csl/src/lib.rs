@@ -878,7 +878,7 @@ fn write_slot_once<T: FromNode>(el: &Node, info: &ParseInfo, slot: &mut Option<T
 impl FromNode for Names {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let mut name = None;
-        let mut label = None;
+        let mut label: Option<NameLabelInput> = None;
         let mut et_al = None;
         let mut with = None;
         let mut institution = None;
@@ -889,7 +889,12 @@ impl FromNode for Names {
                 "name" => write_slot_once(&child, info, &mut name)?,
                 "institution" => write_slot_once(&child, info, &mut institution)?,
                 "et-al" => write_slot_once(&child, info, &mut et_al)?,
-                "label" => write_slot_once(&child, info, &mut label)?,
+                "label" => {
+                    write_slot_once(&child, info, &mut label)?;
+                    if let Some(ref mut label) = label {
+                        label.after_name = name.is_some();
+                    }
+                }
                 "with" => write_slot_once(&child, info, &mut with)?,
                 "substitute" => write_slot_once(&child, info, &mut substitute)?,
                 _ => {
@@ -1054,6 +1059,8 @@ impl FromNode for NameLabelInput {
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
             text_case: Option::from_node(node, info)?,
+            // Context-dependent; we set this in Names::from_node()
+            after_name: false,
         })
     }
 }

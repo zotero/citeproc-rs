@@ -59,7 +59,7 @@ impl Disambiguation<Markup> for Names {
             delimiter: names_inheritance.delimiter.clone().unwrap_or_else(|| Atom::from("")),
         };
 
-        let name_irs = crate::names::to_individual_name_irs(self, &names_inheritance, db, fmt, ctx.reference, false);
+        let name_irs = crate::names::to_individual_name_irs(self, &names_inheritance, db, state, fmt, ctx.reference, false);
         for nir in name_irs {
             use crate::names::ntb_len;
 

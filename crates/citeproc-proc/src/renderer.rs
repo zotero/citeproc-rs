@@ -203,6 +203,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
             formatting,
             plural,
             affixes,
+            after_name: _,
             // TODO: strip-periods
             strip_periods: _,
             // TODO: text-case

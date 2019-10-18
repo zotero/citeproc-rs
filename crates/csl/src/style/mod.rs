@@ -741,6 +741,7 @@ pub struct NameLabelInput {
     pub strip_periods: Option<StripPeriods>,
     pub affixes: Option<Affixes>,
     pub text_case: Option<TextCase>,
+    pub after_name: bool,
 }
 
 impl NameLabelInput {
@@ -755,6 +756,7 @@ impl NameLabelInput {
             strip_periods: self.strip_periods.unwrap_or(false),
             affixes: self.affixes.as_ref().cloned().unwrap_or_default(),
             text_case: self.text_case.unwrap_or_default(),
+            after_name: self.after_name,
         }
     }
     pub fn merge(&self, other: &NameLabelInput) -> NameLabelInput {
@@ -765,6 +767,7 @@ impl NameLabelInput {
             strip_periods: other.strip_periods.or(self.strip_periods),
             affixes: other.affixes.as_ref().cloned().or(self.affixes.as_ref().cloned()),
             text_case: other.text_case.or(self.text_case),
+            after_name: other.after_name,
         }
     }
 }
@@ -777,6 +780,7 @@ pub struct NameLabel {
     pub strip_periods: StripPeriods,
     pub affixes: Affixes,
     pub text_case: TextCase,
+    pub after_name: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
