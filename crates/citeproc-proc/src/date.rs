@@ -144,6 +144,7 @@ impl Disambiguation<Markup> for BodyDate {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;

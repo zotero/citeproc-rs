@@ -88,6 +88,7 @@ pub trait Disambiguation<O: OutputFormat = Markup> {
         &self,
         _db: &impl IrDatabase,
         _ctx: &RefContext<O>,
+        state: &mut IrState,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
         unimplemented!()
@@ -132,7 +133,8 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
 
 pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefContext) -> RefIR {
     let style = ctx.style;
-    let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, Formatting::default());
+    let mut state = IrState::new();
+    let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, &mut state, Formatting::default());
     ir
 }
 
@@ -152,9 +154,11 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .iter()
         .map(|fc| {
             let fmt = db.get_formatter();
-            let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr);
+            let name_el = db.name_citation();
+            let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, name_el);
+            let mut state = IrState::new();
             let (mut ir, _gv) =
-                Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, Formatting::default());
+                Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, &mut state, Formatting::default());
             ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
             (*fc, ir)
         })

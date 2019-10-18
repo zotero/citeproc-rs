@@ -12,9 +12,10 @@ use super::unicode::is_latin_cyrillic;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::style::{
-    DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NamePart,
-    Names, Position,
+    DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NameLabel,
+    NameLabelInput, NamePart, Names, Position,
 };
+use csl::variables::NameVariable;
 
 use csl::Atom;
 
@@ -26,15 +27,13 @@ use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisa
 /// One NameIR per variable
 pub fn to_individual_name_irs<'a, O: OutputFormat>(
     names: &'a Names,
+    name_el: &'a NameEl,
+    label_el: &'a NameLabelInput,
     db: &'a impl IrDatabase,
     fmt: &'a O,
     refr: &'a Reference,
     should_start_with_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a {
-    let name_el = db
-        .name_citation()
-        .merge(names.name.as_ref().unwrap_or(&NameEl::empty()));
-
     let mut primary = true;
     names
         .variables
@@ -72,12 +71,25 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                 }
             });
             NameIR::new(
-                names.clone(),
+                name_el.clone(),
+                label_el.concrete(),
+                names.et_al.clone(),
                 var,
                 ratchets.collect(),
                 Box::new(IR::Rendered(None)),
             )
         })
+}
+
+fn render_label<O: OutputFormat>(
+    ctx: &CiteContext<'_, O>,
+    label: &NameLabel,
+    var: NameVariable,
+) -> IR<O> {
+    let renderer = Renderer::cite(ctx);
+    let o = renderer.name_label(label, var)
+        .map(CiteEdgeData::Output);
+    IR::Rendered(o)
 }
 
 impl<'c, O> Proc<'c, O> for Names
@@ -87,32 +99,60 @@ where
     fn intermediate(
         &self,
         db: &impl IrDatabase,
-        _state: &mut IrState,
+        state: &mut IrState,
         ctx: &CiteContext<'c, O>,
     ) -> IrSum<O>
     where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let name_irs: Vec<IR<O>> = to_individual_name_irs(self, db, fmt, &ctx.reference, true)
-            .map(|mut nir| {
-                if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
-                    *nir.ir = ir;
-                    IR::Name(Arc::new(Mutex::new(nir)))
-                } else {
-                    // shouldn't happen; intermediate_custom should return Some the first time
-                    // round in any situation, and only retun None if it's impossible to crank any
-                    // further for a disamb pass
-                    error!("nir.intermediate_custom returned None the first time round");
-                    IR::Rendered(None)
-                }
+        let (name_el, label_el, delimiter) = state.inherited_names_options(
+            &ctx.name_citation,
+            &self.name,
+            &self.label,
+            &ctx.names_delimiter,
+            &self.delimiter,
+        );
+
+        let name_irs: Vec<IR<O>> =
+            to_individual_name_irs(self, &name_el, &label_el, db, fmt, &ctx.reference, true)
+                .map(|mut nir| {
+                    if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+                        *nir.ir = ir;
+                        IR::Name(Arc::new(Mutex::new(nir)))
+                    } else {
+                        // shouldn't happen; intermediate_custom should return Some the first time
+                        // round in any situation, and only retun None if it's impossible to crank any
+                        // further for a disamb pass
+                        error!("nir.intermediate_custom returned None the first time round");
+                        IR::Rendered(None)
+                    }
+                })
+                .collect();
+
+        if name_irs.is_empty()
+            || name_irs.iter().all(|ir| match ir {
+                IR::Name(nir) => nir.lock().disamb_names.is_empty(),
+                _ => true,
             })
-            .collect();
-        if name_irs.iter().all(|ir| match ir {
-            IR::Name(nir) => nir.lock().disamb_names.is_empty(),
-            _ => true,
-        }) {
-            // TODO: substitute
+        {
+            // XXX: suppress substituted names later on using IrState
+            if let Some(subst) = self.substitute.as_ref() {
+                // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
+                // substitution later on
+                let mut new_state = state.clone();
+                let old = new_state.replace_name_overrides(name_el, label_el, delimiter.clone());
+
+                for (n, el) in subst.0.iter().enumerate() {
+                    let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
+                    warn!("substitute child {} rendered {:?}", n, ir);
+                    if !ir.is_empty() {
+                        new_state.restore_name_overrides(old);
+                        *state = new_state;
+                        return (ir, gv);
+                    }
+                }
+            }
             return (IR::Rendered(None), GroupVars::OnlyEmpty);
         }
 
@@ -124,9 +164,7 @@ where
                 contents: name_irs,
                 formatting: self.formatting,
                 affixes: self.affixes.clone(),
-                delimiter: self.delimiter.as_ref().or(ctx.names_delimiter.as_ref())
-                    .map(|d| d.0.clone())
-                    .unwrap_or_else(|| Atom::from("")),
+                delimiter,
             }),
             GroupVars::DidRender,
         )
@@ -145,12 +183,15 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
-        let name_el = db
-            .name_citation()
-            .merge(self.names_el.name.as_ref().unwrap_or(&NameEl::empty()));
+        let NameIR {
+            ref name_el,
+            ref label_el,
+            variable,
+            ..
+        } = *self;
 
         let mut runner = OneNameVar {
-            name_el: &name_el,
+            name_el,
             bump_name_count: self.name_counter.bump,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
@@ -158,7 +199,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         };
 
         let ntbs =
-            runner.names_to_builds(&self.disamb_names, position, locale, &self.names_el.et_al);
+            runner.names_to_builds(&self.disamb_names, position, locale, &self.et_al);
 
         // TODO: refactor into a method on NameCounter
         self.name_counter.current = ntb_len(&ntbs);
@@ -183,7 +224,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             })
             .filter(|x| !fmt.is_empty(&x))
             .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
-        let seq = IrSeq {
+        let mut seq = IrSeq {
             contents: iter.collect(),
             formatting: runner.name_el.formatting,
             affixes: runner.name_el.affixes.clone(),
@@ -192,6 +233,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))
         } else {
+            seq.contents.push(render_label(ctx, label_el, variable));
             Some((IR::Seq(seq), GroupVars::DidRender))
         }
     }

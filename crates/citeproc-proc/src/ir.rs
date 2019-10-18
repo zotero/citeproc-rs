@@ -231,6 +231,18 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
+impl<O> IR<O> where O : OutputFormat {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            IR::Rendered(None) | IR::YearSuffix(_, None) => true,
+            IR::Seq(seq) if seq.contents.is_empty() => true,
+            IR::ConditionalDisamb(_c, boxed) => boxed.is_empty(),
+            IR::Name(nir) => nir.lock().ir.is_empty(),
+            _ => false,
+        }
+    }
+}
+
 impl<O> Eq for IR<O> where O: OutputFormat + PartialEq + Eq {}
 impl<O> PartialEq for IR<O>
 where
@@ -301,7 +313,7 @@ impl IR<Markup> {
             IR::Rendered(_) => {
                 return ret;
             }
-            IR::Name(ref nir) => {
+            IR::Name(_) => {
                 return ret;
             }
             IR::ConditionalDisamb(ref el, ref _xs) => {

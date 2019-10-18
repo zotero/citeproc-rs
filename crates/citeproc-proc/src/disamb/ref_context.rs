@@ -3,7 +3,8 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Position, Style, VariableForm, Delimiter};
+use csl::style::{CslType, Position, Style, VariableForm, Delimiter, Name as NameEl};
+use std::sync::Arc;
 use csl::terms::LocatorType;
 use csl::variables::*;
 
@@ -18,6 +19,7 @@ pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub position: Position,
     pub year_suffix: bool,
     pub names_delimiter: Option<Delimiter>,
+    pub name_el: Arc<NameEl>,
 }
 
 impl From<FreeCond> for Position {
@@ -61,6 +63,7 @@ where
             // so it should be promoted beyond that single DisambPass::AddYearSuffix(ys) variant.
             year_suffix: false,
             names_delimiter: ctx.names_delimiter.clone(),
+            name_el: ctx.name_citation.clone(),
         }
     }
     pub fn from_free_cond(
@@ -69,6 +72,7 @@ where
         style: &'c Style,
         locale: &'c Locale,
         reference: &'c Reference,
+        name_el: Arc<NameEl>,
     ) -> Self {
         let ni = style.names_delimiter.clone();
         let citation_ni = style.citation.names_delimiter.clone();
@@ -81,6 +85,7 @@ where
             position: Position::from(fc),
             year_suffix: fc.contains(FreeCond::YEAR_SUFFIX),
             names_delimiter: citation_ni.or(ni),
+            name_el,
         }
     }
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {

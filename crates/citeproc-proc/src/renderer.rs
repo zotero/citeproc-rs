@@ -1,10 +1,14 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
+use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{NumericForm, Plural, Style};
-use csl::terms::{GenderedTermSelector, LocatorType, TermForm, TextTermSelector};
-use csl::variables::{NumberVariable, StandardVariable};
+use csl::style::{NameLabel, NumericForm, Plural, Style};
+use csl::terms::{
+    GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
+    TextTermSelector,
+};
+use csl::variables::{NameVariable, NumberVariable, StandardVariable};
 use csl::Atom;
 
 #[derive(Clone)]
@@ -55,6 +59,13 @@ impl<O: OutputFormat> GenericContext<'_, O> {
                 .map(Locator::type_of),
             Ref(ctx) => ctx.locator_type,
         }
+    }
+    pub fn get_name(&self, var: NameVariable) -> Option<&[Name]> {
+        match self {
+            Cit(ctx) => ctx.get_name(var),
+            Ref(ctx) => ctx.reference.name.get(&var),
+        }
+        .map(|vec| vec.as_slice())
     }
     // fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
     //     match self {
@@ -186,7 +197,37 @@ impl<O: OutputFormat> Renderer<'_, O> {
             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, af, quotes.as_ref()))
     }
 
-    pub fn label(
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
+        let NameLabel {
+            form,
+            formatting,
+            plural,
+            affixes,
+            // TODO: strip-periods
+            strip_periods: _,
+            // TODO: text-case
+            text_case: _,
+        } = label;
+        let fmt = self.fmt();
+        let selector = RoleTermSelector::from_name_variable(var, *form);
+        let val = self.ctx.get_name(var);
+        let len = val.map(|v| v.len()).unwrap_or(0);
+        let plural = match (len, plural) {
+            (0, Plural::Contextual) => return None,
+            (1, Plural::Contextual) => false,
+            (_, Plural::Contextual) => true,
+            (_, Plural::Always) => true,
+            (_, Plural::Never) => false,
+        };
+        selector.and_then(|sel| {
+            self.ctx
+                .locale()
+                .get_text_term(TextTermSelector::Role(sel), plural)
+                .map(|term_text| fmt.affixed_text(term_text.to_owned(), *formatting, affixes))
+        })
+    }
+
+    pub fn numeric_label(
         &self,
         var: NumberVariable,
         form: TermForm,

@@ -140,7 +140,7 @@ where
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
                 let content = ctx
                     .get_number(var)
-                    .and_then(|val| renderer.label(var, form, val, pl, f, af))
+                    .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af))
                     .map(CiteEdgeData::from_number_variable(var));
                 (IR::Rendered(content), GroupVars::new())
             }

@@ -9,7 +9,7 @@ use crate::version::Features;
 use std::str::FromStr;
 
 use super::attr::GetAttribute;
-use super::variables::NumberVariable;
+use super::variables::{NumberVariable, NameVariable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TextTermSelector {
@@ -132,6 +132,10 @@ pub struct RoleTermSelector(pub RoleTerm, pub TermFormExtended);
 impl RoleTermSelector {
     pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
         Box::new(self.1.fallback().map(move |x| RoleTermSelector(self.0, x)))
+    }
+    pub fn from_name_variable(var: NameVariable, form: TermFormExtended) -> Option<Self> {
+        let term = RoleTerm::from_name_var(var);
+        term.map(|t| RoleTermSelector(t, form))
     }
 }
 
@@ -409,6 +413,31 @@ pub enum RoleTerm {
     Recipient,
     ReviewedAuthor,
     Translator,
+}
+
+impl RoleTerm {
+    pub fn from_name_var(var: NameVariable) -> Option<Self> {
+        // TODO: how do we get RoleTerm::EditorTranslator?
+        Some(match var {
+            NameVariable::Author => RoleTerm::Author,
+            NameVariable::CollectionEditor => RoleTerm::CollectionEditor,
+            NameVariable::Composer => RoleTerm::Composer,
+            NameVariable::ContainerAuthor => RoleTerm::ContainerAuthor,
+            NameVariable::Director => RoleTerm::Director,
+            NameVariable::Editor => RoleTerm::Editor,
+            NameVariable::EditorialDirector => RoleTerm::EditorialDirector,
+            NameVariable::Illustrator => RoleTerm::Illustrator,
+            NameVariable::Interviewer => RoleTerm::Interviewer,
+            NameVariable::OriginalAuthor => RoleTerm::OriginalAuthor,
+            NameVariable::Recipient => RoleTerm::Recipient,
+            NameVariable::ReviewedAuthor => RoleTerm::ReviewedAuthor,
+            NameVariable::Translator => RoleTerm::Translator,
+            // CSL-M only
+            NameVariable::Authority => {warn!("unimplemented: CSL-M authority role term"); return None},
+            // CSL-M only
+            NameVariable::Dummy => return None,
+        })
+    }
 }
 
 /// This is all the "miscellaneous" terms from the spec, EXCEPT `edition`. Edition is the only one

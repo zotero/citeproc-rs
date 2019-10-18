@@ -6,7 +6,8 @@ use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
 use csl::style::{
-    Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Position, Style,
+    Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Position, Style, NameLabel, NameLabelInput,
+    NameEtAl,
 };
 use csl::variables::NameVariable;
 use csl::Atom;
@@ -32,14 +33,13 @@ impl Disambiguation<Markup> for Names {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let style = ctx.style;
         let _locale = ctx.locale;
-        let name_el = db
-            .name_citation()
-            .merge(self.name.as_ref().unwrap_or(&NameEl::empty()));
+        let (name_el, label_el, delimiter) = state.inherited_names_options(&ctx.name_el, &self.name, &self.label, &ctx.names_delimiter, &self.delimiter);
 
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
@@ -56,16 +56,10 @@ impl Disambiguation<Markup> for Names {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
             affixes: self.affixes.clone(),
-            delimiter: match &self.delimiter {
-                Some(x) => x.0.clone(),
-                None => match ctx.names_delimiter.as_ref().map(|x| x.0.clone()) {
-                    Some(x) => x,
-                    None => Atom::from(""),
-                },
-            },
+            delimiter: delimiter.clone(),
         };
 
-        let name_irs = crate::names::to_individual_name_irs(self, db, fmt, ctx.reference, false);
+        let name_irs = crate::names::to_individual_name_irs(self, &name_el, &label_el, db, fmt, ctx.reference, false);
         for nir in name_irs {
             use crate::names::ntb_len;
 
@@ -534,9 +528,11 @@ pub struct NameCounter {
 }
 
 // TODO: make most fields private
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIR<O: OutputFormat> {
-    pub names_el: Names,
+    pub name_el: NameEl,
+    pub label_el: NameLabel,
+    pub et_al: Option<NameEtAl>,
     pub variable: NameVariable,
 
     pub name_counter: NameCounter,
@@ -551,13 +547,17 @@ where
     O: OutputFormat,
 {
     pub fn new(
-        names_el: Names,
+        name_el: NameEl,
+        label_el: NameLabel,
+        et_al: Option<NameEtAl>,
         variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         ir: Box<IR<O>>,
     ) -> Self {
         NameIR {
-            names_el,
+            name_el,
+            label_el,
+            et_al,
             variable,
             disamb_names: ratchets,
             ir,

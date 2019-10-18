@@ -81,12 +81,79 @@ where
     ) -> IrSum<O>;
 }
 
+use csl::style::{Delimiter, Name, NameLabel, NameLabelInput};
+
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.
     pub macro_stack: HashSet<Atom>,
+    /// Second field is names_delimiter
+    pub name_override: Option<(Name, NameLabelInput, Atom)>,
+}
+
+impl IrState {
+
+    fn inherited_name_el(&self, ctx_name: &Name, own: &Option<Name>) -> Name {
+        let inherited = if let Some((ref name_el, ..)) = self.name_override.as_ref() {
+            name_el
+        } else {
+            ctx_name
+        };
+        inherited.merge(own.as_ref().unwrap_or(&Name::empty()))
+    }
+
+    fn inherited_label_el(&self, own: &Option<NameLabelInput>) -> NameLabelInput {
+        let empty = NameLabelInput::empty();
+        let inherited = if let Some((_, ref name_el, _)) = self.name_override.as_ref() {
+            name_el
+        } else {
+            &empty
+        };
+        inherited.merge(own.as_ref().unwrap_or(&NameLabelInput::empty()))
+    }
+
+    fn inherited_names_delimiter(
+        &self,
+        ctx_delim: &Option<Delimiter>,
+        own: &Option<Delimiter>,
+    ) -> Atom {
+        let own_names_delim = own.as_ref().map(|x| &x.0);
+        let inherited_names_delim = self
+            .name_override
+            .as_ref()
+            .map(|x| &x.2)
+            .or(ctx_delim.as_ref().map(|x| &x.0));
+        own_names_delim
+            .or(inherited_names_delim)
+            .map(|d| d.clone())
+            .unwrap_or_else(|| Atom::from(""))
+    }
+
+    pub fn inherited_names_options(
+        &self,
+        ctx_name: &Name,
+        own_name: &Option<Name>,
+        own_label: &Option<NameLabelInput>,
+        ctx_delim: &Option<Delimiter>,
+        own_delim: &Option<Delimiter>,
+    ) -> (Name, NameLabelInput, Atom) {
+        (
+            self.inherited_name_el(ctx_name, own_name),
+            self.inherited_label_el(own_label),
+            self.inherited_names_delimiter(ctx_delim, own_delim),
+        )
+    }
+
+    pub fn replace_name_overrides(&mut self, name: Name, label: NameLabelInput, delim: Atom) -> Option<(Name, NameLabelInput, Atom)> {
+        let old = std::mem::replace(&mut self.name_override, Some((name, label, delim)));
+        old
+    }
+
+    pub fn restore_name_overrides(&mut self, old: Option<(Name, NameLabelInput, Atom)>) {
+        self.name_override = old;
+    }
 }
 
 impl IrState {

@@ -12,6 +12,8 @@ pub use string_cache::DefaultAtom as Atom;
 extern crate serde_derive;
 #[macro_use]
 extern crate strum_macros;
+#[macro_use]
+extern crate log;
 
 use std::sync::Arc;
 
@@ -1013,14 +1015,15 @@ impl FromNode for NamePart {
     }
 }
 
-impl FromNode for NameLabel {
+impl FromNode for NameLabelInput {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(NameLabel {
-            form: attribute_optional(node, "form", info)?,
+        Ok(NameLabelInput {
+            form: attribute_option(node, "form", info)?,
+            plural: attribute_option(node, "plural", info)?,
+            strip_periods: attribute_option_bool(node, "strip-periods")?,
             formatting: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
-            plural: attribute_optional(node, "plural", info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            affixes: Option::from_node(node, info)?,
+            text_case: Option::from_node(node, info)?,
         })
     }
 }
@@ -1029,7 +1032,7 @@ impl FromNode for Substitute {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let els = node
             .children()
-            .filter(|n| n.is_element() && n.has_tag_name("name"))
+            .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el, info))
             .partition_results()?;
         Ok(Substitute(els))

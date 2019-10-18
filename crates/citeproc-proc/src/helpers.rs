@@ -53,6 +53,7 @@ where
 pub fn ref_sequence<'c>(
     db: &impl IrDatabase,
     ctx: &RefContext<'c, Markup>,
+    state: &mut IrState,
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
@@ -62,9 +63,8 @@ pub fn ref_sequence<'c>(
 
     let (inner, gv) = els
         .iter()
-        .map(|el| Disambiguation::<Markup>::ref_ir(el, db, ctx, formatting.unwrap_or_default()))
-        .fold(
-            (Vec::new(), GroupVars::new()),
+        .map(|el| Disambiguation::<Markup>::ref_ir(el, db, ctx, state, formatting.unwrap_or_default()))
+        .fold( (Vec::new(), GroupVars::new()),
             |(mut acc, acc_gv), (ir, gv)| match ir {
                 RefIR::Edge(None) => (acc, acc_gv.neighbour(gv)),
                 _ => {

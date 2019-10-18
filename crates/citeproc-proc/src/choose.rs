@@ -87,18 +87,19 @@ impl Disambiguation<Markup> for Choose {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx).0 {
-            return ref_sequence(db, ctx, els, "".into(), Some(stack), Affixes::default());
+            return ref_sequence(db, ctx, state, els, "".into(), Some(stack), Affixes::default());
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx).0 {
-                return ref_sequence(db, ctx, els, "".into(), Some(stack), Affixes::default());
+                return ref_sequence(db, ctx, state, els, "".into(), Some(stack), Affixes::default());
             }
         }
-        return ref_sequence(db, ctx, &last.0, "".into(), Some(stack), Affixes::default());
+        return ref_sequence(db, ctx, state, &last.0, "".into(), Some(stack), Affixes::default());
     }
 
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {

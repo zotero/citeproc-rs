@@ -28,10 +28,11 @@ impl Disambiguation<Markup> for Style {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(db, ctx, &els, "".into(), Some(stack), Affixes::default())
+        ref_sequence(db, ctx, state, &els, "".into(), Some(stack), Affixes::default())
     }
 }
 
@@ -46,6 +47,7 @@ impl Disambiguation<Markup> for Group {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         // TODO: handle GroupVars
@@ -54,6 +56,7 @@ impl Disambiguation<Markup> for Group {
         let (seq, group_vars) = ref_sequence(
             db,
             ctx,
+            state,
             &els,
             self.delimiter.0.clone(),
             stack,
@@ -76,6 +79,7 @@ impl Disambiguation<Markup> for Element {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
+        state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let renderer = Renderer::refr(ctx);
@@ -83,10 +87,10 @@ impl Disambiguation<Markup> for Element {
         match *self {
             // TODO: keep track of which empty variables caused GroupVars to not render, if
             // they are indeed free variables.
-            Element::Group(ref g) => g.ref_ir(db, ctx, stack),
-            Element::Names(ref n) => n.ref_ir(db, ctx, stack),
-            Element::Choose(ref c) => c.ref_ir(db, ctx, stack),
-            Element::Date(ref d) => d.ref_ir(db, ctx, stack),
+            Element::Group(ref g) => g.ref_ir(db, ctx, state, stack),
+            Element::Names(ref n) => n.ref_ir(db, ctx, state, stack),
+            Element::Choose(ref c) => c.ref_ir(db, ctx, state, stack),
+            Element::Date(ref d) => d.ref_ir(db, ctx, state, stack),
             Element::Number(var, form, f, ref af, _tc, _dm) => {
                 let content = match var {
                     NumberVariable::Locator => {
@@ -180,7 +184,7 @@ impl Disambiguation<Markup> for Element {
                         .get(name)
                         .expect("macro errors not implemented!");
                     // state.macro_stack.insert(name.clone());
-                    let out = ref_sequence(db, ctx, &macro_unsafe, "".into(), f, af.clone());
+                    let out = ref_sequence(db, ctx, state, &macro_unsafe, "".into(), f, af.clone());
                     // state.macro_stack.remove(&name);
                     out
                 }
@@ -202,7 +206,7 @@ impl Disambiguation<Markup> for Element {
                     .reference
                     .number
                     .get(&var)
-                    .and_then(|val| renderer.label(var, form, val.clone(), pl, f, af))
+                    .and_then(|val| renderer.numeric_label(var, form, val.clone(), pl, f, af))
                     .map(|x| fmt.output_in_context(x, stack))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));

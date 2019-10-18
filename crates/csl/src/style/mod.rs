@@ -490,7 +490,7 @@ pub struct Names {
     // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
-    pub label: Option<NameLabel>,
+    pub label: Option<NameLabelInput>,
     pub et_al: Option<NameEtAl>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
@@ -733,13 +733,50 @@ impl Name {
     }
 }
 
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
+pub struct NameLabelInput {
+    pub form: Option<TermFormExtended>,
+    pub formatting: Option<Formatting>,
+    pub plural: Option<Plural>,
+    pub strip_periods: Option<StripPeriods>,
+    pub affixes: Option<Affixes>,
+    pub text_case: Option<TextCase>,
+}
+
+impl NameLabelInput {
+    pub fn empty() -> Self {
+        Default::default()
+    }
+    pub fn concrete(&self) -> NameLabel {
+        NameLabel {
+            form: self.form.unwrap_or_default(),
+            formatting: self.formatting,
+            plural: self.plural.unwrap_or_default(),
+            strip_periods: self.strip_periods.unwrap_or(false),
+            affixes: self.affixes.as_ref().cloned().unwrap_or_default(),
+            text_case: self.text_case.unwrap_or_default(),
+        }
+    }
+    pub fn merge(&self, other: &NameLabelInput) -> NameLabelInput {
+        NameLabelInput {
+            form: other.form.or(self.form),
+            formatting: other.formatting.or(self.formatting),
+            plural: other.plural.or(self.plural),
+            strip_periods: other.strip_periods.or(self.strip_periods),
+            affixes: other.affixes.as_ref().cloned().or(self.affixes.as_ref().cloned()),
+            text_case: other.text_case.or(self.text_case),
+        }
+    }
+}
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
     pub form: TermFormExtended,
     pub formatting: Option<Formatting>,
-    pub delimiter: Delimiter,
     pub plural: Plural,
     pub strip_periods: StripPeriods,
+    pub affixes: Affixes,
+    pub text_case: TextCase,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
