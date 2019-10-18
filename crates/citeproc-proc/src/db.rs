@@ -731,7 +731,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     if ir0.unambiguous() || !style.citation.disambiguate_add_names {
         return ir0.clone();
     }
-    let (mut ir, mut state) = ir0.fresh_copy();
+    let (mut ir, state) = ir0.fresh_copy();
 
     disambiguate_add_names(db, &mut ir, &ctx, false);
     let matching = refs_accepting_cite(db, &ir, &ctx);

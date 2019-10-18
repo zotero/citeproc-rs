@@ -142,7 +142,7 @@ where
         {
             // XXX: suppress substituted names later on using IrState
             if let Some(subst) = self.substitute.as_ref() {
-                for (n, el) in subst.0.iter().enumerate() {
+                for el in subst.0.iter() {
                     // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
                     // substitution later on
                     let mut new_state = state.clone();
@@ -179,7 +179,7 @@ where
 impl<'c, O: OutputFormat> NameIR<O> {
     pub fn intermediate_custom(
         &mut self,
-        db: &impl IrDatabase,
+        _db: &impl IrDatabase,
         ctx: &CiteContext<'c, O>,
         pass: Option<DisambPass>,
     ) -> Option<IrSum<O>> {

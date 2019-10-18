@@ -115,6 +115,7 @@ impl NamesInheritance {
                 .as_ref()
                 .map(|x| &x.0)
                 .or_else(|| self.delimiter.as_ref())
+                .or_else(|| ctx_delim.as_ref().map(|x| &x.0))
                 .cloned(),
             formatting: names
                 .formatting
@@ -130,7 +131,12 @@ impl NamesInheritance {
         NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
             label: names.label.clone(),
-            delimiter: names.delimiter.as_ref().map(|x| &x.0).cloned(),
+            delimiter: names
+                .delimiter
+                .as_ref()
+                .map(|x| &x.0)
+                .or_else(|| ctx_delim.as_ref().map(|x| &x.0))
+                .cloned(),
             et_al: names.et_al.clone(),
             formatting: names.formatting.clone(),
             display: names.display.clone(),
