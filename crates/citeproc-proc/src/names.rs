@@ -140,7 +140,6 @@ where
                 _ => true,
             })
         {
-            // XXX: suppress substituted names later on using IrState
             if let Some(subst) = self.substitute.as_ref() {
                 for el in subst.0.iter() {
                     // Need to clone the state so that any ultimately-non-rendering names blocks do not affect

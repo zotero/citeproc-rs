@@ -171,6 +171,10 @@ impl Nfa {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.start == self.accepting
+    }
+
     pub fn add_complete_sequence(&mut self, tokens: Vec<Edge>) {
         let mut cursor = self.graph.add_node(());
         self.start.insert(cursor);

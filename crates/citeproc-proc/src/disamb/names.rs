@@ -143,8 +143,21 @@ impl Disambiguation<Markup> for Names {
         state.maybe_suppress_name_vars(&self.variables);
 
         if seq.contents.is_empty() {
-            // TODO: substitute
-            // TODO: suppress once substituted
+            if let Some(subst) = self.substitute.as_ref() {
+                for el in subst.0.iter() {
+                    // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
+                    // substitution later on
+                    let mut new_state = state.clone();
+                    let old =
+                        new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
+                    let (ir, gv) = el.ref_ir(db, ctx, &mut new_state, stack);
+                    if !ir.is_empty() {
+                        new_state.restore_name_overrides(old);
+                        *state = new_state;
+                        return (ir, gv);
+                    }
+                }
+            }
             return (RefIR::Edge(None), GroupVars::OnlyEmpty);
         }
 

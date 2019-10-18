@@ -122,6 +122,15 @@ impl RefIR {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            RefIR::Edge(None) => true,
+            RefIR::Seq(seq) => seq.contents.is_empty(),
+            RefIR::Name(_rnir, nfa) => nfa.is_empty(),
+            _ => false,
+        }
+    }
+
     pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_edge: Edge) {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
