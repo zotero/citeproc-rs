@@ -82,8 +82,9 @@ where
 }
 
 use csl::style::{Delimiter, Name, NameLabel, NameEtAl, NameLabelInput, Names, DisplayMode, Affixes, Formatting};
+use csl::variables::{NameVariable, AnyVariable, NumberVariable, DateVariable, Variable};
 
-#[derive(Debug, Default, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamesInheritance {
     pub name: Name,
     pub label: Option<NameLabelInput>,
@@ -128,6 +129,8 @@ impl NamesInheritance {
     }
 }
 
+use fnv::FnvHashSet;
+
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
     /// This can be a set because macros are strictly non-recursive.
@@ -136,6 +139,8 @@ pub struct IrState {
     pub macro_stack: HashSet<Atom>,
     /// Second field is names_delimiter
     name_override: Option<NamesInheritance>,
+    suppressed: FnvHashSet<AnyVariable>,
+    in_substitute: bool,
 }
 
 impl IrState {
@@ -152,14 +157,61 @@ impl IrState {
         }
     }
 
-    pub fn replace_name_overrides(&mut self, inheritance: NamesInheritance) -> Option<NamesInheritance> {
+    pub fn replace_name_overrides_for_substitute(&mut self, inheritance: NamesInheritance) -> Option<NamesInheritance> {
+        self.in_substitute = true;
         let old = std::mem::replace(&mut self.name_override, Some(inheritance));
         old
     }
 
     pub fn restore_name_overrides(&mut self, old: Option<NamesInheritance>) {
+        if old.is_none() {
+            self.in_substitute = false;
+        }
         self.name_override = old;
     }
+
+    pub fn is_name_suppressed(&self, var: NameVariable) -> bool {
+        self.suppressed.contains(&AnyVariable::Name(var))
+    }
+
+    pub fn maybe_suppress_name_vars(&mut self, vars: &[NameVariable]) {
+        if self.in_substitute {
+            for &var in vars {
+                self.suppressed.insert(AnyVariable::Name(var));
+            }
+        }
+    }
+
+    pub fn maybe_suppress_num(&mut self, var: NumberVariable) {
+        if self.in_substitute {
+            self.suppressed.insert(AnyVariable::Number(var));
+        }
+    }
+
+    pub fn maybe_suppress_date(&mut self, var: DateVariable) {
+        if self.in_substitute {
+            self.suppressed.insert(AnyVariable::Date(var));
+        }
+    }
+
+    pub fn maybe_suppress_ordinary(&mut self, var: Variable) {
+        if self.in_substitute {
+            self.suppressed.insert(AnyVariable::Ordinary(var));
+        }
+    }
+
+    pub fn is_suppressed_ordinary(&self, var: Variable) -> bool {
+        self.suppressed.contains(&AnyVariable::Ordinary(var))
+    }
+
+    pub fn is_suppressed_num(&self, var: NumberVariable) -> bool {
+        self.suppressed.contains(&AnyVariable::Number(var))
+    }
+
+    pub fn is_suppressed_date(&self, var: DateVariable) -> bool {
+        self.suppressed.contains(&AnyVariable::Date(var))
+    }
+
 }
 
 impl IrState {

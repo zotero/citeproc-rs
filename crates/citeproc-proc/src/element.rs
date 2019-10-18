@@ -117,12 +117,26 @@ where
                             return (IR::YearSuffix(ysh, None), GroupVars::OnlyEmpty);
                         }
                         let content = match var {
-                            StandardVariable::Ordinary(v) => ctx
-                                .get_ordinary(v, form)
-                                .map(|val| renderer.text_variable(var, val, f, af, quo)),
-                            StandardVariable::Number(v) => ctx
-                                .get_number(v)
-                                .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo)),
+                            StandardVariable::Ordinary(v) => {
+                                if state.is_suppressed_ordinary(v) {
+                                    None
+                                } else {
+                                    state.maybe_suppress_ordinary(v);
+                                    ctx
+                                        .get_ordinary(v, form)
+                                        .map(|val| renderer.text_variable(var, val, f, af, quo))
+                                }
+                            },
+                            StandardVariable::Number(v) => {
+                                if state.is_suppressed_num(v) {
+                                    None
+                                } else {
+                                    state.maybe_suppress_num(v);
+                                    ctx
+                                        .get_number(v)
+                                        .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo))
+                                }
+                            },
                         };
                         let content = content.map(CiteEdgeData::from_standard_variable(var));
                         let gv = GroupVars::rendered_if(content.is_some());
@@ -138,18 +152,27 @@ where
             }
 
             Element::Label(var, form, f, ref af, _tc, _sp, pl) => {
-                let content = ctx
-                    .get_number(var)
-                    .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af))
-                    .map(CiteEdgeData::from_number_variable(var));
+                let content = if state.is_suppressed_num(var) {
+                    None
+                } else {
+                    ctx
+                        .get_number(var)
+                        .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af))
+                        .map(CiteEdgeData::from_number_variable(var))
+                };
                 (IR::Rendered(content), GroupVars::new())
             }
 
             Element::Number(var, form, f, ref af, ref _tc, _disp) => {
-                let content = ctx
-                    .get_number(var)
-                    .map(|val| renderer.number(var, form, &val, f, af))
-                    .map(CiteEdgeData::Output);
+                let content = if state.is_suppressed_num(var) {
+                    None
+                } else {
+                    state.maybe_suppress_num(var);
+                    ctx
+                        .get_number(var)
+                        .map(|val| renderer.number(var, form, &val, f, af))
+                        .map(CiteEdgeData::Output)
+                };
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
             }
@@ -180,8 +203,13 @@ where
                 }
             }
             Element::Date(ref dt) => {
-                dt.intermediate(db, state, ctx)
-                // IR::YearSuffix(YearSuffixHook::Date(dt.clone()), fmt.plain("date"))
+                let var = dt.variable();
+                if state.is_suppressed_date(var) {
+                    (IR::Rendered(None), GroupVars::OnlyEmpty)
+                } else {
+                    state.maybe_suppress_date(var);
+                    dt.intermediate(db, state, ctx)
+                }
             }
         }
     }

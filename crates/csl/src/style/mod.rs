@@ -89,6 +89,15 @@ pub enum BodyDate {
     Local(LocalizedDate),
 }
 
+impl BodyDate {
+    pub fn variable(&self) -> DateVariable {
+        match self {
+            BodyDate::Indep(i) => i.variable,
+            BodyDate::Local(l) => l.variable,
+        }
+    }
+}
+
 /// e.g. for <text variable="title" form="short" />
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]

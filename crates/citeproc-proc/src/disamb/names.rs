@@ -128,6 +128,8 @@ impl Disambiguation<Markup> for Names {
             }
         }
 
+        state.maybe_suppress_name_vars(&self.variables);
+
         if seq.contents.is_empty() {
             // TODO: substitute
             // TODO: suppress once substituted

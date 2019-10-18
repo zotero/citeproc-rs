@@ -30,6 +30,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     names: &'a Names,
     names_inheritance: &'a NamesInheritance,
     db: &'a impl IrDatabase,
+    state: &'a IrState,
     fmt: &'a O,
     refr: &'a Reference,
     should_start_with_global: bool,
@@ -38,6 +39,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     names
         .variables
         .iter()
+        .filter(move |var| !state.is_name_suppressed(**var))
         .filter_map(move |var| refr.name.get(var).map(|val| (*var, val.clone())))
         .map(move |(var, value)| {
             let ratchets = value.into_iter().map(|value| match value {
@@ -111,7 +113,7 @@ where
         );
 
         let name_irs: Vec<IR<O>> =
-            to_individual_name_irs(self, &names_inheritance, db, fmt, &ctx.reference, true)
+            to_individual_name_irs(self, &names_inheritance, db, state, fmt, &ctx.reference, true)
                 .map(|mut nir| {
                     if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
                         *nir.ir = ir;
@@ -126,6 +128,9 @@ where
                 })
                 .collect();
 
+        // Wait until iteration is done to collect
+        state.maybe_suppress_name_vars(&self.variables);
+
         if name_irs.is_empty()
             || name_irs.iter().all(|ir| match ir {
                 IR::Name(nir) => nir.lock().disamb_names.is_empty(),
@@ -134,14 +139,12 @@ where
         {
             // XXX: suppress substituted names later on using IrState
             if let Some(subst) = self.substitute.as_ref() {
-                // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
-                // substitution later on
-                let mut new_state = state.clone();
-                let old = new_state.replace_name_overrides(names_inheritance);
-
                 for (n, el) in subst.0.iter().enumerate() {
+                    // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
+                    // substitution later on
+                    let mut new_state = state.clone();
+                    let old = new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
                     let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
-                    warn!("substitute child {} rendered {:?}", n, ir);
                     if !ir.is_empty() {
                         new_state.restore_name_overrides(old);
                         *state = new_state;
