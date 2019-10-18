@@ -495,7 +495,7 @@ pub struct Names {
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
 
     /// CSL-M: institutions
     pub with: Option<NameWith>,

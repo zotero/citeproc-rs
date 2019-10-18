@@ -81,7 +81,52 @@ where
     ) -> IrSum<O>;
 }
 
-use csl::style::{Delimiter, Name, NameLabel, NameLabelInput};
+use csl::style::{Delimiter, Name, NameLabel, NameEtAl, NameLabelInput, Names, DisplayMode, Affixes, Formatting};
+
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
+pub struct NamesInheritance {
+    pub name: Name,
+    pub label: Option<NameLabelInput>,
+    pub delimiter: Option<Atom>,
+    pub et_al: Option<NameEtAl>,
+    pub formatting: Option<Formatting>,
+    pub display: Option<DisplayMode>,
+    pub affixes: Option<Affixes>,
+    // CSL-M: institutions
+    // pub with: Option<NameWith>,
+    // CSL-M: institutions
+    // pub institution: Option<Institution>,
+}
+
+impl NamesInheritance {
+
+    fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
+        NamesInheritance {
+            // Name gets merged from context, starting from scratch
+            // So if you supply <name/> at all, you start from context.
+            name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
+            // The rest will just replace whatever's in the inheritance
+            et_al: names.et_al.as_ref().or(self.et_al.as_ref()).cloned(),
+            label: names.label.as_ref().or(self.label.as_ref()).cloned(),
+            delimiter: names.delimiter.as_ref().map(|x| &x.0).or_else(|| self.delimiter.as_ref()).cloned(),
+            formatting: names.formatting.as_ref().or(self.formatting.as_ref()).cloned(),
+            display: names.display.as_ref().or(self.display.as_ref()).cloned(),
+            affixes: names.affixes.as_ref().or(self.affixes.as_ref()).cloned(),
+        }
+    }
+
+    fn from_names(ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
+        NamesInheritance {
+            name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
+            label: names.label.clone(),
+            delimiter: names.delimiter.as_ref().map(|x| &x.0).cloned(),
+            et_al: names.et_al.clone(),
+            formatting: names.formatting.clone(),
+            display: names.display.clone(),
+            affixes: names.affixes.clone(),
+        }
+    }
+}
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrState {
@@ -90,68 +135,29 @@ pub struct IrState {
     /// When you exit a frame, delete from the set.
     pub macro_stack: HashSet<Atom>,
     /// Second field is names_delimiter
-    pub name_override: Option<(Name, NameLabelInput, Atom)>,
+    pub name_override: Option<NamesInheritance>,
 }
 
 impl IrState {
 
-    fn inherited_name_el(&self, ctx_name: &Name, own: &Option<Name>) -> Name {
-        let inherited = if let Some((ref name_el, ..)) = self.name_override.as_ref() {
-            name_el
-        } else {
-            ctx_name
-        };
-        inherited.merge(own.as_ref().unwrap_or(&Name::empty()))
-    }
-
-    fn inherited_label_el(&self, own: &Option<NameLabelInput>) -> NameLabelInput {
-        let empty = NameLabelInput::empty();
-        let inherited = if let Some((_, ref name_el, _)) = self.name_override.as_ref() {
-            name_el
-        } else {
-            &empty
-        };
-        inherited.merge(own.as_ref().unwrap_or(&NameLabelInput::empty()))
-    }
-
-    fn inherited_names_delimiter(
-        &self,
-        ctx_delim: &Option<Delimiter>,
-        own: &Option<Delimiter>,
-    ) -> Atom {
-        let own_names_delim = own.as_ref().map(|x| &x.0);
-        let inherited_names_delim = self
-            .name_override
-            .as_ref()
-            .map(|x| &x.2)
-            .or(ctx_delim.as_ref().map(|x| &x.0));
-        own_names_delim
-            .or(inherited_names_delim)
-            .map(|d| d.clone())
-            .unwrap_or_else(|| Atom::from(""))
-    }
-
     pub fn inherited_names_options(
         &self,
         ctx_name: &Name,
-        own_name: &Option<Name>,
-        own_label: &Option<NameLabelInput>,
         ctx_delim: &Option<Delimiter>,
-        own_delim: &Option<Delimiter>,
-    ) -> (Name, NameLabelInput, Atom) {
-        (
-            self.inherited_name_el(ctx_name, own_name),
-            self.inherited_label_el(own_label),
-            self.inherited_names_delimiter(ctx_delim, own_delim),
-        )
+        own_names: &Names,
+    ) -> NamesInheritance {
+        match &self.name_override {
+            None => NamesInheritance::from_names(ctx_name, ctx_delim, own_names),
+            Some(stacked) => stacked.override_with(ctx_name, ctx_delim, own_names),
+        }
     }
 
-    pub fn replace_name_overrides(&mut self, name: Name, label: NameLabelInput, delim: Atom) -> Option<(Name, NameLabelInput, Atom)> {
-        let old = std::mem::replace(&mut self.name_override, Some((name, label, delim)));
+    pub fn replace_name_overrides(&mut self, inheritance: NamesInheritance) -> Option<NamesInheritance> {
+        let old = std::mem::replace(&mut self.name_override, Some(inheritance));
         old
     }
 
-    pub fn restore_name_overrides(&mut self, old: Option<(Name, NameLabelInput, Atom)>) {
+    pub fn restore_name_overrides(&mut self, old: Option<NamesInheritance>) {
         self.name_override = old;
     }
 }

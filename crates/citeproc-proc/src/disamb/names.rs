@@ -39,13 +39,13 @@ impl Disambiguation<Markup> for Names {
         let fmt = ctx.format;
         let style = ctx.style;
         let _locale = ctx.locale;
-        let (name_el, label_el, delimiter) = state.inherited_names_options(&ctx.name_el, &self.name, &self.label, &ctx.names_delimiter, &self.delimiter);
+        let names_inheritance = state.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
 
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
 
         let mut runner = OneNameVar {
-            name_el: &name_el,
+            name_el: &names_inheritance.name,
             bump_name_count: 0,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
@@ -55,11 +55,11 @@ impl Disambiguation<Markup> for Names {
         let mut seq = RefIrSeq {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
-            affixes: self.affixes.clone(),
-            delimiter: delimiter.clone(),
+            affixes: self.affixes.clone().unwrap_or_default(),
+            delimiter: names_inheritance.delimiter.clone().unwrap_or_else(|| Atom::from("")),
         };
 
-        let name_irs = crate::names::to_individual_name_irs(self, &name_el, &label_el, db, fmt, ctx.reference, false);
+        let name_irs = crate::names::to_individual_name_irs(self, &names_inheritance, db, fmt, ctx.reference, false);
         for nir in name_irs {
             use crate::names::ntb_len;
 
@@ -527,12 +527,12 @@ pub struct NameCounter {
     pub current: u16,
 }
 
+use crate::NamesInheritance;
+
 // TODO: make most fields private
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIR<O: OutputFormat> {
-    pub name_el: NameEl,
-    pub label_el: NameLabel,
-    pub et_al: Option<NameEtAl>,
+    pub names_inheritance: NamesInheritance,
     pub variable: NameVariable,
 
     pub name_counter: NameCounter,
@@ -547,17 +547,13 @@ where
     O: OutputFormat,
 {
     pub fn new(
-        name_el: NameEl,
-        label_el: NameLabel,
-        et_al: Option<NameEtAl>,
+        names_inheritance: NamesInheritance,
         variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         ir: Box<IR<O>>,
     ) -> Self {
         NameIR {
-            name_el,
-            label_el,
-            et_al,
+            names_inheritance,
             variable,
             disamb_names: ratchets,
             ir,

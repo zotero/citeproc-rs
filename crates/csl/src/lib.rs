@@ -876,7 +876,7 @@ impl FromNode for Names {
             et_al,
             label,
             substitute,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),

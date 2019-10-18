@@ -23,12 +23,12 @@ mod initials;
 use self::initials::initialize;
 
 use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
+use crate::NamesInheritance;
 
 /// One NameIR per variable
 pub fn to_individual_name_irs<'a, O: OutputFormat>(
     names: &'a Names,
-    name_el: &'a NameEl,
-    label_el: &'a NameLabelInput,
+    names_inheritance: &'a NamesInheritance,
     db: &'a impl IrDatabase,
     fmt: &'a O,
     refr: &'a Reference,
@@ -45,7 +45,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                     let mut data = DisambNameData {
                         ref_id: refr.id.clone(),
                         var,
-                        el: name_el.clone(),
+                        el: names_inheritance.name.clone(),
                         value: pn,
                         primary,
                     };
@@ -71,9 +71,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                 }
             });
             NameIR::new(
-                name_el.clone(),
-                label_el.concrete(),
-                names.et_al.clone(),
+                names_inheritance.clone(),
                 var,
                 ratchets.collect(),
                 Box::new(IR::Rendered(None)),
@@ -106,16 +104,14 @@ where
         O: OutputFormat,
     {
         let fmt = &ctx.format;
-        let (name_el, label_el, delimiter) = state.inherited_names_options(
+        let names_inheritance = state.inherited_names_options(
             &ctx.name_citation,
-            &self.name,
-            &self.label,
             &ctx.names_delimiter,
-            &self.delimiter,
+            self,
         );
 
         let name_irs: Vec<IR<O>> =
-            to_individual_name_irs(self, &name_el, &label_el, db, fmt, &ctx.reference, true)
+            to_individual_name_irs(self, &names_inheritance, db, fmt, &ctx.reference, true)
                 .map(|mut nir| {
                     if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
                         *nir.ir = ir;
@@ -141,7 +137,7 @@ where
                 // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
                 // substitution later on
                 let mut new_state = state.clone();
-                let old = new_state.replace_name_overrides(name_el, label_el, delimiter.clone());
+                let old = new_state.replace_name_overrides(names_inheritance);
 
                 for (n, el) in subst.0.iter().enumerate() {
                     let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
@@ -162,9 +158,9 @@ where
         (
             IR::Seq(IrSeq {
                 contents: name_irs,
-                formatting: self.formatting,
-                affixes: self.affixes.clone(),
-                delimiter,
+                formatting: names_inheritance.formatting,
+                affixes: names_inheritance.affixes.clone().unwrap_or_default(),
+                delimiter: names_inheritance.delimiter.unwrap_or_else(|| Atom::from("")),
             }),
             GroupVars::DidRender,
         )
@@ -184,14 +180,13 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let position = ctx.position.0;
 
         let NameIR {
-            ref name_el,
-            ref label_el,
+            ref names_inheritance,
             variable,
             ..
         } = *self;
 
         let mut runner = OneNameVar {
-            name_el,
+            name_el: &names_inheritance.name,
             bump_name_count: self.name_counter.bump,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
@@ -199,7 +194,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         };
 
         let ntbs =
-            runner.names_to_builds(&self.disamb_names, position, locale, &self.et_al);
+            runner.names_to_builds(&self.disamb_names, position, locale, &names_inheritance.et_al);
 
         // TODO: refactor into a method on NameCounter
         self.name_counter.current = ntb_len(&ntbs);
@@ -218,7 +213,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
                     runner.name_el = &pn.data.el;
                     let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
-                    runner.name_el = &name_el;
+                    runner.name_el = &names_inheritance.name;
                     ret
                 }
             })
@@ -233,7 +228,9 @@ impl<'c, O: OutputFormat> NameIR<O> {
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))
         } else {
-            seq.contents.push(render_label(ctx, label_el, variable));
+            if let Some(label) = names_inheritance.label.as_ref() {
+                seq.contents.push(render_label(ctx, &label.concrete(), variable));
+            }
             Some((IR::Seq(seq), GroupVars::DidRender))
         }
     }
