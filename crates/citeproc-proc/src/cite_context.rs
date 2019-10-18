@@ -11,7 +11,7 @@ use crate::choose::CondChecker;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Name as NameEl, Position, Style, VariableForm, Delimiter};
+use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
 use csl::variables::*;
 use std::sync::Arc;
 
@@ -35,9 +35,7 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub bib_number: Option<u32>,
 
     pub in_bibliography: bool,
-
     // TODO: keep track of which variables have so far been substituted
-    
 }
 
 // helper methods to access both cite and reference properties via Variables
@@ -45,16 +43,17 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
 impl<'c, O: OutputFormat> CiteContext<'c, O> {
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
-            (Variable::TitleShort, _) |
-            (Variable::Title, VariableForm::Short) => {
-                self.reference.ordinary.get(&Variable::TitleShort)
-                    .or(self.reference.ordinary.get(&Variable::Title))
-            }
-            (Variable::ContainerTitleShort, _) |
-            (Variable::ContainerTitle, VariableForm::Short) => {
-                self.reference.ordinary.get(&Variable::ContainerTitleShort)
-                    .or(self.reference.ordinary.get(&Variable::ContainerTitle))
-            }
+            (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
+                .reference
+                .ordinary
+                .get(&Variable::TitleShort)
+                .or(self.reference.ordinary.get(&Variable::Title)),
+            (Variable::ContainerTitleShort, _)
+            | (Variable::ContainerTitle, VariableForm::Short) => self
+                .reference
+                .ordinary
+                .get(&Variable::ContainerTitleShort)
+                .or(self.reference.ordinary.get(&Variable::ContainerTitle)),
             _ => self.reference.ordinary.get(&var),
         })
         .map(|s| s.as_str())
@@ -141,6 +140,8 @@ fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
     }
 }
 
+use csl::terms::LocatorType;
+
 impl<'c, O> CondChecker for CiteContext<'c, O>
 where
     O: OutputFormat,
@@ -153,6 +154,12 @@ where
     }
     fn csl_type(&self) -> &CslType {
         &self.reference.csl_type
+    }
+    fn locator_type(&self) -> Option<LocatorType> {
+        self.cite
+            .locators
+            .as_ref()
+            .and_then(|l| l.single().map(|l| l.type_of()))
     }
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
         self.reference.date.get(&dvar)

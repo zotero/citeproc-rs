@@ -33,9 +33,11 @@ pub enum EdgeData<O: OutputFormat = Markup> {
     YearSuffixExplicit,
 
     CitationNumber,
+    CitationNumberLabel,
 
     // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
     Frnn,
+    FrnnLabel,
 }
 
 use std::hash::{Hash, Hasher};

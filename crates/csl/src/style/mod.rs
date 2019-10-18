@@ -774,7 +774,11 @@ impl NameLabelInput {
             formatting: other.formatting.or(self.formatting),
             plural: other.plural.or(self.plural),
             strip_periods: other.strip_periods.or(self.strip_periods),
-            affixes: other.affixes.as_ref().cloned().or(self.affixes.as_ref().cloned()),
+            affixes: other
+                .affixes
+                .as_ref()
+                .cloned()
+                .or(self.affixes.as_ref().cloned()),
             text_case: other.text_case.or(self.text_case),
             after_name: other.after_name,
         }

@@ -111,9 +111,7 @@ pub fn cross_product(db: &impl IrDatabase, els: &[Element]) -> FreeCondSets {
 ///
 /// The cross product of any set X and mult_identity() is X.
 pub fn mult_identity() -> FreeCondSets {
-    let mut f = FreeCondSets::default();
-    f.0.insert(FreeCond::empty());
-    f
+    FreeCondSets::default()
 }
 
 /// Creates a Dfa that will match any cite that could have been made by a particular reference.
@@ -134,7 +132,8 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
 pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefContext) -> RefIR {
     let style = ctx.style;
     let mut state = IrState::new();
-    let (ir, _gv) = Disambiguation::<Markup>::ref_ir(style, db, ctx, &mut state, Formatting::default());
+    let (ir, _gv) =
+        Disambiguation::<Markup>::ref_ir(style, db, ctx, &mut state, Formatting::default());
     ir
 }
 
@@ -157,8 +156,13 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
             let name_el = db.name_citation();
             let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, name_el);
             let mut state = IrState::new();
-            let (mut ir, _gv) =
-                Disambiguation::<Markup>::ref_ir(&*style, db, &ctx, &mut state, Formatting::default());
+            let (mut ir, _gv) = Disambiguation::<Markup>::ref_ir(
+                &*style,
+                db,
+                &ctx,
+                &mut state,
+                Formatting::default(),
+            );
             ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
             (*fc, ir)
         })

@@ -1,6 +1,6 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use csl::style::{Affixes, Element, Style, Bibliography};
+use csl::style::{Affixes, Bibliography, Element, Style};
 use csl::variables::*;
 use csl::Atom;
 
@@ -122,23 +122,22 @@ where
                                     None
                                 } else {
                                     state.maybe_suppress_ordinary(v);
-                                    ctx
-                                        .get_ordinary(v, form)
+                                    ctx.get_ordinary(v, form)
                                         .map(|val| renderer.text_variable(var, val, f, af, quo, tc))
                                 }
-                            },
+                            }
                             StandardVariable::Number(v) => {
                                 if state.is_suppressed_num(v) {
                                     None
                                 } else {
                                     state.maybe_suppress_num(v);
-                                    ctx
-                                        .get_number(v)
-                                        .map(|val| renderer.text_variable(var, val.verbatim(), f, af, quo, tc))
+                                    ctx.get_number(v).map(|val| {
+                                        renderer.text_variable(var, val.verbatim(), f, af, quo, tc)
+                                    })
                                 }
-                            },
+                            }
                         };
-                        let content = content.map(CiteEdgeData::from_standard_variable(var));
+                        let content = content.map(CiteEdgeData::from_standard_variable(var, false));
                         let gv = GroupVars::rendered_if(content.is_some());
                         (IR::Rendered(content), gv)
                     }
@@ -155,10 +154,9 @@ where
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
-                    ctx
-                        .get_number(var)
+                    ctx.get_number(var)
                         .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af, tc))
-                        .map(CiteEdgeData::from_number_variable(var))
+                        .map(CiteEdgeData::from_number_variable(var, true))
                 };
                 (IR::Rendered(content), GroupVars::new())
             }
@@ -168,8 +166,7 @@ where
                     None
                 } else {
                     state.maybe_suppress_num(var);
-                    ctx
-                        .get_number(var)
+                    ctx.get_number(var)
                         .map(|val| renderer.number(var, form, &val, f, af, tc))
                         .map(CiteEdgeData::Output)
                 };

@@ -45,7 +45,7 @@ impl<O: OutputFormat> GenericContext<'_, O> {
     }
     pub fn should_add_year_suffix_hook(&self) -> bool {
         match self {
-            GenericContext::Cit(ctx) => true,
+            GenericContext::Cit(ctx) => ctx.style.citation.disambiguate_add_year_suffix,
             GenericContext::Ref(ctx) => ctx.year_suffix,
         }
     }
@@ -67,12 +67,12 @@ impl<O: OutputFormat> GenericContext<'_, O> {
         }
         .map(|vec| vec.as_slice())
     }
-    // fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
-    //     match self {
-    //         Cit(ctx) => ctx.get_number(var),
-    //         Ref(ctx) => ctx.reference.number.get(var),
-    //     }
-    // }
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+        match self {
+            Cit(ctx) => ctx.get_number(var),
+            Ref(ctx) => ctx.get_number(var),
+        }
+    }
 }
 
 use GenericContext::*;
@@ -151,7 +151,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
                 StandardVariable::Number(v) => v.should_replace_hyphens(),
             },
-            text_case
+            text_case,
         };
         let b = fmt.ingest(value, options);
         let txt = fmt.with_format(b, f);
@@ -180,10 +180,13 @@ impl<O: OutputFormat> Renderer<'_, O> {
         }
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(quo);
-        let b = fmt.ingest(value, IngestOptions {
-            text_case,
-            ..Default::default()
-        });
+        let b = fmt.ingest(
+            value,
+            IngestOptions {
+                text_case,
+                ..Default::default()
+            },
+        );
         let txt = fmt.with_format(b, f);
         Some(fmt.affixed_quoted(txt, af, quotes.as_ref()))
     }

@@ -92,9 +92,7 @@ impl TestCase {
                     let actual = executor.get_results();
                     Some(actual.output_independent())
                 }
-                Mode::Bibliography => {
-                    Some(get_bib_string(&proc))
-                }
+                Mode::Bibliography => Some(get_bib_string(&proc)),
             }
         // turns out it's easier to just produce the string the same way
         } else {
@@ -140,9 +138,7 @@ impl TestCase {
                             .replace("&amp;", "&#38;"),
                     )
                 }
-                Mode::Bibliography => {
-                    Some(get_bib_string(&proc))
-                }
+                Mode::Bibliography => Some(get_bib_string(&proc)),
             }
         }
     }

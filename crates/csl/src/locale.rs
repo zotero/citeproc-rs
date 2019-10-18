@@ -122,7 +122,7 @@ impl FromNode for Locale {
                         simple_terms.insert(sel, con);
                     }
                     TermEl::Gendered(sel, con) => {
-                        gendered_terms.insert(sel, con);
+                        gendered_terms.insert(sel.normalise(), con);
                     }
                     TermEl::Ordinal(sel, con) => {
                         ordinal_terms.insert(sel, con);
@@ -250,6 +250,7 @@ impl Locale {
                 .next()
                 .map(|r| r.get(plural)),
             Gendered(ref ts) => ts
+                .normalise()
                 .fallback()
                 .filter_map(|sel| self.gendered_terms.get(&sel))
                 .next()

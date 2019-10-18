@@ -11,10 +11,10 @@ use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSet
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{ClusterId, Cite, Name};
+use citeproc_io::{Cite, ClusterId, Name};
+use csl::style::Position;
 use csl::variables::NameVariable;
 use csl::Atom;
-use csl::style::Position;
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -362,22 +362,6 @@ fn is_unambiguous(
         if acc {
             n += 1;
         }
-        if k == own_id && !acc && log_enabled!(Warn) {
-            warn!(
-                "{:?} Own reference {} did not match during {:?}:\n{}",
-                cite_id,
-                k,
-                pass,
-                dfa.debug_graph(db)
-            );
-            warn!("{:#?}", &edges);
-        }
-        if k != own_id && acc && log_enabled!(Info) {
-            info!(
-                "cite {:?} matched other reference {} during {:?}",
-                cite_id, k, pass
-            );
-        }
         if n > 1 {
             break;
         }
@@ -386,7 +370,12 @@ fn is_unambiguous(
 }
 
 /// Returns the set of Reference IDs that could have produced a cite's IR
-fn refs_accepting_cite(db: &impl IrDatabase, ir: &IR<Markup>) -> Vec<Atom> {
+fn refs_accepting_cite<O: OutputFormat>(
+    db: &impl IrDatabase,
+    ir: &IR<Markup>,
+    ctx: &CiteContext<'_, O>,
+) -> Vec<Atom> {
+    use log::Level::{Info, Warn};
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut v = Vec::with_capacity(1);
     for k in db.cited_keys().iter() {
@@ -394,6 +383,22 @@ fn refs_accepting_cite(db: &impl IrDatabase, ir: &IR<Markup>) -> Vec<Atom> {
         let acc = dfa.accepts_data(db, &edges);
         if acc {
             v.push(k.clone());
+        }
+        if log_enabled!(Warn) && ctx.cite_id.is_some() && k == &ctx.reference.id && !acc {
+            warn!(
+                "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
+                ctx.cite_id,
+                k,
+                ctx.disamb_pass,
+                dfa.debug_graph(db),
+                edges
+            );
+        }
+        if log_enabled!(Info) && ctx.cite_id.is_some() && k != &ctx.reference.id && acc {
+            info!(
+                "{:?}: matched other reference {} during pass {:?}",
+                ctx.cite_id, k, ctx.disamb_pass
+            );
         }
     }
     v
@@ -483,7 +488,7 @@ fn disambiguate_add_names(
     let style = db.style();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
-    let initial_refs = refs_accepting_cite(db, ir);
+    let initial_refs = refs_accepting_cite(db, ir, ctx);
     let mut best = initial_refs.len() as u16;
     let name_refs = list_all_name_blocks(ir);
 
@@ -625,7 +630,7 @@ fn disambiguate_add_givennames(
     also_add: bool,
 ) -> Option<bool> {
     let fmt = db.get_formatter();
-    let refs = refs_accepting_cite(db, ir);
+    let refs = refs_accepting_cite(db, ir, ctx);
     let name_refs = list_all_name_blocks(ir);
     for nir_arc in name_refs {
         let mut nir = nir_arc.lock();
@@ -708,7 +713,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut state = IrState::new();
     let ir = style.intermediate(db, &mut state, &ctx).0;
     let _fmt = db.get_formatter();
-    let matching = refs_accepting_cite(db, &ir);
+    let matching = refs_accepting_cite(db, &ir, &ctx);
     Arc::new(IrGen::new(ir, matching, state))
 }
 
@@ -729,7 +734,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let (mut ir, mut state) = ir0.fresh_copy();
 
     disambiguate_add_names(db, &mut ir, &ctx, false);
-    let matching = refs_accepting_cite(db, &ir);
+    let matching = refs_accepting_cite(db, &ir, &ctx);
     Arc::new(IrGen::new(ir, matching, state))
 }
 
@@ -751,7 +756,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     let also_add_names = style.citation.disambiguate_add_names;
     disambiguate_add_givennames(db, &mut ir, &ctx, also_add_names);
-    let matching = refs_accepting_cite(db, &ir);
+    let matching = refs_accepting_cite(db, &ir, &ctx);
     Arc::new(IrGen::new(ir, matching, state))
 }
 
@@ -775,7 +780,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
     disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
-    let matching = refs_accepting_cite(db, &ir);
+    let matching = refs_accepting_cite(db, &ir, &ctx);
     Arc::new(IrGen::new(ir, matching, state))
 }
 
@@ -851,7 +856,10 @@ fn built_cluster(
 fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let sorted_refs_arc = db.sorted_refs();
     let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-    let bib_number = citation_numbers_by_id.get(&ref_id).expect("sorted_refs should contain a bib_item key").clone();
+    let bib_number = citation_numbers_by_id
+        .get(&ref_id)
+        .expect("sorted_refs should contain a bib_item key")
+        .clone();
     let style = db.style();
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
@@ -892,7 +900,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
         }
 
-        let matching = refs_accepting_cite(db, &ir);
+        let matching = refs_accepting_cite(db, &ir, &ctx);
         Some(Arc::new(IrGen::new(ir, matching, state)))
     } else {
         None
@@ -906,15 +914,10 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         let layout = &style.bibliography.as_ref().unwrap().layout;
         let ir = &gen0.ir;
         let flat = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
-        let build = fmt.with_format(
-            fmt.affixed(flat, &layout.affixes),
-            layout.formatting,
-        );
+        let build = fmt.with_format(fmt.affixed(flat, &layout.affixes), layout.formatting);
         Arc::new(fmt.output(build))
     } else {
         // Whatever
         Arc::new(fmt.output(fmt.plain("")))
     }
 }
-
-

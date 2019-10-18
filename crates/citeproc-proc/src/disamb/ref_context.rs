@@ -3,10 +3,10 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Position, Style, VariableForm, Delimiter, Name as NameEl};
-use std::sync::Arc;
+use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
 use csl::terms::LocatorType;
 use csl::variables::*;
+use std::sync::Arc;
 
 use crate::disamb::FreeCond;
 
@@ -90,22 +90,31 @@ where
     }
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
-            (Variable::TitleShort, _) |
-            (Variable::Title, VariableForm::Short) => {
-                self.reference.ordinary.get(&Variable::TitleShort)
-                    .or(self.reference.ordinary.get(&Variable::Title))
-            }
-            (Variable::ContainerTitleShort, _) |
-            (Variable::ContainerTitle, VariableForm::Short) => {
-                self.reference.ordinary.get(&Variable::ContainerTitleShort)
-                    .or(self.reference.ordinary.get(&Variable::ContainerTitle))
-            }
+            (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
+                .reference
+                .ordinary
+                .get(&Variable::TitleShort)
+                .or(self.reference.ordinary.get(&Variable::Title)),
+            (Variable::ContainerTitleShort, _)
+            | (Variable::ContainerTitle, VariableForm::Short) => self
+                .reference
+                .ordinary
+                .get(&Variable::ContainerTitleShort)
+                .or(self.reference.ordinary.get(&Variable::ContainerTitle)),
             _ => self.reference.ordinary.get(&var),
         })
         .map(|s| s.as_str())
     }
-    pub fn get_number(&self, var: NumberVariable) -> Option<&NumericValue> {
-        self.reference.number.get(&var)
+    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+        match var {
+            NumberVariable::PageFirst => self
+                .reference
+                .number
+                .get(&NumberVariable::Page)
+                .and_then(|pp| pp.page_first())
+                .clone(),
+            _ => self.reference.number.get(&var).cloned(),
+        }
     }
     pub fn has_variable(&self, var: AnyVariable) -> bool {
         match var {
@@ -122,7 +131,7 @@ where
                     // TODO: make Hereinafter a FreeCond
                     Variable::Hereinafter => unimplemented!("Hereinafter as a FreeCond"),
                     Variable::YearSuffix => self.year_suffix,
-                    _ => self.reference.ordinary.contains_key(&v),
+                    _ => self.get_ordinary(v, VariableForm::Long).is_some(),
                 }
             }
             AnyVariable::Date(v) => self.reference.date.contains_key(&v),
@@ -152,6 +161,9 @@ where
     }
     fn csl_type(&self) -> &CslType {
         &self.reference.csl_type
+    }
+    fn locator_type(&self) -> Option<LocatorType> {
+        self.locator_type
     }
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
         self.reference.date.get(&dvar)

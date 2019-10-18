@@ -860,14 +860,18 @@ impl FromNode for MacroMap {
     }
 }
 
-fn write_slot_once<T: FromNode>(el: &Node, info: &ParseInfo, slot: &mut Option<T>) -> FromNodeResult<()> {
+fn write_slot_once<T: FromNode>(
+    el: &Node,
+    info: &ParseInfo,
+    slot: &mut Option<T>,
+) -> FromNodeResult<()> {
     if slot.is_some() {
         return Err(InvalidCsl::new(
-                &el,
-                &format!(
-                    "There can only be one <{}> in a <names> block.",
-                    el.tag_name().name(),
-                ),
+            &el,
+            &format!(
+                "There can only be one <{}> in a <names> block.",
+                el.tag_name().name(),
+            ),
         ))?;
     }
     let t = T::from_node(el, info)?;

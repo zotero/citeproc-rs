@@ -6,8 +6,8 @@ use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
 use csl::style::{
-    Cond, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Position, Style, NameLabel, NameLabelInput,
-    NameEtAl,
+    Cond, GivenNameDisambiguationRule, Name as NameEl, NameEtAl, NameForm, NameLabel,
+    NameLabelInput, Names, Position, Style,
 };
 use csl::variables::NameVariable;
 use csl::Atom;
@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        // TODO: drill down into the substitute logic here
         let mut base = if let Some(subst) = &self.substitute {
+            // TODO: drill down into the substitute logic here
             cross_product(db, &subst.0)
         } else {
             mult_identity()
@@ -39,7 +39,8 @@ impl Disambiguation<Markup> for Names {
         let fmt = ctx.format;
         let style = ctx.style;
         let _locale = ctx.locale;
-        let names_inheritance = state.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
+        let names_inheritance =
+            state.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
 
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
@@ -56,10 +57,21 @@ impl Disambiguation<Markup> for Names {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
             affixes: self.affixes.clone().unwrap_or_default(),
-            delimiter: names_inheritance.delimiter.clone().unwrap_or_else(|| Atom::from("")),
+            delimiter: names_inheritance
+                .delimiter
+                .clone()
+                .unwrap_or_else(|| Atom::from("")),
         };
 
-        let name_irs = crate::names::to_individual_name_irs(self, &names_inheritance, db, state, fmt, ctx.reference, false);
+        let name_irs = crate::names::to_individual_name_irs(
+            self,
+            &names_inheritance,
+            db,
+            state,
+            fmt,
+            ctx.reference,
+            false,
+        );
         for nir in name_irs {
             use crate::names::ntb_len;
 

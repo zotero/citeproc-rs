@@ -357,10 +357,11 @@ impl Processor {
     }
 
     pub fn get_bibliography(&self) -> Vec<MarkupOutput> {
-        self.sorted_refs().0.iter().map(|k| {
-            (*self.bib_item(k.clone())).clone()
-        })
-        .collect()
+        self.sorted_refs()
+            .0
+            .iter()
+            .map(|k| (*self.bib_item(k.clone())).clone())
+            .collect()
     }
 
     pub fn get_reference(&self, ref_id: Atom) -> Option<Arc<Reference>> {

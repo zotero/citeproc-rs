@@ -173,15 +173,20 @@ pub enum CiteEdgeData<O: OutputFormat = Markup> {
     /// Used for representing a YearSuffix that has actually been rendered during disambiguation.
     YearSuffix(O::Build),
     CitationNumber(O::Build),
+    CitationNumberLabel(O::Build),
     Frnn(O::Build),
+    FrnnLabel(O::Build),
 }
 
 impl<O: OutputFormat> CiteEdgeData<O> {
-    pub fn from_number_variable(var: NumberVariable) -> fn(O::Build) -> Self {
-        match var {
-            NumberVariable::Locator => CiteEdgeData::Locator,
-            NumberVariable::FirstReferenceNoteNumber => CiteEdgeData::Frnn,
-            NumberVariable::CitationNumber => CiteEdgeData::CitationNumber,
+    pub fn from_number_variable(var: NumberVariable, label: bool) -> fn(O::Build) -> Self {
+        match (var, label) {
+            (NumberVariable::Locator, false) => CiteEdgeData::Locator,
+            (NumberVariable::Locator, true) => CiteEdgeData::LocatorLabel,
+            (NumberVariable::FirstReferenceNoteNumber, false) => CiteEdgeData::Frnn,
+            (NumberVariable::FirstReferenceNoteNumber, true) => CiteEdgeData::FrnnLabel,
+            (NumberVariable::CitationNumber, false) => CiteEdgeData::CitationNumber,
+            (NumberVariable::CitationNumber, true) => CiteEdgeData::CitationNumberLabel,
             _ => CiteEdgeData::Output,
         }
     }
@@ -191,9 +196,9 @@ impl<O: OutputFormat> CiteEdgeData<O> {
             _ => CiteEdgeData::Output,
         }
     }
-    pub fn from_standard_variable(var: StandardVariable) -> fn(O::Build) -> Self {
+    pub fn from_standard_variable(var: StandardVariable, label: bool) -> fn(O::Build) -> Self {
         match var {
-            StandardVariable::Number(nv) => CiteEdgeData::from_number_variable(nv),
+            StandardVariable::Number(nv) => CiteEdgeData::from_number_variable(nv, label),
             StandardVariable::Ordinary(v) => CiteEdgeData::from_ordinary_variable(v),
         }
     }
@@ -231,7 +236,10 @@ pub enum IR<O: OutputFormat = Markup> {
     Seq(IrSeq<O>),
 }
 
-impl<O> IR<O> where O : OutputFormat {
+impl<O> IR<O>
+where
+    O: OutputFormat,
+{
     pub fn is_empty(&self) -> bool {
         match self {
             IR::Rendered(None) | IR::YearSuffix(_, None) => true,
@@ -405,9 +413,11 @@ impl CiteEdgeData<Markup> {
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
+            CiteEdgeData::FrnnLabel(_) => EdgeData::FrnnLabel,
             CiteEdgeData::Locator(_) => EdgeData::Locator,
             CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
+            CiteEdgeData::CitationNumberLabel(_) => EdgeData::CitationNumberLabel,
         }
     }
     fn inner(&self) -> <Markup as OutputFormat>::Build {
@@ -415,9 +425,11 @@ impl CiteEdgeData<Markup> {
             CiteEdgeData::Output(x)
             | CiteEdgeData::YearSuffix(x)
             | CiteEdgeData::Frnn(x)
+            | CiteEdgeData::FrnnLabel(x)
             | CiteEdgeData::Locator(x)
             | CiteEdgeData::LocatorLabel(x)
-            | CiteEdgeData::CitationNumber(x) => x.clone(),
+            | CiteEdgeData::CitationNumber(x)
+            | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
         }
     }
 }

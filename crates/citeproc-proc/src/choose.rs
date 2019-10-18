@@ -92,41 +92,66 @@ impl Disambiguation<Markup> for Choose {
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx).0 {
-            return ref_sequence(db, ctx, state, els, "".into(), Some(stack), Affixes::default());
+            return ref_sequence(
+                db,
+                ctx,
+                state,
+                els,
+                "".into(),
+                Some(stack),
+                Affixes::default(),
+            );
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx).0 {
-                return ref_sequence(db, ctx, state, els, "".into(), Some(stack), Affixes::default());
+                return ref_sequence(
+                    db,
+                    ctx,
+                    state,
+                    els,
+                    "".into(),
+                    Some(stack),
+                    Affixes::default(),
+                );
             }
         }
-        return ref_sequence(db, ctx, state, &last.0, "".into(), Some(stack), Affixes::default());
+        return ref_sequence(
+            db,
+            ctx,
+            state,
+            &last.0,
+            "".into(),
+            Some(stack),
+            Affixes::default(),
+        );
     }
 
     fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
         use std::iter;
         let Choose(ifthen, elseifs, else_) = self;
         let IfThen(if_conditions, if_els) = ifthen;
-        assert!(if_conditions.0 == Match::All);
-        assert!(if_conditions.1.len() == 1);
-        let if_els = cross_product(db, if_els);
-        let ifthen = (&if_conditions.1[0], if_els);
+        let Conditions(ifc_match, ifc_cond_set) = if_conditions;
+        assert!(*ifc_match == Match::All);
+        assert!(ifc_cond_set.len() == 1);
+        let ifthen = (&ifc_cond_set[0], cross_product(db, if_els));
         let first: Vec<_> = iter::once(ifthen)
             .chain(elseifs.iter().map(|fi: &IfThen| {
                 let IfThen(if_conditions, if_els) = fi;
-                assert!(if_conditions.0 == Match::All);
-                assert!(if_conditions.1.len() == 1);
-                let if_els = cross_product(db, if_els);
-                (&if_conditions.1[0], if_els)
+                let Conditions(ifc_match, ifc_cond_set) = if_conditions;
+                assert!(*ifc_match == Match::All);
+                assert!(ifc_cond_set.len() == 1);
+                (&ifc_cond_set[0], cross_product(db, if_els))
             }))
             .collect();
-        FreeCondSets::all_branches(
+        let res = FreeCondSets::all_branches(
             first.into_iter(),
             if else_.0.len() > 0 {
                 Some(cross_product(db, &else_.0))
             } else {
                 None
             },
-        )
+        );
+        res
     }
 }
 
@@ -217,6 +242,7 @@ where
             Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
             Cond::Type(typ) => checker.csl_type() == typ,
             Cond::Position(pos) => checker.position().matches(*pos),
+            Cond::Locator(typ) => checker.locator_type() == Some(*typ),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
                 if !style.features.condition_date_parts =>
@@ -234,11 +260,14 @@ where
     run_matcher(&mut iter_all, &cond_set.match_type)
 }
 
+use csl::terms::LocatorType;
+
 pub trait CondChecker {
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
     fn is_disambiguate(&self) -> bool;
     fn csl_type(&self) -> &CslType;
+    fn locator_type(&self) -> Option<LocatorType>;
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;
     fn position(&self) -> Position;
     fn style(&self) -> &Style;

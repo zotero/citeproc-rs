@@ -9,7 +9,7 @@ use crate::version::Features;
 use std::str::FromStr;
 
 use super::attr::GetAttribute;
-use super::variables::{NumberVariable, NameVariable};
+use super::variables::{NameVariable, NumberVariable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TextTermSelector {
@@ -106,6 +106,15 @@ impl GenderedTermSelector {
                 Some(ref l) => Some(GenderedTermSelector::Locator(l.clone(), form.clone())),
             },
             v => Some(GenderedTermSelector::Number(v, form.clone())),
+        }
+    }
+    pub fn normalise(self) -> Self {
+        use GenderedTermSelector::*;
+        match self {
+            Number(NumberVariable::Page, x) => Locator(LocatorType::Page, x),
+            Number(NumberVariable::Issue, x) => Locator(LocatorType::Issue, x),
+            Number(NumberVariable::Volume, x) => Locator(LocatorType::Volume, x),
+            g => g,
         }
     }
     pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
@@ -433,7 +442,10 @@ impl RoleTerm {
             NameVariable::ReviewedAuthor => RoleTerm::ReviewedAuthor,
             NameVariable::Translator => RoleTerm::Translator,
             // CSL-M only
-            NameVariable::Authority => {warn!("unimplemented: CSL-M authority role term"); return None},
+            NameVariable::Authority => {
+                warn!("unimplemented: CSL-M authority role term");
+                return None;
+            }
             // CSL-M only
             NameVariable::Dummy => return None,
         })
