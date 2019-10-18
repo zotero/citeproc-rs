@@ -572,30 +572,34 @@ fn get_any_multiplied(conds: &FnvHashSet<Cond>, inner: &FreeCondSets) -> FnvHash
         .filter_map(cond_to_frees)
         .map(|(a, _neg_a)| a)
         .collect();
-    let mut any = fnv_set_with_cap(inner.0.len());
-    for i in 1..=vec.len() {
-        vec.iter()
-            .cloned()
-            .combinations(i)
-            .map(|fc_vec| fc_vec.into_iter().collect::<FreeCond>())
-            .filter_map(|mut fc| {
-                for (a, neg_a) in conds.iter().filter_map(cond_to_frees) {
-                    if !fc.contains(a) {
-                        fc = (fc | neg_a).imply();
+    if vec.is_empty() {
+        inner.0.clone()
+    } else {
+        let mut any = fnv_set_with_cap(inner.0.len());
+        for i in 1..=vec.len() {
+            vec.iter()
+                .cloned()
+                .combinations(i)
+                .map(|fc_vec| fc_vec.into_iter().collect::<FreeCond>())
+                .filter_map(|mut fc| {
+                    for (a, neg_a) in conds.iter().filter_map(cond_to_frees) {
+                        if !fc.contains(a) {
+                            fc = (fc | neg_a).imply();
+                        }
                     }
-                }
-                if !fc.is_incompatible() {
-                    Some(inner.scalar_multiply(fc))
-                } else {
-                    None
-                }
-            })
-            .fold(&mut any, |acc, mut x| {
-                acc.extend(x.0.drain());
-                acc
-            });
+                    if !fc.is_incompatible() {
+                        Some(inner.scalar_multiply(fc))
+                    } else {
+                        None
+                    }
+                })
+                .fold(&mut any, |acc, mut x| {
+                    acc.extend(x.0.drain());
+                    acc
+                });
+        }
+        any
     }
-    any
 }
 
 fn get_nand_outside(conds: &FnvHashSet<Cond>, outside: &mut FnvHashSet<FreeCond>) {
