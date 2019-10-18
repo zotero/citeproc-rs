@@ -14,6 +14,7 @@ use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{ClusterId, Cite, Name};
 use csl::variables::NameVariable;
 use csl::Atom;
+use csl::style::Position;
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -39,13 +40,13 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     fn ir_gen0(&self, key: CiteId) -> Arc<IrGen>;
     fn ir_gen1_add_names(&self, key: CiteId) -> Arc<IrGen>;
     fn ir_gen2_add_given_name(&self, key: CiteId) -> Arc<IrGen>;
-    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> Arc<IrGen>;
-    fn ir_gen4_conditionals(&self, key: CiteId) -> Arc<IrGen>;
-
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
     fn year_suffix_for(&self, ref_id: Atom) -> Option<u32>;
-
+    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen4_conditionals(&self, key: CiteId) -> Arc<IrGen>;
     fn built_cluster(&self, key: ClusterId) -> Arc<MarkupOutput>;
+
+    fn bib_item_gen0(&self, ref_id: Atom) -> Option<Arc<IrGen>>;
     fn bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput>;
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
@@ -847,23 +848,19 @@ fn built_cluster(
 // TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then
 // mutate.
 
-fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
-    use csl::style::Position;
-    let fmt = db.get_formatter();
+fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let sorted_refs_arc = db.sorted_refs();
     let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
     let bib_number = citation_numbers_by_id.get(&ref_id).expect("sorted_refs should contain a bib_item key").clone();
     let style = db.style();
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
-    let refr = match db.reference(ref_id.clone()) {
-        None => return Arc::new(fmt.output(fmt.plain("missing reference in bibliography"))),
-        Some(r) => r,
-    };
+    let refr = db.reference(ref_id.clone())?;
+
     if let Some(bib) = &style.bibliography {
         let ni = style.names_delimiter.clone();
         let bib_ni = bib.names_delimiter.clone();
-        let ctx = CiteContext {
+        let mut ctx = CiteContext {
             reference: &refr,
             format: db.get_formatter(),
             cite_id: None,
@@ -880,7 +877,34 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         };
         let layout = &bib.layout;
         let mut state = IrState::new();
-        let ir = bib.intermediate(db, &mut state, &ctx).0;
+        let mut ir = bib.intermediate(db, &mut state, &ctx).0;
+
+        // Immediately apply year suffixes.
+        // Early-gen cites determine whether these exist -- but in the bibliography, we are already
+        // aware of this, so they just need to be mirrored.
+        //
+        // Can't apply them the first time round, because IR may contain many suffix hooks, and we
+        // need to only supply the first appearing explicit one, or the first appearing implicit one.
+        // TODO: comply with the spec where "hook in cite == explicit => no implicit in bib" and "vice
+        // versa"
+        if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
+            ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
+            disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
+        }
+
+        let matching = refs_accepting_cite(db, &ir);
+        Some(Arc::new(IrGen::new(ir, matching, state)))
+    } else {
+        None
+    }
+}
+
+fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
+    let fmt = db.get_formatter();
+    let style = db.style();
+    if let Some(gen0) = db.bib_item_gen0(ref_id) {
+        let layout = &style.bibliography.as_ref().unwrap().layout;
+        let ir = &gen0.ir;
         let flat = ir.flatten(&fmt).unwrap_or(fmt.plain(""));
         let build = fmt.with_format(
             fmt.affixed(flat, &layout.affixes),
@@ -892,3 +916,5 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         Arc::new(fmt.output(fmt.plain("")))
     }
 }
+
+
