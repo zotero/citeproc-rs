@@ -106,7 +106,7 @@ impl NamesInheritance {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
             // So if you supply <name/> at all, you start from context.
-            name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
+            name: ctx_name.merge(names.name.as_ref().unwrap_or(&self.name)),
             // The rest will just replace whatever's in the inheritance
             et_al: names.et_al.as_ref().or(self.et_al.as_ref()).cloned(),
             label: names.label.as_ref().or(self.label.as_ref()).cloned(),
