@@ -28,10 +28,17 @@ mod names;
 mod number;
 mod renderer;
 mod unicode;
+mod walker;
 
 pub(crate) mod prelude {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub enum CiteOrBib {
+        Citation,
+        Bibliography,
+    }
     pub use crate::db::{HasFormatter, IrDatabase};
     pub use crate::renderer::GenericContext;
+    pub use crate::walker::{StyleWalker, WalkerFoldType};
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;
@@ -157,6 +164,7 @@ pub struct IrState {
     name_override: Option<NamesInheritance>,
     suppressed: FnvHashSet<AnyVariable>,
     in_substitute: bool,
+    disamb_count: u32,
 }
 
 impl IrState {
@@ -228,6 +236,10 @@ impl IrState {
 
     pub fn is_suppressed_date(&self, var: DateVariable) -> bool {
         self.suppressed.contains(&AnyVariable::Date(var))
+    }
+
+    pub fn inc_disamb_count(&mut self) {
+        self.disamb_count += 1;
     }
 }
 

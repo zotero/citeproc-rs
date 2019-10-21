@@ -153,8 +153,9 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .iter()
         .map(|fc| {
             let fmt = db.get_formatter();
-            let name_el = db.name_citation();
-            let ctx = RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, name_el);
+            let name_info = db.name_info_citation();
+            let ctx =
+                RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, CiteOrBib::Citation);
             let mut state = IrState::new();
             let (mut ir, _gv) = Disambiguation::<Markup>::ref_ir(
                 &*style,

@@ -347,66 +347,73 @@ impl FromNode for TextTermSelector {
     }
 }
 
-fn text_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    let macro_ = node.attribute("macro");
-    let value = node.attribute("value");
-    let variable = node.attribute("variable");
-    let term = node.attribute("term");
-    let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
-
-    let source = match (macro_, value, variable, term) {
-        (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
-        (None, Some(val), None, None) => TextSource::Value(val.into()),
-        (None, None, Some(___), None) => TextSource::Variable(
-            attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
-            attribute_optional(node, "form", info)?,
-        ),
-        (None, None, None, Some(___)) => TextSource::Term(
-            TextTermSelector::from_node(node, info)?,
-            attribute_bool(node, "plural", false)?,
-        ),
-        _ => return Err(InvalidCsl::new(node, invalid).into()),
-    };
-
-    let formatting = Option::from_node(node, info)?;
-    let affixes = Affixes::from_node(node, info)?;
-    let quotes = attribute_bool(node, "quotes", false)?;
-    let strip_periods = attribute_bool(node, "strip-periods", false)?;
-    let text_case = TextCase::from_node(node, info)?;
-    let display = attribute_option(node, "display", info)?;
-
-    Ok(Element::Text(
-        source,
-        formatting,
-        affixes,
-        quotes,
-        strip_periods,
-        text_case,
-        display,
-    ))
+impl FromNode for LabelElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(LabelElement {
+                variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
+                form: attribute_optional(node, "form", info)?,
+                formatting: Option::from_node(node, info)?,
+                affixes: Affixes::from_node(node, info)?,
+                strip_periods: attribute_bool(node, "strip-periods", false)?,
+                text_case: TextCase::from_node(node, info)?,
+                plural: attribute_optional(node, "plural", info)?,
+        })
+    }
 }
 
-fn label_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    Ok(Element::Label(
-        attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
-        attribute_optional(node, "form", info)?,
-        Option::from_node(node, info)?,
-        Affixes::from_node(node, info)?,
-        attribute_bool(node, "strip-periods", false)?,
-        TextCase::from_node(node, info)?,
-        attribute_optional(node, "plural", info)?,
-    ))
+impl FromNode for TextElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let macro_ = node.attribute("macro");
+        let value = node.attribute("value");
+        let variable = node.attribute("variable");
+        let term = node.attribute("term");
+        let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
+
+        let source = match (macro_, value, variable, term) {
+            (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
+            (None, Some(val), None, None) => TextSource::Value(val.into()),
+            (None, None, Some(___), None) => TextSource::Variable(
+                attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
+                attribute_optional(node, "form", info)?,
+            ),
+            (None, None, None, Some(___)) => TextSource::Term(
+                TextTermSelector::from_node(node, info)?,
+                attribute_bool(node, "plural", false)?,
+            ),
+            _ => return Err(InvalidCsl::new(node, invalid).into()),
+        };
+
+        let formatting = Option::from_node(node, info)?;
+        let affixes = Affixes::from_node(node, info)?;
+        let quotes = attribute_bool(node, "quotes", false)?;
+        let strip_periods = attribute_bool(node, "strip-periods", false)?;
+        let text_case = TextCase::from_node(node, info)?;
+        let display = attribute_option(node, "display", info)?;
+
+        Ok(TextElement {
+            source,
+            formatting,
+            affixes,
+            quotes,
+            strip_periods,
+            text_case,
+            display,
+        })
+    }
+
 }
 
-fn number_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    Ok(Element::Number(
-        attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
-        attribute_optional(node, "form", info)?,
-        Option::from_node(node, info)?,
-        Affixes::from_node(node, info)?,
-        attribute_optional(node, "plural", info)?,
-        attribute_option(node, "display", info)?,
-    ))
+impl FromNode for NumberElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(NumberElement {
+            variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
+            form: attribute_optional(node, "form", info)?,
+            formatting: Option::from_node(node, info)?,
+            affixes: Affixes::from_node(node, info)?,
+            text_case: attribute_optional(node, "plural", info)?,
+            display: attribute_option(node, "display", info)?,
+        })
+    }
 }
 
 impl FromNode for Group {
@@ -801,10 +808,10 @@ impl FromNode for BodyDate {
 impl FromNode for Element {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         match node.tag_name().name() {
-            "text" => Ok(text_el(node, info)?),
-            "label" => Ok(label_el(node, info)?),
+            "text" => Ok(Element::Text(TextElement::from_node(node, info)?)),
+            "label" => Ok(Element::Label(LabelElement::from_node(node, info)?)),
+            "number" => Ok(Element::Number(NumberElement::from_node(node, info)?)),
             "group" => Ok(Element::Group(Group::from_node(node, info)?)),
-            "number" => Ok(number_el(node, info)?),
             "names" => Ok(Element::Names(Arc::new(Names::from_node(node, info)?))),
             "choose" => Ok(choose_el(node, info)?),
             "date" => Ok(Element::Date(Arc::new(BodyDate::from_node(node, info)?))),

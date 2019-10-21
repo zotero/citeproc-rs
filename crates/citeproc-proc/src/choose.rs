@@ -171,7 +171,8 @@ where
     O: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, disambiguate) = eval_conditions(conditions, ctx);
+    let (matched, mut disambiguate) = eval_conditions(conditions, ctx);
+    disambiguate = disambiguate && !ctx.is_disambiguate();
     let content = if matched {
         Some(sequence(
             db,
@@ -196,7 +197,8 @@ where
     Ck: CondChecker,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, disambiguate) = eval_conditions(conditions, checker);
+    let (matched, mut disambiguate) = eval_conditions(conditions, checker);
+    disambiguate = disambiguate && !checker.is_disambiguate();
     let content = if matched {
         Some(elements.as_slice())
     } else {
@@ -216,7 +218,7 @@ fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> b
 
 // first bool is the match result
 // second bool is disambiguate=true
-fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck) -> (bool, bool)
+pub fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck) -> (bool, bool)
 where
     Ck: CondChecker,
 {
@@ -224,7 +226,7 @@ where
     let mut tests = conditions.iter().map(|c| eval_condset(c, checker));
     let disambiguate = conditions.iter().any(|c| {
         c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
-    }) && !checker.is_disambiguate();
+    });
 
     (run_matcher(&mut tests, match_type), disambiguate)
 }
@@ -233,19 +235,19 @@ fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck) -> bool
 where
     Ck: CondChecker,
 {
-    let style = checker.style();
+    let features = checker.features();
 
     let mut iter_all = cond_set.conds.iter().filter_map(|cond| {
         Some(match cond {
             Cond::Variable(var) => checker.has_variable(*var),
             Cond::IsNumeric(var) => checker.is_numeric(*var),
             Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
-            Cond::Type(typ) => checker.csl_type() == typ,
+            Cond::Type(typ) => checker.csl_type() == *typ,
             Cond::Position(pos) => checker.position().matches(*pos),
             Cond::Locator(typ) => checker.locator_type() == Some(*typ),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
-                if !style.features.condition_date_parts =>
+                if !features.condition_date_parts =>
             {
                 return None;
             }
@@ -261,16 +263,50 @@ where
 }
 
 use csl::terms::LocatorType;
+use csl::version::Features;
+
+pub struct UselessCondChecker;
+impl UselessCondChecker {
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        false
+    }
+    fn is_numeric(&self, var: AnyVariable) -> bool {
+        false
+    }
+    fn is_disambiguate(&self) -> bool {
+        false
+    }
+    fn csl_type(&self) -> CslType {
+        CslType::Book
+    }
+    fn locator_type(&self) -> Option<LocatorType> {
+        None
+    }
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+        None
+    }
+    fn position(&self) -> Position {
+        Position::First
+    }
+    fn features(&self) -> &csl::version::Features {
+        lazy_static::lazy_static! {
+            static ref NO_FEATURES: Features = {
+                Features::new()
+            };
+        };
+        &*NO_FEATURES
+    }
+}
 
 pub trait CondChecker {
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
     fn is_disambiguate(&self) -> bool;
-    fn csl_type(&self) -> &CslType;
+    fn csl_type(&self) -> CslType;
     fn locator_type(&self) -> Option<LocatorType>;
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;
     fn position(&self) -> Position;
-    fn style(&self) -> &Style;
+    fn features(&self) -> &Features;
     fn has_year_only(&self, dvar: DateVariable) -> bool {
         self.get_date(dvar)
             .map(|dor| match dor {

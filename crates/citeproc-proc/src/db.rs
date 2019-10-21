@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
-use csl::style::Position;
+use csl::style::{Position, TextElement};
 use csl::variables::NameVariable;
 use csl::Atom;
 
@@ -300,8 +300,7 @@ macro_rules! preamble {
             None => return ref_not_found($db, &$cite.ref_id, true),
             Some(r) => r,
         };
-        let ni = $style.names_delimiter.clone();
-        let citation_ni = $style.citation.names_delimiter.clone();
+        let (names_delimiter, name_el) = $db.name_info_citation();
         $ctx = CiteContext {
             reference: &$refr,
             format: $db.get_formatter(),
@@ -313,9 +312,9 @@ macro_rules! preamble {
             style: &$style,
             locale: &$locale,
             bib_number: $db.bib_number($id),
-            name_citation: $db.name_citation(),
             in_bibliography: false,
-            names_delimiter: citation_ni.or(ni),
+            names_delimiter,
+            name_citation: name_el,
         };
     }};
 }
@@ -560,9 +559,7 @@ fn expand_one_name_ir(
     let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
 
     for r in refs_accepting {
-        if let Some(rnir) =
-            make_identical_name_formatter(db, r.clone(), ctx, index)
-        {
+        if let Some(rnir) = make_identical_name_formatter(db, r.clone(), ctx, index) {
             let var = rnir.variable;
             let len = rnir.disamb_name_ids.len();
             if len > double_vec.len() {
@@ -648,20 +645,20 @@ fn disambiguate_add_givennames(
 
 use csl::style::Element;
 fn plain_suffix_element() -> Element {
-    use csl::style::{Affixes, Element, TextCase, TextSource, VariableForm};
+    use csl::style::{Element, TextCase, TextSource, VariableForm};
     use csl::variables::{StandardVariable, Variable};
-    Element::Text(
-        TextSource::Variable(
+    Element::Text(TextElement {
+        source: TextSource::Variable(
             StandardVariable::Ordinary(Variable::YearSuffix),
             VariableForm::Long,
         ),
-        None,
-        Default::default(),
-        false,
-        false,
-        TextCase::None,
-        None,
-    )
+        formatting: None,
+        affixes: Default::default(),
+        quotes: false,
+        strip_periods: false,
+        text_case: TextCase::None,
+        display: None,
+    })
 }
 
 fn disambiguate_add_year_suffix(
@@ -670,7 +667,6 @@ fn disambiguate_add_year_suffix(
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
-    use csl::style::{Affixes, Element, TextCase, TextSource, VariableForm};
     use csl::variables::{StandardVariable, Variable};
     // First see if we can do it with an explicit one
     let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
@@ -705,6 +701,63 @@ fn disambiguate_add_year_suffix(
         };
         true
     });
+}
+
+fn disambiguate_true(
+    db: &impl IrDatabase,
+    ir: &mut IR<Markup>,
+    state: &mut IrState,
+    ctx: &CiteContext<'_, Markup>,
+) {
+    info!(
+        "attempting to disambiguate {:?} ({}) with {:?}",
+        ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
+    );
+    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
+    if un {
+        return;
+    }
+
+    let dfa = db.ref_dfa(ctx.reference.id.clone()).unwrap();
+    debug!("{}", dfa.debug_graph(db));
+
+    let mut done = false;
+    const iter_max: u32 = 32;
+    let mut n = 0u32;
+    while !un && !done && n < iter_max {
+        done = try_disambiguate(db, ir, state, ctx);
+        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
+        n += 1;
+        debug!("done {done}, un {un}, n {n}", done = done, un = un, n = n);
+    }
+
+    fn try_disambiguate(
+        db: &impl IrDatabase,
+        ir: &mut IR<Markup>,
+        state: &mut IrState,
+        ctx: &CiteContext<'_, Markup>,
+    ) -> bool {
+        // retval = whether we're done
+        *ir = match ir {
+            IR::Name(_) | IR::YearSuffix(..) | IR::Rendered(_) => return true,
+            IR::ConditionalDisamb(ref el, ref _xs) => {
+                let (new_ir, _) = el.intermediate(db, state, ctx);
+                new_ir
+            }
+            IR::Seq(ref mut seq) => {
+                let mut count = seq.contents.len();
+                for sir in seq.contents.iter_mut() {
+                    let done = try_disambiguate(db, sir, state, ctx);
+                    if !done {
+                        break;
+                    }
+                    count -= 1;
+                }
+                return count == 0;
+            }
+        };
+        false
+    }
 }
 
 fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
@@ -803,7 +856,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     }
     let (mut ir, mut state) = ir3.fresh_copy();
 
-    disambiguate(db, &mut ir, &mut state, &mut ctx, None, &refr.id);
+    disambiguate_true(db, &mut ir, &mut state, &mut ctx);
     // No point recomputing when nothing more can be done.
     let matching = Vec::new();
     Arc::new(IrGen::new(ir, matching, state))
@@ -870,8 +923,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let refr = db.reference(ref_id.clone())?;
 
     if let Some(bib) = &style.bibliography {
-        let ni = style.names_delimiter.clone();
-        let bib_ni = bib.names_delimiter.clone();
+        let (names_delimiter, name_el) = db.name_info_bibliography();
         let mut ctx = CiteContext {
             reference: &refr,
             format: db.get_formatter(),
@@ -883,9 +935,9 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             style: &style,
             locale: &locale,
             bib_number: Some(bib_number),
-            name_citation: db.name_bibliography(),
             in_bibliography: true,
-            names_delimiter: bib_ni.or(ni),
+            names_delimiter,
+            name_citation: name_el,
         };
         let layout = &bib.layout;
         let mut state = IrState::new();

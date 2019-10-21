@@ -7,10 +7,7 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{
-    Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule, TextCase,
-    TextSource, VariableForm,
-};
+use csl::style::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
 use csl::variables::{NameVariable, NumberVariable, StandardVariable, Variable};
 use csl::Atom;
 

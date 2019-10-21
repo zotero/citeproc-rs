@@ -7,6 +7,7 @@ use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableFo
 use csl::terms::LocatorType;
 use csl::variables::*;
 use std::sync::Arc;
+use csl::version::Features;
 
 use crate::disamb::FreeCond;
 
@@ -20,6 +21,7 @@ pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub year_suffix: bool,
     pub names_delimiter: Option<Delimiter>,
     pub name_el: Arc<NameEl>,
+    pub disamb_count: u32,
 }
 
 impl From<FreeCond> for Position {
@@ -48,7 +50,7 @@ where
 {
     pub fn from_cite_context(refr: &'c Reference, ctx: &'c CiteContext<'c, O>) -> Self {
         use citeproc_io::Locators;
-        RefContext {
+        let mut ctx = RefContext {
             format: &ctx.format,
             style: ctx.style,
             locale: ctx.locale,
@@ -64,19 +66,25 @@ where
             year_suffix: false,
             names_delimiter: ctx.names_delimiter.clone(),
             name_el: ctx.name_citation.clone(),
-        }
+            disamb_count: 0,
+        };
+        ctx.count_disambiguate_branches(CiteOrBib::Citation);
+        ctx
     }
+
     pub fn from_free_cond(
         fc: FreeCond,
         format: &'c O,
         style: &'c Style,
         locale: &'c Locale,
         reference: &'c Reference,
-        name_el: Arc<NameEl>,
+        location: CiteOrBib,
     ) -> Self {
-        let ni = style.names_delimiter.clone();
-        let citation_ni = style.citation.names_delimiter.clone();
-        RefContext {
+        let name_info = match location {
+            CiteOrBib::Citation => style.name_info_citation(),
+            CiteOrBib::Bibliography => style.name_info_bibliography(),
+        };
+        let mut ctx = RefContext {
             format,
             style,
             locale,
@@ -84,10 +92,30 @@ where
             locator_type: fc.to_loc_type(),
             position: Position::from(fc),
             year_suffix: fc.contains(FreeCond::YEAR_SUFFIX),
-            names_delimiter: citation_ni.or(ni),
-            name_el,
-        }
+            names_delimiter: name_info.0,
+            name_el: name_info.1,
+            disamb_count: 0,
+        };
+        ctx.count_disambiguate_branches(location);
+        ctx
     }
+
+    pub fn count_disambiguate_branches(&mut self, location: CiteOrBib) {
+        let count = {
+            let mut counter = DisambCounter::new(&self);
+            match location {
+                CiteOrBib::Citation => {
+                    counter.walk_citation(self.style);
+                }
+                CiteOrBib::Bibliography => {
+                    counter.walk_bibliography(self.style);
+                }
+            }
+            counter.count
+        };
+        self.disamb_count = count;
+    }
+
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
@@ -105,6 +133,7 @@ where
         })
         .map(|s| s.as_str())
     }
+
     pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
         match var {
             NumberVariable::PageFirst => self
@@ -116,6 +145,7 @@ where
             _ => self.reference.number.get(&var).cloned(),
         }
     }
+
     pub fn has_variable(&self, var: AnyVariable) -> bool {
         match var {
             AnyVariable::Number(v) => match v {
@@ -159,8 +189,8 @@ where
             // TODO: not very useful; implement for non-number variables (see CiteContext)
         }
     }
-    fn csl_type(&self) -> &CslType {
-        &self.reference.csl_type
+    fn csl_type(&self) -> CslType {
+        self.reference.csl_type
     }
     fn locator_type(&self) -> Option<LocatorType> {
         self.locator_type
@@ -172,9 +202,136 @@ where
         self.position
     }
     fn is_disambiguate(&self) -> bool {
-        false
+        self.disamb_count != 0
     }
-    fn style(&self) -> &Style {
-        self.style
+    fn features(&self) -> &Features {
+        &self.style.features
+    }
+}
+
+struct DisambCounter<'a, O: OutputFormat> {
+    count: u32,
+    ctx: &'a RefContext<'a, O>,
+}
+
+impl<'a, O: OutputFormat> DisambCounter<'a, O> {
+    fn inc(&mut self) {
+        self.count += 1;
+    }
+    fn new(ctx: &'a RefContext<'a, O>) -> Self {
+        DisambCounter { count: 0, ctx }
+    }
+}
+
+use csl::style::{Conditions, IfThen, Choose};
+
+impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
+    type Output = u32;
+    type Checker = RefContext<'a, O>;
+    fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
+        elements.iter().fold(0, |acc, el| self.element(el))
+    }
+    fn choose(&mut self, choose: &Choose) -> Self::Output {
+        use std::iter;
+        let Choose(head, rest, last) = choose;
+        let iter = std::iter::once(head).chain(rest.iter());
+        let mut sum = 0u32;
+        for branch in iter {
+            let (eval_true, is_disambiguate) = crate::choose::eval_conditions(&branch.0, self.ctx);
+            if is_disambiguate {
+                sum += 1;
+            }
+            if eval_true {
+                let count = self.fold(&branch.1, WalkerFoldType::IfThen);
+                return sum + count;
+            }
+        }
+        sum += self.fold(&last.0, WalkerFoldType::Else);
+        sum
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::prelude::*;
+    use citeproc_db::LocaleFetcher;
+    use csl::locale::Lang;
+    use csl::Atom;
+    use crate::disamb::FreeCond;
+    use crate::test::with_test_citation;
+
+    #[test]
+    fn test_counter() {
+        fn count(fc: FreeCond, f: impl Fn(&mut Reference) + Copy) -> impl Fn(Style) -> u32 + Copy {
+            move |style: Style| {
+                let format = Markup::default();
+                let locale = citeproc_db::PredefinedLocales::bundled_en_us()
+                    .fetch_locale(&Lang::en_us())
+                    .unwrap();
+                use citeproc_io::Reference;
+                let mut reference = Reference::empty(Atom::from("id"), CslType::Book);
+                f(&mut reference);
+                let ctx = RefContext::from_free_cond(
+                    fc,
+                    &format,
+                    &style,
+                    &locale,
+                    &reference,
+                    CiteOrBib::Citation,
+                );
+                let mut counter = DisambCounter::new(&ctx);
+                counter.walk_citation(&style)
+            }
+        }
+        let count_plain = count(FreeCond::empty(), |_| {});
+
+        assert_eq!(
+            with_test_citation(count_plain, r#"<choose><if disambiguate="true" /></choose>"#),
+            1
+        );
+        assert_eq!(
+            with_test_citation(
+                count_plain,
+                r#"<choose>
+                    <if position="subsequent" />
+                    <else-if disambiguate="true" />
+                </choose>"#
+            ),
+            1,
+        );
+        assert_eq!(
+            with_test_citation(
+                count_plain,
+                r#"<choose>
+                    <if position="subsequent" />
+                    <else-if disambiguate="true" />
+                    <else>
+                        <choose>
+                            <if disambiguate="true" />
+                        </choose>
+                    </else>
+                </choose>"#,
+            ),
+            2,
+        );
+        assert_eq!(
+            with_test_citation(
+                count(FreeCond::SUBSEQUENT, |refr| {
+                    refr.ordinary.insert(Variable::Title, "Something".into());
+                }),
+                r#"<choose>
+                    <if position="subsequent" />
+                    <else-if variable="title" />
+                    <else-if disambiguate="true" />
+                    <else>
+                        <choose>
+                            <if disambiguate="true" />
+                        </choose>
+                    </else>
+                </choose>"#,
+            ),
+            0,
+        );
     }
 }

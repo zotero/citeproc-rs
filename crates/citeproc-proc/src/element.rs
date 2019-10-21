@@ -1,6 +1,8 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use csl::style::{Affixes, Bibliography, Element, Style};
+use csl::style::{
+    Affixes, Bibliography, Element, LabelElement, NumberElement, Style, TextElement, TextSource,
+};
 use csl::variables::*;
 use csl::Atom;
 
@@ -67,7 +69,15 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
-            Element::Text(ref source, f, ref af, quo, _sp, tc, _disp) => {
+            Element::Text(TextElement {
+                ref source,
+                formatting: f,
+                affixes: ref af,
+                quotes: quo,
+                strip_periods: sp,
+                text_case: tc,
+                display: _disp,
+            }) => {
                 use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
@@ -150,7 +160,15 @@ where
                 }
             }
 
-            Element::Label(var, form, f, ref af, _sp, tc, pl) => {
+            Element::Label(LabelElement {
+                variable: var,
+                form,
+                formatting: f,
+                affixes: ref af,
+                strip_periods: _sp,
+                text_case: tc,
+                plural: pl,
+            }) => {
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
@@ -161,7 +179,14 @@ where
                 (IR::Rendered(content), GroupVars::new())
             }
 
-            Element::Number(var, form, f, ref af, tc, _disp) => {
+            Element::Number(NumberElement {
+                variable: var,
+                form,
+                formatting: f,
+                affixes: ref af,
+                text_case: tc,
+                display: _disp,
+            }) => {
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {

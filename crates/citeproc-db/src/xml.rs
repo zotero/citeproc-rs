@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource},
-    style::{Name, Style},
+    style::{Name, Style, TextElement, TextSource, Delimiter},
 };
 use fnv::FnvHashSet;
 
@@ -25,21 +25,24 @@ pub trait StyleDatabase {
     fn style(&self) -> Arc<Style>;
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
-    fn name_citation(&self) -> Arc<Name>;
-    fn name_bibliography(&self) -> Arc<Name>;
+    /// First one is the inherited names-delimiter
+    fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>);
+    /// Grabs the Name options from `<style>` + `<bibliography>` elements
+    /// First one is the inherited names-delimiter
+    fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>);
 
     /// Lists every <names> block in the style, with each name variable it is used for
     fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
 }
 
-fn name_citation(db: &impl StyleDatabase) -> Arc<Name> {
+fn name_info_citation(db: &impl StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
     let style = db.style();
-    Arc::new(style.name_citation())
+    style.name_info_citation()
 }
 
-fn name_bibliography(db: &impl StyleDatabase) -> Arc<Name> {
+fn name_info_bibliography(db: &impl StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
     let style = db.style();
-    Arc::new(style.name_bibliography())
+    style.name_info_bibliography()
 }
 
 use csl::style::Element;
@@ -91,7 +94,7 @@ fn name_configurations_inner(
                 name_configurations_inner(style, base, e, buf);
             }
         }
-        Element::Text(csl::style::TextSource::Macro(m), ..) => {
+        Element::Text(TextElement { source: TextSource::Macro(m), .. }) => {
             if let Some(mac) = style.macros.get(m) {
                 for e in mac {
                     name_configurations_inner(style, base, e, buf);
@@ -266,10 +269,20 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "parallel")] {
         pub trait LocaleFetcher: Send + Sync {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
+            fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
+                use std::str::FromStr;
+                let s = self.fetch_string(lang).ok()??;
+                Some(Locale::from_str(&s).ok()?)
+            }
         }
     } else {
         pub trait LocaleFetcher {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
+            fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
+                use std::str::FromStr;
+                let s = self.fetch_string(lang).ok()??;
+                Some(Locale::from_str(&s).ok()?)
+            }
         }
     }
 }
@@ -295,6 +308,17 @@ impl From<io::Error> for LocaleFetchError {
 use std::collections::HashMap;
 
 pub struct PredefinedLocales(pub HashMap<Lang, String>);
+
+impl PredefinedLocales {
+    pub fn bundled_en_us() -> Self {
+        let mut m = HashMap::new();
+        m.insert(
+            Lang::en_us(),
+            include_str!("../../citeproc-wasm/src/locales-en-US.xml").to_string(),
+        );
+        PredefinedLocales(m)
+    }
+}
 
 impl LocaleFetcher for PredefinedLocales {
     fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {

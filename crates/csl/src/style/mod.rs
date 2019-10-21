@@ -30,36 +30,45 @@ pub enum TextSource {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
+pub struct TextElement {
+    pub source: TextSource,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub quotes: Quotes,
+    pub strip_periods: StripPeriods,
+    pub text_case: TextCase,
+    pub display: Option<DisplayMode>,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct LabelElement {
+    pub variable: NumberVariable,
+    pub form: TermForm,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub strip_periods: StripPeriods,
+    pub text_case: TextCase,
+    pub plural: Plural,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct NumberElement {
+    pub variable: NumberVariable,
+    pub form: NumericForm,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub text_case: TextCase,
+    pub display: Option<DisplayMode>,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     /// <cs:text>
-    Text(
-        TextSource,
-        Option<Formatting>,
-        Affixes,
-        Quotes,
-        StripPeriods,
-        TextCase,
-        Option<DisplayMode>,
-    ),
+    Text(TextElement),
     /// <cs:label>
-    Label(
-        NumberVariable,
-        TermForm,
-        Option<Formatting>,
-        Affixes,
-        StripPeriods,
-        TextCase,
-        Plural,
-    ),
+    Label(LabelElement),
     /// <cs:number>
-    Number(
-        NumberVariable,
-        NumericForm,
-        Option<Formatting>,
-        Affixes,
-        TextCase,
-        Option<DisplayMode>,
-    ),
+    Number(NumberElement),
     /// <cs:group>
     Group(Group),
     /// <cs:choose>
@@ -1051,6 +1060,18 @@ impl Default for Style {
 }
 
 impl Style {
+    pub fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>) {
+        let nc = Arc::new(self.name_citation());
+        let nd = self.names_delimiter.clone();
+        let citation_nd = self.citation.names_delimiter.clone();
+        (citation_nd.or(nd), nc)
+    }
+    pub fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>) {
+        let nb = Arc::new(self.name_bibliography());
+        let nd = self.names_delimiter.clone();
+        let bib_nd = self.bibliography.as_ref().and_then(|bib| bib.names_delimiter.clone());
+        (bib_nd.or(nd), nb)
+    }
     pub fn name_citation(&self) -> Name {
         let default = Name::root_default();
         let root = &self.name_inheritance;
@@ -1250,7 +1271,7 @@ pub enum PageRangeFormat {
     MinimalTwo,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,

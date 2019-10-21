@@ -66,6 +66,9 @@ bitflags::bitflags! {
         const LT_VOLUME     = 1 << 46;
         const LT_VOLUME_FALSE = 1 << 47;
 
+        const DISAMBIGUATE = 1 << 48;
+        const DISAMBIGUATE_FALSE = 1 << 49;
+
         // TODO(CSL-M): enable these
 
         // const LT_ARTICLE    = 1 << 48;
@@ -277,6 +280,7 @@ impl FreeCond {
 
 fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
     let x = match c {
+        Cond::Disambiguate(_b) => (FreeCond::DISAMBIGUATE, FreeCond::DISAMBIGUATE_FALSE),
         Cond::Position(p) => match p {
             Position::Ibid => (FreeCond::IBID, FreeCond::IBID_FALSE),
             Position::IbidWithLocator => (

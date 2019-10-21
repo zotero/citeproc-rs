@@ -9,7 +9,7 @@ use super::EdgeData;
 use super::{cross_product, mult_identity, FreeCondSets};
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::style::{Affixes, Formatting, Position};
+use csl::style::{Affixes, Formatting, LabelElement, NumberElement, Position, TextElement};
 use csl::variables::*;
 
 use csl::{
@@ -107,7 +107,14 @@ impl Disambiguation<Markup> for Element {
                     dt.ref_ir(db, ctx, state, stack)
                 }
             }
-            Element::Number(var, form, f, ref af, tc, _dm) => {
+            Element::Number(NumberElement {
+                variable: var,
+                form,
+                formatting: f,
+                affixes: ref af,
+                text_case: tc,
+                display: _d,
+            }) => {
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
@@ -131,7 +138,15 @@ impl Disambiguation<Markup> for Element {
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
             }
-            Element::Text(ref src, f, ref af, quo, _sp, tc, _disp) => match *src {
+            Element::Text(TextElement {
+                source: ref src,
+                formatting: f,
+                affixes: ref af,
+                quotes: quo,
+                strip_periods: sp,
+                text_case: tc,
+                display: _disp,
+            }) => match *src {
                 TextSource::Variable(var, form) => {
                     if var == StandardVariable::Number(NumberVariable::Locator) {
                         if let Some(_loctype) = ctx.locator_type {
@@ -213,7 +228,15 @@ impl Disambiguation<Markup> for Element {
                     out
                 }
             },
-            Element::Label(var, form, f, ref af, _sp, tc, pl) => {
+            Element::Label(LabelElement {
+                variable: var,
+                form,
+                formatting: f,
+                affixes: ref af,
+                strip_periods: _sp,
+                text_case: tc,
+                plural: pl,
+            }) => {
                 let custom = match var {
                     NumberVariable::Locator if ctx.locator_type.is_some() => {
                         Some(EdgeData::LocatorLabel)
@@ -256,7 +279,12 @@ impl Disambiguation<Markup> for Element {
             Element::Names(n) => n.get_free_conds(db),
             Element::Date(d) => d.get_free_conds(db),
             Element::Choose(c) => c.get_free_conds(db),
-            Element::Number(num_var, ..) | Element::Label(num_var, ..) => {
+            Element::Number(NumberElement {
+                variable: num_var, ..
+            })
+            | Element::Label(LabelElement {
+                variable: num_var, ..
+            }) => {
                 if num_var.is_independent() {
                     let mut implicit_var_test = mult_identity();
                     let cond = Cond::Variable(AnyVariable::Number(*num_var));
@@ -266,7 +294,7 @@ impl Disambiguation<Markup> for Element {
                     mult_identity()
                 }
             }
-            Element::Text(src, ..) => match src {
+            Element::Text(TextElement { source: src, .. }) => match src {
                 TextSource::Macro(m) => {
                     // TODO: same todos as in Proc
                     let style = db.style();

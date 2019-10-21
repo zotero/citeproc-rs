@@ -14,6 +14,7 @@ use csl::locale::Locale;
 use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
 use csl::variables::*;
 use std::sync::Arc;
+use csl::version::Features;
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
@@ -152,8 +153,8 @@ where
     fn is_numeric(&self, var: AnyVariable) -> bool {
         CiteContext::is_numeric(self, var)
     }
-    fn csl_type(&self) -> &CslType {
-        &self.reference.csl_type
+    fn csl_type(&self) -> CslType {
+        self.reference.csl_type
     }
     fn locator_type(&self) -> Option<LocatorType> {
         self.cite
@@ -170,7 +171,7 @@ where
     fn is_disambiguate(&self) -> bool {
         self.disamb_pass == Some(DisambPass::Conditionals)
     }
-    fn style(&self) -> &Style {
-        self.style
+    fn features(&self) -> &Features {
+        &self.style.features
     }
 }
