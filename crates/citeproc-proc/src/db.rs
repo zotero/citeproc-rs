@@ -115,8 +115,8 @@ fn ref_dfa<DB: IrDatabase>(db: &DB, key: Atom) -> Option<Arc<Dfa>> {
 }
 
 fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {
-    let style = db.style();
-    Arc::new(style.get_free_conds(db))
+    use crate::disamb::get_free_conds;
+    Arc::new(get_free_conds(db))
 }
 
 fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {

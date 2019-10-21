@@ -4,7 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::disamb::mult_identity;
 use crate::prelude::*;
 
 use citeproc_io::Date;
@@ -130,16 +129,6 @@ where
 }
 
 impl Disambiguation<Markup> for BodyDate {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        use csl::style::Cond;
-        use csl::variables::{AnyVariable, Variable};
-        // Position may be involved for NASO and primary disambiguation
-        let mut base = mult_identity();
-        let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
-        base.scalar_multiply_cond(cond, true);
-        base
-    }
-
     fn ref_ir(
         &self,
         db: &impl IrDatabase,

@@ -20,6 +20,8 @@ pub enum WalkerFoldType {
     Layout,
     IfThen,
     Else,
+    Substitute,
+    Macro,
 }
 
 pub trait StyleWalker {
@@ -93,9 +95,6 @@ pub trait StyleWalker {
         sel: TextTermSelector,
         plural: bool,
     ) -> Self::Output {
-        Self::Output::default()
-    }
-    fn text_label(&mut self, source: &TextElement) -> Self::Output {
         Self::Output::default()
     }
     fn label(&mut self, label: &LabelElement) -> Self::Output {

@@ -80,10 +80,139 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
-pub trait Disambiguation<O: OutputFormat = Markup> {
-    fn get_free_conds(&self, _db: &impl IrDatabase) -> FreeCondSets {
-        mult_identity()
+use csl::style::{Choose, Names, NumberElement, TextElement, LabelElement, VariableForm, Cond, BodyDate, Position, Match, IfThen, Conditions};
+use csl::variables::*;
+use csl::{IsIndependent, Atom};
+
+pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {
+    let mut walker = FreeCondWalker {
+        db
+    };
+    walker.walk_citation(&db.style())
+}
+
+struct FreeCondWalker<'a, DB: IrDatabase> {
+    db: &'a DB,
+}
+
+impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
+    type Output = FreeCondSets;
+    type Checker = crate::choose::UselessCondChecker;
+
+    /// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
+    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+        // TODO: keep track of which empty variables caused GroupVars to not render, if
+        // they are indeed free variables.
+        // XXX: include layout parts?
+        let mut all = fnv_set_with_cap(elements.len());
+        all.insert(FreeCond::empty());
+        let mut f = FreeCondSets(all);
+        for el in elements {
+            f.cross_product(self.element(el));
+        }
+        f
     }
+    fn text_macro(&mut self, text: &TextElement, m: &Atom) -> Self::Output {
+        // TODO: same todos as in Proc
+        let style = self.db.style();
+        let macro_unsafe = style.macros.get(m).expect("macro errors not implemented!");
+        // TODO: reinstate macro recursion prevention with a new state arg
+        // if state.macro_stack.contains(&name) {
+        //     panic!(
+        //         "foiled macro recursion: {} called from within itself; exiting",
+        //         &name
+        //     );
+        // }
+        // state.macro_stack.insert(name.clone());
+        self.fold(macro_unsafe, WalkerFoldType::Macro)
+    }
+
+    fn text_variable(&mut self, text: &TextElement, sv: StandardVariable, form: VariableForm) -> Self::Output {
+        if sv.is_independent() {
+            let mut implicit_var_test = FreeCondSets::mult_identity();
+            let cond = Cond::Variable((&sv).into());
+            implicit_var_test.scalar_multiply_cond(cond, true);
+            implicit_var_test
+        } else {
+            FreeCondSets::mult_identity()
+        }
+    }
+
+    fn date(&mut self, date: &BodyDate) -> Self::Output {
+        // Position may be involved for NASO and primary disambiguation
+        let mut base = FreeCondSets::mult_identity();
+        let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
+        base.scalar_multiply_cond(cond, true);
+        base
+    }
+
+    fn names(&mut self, names: &Names) -> Self::Output {
+        let mut base = if let Some(subst) = &names.substitute {
+            // TODO: drill down into the substitute logic here
+            self.fold(&subst.0, WalkerFoldType::Substitute)
+        } else {
+            FreeCondSets::mult_identity()
+        };
+        // Position may be involved for NASO and primary disambiguation
+        let cond = Cond::Position(Position::First);
+        base.scalar_multiply_cond(cond, true);
+        base
+    }
+
+    fn number(&mut self, number: &NumberElement) -> Self::Output {
+        let num_var = number.variable;
+        if num_var.is_independent() {
+            let mut implicit_var_test = FreeCondSets::mult_identity();
+            let cond = Cond::Variable(AnyVariable::Number(num_var));
+            implicit_var_test.scalar_multiply_cond(cond, true);
+            implicit_var_test
+        } else {
+            FreeCondSets::mult_identity()
+        }
+    }
+    fn label(&mut self, label: &LabelElement) -> Self::Output {
+        let num_var = label.variable;
+        if num_var.is_independent() {
+            let mut implicit_var_test = FreeCondSets::mult_identity();
+            let cond = Cond::Variable(AnyVariable::Number(num_var));
+            implicit_var_test.scalar_multiply_cond(cond, true);
+            implicit_var_test
+        } else {
+            FreeCondSets::mult_identity()
+        }
+    }
+
+    fn choose(&mut self, choose: &Choose) -> Self::Output {
+        use std::iter;
+        let Choose(ifthen, elseifs, else_) = choose;
+        let IfThen(if_conditions, if_els) = ifthen;
+        let Conditions(ifc_match, ifc_cond_set) = if_conditions;
+        // Other kinds (CSL-M) not yet supported
+        assert!(*ifc_match == Match::All);
+        assert!(ifc_cond_set.len() == 1);
+        let ifthen = (&ifc_cond_set[0], self.fold(if_els, WalkerFoldType::IfThen));
+        let first: Vec<_> = iter::once(ifthen)
+            .chain(elseifs.iter().map(|fi: &IfThen| {
+                let IfThen(if_conditions, if_els) = fi;
+                let Conditions(ifc_match, ifc_cond_set) = if_conditions;
+                // Other kinds (CSL-M) not yet supported
+                assert!(*ifc_match == Match::All);
+                assert!(ifc_cond_set.len() == 1);
+                (&ifc_cond_set[0], self.fold(if_els, WalkerFoldType::IfThen))
+            }))
+            .collect();
+        FreeCondSets::all_branches(
+            first.into_iter(),
+            if else_.0.len() > 0 {
+                Some(self.fold(&else_.0, WalkerFoldType::Else))
+            } else {
+                None
+            },
+        )
+    }
+}
+
+pub trait Disambiguation<O: OutputFormat = Markup> {
     fn ref_ir(
         &self,
         _db: &impl IrDatabase,
@@ -93,25 +222,6 @@ pub trait Disambiguation<O: OutputFormat = Markup> {
     ) -> (RefIR, GroupVars) {
         unimplemented!()
     }
-}
-
-/// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
-pub fn cross_product(db: &impl IrDatabase, els: &[Element]) -> FreeCondSets {
-    // XXX: include layout parts?
-    let mut all = fnv_set_with_cap(els.len());
-    all.insert(FreeCond::empty());
-    let mut f = FreeCondSets(all);
-    for el in els {
-        f.cross_product(el.get_free_conds(db));
-    }
-    f
-}
-
-/// Like the number 1, but for multiplying FreeCondSets using cross_products.
-///
-/// The cross product of any set X and mult_identity() is X.
-pub fn mult_identity() -> FreeCondSets {
-    FreeCondSets::default()
 }
 
 /// Creates a Dfa that will match any cite that could have been made by a particular reference.

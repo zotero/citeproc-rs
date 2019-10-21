@@ -351,6 +351,15 @@ pub struct FreeCondSets(pub FnvHashSet<FreeCond>);
 
 impl Default for FreeCondSets {
     fn default() -> Self {
+        FreeCondSets::mult_identity()
+    }
+}
+
+impl FreeCondSets {
+    /// Like the number 1, but for multiplying FreeCondSets using cross_products.
+    ///
+    /// The cross product of any set X and mult_identity() is X.
+    pub fn mult_identity() -> FreeCondSets {
         let mut f = FreeCondSets(FnvHashSet::default());
         // the multiplicative identity
         f.0.insert(FreeCond::empty());

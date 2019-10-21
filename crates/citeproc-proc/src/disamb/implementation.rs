@@ -6,7 +6,6 @@
 
 use super::Disambiguation;
 use super::EdgeData;
-use super::{cross_product, mult_identity, FreeCondSets};
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use csl::style::{Affixes, Formatting, LabelElement, NumberElement, Position, TextElement};
@@ -19,11 +18,6 @@ use csl::{
 };
 
 impl Disambiguation<Markup> for Style {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        let els = &self.citation.layout.elements;
-        cross_product(db, els)
-    }
-
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
@@ -45,12 +39,6 @@ impl Disambiguation<Markup> for Style {
 }
 
 impl Disambiguation<Markup> for Group {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        // TODO: keep track of which empty variables caused GroupVars to not render, if
-        // they are indeed free variables.
-        cross_product(db, &self.elements)
-    }
-
     fn ref_ir(
         &self,
         db: &impl IrDatabase,
@@ -273,54 +261,4 @@ impl Disambiguation<Markup> for Element {
         }
     }
 
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        match self {
-            Element::Group(g) => g.get_free_conds(db),
-            Element::Names(n) => n.get_free_conds(db),
-            Element::Date(d) => d.get_free_conds(db),
-            Element::Choose(c) => c.get_free_conds(db),
-            Element::Number(NumberElement {
-                variable: num_var, ..
-            })
-            | Element::Label(LabelElement {
-                variable: num_var, ..
-            }) => {
-                if num_var.is_independent() {
-                    let mut implicit_var_test = mult_identity();
-                    let cond = Cond::Variable(AnyVariable::Number(*num_var));
-                    implicit_var_test.scalar_multiply_cond(cond, true);
-                    implicit_var_test
-                } else {
-                    mult_identity()
-                }
-            }
-            Element::Text(TextElement { source: src, .. }) => match src {
-                TextSource::Macro(m) => {
-                    // TODO: same todos as in Proc
-                    let style = db.style();
-                    let macro_unsafe = style.macros.get(m).expect("macro errors not implemented!");
-                    // TODO: reinstate macro recursion prevention with a new state arg
-                    // if state.macro_stack.contains(&name) {
-                    //     panic!(
-                    //         "foiled macro recursion: {} called from within itself; exiting",
-                    //         &name
-                    //     );
-                    // }
-                    // state.macro_stack.insert(name.clone());
-                    cross_product(db, macro_unsafe)
-                }
-                TextSource::Variable(sv, ..) => {
-                    if sv.is_independent() {
-                        let mut implicit_var_test = mult_identity();
-                        let cond = Cond::Variable(sv.into());
-                        implicit_var_test.scalar_multiply_cond(cond, true);
-                        implicit_var_test
-                    } else {
-                        mult_identity()
-                    }
-                }
-                TextSource::Value(_) | TextSource::Term(..) => mult_identity(),
-            },
-        }
-    }
 }

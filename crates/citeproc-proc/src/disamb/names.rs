@@ -1,7 +1,6 @@
 use super::add_to_graph;
 use super::finite_automata::{Nfa, NfaEdge};
 use super::graph_with_stack;
-use super::mult_identity;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
@@ -16,19 +15,6 @@ use petgraph::graph::NodeIndex;
 use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        let mut base = if let Some(subst) = &self.substitute {
-            // TODO: drill down into the substitute logic here
-            cross_product(db, &subst.0)
-        } else {
-            mult_identity()
-        };
-        // Position may be involved for NASO and primary disambiguation
-        let cond = Cond::Position(Position::First);
-        base.scalar_multiply_cond(cond, true);
-        base
-    }
-
     fn ref_ir(
         &self,
         db: &impl IrDatabase,

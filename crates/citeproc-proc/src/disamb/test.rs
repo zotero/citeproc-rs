@@ -4,6 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use super::get_free_conds;
 use super::free::{FreeCond, FreeCondSets};
 use crate::prelude::*;
 use crate::test::MockProcessor;
@@ -71,7 +72,7 @@ fn whole_apa() {
     use std::fs;
     db.set_style_text(include_str!("../../tests/data/apa.csl"));
     // let style = Style::from_str(&).unwrap();
-    let fcs = db.style().get_free_conds(&db);
+    let fcs = get_free_conds(&db);
     dbg!(&fcs);
 }
 
@@ -81,7 +82,7 @@ fn whole_agcl() {
     use std::fs;
     db.set_style_text(include_str!("../../tests/data/aglc.csl"));
     // let style = Style::from_str(&).unwrap();
-    let fcs = db.style().get_free_conds(&db);
+    let fcs = get_free_conds(&db);
     dbg!(&fcs);
 }
 
@@ -101,7 +102,7 @@ fn test_locator_macro() {
       </else-if>
     </choose>"#
     ));
-    let fcs = db.style().get_free_conds(&db);
+    let fcs = get_free_conds(&db);
     let mut correct = FreeCondSets::empty();
     correct.0.insert(FreeCond::LOCATOR | FreeCond::LT_PAGE);
     correct
@@ -165,7 +166,7 @@ fn test() {
     let get_stream = |ind: usize| {
         let id = cite_ids[ind];
         let gen0 = db.ir_gen0(id);
-        let ir = gen0.ir;
+        let ir = &gen0.ir;
         let fmt = db.get_formatter();
         ir.to_edge_stream(&fmt)
     };

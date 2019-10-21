@@ -125,34 +125,6 @@ impl Disambiguation<Markup> for Choose {
             Affixes::default(),
         );
     }
-
-    fn get_free_conds(&self, db: &impl IrDatabase) -> FreeCondSets {
-        use std::iter;
-        let Choose(ifthen, elseifs, else_) = self;
-        let IfThen(if_conditions, if_els) = ifthen;
-        let Conditions(ifc_match, ifc_cond_set) = if_conditions;
-        assert!(*ifc_match == Match::All);
-        assert!(ifc_cond_set.len() == 1);
-        let ifthen = (&ifc_cond_set[0], cross_product(db, if_els));
-        let first: Vec<_> = iter::once(ifthen)
-            .chain(elseifs.iter().map(|fi: &IfThen| {
-                let IfThen(if_conditions, if_els) = fi;
-                let Conditions(ifc_match, ifc_cond_set) = if_conditions;
-                assert!(*ifc_match == Match::All);
-                assert!(ifc_cond_set.len() == 1);
-                (&ifc_cond_set[0], cross_product(db, if_els))
-            }))
-            .collect();
-        let res = FreeCondSets::all_branches(
-            first.into_iter(),
-            if else_.0.len() > 0 {
-                Some(cross_product(db, &else_.0))
-            } else {
-                None
-            },
-        );
-        res
-    }
 }
 
 struct BranchEval<O: OutputFormat> {
@@ -266,7 +238,7 @@ use csl::terms::LocatorType;
 use csl::version::Features;
 
 pub struct UselessCondChecker;
-impl UselessCondChecker {
+impl CondChecker for UselessCondChecker {
     fn has_variable(&self, var: AnyVariable) -> bool {
         false
     }

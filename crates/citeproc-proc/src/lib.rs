@@ -50,9 +50,7 @@ pub(crate) mod prelude {
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
 
-    pub(crate) use crate::disamb::{
-        cross_product, Disambiguation, Edge, EdgeData, FreeCondSets, RefContext,
-    };
+    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, FreeCondSets, RefContext};
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
