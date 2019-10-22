@@ -5,12 +5,13 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
+use super::micro_html::micro_html_to_string;
 use crate::IngestOptions;
 
 use csl::style::Formatting;
 
 #[derive(Debug, Clone)]
-pub struct PlainText {}
+pub struct PlainText;
 
 impl Default for PlainText {
     fn default() -> Self {
@@ -24,12 +25,8 @@ impl OutputFormat for PlainText {
     type Output = String;
 
     #[inline]
-    fn ingest(&self, s: &str, o: IngestOptions) -> Self::Build {
-        if o.replace_hyphens {
-            s.replace('-', "\u{2013}")
-        } else {
-            s.to_string()
-        }
+    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
+        micro_html_to_string(input, options)
     }
 
     #[inline]

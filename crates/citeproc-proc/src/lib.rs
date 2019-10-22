@@ -29,6 +29,7 @@ mod number;
 mod renderer;
 mod unicode;
 mod walker;
+mod sort;
 
 pub(crate) mod prelude {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

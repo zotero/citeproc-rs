@@ -20,6 +20,12 @@ pub enum GroupVars {
     DidRender,
 }
 
+impl Default for GroupVars {
+    fn default() -> Self {
+        GroupVars::new()
+    }
+}
+
 use self::GroupVars::*;
 
 impl GroupVars {

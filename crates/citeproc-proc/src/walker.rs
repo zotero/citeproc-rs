@@ -15,13 +15,13 @@ use std::sync::Arc;
 
 use crate::choose::{CondChecker, UselessCondChecker};
 
-pub enum WalkerFoldType {
-    Group,
-    Layout,
+pub enum WalkerFoldType<'a> {
+    Group(&'a Group),
+    Layout(&'a Layout),
     IfThen,
     Else,
     Substitute,
-    Macro,
+    Macro(&'a TextElement),
 }
 
 pub trait StyleWalker {
@@ -110,10 +110,10 @@ pub trait StyleWalker {
         Self::Output::default()
     }
     fn group(&mut self, group: &Group) -> Self::Output {
-        self.fold(&group.elements, WalkerFoldType::Group)
+        self.fold(&group.elements, WalkerFoldType::Group(group))
     }
     fn layout(&mut self, layout: &Layout) -> Self::Output {
-        self.fold(&layout.elements, WalkerFoldType::Layout)
+        self.fold(&layout.elements, WalkerFoldType::Layout(layout))
     }
     fn walk_citation(&mut self, style: &Style) -> Self::Output {
         self.layout(&style.citation.layout)
@@ -123,6 +123,9 @@ pub trait StyleWalker {
             .bibliography
             .as_ref()
             .map(|bib| self.layout(&bib.layout))
+    }
+    fn bibliography(&mut self, bib: &Bibliography) -> Self::Output {
+        self.layout(&bib.layout)
     }
     fn element(&mut self, element: &Element) -> Self::Output {
         match element {

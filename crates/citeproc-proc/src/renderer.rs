@@ -75,30 +75,132 @@ impl<O: OutputFormat> GenericContext<'_, O> {
     }
 }
 
-use GenericContext::*;
+use crate::choose::CondChecker;
+use citeproc_io::DateOrRange;
+use csl::style::{CslType, Position};
+use csl::variables::{AnyVariable, DateVariable};
 
-pub struct Renderer<'a, O: OutputFormat> {
-    ctx: GenericContext<'a, O>,
+impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
+    fn has_variable(&self, var: AnyVariable) -> bool {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::has_variable(ctx, var),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::has_variable(ctx, var),
+        }
+    }
+    fn is_numeric(&self, var: AnyVariable) -> bool {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_numeric(ctx, var),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_numeric(ctx, var),
+        }
+    }
+    fn is_disambiguate(&self) -> bool {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_disambiguate(ctx),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_disambiguate(ctx),
+        }
+    }
+    fn csl_type(&self) -> CslType {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::csl_type(ctx),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::csl_type(ctx),
+        }
+    }
+    fn locator_type(&self) -> Option<LocatorType> {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::locator_type(ctx),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::locator_type(ctx),
+        }
+    }
+    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::get_date(ctx, dvar),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::get_date(ctx, dvar),
+        }
+    }
+    fn position(&self) -> Position {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::position(ctx),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::position(ctx),
+        }
+    }
+    fn features(&self) -> &csl::version::Features {
+        match self {
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::features(ctx),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::features(ctx),
+        }
+    }
 }
 
-impl<O: OutputFormat> Renderer<'_, O> {
-    pub fn refr<'c>(c: &'c RefContext<'c, O>) -> Renderer<'c, O> {
+use GenericContext::*;
+
+pub struct Renderer<'a, O: OutputFormat, Custom: OutputFormat = O> {
+    ctx: GenericContext<'a, O>,
+    format: &'a Custom,
+}
+
+impl<'c, O: OutputFormat> Renderer<'c, O, O> {
+    pub fn refr(c: &'c RefContext<'c, O>) -> Self {
         Renderer {
             ctx: GenericContext::Ref(c),
+            format: c.format,
         }
     }
 
-    pub fn cite<'c>(c: &'c CiteContext<'c, O>) -> Renderer<'c, O> {
+    pub fn cite(c: &'c CiteContext<'c, O>) -> Self {
         Renderer {
             ctx: GenericContext::Cit(c),
+            format: &c.format,
         }
+    }
+}
+
+impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
+    pub fn sorting<'c>(ctx: GenericContext<'c, O>, format: &'c O2) -> Renderer<'c, O, O2> {
+        Renderer { ctx, format }
     }
 
     #[inline]
-    fn fmt(&self) -> &O {
-        match self.ctx {
-            GenericContext::Cit(c) => &c.format,
-            GenericContext::Ref(c) => c.format,
+    fn fmt(&self) -> &O2 {
+        self.format
+    }
+
+    /// The spec is slightly impractical to implement:
+    ///
+    /// > Number variables rendered within the macro with cs:number and date variables are treated
+    /// > the same as when they are called via variable.
+    ///
+    /// ... bu when it's a macro, you have to produce a string. So we just do an arbitrary amount
+    /// of left-padding.
+    pub fn number_sort_string(
+        &self,
+        var: NumberVariable,
+        form: NumericForm,
+        val: &NumericValue,
+        af: &Affixes,
+        text_case: TextCase,
+    ) -> O2::Build {
+        use citeproc_io::NumericToken;
+        use crate::number::{roman_lower, roman_representable};
+        let fmt = self.fmt();
+        match (val, form) {
+            (NumericValue::Tokens(_, ts), _) => {
+                let mut s = String::new();
+                for t in ts {
+                    if !s.is_empty() {
+                        s.push(',');
+                    }
+                    if let NumericToken::Num(n) = t {
+                        s.push_str(&format!("{:08}", n));
+                    }
+                }
+                let options = IngestOptions {
+                    replace_hyphens: false,
+                    text_case,
+                };
+                fmt.affixed_text(s, None, af)
+            }
+            // TODO: text-case
+            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), None, af),
         }
     }
 
@@ -110,7 +212,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         f: Option<Formatting>,
         af: &Affixes,
         text_case: TextCase,
-    ) -> O::Build {
+    ) -> O2::Build {
         use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
         match (val, form) {
@@ -124,6 +226,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
                 let b = fmt.with_format(b, f);
                 fmt.affixed(b, af)
             }
+            // TODO: text-case
             _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, af),
         }
     }
@@ -143,7 +246,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         quo: bool,
         text_case: TextCase,
         // sp, tc, disp
-    ) -> O::Build {
+    ) -> O2::Build {
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(quo);
         let options = IngestOptions {
@@ -174,7 +277,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         quo: bool,
         text_case: TextCase,
         // sp, tc, disp
-    ) -> Option<O::Build> {
+    ) -> Option<O2::Build> {
         if value.len() == 0 {
             return None;
         }
@@ -199,7 +302,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         af: &Affixes,
         quo: bool,
         // sp, tc, disp
-    ) -> Option<O::Build> {
+    ) -> Option<O2::Build> {
         let fmt = self.fmt();
         let locale = self.ctx.locale();
         let quotes = Renderer::<O>::quotes(quo);
@@ -208,7 +311,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
             .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, af, quotes.as_ref()))
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O2::Build> {
         let NameLabel {
             form,
             formatting,
@@ -248,7 +351,7 @@ impl<O: OutputFormat> Renderer<'_, O> {
         f: Option<Formatting>,
         af: &Affixes,
         text_case: TextCase,
-    ) -> Option<O::Build> {
+    ) -> Option<O2::Build> {
         let fmt = self.fmt();
         let selector =
             GenderedTermSelector::from_number_variable(&self.ctx.locator_type(), var, form);
@@ -269,3 +372,4 @@ impl<O: OutputFormat> Renderer<'_, O> {
         })
     }
 }
+

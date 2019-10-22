@@ -962,7 +962,7 @@ pub struct SortKey {
     pub names_min: Option<u32>,
     pub names_use_first: Option<u32>,
     pub names_use_last: Option<u32>,
-    pub sort: Option<SortDirection>,
+    pub direction: Option<SortDirection>,
 }
 
 /// You must sort on either a variable or a macro
@@ -972,7 +972,7 @@ pub enum SortSource {
     Macro(Atom),
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SortDirection {
     Ascending,

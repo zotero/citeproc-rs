@@ -86,13 +86,15 @@ use csl::{IsIndependent, Atom};
 
 pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {
     let mut walker = FreeCondWalker {
-        db
+        db,
+        macro_stack: Vec::new(),
     };
     walker.walk_citation(&db.style())
 }
 
 struct FreeCondWalker<'a, DB: IrDatabase> {
     db: &'a DB,
+    macro_stack: Vec<Atom>,
 }
 
 impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
@@ -112,19 +114,22 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
         }
         f
     }
-    fn text_macro(&mut self, text: &TextElement, m: &Atom) -> Self::Output {
+
+    fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.db.style();
-        let macro_unsafe = style.macros.get(m).expect("macro errors not implemented!");
-        // TODO: reinstate macro recursion prevention with a new state arg
-        // if state.macro_stack.contains(&name) {
-        //     panic!(
-        //         "foiled macro recursion: {} called from within itself; exiting",
-        //         &name
-        //     );
-        // }
-        // state.macro_stack.insert(name.clone());
-        self.fold(macro_unsafe, WalkerFoldType::Macro)
+        let macro_unsafe = style.macros.get(name).expect("macro errors not implemented!");
+
+        if self.macro_stack.contains(&name) {
+            panic!(
+                "foiled macro recursion: {} called from within itself; exiting",
+                &name
+            );
+        }
+        self.macro_stack.push(name.clone());
+        let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
+        self.macro_stack.pop();
+        ret
     }
 
     fn text_variable(&mut self, text: &TextElement, sv: StandardVariable, form: VariableForm) -> Self::Output {

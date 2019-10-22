@@ -13,9 +13,9 @@ use crate::output::FormatCmd;
 pub struct PlainWriter {}
 
 impl MarkupWriter for PlainWriter {
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    fn stack_preorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
 
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {}
+    fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
 
     fn write_inline(&self, s: &mut String, inline: &InlineElement) {
         inline.to_plain_inner(s, self);

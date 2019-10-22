@@ -208,7 +208,7 @@ impl FromNode for SortKey {
             names_min: attribute_option_int(node, "names-min")?,
             names_use_first: attribute_option_int(node, "names-min")?,
             names_use_last: attribute_option_int(node, "names-min")?,
-            sort: attribute_option(node, "sort", info)?,
+            direction: attribute_option(node, "sort", info)?,
         })
     }
 }

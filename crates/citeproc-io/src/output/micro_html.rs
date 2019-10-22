@@ -41,6 +41,54 @@ pub trait HtmlReader<T> {
     }
 }
 
+pub fn micro_html_to_string<'a>(fragment: &'a str, options: IngestOptions) -> String {
+    let mut parser = TagParser::new(&fragment);
+    let reader = PlainHtmlReader { options };
+    let result: Vec<String> = parser.walk(&reader);
+    let mut res: Option<String> = None;
+    for r in result {
+        res = match res {
+            Some(ref mut acc) => {
+                acc.push_str(&r);
+                continue;
+            }
+            None => Some(r),
+        }
+    }
+    res.unwrap_or_default()
+}
+
+struct PlainHtmlReader {
+    options: IngestOptions,
+}
+
+impl HtmlReader<String> for PlainHtmlReader {
+    fn constructor(&self, tag: &Tag, children: Vec<String>) -> Vec<String> {
+        match tag.name {
+            "i" => children,
+            "b" => children,
+            "sup" => children,
+            "sub" => children,
+            "span" => match tag.attrs {
+                // very specific!
+                [("style", "font-variant:small-caps;")] | [("style", "font-variant: small-caps;")] => children,
+                [("class", "nocase")] => children,
+                _ => return vec![],
+            },
+            _ => return vec![],
+        }
+    }
+
+    fn plain(&self, s: &str) -> Option<String> {
+        let x = if self.options.replace_hyphens {
+            s.replace('-', "\u{2013}")
+        } else {
+            s.to_string()
+        };
+        Some(x)
+    }
+}
+
 struct MicroHtmlReader {
     options: IngestOptions,
 }
@@ -66,7 +114,7 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
         vec![single]
     }
 
-    fn plain(&self, s: &str) -> Option<MicroNode> {
+    fn plain<'input>(&self, s: &'input str) -> Option<MicroNode> {
         let x = if self.options.replace_hyphens {
             s.replace('-', "\u{2013}")
         } else {
@@ -115,8 +163,8 @@ struct TagParser {
 
 use stringreader::StringReader;
 
-impl TagParser {
-    fn new(input: &str) -> Self {
+impl<'input> TagParser {
+    fn new(input: &'input str) -> Self {
         let opts = ParseOpts {
             tree_builder: TreeBuilderOpts {
                 drop_doctype: true,

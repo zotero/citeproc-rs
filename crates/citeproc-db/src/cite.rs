@@ -60,11 +60,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
     fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
 
-    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
-
-    fn bib_number(&self, id: CiteId) -> Option<u32>;
-    // fn ref_bib_number(&self, id: Atom) -> u32;
-
     #[salsa::interned]
     fn cite(&self, cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>>) -> CiteId;
     #[salsa::input]
@@ -285,92 +280,3 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
     }
 }
 
-use csl::style::{Sort, SortSource};
-use csl::variables::*;
-use std::cmp::Ordering;
-
-/// Creates a total ordering of References from a Sort element.
-fn bib_ordering(a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Ordering {
-    //
-    fn compare_demoting_none<T: Ord>(aa: Option<&T>, bb: Option<&T>) -> Ordering {
-        match (aa, bb) {
-            (None, None) => Ordering::Equal,
-            (None, Some(_)) => Ordering::Greater,
-            (Some(_), None) => Ordering::Less,
-            (Some(aaa), Some(bbb)) => aaa.cmp(bbb),
-        }
-    }
-    let mut ord = Ordering::Equal;
-    for key in sort.keys.iter() {
-        // If an ordering is found, you don't need to tie-break any further with more sort keys.
-        if ord != Ordering::Equal {
-            break;
-        }
-        ord = match key.sort_source {
-            // TODO: implement macro-based sorting using a new Proc method
-            SortSource::Macro(_) => Ordering::Equal,
-            // For variables, we're not going to use the CiteContext wrappers, because if a
-            // variable is not defined directly on the reference, it shouldn't be sortable-by, so
-            // will just come back as None from reference.xxx.get() and produce Equal.
-            SortSource::Variable(any) => match any {
-                AnyVariable::Ordinary(v) => {
-                    compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
-                }
-                AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
-                AnyVariable::Name(_) => Ordering::Equal,
-                AnyVariable::Date(_) => Ordering::Equal,
-            },
-        };
-    }
-    ord
-}
-
-fn sorted_refs(db: &impl CiteDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
-    let style = db.style();
-    let bib = match style.bibliography {
-        None => None,
-        Some(ref b) => b.sort.as_ref(),
-    };
-
-    let mut citation_numbers = FnvHashMap::default();
-
-    // only the references that exist go in the bibliography
-    // first, compute refs in the order that they are cited.
-    // stable sorting will cause this to be the final tiebreaker.
-    let all = db.all_keys();
-    let all_cite_ids = db.all_cite_ids();
-    let mut preordered = Vec::with_capacity(all.len());
-    let mut i = 1;
-    for &id in all_cite_ids.iter() {
-        let ref_id = &id.lookup(db).ref_id;
-        if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
-            preordered.push(ref_id.clone());
-            citation_numbers.insert(ref_id.clone(), i as u32);
-            i += 1;
-        }
-    }
-    let refs = if let Some(ref sort) = bib {
-        // dbg!(sort);
-        preordered.sort_by(|a, b| {
-            let ar = db.reference_input(a.clone());
-            let br = db.reference_input(b.clone());
-            bib_ordering(&ar, &br, sort, &style)
-        });
-        preordered
-    } else {
-        // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
-        // they are cited.
-        preordered
-    };
-    for (i, ref_id) in refs.iter().enumerate() {
-        citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
-    }
-    Arc::new((refs, citation_numbers))
-}
-
-fn bib_number(db: &impl CiteDatabase, id: CiteId) -> Option<u32> {
-    let cite = id.lookup(db);
-    let arc = db.sorted_refs();
-    let (_, ref lookup_ref_ids) = &*arc;
-    lookup_ref_ids.get(&cite.ref_id).cloned()
-}

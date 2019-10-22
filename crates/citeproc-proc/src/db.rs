@@ -11,8 +11,8 @@ use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSet
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, ClusterId, Name};
-use csl::style::{Position, TextElement};
+use citeproc_io::{Cite, ClusterId, Name, Reference};
+use csl::style::{Position, TextElement, Style, Bibliography};
 use csl::variables::NameVariable;
 use csl::Atom;
 
@@ -69,6 +69,18 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
+
+
+    // Sorting
+
+    #[salsa::invoke(crate::sort::sorted_refs)]
+    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
+    #[salsa::invoke(crate::sort::sort_string_citation)]
+    fn sort_string_citation(&self, ref_id: Atom, macro_name: Atom) -> Arc<String>;
+    #[salsa::invoke(crate::sort::sort_string_bibliography)]
+    fn sort_string_bibliography(&self, ref_id: Atom, macro_name: Atom) -> Option<Arc<String>>;
+    #[salsa::invoke(crate::sort::bib_number)]
+    fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
 
 fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
@@ -231,7 +243,7 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 }
 
 // Not cached
-fn ref_bib_number(db: &impl CiteDatabase, ref_id: &Atom) -> u32 {
+fn ref_bib_number(db: &impl IrDatabase, ref_id: &Atom) -> u32 {
     let srs = db.sorted_refs();
     let (_, ref lookup_ref_ids) = &*srs;
     let ret = lookup_ref_ids.get(ref_id).cloned();
@@ -910,21 +922,14 @@ fn built_cluster(
 // TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then
 // mutate.
 
-fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
-    let sorted_refs_arc = db.sorted_refs();
-    let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-    let bib_number = citation_numbers_by_id
-        .get(&ref_id)
-        .expect("sorted_refs should contain a bib_item key")
-        .clone();
+pub fn with_bib_context<T>(db: &impl IrDatabase, ref_id: Atom, bib_number: Option<u32>, f: impl Fn(&Bibliography, CiteContext) -> T) -> Option<T> {
     let style = db.style();
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
-    let refr = db.reference(ref_id.clone())?;
-
+    let refr = db.reference(ref_id)?;
+    let (names_delimiter, name_el) = db.name_info_bibliography();
     if let Some(bib) = &style.bibliography {
-        let (names_delimiter, name_el) = db.name_info_bibliography();
-        let mut ctx = CiteContext {
+        let ctx = CiteContext {
             reference: &refr,
             format: db.get_formatter(),
             cite_id: None,
@@ -934,12 +939,26 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             disamb_pass: None,
             style: &style,
             locale: &locale,
-            bib_number: Some(bib_number),
+            bib_number,
             in_bibliography: true,
             names_delimiter,
             name_citation: name_el,
         };
-        let layout = &bib.layout;
+        Some(f(bib, ctx))
+    } else {
+        None
+    }
+}
+
+fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
+    let sorted_refs_arc = db.sorted_refs();
+    let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
+    let bib_number = citation_numbers_by_id
+        .get(&ref_id)
+        .expect("sorted_refs should contain a bib_item key")
+        .clone();
+
+    with_bib_context(db, ref_id.clone(), Some(bib_number), |bib, mut ctx| {
         let mut state = IrState::new();
         let mut ir = bib.intermediate(db, &mut state, &ctx).0;
 
@@ -957,10 +976,8 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         }
 
         let matching = refs_accepting_cite(db, &ir, &ctx);
-        Some(Arc::new(IrGen::new(ir, matching, state)))
-    } else {
-        None
-    }
+        Arc::new(IrGen::new(ir, matching, state))
+    })
 }
 
 fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
@@ -977,3 +994,4 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         Arc::new(fmt.output(fmt.plain("")))
     }
 }
+
