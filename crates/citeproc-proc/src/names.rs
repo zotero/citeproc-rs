@@ -12,8 +12,8 @@ use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::style::{
-    DelimiterPrecedes, Name as NameEl, NameAnd, NameAsSortOrder, NameEtAl, NameForm, NameLabel,
-    NameLabelInput, NamePart, Names, Position,
+    DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
+    NameEtAl, NameForm, NameLabel, NameLabelInput, NamePart, Names, Position,
 };
 use csl::variables::NameVariable;
 use csl::Atom;
@@ -299,15 +299,7 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
     let parts: Vec<NamePartToken> = order
         .iter()
         .cloned()
-        .filter(|npt| match npt {
-            NamePartToken::Given => pn.given.is_some(),
-            NamePartToken::Family => pn.family.is_some(),
-            NamePartToken::NonDroppingParticle => pn.non_dropping_particle.is_some(),
-            NamePartToken::DroppingParticle => pn.dropping_particle.is_some(),
-            NamePartToken::Suffix => pn.suffix.is_some(),
-            NamePartToken::Space => true,
-            NamePartToken::SortSeparator => true,
-        })
+        .filter(|npt| pn_filter_part(pn, *npt))
         .collect();
 
     // don't include leading or trailing spaces or delimiters
@@ -347,6 +339,18 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
         })
 }
 
+fn pn_filter_part(pn: &PersonName, token: NamePartToken) -> bool {
+    match token {
+        NamePartToken::Given => pn.given.is_some(),
+        NamePartToken::Family => pn.family.is_some(),
+        NamePartToken::NonDroppingParticle => pn.non_dropping_particle.is_some(),
+        NamePartToken::DroppingParticle => pn.dropping_particle.is_some(),
+        NamePartToken::Suffix => pn.suffix.is_some(),
+        NamePartToken::Space => true,
+        NamePartToken::SortSeparator => true,
+    }
+}
+
 fn should_delimit_after<O: OutputFormat>(
     prec: DelimiterPrecedes,
     name: &OneNameVar<'_, O>,
@@ -377,7 +381,7 @@ pub struct OneNameVar<'a, O: OutputFormat> {
     pub name_el: &'a NameEl,
     pub bump_name_count: u16,
     // From Style
-    pub demote_non_dropping_particle: csl::style::DemoteNonDroppingParticle,
+    pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool,
     pub fmt: &'a O,
 }
@@ -481,17 +485,67 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn render_person_name(&self, pn: &PersonName, seen_one: bool) -> O::Build {
-        let fmt = self.fmt;
-        let format_with_part = |o_part: &Option<NamePart>, s: &str| {
-            match o_part {
-                None => fmt.plain(s),
-                Some(ref part) => {
-                    // TODO: text-case
-                    fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
+    pub(crate) fn person_name_sort_keys(
+        &self,
+        pn: &PersonName,
+        out: &mut Vec<String>,
+    ) {
+        let order = get_sort_order(
+            pn_is_latin_cyrillic(pn),
+            self.name_el.form == Some(NameForm::Long),
+            self.demote_non_dropping_particle,
+        );
+        let strings = order.iter().cloned().map(|sort_token| {
+            let mut s = String::new();
+            for token in sort_token.iter().cloned().filter(|npt| pn_filter_part(pn, *npt)) {
+                match token {
+                    NamePartToken::Given => {
+                        if let Some(ref given) = pn.given {
+                            // TODO: parametrize for disambiguation
+                            let string = initialize(
+                                &given,
+                                self.name_el.initialize.unwrap_or(true),
+                                self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
+                                self.initialize_with_hyphen,
+                            );
+                            s.push_str(&string);
+                        }
+                    }
+                    NamePartToken::Family => {
+                        if let Some(ref family) = pn.family {
+                            s.push_str(&family);
+                        }
+                    }
+                    NamePartToken::NonDroppingParticle => {
+                        s.push_str(&pn.non_dropping_particle.as_ref().unwrap());
+                    }
+                    NamePartToken::DroppingParticle => {
+                        s.push_str(&pn.dropping_particle.as_ref().unwrap());
+                    }
+                    NamePartToken::Suffix => {
+                        s.push_str(&pn.suffix.as_ref().unwrap());
+                    }
+                    NamePartToken::Space => {}
+                    NamePartToken::SortSeparator => {}
                 }
             }
-        };
+            out.push(s);
+        });
+    }
+
+    fn format_with_part(&self, o_part: &Option<NamePart>, s: &str) -> O::Build {
+        let fmt = self.fmt;
+        match o_part {
+            None => fmt.plain(s),
+            Some(ref part) => {
+                // TODO: text-case, IngestOptions
+                fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
+            }
+        }
+    }
+
+    pub(crate) fn render_person_name(&self, pn: &PersonName, seen_one: bool) -> O::Build {
+        let fmt = self.fmt;
 
         let order = get_display_order(
             pn_is_latin_cyrillic(pn),
@@ -514,13 +568,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
                             self.initialize_with_hyphen,
                         );
-                        build.push(format_with_part(name_part, &string));
+                        build.push(self.format_with_part(name_part, &string));
                     }
                 }
                 NamePartToken::Family => {
                     let name_part = &self.name_el.name_part_family;
                     let string = pn.family.as_ref().unwrap();
-                    build.push(format_with_part(name_part, &string));
+                    build.push(self.format_with_part(name_part, &string));
                 }
                 NamePartToken::NonDroppingParticle => {
                     build.push(fmt.plain(&pn.non_dropping_particle.as_ref().unwrap()));
@@ -539,7 +593,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         fmt.plain(&sep)
                     } else {
                         fmt.plain(", ")
-                    })
+                    });
                 }
             }
         }
@@ -634,7 +688,9 @@ pub enum NameTokenBuilt<'a, B> {
     Built(B),
 }
 
-use self::ord::{get_display_order, get_sort_order, DisplayOrdering, NamePartToken};
+use self::ord::{
+    get_display_order, get_sort_order, DisplayOrdering, NamePartToken, SortOrdering, SortToken,
+};
 
 #[allow(dead_code)]
 mod ord {
@@ -667,15 +723,9 @@ mod ord {
     }
 
     pub type SortOrdering = &'static [SortToken];
-
-    #[derive(PartialEq)]
-    pub enum SortToken {
-        One(NamePartToken),
-        Two(NamePartToken, NamePartToken),
-    }
+    pub type SortToken = &'static [NamePartToken];
 
     use self::NamePartToken::*;
-    use self::SortToken::*;
 
     pub fn get_display_order(latin: bool, long: bool, naso: bool, demote: DNDP) -> DisplayOrdering {
         match (latin, long, naso, demote) {
@@ -753,16 +803,16 @@ mod ord {
     static LATIN_SHORT: DisplayOrdering = &[NonDroppingParticle, Space, Family];
 
     static LATIN_SORT_NEVER: SortOrdering = &[
-        Two(NonDroppingParticle, Family),
-        One(DroppingParticle),
-        One(Given),
-        One(Suffix),
+        &[NonDroppingParticle, Family],
+        &[DroppingParticle],
+        &[Given],
+        &[Suffix],
     ];
     static LATIN_SORT: SortOrdering = &[
-        One(Family),
-        Two(DroppingParticle, NonDroppingParticle),
-        One(Given),
-        One(Suffix),
+        &[Family],
+        &[DroppingParticle, NonDroppingParticle],
+        &[Given],
+        &[Suffix],
     ];
 
     static NON_LATIN_LONG: DisplayOrdering = &[
@@ -770,6 +820,6 @@ mod ord {
         Given,
     ];
     static NON_LATIN_SHORT: DisplayOrdering = &[Family];
-    static NON_LATIN_SORT_LONG: SortOrdering = &[One(Family), One(Given)];
-    static NON_LATIN_SORT_SHORT: SortOrdering = &[One(Family)];
+    static NON_LATIN_SORT_LONG: SortOrdering = &[&[Family], &[Given]];
+    static NON_LATIN_SORT_SHORT: SortOrdering = &[&[Family]];
 }
