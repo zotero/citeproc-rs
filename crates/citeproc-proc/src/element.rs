@@ -69,20 +69,12 @@ where
         match *self {
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
-            Element::Text(TextElement {
-                ref source,
-                formatting: f,
-                affixes: ref af,
-                quotes: quo,
-                strip_periods: sp,
-                text_case: tc,
-                display: _disp,
-            }) => {
+            Element::Text(ref text) => {
                 use citeproc_io::output::LocalizedQuotes;
                 use csl::style::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-                let _quotes = if quo { Some(&q) } else { None };
-                match *source {
+                let _quotes = if text.quotes { Some(&q) } else { None };
+                match text.source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
                         let macro_unsafe = ctx
@@ -100,13 +92,13 @@ where
                             );
                         }
                         state.macro_stack.insert(name.clone());
-                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), f, af.clone());
+                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), text.formatting, text.affixes.clone());
                         state.macro_stack.remove(&name);
                         out
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer
-                            .text_value(value, f, af, quo, tc)
+                            .text_value(text, value)
                             .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::NoneSeen)
                     }
@@ -117,7 +109,7 @@ where
                                 return (
                                     IR::Rendered(Some(CiteEdgeData::YearSuffix(
                                         renderer
-                                            .text_value(&base26, f, af, quo, tc)
+                                            .text_value(text, &base26)
                                             .expect("we made base26 ourselves, it is not empty"),
                                     ))),
                                     GroupVars::DidRender,
@@ -133,7 +125,7 @@ where
                                 } else {
                                     state.maybe_suppress_ordinary(v);
                                     ctx.get_ordinary(v, form)
-                                        .map(|val| renderer.text_variable(var, val, f, af, quo, tc))
+                                        .map(|val| renderer.text_variable(text, var, val))
                                 }
                             }
                             StandardVariable::Number(v) => {
@@ -142,7 +134,7 @@ where
                                 } else {
                                     state.maybe_suppress_num(v);
                                     ctx.get_number(v).map(|val| {
-                                        renderer.text_variable(var, val.verbatim(), f, af, quo, tc)
+                                        renderer.text_variable(text, var, val.verbatim())
                                     })
                                 }
                             }
@@ -153,46 +145,33 @@ where
                     }
                     TextSource::Term(term_selector, plural) => {
                         let content = renderer
-                            .text_term(term_selector, plural, f, &af, quo)
+                            .text_term(text, term_selector, plural)
                             .map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }
             }
 
-            Element::Label(LabelElement {
-                variable: var,
-                form,
-                formatting: f,
-                affixes: ref af,
-                strip_periods: _sp,
-                text_case: tc,
-                plural: pl,
-            }) => {
+            Element::Label(ref label) => {
+                let var = label.variable;
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
                     ctx.get_number(var)
-                        .and_then(|val| renderer.numeric_label(var, form, val, pl, f, af, tc))
+                        .and_then(|val| renderer.numeric_label(label, val))
                         .map(CiteEdgeData::from_number_variable(var, true))
                 };
                 (IR::Rendered(content), GroupVars::new())
             }
 
-            Element::Number(NumberElement {
-                variable: var,
-                form,
-                formatting: f,
-                affixes: ref af,
-                text_case: tc,
-                display: _disp,
-            }) => {
+            Element::Number(ref number) => {
+                let var = number.variable;
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
                     state.maybe_suppress_num(var);
                     ctx.get_number(var)
-                        .map(|val| renderer.number(var, form, &val, f, af, tc))
+                        .map(|val| renderer.number(number, &val))
                         .map(CiteEdgeData::Output)
                 };
                 let gv = GroupVars::rendered_if(content.is_some());

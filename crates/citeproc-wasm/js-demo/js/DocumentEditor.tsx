@@ -2,6 +2,8 @@ import { Document, RenderedDocument } from './Document';
 import React, { useState, useEffect, useCallback } from 'react';
 import { NoteCluster, Cite } from '../../pkg';
 
+import './bibliography.css';
+
 const btnStyle = {
     display: "inline"
 }
@@ -37,13 +39,16 @@ const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: Render
         let touched = renderedDocument.updatedLastRevision[c.id];
         return <ClusterViewer key={c.id} note={c.note} html={html} touched={touched} />
     });
-    let bibs = renderedDocument.bibliography.map((str, x) => {
+    let bibs = renderedDocument.bibliographyIds.map((key, x) => {
+        let str = renderedDocument.bibliography[key];
         return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
     });
     return <div>
         {clusters}
         <h2>Bibliography</h2>
-        {bibs}
+        <div className="csl-bib-body">
+            {bibs}
+        </div>
     </div>;
 });
 

@@ -15,25 +15,70 @@ use std::sync::Arc;
 pub enum DocUpdate {
     // We recomputed a cluster -- it now needs to be re-rendered
     Cluster(ClusterId),
-    // Update a bibliography entry at an index
-    BibEntry(u32),
-    WholeBibliography,
 }
 
-#[derive(Default, Debug, Clone, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SecondFieldAlign {
+    Flush,
+    Margin,
+}
+
+/// Mostly imitates the citeproc-js API.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BibliographyMeta<O: OutputFormat = Markup> {
+      pub max_offset: u32,
+      /// Represents line spacing between entries
+      pub entry_spacing: u32,
+      /// Represents line spacing within entries
+      pub line_spacing: u32,
+      /// Whether hanging-indent should be applied
+      pub hanging_indent: bool,
+
+      // XXX: the CSL spec does a bad job explaining how to implement this.
+
+      /// When the second-field-align CSL option is set, this returns either “flush” or “margin”.
+      /// The calling application should align text in bibliography output as described in the CSL specification.
+      /// Where second-field-align is not set, this is undefined.
+      pub second_field_align: Option<SecondFieldAlign>,
+
+      /// Contains information along the lines of citeproc-js' `bibstart` and `bibend` strings for
+      /// open and close tags
+      pub format_meta: O::BibMeta,
+}
+
+use csl::Atom;
+use fnv::FnvHashMap;
+
+#[derive(Clone, Serialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BibliographyUpdate<O: OutputFormat = Markup> {
+    /// Contains Reference Ids mapped to their bibliography outputs
+    pub updated_entries: FnvHashMap<Atom, Arc<O::Output>>,
+    /// None if the sort is the same, otherwise contains all entries in order
+    /// Entries that cease to be present in the list between updates are considered to have been removed.
+    pub entry_ids: Option<Vec<Atom>>,
+}
+
+impl BibliographyUpdate {
+    pub fn new() -> Self {
+        BibliographyUpdate::default()
+    }
+}
+
+#[derive(Default, Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSummary<O: OutputFormat = Markup> {
-    // A list of clusters that were updated, paired with the formatted output for each
+    /// A list of clusters that were updated, paired with the formatted output for each
     pub clusters: Vec<(ClusterId, Arc<O::Output>)>,
-    // Not sure if this way is better than DocUpdate::BibEntry(id)
-    // pub bib_entries: Vec<(u32, Arc<O::Output>)>,
+    pub bibliography: Option<BibliographyUpdate>,
 }
 
 impl UpdateSummary {
     pub fn summarize(db: &impl IrDatabase, updates: &[DocUpdate]) -> Self {
         let ids = updates.iter().filter_map(|&u| match u {
             DocUpdate::Cluster(x) => Some(x),
-            _ => None,
         });
         let mut set = fnv::FnvHashSet::default();
         for id in ids {
@@ -43,6 +88,6 @@ impl UpdateSummary {
         for id in set {
             clusters.push((id, db.built_cluster(id)));
         }
-        UpdateSummary { clusters }
+        UpdateSummary { clusters, bibliography: None }
     }
 }

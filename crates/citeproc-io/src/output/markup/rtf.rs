@@ -99,6 +99,11 @@ impl InlineElement {
             Text(text) => {
                 rtf_escape_into(text, s);
             }
+            Div(_display, inlines) => {
+                for i in inlines {
+                    i.to_rtf_inner(s, options);
+                }
+            }
             Micro(micros) => {
                 for micro in micros {
                     micro.to_rtf_inner(s, options);

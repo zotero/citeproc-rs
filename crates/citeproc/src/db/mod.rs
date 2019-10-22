@@ -11,7 +11,7 @@ mod test;
 
 use crate::prelude::*;
 
-use self::update::{DocUpdate, UpdateSummary};
+use self::update::{DocUpdate, UpdateSummary, BibliographyMeta, SecondFieldAlign, BibliographyUpdate};
 use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 use citeproc_proc::db::IrDatabaseStorage;
 
@@ -35,6 +35,21 @@ use csl::Atom;
 type MarkupBuild = <Markup as OutputFormat>::Build;
 #[allow(dead_code)]
 type MarkupOutput = <Markup as OutputFormat>::Output;
+use fnv::FnvHashMap;
+
+struct SavedBib {
+    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>,
+    bib_entries: FnvHashMap<Atom, Arc<MarkupOutput>>,
+}
+
+impl SavedBib {
+    fn new() -> Self {
+        SavedBib {
+            sorted_refs: Arc::new(Default::default()),
+            bib_entries: Default::default(),
+        }
+    }
+}
 
 #[salsa::database(
     StyleDatabaseStorage,
@@ -48,6 +63,7 @@ pub struct Processor {
     queue: Arc<Mutex<Vec<DocUpdate>>>,
     save_updates: bool,
     formatter: Markup,
+    last_bibliography: Arc<Mutex<SavedBib>>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -91,6 +107,7 @@ impl ParallelDatabase for Processor {
             queue: self.queue.clone(),
             save_updates: self.save_updates,
             formatter: self.formatter.clone(),
+            last_bibliography: self.last_bibliography.clone(),
         })
     }
 }
@@ -159,6 +176,7 @@ impl Processor {
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
             formatter: Markup::default(),
+            last_bibliography: Arc::new(Mutex::new(SavedBib::new())),
         };
         citeproc_db::safe_default(&mut db);
         db
@@ -238,8 +256,16 @@ impl Processor {
         }
         self.compute();
         let mut queue = self.queue.lock();
-        let summary = UpdateSummary::summarize(self, &*queue);
+        let mut summary = UpdateSummary::summarize(self, &*queue);
         queue.clear();
+        // Technically, you should probably have a lock over save_and_diff_bibliography as well, so
+        // you get a point-in-time shapshot, but at the moment, that would mean recursively locking
+        // queue as computing the bibliography will also create salsa events.
+        drop(queue);
+        if self.get_style().bibliography.is_some() {
+            let bib = self.save_and_diff_bibliography();
+            summary.bibliography = bib;
+        }
         summary
     }
 
@@ -354,6 +380,58 @@ impl Processor {
 
     pub fn get_bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput> {
         self.bib_item(ref_id)
+    }
+
+    fn get_bibliography_map(&self) -> FnvHashMap<Atom, Arc<MarkupOutput>> {
+        let sorted_refs = self.sorted_refs();
+        let mut m = FnvHashMap::with_capacity_and_hasher(sorted_refs.0.len(), fnv::FnvBuildHasher::default());
+        for key in sorted_refs.0.iter() {
+            m.insert(key.clone(), self.bib_item(key.clone()));
+        }
+        m
+    }
+
+    pub fn get_bibliography_meta(&self) -> Option<BibliographyMeta> {
+        let style = self.get_style();
+        style.bibliography.as_ref().map(|bib| {
+            BibliographyMeta {
+                // TODO
+                max_offset: 0,
+                entry_spacing: bib.entry_spacing,
+                line_spacing: bib.line_spaces,
+                hanging_indent: bib.hanging_indent,
+                // To avoid serde derive in csl
+                second_field_align: bib.second_field_align.as_ref().map(|s| match s {
+                    csl::style::SecondFieldAlign::Flush => SecondFieldAlign::Flush,
+                    csl::style::SecondFieldAlign::Margin => SecondFieldAlign::Margin,
+                }),
+                format_meta: self.formatter.meta()
+            }
+        })
+    }
+
+    fn save_and_diff_bibliography(&self) -> Option<BibliographyUpdate> {
+        let mut last_bibliography = self.last_bibliography.lock();
+        let new = self.get_bibliography_map();
+        let old = std::mem::replace(&mut *last_bibliography, SavedBib::new());
+        let mut update = BibliographyUpdate::new();
+        for (k, v) in new.iter() {
+            let old_v = old.bib_entries.get(k);
+            if Some(v) != old_v {
+                update.updated_entries.insert(k.clone(), v.clone());
+            }
+        }
+        last_bibliography.bib_entries = new;
+        let sorted_refs = self.sorted_refs();
+        if sorted_refs != old.sorted_refs {
+            update.entry_ids = Some(sorted_refs.0.clone());
+            last_bibliography.sorted_refs = sorted_refs;
+            Some(update)
+        } else if update.updated_entries.is_empty() {
+            None
+        } else {
+            Some(update)
+        }
     }
 
     pub fn get_bibliography(&self) -> Vec<MarkupOutput> {

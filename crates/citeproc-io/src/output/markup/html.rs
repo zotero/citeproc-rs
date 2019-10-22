@@ -8,6 +8,7 @@ use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use csl::style::DisplayMode;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlWriter {
@@ -129,12 +130,47 @@ impl InlineElement {
         }
         s
     }
+    // fn is_disp(&self, disp: DisplayMode) -> bool {
+    //     match *self {
+    //         Div(display, _) => disp == display,
+    //         _ => false,
+    //     }
+    // }
+    // fn collapsing_left_margin(inlines: &[InlineElement], s: &mut s) {
+    //     use super::InlineElement::*;
+    //     let mut iter = inlines.iter().peekable();
+    //     while let Some(i) = iter.next() {
+    //         let peek = iter.peek();
+    //         match i {
+    //             Div(display, inlines) => {
+    //                 if display == DisplayMode::LeftMargin {
+    //                     if let Some(peek) = iter.peek() {
+    //                         if !peek.is_disp(DisplayMode::RightInline) {
+    //                             Div(DisplayMode::Block)
+    //                             continue;
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         i.to_html_inner(&mut s, options);
+    //     }
+    // }
     fn to_html_inner(&self, s: &mut String, options: &HtmlWriter) {
         use super::InlineElement::*;
         match self {
             Text(text) => {
                 use v_htmlescape::escape;
                 s.push_str(&escape(text).to_string());
+            }
+            Div(display, inlines) => {
+                use std::fmt::Write;
+                let disp: &str = display.as_ref();
+                write!(s, "<div class=\"csl-{}\">", disp).unwrap();
+                for i in inlines {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str("</div>");
             }
             Micro(micros) => {
                 for micro in micros {

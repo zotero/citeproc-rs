@@ -187,10 +187,11 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
 
     fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
         let renderer = self.renderer();
-        let val = renderer.text_value(&value, None, &text.affixes, text.quotes, text.text_case);
+        let val = renderer.text_value(text, &value);
         (val.unwrap_or_default(), GroupVars::new())
     }
 
+    // TODO: reinstate variable suppression
     fn text_variable(
         &mut self,
         text: &TextElement,
@@ -201,12 +202,12 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         let res = match svar {
             StandardVariable::Number(nvar) => {
                 self.ctx.get_number(nvar).map(|nval| {
-                    renderer.text_variable(svar, nval.verbatim(), None, &text.affixes, text.quotes, text.text_case)
+                    renderer.text_variable(text, svar, nval.verbatim())
                 })
             }
             StandardVariable::Ordinary(var) => {
                 self.ctx.get_ordinary(var, form).map(|val| {
-                    renderer.text_variable(svar, val, None, &text.affixes, text.quotes, text.text_case)
+                    renderer.text_variable(text, svar, val)
                 })
             }
         };
@@ -214,6 +215,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         (res.unwrap_or_default(), gv)
     }
 
+    // TODO: reinstate variable suppression
     fn number(&mut self, number: &NumberElement) -> Self::Output {
         let renderer = self.renderer();
         let var = number.variable;

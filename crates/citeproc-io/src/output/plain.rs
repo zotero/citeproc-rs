@@ -8,7 +8,7 @@ use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use super::micro_html::micro_html_to_string;
 use crate::IngestOptions;
 
-use csl::style::Formatting;
+use csl::style::{Formatting, DisplayMode};
 
 #[derive(Debug, Clone)]
 pub struct PlainText;
@@ -23,6 +23,11 @@ impl OutputFormat for PlainText {
     type Input = String;
     type Build = String;
     type Output = String;
+    type BibMeta = ();
+
+    fn meta(&self) -> Self::BibMeta {
+        ()
+    }
 
     #[inline]
     fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
@@ -74,6 +79,11 @@ impl OutputFormat for PlainText {
 
     #[inline]
     fn with_format(&self, a: Self::Build, _f: Option<Formatting>) -> Self::Build {
+        a
+    }
+
+    #[inline]
+    fn with_display(&self, a: Self::Build, _d: Option<DisplayMode>, _in_bib: bool) -> Self::Build {
         a
     }
 

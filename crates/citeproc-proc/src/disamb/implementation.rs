@@ -80,13 +80,13 @@ impl Disambiguation<Markup> for Element {
     ) -> (RefIR, GroupVars) {
         let renderer = Renderer::refr(ctx);
         let fmt = ctx.format;
-        match *self {
+        match self {
             // TODO: keep track of which empty variables caused GroupVars to not render, if
             // they are indeed free variables.
-            Element::Group(ref g) => g.ref_ir(db, ctx, state, stack),
-            Element::Names(ref n) => n.ref_ir(db, ctx, state, stack),
-            Element::Choose(ref c) => c.ref_ir(db, ctx, state, stack),
-            Element::Date(ref dt) => {
+            Element::Group(g) => g.ref_ir(db, ctx, state, stack),
+            Element::Names(n) => n.ref_ir(db, ctx, state, stack),
+            Element::Choose(c) => c.ref_ir(db, ctx, state, stack),
+            Element::Date(dt) => {
                 let var = dt.variable();
                 if state.is_suppressed_date(var) {
                     (RefIR::Edge(None), GroupVars::OnlyEmpty)
@@ -95,14 +95,8 @@ impl Disambiguation<Markup> for Element {
                     dt.ref_ir(db, ctx, state, stack)
                 }
             }
-            Element::Number(NumberElement {
-                variable: var,
-                form,
-                formatting: f,
-                affixes: ref af,
-                text_case: tc,
-                display: _d,
-            }) => {
+            Element::Number(number) => {
+                let var = number.variable;
                 let content = if state.is_suppressed_num(var) {
                     None
                 } else {
@@ -116,7 +110,7 @@ impl Disambiguation<Markup> for Element {
                             .reference
                             .number
                             .get(&v)
-                            .map(|val| renderer.number(var, form, &val.clone(), f, af, tc)),
+                            .map(|val| renderer.number(number, &val.clone())),
                     }
                 };
                 let content = content
@@ -126,15 +120,7 @@ impl Disambiguation<Markup> for Element {
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
             }
-            Element::Text(TextElement {
-                source: ref src,
-                formatting: f,
-                affixes: ref af,
-                quotes: quo,
-                strip_periods: sp,
-                text_case: tc,
-                display: _disp,
-            }) => match *src {
+            Element::Text(text) => match text.source {
                 TextSource::Variable(var, form) => {
                     if var == StandardVariable::Number(NumberVariable::Locator) {
                         if let Some(_loctype) = ctx.locator_type {
@@ -167,7 +153,7 @@ impl Disambiguation<Markup> for Element {
                             } else {
                                 state.maybe_suppress_ordinary(v);
                                 ctx.get_ordinary(v, form)
-                                    .map(|val| renderer.text_variable(var, val, f, af, quo, tc))
+                                    .map(|val| renderer.text_variable(text, var, val))
                             }
                         }
                         StandardVariable::Number(v) => {
@@ -176,7 +162,7 @@ impl Disambiguation<Markup> for Element {
                             } else {
                                 state.maybe_suppress_num(v);
                                 ctx.get_number(v).map(|val| {
-                                    renderer.text_variable(var, val.verbatim(), f, af, quo, tc)
+                                    renderer.text_variable(text, var, val.verbatim())
                                 })
                             }
                         }
@@ -190,7 +176,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 TextSource::Value(ref val) => {
                     let content = renderer
-                        .text_value(&val, f, af, quo, tc)
+                        .text_value(text, &val)
                         .map(|x| fmt.output_in_context(x, stack))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
@@ -198,7 +184,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 TextSource::Term(term_selector, plural) => {
                     let content = renderer
-                        .text_term(term_selector, plural, f, &af, quo)
+                        .text_term(text, term_selector, plural)
                         .map(|x| fmt.output_in_context(x, stack))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
@@ -211,20 +197,13 @@ impl Disambiguation<Markup> for Element {
                         .get(name)
                         .expect("macro errors not implemented!");
                     // state.macro_stack.insert(name.clone());
-                    let out = ref_sequence(db, ctx, state, &macro_unsafe, "".into(), f, af.clone());
+                    let out = ref_sequence(db, ctx, state, &macro_unsafe, "".into(), text.formatting, text.affixes.clone());
                     // state.macro_stack.remove(&name);
                     out
                 }
             },
-            Element::Label(LabelElement {
-                variable: var,
-                form,
-                formatting: f,
-                affixes: ref af,
-                strip_periods: _sp,
-                text_case: tc,
-                plural: pl,
-            }) => {
+            Element::Label(label) => {
+                let var = label.variable;
                 let custom = match var {
                     NumberVariable::Locator if ctx.locator_type.is_some() => {
                         Some(EdgeData::LocatorLabel)
@@ -251,7 +230,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 let content = ctx
                     .get_number(var)
-                    .and_then(|val| renderer.numeric_label(var, form, val.clone(), pl, f, af, tc))
+                    .and_then(|val| renderer.numeric_label(label, val.clone()))
                     .map(|x| fmt.output_in_context(x, stack))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));

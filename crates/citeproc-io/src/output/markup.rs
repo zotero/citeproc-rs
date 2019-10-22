@@ -11,6 +11,7 @@ use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::style::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
+    DisplayMode,
 };
 
 mod rtf;
@@ -38,6 +39,7 @@ pub enum QuoteType {
     DoubleQuote,
 }
 
+
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum InlineElement {
@@ -53,6 +55,7 @@ pub enum InlineElement {
         url: String,
         content: Vec<InlineElement>,
     },
+    Div(DisplayMode, Vec<InlineElement>),
 }
 
 impl Markup {
@@ -76,10 +79,31 @@ impl Default for Markup {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct MarkupBibMeta {
+    #[serde(rename = "markupPre")]
+    markup_pre: String,
+    #[serde(rename = "markupPost")]
+    markup_post: String,
+}
+
 impl OutputFormat for Markup {
     type Input = String;
     type Build = Vec<InlineElement>;
     type Output = String;
+    type BibMeta = MarkupBibMeta;
+
+    fn meta(&self) -> Self::BibMeta {
+        let (pre, post) = match self {
+            Markup::Html(_) => ("<div class=\"csl-bib-body\">", "</div>"),
+            Markup::Rtf(_) => ("", ""),
+            Markup::Plain(_) => ("", ""),
+        };
+        MarkupBibMeta {
+            markup_pre: pre.to_string(),
+            markup_post: post.to_string(),
+        }
+    }
 
     #[inline]
     fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
@@ -125,6 +149,16 @@ impl OutputFormat for Markup {
     #[inline]
     fn with_format(&self, a: Self::Build, f: Option<Formatting>) -> Self::Build {
         self.fmt_vec(a, f)
+    }
+
+    #[inline]
+    fn with_display(&self, a: Self::Build, display: Option<DisplayMode>, in_bib: bool) -> Self::Build {
+        if in_bib {
+            if let Some(d) = display {
+                return vec![InlineElement::Div(d, a)]
+            }
+        }
+        a
     }
 
     #[inline]

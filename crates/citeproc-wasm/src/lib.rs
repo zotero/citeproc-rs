@@ -21,6 +21,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
+use serde::Serialize;
 
 use citeproc::prelude::*;
 use citeproc::Processor;
@@ -93,19 +94,23 @@ impl Driver {
         Ok(())
     }
 
+    fn serde_result<T>(&self, f: impl Fn(&Processor) -> T) -> Result<JsValue, JsValue> where T: Serialize {
+        let engine = self.engine.borrow();
+        let to_serialize = f(&engine);
+        Ok(JsValue::from_serde(&to_serialize).unwrap())
+    }
+
     /// Gets a list of locales in use by the references currently loaded.
     ///
     /// Note that Driver comes pre-loaded with the `en-US` locale.
     #[wasm_bindgen(js_name = "toFetch")]
-    pub fn locales_to_fetch(&self) -> JsValue {
-        let langs: Vec<String> = self
-            .engine
-            .borrow()
-            .get_langs_in_use()
-            .iter()
-            .map(|l| l.to_string())
-            .collect();
-        JsValue::from_serde(&langs).unwrap()
+    pub fn locales_to_fetch(&self) -> Result<JsValue, JsValue> {
+        self.serde_result(|engine| {
+            engine.get_langs_in_use()
+                .iter()
+                .map(|l| l.to_string())
+                .collect::<Vec<_>>()
+        })
     }
 
     /// Inserts or replaces a cluster with a matching `id`.
@@ -146,8 +151,12 @@ impl Driver {
 
     #[wasm_bindgen(js_name = "makeBibliography")]
     pub fn full_bibliography(&self) -> Result<JsValue, JsValue> {
-        let built = self.engine.borrow().get_bibliography();
-        Ok(JsValue::from_serde(&built).unwrap())
+        self.serde_result(|engine| engine.get_bibliography())
+    }
+
+    #[wasm_bindgen(js_name = "bibliographyMeta")]
+    pub fn bibliography_meta(&self) -> Result<JsValue, JsValue> {
+        self.serde_result(|engine| engine.get_bibliography_meta())
     }
 
     /// Replaces cluster numberings in one go.
@@ -320,8 +329,14 @@ export type Reference = {
 
 export type CslType = "book" | "article" | "legal_case" | "article-journal";
 
+export interface BibliographyUpdate {
+    updatedEntries: { [key: string]: string };
+    entryIds?: string[];
+}
+
 export type UpdateSummary<Output = string> = {
     clusters: [number, Output][];
+    bibliography?: BibliographyUpdate;
 };
 
 type InvalidCsl = {

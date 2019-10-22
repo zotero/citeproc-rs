@@ -10,7 +10,8 @@ export class RenderedDocument {
     /** Caches HTML for a ClusterId, that is pulled from the driver */
     public builtClusters: { [id: number]: string } = {};
 
-    public bibliography: Array<string>;
+    public bibliographyIds: Array<string> = [];
+    public bibliography: { [id: string]: string } = {};
 
     public orderedClusterIds: Array<OrderedClusterIds> = [];
 
@@ -24,19 +25,29 @@ export class RenderedDocument {
             // TODO: send note through a round trip and get it from builtCluster
             this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
-        this.bibliography = driver.makeBibliography();
+        // this.bibliography = driver.makeBibliography();
     }
 
-    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>, bib: Array<string>) {
-        return produce(this, draft => {
+    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>) {
+        let neu = produce(this, draft => {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
-            draft.bibliography = bib;
+            let bib = summary.bibliography;
+            if (bib != null) {
+                let entry_ids = bib.entryIds;
+                if (entry_ids != null) {
+                    draft.bibliographyIds = entry_ids;
+                }
+                for (let key of Object.keys(bib.updatedEntries)) {
+                    draft.bibliography[key] = bib.updatedEntries[key];
+                }
+            }
             for (let [id, built] of summary.clusters) {
                 draft.builtClusters[id] = built;
                 draft.updatedLastRevision[id] = true;
             }
-        })
+        });
+        return neu;
     }
 
 }
@@ -79,7 +90,7 @@ export class Document {
         driver.initClusters(this.clusters);
         this.rendered = new RenderedDocument(this.clusters, driver);
         // Drain the update queue, because we know we're up to date
-        this.driver.batchedUpdates();
+        this.driver.drain();
     }
 
     /** Warning: Does not free the old driver. You should have kept a copy to call free() on. */
@@ -98,8 +109,7 @@ export class Document {
         return produce(this, draft => {
             fn(draft);
             let summary = driver.batchedUpdates();
-            let bib = driver.makeBibliography();
-            draft.rendered = draft.rendered.update(summary, this.ordered(), bib);
+            draft.rendered = draft.rendered.update(summary, this.ordered());
         });
     };
 

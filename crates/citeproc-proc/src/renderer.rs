@@ -3,7 +3,7 @@ use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{NameLabel, NumericForm, Plural, Style, TextCase};
+use csl::style::{NameLabel, NumericForm, Plural, Style, TextCase, DisplayMode, TextElement, NumberElement, LabelElement};
 use csl::terms::{
     GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
     TextTermSelector,
@@ -35,6 +35,12 @@ impl<O: OutputFormat> GenericContext<'_, O> {
         match self {
             GenericContext::Cit(ctx) => ctx.reference,
             GenericContext::Ref(ctx) => ctx.reference,
+        }
+    }
+    pub fn in_bibliography(&self) -> bool {
+        match self {
+            GenericContext::Cit(ctx) => ctx.in_bibliography,
+            GenericContext::Ref(ctx) => false,
         }
     }
     pub fn format(&self) -> &O {
@@ -206,28 +212,28 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
 
     pub fn number(
         &self,
-        var: NumberVariable,
-        form: NumericForm,
+        number: &NumberElement,
         val: &NumericValue,
-        f: Option<Formatting>,
-        af: &Affixes,
-        text_case: TextCase,
     ) -> O2::Build {
         use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
-        match (val, form) {
+        match (val, number.form) {
             (NumericValue::Tokens(_, ts), NumericForm::Roman) if roman_representable(&val) => {
                 let options = IngestOptions {
-                    replace_hyphens: var.should_replace_hyphens(),
-                    text_case,
+                    replace_hyphens: number.variable.should_replace_hyphens(),
+                    text_case: number.text_case,
                 };
                 let string = roman_lower(&ts);
                 let b = fmt.ingest(&string, options);
-                let b = fmt.with_format(b, f);
-                fmt.affixed(b, af)
+                let b = fmt.with_format(b, number.formatting);
+                let b = fmt.affixed(b, &number.affixes);
+                fmt.with_display(b, number.display, self.ctx.in_bibliography())
             }
             // TODO: text-case
-            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), f, af),
+            _ => {
+                let b = fmt.affixed_text(val.as_number(number.variable.should_replace_hyphens()), number.formatting, &number.affixes);
+                fmt.with_display(b, number.display, self.ctx.in_bibliography())
+            }
         }
     }
 
@@ -239,25 +245,22 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
 
     pub fn text_variable(
         &self,
+        text: &TextElement,
         var: StandardVariable,
         value: &str,
-        f: Option<Formatting>,
-        af: &Affixes,
-        quo: bool,
-        text_case: TextCase,
-        // sp, tc, disp
     ) -> O2::Build {
+        warn!("{:?}", text);
         let fmt = self.fmt();
-        let quotes = Renderer::<O>::quotes(quo);
+        let quotes = Renderer::<O>::quotes(text.quotes);
         let options = IngestOptions {
             replace_hyphens: match var {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
                 StandardVariable::Number(v) => v.should_replace_hyphens(),
             },
-            text_case,
+            text_case: text.text_case,
         };
         let b = fmt.ingest(value, options);
-        let txt = fmt.with_format(b, f);
+        let txt = fmt.with_format(b, text.formatting);
 
         let txt = match var {
             StandardVariable::Ordinary(v) => {
@@ -266,49 +269,45 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
             }
             StandardVariable::Number(_) => txt,
         };
-        fmt.affixed_quoted(txt, &af, quotes.as_ref())
+        let b = fmt.affixed_quoted(txt, &text.affixes, quotes.as_ref());
+        fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
     pub fn text_value(
         &self,
+        text: &TextElement,
         value: &str,
-        f: Option<Formatting>,
-        af: &Affixes,
-        quo: bool,
-        text_case: TextCase,
-        // sp, tc, disp
     ) -> Option<O2::Build> {
         if value.len() == 0 {
             return None;
         }
         let fmt = self.fmt();
-        let quotes = Renderer::<O>::quotes(quo);
+        let quotes = Renderer::<O>::quotes(text.quotes);
         let b = fmt.ingest(
             value,
             IngestOptions {
-                text_case,
+                text_case: text.text_case,
                 ..Default::default()
             },
         );
-        let txt = fmt.with_format(b, f);
-        Some(fmt.affixed_quoted(txt, af, quotes.as_ref()))
+        let b = fmt.with_format(b, text.formatting);
+        let b = fmt.affixed_quoted(b, &text.affixes, quotes.as_ref());
+        let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
+        Some(b)
     }
 
     pub fn text_term(
         &self,
+        text: &TextElement,
         term_selector: TextTermSelector,
         plural: bool,
-        f: Option<Formatting>,
-        af: &Affixes,
-        quo: bool,
-        // sp, tc, disp
     ) -> Option<O2::Build> {
         let fmt = self.fmt();
         let locale = self.ctx.locale();
-        let quotes = Renderer::<O>::quotes(quo);
+        let quotes = Renderer::<O>::quotes(text.quotes);
         locale
             .get_text_term(term_selector, plural)
-            .map(|val| fmt.affixed_text_quoted(val.to_owned(), f, af, quotes.as_ref()))
+            .map(|val| fmt.affixed_text_quoted(val.to_owned(), text.formatting, &text.affixes, quotes.as_ref()))
     }
 
     pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O2::Build> {
@@ -344,31 +343,31 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
 
     pub fn numeric_label(
         &self,
-        var: NumberVariable,
-        form: TermForm,
+        label: &LabelElement,
         num_val: NumericValue,
-        plural: Plural,
-        f: Option<Formatting>,
-        af: &Affixes,
-        text_case: TextCase,
     ) -> Option<O2::Build> {
         let fmt = self.fmt();
         let selector =
-            GenderedTermSelector::from_number_variable(&self.ctx.locator_type(), var, form);
-        let plural = match (num_val, plural) {
+            GenderedTermSelector::from_number_variable(&self.ctx.locator_type(), label.variable, label.form);
+        let plural = match (num_val, label.plural) {
             (ref val, Plural::Contextual) => val.is_multiple(),
             (_, Plural::Always) => true,
             (_, Plural::Never) => false,
         };
         selector.and_then(|sel| {
             let options = IngestOptions {
-                text_case,
+                text_case: label.text_case,
                 ..Default::default()
             };
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
-                .map(|val| fmt.affixed(fmt.with_format(fmt.ingest(val, options), f), &af))
+                .map(|val| {
+                    let b = fmt.ingest(val, options);
+                    let b = fmt.with_format(b, label.formatting);
+                    let b = fmt.affixed(b, &label.affixes);
+                    b
+                })
         })
     }
 }

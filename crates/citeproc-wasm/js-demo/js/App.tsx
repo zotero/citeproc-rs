@@ -51,9 +51,19 @@ let initialStyle = `<style class="note">
     </layout>
   </citation>
   <bibliography>
-  <layout>
-    <text value="done" />
-  </layout>
+      <layout>
+      <group>
+        <choose>
+            <if variable="author">
+                <text value="Some Author" display="left-margin" />
+            </if>
+            <else>
+                <text value="no author" display="left-margin" />
+            </else>
+        </choose>
+        <text variable="title" display="right-inline" />
+      </group>
+      </layout>
   </bibliography>
 </style>`;
 

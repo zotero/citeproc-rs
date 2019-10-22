@@ -51,6 +51,11 @@ impl InlineElement {
                 use v_htmlescape::escape;
                 s.push_str(&escape(text).to_string());
             }
+            Div(_display, inlines) => {
+                for i in inlines {
+                    i.to_plain_inner(s, options);
+                }
+            }
             Micro(micros) => {
                 for micro in micros {
                     micro.to_plain_inner(s, options);
