@@ -60,9 +60,9 @@ impl SavedBib {
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
+    pub formatter: Markup,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
     save_updates: bool,
-    formatter: Markup,
     last_bibliography: Arc<Mutex<SavedBib>>,
 }
 

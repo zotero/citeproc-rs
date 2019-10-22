@@ -146,12 +146,21 @@ impl TestCase {
 
 fn get_bib_string(proc: &Processor) -> String {
     let bib = proc.get_bibliography();
+    let fmt = &proc.formatter;
     let mut string = String::new();
     string.push_str("<div class=\"csl-bib-body\">");
     for entry in bib {
-        string.push_str("\n  <div class=\"csl-entry\">");
-        string.push_str(&entry);
-        string.push_str("</div>");
+        string.push('\n');
+        match fmt {
+            Markup::Html(_) => {
+                string.push_str("  <div class=\"csl-entry\">");
+                string.push_str(&entry);
+                string.push_str("</div>");
+            }
+            _ => {
+                string.push_str(&entry);
+            }
+        }
     }
     string.push_str("\n</div>");
     string
