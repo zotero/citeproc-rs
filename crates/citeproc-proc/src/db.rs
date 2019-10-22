@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name, Reference};
-use csl::style::{Position, TextElement, Style, Bibliography};
+use csl::style::{Bibliography, Position, Style, TextElement};
 use csl::variables::NameVariable;
 use csl::Atom;
 
@@ -69,7 +69,6 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     #[salsa::interned]
     fn edge(&self, e: EdgeData) -> Edge;
-
 
     // Sorting
 
@@ -546,7 +545,14 @@ fn disambiguate_add_names(
                 break;
             }
             if also_expand {
-                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir, n as u32);
+                expand_one_name_ir(
+                    db,
+                    ir,
+                    ctx,
+                    &initial_refs,
+                    &mut nir_arc.lock(),
+                    n as u32,
+                );
             }
             let new_count = total_ambiguity_number(&mut nir);
             nir.achieved_count(new_count);
@@ -922,7 +928,12 @@ fn built_cluster(
 // TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then
 // mutate.
 
-pub fn with_bib_context<T>(db: &impl IrDatabase, ref_id: Atom, bib_number: Option<u32>, f: impl Fn(&Bibliography, CiteContext) -> T) -> Option<T> {
+pub fn with_bib_context<T>(
+    db: &impl IrDatabase,
+    ref_id: Atom,
+    bib_number: Option<u32>,
+    f: impl Fn(&Bibliography, CiteContext) -> T,
+) -> Option<T> {
     let style = db.style();
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
@@ -994,4 +1005,3 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         Arc::new(fmt.output(fmt.plain("")))
     }
 }
-

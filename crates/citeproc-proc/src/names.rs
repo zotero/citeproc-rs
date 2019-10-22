@@ -4,11 +4,11 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::prelude::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
-
+use self::initials::initialize;
 use super::unicode::is_latin_cyrillic;
+use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
+use crate::prelude::*;
+use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::style::{
@@ -16,14 +16,13 @@ use csl::style::{
     NameLabelInput, NamePart, Names, Position,
 };
 use csl::variables::NameVariable;
-
 use csl::Atom;
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 mod initials;
-use self::initials::initialize;
 
-use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
-use crate::NamesInheritance;
+fn name_sort_keys(names: &Names) {}
 
 /// One NameIR per variable
 pub fn to_individual_name_irs<'a, O: OutputFormat>(
@@ -635,7 +634,7 @@ pub enum NameTokenBuilt<'a, B> {
     Built(B),
 }
 
-use self::ord::{get_display_order, DisplayOrdering, NamePartToken};
+use self::ord::{get_display_order, get_sort_order, DisplayOrdering, NamePartToken};
 
 #[allow(dead_code)]
 mod ord {

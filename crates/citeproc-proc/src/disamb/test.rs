@@ -4,8 +4,8 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::get_free_conds;
 use super::free::{FreeCond, FreeCondSets};
+use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;

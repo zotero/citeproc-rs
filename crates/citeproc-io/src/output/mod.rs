@@ -21,7 +21,7 @@ use std::marker::{Send, Sync};
 // pub use self::plain::PlainText;
 // pub use self::markup::Markup;
 
-use csl::style::{Affixes, Formatting, DisplayMode};
+use csl::style::{Affixes, DisplayMode, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,7 +155,12 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     }
 
     fn with_format(&self, a: Self::Build, f: Option<Formatting>) -> Self::Build;
-    fn with_display(&self, a: Self::Build, display: Option<DisplayMode>, in_bibliography: bool) -> Self::Build;
+    fn with_display(
+        &self,
+        a: Self::Build,
+        display: Option<DisplayMode>,
+        in_bibliography: bool,
+    ) -> Self::Build;
 
     fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build;
 

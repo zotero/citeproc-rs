@@ -1,14 +1,14 @@
-use std::sync::Arc;
-use citeproc_io::Reference;
-use fnv::FnvHashMap;
 use crate::db::with_bib_context;
 use crate::prelude::*;
-use csl::Atom;
 use citeproc_io::output::plain::PlainText;
+use citeproc_io::Reference;
+use csl::Atom;
+use fnv::FnvHashMap;
 use std::borrow::Cow;
+use std::sync::Arc;
 
-use csl::variables::*;
 use csl::style::*;
+use csl::variables::*;
 
 use csl::variables::*;
 use std::cmp::Ordering;
@@ -31,7 +31,11 @@ pub fn sort_string_citation(db: &impl IrDatabase, ref_id: Atom, macro_name: Atom
     unimplemented!()
 }
 
-pub fn sort_string_bibliography(db: &impl IrDatabase, ref_id: Atom, macro_name: Atom) -> Option<Arc<String>> {
+pub fn sort_string_bibliography(
+    db: &impl IrDatabase,
+    ref_id: Atom,
+    macro_name: Atom,
+) -> Option<Arc<String>> {
     with_bib_context(db, ref_id.clone(), None, |bib, ctx| {
         let mut walker = SortingWalker::new(&ctx);
         let mut text = plain_macro_element(macro_name.clone());
@@ -92,12 +96,21 @@ pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
 }
 
 /// Creates a total ordering of References from a Sort element. (Not a query)
-pub fn bib_ordering(db: &impl IrDatabase,  a: &Reference, b: &Reference, sort: &Sort, _style: &Style) -> Ordering {
+pub fn bib_ordering(
+    db: &impl IrDatabase,
+    a: &Reference,
+    b: &Reference,
+    sort: &Sort,
+    _style: &Style,
+) -> Ordering {
     enum Demoted {
         Left,
         Right,
     }
-    fn compare_demoting_none<T: Ord>(aa: Option<&T>, bb: Option<&T>) -> (Ordering, Option<Demoted>) {
+    fn compare_demoting_none<T: Ord>(
+        aa: Option<&T>,
+        bb: Option<&T>,
+    ) -> (Ordering, Option<Demoted>) {
         match (aa, bb) {
             (None, None) => (Ordering::Equal, None),
             (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
@@ -116,7 +129,7 @@ pub fn bib_ordering(db: &impl IrDatabase,  a: &Reference, b: &Reference, sort: &
                 let a_string = db.sort_string_bibliography(a.id.clone(), macro_name.clone());
                 let b_string = db.sort_string_bibliography(b.id.clone(), macro_name.clone());
                 (a_string.cmp(&b_string), None)
-            },
+            }
             // For variables, we're not going to use the CiteContext wrappers, because if a
             // variable is not defined directly on the reference, it shouldn't be sortable-by, so
             // will just come back as None from reference.xxx.get() and produce Equal.
@@ -177,9 +190,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
                     s.push_str(&child);
                     continue;
                 }
-                None => {
-                    Some(child)
-                }
+                None => Some(child),
             }
         }
         (output.unwrap_or_default(), gv_acc)
@@ -200,16 +211,14 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     ) -> Self::Output {
         let renderer = self.renderer();
         let res = match svar {
-            StandardVariable::Number(nvar) => {
-                self.ctx.get_number(nvar).map(|nval| {
-                    renderer.text_variable(text, svar, nval.verbatim())
-                })
-            }
-            StandardVariable::Ordinary(var) => {
-                self.ctx.get_ordinary(var, form).map(|val| {
-                    renderer.text_variable(text, svar, val)
-                })
-            }
+            StandardVariable::Number(nvar) => self
+                .ctx
+                .get_number(nvar)
+                .map(|nval| renderer.text_variable(text, svar, nval.verbatim())),
+            StandardVariable::Ordinary(var) => self
+                .ctx
+                .get_ordinary(var, form)
+                .map(|val| renderer.text_variable(text, svar, val)),
         };
         let gv = GroupVars::rendered_if(res.is_some());
         (res.unwrap_or_default(), gv)
@@ -219,8 +228,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn number(&mut self, number: &NumberElement) -> Self::Output {
         let renderer = self.renderer();
         let var = number.variable;
-        let content = self.ctx.get_number(var)
-            .map(|val| renderer.number_sort_string(var, number.form, &val, &number.affixes, number.text_case));
+        let content = self.ctx.get_number(var).map(|val| {
+            renderer.number_sort_string(var, number.form, &val, &number.affixes, number.text_case)
+        });
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)
     }
@@ -228,7 +238,10 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.ctx.style;
-        let macro_unsafe = style.macros.get(name).expect("macro errors not implemented!");
+        let macro_unsafe = style
+            .macros
+            .get(name)
+            .expect("macro errors not implemented!");
 
         if self.macro_stack.contains(&name) {
             panic!(
@@ -241,5 +254,4 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         self.macro_stack.pop();
         ret
     }
-
 }

@@ -6,8 +6,8 @@ use csl::locale::Locale;
 use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
 use csl::terms::LocatorType;
 use csl::variables::*;
-use std::sync::Arc;
 use csl::version::Features;
+use std::sync::Arc;
 
 use crate::disamb::FreeCond;
 
@@ -223,7 +223,7 @@ impl<'a, O: OutputFormat> DisambCounter<'a, O> {
     }
 }
 
-use csl::style::{Conditions, IfThen, Choose};
+use csl::style::{Choose, Conditions, IfThen};
 
 impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
     type Output = u32;
@@ -254,12 +254,12 @@ impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::disamb::FreeCond;
     use crate::prelude::*;
+    use crate::test::with_test_citation;
     use citeproc_db::LocaleFetcher;
     use csl::locale::Lang;
     use csl::Atom;
-    use crate::disamb::FreeCond;
-    use crate::test::with_test_citation;
 
     #[test]
     fn test_counter() {
@@ -287,7 +287,10 @@ mod test {
         let count_plain = count(FreeCond::empty(), |_| {});
 
         assert_eq!(
-            with_test_citation(count_plain, r#"<choose><if disambiguate="true" /></choose>"#),
+            with_test_citation(
+                count_plain,
+                r#"<choose><if disambiguate="true" /></choose>"#
+            ),
             1
         );
         assert_eq!(

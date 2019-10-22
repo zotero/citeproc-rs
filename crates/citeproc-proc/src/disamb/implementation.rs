@@ -161,9 +161,8 @@ impl Disambiguation<Markup> for Element {
                                 None
                             } else {
                                 state.maybe_suppress_num(v);
-                                ctx.get_number(v).map(|val| {
-                                    renderer.text_variable(text, var, val.verbatim())
-                                })
+                                ctx.get_number(v)
+                                    .map(|val| renderer.text_variable(text, var, val.verbatim()))
                             }
                         }
                     };
@@ -197,7 +196,15 @@ impl Disambiguation<Markup> for Element {
                         .get(name)
                         .expect("macro errors not implemented!");
                     // state.macro_stack.insert(name.clone());
-                    let out = ref_sequence(db, ctx, state, &macro_unsafe, "".into(), text.formatting, text.affixes.clone());
+                    let out = ref_sequence(
+                        db,
+                        ctx,
+                        state,
+                        &macro_unsafe,
+                        "".into(),
+                        text.formatting,
+                        text.affixes.clone(),
+                    );
                     // state.macro_stack.remove(&name);
                     out
                 }
@@ -239,5 +246,4 @@ impl Disambiguation<Markup> for Element {
             }
         }
     }
-
 }

@@ -350,13 +350,13 @@ impl FromNode for TextTermSelector {
 impl FromNode for LabelElement {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LabelElement {
-                variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
-                form: attribute_optional(node, "form", info)?,
-                formatting: Option::from_node(node, info)?,
-                affixes: Affixes::from_node(node, info)?,
-                strip_periods: attribute_bool(node, "strip-periods", false)?,
-                text_case: TextCase::from_node(node, info)?,
-                plural: attribute_optional(node, "plural", info)?,
+            variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
+            form: attribute_optional(node, "form", info)?,
+            formatting: Option::from_node(node, info)?,
+            affixes: Affixes::from_node(node, info)?,
+            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            text_case: TextCase::from_node(node, info)?,
+            plural: attribute_optional(node, "plural", info)?,
         })
     }
 }
@@ -400,7 +400,6 @@ impl FromNode for TextElement {
             display,
         })
     }
-
 }
 
 impl FromNode for NumberElement {

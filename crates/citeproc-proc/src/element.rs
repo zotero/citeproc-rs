@@ -92,14 +92,20 @@ where
                             );
                         }
                         state.macro_stack.insert(name.clone());
-                        let out = sequence(db, state, ctx, &macro_unsafe, "".into(), text.formatting, text.affixes.clone());
+                        let out = sequence(
+                            db,
+                            state,
+                            ctx,
+                            &macro_unsafe,
+                            "".into(),
+                            text.formatting,
+                            text.affixes.clone(),
+                        );
                         state.macro_stack.remove(&name);
                         out
                     }
                     TextSource::Value(ref value) => {
-                        let content = renderer
-                            .text_value(text, value)
-                            .map(CiteEdgeData::Output);
+                        let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
                         (IR::Rendered(content), GroupVars::NoneSeen)
                     }
                     TextSource::Variable(var, form) => {

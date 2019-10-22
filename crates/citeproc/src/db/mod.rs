@@ -11,17 +11,19 @@ mod test;
 
 use crate::prelude::*;
 
-use self::update::{DocUpdate, UpdateSummary, BibliographyMeta, SecondFieldAlign, BibliographyUpdate};
+use self::update::{
+    BibliographyMeta, BibliographyUpdate, DocUpdate, SecondFieldAlign, UpdateSummary,
+};
 use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 use citeproc_proc::db::IrDatabaseStorage;
 
-use parking_lot::Mutex;
 use salsa::Durability;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
+use parking_lot::Mutex;
 
 use csl::error::StyleError;
 use csl::locale::Lang;
@@ -384,7 +386,10 @@ impl Processor {
 
     fn get_bibliography_map(&self) -> FnvHashMap<Atom, Arc<MarkupOutput>> {
         let sorted_refs = self.sorted_refs();
-        let mut m = FnvHashMap::with_capacity_and_hasher(sorted_refs.0.len(), fnv::FnvBuildHasher::default());
+        let mut m = FnvHashMap::with_capacity_and_hasher(
+            sorted_refs.0.len(),
+            fnv::FnvBuildHasher::default(),
+        );
         for key in sorted_refs.0.iter() {
             m.insert(key.clone(), self.bib_item(key.clone()));
         }
@@ -405,7 +410,7 @@ impl Processor {
                     csl::style::SecondFieldAlign::Flush => SecondFieldAlign::Flush,
                     csl::style::SecondFieldAlign::Margin => SecondFieldAlign::Margin,
                 }),
-                format_meta: self.formatter.meta()
+                format_meta: self.formatter.meta(),
             }
         })
     }

@@ -279,4 +279,3 @@ fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>)
         panic!("called cite_position on unknown cite id, {:?}", key);
     }
 }
-

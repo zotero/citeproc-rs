@@ -80,9 +80,12 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
-use csl::style::{Choose, Names, NumberElement, TextElement, LabelElement, VariableForm, Cond, BodyDate, Position, Match, IfThen, Conditions};
+use csl::style::{
+    BodyDate, Choose, Cond, Conditions, IfThen, LabelElement, Match, Names, NumberElement,
+    Position, TextElement, VariableForm,
+};
 use csl::variables::*;
-use csl::{IsIndependent, Atom};
+use csl::{Atom, IsIndependent};
 
 pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {
     let mut walker = FreeCondWalker {
@@ -118,7 +121,10 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.db.style();
-        let macro_unsafe = style.macros.get(name).expect("macro errors not implemented!");
+        let macro_unsafe = style
+            .macros
+            .get(name)
+            .expect("macro errors not implemented!");
 
         if self.macro_stack.contains(&name) {
             panic!(
@@ -132,7 +138,12 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
         ret
     }
 
-    fn text_variable(&mut self, text: &TextElement, sv: StandardVariable, form: VariableForm) -> Self::Output {
+    fn text_variable(
+        &mut self,
+        text: &TextElement,
+        sv: StandardVariable,
+        form: VariableForm,
+    ) -> Self::Output {
         if sv.is_independent() {
             let mut implicit_var_test = FreeCondSets::mult_identity();
             let cond = Cond::Variable((&sv).into());

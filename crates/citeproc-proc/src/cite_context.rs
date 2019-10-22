@@ -13,8 +13,8 @@ use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
 use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
 use csl::variables::*;
-use std::sync::Arc;
 use csl::version::Features;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {

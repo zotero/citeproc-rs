@@ -4,11 +4,11 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use super::micro_html::micro_html_to_string;
+use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::IngestOptions;
 
-use csl::style::{Formatting, DisplayMode};
+use csl::style::{DisplayMode, Formatting};
 
 #[derive(Debug, Clone)]
 pub struct PlainText;

@@ -28,24 +28,23 @@ pub enum SecondFieldAlign {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BibliographyMeta<O: OutputFormat = Markup> {
-      pub max_offset: u32,
-      /// Represents line spacing between entries
-      pub entry_spacing: u32,
-      /// Represents line spacing within entries
-      pub line_spacing: u32,
-      /// Whether hanging-indent should be applied
-      pub hanging_indent: bool,
+    pub max_offset: u32,
+    /// Represents line spacing between entries
+    pub entry_spacing: u32,
+    /// Represents line spacing within entries
+    pub line_spacing: u32,
+    /// Whether hanging-indent should be applied
+    pub hanging_indent: bool,
 
-      // XXX: the CSL spec does a bad job explaining how to implement this.
+    // XXX: the CSL spec does a bad job explaining how to implement this.
+    /// When the second-field-align CSL option is set, this returns either “flush” or “margin”.
+    /// The calling application should align text in bibliography output as described in the CSL specification.
+    /// Where second-field-align is not set, this is undefined.
+    pub second_field_align: Option<SecondFieldAlign>,
 
-      /// When the second-field-align CSL option is set, this returns either “flush” or “margin”.
-      /// The calling application should align text in bibliography output as described in the CSL specification.
-      /// Where second-field-align is not set, this is undefined.
-      pub second_field_align: Option<SecondFieldAlign>,
-
-      /// Contains information along the lines of citeproc-js' `bibstart` and `bibend` strings for
-      /// open and close tags
-      pub format_meta: O::BibMeta,
+    /// Contains information along the lines of citeproc-js' `bibstart` and `bibend` strings for
+    /// open and close tags
+    pub format_meta: O::BibMeta,
 }
 
 use csl::Atom;
@@ -88,6 +87,9 @@ impl UpdateSummary {
         for id in set {
             clusters.push((id, db.built_cluster(id)));
         }
-        UpdateSummary { clusters, bibliography: None }
+        UpdateSummary {
+            clusters,
+            bibliography: None,
+        }
     }
 }

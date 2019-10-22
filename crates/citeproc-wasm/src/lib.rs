@@ -15,13 +15,13 @@ extern crate log;
 use self::utils::ErrorPlaceholder;
 
 use js_sys::{Error, Promise};
+use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
-use serde::Serialize;
 
 use citeproc::prelude::*;
 use citeproc::Processor;
@@ -94,7 +94,10 @@ impl Driver {
         Ok(())
     }
 
-    fn serde_result<T>(&self, f: impl Fn(&Processor) -> T) -> Result<JsValue, JsValue> where T: Serialize {
+    fn serde_result<T>(&self, f: impl Fn(&Processor) -> T) -> Result<JsValue, JsValue>
+    where
+        T: Serialize,
+    {
         let engine = self.engine.borrow();
         let to_serialize = f(&engine);
         Ok(JsValue::from_serde(&to_serialize).unwrap())
@@ -106,7 +109,8 @@ impl Driver {
     #[wasm_bindgen(js_name = "toFetch")]
     pub fn locales_to_fetch(&self) -> Result<JsValue, JsValue> {
         self.serde_result(|engine| {
-            engine.get_langs_in_use()
+            engine
+                .get_langs_in_use()
                 .iter()
                 .map(|l| l.to_string())
                 .collect::<Vec<_>>()

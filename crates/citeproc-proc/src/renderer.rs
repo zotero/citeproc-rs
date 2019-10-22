@@ -3,7 +3,10 @@ use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{NameLabel, NumericForm, Plural, Style, TextCase, DisplayMode, TextElement, NumberElement, LabelElement};
+use csl::style::{
+    DisplayMode, LabelElement, NameLabel, NumberElement, NumericForm, Plural, Style, TextCase,
+    TextElement,
+};
 use csl::terms::{
     GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
     TextTermSelector,
@@ -185,8 +188,8 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         af: &Affixes,
         text_case: TextCase,
     ) -> O2::Build {
-        use citeproc_io::NumericToken;
         use crate::number::{roman_lower, roman_representable};
+        use citeproc_io::NumericToken;
         let fmt = self.fmt();
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
@@ -210,11 +213,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         }
     }
 
-    pub fn number(
-        &self,
-        number: &NumberElement,
-        val: &NumericValue,
-    ) -> O2::Build {
+    pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O2::Build {
         use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
         match (val, number.form) {
@@ -231,7 +230,11 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
             }
             // TODO: text-case
             _ => {
-                let b = fmt.affixed_text(val.as_number(number.variable.should_replace_hyphens()), number.formatting, &number.affixes);
+                let b = fmt.affixed_text(
+                    val.as_number(number.variable.should_replace_hyphens()),
+                    number.formatting,
+                    &number.affixes,
+                );
                 fmt.with_display(b, number.display, self.ctx.in_bibliography())
             }
         }
@@ -273,11 +276,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn text_value(
-        &self,
-        text: &TextElement,
-        value: &str,
-    ) -> Option<O2::Build> {
+    pub fn text_value(&self, text: &TextElement, value: &str) -> Option<O2::Build> {
         if value.len() == 0 {
             return None;
         }
@@ -305,9 +304,14 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         let fmt = self.fmt();
         let locale = self.ctx.locale();
         let quotes = Renderer::<O>::quotes(text.quotes);
-        locale
-            .get_text_term(term_selector, plural)
-            .map(|val| fmt.affixed_text_quoted(val.to_owned(), text.formatting, &text.affixes, quotes.as_ref()))
+        locale.get_text_term(term_selector, plural).map(|val| {
+            fmt.affixed_text_quoted(
+                val.to_owned(),
+                text.formatting,
+                &text.affixes,
+                quotes.as_ref(),
+            )
+        })
     }
 
     pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O2::Build> {
@@ -341,14 +345,13 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         })
     }
 
-    pub fn numeric_label(
-        &self,
-        label: &LabelElement,
-        num_val: NumericValue,
-    ) -> Option<O2::Build> {
+    pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O2::Build> {
         let fmt = self.fmt();
-        let selector =
-            GenderedTermSelector::from_number_variable(&self.ctx.locator_type(), label.variable, label.form);
+        let selector = GenderedTermSelector::from_number_variable(
+            &self.ctx.locator_type(),
+            label.variable,
+            label.form,
+        );
         let plural = match (num_val, label.plural) {
             (ref val, Plural::Contextual) => val.is_multiple(),
             (_, Plural::Always) => true,
@@ -371,4 +374,3 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         })
     }
 }
-

@@ -10,8 +10,7 @@ use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::style::{
-    FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
-    DisplayMode,
+    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 
 mod rtf;
@@ -38,7 +37,6 @@ pub enum QuoteType {
     SingleQuote,
     DoubleQuote,
 }
-
 
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -152,10 +150,15 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn with_display(&self, a: Self::Build, display: Option<DisplayMode>, in_bib: bool) -> Self::Build {
+    fn with_display(
+        &self,
+        a: Self::Build,
+        display: Option<DisplayMode>,
+        in_bib: bool,
+    ) -> Self::Build {
         if in_bib {
             if let Some(d) = display {
-                return vec![InlineElement::Div(d, a)]
+                return vec![InlineElement::Div(d, a)];
             }
         }
         a

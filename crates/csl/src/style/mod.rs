@@ -1069,7 +1069,10 @@ impl Style {
     pub fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>) {
         let nb = Arc::new(self.name_bibliography());
         let nd = self.names_delimiter.clone();
-        let bib_nd = self.bibliography.as_ref().and_then(|bib| bib.names_delimiter.clone());
+        let bib_nd = self
+            .bibliography
+            .as_ref()
+            .and_then(|bib| bib.names_delimiter.clone());
         (bib_nd.or(nd), nb)
     }
     pub fn name_citation(&self) -> Name {

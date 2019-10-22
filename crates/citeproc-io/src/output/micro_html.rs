@@ -71,7 +71,8 @@ impl HtmlReader<String> for PlainHtmlReader {
             "sub" => children,
             "span" => match tag.attrs {
                 // very specific!
-                [("style", "font-variant:small-caps;")] | [("style", "font-variant: small-caps;")] => children,
+                [("style", "font-variant:small-caps;")]
+                | [("style", "font-variant: small-caps;")] => children,
                 [("class", "nocase")] => children,
                 _ => return vec![],
             },

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource},
-    style::{Name, Style, TextElement, TextSource, Delimiter},
+    style::{Delimiter, Name, Style, TextElement, TextSource},
 };
 use fnv::FnvHashSet;
 
@@ -94,7 +94,10 @@ fn name_configurations_inner(
                 name_configurations_inner(style, base, e, buf);
             }
         }
-        Element::Text(TextElement { source: TextSource::Macro(m), .. }) => {
+        Element::Text(TextElement {
+            source: TextSource::Macro(m),
+            ..
+        }) => {
             if let Some(mac) = style.macros.get(m) {
                 for e in mac {
                     name_configurations_inner(style, base, e, buf);
