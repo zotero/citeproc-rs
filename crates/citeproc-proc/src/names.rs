@@ -6,7 +6,9 @@
 
 use self::initials::initialize;
 use super::unicode::is_latin_cyrillic;
-use crate::disamb::names::{DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet};
+use crate::disamb::names::{
+    DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
+};
 use crate::prelude::*;
 use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
@@ -22,7 +24,42 @@ use parking_lot::Mutex;
 
 mod initials;
 
-fn name_sort_keys(names: &Names) {}
+impl DisambNameData {
+    fn lookup_id(&mut self, db: &impl IrDatabase, advance_to_global: bool) -> DisambName {
+        let id = db.disamb_name(self.clone());
+        // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
+        if advance_to_global {
+            let globally_disambiguated = db.disambiguated_person_names();
+            if let Some(my_data) = globally_disambiguated.get(&id) {
+                *self = my_data.clone()
+            }
+        }
+        id
+    }
+}
+
+impl<B> DisambNameRatchet<B> {
+    fn for_person(
+        db: &impl IrDatabase,
+        var: NameVariable,
+        value: PersonName,
+        ref_id: &Atom,
+        name_el: &NameEl,
+        primary: bool,
+        global: bool,
+    ) -> Self {
+        let mut data = DisambNameData {
+            var,
+            value,
+            ref_id: ref_id.clone(),
+            el: name_el.clone(),
+            primary,
+        };
+        let id = data.lookup_id(db, global);
+        let ratchet = PersonDisambNameRatchet::new(&db.style(), id, data);
+        DisambNameRatchet::Person(ratchet)
+    }
+}
 
 /// One NameIR per variable
 pub fn to_individual_name_irs<'a, O: OutputFormat>(
@@ -34,47 +71,38 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     refr: &'a Reference,
     should_start_with_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a {
-    let mut primary = true;
     names
         .variables
         .iter()
         .filter(move |var| !state.is_name_suppressed(**var))
         .filter_map(move |var| refr.name.get(var).map(|val| (*var, val.clone())))
         .map(move |(var, value)| {
-            let ratchets = value.into_iter().map(|value| match value {
-                Name::Person(pn) => {
-                    let mut data = DisambNameData {
-                        ref_id: refr.id.clone(),
-                        var,
-                        el: names_inheritance.name.clone(),
-                        value: pn,
-                        primary,
-                    };
-                    if primary {
-                        primary = false;
-                    }
-                    let id = db.disamb_name(data.clone());
-                    // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
-                    if should_start_with_global {
-                        let globally_disambiguated = db.disambiguated_person_names();
-                        if let Some(my_data) = globally_disambiguated.get(&id) {
-                            data = my_data.clone();
+            let ratchets = value
+                .into_iter()
+                .enumerate()
+                .map(|(n, value)| {
+                    // Each variable gets its own 'primary' name.
+                    let primary = n == 0;
+                    match value {
+                        Name::Person(pn) => DisambNameRatchet::for_person(
+                            db,
+                            var,
+                            pn,
+                            &refr.id,
+                            &names_inheritance.name,
+                            primary,
+                            should_start_with_global,
+                        ),
+                        Name::Literal { literal } => {
+                            DisambNameRatchet::Literal(fmt.text_node(literal, None))
                         }
                     }
-                    let ratchet = PersonDisambNameRatchet::new(db, id, data);
-                    DisambNameRatchet::Person(ratchet)
-                }
-                Name::Literal { literal } => {
-                    if primary {
-                        primary = false;
-                    }
-                    DisambNameRatchet::Literal(fmt.text_node(literal, None))
-                }
-            });
+                })
+                .collect();
             NameIR::new(
                 names_inheritance.clone(),
                 var,
-                ratchets.collect(),
+                ratchets,
                 Box::new(IR::Rendered(None)),
             )
         })
@@ -485,11 +513,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(
-        &self,
-        pn: &PersonName,
-        out: &mut Vec<String>,
-    ) {
+    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<String>) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
@@ -497,7 +521,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         );
         let strings = order.iter().cloned().map(|sort_token| {
             let mut s = String::new();
-            for token in sort_token.iter().cloned().filter(|npt| pn_filter_part(pn, *npt)) {
+            for token in sort_token
+                .iter()
+                .cloned()
+                .filter(|npt| pn_filter_part(pn, *npt))
+            {
                 match token {
                     NamePartToken::Given => {
                         if let Some(ref given) = pn.given {

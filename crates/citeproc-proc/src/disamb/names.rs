@@ -520,8 +520,7 @@ pub struct PersonDisambNameRatchet {
     pub iter: SingleNameDisambIter,
 }
 impl PersonDisambNameRatchet {
-    pub fn new(db: &impl IrDatabase, id: DisambName, data: DisambNameData) -> Self {
-        let style = db.style();
+    pub fn new(style: &Style, id: DisambName, data: DisambNameData) -> Self {
         let rule = style.citation.givenname_disambiguation_rule;
         let method = SingleNameDisambMethod::from_rule(rule, data.primary);
         let iter = SingleNameDisambIter::new(method, &data.el);
