@@ -961,7 +961,7 @@ pub struct SortKey {
     pub sort_source: SortSource,
     pub names_min: Option<u32>,
     pub names_use_first: Option<u32>,
-    pub names_use_last: Option<u32>,
+    pub names_use_last: Option<bool>,
     pub direction: Option<SortDirection>,
 }
 

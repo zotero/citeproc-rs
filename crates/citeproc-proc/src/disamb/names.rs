@@ -26,7 +26,7 @@ impl Disambiguation<Markup> for Names {
         let style = ctx.style;
         let _locale = ctx.locale;
         let names_inheritance =
-            state.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
+            state.name_override.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
 
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
@@ -135,10 +135,10 @@ impl Disambiguation<Markup> for Names {
                     // substitution later on
                     let mut new_state = state.clone();
                     let old =
-                        new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
+                        new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
                     let (ir, gv) = el.ref_ir(db, ctx, &mut new_state, stack);
                     if !ir.is_empty() {
-                        new_state.restore_name_overrides(old);
+                        new_state.name_override.restore_name_overrides(old);
                         *state = new_state;
                         return (ir, gv);
                     }

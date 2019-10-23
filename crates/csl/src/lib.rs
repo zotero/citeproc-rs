@@ -206,8 +206,8 @@ impl FromNode for SortKey {
         Ok(SortKey {
             sort_source: SortSource::from_node(node, info)?,
             names_min: attribute_option_int(node, "names-min")?,
-            names_use_first: attribute_option_int(node, "names-min")?,
-            names_use_last: attribute_option_int(node, "names-min")?,
+            names_use_first: attribute_option_int(node, "names-use-first")?,
+            names_use_last: attribute_option_bool(node, "names-use-last")?,
             direction: attribute_option(node, "sort", info)?,
         })
     }

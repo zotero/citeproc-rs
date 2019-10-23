@@ -118,6 +118,45 @@ fn render_label<O: OutputFormat>(
     IR::Rendered(o)
 }
 
+use crate::NameOverrider;
+use csl::style::SortKey;
+
+pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameVariable, sort_key: &SortKey, loc: CiteOrBib) -> Option<Vec<String>> {
+    let style = db.style();
+    let fmt = db.get_formatter();
+    let (delim, arc_name_el) = match loc {
+        CiteOrBib::Citation => style.name_info_citation(),
+        CiteOrBib::Bibliography => style.name_info_bibliography(),
+    };
+    let mut name_o = NameOverrider::default();
+    let names_inheritance =  name_o.inherited_names_options_sort_key(&arc_name_el, &delim, sort_key);
+    let mut runner = OneNameVar {
+        name_el: &names_inheritance.name,
+        bump_name_count: 0,
+        demote_non_dropping_particle: style.demote_non_dropping_particle,
+        initialize_with_hyphen: style.initialize_with_hyphen,
+        fmt: &fmt,
+    };
+    let mut out = Vec::new();
+    if let Some(values) = refr.name.get(&var) {
+        for value in values {
+            match value {
+                Name::Person(pn) => {
+                    runner.person_name_sort_keys(pn, &mut out);
+                }
+                Name::Literal { literal } => {
+                    out.push(literal.clone());
+                }
+            }
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
 impl<'c, O> Proc<'c, O> for Names
 where
     O: OutputFormat,
@@ -133,7 +172,7 @@ where
     {
         let fmt = &ctx.format;
         let names_inheritance =
-            state.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, self);
+            state.name_override.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, self);
 
         let name_irs: Vec<IR<O>> = to_individual_name_irs(
             self,
@@ -173,10 +212,10 @@ where
                     // substitution later on
                     let mut new_state = state.clone();
                     let old =
-                        new_state.replace_name_overrides_for_substitute(names_inheritance.clone());
+                        new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
                     let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
                     if !ir.is_empty() {
-                        new_state.restore_name_overrides(old);
+                        new_state.name_override.restore_name_overrides(old);
                         *state = new_state;
                         return (ir, gv);
                     }

@@ -138,7 +138,11 @@ pub fn bib_ordering(
                     compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
                 }
                 AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
-                AnyVariable::Name(_) => (Ordering::Equal, None),
+                AnyVariable::Name(v) => {
+                    let a_strings = crate::names::sort_strings_for_names(db, a, v, key, CiteOrBib::Bibliography);
+                    let b_strings = crate::names::sort_strings_for_names(db, b, v, key, CiteOrBib::Bibliography);
+                    compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
+                }
                 AnyVariable::Date(_) => (Ordering::Equal, None),
             },
         };
