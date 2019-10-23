@@ -15,13 +15,13 @@ use csl::variables::{NameVariable, NumberVariable, StandardVariable};
 use csl::Atom;
 
 #[derive(Clone)]
-pub enum GenericContext<'a, O: OutputFormat> {
+pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
     Ref(&'a RefContext<'a, O>),
-    Cit(&'a CiteContext<'a, O>),
+    Cit(&'a CiteContext<'a, O, I>),
 }
 
 #[allow(dead_code)]
-impl<O: OutputFormat> GenericContext<'_, O> {
+impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
     pub fn locale(&self) -> &Locale {
         match self {
             GenericContext::Cit(ctx) => ctx.locale,
@@ -143,34 +143,31 @@ impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
 use GenericContext::*;
 
 pub struct Renderer<'a, O: OutputFormat, Custom: OutputFormat = O> {
-    ctx: GenericContext<'a, O>,
-    format: &'a Custom,
+    ctx: GenericContext<'a, O, Custom>,
 }
 
 impl<'c, O: OutputFormat> Renderer<'c, O, O> {
     pub fn refr(c: &'c RefContext<'c, O>) -> Self {
         Renderer {
             ctx: GenericContext::Ref(c),
-            format: c.format,
         }
     }
 
-    pub fn cite(c: &'c CiteContext<'c, O>) -> Self {
-        Renderer {
-            ctx: GenericContext::Cit(c),
-            format: &c.format,
-        }
-    }
 }
 
-impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
-    pub fn sorting<'c>(ctx: GenericContext<'c, O>, format: &'c O2) -> Renderer<'c, O, O2> {
-        Renderer { ctx, format }
+impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
+    pub fn sorting(ctx: GenericContext<'c, O, I>) -> Renderer<'c, O, I> {
+        Renderer { ctx }
+    }
+    pub fn cite(c: &'c CiteContext<'c, O, I>) -> Self {
+        Renderer {
+            ctx: GenericContext::Cit(c),
+        }
     }
 
     #[inline]
-    fn fmt(&self) -> &O2 {
-        self.format
+    fn fmt(&self) -> &O {
+        self.ctx.format()
     }
 
     /// The spec is slightly impractical to implement:
@@ -187,7 +184,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         val: &NumericValue,
         af: &Affixes,
         text_case: TextCase,
-    ) -> O2::Build {
+    ) -> O::Build {
         use crate::number::{roman_lower, roman_representable};
         use citeproc_io::NumericToken;
         let fmt = self.fmt();
@@ -213,7 +210,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         }
     }
 
-    pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O2::Build {
+    pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
         use crate::number::{roman_lower, roman_representable};
         let fmt = self.fmt();
         match (val, number.form) {
@@ -251,7 +248,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         text: &TextElement,
         var: StandardVariable,
         value: &str,
-    ) -> O2::Build {
+    ) -> O::Build {
         warn!("{:?}", text);
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(text.quotes);
@@ -276,7 +273,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn text_value(&self, text: &TextElement, value: &str) -> Option<O2::Build> {
+    pub fn text_value(&self, text: &TextElement, value: &str) -> Option<O::Build> {
         if value.len() == 0 {
             return None;
         }
@@ -300,7 +297,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         text: &TextElement,
         term_selector: TextTermSelector,
         plural: bool,
-    ) -> Option<O2::Build> {
+    ) -> Option<O::Build> {
         let fmt = self.fmt();
         let locale = self.ctx.locale();
         let quotes = Renderer::<O>::quotes(text.quotes);
@@ -314,7 +311,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         })
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O2::Build> {
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
         let NameLabel {
             form,
             formatting,
@@ -345,7 +342,7 @@ impl<O: OutputFormat, O2: OutputFormat> Renderer<'_, O, O2> {
         })
     }
 
-    pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O2::Build> {
+    pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector = GenderedTermSelector::from_number_variable(
             &self.ctx.locator_type(),

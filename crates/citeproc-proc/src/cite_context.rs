@@ -11,15 +11,15 @@ use crate::choose::CondChecker;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::locale::Locale;
-use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
+use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm, SortKey};
 use csl::variables::*;
 use csl::version::Features;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
+pub struct CiteContext<'c, Output: OutputFormat + Sized = Markup, Input: OutputFormat + Sized = Output, > {
     pub reference: &'c Reference,
-    pub format: O,
+    pub format: Output,
     pub cite_id: Option<CiteId>,
     pub style: &'c Style,
     pub locale: &'c Locale,
@@ -31,17 +31,39 @@ pub struct CiteContext<'c, O: OutputFormat + Sized = Markup> {
     pub disamb_pass: Option<DisambPass>,
 
     // These fields are synchronised with fields on EdgeData and IR.
-    pub cite: &'c Cite<O>,
+    pub cite: &'c Cite<Input>,
     pub citation_number: u32,
     pub bib_number: Option<u32>,
 
     pub in_bibliography: bool,
+    pub sort_key: Option<SortKey>,
     // TODO: keep track of which variables have so far been substituted
 }
 
 // helper methods to access both cite and reference properties via Variables
 
-impl<'c, O: OutputFormat> CiteContext<'c, O> {
+impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
+    pub fn change_format<O2: OutputFormat>(&self, new_fmt: O2) -> CiteContext<'c, O2, I> {
+        CiteContext {
+            format: new_fmt,
+            reference: self.reference,
+            cite_id: self.cite_id,
+            cite: self.cite,
+            style: self.style,
+            locale: self.locale,
+            name_citation: self.name_citation.clone(),
+            names_delimiter: self.names_delimiter.clone(),
+            position: self.position,
+            disamb_pass: self.disamb_pass,
+            citation_number: self.citation_number,
+            bib_number: self.bib_number,
+            in_bibliography: self.in_bibliography,
+            sort_key: None,
+        }
+    }
+}
+
+impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
         (match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
@@ -143,9 +165,10 @@ fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
 
 use csl::terms::LocatorType;
 
-impl<'c, O> CondChecker for CiteContext<'c, O>
+impl<'c, O, I> CondChecker for CiteContext<'c, O, I>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn has_variable(&self, var: AnyVariable) -> bool {
         CiteContext::has_variable(self, var)

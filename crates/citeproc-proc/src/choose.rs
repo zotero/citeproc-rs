@@ -16,19 +16,17 @@ use csl::variables::{AnyVariable, DateVariable};
 
 use std::sync::Arc;
 
-impl<'c, O> Proc<'c, O> for Arc<Choose>
+impl <'c, O, I> Proc<'c, O, I> for Arc<Choose>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
+        ctx: &CiteContext<'c, O, I>,
+    ) -> IrSum<O> {
         // XXX: should you treat conditional evaluations as a "variable test"?
         let Choose(ref head, ref rest, ref last) = **self;
         let mut disamb = false;
@@ -133,14 +131,15 @@ struct BranchEval<O: OutputFormat> {
     content: Option<IrSum<O>>,
 }
 
-fn eval_ifthen<'c, O>(
+fn eval_ifthen<'c, O, I>(
     db: &impl IrDatabase,
     branch: &'c IfThen,
     state: &mut IrState,
-    ctx: &CiteContext<'c, O>,
+    ctx: &CiteContext<'c, O, I>,
 ) -> BranchEval<O>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
     let (matched, mut disambiguate) = eval_conditions(conditions, ctx);

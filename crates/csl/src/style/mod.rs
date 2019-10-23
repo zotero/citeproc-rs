@@ -956,7 +956,7 @@ pub struct Sort {
     pub keys: Vec<SortKey>,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct SortKey {
     pub sort_source: SortSource,
     pub names_min: Option<u32>,
@@ -966,7 +966,7 @@ pub struct SortKey {
 }
 
 /// You must sort on either a variable or a macro
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SortSource {
     Variable(AnyVariable),
     Macro(Atom),

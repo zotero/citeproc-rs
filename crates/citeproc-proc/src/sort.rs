@@ -31,13 +31,15 @@ pub fn sort_string_citation(db: &impl IrDatabase, ref_id: Atom, macro_name: Atom
     unimplemented!()
 }
 
+// Cached by the DB because typically the output needs to be compared more than once
 pub fn sort_string_bibliography(
     db: &impl IrDatabase,
     ref_id: Atom,
     macro_name: Atom,
+    key: SortKey,
 ) -> Option<Arc<String>> {
-    with_bib_context(db, ref_id.clone(), None, |bib, ctx| {
-        let mut walker = SortingWalker::new(&ctx);
+    with_bib_context(db, ref_id.clone(), None, Some(key), |bib, ctx| {
+        let mut walker = SortingWalker::new(db, &ctx);
         let mut text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
         info!("{} macro {} produced: {}", ref_id, macro_name, string);
@@ -74,7 +76,7 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
         preordered.sort_by(|a, b| {
             let ar = db.reference_input(a.clone());
             let br = db.reference_input(b.clone());
-            crate::sort::bib_ordering(db, &ar, &br, sort, &style)
+            bib_ordering(db, &ar, &br, sort, &style)
         });
         preordered
     } else {
@@ -126,8 +128,9 @@ pub fn bib_ordering(
         }
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string = db.sort_string_bibliography(a.id.clone(), macro_name.clone());
-                let b_string = db.sort_string_bibliography(b.id.clone(), macro_name.clone());
+                let a_string = db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
+                let b_string = db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
+                info!("cmp macro {}: {:?} <> {:?}", macro_name, a_string, b_string);
                 (a_string.cmp(&b_string), None)
             }
             // For variables, we're not going to use the CiteContext wrappers, because if a
@@ -141,9 +144,10 @@ pub fn bib_ordering(
                 AnyVariable::Name(v) => {
                     let a_strings = crate::names::sort_strings_for_names(db, a, v, key, CiteOrBib::Bibliography);
                     let b_strings = crate::names::sort_strings_for_names(db, b, v, key, CiteOrBib::Bibliography);
+                    info!("{:?} <-> {:?}", a_strings, b_strings);
                     compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
                 }
-                AnyVariable::Date(_) => (Ordering::Equal, None),
+                AnyVariable::Date(v) => (Ordering::Equal, None),
             },
         };
         ord = match (key.direction.as_ref(), demoted) {
@@ -157,29 +161,36 @@ pub fn bib_ordering(
     ord
 }
 
-struct SortingWalker<'a, O: OutputFormat> {
-    ctx: &'a CiteContext<'a, O>,
+/// Currently only works where 
+struct SortingWalker<'a, DB: IrDatabase, I: OutputFormat> {
+    db: &'a DB,
+    /// the cite is in its original format, but the formatter is PlainText
+    ctx: CiteContext<'a, PlainText, I>,
     macro_stack: Vec<Atom>,
     plain_fmt: PlainText,
+    state: IrState,
 }
 
-impl<'a, O: OutputFormat> SortingWalker<'a, O> {
-    pub fn new(ctx: &'a CiteContext<'a, O>) -> Self {
+impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
+    pub fn new<O: OutputFormat>(db: &'a DB, ctx: &'a CiteContext<'a, O, I>) -> Self {
+        let plain_ctx = ctx.change_format(PlainText);
         SortingWalker {
-            ctx,
+            db,
+            ctx: plain_ctx,
             macro_stack: Vec::new(),
             plain_fmt: PlainText,
+            state: Default::default(),
         }
     }
 
-    fn renderer(&'a self) -> Renderer<'a, O, PlainText> {
-        Renderer::sorting(GenericContext::Cit(self.ctx), &self.plain_fmt)
+    fn renderer(&'a self) -> Renderer<'a, PlainText, I> {
+        Renderer::sorting(GenericContext::Cit(&self.ctx))
     }
 }
 
-impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
+impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
     type Output = (String, GroupVars);
-    type Checker = GenericContext<'a, O>;
+    type Checker = GenericContext<'a, PlainText>;
 
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         let mut iter = elements.iter();
@@ -237,6 +248,38 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)
+    }
+
+
+
+    // SPEC:
+    // For name sorting, there are four advantages in using the same macro rendering
+    // and sorting, instead of sorting directly on the name variable.
+    // 
+    // 1.  First, substitution is available (e.g. the "editor" variable might
+    //     substitute for an empty "author" variable).
+    // 2.  Secondly, et-al abbreviation can be used (using either the
+    //     et-al-min/et-al-subsequent-min, et-al-use-first/et-al-subsequent-use-first,
+    //     and et-al-use-last options defined for the macro, or the overriding
+    //     names-min, names-use-first and names-use-last attributes set on cs:key).
+    //     When et-al abbreviation occurs, the "et-al" and "and others" terms are
+    //     excluded from the sort key values.
+    // 3.  Thirdly, names can be sorted by just the surname (using a macro for which
+    //     the form attribute on cs:name is set to "short").
+    // 4.  Finally, it is possible to sort by the number of names in a name list, by
+    //     calling a macro for which the form attribute on cs:name is set to "count".
+    //     As for names sorted via the variable attribute, names sorted via macro are
+    //     returned with the cs:name attribute name-as-sort-order set to "all".
+    //
+    //     So
+    //
+    //     1. Override naso = all,
+    //     2. Exclude et-al and & others terms,
+    //     3. Return count as a {:08} padded number
+
+    fn names(&mut self, names: &Names) -> Self::Output {
+        let (ir, gv) = crate::names::intermediate(names, self.db, &mut self.state, &self.ctx);
+        (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {

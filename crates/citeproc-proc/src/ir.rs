@@ -290,6 +290,67 @@ impl<O: OutputFormat> Default for IR<O> {
 
 use std::mem;
 
+/// Currently, flattening into EdgeData(String) only works when the Output type is String
+/// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
+impl<O: OutputFormat<Output = String>> IR<O> {
+    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
+        // must clone
+        match self {
+            IR::Rendered(None) => None,
+            IR::Rendered(Some(ref x)) => Some(x.inner()),
+            IR::Name(nir) => nir.lock().ir.flatten(fmt),
+            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
+            IR::YearSuffix(_, ref x) => x.clone(),
+            IR::Seq(ref seq) => seq.flatten_seq(fmt),
+        }
+    }
+}
+
+impl<O: OutputFormat<Output = String>> IrSeq<O> {
+    // TODO: Groupvars
+    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
+        let xs: Vec<_> = self
+            .contents
+            .iter()
+            .filter_map(|i| i.flatten(fmt))
+            .collect();
+        if xs.is_empty() {
+            return None;
+        }
+        let grp = fmt.group(xs, &self.delimiter, self.formatting);
+        Some(fmt.affixed(grp, &self.affixes))
+    }
+}
+
+impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
+    pub(crate) fn to_edge_data(&self, fmt: &O, formatting: Formatting) -> EdgeData {
+        match self {
+            CiteEdgeData::Output(x) => {
+                EdgeData::Output(fmt.output_in_context(x.clone(), formatting))
+            }
+            CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
+            CiteEdgeData::Frnn(_) => EdgeData::Frnn,
+            CiteEdgeData::FrnnLabel(_) => EdgeData::FrnnLabel,
+            CiteEdgeData::Locator(_) => EdgeData::Locator,
+            CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
+            CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
+            CiteEdgeData::CitationNumberLabel(_) => EdgeData::CitationNumberLabel,
+        }
+    }
+    fn inner(&self) -> O::Build {
+        match self {
+            CiteEdgeData::Output(x)
+            | CiteEdgeData::YearSuffix(x)
+            | CiteEdgeData::Frnn(x)
+            | CiteEdgeData::FrnnLabel(x)
+            | CiteEdgeData::Locator(x)
+            | CiteEdgeData::LocatorLabel(x)
+            | CiteEdgeData::CitationNumber(x)
+            | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
+        }
+    }
+}
+
 impl IR<Markup> {
     pub(crate) fn visit_year_suffix_hooks<F>(&mut self, callback: &mut F) -> bool
     where
@@ -312,60 +373,6 @@ impl IR<Markup> {
                 return false;
             }
             _ => false,
-        }
-    }
-
-    pub(crate) fn disambiguate<'c>(
-        &mut self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
-        ctx: &CiteContext<'c, Markup>,
-        applied_suffix: &mut bool,
-    ) -> bool {
-        let mut ret = false;
-        *self = match self {
-            IR::Rendered(_) => {
-                return ret;
-            }
-            IR::Name(_) => {
-                return ret;
-            }
-            IR::ConditionalDisamb(ref el, ref _xs) => {
-                if let Some(DisambPass::Conditionals) = ctx.disamb_pass {
-                    info!(
-                        "attempting to disambiguate {:?} ({}) with {:?}",
-                        ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
-                    );
-                    let (new_ir, _) = el.intermediate(db, state, ctx);
-                    ret = false;
-                    new_ir
-                } else {
-                    return ret;
-                }
-            }
-            IR::YearSuffix(ref ysh, ref _x) => {
-                return ret;
-            }
-            IR::Seq(ref mut seq) => {
-                ret = seq
-                    .contents
-                    .iter_mut()
-                    .any(|ir| ir.disambiguate(db, state, ctx, applied_suffix));
-                return ret;
-            }
-        };
-        ret
-    }
-
-    pub fn flatten(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {
-        // must clone
-        match self {
-            IR::Rendered(None) => None,
-            IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Name(nir) => nir.lock().ir.flatten(fmt),
-            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
-            IR::YearSuffix(_, ref x) => x.clone(),
-            IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
     }
 
@@ -410,35 +417,6 @@ impl IR<Markup> {
 //         }
 //     }
 // }
-
-impl CiteEdgeData<Markup> {
-    pub(crate) fn to_edge_data(&self, fmt: &Markup, formatting: Formatting) -> EdgeData {
-        match self {
-            CiteEdgeData::Output(x) => {
-                EdgeData::Output(fmt.output_in_context(x.clone(), formatting))
-            }
-            CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
-            CiteEdgeData::Frnn(_) => EdgeData::Frnn,
-            CiteEdgeData::FrnnLabel(_) => EdgeData::FrnnLabel,
-            CiteEdgeData::Locator(_) => EdgeData::Locator,
-            CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
-            CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
-            CiteEdgeData::CitationNumberLabel(_) => EdgeData::CitationNumberLabel,
-        }
-    }
-    fn inner(&self) -> <Markup as OutputFormat>::Build {
-        match self {
-            CiteEdgeData::Output(x)
-            | CiteEdgeData::YearSuffix(x)
-            | CiteEdgeData::Frnn(x)
-            | CiteEdgeData::FrnnLabel(x)
-            | CiteEdgeData::Locator(x)
-            | CiteEdgeData::LocatorLabel(x)
-            | CiteEdgeData::CitationNumber(x)
-            | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
-        }
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IrSeq<O: OutputFormat> {
@@ -505,16 +483,4 @@ impl IrSeq<Markup> {
         }
     }
 
-    fn flatten_seq(&self, fmt: &Markup) -> Option<<Markup as OutputFormat>::Build> {
-        let xs: Vec<_> = self
-            .contents
-            .iter()
-            .filter_map(|i| i.flatten(fmt))
-            .collect();
-        if xs.is_empty() {
-            return None;
-        }
-        let grp = fmt.group(xs, &self.delimiter, self.formatting);
-        Some(fmt.affixed(grp, &self.affixes))
-    }
 }

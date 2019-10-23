@@ -12,7 +12,7 @@ use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name, Reference};
-use csl::style::{Bibliography, Position, Style, TextElement};
+use csl::style::{Bibliography, Position, Style, TextElement, SortKey};
 use csl::variables::NameVariable;
 use csl::Atom;
 
@@ -77,7 +77,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     #[salsa::invoke(crate::sort::sort_string_citation)]
     fn sort_string_citation(&self, ref_id: Atom, macro_name: Atom) -> Arc<String>;
     #[salsa::invoke(crate::sort::sort_string_bibliography)]
-    fn sort_string_bibliography(&self, ref_id: Atom, macro_name: Atom) -> Option<Arc<String>>;
+    fn sort_string_bibliography(&self, ref_id: Atom, macro_name: Atom, sort_key: SortKey) -> Option<Arc<String>>;
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
@@ -326,34 +326,9 @@ macro_rules! preamble {
             in_bibliography: false,
             names_delimiter,
             name_citation: name_el,
+            sort_key: None,
         };
     }};
-}
-
-fn disambiguate(
-    db: &impl IrDatabase,
-    ir: &mut IR<Markup>,
-    state: &mut IrState,
-    ctx: &mut CiteContext<Markup>,
-    _maybe_ys: Option<&FnvHashMap<Atom, u32>>,
-    own_id: &Atom,
-) -> bool {
-    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
-    info!(
-        "{:?} was {}ambiguous in pass {:?}",
-        ctx.cite_id,
-        if un { "un" } else { "" },
-        ctx.disamb_pass
-    );
-    // disambiguate returns true if it can do more for this DisambPass (i.e. more names to add)
-    let mut applied_suffix = false;
-    while !un && ir.disambiguate(db, state, ctx, &mut applied_suffix) {
-        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
-    }
-    if !un {
-        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, own_id);
-    }
-    un
 }
 
 fn is_unambiguous(
@@ -932,6 +907,7 @@ pub fn with_bib_context<T>(
     db: &impl IrDatabase,
     ref_id: Atom,
     bib_number: Option<u32>,
+    sort_key: Option<SortKey>,
     f: impl Fn(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -954,6 +930,7 @@ pub fn with_bib_context<T>(
             in_bibliography: true,
             names_delimiter,
             name_citation: name_el,
+            sort_key: None,
         };
         Some(f(bib, ctx))
     } else {
@@ -969,7 +946,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         .expect("sorted_refs should contain a bib_item key")
         .clone();
 
-    with_bib_context(db, ref_id.clone(), Some(bib_number), |bib, mut ctx| {
+    with_bib_context(db, ref_id.clone(), Some(bib_number), None, |bib, mut ctx| {
         let mut state = IrState::new();
         let mut ir = bib.intermediate(db, &mut state, &ctx).0;
 

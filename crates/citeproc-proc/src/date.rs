@@ -101,26 +101,24 @@ impl Either<Markup> {
     }
 }
 
-impl<'c, O> Proc<'c, O> for BodyDate
+impl <'c, O, I> Proc<'c, O, I> for BodyDate
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
-        _state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O, I>,
+    ) -> IrSum<O> {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
         match self {
             BodyDate::Indep(idate) => {
-                intermediate_generic_indep(idate, db, GenericContext::Cit(ctx))
+                intermediate_generic_indep(idate, GenericContext::Cit(ctx))
             }
             BodyDate::Local(ldate) => {
-                intermediate_generic_local(ldate, db, GenericContext::Cit(ctx))
+                intermediate_generic_local(ldate, GenericContext::Cit(ctx))
             }
         }
         .map(Either::into_cite_ir)
@@ -139,10 +137,10 @@ impl Disambiguation<Markup> for BodyDate {
         let fmt = ctx.format;
         match self {
             BodyDate::Indep(idate) => {
-                intermediate_generic_indep(idate, db, GenericContext::Ref(ctx))
+                intermediate_generic_indep::<Markup, Markup>(idate, GenericContext::Ref(ctx))
             }
             BodyDate::Local(ldate) => {
-                intermediate_generic_local(ldate, db, GenericContext::Ref(ctx))
+                intermediate_generic_local::<Markup, Markup>(ldate, GenericContext::Ref(ctx))
             }
         }
         .map(|e| e.into_ref_ir(db, ctx, stack))
@@ -239,13 +237,13 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
     }
 }
 
-fn intermediate_generic_local<'c, O>(
+fn intermediate_generic_local<'c, O, I>(
     local: &LocalizedDate,
-    _db: &impl IrDatabase,
-    ctx: GenericContext<'c, O>,
+    ctx: GenericContext<'c, O, I>,
 ) -> Option<Either<O>>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     let fmt = ctx.format();
     let locale = ctx.locale();
@@ -278,13 +276,13 @@ where
     })
 }
 
-fn intermediate_generic_indep<'c, O>(
+fn intermediate_generic_indep<'c, O, I>(
     indep: &IndependentDate,
-    _db: &impl IrDatabase,
-    ctx: GenericContext<'c, O>,
+    ctx: GenericContext<'c, O, I>,
 ) -> Option<Either<O>>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     let fmt = ctx.format();
     let gen_date = GenericDateBits {
@@ -320,9 +318,9 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
     }
 }
 
-fn dp_render_either<'c, O: OutputFormat>(
+fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
-    ctx: GenericContext<'c, O>,
+    ctx: GenericContext<'c, O, I>,
     date: &Date,
 ) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
@@ -352,9 +350,9 @@ fn dp_render_either<'c, O: OutputFormat>(
         .map(|x| (part.form, x))
 }
 
-fn dp_render_string<'c, O: OutputFormat>(
+fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
-    ctx: &GenericContext<'c, O>,
+    ctx: &GenericContext<'c, O, I>,
     date: &Date,
 ) -> Option<String> {
     let locale = ctx.locale();

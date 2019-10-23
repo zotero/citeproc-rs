@@ -6,15 +6,16 @@ use csl::style::{
 use csl::variables::*;
 use csl::Atom;
 
-impl<'c, O> Proc<'c, O> for Style
+impl <'c, O, I> Proc<'c, O, I> for Style
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
@@ -30,15 +31,16 @@ where
     }
 }
 
-impl<'c, O> Proc<'c, O> for Bibliography
+impl <'c, O, I> Proc<'c, O, I> for Bibliography
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let layout = &self.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
@@ -54,15 +56,16 @@ where
     }
 }
 
-impl<'c, O> Proc<'c, O> for Element
+impl <'c, O, I> Proc<'c, O, I> for Element
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let _fmt = &ctx.format;
         let renderer = Renderer::cite(ctx);

@@ -75,15 +75,16 @@ pub use self::ir::IR;
 
 // Levels 1-3 will also have to update the ConditionalDisamb's current render
 
-pub(crate) trait Proc<'c, O>
+pub(crate) trait Proc<'c, O, I>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O>;
 }
 
@@ -136,7 +137,11 @@ impl NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
             did_supply_name: names.name.is_some(),
             label: names.label.clone(),
-            delimiter: names.delimiter.as_ref().map(|x| x.0.clone()),
+            delimiter: names
+                .delimiter
+                .as_ref()
+                .map(|x| x.0.clone())
+                .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
             et_al: names.et_al.clone(),
             formatting: names.formatting.clone(),
             display: names.display.clone(),

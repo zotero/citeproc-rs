@@ -108,8 +108,8 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
         })
 }
 
-fn render_label<O: OutputFormat>(
-    ctx: &CiteContext<'_, O>,
+fn render_label<O: OutputFormat, I: OutputFormat>(
+    ctx: &CiteContext<'_, O, I>,
     label: &NameLabel,
     var: NameVariable,
 ) -> IR<O> {
@@ -129,9 +129,15 @@ pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameV
         CiteOrBib::Bibliography => style.name_info_bibliography(),
     };
     let mut name_o = NameOverrider::default();
+    // Not clear from the spec whether we need to preserve the contextual name options or not.
+    // This code does preserve them, and then forces NASO and form as is definitely required.
     let names_inheritance =  name_o.inherited_names_options_sort_key(&arc_name_el, &delim, sort_key);
     let mut runner = OneNameVar {
-        name_el: &names_inheritance.name,
+        name_el: &names_inheritance.name.merge(&NameEl {
+            name_as_sort_order: Some(NameAsSortOrder::All),
+            form: Some(NameForm::Long),
+            ..Default::default()
+        }),
         bump_name_count: 0,
         demote_non_dropping_particle: style.demote_non_dropping_particle,
         initialize_with_hyphen: style.initialize_with_hyphen,
@@ -145,7 +151,9 @@ pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameV
                     runner.person_name_sort_keys(pn, &mut out);
                 }
                 Name::Literal { literal } => {
-                    out.push(literal.clone());
+                    if !literal.is_empty() {
+                        out.push(literal.clone());
+                    }
                 }
             }
         }
@@ -157,95 +165,106 @@ pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameV
     }
 }
 
-impl<'c, O> Proc<'c, O> for Names
+pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
+    names: &Names,
+    db: &impl IrDatabase,
+    state: &mut IrState,
+    ctx: &CiteContext<'c, O, I>,
+) -> IrSum<O> {
+    let fmt = &ctx.format;
+    let mut names_inheritance =
+        state.name_override.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, names);
+
+    if let Some(key) = &ctx.sort_key {
+        names_inheritance = names_inheritance.override_with(&ctx.name_citation, &ctx.names_delimiter, NamesInheritance::from_sort_key(key));
+    }
+
+    let name_irs: Vec<IR<O>> = to_individual_name_irs(
+        names,
+        &names_inheritance,
+        db,
+        state,
+        fmt,
+        &ctx.reference,
+        true,
+    )
+    .map(|mut nir| {
+        if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+            *nir.ir = ir;
+            IR::Name(Arc::new(Mutex::new(nir)))
+        } else {
+            // shouldn't happen; intermediate_custom should return Some the first time
+            // round in any situation, and only retun None if it's impossible to crank any
+            // further for a disamb pass
+            error!("nir.intermediate_custom returned None the first time round");
+            IR::Rendered(None)
+        }
+    })
+    .collect();
+
+    // Wait until iteration is done to collect
+    state.maybe_suppress_name_vars(&names.variables);
+
+    if name_irs.is_empty()
+        || name_irs.iter().all(|ir| match ir {
+            IR::Name(nir) => nir.lock().disamb_names.is_empty(),
+            _ => true,
+        })
+    {
+        if let Some(subst) = names.substitute.as_ref() {
+            for el in subst.0.iter() {
+                // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
+                // substitution later on
+                let mut new_state = state.clone();
+                let old =
+                    new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
+                let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
+                if !ir.is_empty() {
+                    new_state.name_override.restore_name_overrides(old);
+                    *state = new_state;
+                    return (ir, gv);
+                }
+            }
+        }
+        return (IR::Rendered(None), GroupVars::OnlyEmpty);
+    }
+
+    // TODO: &[editor, translator] => &[editor], and use editortranslator on
+    // the label
+
+    (
+        IR::Seq(IrSeq {
+            contents: name_irs,
+            formatting: names_inheritance.formatting,
+            affixes: names_inheritance.affixes.clone().unwrap_or_default(),
+            delimiter: names_inheritance
+                .delimiter
+                .unwrap_or_else(|| Atom::from("")),
+        }),
+        GroupVars::DidRender,
+    )
+}
+
+impl<'c, O, I> Proc<'c, O, I> for Names
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     fn intermediate(
         &self,
         db: &impl IrDatabase,
         state: &mut IrState,
-        ctx: &CiteContext<'c, O>,
-    ) -> IrSum<O>
-    where
-        O: OutputFormat,
-    {
-        let fmt = &ctx.format;
-        let names_inheritance =
-            state.name_override.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, self);
-
-        let name_irs: Vec<IR<O>> = to_individual_name_irs(
-            self,
-            &names_inheritance,
-            db,
-            state,
-            fmt,
-            &ctx.reference,
-            true,
-        )
-        .map(|mut nir| {
-            if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
-                *nir.ir = ir;
-                IR::Name(Arc::new(Mutex::new(nir)))
-            } else {
-                // shouldn't happen; intermediate_custom should return Some the first time
-                // round in any situation, and only retun None if it's impossible to crank any
-                // further for a disamb pass
-                error!("nir.intermediate_custom returned None the first time round");
-                IR::Rendered(None)
-            }
-        })
-        .collect();
-
-        // Wait until iteration is done to collect
-        state.maybe_suppress_name_vars(&self.variables);
-
-        if name_irs.is_empty()
-            || name_irs.iter().all(|ir| match ir {
-                IR::Name(nir) => nir.lock().disamb_names.is_empty(),
-                _ => true,
-            })
-        {
-            if let Some(subst) = self.substitute.as_ref() {
-                for el in subst.0.iter() {
-                    // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
-                    // substitution later on
-                    let mut new_state = state.clone();
-                    let old =
-                        new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
-                    let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
-                    if !ir.is_empty() {
-                        new_state.name_override.restore_name_overrides(old);
-                        *state = new_state;
-                        return (ir, gv);
-                    }
-                }
-            }
-            return (IR::Rendered(None), GroupVars::OnlyEmpty);
-        }
-
-        // TODO: &[editor, translator] => &[editor], and use editortranslator on
-        // the label
-
-        (
-            IR::Seq(IrSeq {
-                contents: name_irs,
-                formatting: names_inheritance.formatting,
-                affixes: names_inheritance.affixes.clone().unwrap_or_default(),
-                delimiter: names_inheritance
-                    .delimiter
-                    .unwrap_or_else(|| Atom::from("")),
-            }),
-            GroupVars::DidRender,
-        )
+        ctx: &CiteContext<'c, O, I>,
+    ) -> IrSum<O> {
+        intermediate(self, db, state, ctx)
     }
 }
 
 impl<'c, O: OutputFormat> NameIR<O> {
-    pub fn intermediate_custom(
+    pub fn intermediate_custom<I: OutputFormat>(
         &mut self,
         _db: &impl IrDatabase,
-        ctx: &CiteContext<'c, O>,
+        ctx: &CiteContext<'c, O, I>,
         pass: Option<DisambPass>,
     ) -> Option<IrSum<O>> {
         let style = ctx.style;
@@ -558,7 +577,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             self.name_el.form == Some(NameForm::Long),
             self.demote_non_dropping_particle,
         );
-        let strings = order.iter().cloned().map(|sort_token| {
+        for sort_token in order {
             let mut s = String::new();
             for token in sort_token
                 .iter()
@@ -596,8 +615,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     NamePartToken::SortSeparator => {}
                 }
             }
-            out.push(s);
-        });
+            if !s.is_empty() {
+                out.push(s);
+            }
+        }
     }
 
     fn format_with_part(&self, o_part: &Option<NamePart>, s: &str) -> O::Build {
@@ -768,7 +789,7 @@ mod ord {
 
     pub type DisplayOrdering = &'static [NamePartToken];
 
-    #[derive(Clone, Copy, PartialEq)]
+    #[derive(Clone, Copy, PartialEq, Debug)]
     pub enum NamePartToken {
         Given,
         Family,

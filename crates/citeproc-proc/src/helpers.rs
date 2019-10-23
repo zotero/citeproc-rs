@@ -10,10 +10,10 @@ use citeproc_io::output::markup::Markup;
 use csl::style::{Affixes, Element, Formatting};
 use csl::Atom;
 
-pub fn sequence<'c, O>(
+pub fn sequence<'c, O, I>(
     db: &impl IrDatabase,
     state: &mut IrState,
-    ctx: &CiteContext<'c, O>,
+    ctx: &CiteContext<'c, O, I>,
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
@@ -21,6 +21,7 @@ pub fn sequence<'c, O>(
 ) -> IrSum<O>
 where
     O: OutputFormat,
+    I: OutputFormat,
 {
     let _fmt = &ctx.format;
 
