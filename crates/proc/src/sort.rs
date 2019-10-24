@@ -39,7 +39,7 @@ pub fn sort_string_bibliography(
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
-        info!("{} macro {} produced: {}", ref_id, macro_name, string);
+        // info!("{} macro {} produced: {}", ref_id, macro_name, string);
         Arc::new(string)
     })
 }
@@ -102,19 +102,21 @@ pub fn bib_ordering(
     sort: &Sort,
     _style: &Style,
 ) -> Ordering {
+    #[derive(Debug)]
     enum Demoted {
         Left,
         Right,
     }
+    use natural_sort::NaturalCmp;
     fn compare_demoting_none<T: Ord>(
-        aa: Option<&T>,
-        bb: Option<&T>,
+        aa: Option<T>,
+        bb: Option<T>,
     ) -> (Ordering, Option<Demoted>) {
         match (aa, bb) {
             (None, None) => (Ordering::Equal, None),
             (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
             (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
-            (Some(aaa), Some(bbb)) => (aaa.cmp(bbb), None),
+            (Some(aaa), Some(bbb)) => (aaa.cmp(&bbb), None),
         }
     }
     let mut ord = Ordering::Equal;
@@ -129,8 +131,11 @@ pub fn bib_ordering(
                     db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
                 let b_string =
                     db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
-                info!("cmp macro {}: {:?} <> {:?}", macro_name, a_string, b_string);
-                (a_string.cmp(&b_string), None)
+                let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
+                let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
+                let x = compare_demoting_none(a_nat, b_nat);
+                info!("cmp macro {}: {} {:?} {:?} {} {:?}", macro_name, a.id, a_string, x.0, b.id, b_string);
+                x
             }
             // For variables, we're not going to use the CiteContext wrappers, because if a
             // variable is not defined directly on the reference, it shouldn't be sortable-by, so
@@ -155,7 +160,6 @@ pub fn bib_ordering(
                         key,
                         CiteOrBib::Bibliography,
                     );
-                    info!("{:?} <-> {:?}", a_strings, b_strings);
                     compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
                 }
                 AnyVariable::Date(_v) => (Ordering::Equal, None),
@@ -287,6 +291,11 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
     }
 
+    fn date(&mut self, date: &BodyDate) -> Self::Output {
+        let (ir, gv) = date.intermediate(self.db, &mut self.state, &self.ctx);
+        (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
+    }
+
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.ctx.style;
@@ -299,5 +308,273 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
         self.state.pop_macro(name);
         ret
+    }
+}
+
+// dates: Date variables called via the variable attribute are returned in the YYYYMMDD format,
+// with zeros substituted for any missing date-parts (e.g. 20001200 for December 2000). As a
+// result, less specific dates precede more specific dates in ascending sorts, e.g. “2000, May
+// 2000, May 1st 2000”. Negative years are sorted inversely, e.g. “100BC, 50BC, 50AD, 100AD”.
+// Seasons are ignored for sorting, as the chronological order of the seasons differs between the
+// northern and southern hemispheres. In the case of date ranges, the start date is used for the
+// primary sort, and the end date is used for a secondary sort, e.g. “2000–2001, 2000–2005,
+// 2002–2003, 2002–2009”. Date ranges are placed after single dates when they share the same
+// (start) date, e.g. “2000, 2000–2002”.
+
+// Basically, everything would be very easy without the BC/AD sorting and the ranges coming later
+// parts. But given these, we have to parse dates again.
+pub mod natural_sort {
+
+    // From the BMP(0) unicode private use area
+    // Delimits a date so it can be parsed when doing a natural sort comparison
+    pub const DATE_START: char = '\u{E000}';
+    pub const DATE_START_STR: &str = "\u{E000}";
+    pub const DATE_END: char = '\u{E001}';
+    pub const DATE_END_STR: &str = "\u{E001}";
+
+    // Delimits a number so it can be compared
+    pub const NUM_START: char = '\u{E002}';
+    pub const NUM_START_STR: &str = "\u{E002}";
+    pub const NUM_END: char = '\u{E003}';
+    pub const NUM_END_STR: &str = "\u{E003}";
+
+    pub fn date_affixes() -> Affixes {
+        Affixes {
+            prefix: DATE_START_STR.into(),
+            suffix: DATE_END_STR.into(),
+        }
+    }
+
+    pub fn num_affixes() -> Affixes {
+        Affixes {
+            prefix: NUM_START_STR.into(),
+            suffix: NUM_END_STR.into(),
+        }
+    }
+
+    #[derive(PartialEq, Eq, Debug)]
+    struct CmpDate<'a> {
+        year: i32,
+        rest: &'a str,
+    }
+
+    impl<'a> Ord for CmpDate<'a> {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.year.cmp(&other.year)
+                .then_with(|| self.rest.cmp(other.rest))
+        }
+    }
+
+    impl<'a> PartialOrd for CmpDate<'a> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.year.cmp(&other.year)
+                .then_with(|| self.rest.cmp(other.rest)))
+        }
+    }
+
+    #[derive(PartialEq, Eq, Debug)]
+    enum CmpRange<'a> {
+        Single(CmpDate<'a>),
+        Range(CmpDate<'a>, CmpDate<'a>),
+    }
+
+    impl<'a> Ord for CmpRange<'a> {
+        fn cmp(&self, other: &Self) -> Ordering {
+            match (self, other) {
+                (CmpRange::Single(a), CmpRange::Single(b)) => a.cmp(b),
+                (CmpRange::Single(a), CmpRange::Range(b, _c)) => a.cmp(b),
+                (CmpRange::Range(a, _b), CmpRange::Single(c)) => a.cmp(c),
+                (CmpRange::Range(a, b), CmpRange::Range(c, d)) => a.cmp(c).then_with(|| b.cmp(d)),
+            }
+        }
+    }
+
+    impl<'a> PartialOrd for CmpRange<'a> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    use csl::Affixes;
+    use std::str::FromStr;
+    use nom::{
+        IResult,
+        sequence::delimited,
+        character::complete::char,
+        bytes::complete::{take_while, take_while1, take_while_m_n},
+        combinator::{map, opt},
+        branch::alt,
+    };
+    use std::cmp::Ordering;
+
+    fn to_u32(s: &str) -> u32 {
+        FromStr::from_str(s.trim_start_matches('0')).unwrap()
+    }
+
+    fn to_i32(s: &str) -> i32 {
+        FromStr::from_str(s).unwrap()
+    }
+
+    fn take_4_digits(inp: &str) -> IResult<&str, &str> {
+        take_while_m_n(4, 4, |c: char| c.is_ascii_digit())(inp)
+    }
+
+    fn take_8_digits(inp: &str) -> IResult<&str, &str> {
+        take_while_m_n(8, 8, |c: char| c.is_ascii_digit())(inp)
+    }
+
+    fn year_prefix(inp: &str) -> IResult<&str, char> {
+        alt((char('+'), char('-')))(inp)
+    }
+
+    fn year(inp: &str) -> IResult<&str, i32> {
+        let (rem1, pref) = opt(year_prefix)(inp)?;
+        let (rem2, y) = take_4_digits(rem1)?;
+        Ok((
+            rem2,
+            match pref {
+                Some('-') => -to_i32(y),
+                _ => to_i32(y),
+            },
+        ))
+    }
+
+    fn date(inp: &str) -> IResult<&str, CmpDate> {
+        let (rem1, year) = year(inp)?;
+        fn still_date(c: char) -> bool {
+            c != DATE_END && c != '-'
+        }
+        let (rem2, rest) = take_while(still_date)(rem1)?;
+        Ok((rem2, CmpDate { year, rest }))
+    }
+
+    fn range(inp: &str) -> IResult<&str, Token> {
+        let (rem1, _) = char(DATE_START)(inp)?;
+        let (rem2, first) = date(rem1)?;
+        fn and_ymd(inp: &str) -> IResult<&str, CmpDate> {
+            let (rem1, _) = char('-')(inp)?;
+            Ok(date(rem1)?)
+        }
+        let (rem3, d2) = opt(and_ymd)(rem2)?;
+        let (rem4, _) = char(DATE_END)(rem3)?;
+        Ok((
+            rem4,
+            Token::Date(match d2 {
+                None => CmpRange::Single(first),
+                Some(d) => CmpRange::Range(first, d),
+            })
+        ))
+    }
+
+    fn num(inp: &str) -> IResult<&str, Token> {
+        delimited(
+            char(NUM_START),
+            map(take_8_digits, |x| Token::Num(to_u32(x))),
+            char(NUM_END)
+        )(inp)
+    }
+
+    fn str_token(inp: &str) -> IResult<&str, Token> {
+        fn normal(c: char) -> bool {
+            !(c == DATE_START || c == NUM_START)
+        }
+        map(take_while1(normal), Token::Str)(inp)
+    }
+
+    fn token(inp: &str) -> IResult<&str, Token> {
+        alt((str_token, num, range))(inp)
+    }
+
+    struct TokenIterator<'a> {
+        remain: &'a str,
+    }
+
+    #[derive(PartialEq, Debug)]
+    enum Token<'a> {
+        Str(&'a str),
+        Num(u32),
+        Date(CmpRange<'a>),
+    }
+
+    impl<'a> PartialOrd for Token<'a> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            match (self, other) {
+                (Token::Str(a), Token::Str(b)) => a.partial_cmp(b),
+                (Token::Date(a), Token::Date(b)) => a.partial_cmp(b),
+                (Token::Num(a), Token::Num(b)) => a.partial_cmp(b),
+                _ => None,
+            }
+        }
+    }
+
+    impl<'a> Iterator for TokenIterator<'a> {
+        type Item = Token<'a>;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.remain.is_empty() {
+                return None;
+            }
+            if let Ok((remainder, token)) = token(self.remain) {
+                self.remain = remainder;
+                Some(token)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[derive(PartialEq, Eq)]
+    pub struct NaturalCmp<'a>(&'a str);
+    impl<'a> NaturalCmp<'a> {
+        pub fn new(s: &'a str) -> Option<Self> {
+            if s.is_empty() {
+                None
+            } else {
+                Some(NaturalCmp(s))
+            }
+        }
+    }
+    impl<'a> PartialOrd for NaturalCmp<'a> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl<'a> Ord for NaturalCmp<'a> {
+        fn cmp(&self, other: &Self) -> Ordering {
+            natural_cmp(self.0, other.0)
+        }
+    }
+
+    fn natural_cmp(a: &str, b: &str) -> Ordering {
+        let a_i = TokenIterator { remain: a };
+        let b_i = TokenIterator { remain: b };
+        let mut iter = a_i.zip(b_i);
+        let mut o = Ordering::Equal;
+        while let Some((a_t, b_t)) = iter.next() {
+            if o != Ordering::Equal {
+                return o;
+            }
+            if let Some(c) = a_t.partial_cmp(&b_t) {
+                o = c;
+            }
+        }
+        o
+    }
+
+    #[test]
+    fn natural_cmp_strings() {
+        env_logger::init();
+        assert_eq!(natural_cmp("a", "z"), Ordering::Less, "a - z");
+        assert_eq!(natural_cmp("z", "a"), Ordering::Greater, "z - a");
+        assert_eq!(natural_cmp("a\u{E000}20090407\u{E001}", "a\u{E000}20080407\u{E001}"), Ordering::Greater, "2009");
+        assert_eq!(natural_cmp("a\u{E000}20090507\u{E001}", "a\u{E000}20090407\u{E001}"), Ordering::Greater);
+        assert_eq!(natural_cmp("a\u{E000}-0100\u{E001}", "a\u{E000}0100\u{E001}"), Ordering::Less, "100BC < 100AD");
+
+        // 2000, May 2000, May 1st 2000
+        assert_eq!(natural_cmp("a\u{E000}2000\u{E001}", "a\u{E000}200004\u{E001}"), Ordering::Less, "2000 < May 2000");
+        assert_eq!(natural_cmp("a\u{E000}200004\u{E001}", "a\u{E000}20000401\u{E001}"), Ordering::Less, "May 2000 < May 1st 2000");
+
+        assert_eq!(natural_cmp("\u{E002}1000\u{E003}", "\u{E001}1000\u{E003}"), Ordering::Equal, "1000 == 1000");
+        assert_eq!(natural_cmp("\u{E002}1000\u{E003}", "\u{E001}2000\u{E003}"), Ordering::Less, "1000 < 2000");
+
     }
 }

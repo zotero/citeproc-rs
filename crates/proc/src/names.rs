@@ -303,6 +303,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             position,
             locale,
             &names_inheritance.et_al,
+            ctx.sort_key.is_some(),
         );
 
         // TODO: refactor into a method on NameCounter
@@ -521,6 +522,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         &self,
         position: Position,
         names_slice: &'s [DisambNameRatchet<O::Build>],
+        is_sort_key: bool,
     ) -> Vec<NameToken<'s, O::Build>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
@@ -544,16 +546,18 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
-                let dpea = self
-                    .name_el
-                    .delimiter_precedes_et_al
-                    .unwrap_or(DelimiterPrecedes::Contextual);
-                if should_delimit_after(dpea, self, ea_use_first) {
-                    nms.push(NameToken::Delimiter);
-                } else {
-                    nms.push(NameToken::Space);
+                if !is_sort_key {
+                    let dpea = self
+                        .name_el
+                        .delimiter_precedes_et_al
+                        .unwrap_or(DelimiterPrecedes::Contextual);
+                    if should_delimit_after(dpea, self, ea_use_first) {
+                        nms.push(NameToken::Delimiter);
+                    } else {
+                        nms.push(NameToken::Space);
+                    }
+                    nms.push(NameToken::EtAl);
                 }
-                nms.push(NameToken::EtAl);
                 nms
             }
         } else {
@@ -708,20 +712,26 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         position: Position,
         locale: &csl::locale::Locale,
         et_al: &Option<NameEtAl>,
+        is_sort_key: bool,
     ) -> Vec<NameTokenBuilt<'b, O::Build>> {
         let fmt = self.fmt.clone();
         let mut seen_one = false;
-        let name_tokens = self.name_tokens(position, names_slice);
+        let name_tokens = self.name_tokens(position, names_slice, is_sort_key);
 
         if self.name_el.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
                 NameToken::Name(_) => acc + 1,
                 _ => acc,
             });
-            // This isn't sort-mode, you can render NameForm::Count as text.
-            return vec![NameTokenBuilt::Built(
-                fmt.text_node(format!("{}", count), None),
-            )];
+            if is_sort_key {
+                let b = fmt.affixed_text(format!("{:08}", count), None, &crate::sort::natural_sort::num_affixes());
+                return vec![NameTokenBuilt::Built(b)];
+            } else {
+                // This isn't sort-mode, you can render NameForm::Count as text.
+                return vec![NameTokenBuilt::Built(
+                    fmt.text_node(format!("{}", count), None),
+                )];
+            }
         }
 
         name_tokens

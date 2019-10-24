@@ -62,7 +62,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
             citation_number: self.citation_number,
             bib_number: self.bib_number,
             in_bibliography: self.in_bibliography,
-            sort_key: None,
+            sort_key: self.sort_key.clone(),
         }
     }
 }

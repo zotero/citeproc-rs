@@ -11,7 +11,7 @@ use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
-    MonthForm, YearForm,
+    MonthForm, YearForm, SortKey,
 };
 use std::mem;
 
@@ -112,7 +112,7 @@ where
         _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
-        // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
+
         match self {
             BodyDate::Indep(idate) => intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
             BodyDate::Local(ldate) => intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
@@ -246,10 +246,19 @@ where
     let refr = ctx.reference();
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
-    let gen_date = GenericDateBits {
-        overall_delimiter: &locale_date.delimiter.0,
-        overall_formatting: local.formatting,
-        overall_affixes: &local.affixes,
+    let empty = GenericDateBits {
+        overall_delimiter: &Atom::from(""),
+        overall_formatting: None,
+        overall_affixes: &crate::sort::natural_sort::date_affixes(),
+    };
+    let gen_date = if ctx.sort_key().is_some() {
+        empty
+    } else {
+        GenericDateBits {
+            overall_delimiter: &locale_date.delimiter.0,
+            overall_formatting: local.formatting,
+            overall_affixes: &local.affixes,
+        }
     };
     // TODO: render date ranges
     // TODO: TextCase
@@ -281,10 +290,19 @@ where
     I: OutputFormat,
 {
     let fmt = ctx.format();
-    let gen_date = GenericDateBits {
-        overall_delimiter: &indep.delimiter.0,
-        overall_formatting: indep.formatting,
-        overall_affixes: &indep.affixes,
+    let empty = GenericDateBits {
+        overall_delimiter: &Atom::from(""),
+        overall_formatting: None,
+        overall_affixes: &crate::sort::natural_sort::date_affixes(),
+    };
+    let gen_date = if ctx.sort_key().is_some() {
+        empty
+    } else {
+        GenericDateBits {
+            overall_delimiter: &indep.delimiter.0,
+            overall_formatting: indep.formatting,
+            overall_affixes: &indep.affixes,
+        }
     };
     let date = ctx
         .reference()
@@ -320,6 +338,11 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     date: &Date,
 ) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
+    if let Some(key) = ctx.sort_key() {
+        let string = dp_render_sort_string(part, date, key);
+        return string
+            .map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))))
+    }
     let string = dp_render_string(part, &ctx, date);
     string
         .map(|s| {
@@ -344,6 +367,34 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
             }
         })
         .map(|x| (part.form, x))
+}
+
+fn dp_render_sort_string(
+    part: &DatePart,
+    date: &Date,
+    key: &SortKey,
+) -> Option<String> {
+    let should_return_zeroes =  key.is_macro();
+    match part.form {
+        DatePartForm::Year(_form) => Some(format!("{:04}", date.year)),
+        DatePartForm::Month(_form, _strip_periods) => {
+            // Sort strings do not compare seasons
+            if date.month > 0 && date.month <= 12 {
+                Some(format!("{:02}", date.month))
+            } else if date.month == 0 && should_return_zeroes {
+                Some("00".to_owned())
+            } else {
+                None
+            }
+        },
+        DatePartForm::Day(_form) => {
+            if date.day == 0 && should_return_zeroes {
+                None
+            } else {
+                Some(format!("{:02}", date.day))
+            }
+        },
+    }
 }
 
 fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(

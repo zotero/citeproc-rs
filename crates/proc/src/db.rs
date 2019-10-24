@@ -903,7 +903,7 @@ pub fn with_bib_context<T>(
     db: &impl IrDatabase,
     ref_id: Atom,
     bib_number: Option<u32>,
-    _sort_key: Option<SortKey>,
+    sort_key: Option<SortKey>,
     f: impl Fn(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -926,7 +926,7 @@ pub fn with_bib_context<T>(
             in_bibliography: true,
             names_delimiter,
             name_citation: name_el,
-            sort_key: None,
+            sort_key,
         };
         Some(f(bib, ctx))
     } else {

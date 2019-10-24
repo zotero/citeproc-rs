@@ -969,6 +969,15 @@ pub struct SortKey {
     pub direction: Option<SortDirection>,
 }
 
+impl SortKey {
+    pub fn is_macro(&self) -> bool {
+        match self.sort_source {
+            SortSource::Macro(_) => true,
+            _ => false,
+        }
+    }
+}
+
 /// You must sort on either a variable or a macro
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SortSource {

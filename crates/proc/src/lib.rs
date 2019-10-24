@@ -87,14 +87,21 @@ where
 }
 
 use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
-use csl::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
+use csl::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable, NameAsSortOrder};
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum DidSupplyName {
+    NameEl,
+    SortKey,
+    None,
+}
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamesInheritance {
     pub name: Name,
     // Name gets merged from context, starting from scratch
     // So if you supply <name/> at all, you start from context.
-    did_supply_name: bool,
+    did_supply_name: DidSupplyName,
     pub label: Option<NameLabelInput>,
     pub delimiter: Option<Atom>,
     pub et_al: Option<NameEtAl>,
@@ -114,12 +121,12 @@ impl NamesInheritance {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
             // So if you supply <name/> at all, you start from context.
-            name: if other.did_supply_name {
-                ctx_name.merge(&other.name)
-            } else {
-                self.name.clone()
+            name: match other.did_supply_name {
+                DidSupplyName::NameEl => ctx_name.merge(&other.name),
+                DidSupplyName::SortKey => self.name.merge(&other.name),
+                DidSupplyName::None => self.name.clone(),
             },
-            did_supply_name: true,
+            did_supply_name: DidSupplyName::NameEl,
             // The rest will just replace whatever's in the inheritance
             et_al: other.et_al.or_else(|| self.et_al.clone()),
             label: other.label.or_else(|| self.label.clone()),
@@ -135,7 +142,7 @@ impl NamesInheritance {
     fn from_names(ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
         NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
-            did_supply_name: names.name.is_some(),
+            did_supply_name: if names.name.is_some() { DidSupplyName::NameEl } else { DidSupplyName::None },
             label: names.label.clone(),
             delimiter: names
                 .delimiter
@@ -155,11 +162,12 @@ impl NamesInheritance {
             et_al_use_first: sort_key.names_use_first,
             et_al_subsequent_use_first: sort_key.names_use_first,
             et_al_use_last: sort_key.names_use_last,
+            name_as_sort_order: Some(NameAsSortOrder::All),
             ..Default::default()
         };
         NamesInheritance {
             name: name_el,
-            did_supply_name: true, // makes no difference
+            did_supply_name: DidSupplyName::SortKey, // makes no difference
             delimiter: None,
             label: None,
             et_al: None,

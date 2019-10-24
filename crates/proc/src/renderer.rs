@@ -4,7 +4,7 @@ use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
     Atom, GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, StandardVariable, Style,
-    TextCase, TextElement, TextTermSelector,
+    TextCase, TextElement, TextTermSelector, SortKey,
 };
 
 #[derive(Clone)]
@@ -15,6 +15,12 @@ pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
 
 #[allow(dead_code)]
 impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
+    pub fn sort_key(&self) -> Option<&SortKey> {
+        match self {
+            GenericContext::Cit(ctx) => ctx.sort_key.as_ref(),
+            GenericContext::Ref(_ctx) => None,
+        }
+    }
     pub fn locale(&self) -> &Locale {
         match self {
             GenericContext::Cit(ctx) => ctx.locale,
@@ -174,7 +180,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: NumberVariable,
         form: NumericForm,
         val: &NumericValue,
-        af: &Affixes,
+        _af: &Affixes,
         text_case: TextCase,
     ) -> O::Build {
         use citeproc_io::NumericToken;
@@ -194,10 +200,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                 };
-                fmt.affixed_text(s, None, af)
+                fmt.affixed_text(s, None, &crate::sort::natural_sort::num_affixes())
             }
             // TODO: text-case
-            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), None, af),
+            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), None, &crate::sort::natural_sort::num_affixes()),
         }
     }
 
@@ -243,7 +249,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: StandardVariable,
         value: &str,
     ) -> O::Build {
-        warn!("{:?}", text);
         let fmt = self.fmt();
         let quotes = Renderer::<O>::quotes(text.quotes);
         let options = IngestOptions {

@@ -38,9 +38,7 @@ csl: |
     <citation><layout></layout></citation>
     <bibliography>
       <sort>
-        <key macro="title" />
-        <key macro="chapter-number" />
-        <key macro="publication-number" sort="descending" />
+        <key macro="combined" />
       </sort>
       <layout>
         <text variable="title" />
