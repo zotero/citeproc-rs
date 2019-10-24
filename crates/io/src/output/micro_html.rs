@@ -41,7 +41,7 @@ pub trait HtmlReader<T> {
     }
 }
 
-pub fn micro_html_to_string<'a>(fragment: &'a str, options: IngestOptions) -> String {
+pub fn micro_html_to_string(fragment: &str, options: IngestOptions) -> String {
     let mut parser = TagParser::new(&fragment);
     let reader = PlainHtmlReader { options };
     let result: Vec<String> = parser.walk(&reader);
@@ -246,10 +246,7 @@ impl<'input> TagParser {
                 }
                 NodeData::Comment { .. } => {}
                 NodeData::Element { .. } => unreachable!(),
-                NodeData::ProcessingInstruction {
-                    target: _,
-                    contents: _,
-                } => debug!(
+                NodeData::ProcessingInstruction { .. } => debug!(
                     // "Unknown enum tag: NodeData::ProcessingInstruction {{ {:?} {:?} }}",
                     // target, contents
                     "Unknown enum tag: NodeData::ProcessingInstruction",

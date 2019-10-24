@@ -74,13 +74,13 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 .reference
                 .ordinary
                 .get(&Variable::TitleShort)
-                .or(self.reference.ordinary.get(&Variable::Title)),
+                .or_else(|| self.reference.ordinary.get(&Variable::Title)),
             (Variable::ContainerTitleShort, _)
             | (Variable::ContainerTitle, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
-                .or(self.reference.ordinary.get(&Variable::ContainerTitle)),
+                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle)),
             _ => self.reference.ordinary.get(&var),
         })
         .map(|s| s.as_str())

@@ -39,8 +39,8 @@ impl Default for CslVariant {
 }
 
 impl CslVariant {
-    pub fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
-        let version = match *self {
+    pub fn filter_arg<T: EnumProperty>(self, val: T) -> Option<T> {
+        let version = match self {
             CslVariant::Csl => "csl",
             CslVariant::CslM => "cslM",
         };

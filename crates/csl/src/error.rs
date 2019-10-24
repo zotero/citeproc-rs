@@ -254,7 +254,7 @@ where
     O: Sized,
     Self: Sized,
 {
-    fn partition_results<'a>(self) -> Result<Vec<O>, Vec<E>> {
+    fn partition_results(self) -> Result<Vec<O>, Vec<E>> {
         let mut errors = Vec::new();
         let oks = self
             .filter_map(|res| match res {

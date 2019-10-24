@@ -87,17 +87,23 @@ use csl::{
     Position, TextElement, VariableForm,
 };
 
-pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {
-    let mut walker = FreeCondWalker {
-        db,
-        macro_stack: Vec::new(),
-    };
+pub fn get_free_conds(db: &impl IrDatabase) -> FreeCondSets {
+    let mut walker = FreeCondWalker::new(db);
     walker.walk_citation(&db.style())
 }
 
 struct FreeCondWalker<'a, DB: IrDatabase> {
     db: &'a DB,
-    macro_stack: Vec<Atom>,
+    state: IrState,
+}
+
+impl<'a, DB: IrDatabase> FreeCondWalker<'a, DB> {
+    fn new(db: &'a DB) -> Self {
+        FreeCondWalker {
+            db,
+            state: IrState::new(),
+        }
+    }
 }
 
 impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
@@ -126,15 +132,9 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
             .get(name)
             .expect("macro errors not implemented!");
 
-        if self.macro_stack.contains(&name) {
-            panic!(
-                "foiled macro recursion: {} called from within itself; exiting",
-                &name
-            );
-        }
-        self.macro_stack.push(name.clone());
+        self.state.push_macro(name);
         let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
-        self.macro_stack.pop();
+        self.state.pop_macro(name);
         ret
     }
 
@@ -304,7 +304,7 @@ pub fn graph_with_stack(
     db: &impl IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
-    formatting: &Option<Formatting>,
+    formatting: Option<Formatting>,
     affixes: &Affixes,
     mut spot: NodeIndex,
     f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
@@ -351,11 +351,11 @@ pub fn add_to_graph(
         }
         RefIR::Seq(ref seq) => {
             let RefIrSeq {
-                contents,
                 formatting,
-                affixes,
-                delimiter,
-            } = seq;
+                ref contents,
+                ref affixes,
+                ref delimiter,
+            } = *seq;
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
                     Some(db.edge(EdgeData::Output(
@@ -385,10 +385,9 @@ pub fn add_to_graph(
             // adding the same edges between them.
             let mut node_mapping = FnvHashMap::default();
             let mut get_node = |nfa: &mut Nfa, incoming: NodeIndex| {
-                node_mapping
+                *node_mapping
                     .entry(incoming)
                     .or_insert_with(|| nfa.graph.add_node(()))
-                    .clone()
             };
             // collected because iterator uses a mutable reference to nfa
             let incoming_edges: Vec<_> = name_nfa

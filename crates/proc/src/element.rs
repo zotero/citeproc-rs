@@ -1,10 +1,8 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
+use citeproc_io::output::LocalizedQuotes;
 use csl::variables::*;
-use csl::Atom;
-use csl::{
-    Affixes, Bibliography, Element, LabelElement, NumberElement, Style, TextElement, TextSource,
-};
+use csl::{Affixes, Atom, Bibliography, Element, Style, TextSource};
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -73,8 +71,6 @@ where
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref text) => {
-                use citeproc_io::output::LocalizedQuotes;
-                use csl::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
                 let _quotes = if text.quotes { Some(&q) } else { None };
                 match text.source {
@@ -88,13 +84,8 @@ where
                         // Technically, if re-running a style with a fresh IrState, you might
                         // get an extra level of recursion before it panics. BUT, then it will
                         // already have panicked when it was run the first time! So we're OK.
-                        if state.macro_stack.contains(&name) {
-                            panic!(
-                                "foiled macro recursion: {} called from within itself; exiting",
-                                &name
-                            );
-                        }
-                        state.macro_stack.insert(name.clone());
+                        // XXX: that's not quite true
+                        state.push_macro(name);
                         let out = sequence(
                             db,
                             state,
@@ -104,7 +95,7 @@ where
                             text.formatting,
                             text.affixes.clone(),
                         );
-                        state.macro_stack.remove(&name);
+                        state.pop_macro(name);
                         out
                     }
                     TextSource::Value(ref value) => {

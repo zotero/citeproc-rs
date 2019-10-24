@@ -91,7 +91,7 @@ impl MicroNode {
 }
 
 impl FormatCmd {
-    fn html_tag(&self, options: &HtmlWriter) -> (&'static str, &'static str) {
+    fn html_tag(self, options: &HtmlWriter) -> (&'static str, &'static str) {
         use super::FormatCmd::*;
         match self {
             FontStyleItalic => ("i", ""),
@@ -122,13 +122,6 @@ impl FormatCmd {
 }
 
 impl InlineElement {
-    fn to_html(inlines: &[InlineElement], options: &HtmlWriter) -> String {
-        let mut s = String::new();
-        for i in inlines {
-            i.to_html_inner(&mut s, options);
-        }
-        s
-    }
     // fn is_disp(&self, disp: DisplayMode) -> bool {
     //     match *self {
     //         Div(display, _) => disp == display,
@@ -188,11 +181,7 @@ impl InlineElement {
                 }
                 s.push('”');
             }
-            Anchor {
-                title: _,
-                url,
-                content,
-            } => {
+            Anchor { url, content, .. } => {
                 if options.link_anchors {
                     s.push_str(r#"<a href=""#);
                     // TODO: HTML-quoted-escape? the url?

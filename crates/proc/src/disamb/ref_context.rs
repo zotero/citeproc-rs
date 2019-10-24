@@ -100,14 +100,9 @@ where
         let count = {
             let mut counter = DisambCounter::new(&self);
             match location {
-                CiteOrBib::Citation => {
-                    counter.walk_citation(self.style);
-                }
-                CiteOrBib::Bibliography => {
-                    counter.walk_bibliography(self.style);
-                }
+                CiteOrBib::Citation => counter.walk_citation(self.style),
+                CiteOrBib::Bibliography => counter.walk_bibliography(self.style).unwrap_or(0),
             }
-            counter.count
         };
         self.disamb_count = count;
     }
@@ -118,13 +113,13 @@ where
                 .reference
                 .ordinary
                 .get(&Variable::TitleShort)
-                .or(self.reference.ordinary.get(&Variable::Title)),
+                .or_else(|| self.reference.ordinary.get(&Variable::Title)),
             (Variable::ContainerTitleShort, _)
             | (Variable::ContainerTitle, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
-                .or(self.reference.ordinary.get(&Variable::ContainerTitle)),
+                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle)),
             _ => self.reference.ordinary.get(&var),
         })
         .map(|s| s.as_str())
@@ -205,16 +200,12 @@ where
 }
 
 struct DisambCounter<'a, O: OutputFormat> {
-    count: u32,
     ctx: &'a RefContext<'a, O>,
 }
 
 impl<'a, O: OutputFormat> DisambCounter<'a, O> {
-    fn inc(&mut self) {
-        self.count += 1;
-    }
     fn new(ctx: &'a RefContext<'a, O>) -> Self {
-        DisambCounter { count: 0, ctx }
+        DisambCounter { ctx }
     }
 }
 

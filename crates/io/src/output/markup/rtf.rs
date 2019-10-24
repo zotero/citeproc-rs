@@ -33,7 +33,7 @@ impl MarkupWriter for RtfWriter {
 }
 
 impl FormatCmd {
-    fn rtf_tag(&self, _options: &RtfWriter) -> &'static str {
+    fn rtf_tag(self, _options: &RtfWriter) -> &'static str {
         use super::FormatCmd::*;
         match self {
             FontStyleItalic => "\\i ",
@@ -85,14 +85,6 @@ impl MicroNode {
 }
 
 impl InlineElement {
-    fn to_rtf(inlines: &[InlineElement], options: &RtfWriter) -> String {
-        let mut s = String::new();
-        for i in inlines {
-            i.to_rtf_inner(&mut s, options);
-        }
-        s
-    }
-
     fn to_rtf_inner(&self, s: &mut String, options: &RtfWriter) {
         use super::InlineElement::*;
         match self {
@@ -119,11 +111,7 @@ impl InlineElement {
                 }
                 s.push('"');
             }
-            Anchor {
-                title: _,
-                url,
-                content,
-            } => {
+            Anchor { url, content, .. } => {
                 // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
                 // TODO: HTML-quoted-escape? the url?
                 s.push_str(r#"<a href=""#);

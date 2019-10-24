@@ -132,14 +132,10 @@ mod roman {
     fn from_lax(txt: &str) -> Option<i32> {
         let (mut n, mut max) = (0, 0);
         for c in txt.chars().rev() {
-            let it = ROMAN.iter().find(|x| {
+            let &(_, val) = ROMAN.iter().find(|x| {
                 let &(ch, _) = *x;
                 ch == c
-            });
-            if it.is_none() {
-                return None;
-            }
-            let &(_, val) = it.unwrap();
+            })?;
             if val < max {
                 n -= val;
             } else {

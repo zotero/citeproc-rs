@@ -1,17 +1,11 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::Name;
-use citeproc_io::{Locator, NumericValue, Reference};
-use csl::Atom;
-use csl::Locale;
+use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
-    GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
-    TextTermSelector,
+    Atom, GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
+    NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, StandardVariable, Style,
+    TextCase, TextElement, TextTermSelector,
 };
-use csl::{
-    LabelElement, NameLabel, NumberElement, NumericForm, Plural, Style, TextCase, TextElement,
-};
-use csl::{NameVariable, NumberVariable, StandardVariable};
 
 #[derive(Clone)]
 pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
@@ -236,8 +230,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
 
     fn quotes(quo: bool) -> Option<LocalizedQuotes> {
         let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-        let quotes = if quo { Some(q) } else { None };
-        quotes
+        if quo {
+            Some(q)
+        } else {
+            None
+        }
     }
 
     pub fn text_variable(
@@ -314,11 +311,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             formatting,
             plural,
             affixes,
-            after_name: _,
+            ..
+            // after_name: _,
             // TODO: strip-periods
-            strip_periods: _,
+            // strip_periods: _,
             // TODO: text-case
-            text_case: _,
+            // text_case: _,
         } = label;
         let fmt = self.fmt();
         let selector = RoleTermSelector::from_name_variable(var, *form);
@@ -342,7 +340,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector = GenderedTermSelector::from_number_variable(
-            &self.ctx.locator_type(),
+            self.ctx.locator_type(),
             label.variable,
             label.form,
         );
@@ -362,8 +360,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 .map(|val| {
                     let b = fmt.ingest(val, options);
                     let b = fmt.with_format(b, label.formatting);
-                    let b = fmt.affixed(b, &label.affixes);
-                    b
+                    fmt.affixed(b, &label.affixes)
                 })
         })
     }

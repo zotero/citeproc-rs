@@ -9,13 +9,6 @@ use super::EdgeData;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use csl::*;
-use csl::{Affixes, Formatting, LabelElement, NumberElement, Position, TextElement};
-
-use csl::{
-    style::{Cond, Element, Group, Style, TextSource},
-    variables::AnyVariable,
-    IsIndependent,
-};
 
 impl Disambiguation<Markup> for Style {
     fn ref_ir(
@@ -193,8 +186,8 @@ impl Disambiguation<Markup> for Element {
                         .macros
                         .get(name)
                         .expect("macro errors not implemented!");
-                    // state.macro_stack.insert(name.clone());
-                    let out = ref_sequence(
+                    state.push_macro(name);
+                    let ret = ref_sequence(
                         db,
                         ctx,
                         state,
@@ -203,8 +196,8 @@ impl Disambiguation<Markup> for Element {
                         text.formatting,
                         text.affixes.clone(),
                     );
-                    // state.macro_stack.remove(&name);
-                    out
+                    state.pop_macro(name);
+                    ret
                 }
             },
             Element::Label(label) => {

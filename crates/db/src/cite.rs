@@ -86,8 +86,8 @@ macro_rules! intern_key {
 intern_key!(pub CiteId);
 
 impl CiteId {
-    pub fn lookup(&self, db: &impl CiteDatabase) -> Arc<Cite<Markup>> {
-        let (_cluster_id, _index, cite) = db.lookup_cite(*self);
+    pub fn lookup(self, db: &impl CiteDatabase) -> Arc<Cite<Markup>> {
+        let (_cluster_id, _index, cite) = db.lookup_cite(self);
         cite
     }
 }
@@ -219,7 +219,7 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                             && prev_cluster
                                 .cites
                                 .iter()
-                                .all(|&pid| &pid.lookup(db).ref_id == &cite.ref_id)
+                                .all(|&pid| pid.lookup(db).ref_id == cite.ref_id)
                         {
                             // Pick the last one to match locators against
                             prev_cluster.cites.last().map(|&pid| pid.lookup(db))
@@ -251,11 +251,11 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                 let diff = cluster.number.sub_note(first_note_number);
                 if let Some(pos) = matching_prev {
                     map.insert(cite_id, (pos, Some(unsigned)));
-                } else if cluster.number == first_number {
+                } else if cluster.number == first_number
+                    || diff.map(|d| d < near_note_distance).unwrap_or(false)
+                {
                     // XXX: not sure about this one
                     // unimplemented!("cite position for same number, but different cluster");
-                    map.insert(cite_id, (Position::NearNote, Some(unsigned)));
-                } else if diff.map(|d| d < near_note_distance).unwrap_or(false) {
                     map.insert(cite_id, (Position::NearNote, Some(unsigned)));
                 } else {
                     map.insert(cite_id, (Position::FarNote, Some(unsigned)));
@@ -274,7 +274,7 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
 
 fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>) {
     if let Some(x) = db.cite_positions().get(&key) {
-        x.clone()
+        *x
     } else {
         panic!("called cite_position on unknown cite id, {:?}", key);
     }

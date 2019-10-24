@@ -4,6 +4,10 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+// For the salsa macro expansion
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::enum_variant_names)]
+
 pub mod update;
 
 #[cfg(test)]
@@ -85,18 +89,15 @@ impl salsa::Database for Processor {
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
         use citeproc_proc::db::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
-        let mut q = self.queue.lock();
-        match event_fn().kind {
-            WillExecute { database_key } => match database_key.kind {
-                RDS(GroupKey::built_cluster(key)) => {
-                    let upd = DocUpdate::Cluster(key);
-                    // info!("produced update, {:?}", upd);
-                    q.push(upd)
-                }
-                _ => {}
-            },
-            _ => {}
-        };
+        let kind = event_fn().kind;
+        if let WillExecute { database_key } = kind {
+            if let RDS(GroupKey::built_cluster(key)) = database_key.kind {
+                let mut q = self.queue.lock();
+                let upd = DocUpdate::Cluster(key);
+                // info!("produced update, {:?}", upd);
+                q.push(upd);
+            }
+        }
     }
 }
 

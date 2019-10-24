@@ -73,11 +73,7 @@ impl InlineElement {
                 }
                 s.push('”');
             }
-            Anchor {
-                title: _,
-                url: _,
-                content,
-            } => {
+            Anchor { content, .. } => {
                 for i in content {
                     i.to_plain_inner(s, options);
                 }

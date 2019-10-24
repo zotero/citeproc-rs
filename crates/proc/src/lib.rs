@@ -55,8 +55,6 @@ pub(crate) mod prelude {
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
-
-    pub type MarkupBuild = <Markup as OutputFormat>::Build;
 }
 
 use prelude::*;
@@ -129,8 +127,8 @@ impl NamesInheritance {
                 .delimiter
                 .or_else(|| self.delimiter.clone())
                 .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
-            formatting: other.formatting.or_else(|| self.formatting.clone()),
-            display: other.display.or_else(|| self.display.clone()),
+            formatting: other.formatting.or(self.formatting),
+            display: other.display.or(self.display),
             affixes: other.affixes.or_else(|| self.affixes.clone()),
         }
     }
@@ -145,8 +143,8 @@ impl NamesInheritance {
                 .map(|x| x.0.clone())
                 .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
             et_al: names.et_al.clone(),
-            formatting: names.formatting.clone(),
-            display: names.display.clone(),
+            formatting: names.formatting,
+            display: names.display,
             affixes: names.affixes.clone(),
         }
     }
@@ -179,8 +177,7 @@ pub struct IrState {
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.
-    pub macro_stack: HashSet<Atom>,
-    /// Second field is names_delimiter
+    macro_stack: HashSet<Atom>,
     pub name_override: NameOverrider,
     suppressed: FnvHashSet<AnyVariable>,
     disamb_count: u32,
@@ -223,8 +220,7 @@ impl NameOverrider {
         &mut self,
         inheritance: NamesInheritance,
     ) -> Option<NamesInheritance> {
-        let old = std::mem::replace(&mut self.name_override, Some(inheritance));
-        old
+        std::mem::replace(&mut self.name_override, Some(inheritance))
     }
 
     pub fn replace_name_overrides_for_substitute(
@@ -232,8 +228,7 @@ impl NameOverrider {
         inheritance: NamesInheritance,
     ) -> Option<NamesInheritance> {
         self.in_substitute = true;
-        let old = std::mem::replace(&mut self.name_override, Some(inheritance));
-        old
+        std::mem::replace(&mut self.name_override, Some(inheritance))
     }
 
     pub fn restore_name_overrides(&mut self, old: Option<NamesInheritance>) {
@@ -295,5 +290,19 @@ impl IrState {
 impl IrState {
     pub fn new() -> Self {
         IrState::default()
+    }
+
+    pub fn push_macro(&mut self, macro_name: &Atom) {
+        if self.macro_stack.contains(macro_name) {
+            panic!(
+                "foiled macro recursion: {} called from within itself; exiting",
+                macro_name
+            );
+        }
+        self.macro_stack.insert(macro_name.clone());
+    }
+
+    pub fn pop_macro(&mut self, macro_name: &Atom) {
+        self.macro_stack.remove(macro_name);
     }
 }

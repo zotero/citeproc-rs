@@ -37,6 +37,7 @@ pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
     f(sty)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[salsa::database(
     citeproc_db::StyleDatabaseStorage,
     citeproc_db::LocaleDatabaseStorage,

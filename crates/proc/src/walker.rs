@@ -4,11 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::prelude::*;
-
-use csl::*;
-
 use crate::choose::CondChecker;
+use csl::*;
 
 pub enum WalkerFoldType<'a> {
     Group(&'a Group),

@@ -377,6 +377,8 @@ pub struct CondSet {
 
 impl From<ConditionParser> for CondSet {
     #[rustfmt::skip]
+    // Much neater to treat them all the same
+    #[allow(clippy::for_loop_over_option)]
     fn from(cp: ConditionParser) -> Self {
         let mut conds = FnvHashSet::default();
         for x in cp.position { conds.insert(Cond::Position(x)); }
@@ -711,8 +713,11 @@ impl Name {
     ///
     pub fn merge(&self, overrider: &Self) -> Self {
         Name {
-            and: overrider.and.clone().or(self.and.clone()),
-            delimiter: overrider.delimiter.clone().or(self.delimiter.clone()),
+            and: overrider.and.clone().or(self.and),
+            delimiter: overrider
+                .delimiter
+                .clone()
+                .or_else(|| self.delimiter.clone()),
             delimiter_precedes_et_al: overrider
                 .delimiter_precedes_et_al
                 .or(self.delimiter_precedes_et_al),
@@ -727,19 +732,19 @@ impl Name {
                 .et_al_subsequent_use_first
                 .or(self.et_al_subsequent_use_first),
             form: overrider.form.or(self.form),
-            initialize: overrider.initialize.or(self.initialize.clone()),
+            initialize: overrider.initialize.or(self.initialize),
             initialize_with: overrider
                 .initialize_with
                 .clone()
-                .or(self.initialize_with.clone()),
+                .or_else(|| self.initialize_with.clone()),
             name_as_sort_order: overrider.name_as_sort_order.or(self.name_as_sort_order),
             sort_separator: overrider
                 .sort_separator
                 .clone()
-                .or(self.sort_separator.clone()),
+                .or_else(|| self.sort_separator.clone()),
 
             // these four aren't inherited
-            formatting: overrider.formatting.clone(),
+            formatting: overrider.formatting,
             affixes: overrider.affixes.clone(),
             name_part_given: overrider.name_part_given.clone(),
             name_part_family: overrider.name_part_family.clone(),
@@ -750,7 +755,6 @@ impl Name {
         self.et_al_min.is_some() && self.et_al_use_first.is_some()
     }
 }
-
 #[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct NameLabelInput {
     pub form: Option<TermFormExtended>,
@@ -787,7 +791,7 @@ impl NameLabelInput {
                 .affixes
                 .as_ref()
                 .cloned()
-                .or(self.affixes.as_ref().cloned()),
+                .or_else(|| self.affixes.as_ref().cloned()),
             text_case: other.text_case.or(self.text_case),
             after_name: other.after_name,
         }

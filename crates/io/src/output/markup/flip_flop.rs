@@ -48,7 +48,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
         }
         Formatted(ils, f) => {
             let mut flop = state.clone();
-            let mut new_f = f.clone();
+            let mut new_f = *f;
             if let Some(fs) = f.font_style {
                 let samey = fs == state.emph;
                 if samey {

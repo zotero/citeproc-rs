@@ -71,16 +71,16 @@ impl DateOrRange {
         DateOrRange::Single(Date { year, month, day })
     }
     pub fn single(&self) -> Option<Date> {
-        if let DateOrRange::Single(ref d) = self {
-            Some(d.clone())
+        if let DateOrRange::Single(d) = self {
+            Some(*d)
         } else {
             None
         }
     }
     pub fn single_or_first(&self) -> Option<Date> {
         match self {
-            DateOrRange::Single(ref d) => Some(d.clone()),
-            DateOrRange::Range(ref d, _) => Some(d.clone()),
+            DateOrRange::Single(d) => Some(*d),
+            DateOrRange::Range(d, _) => Some(*d),
             _ => None,
         }
     }
@@ -114,19 +114,19 @@ impl FromStr for DateOrRange {
 fn test_date_parsing() {
     assert_eq!(
         DateOrRange::from_str("-1998-09-21"),
-        Ok(DateOrRange::new(-1998, 09, 21))
+        Ok(DateOrRange::new(-1998, 9, 21))
     );
     assert_eq!(
         DateOrRange::from_str("+1998-09-21"),
-        Ok(DateOrRange::new(1998, 09, 21))
+        Ok(DateOrRange::new(1998, 9, 21))
     );
     assert_eq!(
         DateOrRange::from_str("1998-09-21"),
-        Ok(DateOrRange::new(1998, 09, 21))
+        Ok(DateOrRange::new(1998, 9, 21))
     );
     assert_eq!(
         DateOrRange::from_str("1998-09"),
-        Ok(DateOrRange::new(1998, 09, 0))
+        Ok(DateOrRange::new(1998, 9, 0))
     );
     assert_eq!(
         DateOrRange::from_str("1998"),

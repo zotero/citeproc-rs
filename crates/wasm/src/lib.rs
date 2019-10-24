@@ -78,7 +78,8 @@ impl Driver {
     #[wasm_bindgen(js_name = "setReferences")]
     pub fn set_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
-        Ok(self.engine.borrow_mut().set_references(refs))
+        self.engine.borrow_mut().set_references(refs);
+        Ok(())
     }
 
     /// Inserts or overwrites a reference.
@@ -124,14 +125,16 @@ impl Driver {
             ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e))
         })?;
         let mut eng = self.engine.borrow_mut();
-        Ok(eng.insert_cluster(cluster))
+        eng.insert_cluster(cluster);
+        Ok(())
     }
 
     /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
     pub fn remove_cluster(&mut self, cluster_id: u32) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
-        Ok(eng.remove_cluster(cluster_id))
+        eng.remove_cluster(cluster_id);
+        Ok(())
     }
 
     /// Resets all the clusters in the processor to a new list.
@@ -140,7 +143,8 @@ impl Driver {
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
         let clusters = utils::read_js_array(clusters)?;
-        Ok(self.engine.borrow_mut().init_clusters(clusters))
+        self.engine.borrow_mut().init_clusters(clusters);
+        Ok(())
     }
 
     /// Returns the formatted citation cluster for `cluster_id`.
@@ -372,7 +376,7 @@ async fn fetch_all(inner: &Lifecycle, langs: Vec<Lang>) -> Vec<(Lang, String)> {
         .map(|lang| {
             let promised = inner.fetch_locale(&lang.to_string());
             let future = JsFuture::from(promised);
-            (lang.clone(), future)
+            (lang, future)
         })
         // Must collect to avoid shared + later mutable borrows of self.cache in two different
         // stages of the iterator
@@ -381,6 +385,7 @@ async fn fetch_all(inner: &Lifecycle, langs: Vec<Lang>) -> Vec<(Lang, String)> {
     for (lang, thunk) in thunks {
         // And collect them.
         match thunk.await {
+            #[allow(clippy::single_match)]
             Ok(got) => match got.as_string() {
                 Some(string) => pairs.push((lang, string)),
                 // JS consumer did not return a string. Assume it was null/undefined/etc, so no

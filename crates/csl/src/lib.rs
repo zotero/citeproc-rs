@@ -66,8 +66,7 @@ where
     fn is_on_node<'a>(node: &'a Node) -> bool {
         node.attributes()
             .iter()
-            .filter(|a| Self::filter_attribute(a.name()))
-            .next()
+            .find(|a| Self::filter_attribute(a.name()))
             != None
     }
     fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
@@ -369,11 +368,11 @@ impl FromNode for TextElement {
         let source = match (macro_, value, variable, term) {
             (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
             (None, Some(val), None, None) => TextSource::Value(val.into()),
-            (None, None, Some(___), None) => TextSource::Variable(
+            (None, None, Some(_vv), None) => TextSource::Variable(
                 attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
                 attribute_optional(node, "form", info)?,
             ),
-            (None, None, None, Some(___)) => TextSource::Term(
+            (None, None, None, Some(_tt)) => TextSource::Term(
                 TextTermSelector::from_node(node, info)?,
                 attribute_bool(node, "plural", false)?,
             ),

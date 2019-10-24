@@ -4,12 +4,8 @@ use super::graph_with_stack;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
-use csl::Atom;
-use csl::NameVariable;
-use csl::{
-    Cond, GivenNameDisambiguationRule, Name as NameEl, NameEtAl, NameForm, NameLabel,
-    NameLabelInput, Names, Position, Style,
-};
+use csl::variables::*;
+use csl::{Atom, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
 use std::sync::Arc;
@@ -76,7 +72,7 @@ impl Disambiguation<Markup> for Names {
                     db,
                     fmt,
                     &mut nfa,
-                    &runner.name_el.formatting,
+                    runner.name_el.formatting,
                     &runner.name_el.affixes,
                     start,
                     |nfa, mut spot| {
@@ -156,8 +152,8 @@ impl Disambiguation<Markup> for Names {
 
 citeproc_db::intern_key!(pub DisambName);
 impl DisambName {
-    pub fn lookup(&self, db: &impl IrDatabase) -> DisambNameData {
-        db.lookup_disamb_name(*self)
+    pub fn lookup(self, db: &impl IrDatabase) -> DisambNameData {
+        db.lookup_disamb_name(self)
     }
 }
 
@@ -499,9 +495,8 @@ impl RefNameIR {
     fn from_name_ir<O: OutputFormat>(name_ir: &NameIR<O>) -> Self {
         let mut vec = Vec::with_capacity(name_ir.disamb_names.len());
         for dnr in &name_ir.disamb_names {
-            match dnr {
-                DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) => vec.push(*id),
-                _ => {}
+            if let DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) = dnr {
+                vec.push(*id);
             }
         }
         RefNameIR {
@@ -516,12 +511,14 @@ pub enum DisambNameRatchet<B> {
     Literal(B),
     Person(PersonDisambNameRatchet),
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersonDisambNameRatchet {
     pub id: DisambName,
     pub data: DisambNameData,
     pub iter: SingleNameDisambIter,
 }
+
 impl PersonDisambNameRatchet {
     pub fn new(style: &Style, id: DisambName, data: DisambNameData) -> Self {
         let rule = style.citation.givenname_disambiguation_rule;

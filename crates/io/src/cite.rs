@@ -48,13 +48,13 @@ where
 {
     use super::csl_json::IdOrNumber;
     let s = IdOrNumber::deserialize(d)?;
-    Ok(Atom::from(s.to_string()))
+    Ok(Atom::from(s.into_string()))
 }
 
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cite<O: OutputFormat> {
     #[serde(rename = "id", deserialize_with = "get_ref_id")]
@@ -115,6 +115,17 @@ where
     D: Deserializer<'de>,
 {
     Ok(Option::<Locators>::deserialize(d)?.and_then(|me| me.into_option()))
+}
+
+impl<O: OutputFormat> Eq for Cite<O> {}
+impl<O: OutputFormat> PartialEq for Cite<O> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ref_id == other.ref_id
+            && self.prefix == other.prefix
+            && self.suffix == other.suffix
+            && self.suppression == other.suppression
+            && self.locators == other.locators
+    }
 }
 
 use std::hash::{Hash, Hasher};

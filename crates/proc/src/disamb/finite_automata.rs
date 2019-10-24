@@ -47,8 +47,8 @@ use std::hash::{Hash, Hasher};
 impl Hash for EdgeData {
     fn hash<H: Hasher>(&self, state: &mut H) {
         use std::mem::discriminant;
-        match &*self {
-            &EdgeData::Output(ref outp) => {
+        match self {
+            EdgeData::Output(ref outp) => {
                 ::core::hash::Hash::hash(&discriminant(self), state);
                 ::core::hash::Hash::hash(&(*outp), state)
             }
@@ -110,7 +110,7 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Nfa {
     pub graph: NfaGraph,
     pub accepting: BTreeSet<NodeIndex>,
@@ -164,11 +164,7 @@ impl Dfa {
 
 impl Nfa {
     pub fn new() -> Self {
-        Nfa {
-            graph: NfaGraph::new(),
-            start: BTreeSet::new(),
-            accepting: BTreeSet::new(),
-        }
+        Nfa::default()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -213,7 +209,7 @@ impl Nfa {
             let mut start_set = BTreeSet::new();
             start_set.insert(dfa1.start);
             Nfa {
-                graph: dfa1.graph.map(|_, _| (), |_, e| NfaEdge::Token(e.clone())),
+                graph: dfa1.graph.map(|_, _| (), |_, e| NfaEdge::Token(*e)),
                 accepting: start_set,
                 start: dfa1.accepting,
             }
@@ -310,7 +306,7 @@ impl Dfa {
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {
             let (cursor, prepended, chunk) = cursors.pop().unwrap();
-            let first = prepended.as_ref().or(chunk.get(0));
+            let first = prepended.as_ref().or_else(|| chunk.get(0));
             if first == None && self.accepting.contains(&cursor) {
                 // we did it!
                 return true;

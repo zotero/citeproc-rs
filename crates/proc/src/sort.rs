@@ -2,18 +2,13 @@ use crate::db::with_bib_context;
 use crate::prelude::*;
 use citeproc_io::output::plain::PlainText;
 use citeproc_io::Reference;
-use csl::Atom;
-use fnv::FnvHashMap;
-
-use std::sync::Arc;
-
 use csl::*;
+use fnv::FnvHashMap;
+use std::sync::Arc;
 
 use std::cmp::Ordering;
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
-    use csl::{Element, TextCase, TextSource, VariableForm};
-
     TextElement {
         source: TextSource::Macro(macro_name),
         formatting: None,
@@ -182,8 +177,6 @@ struct SortingWalker<'a, DB: IrDatabase, I: OutputFormat> {
     db: &'a DB,
     /// the cite is in its original format, but the formatter is PlainText
     ctx: CiteContext<'a, PlainText, I>,
-    macro_stack: Vec<Atom>,
-    plain_fmt: PlainText,
     state: IrState,
 }
 
@@ -193,8 +186,6 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
         SortingWalker {
             db,
             ctx: plain_ctx,
-            macro_stack: Vec::new(),
-            plain_fmt: PlainText,
             state: Default::default(),
         }
     }
@@ -304,15 +295,9 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
             .get(name)
             .expect("macro errors not implemented!");
 
-        if self.macro_stack.contains(&name) {
-            panic!(
-                "foiled macro recursion: {} called from within itself; exiting",
-                &name
-            );
-        }
-        self.macro_stack.push(name.clone());
+        self.state.push_macro(name);
         let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
-        self.macro_stack.pop();
+        self.state.pop_macro(name);
         ret
     }
 }

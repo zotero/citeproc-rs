@@ -76,8 +76,8 @@ pub struct UpdateSummary<O: OutputFormat = Markup> {
 
 impl UpdateSummary {
     pub fn summarize(db: &impl IrDatabase, updates: &[DocUpdate]) -> Self {
-        let ids = updates.iter().filter_map(|&u| match u {
-            DocUpdate::Cluster(x) => Some(x),
+        let ids = updates.iter().map(|&u| match u {
+            DocUpdate::Cluster(x) => x,
         });
         let mut set = fnv::FnvHashSet::default();
         for id in ids {

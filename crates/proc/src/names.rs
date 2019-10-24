@@ -13,11 +13,9 @@ use crate::prelude::*;
 use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
-use csl::Atom;
-use csl::NameVariable;
 use csl::{
-    DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
-    NameEtAl, NameForm, NameLabel, NameLabelInput, NamePart, Names, Position,
+    Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
+    NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position,
 };
 use std::sync::Arc;
 use parking_lot::Mutex;
@@ -764,7 +762,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
                 NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
                 NameToken::And => {
-                    use csl::*;
+                    use csl::terms::*;
                     let select = |form: TermFormExtended| {
                         TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
                     };

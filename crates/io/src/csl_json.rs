@@ -95,7 +95,7 @@ pub enum IdOrNumber {
 }
 
 impl IdOrNumber {
-    pub fn to_string(self) -> String {
+    pub fn into_string(self) -> String {
         match self {
             IdOrNumber::S(s) => s,
             IdOrNumber::N(i) => i.to_string(),
@@ -223,7 +223,7 @@ impl<'de> Deserialize<'de> for Reference {
                 }
                 Ok(Reference {
                     id: id
-                        .map(|i| csl::Atom::from(i.to_string()))
+                        .map(|i| csl::Atom::from(i.into_string()))
                         .ok_or_else(|| de::Error::missing_field("id"))?,
                     csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
                     language,
@@ -548,7 +548,7 @@ impl<'de> Deserialize<'de> for DateOrRange {
                 formatter.write_str("a date")
             }
 
-            fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {

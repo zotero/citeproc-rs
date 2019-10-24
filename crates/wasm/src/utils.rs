@@ -62,6 +62,7 @@ impl ErrorPlaceholder {
     }
 }
 
+#[allow(clippy::boxed_local)]
 pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue>
 where
     T: DeserializeOwned,
@@ -77,7 +78,7 @@ where
 pub struct USFetcher;
 
 // ~2kB gzipped, and prevents the same initial fetch every single time.
-const EN_US: &'static str = include_str!("locales-en-US.xml");
+const EN_US: &str = include_str!("locales-en-US.xml");
 
 impl LocaleFetcher for USFetcher {
     fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
