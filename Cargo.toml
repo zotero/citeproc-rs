@@ -9,11 +9,11 @@ members = [ "crates/*" ]
 # for running `cargo test`, `cargo doc` etc at the workspace root
 default-members = [
   "crates/csl",
-  "crates/citeproc-io",
-  "crates/citeproc-db",
-  "crates/citeproc-proc",
+  "crates/io",
+  "crates/db",
+  "crates/proc",
+  "crates/wasm",
   "crates/citeproc",
-  "crates/citeproc-wasm"
 ]
 
 [profile.bench]

@@ -13,6 +13,6 @@ parallel = []
 salsa = "0.13.0"
 fnv = "1.0.6"
 csl = { path = "../csl" }
-citeproc-io = { path = "../citeproc-io" }
+citeproc-io = { path = "../io" }
 log = "0.4.8"
 cfg-if = "0.1.9"

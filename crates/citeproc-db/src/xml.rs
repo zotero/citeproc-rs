@@ -317,7 +317,7 @@ impl PredefinedLocales {
         let mut m = HashMap::new();
         m.insert(
             Lang::en_us(),
-            include_str!("../../citeproc-wasm/src/locales-en-US.xml").to_string(),
+            include_str!("../../wasm/src/locales-en-US.xml").to_string(),
         );
         PredefinedLocales(m)
     }

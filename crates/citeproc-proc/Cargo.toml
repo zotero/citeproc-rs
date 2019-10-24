@@ -10,7 +10,7 @@ test = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 csl = { path = "../csl" }
-citeproc-io = { path = "../citeproc-io" }
+citeproc-io = { path = "../io" }
 serde = "1.0.100"
 serde_derive = "1.0.100"
 fnv = "1.0.6"
@@ -19,7 +19,7 @@ petgraph = "0.4.13"
 generational-arena = "0.2.2"
 cfg-if = "0.1.9"
 salsa = "0.13.0"
-citeproc-db = { path = "../citeproc-db" }
+citeproc-db = { path = "../db" }
 strum = "0.15.0"
 log = "0.4.8"
 bitflags = "1.1.0"

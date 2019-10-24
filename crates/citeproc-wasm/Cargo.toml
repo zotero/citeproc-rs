@@ -24,7 +24,7 @@ default = []
 [dependencies]
 citeproc = { path = "../citeproc", default-features = false, features=[] }
 csl = { path = "../csl" }
-citeproc-io = { path = "../citeproc-io" }
+citeproc-io = { path = "../io" }
 cfg-if = "0.1.9"
 console_log = { version = "0.1.2", optional = true }
 fern = { version = "0.5.8", optional = true }

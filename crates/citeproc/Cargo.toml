@@ -30,9 +30,9 @@ serde = { version = "1.0.100", features = ["rc"] }
 serde_derive = "1.0.100"
 
 csl = { path = "../csl" }
-citeproc-io = { path = "../citeproc-io" }
-citeproc-proc = { path = "../citeproc-proc" }
-citeproc-db = { path = "../citeproc-db" }
+citeproc-io = { path = "../io" }
+citeproc-proc = { path = "../proc" }
+citeproc-db = { path = "../db" }
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }
