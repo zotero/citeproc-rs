@@ -7,8 +7,8 @@
 use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
-use csl::{Affixes, Element, Formatting};
 use csl::Atom;
+use csl::{Affixes, Element, Formatting};
 
 pub fn sequence<'c, O, I>(
     db: &impl IrDatabase,

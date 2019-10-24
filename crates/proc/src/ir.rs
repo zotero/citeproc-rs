@@ -7,9 +7,9 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
-use csl::{NameVariable, NumberVariable, StandardVariable, Variable};
 use csl::Atom;
+use csl::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
+use csl::{NumberVariable, StandardVariable, Variable};
 
 use std::sync::Arc;
 
@@ -288,8 +288,6 @@ impl<O: OutputFormat> Default for IR<O> {
     }
 }
 
-use std::mem;
-
 /// Currently, flattening into EdgeData(String) only works when the Output type is String
 /// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
 impl<O: OutputFormat<Output = String>> IR<O> {
@@ -482,5 +480,4 @@ impl IrSeq<Markup> {
             edges.push(EdgeData::Output(affixes.suffix.to_string()));
         }
     }
-
 }

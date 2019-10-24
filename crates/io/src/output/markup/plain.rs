@@ -29,7 +29,7 @@ impl MicroNode {
             Text(text) => {
                 s.push_str(&text);
             }
-            Formatted(nodes, cmd) => {
+            Formatted(nodes, _cmd) => {
                 for node in nodes {
                     node.to_plain_inner(s, options);
                 }

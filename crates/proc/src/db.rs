@@ -11,9 +11,9 @@ use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSet
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, ClusterId, Name, Reference};
-use csl::{Bibliography, Position, Style, TextElement, SortKey};
-use csl::NameVariable;
+use citeproc_io::{Cite, ClusterId, Name};
+use csl::{Bibliography, Position, SortKey, TextElement};
+
 use csl::Atom;
 
 use parking_lot::{Mutex, MutexGuard};
@@ -77,7 +77,12 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     #[salsa::invoke(crate::sort::sort_string_citation)]
     fn sort_string_citation(&self, ref_id: Atom, macro_name: Atom) -> Arc<String>;
     #[salsa::invoke(crate::sort::sort_string_bibliography)]
-    fn sort_string_bibliography(&self, ref_id: Atom, macro_name: Atom, sort_key: SortKey) -> Option<Arc<String>>;
+    fn sort_string_bibliography(
+        &self,
+        ref_id: Atom,
+        macro_name: Atom,
+        sort_key: SortKey,
+    ) -> Option<Arc<String>>;
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
@@ -333,12 +338,11 @@ macro_rules! preamble {
 
 fn is_unambiguous(
     db: &impl IrDatabase,
-    pass: Option<DisambPass>,
+    _pass: Option<DisambPass>,
     ir: &IR<Markup>,
-    cite_id: Option<CiteId>,
-    own_id: &Atom,
+    _cite_id: Option<CiteId>,
+    _own_id: &Atom,
 ) -> bool {
-    use log::Level::{Info, Warn};
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut n = 0;
     for k in db.cited_keys().iter() {
@@ -417,7 +421,7 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     fn find_name_block<'a>(ref_ir: &'a RefIR, nth: &mut u32) -> Option<&'a RefNameIR> {
         match ref_ir {
             RefIR::Edge(_) => None,
-            RefIR::Name(nir, ref nfa) => {
+            RefIR::Name(nir, ref _nfa) => {
                 if *nth == 0 {
                     Some(nir)
                 } else {
@@ -462,9 +466,7 @@ fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
     vec
 }
 
-use crate::disamb::names::{
-    DisambNameRatchet, NameIR, NameVariantMatcher, PersonDisambNameRatchet, RefNameIR,
-};
+use crate::disamb::names::{DisambNameRatchet, NameIR, NameVariantMatcher, RefNameIR};
 
 fn disambiguate_add_names(
     db: &impl IrDatabase,
@@ -473,7 +475,7 @@ fn disambiguate_add_names(
     also_expand: bool,
 ) -> bool {
     let fmt = &db.get_formatter();
-    let style = db.style();
+    let _style = db.style();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
     let initial_refs = refs_accepting_cite(db, ir, ctx);
@@ -543,7 +545,7 @@ type NameMutexGuard<'a> = MutexGuard<'a, NameIR<Markup>>;
 
 fn expand_one_name_ir(
     db: &impl IrDatabase,
-    ir: &IR<Markup>,
+    _ir: &IR<Markup>,
     ctx: &CiteContext<'_, Markup>,
     refs_accepting: &[Atom],
     nir: &mut NameMutexGuard,
@@ -553,7 +555,7 @@ fn expand_one_name_ir(
 
     for r in refs_accepting {
         if let Some(rnir) = make_identical_name_formatter(db, r.clone(), ctx, index) {
-            let var = rnir.variable;
+            let _var = rnir.variable;
             let len = rnir.disamb_name_ids.len();
             if len > double_vec.len() {
                 double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
@@ -623,7 +625,7 @@ fn disambiguate_add_givennames(
     ctx: &CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
-    let fmt = db.get_formatter();
+    let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(db, ir, ctx);
     let name_refs = list_all_name_blocks(ir);
     for (n, nir_arc) in name_refs.into_iter().enumerate() {
@@ -660,7 +662,6 @@ fn disambiguate_add_year_suffix(
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
-    use csl::{StandardVariable, Variable};
     // First see if we can do it with an explicit one
     let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
         *piece = match piece {
@@ -802,7 +803,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     if ir1.unambiguous() || !style.citation.disambiguate_add_givenname {
         return ir1.clone();
     }
-    let (mut ir, mut state) = ir1.fresh_copy();
+    let (mut ir, state) = ir1.fresh_copy();
 
     let also_add_names = style.citation.disambiguate_add_names;
     disambiguate_add_givennames(db, &mut ir, &ctx, also_add_names);
@@ -907,7 +908,7 @@ pub fn with_bib_context<T>(
     db: &impl IrDatabase,
     ref_id: Atom,
     bib_number: Option<u32>,
-    sort_key: Option<SortKey>,
+    _sort_key: Option<SortKey>,
     f: impl Fn(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -946,26 +947,32 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         .expect("sorted_refs should contain a bib_item key")
         .clone();
 
-    with_bib_context(db, ref_id.clone(), Some(bib_number), None, |bib, mut ctx| {
-        let mut state = IrState::new();
-        let mut ir = bib.intermediate(db, &mut state, &ctx).0;
+    with_bib_context(
+        db,
+        ref_id.clone(),
+        Some(bib_number),
+        None,
+        |bib, mut ctx| {
+            let mut state = IrState::new();
+            let mut ir = bib.intermediate(db, &mut state, &ctx).0;
 
-        // Immediately apply year suffixes.
-        // Early-gen cites determine whether these exist -- but in the bibliography, we are already
-        // aware of this, so they just need to be mirrored.
-        //
-        // Can't apply them the first time round, because IR may contain many suffix hooks, and we
-        // need to only supply the first appearing explicit one, or the first appearing implicit one.
-        // TODO: comply with the spec where "hook in cite == explicit => no implicit in bib" and "vice
-        // versa"
-        if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
-            ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
-            disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
-        }
+            // Immediately apply year suffixes.
+            // Early-gen cites determine whether these exist -- but in the bibliography, we are already
+            // aware of this, so they just need to be mirrored.
+            //
+            // Can't apply them the first time round, because IR may contain many suffix hooks, and we
+            // need to only supply the first appearing explicit one, or the first appearing implicit one.
+            // TODO: comply with the spec where "hook in cite == explicit => no implicit in bib" and "vice
+            // versa"
+            if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
+                ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
+                disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
+            }
 
-        let matching = refs_accepting_cite(db, &ir, &ctx);
-        Arc::new(IrGen::new(ir, matching, state))
-    })
+            let matching = refs_accepting_cite(db, &ir, &ctx);
+            Arc::new(IrGen::new(ir, matching, state))
+        },
+    )
 }
 
 fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {

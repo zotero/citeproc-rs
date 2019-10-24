@@ -5,10 +5,10 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use crate::prelude::fnv_set_with_cap;
-use csl::{Cond, Position};
-use csl::{CondSet, Match};
 use csl::LocatorType;
 use csl::{AnyVariable, NumberVariable, Variable};
+use csl::{Cond, Position};
+use csl::{CondSet, Match};
 use fnv::FnvHashSet;
 
 bitflags::bitflags! {

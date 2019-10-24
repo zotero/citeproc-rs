@@ -51,7 +51,7 @@ pub(crate) mod prelude {
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
 
-    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, FreeCondSets, RefContext};
+    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
@@ -88,9 +88,7 @@ where
     ) -> IrSum<O>;
 }
 
-use csl::{
-    Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabel, NameLabelInput, Names,
-};
+use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
 use csl::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Eq, Clone, PartialEq)]
@@ -118,16 +116,20 @@ impl NamesInheritance {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
             // So if you supply <name/> at all, you start from context.
-            name: if other.did_supply_name { ctx_name.merge(&other.name) } else { self.name.clone() },
+            name: if other.did_supply_name {
+                ctx_name.merge(&other.name)
+            } else {
+                self.name.clone()
+            },
             did_supply_name: true,
             // The rest will just replace whatever's in the inheritance
             et_al: other.et_al.or_else(|| self.et_al.clone()),
             label: other.label.or_else(|| self.label.clone()),
-            delimiter: other.delimiter
+            delimiter: other
+                .delimiter
                 .or_else(|| self.delimiter.clone())
                 .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
-            formatting: other.formatting
-                .or_else(|| self.formatting.clone()),
+            formatting: other.formatting.or_else(|| self.formatting.clone()),
             display: other.display.or_else(|| self.display.clone()),
             affixes: other.affixes.or_else(|| self.affixes.clone()),
         }
@@ -185,7 +187,7 @@ pub struct IrState {
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
-pub struct NameOverrider{
+pub struct NameOverrider {
     name_override: Option<NamesInheritance>,
     pub in_substitute: bool,
 }

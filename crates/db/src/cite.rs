@@ -7,7 +7,7 @@
 use super::xml::{LocaleDatabase, StyleDatabase};
 
 use csl::Locale;
-use csl::{Position, Style};
+use csl::Position;
 use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;

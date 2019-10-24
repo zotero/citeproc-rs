@@ -8,8 +8,8 @@ use super::Disambiguation;
 use super::EdgeData;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
-use csl::{Affixes, Formatting, LabelElement, NumberElement, Position, TextElement};
 use csl::*;
+use csl::{Affixes, Formatting, LabelElement, NumberElement, Position, TextElement};
 
 use csl::{
     style::{Cond, Element, Group, Style, TextSource},

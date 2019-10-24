@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
 use citeproc_io::{output::markup::Markup, Cite, Cluster2, IntraNote, Reference};
+use csl::Atom;
 use csl::Lang;
 use csl::Style;
-use csl::Atom;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 

@@ -10,10 +10,10 @@ use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
-use csl::Style;
-use csl::{Cond, CslType, Position};
-use csl::{AnyVariable, NumberVariable, Variable};
 use csl::IsIndependent;
+use csl::Style;
+use csl::{AnyVariable, NumberVariable, Variable};
+use csl::{Cond, CslType, Position};
 use fnv::FnvHashSet;
 
 macro_rules! style_text_layout {

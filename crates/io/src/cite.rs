@@ -6,8 +6,8 @@
 
 use super::output::OutputFormat;
 use super::NumericValue;
-use csl::LocatorType;
 use csl::Atom;
+use csl::LocatorType;
 
 pub type ClusterId = u32;
 

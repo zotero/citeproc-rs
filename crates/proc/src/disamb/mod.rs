@@ -80,12 +80,12 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
+use csl::*;
+use csl::{Atom, IsIndependent};
 use csl::{
     BodyDate, Choose, Cond, Conditions, IfThen, LabelElement, Match, Names, NumberElement,
     Position, TextElement, VariableForm,
 };
-use csl::*;
-use csl::{Atom, IsIndependent};
 
 pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {
     let mut walker = FreeCondWalker {
@@ -105,7 +105,7 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
     type Checker = crate::choose::UselessCondChecker;
 
     /// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
-    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+    fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         // TODO: keep track of which empty variables caused GroupVars to not render, if
         // they are indeed free variables.
         // XXX: include layout parts?
@@ -140,9 +140,9 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
 
     fn text_variable(
         &mut self,
-        text: &TextElement,
+        _text: &TextElement,
         sv: StandardVariable,
-        form: VariableForm,
+        _form: VariableForm,
     ) -> Self::Output {
         if sv.is_independent() {
             let mut implicit_var_test = FreeCondSets::mult_identity();
@@ -154,7 +154,7 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
         }
     }
 
-    fn date(&mut self, date: &BodyDate) -> Self::Output {
+    fn date(&mut self, _date: &BodyDate) -> Self::Output {
         // Position may be involved for NASO and primary disambiguation
         let mut base = FreeCondSets::mult_identity();
         let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
@@ -233,7 +233,7 @@ pub trait Disambiguation<O: OutputFormat = Markup> {
         &self,
         _db: &impl IrDatabase,
         _ctx: &RefContext<O>,
-        state: &mut IrState,
+        _state: &mut IrState,
         _stack: Formatting,
     ) -> (RefIR, GroupVars) {
         unimplemented!()
@@ -279,7 +279,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
         .iter()
         .map(|fc| {
             let fmt = db.get_formatter();
-            let name_info = db.name_info_citation();
+            let _name_info = db.name_info_citation();
             let ctx =
                 RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, CiteOrBib::Citation);
             let mut state = IrState::new();

@@ -25,9 +25,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use parking_lot::Mutex;
 
-use csl::StyleError;
 use csl::Lang;
 use csl::Style;
+use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};

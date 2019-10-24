@@ -7,12 +7,12 @@
 use crate::prelude::*;
 
 use citeproc_io::Date;
+use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
 };
-use csl::Atom;
 use std::mem;
 
 enum Either<O: OutputFormat> {
@@ -54,7 +54,7 @@ fn to_ref_ir(
         // EdgeData::YearSuffix edges in RefIR. Because we don't care whether it's been rendered or
         // not -- in RefIR's comparison, it must always be an EdgeData::YearSuffix.
         IR::Rendered(opt_build) => RefIR::Edge(to_edge(opt_build, stack)),
-        IR::YearSuffix(ysh, _opt_build) => RefIR::Edge(Some(ys_edge)),
+        IR::YearSuffix(_ysh, _opt_build) => RefIR::Edge(Some(ys_edge)),
         IR::Seq(ir_seq) => RefIR::Seq(RefIrSeq {
             contents: ir_seq
                 .contents
@@ -101,25 +101,21 @@ impl Either<Markup> {
     }
 }
 
-impl <'c, O, I> Proc<'c, O, I> for BodyDate
+impl<'c, O, I> Proc<'c, O, I> for BodyDate
 where
     O: OutputFormat,
     I: OutputFormat,
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
-        state: &mut IrState,
+        _db: &impl IrDatabase,
+        _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         // TODO: wrap BodyDate in a YearSuffixHook::Date() under certain conditions
         match self {
-            BodyDate::Indep(idate) => {
-                intermediate_generic_indep(idate, GenericContext::Cit(ctx))
-            }
-            BodyDate::Local(ldate) => {
-                intermediate_generic_local(ldate, GenericContext::Cit(ctx))
-            }
+            BodyDate::Indep(idate) => intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
+            BodyDate::Local(ldate) => intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
         }
         .map(Either::into_cite_ir)
         .unwrap_or((IR::Rendered(None), GroupVars::rendered_if(false)))
@@ -131,10 +127,10 @@ impl Disambiguation<Markup> for BodyDate {
         &self,
         db: &impl IrDatabase,
         ctx: &RefContext<Markup>,
-        state: &mut IrState,
+        _state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        let fmt = ctx.format;
+        let _fmt = ctx.format;
         match self {
             BodyDate::Indep(idate) => {
                 intermediate_generic_indep::<Markup, Markup>(idate, GenericContext::Ref(ctx))
@@ -269,7 +265,7 @@ where
             .filter(|dp| dp_matches(dp, local.parts_selector))
             .filter_map(|dp| dp_render_either(dp, ctx.clone(), &val));
         let mut builder = PartBuilder::new(gen_date, len_hint);
-        for (form, either) in rendered_parts {
+        for (_form, either) in rendered_parts {
             builder.push_either(either);
         }
         builder.into_either(fmt)
@@ -303,7 +299,7 @@ where
             .iter()
             .filter_map(|dp| dp_render_either(dp, ctx.clone(), &val));
         let mut builder = PartBuilder::new(gen_date, len_hint);
-        for (form, either) in each {
+        for (_form, either) in each {
             builder.push_either(either);
         }
         builder.into_either(fmt)

@@ -6,9 +6,7 @@
 
 use super::{LocalizedQuotes, OutputFormat};
 use crate::utils::{Intercalate, JoinMany};
-use csl::{
-    FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
-};
+use csl::{FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment};
 
 use pandoc_types::definition::Inline::*;
 use pandoc_types::definition::{Attr, Inline, QuoteType, Target};

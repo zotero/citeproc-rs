@@ -4,12 +4,12 @@ use super::graph_with_stack;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
+use csl::Atom;
+use csl::NameVariable;
 use csl::{
     Cond, GivenNameDisambiguationRule, Name as NameEl, NameEtAl, NameForm, NameLabel,
     NameLabelInput, Names, Position, Style,
 };
-use csl::NameVariable;
-use csl::Atom;
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
 use std::sync::Arc;
@@ -26,7 +26,9 @@ impl Disambiguation<Markup> for Names {
         let style = ctx.style;
         let _locale = ctx.locale;
         let names_inheritance =
-            state.name_override.inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
+            state
+                .name_override
+                .inherited_names_options(&ctx.name_el, &ctx.names_delimiter, &self);
 
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
@@ -134,8 +136,9 @@ impl Disambiguation<Markup> for Names {
                     // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
                     // substitution later on
                     let mut new_state = state.clone();
-                    let old =
-                        new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
+                    let old = new_state
+                        .name_override
+                        .replace_name_overrides_for_substitute(names_inheritance.clone());
                     let (ir, gv) = el.ref_ir(db, ctx, &mut new_state, stack);
                     if !ir.is_empty() {
                         new_state.name_override.restore_name_overrides(old);
@@ -415,7 +418,7 @@ impl NameVariantMatcher {
 
     pub fn from_disamb_name(db: &impl IrDatabase, dn: DisambName) -> Self {
         let style = db.style();
-        let fmt = &db.get_formatter();
+        let _fmt = &db.get_formatter();
         let rule = style.citation.givenname_disambiguation_rule;
 
         let mut data: DisambNameData = dn.lookup(db);
@@ -445,7 +448,7 @@ pub fn disambiguated_person_names(
     }
 
     let dns = db.all_person_names();
-    let fmt = &db.get_formatter();
+    let _fmt = &db.get_formatter();
     let mut matchers = Vec::new();
     let mut results = FnvHashMap::default();
 

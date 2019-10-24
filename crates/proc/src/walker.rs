@@ -5,11 +5,10 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::prelude::*;
-use citeproc_db::LocaleFetcher;
-use csl::{Name as NameEl, *};
-use std::sync::Arc;
 
-use crate::choose::{CondChecker, UselessCondChecker};
+use csl::*;
+
+use crate::choose::CondChecker;
 
 pub enum WalkerFoldType<'a> {
     Group(&'a Group),
@@ -23,7 +22,7 @@ pub enum WalkerFoldType<'a> {
 pub trait StyleWalker {
     type Output: Default;
     type Checker: CondChecker;
-    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+    fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         for el in elements {
             let _ = self.element(el);
         }
@@ -53,7 +52,6 @@ pub trait StyleWalker {
     }
     /// Default impl only walks branches for which ifthen returns Some
     fn choose(&mut self, choose: &Choose) -> Self::Output {
-        use std::iter;
         let Choose(head, rest, last) = choose;
         let iter = std::iter::once(head).chain(rest.iter());
         for branch in iter {
@@ -73,36 +71,36 @@ pub trait StyleWalker {
     }
     fn text_variable(
         &mut self,
-        text: &TextElement,
-        svar: StandardVariable,
-        form: VariableForm,
+        _text: &TextElement,
+        _svar: StandardVariable,
+        _form: VariableForm,
     ) -> Self::Output {
         Self::Output::default()
     }
-    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+    fn text_value(&mut self, _text: &TextElement, _value: &Atom) -> Self::Output {
         Self::Output::default()
     }
-    fn text_macro(&mut self, source: &TextElement, name: &Atom) -> Self::Output {
+    fn text_macro(&mut self, _source: &TextElement, _name: &Atom) -> Self::Output {
         Self::Output::default()
     }
     fn text_term(
         &mut self,
-        source: &TextElement,
-        sel: TextTermSelector,
-        plural: bool,
+        _source: &TextElement,
+        _sel: TextTermSelector,
+        _plural: bool,
     ) -> Self::Output {
         Self::Output::default()
     }
-    fn label(&mut self, label: &LabelElement) -> Self::Output {
+    fn label(&mut self, _label: &LabelElement) -> Self::Output {
         Self::Output::default()
     }
-    fn number(&mut self, source: &NumberElement) -> Self::Output {
+    fn number(&mut self, _source: &NumberElement) -> Self::Output {
         Self::Output::default()
     }
-    fn names(&mut self, name: &Names) -> Self::Output {
+    fn names(&mut self, _name: &Names) -> Self::Output {
         Self::Output::default()
     }
-    fn date(&mut self, date: &BodyDate) -> Self::Output {
+    fn date(&mut self, _date: &BodyDate) -> Self::Output {
         Self::Output::default()
     }
     fn group(&mut self, group: &Group) -> Self::Output {

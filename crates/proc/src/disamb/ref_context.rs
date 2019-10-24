@@ -219,16 +219,15 @@ impl<'a, O: OutputFormat> DisambCounter<'a, O> {
     }
 }
 
-use csl::{Choose, Conditions, IfThen};
+use csl::Choose;
 
 impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
     type Output = u32;
     type Checker = RefContext<'a, O>;
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
-        elements.iter().fold(0, |acc, el| self.element(el))
+        elements.iter().fold(0, |_acc, el| self.element(el))
     }
     fn choose(&mut self, choose: &Choose) -> Self::Output {
-        use std::iter;
         let Choose(head, rest, last) = choose;
         let iter = std::iter::once(head).chain(rest.iter());
         let mut sum = 0u32;
@@ -254,8 +253,8 @@ mod test {
     use crate::prelude::*;
     use crate::test::with_test_citation;
     use citeproc_db::LocaleFetcher;
-    use csl::Lang;
     use csl::Atom;
+    use csl::Lang;
 
     #[test]
     fn test_counter() {

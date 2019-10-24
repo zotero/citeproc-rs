@@ -1,12 +1,12 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
+use csl::variables::*;
+use csl::Atom;
 use csl::{
     Affixes, Bibliography, Element, LabelElement, NumberElement, Style, TextElement, TextSource,
 };
-use csl::variables::*;
-use csl::Atom;
 
-impl <'c, O, I> Proc<'c, O, I> for Style
+impl<'c, O, I> Proc<'c, O, I> for Style
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -31,7 +31,7 @@ where
     }
 }
 
-impl <'c, O, I> Proc<'c, O, I> for Bibliography
+impl<'c, O, I> Proc<'c, O, I> for Bibliography
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -56,7 +56,7 @@ where
     }
 }
 
-impl <'c, O, I> Proc<'c, O, I> for Element
+impl<'c, O, I> Proc<'c, O, I> for Element
 where
     O: OutputFormat,
     I: OutputFormat,

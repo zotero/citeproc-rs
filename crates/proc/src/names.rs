@@ -13,12 +13,12 @@ use crate::prelude::*;
 use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
+use csl::Atom;
+use csl::NameVariable;
 use csl::{
     DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
     NameEtAl, NameForm, NameLabel, NameLabelInput, NamePart, Names, Position,
 };
-use csl::NameVariable;
-use csl::Atom;
 use std::sync::Arc;
 use parking_lot::Mutex;
 
@@ -121,18 +121,24 @@ fn render_label<O: OutputFormat, I: OutputFormat>(
 use crate::NameOverrider;
 use csl::SortKey;
 
-pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameVariable, sort_key: &SortKey, loc: CiteOrBib) -> Option<Vec<String>> {
+pub fn sort_strings_for_names(
+    db: &impl IrDatabase,
+    refr: &Reference,
+    var: NameVariable,
+    sort_key: &SortKey,
+    loc: CiteOrBib,
+) -> Option<Vec<String>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
         CiteOrBib::Citation => style.name_info_citation(),
         CiteOrBib::Bibliography => style.name_info_bibliography(),
     };
-    let mut name_o = NameOverrider::default();
+    let name_o = NameOverrider::default();
     // Not clear from the spec whether we need to preserve the contextual name options or not.
     // This code does preserve them, and then forces NASO and form as is definitely required.
-    let names_inheritance =  name_o.inherited_names_options_sort_key(&arc_name_el, &delim, sort_key);
-    let mut runner = OneNameVar {
+    let names_inheritance = name_o.inherited_names_options_sort_key(&arc_name_el, &delim, sort_key);
+    let runner = OneNameVar {
         name_el: &names_inheritance.name.merge(&NameEl {
             name_as_sort_order: Some(NameAsSortOrder::All),
             form: Some(NameForm::Long),
@@ -172,11 +178,18 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     ctx: &CiteContext<'c, O, I>,
 ) -> IrSum<O> {
     let fmt = &ctx.format;
-    let mut names_inheritance =
-        state.name_override.inherited_names_options(&ctx.name_citation, &ctx.names_delimiter, names);
+    let mut names_inheritance = state.name_override.inherited_names_options(
+        &ctx.name_citation,
+        &ctx.names_delimiter,
+        names,
+    );
 
     if let Some(key) = &ctx.sort_key {
-        names_inheritance = names_inheritance.override_with(&ctx.name_citation, &ctx.names_delimiter, NamesInheritance::from_sort_key(key));
+        names_inheritance = names_inheritance.override_with(
+            &ctx.name_citation,
+            &ctx.names_delimiter,
+            NamesInheritance::from_sort_key(key),
+        );
     }
 
     let name_irs: Vec<IR<O>> = to_individual_name_irs(
@@ -216,8 +229,9 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                 // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
                 // substitution later on
                 let mut new_state = state.clone();
-                let old =
-                    new_state.name_override.replace_name_overrides_for_substitute(names_inheritance.clone());
+                let old = new_state
+                    .name_override
+                    .replace_name_overrides_for_substitute(names_inheritance.clone());
                 let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
                 if !ir.is_empty() {
                     new_state.name_override.restore_name_overrides(old);
@@ -776,9 +790,7 @@ pub enum NameTokenBuilt<'a, B> {
     Built(B),
 }
 
-use self::ord::{
-    get_display_order, get_sort_order, DisplayOrdering, NamePartToken, SortOrdering, SortToken,
-};
+use self::ord::{get_display_order, get_sort_order, DisplayOrdering, NamePartToken};
 
 #[allow(dead_code)]
 mod ord {

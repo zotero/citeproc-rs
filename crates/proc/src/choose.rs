@@ -10,13 +10,12 @@ use crate::helpers::sequence;
 use citeproc_io::DateOrRange;
 use csl::{
     Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
-    Style,
 };
 use csl::{AnyVariable, DateVariable};
 
 use std::sync::Arc;
 
-impl <'c, O, I> Proc<'c, O, I> for Arc<Choose>
+impl<'c, O, I> Proc<'c, O, I> for Arc<Choose>
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -233,15 +232,15 @@ where
     run_matcher(&mut iter_all, &cond_set.match_type)
 }
 
-use csl::LocatorType;
 use csl::Features;
+use csl::LocatorType;
 
 pub struct UselessCondChecker;
 impl CondChecker for UselessCondChecker {
-    fn has_variable(&self, var: AnyVariable) -> bool {
+    fn has_variable(&self, _var: AnyVariable) -> bool {
         false
     }
-    fn is_numeric(&self, var: AnyVariable) -> bool {
+    fn is_numeric(&self, _var: AnyVariable) -> bool {
         false
     }
     fn is_disambiguate(&self) -> bool {
@@ -253,7 +252,7 @@ impl CondChecker for UselessCondChecker {
     fn locator_type(&self) -> Option<LocatorType> {
         None
     }
-    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
+    fn get_date(&self, _dvar: DateVariable) -> Option<&DateOrRange> {
         None
     }
     fn position(&self) -> Position {

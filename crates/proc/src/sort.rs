@@ -4,7 +4,7 @@ use citeproc_io::output::plain::PlainText;
 use citeproc_io::Reference;
 use csl::Atom;
 use fnv::FnvHashMap;
-use std::borrow::Cow;
+
 use std::sync::Arc;
 
 use csl::*;
@@ -13,7 +13,7 @@ use std::cmp::Ordering;
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
     use csl::{Element, TextCase, TextSource, VariableForm};
-    use csl::{StandardVariable, Variable};
+
     TextElement {
         source: TextSource::Macro(macro_name),
         formatting: None,
@@ -25,7 +25,11 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
     }
 }
 
-pub fn sort_string_citation(db: &impl IrDatabase, ref_id: Atom, macro_name: Atom) -> Arc<String> {
+pub fn sort_string_citation(
+    _db: &impl IrDatabase,
+    _ref_id: Atom,
+    _macro_name: Atom,
+) -> Arc<String> {
     unimplemented!()
 }
 
@@ -36,9 +40,9 @@ pub fn sort_string_bibliography(
     macro_name: Atom,
     key: SortKey,
 ) -> Option<Arc<String>> {
-    with_bib_context(db, ref_id.clone(), None, Some(key), |bib, ctx| {
+    with_bib_context(db, ref_id.clone(), None, Some(key), |_bib, ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
-        let mut text = plain_macro_element(macro_name.clone());
+        let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
         info!("{} macro {} produced: {}", ref_id, macro_name, string);
         Arc::new(string)
@@ -159,7 +163,7 @@ pub fn bib_ordering(
                     info!("{:?} <-> {:?}", a_strings, b_strings);
                     compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
                 }
-                AnyVariable::Date(v) => (Ordering::Equal, None),
+                AnyVariable::Date(_v) => (Ordering::Equal, None),
             },
         };
         ord = match (key.direction.as_ref(), demoted) {
@@ -205,7 +209,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
     type Checker = GenericContext<'a, PlainText>;
 
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
-        let mut iter = elements.iter();
+        let iter = elements.iter();
         let mut output: Option<String> = None;
         // Avoid allocating one new string
         let mut gv_acc = GroupVars::new();

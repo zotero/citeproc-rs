@@ -2,17 +2,16 @@ use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
+use csl::Atom;
 use csl::Locale;
-use csl::{
-    DisplayMode, LabelElement, NameLabel, NumberElement, NumericForm, Plural, Style, TextCase,
-    TextElement,
-};
 use csl::{
     GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
     TextTermSelector,
 };
+use csl::{
+    LabelElement, NameLabel, NumberElement, NumericForm, Plural, Style, TextCase, TextElement,
+};
 use csl::{NameVariable, NumberVariable, StandardVariable};
-use csl::Atom;
 
 #[derive(Clone)]
 pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
@@ -43,7 +42,7 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
     pub fn in_bibliography(&self) -> bool {
         match self {
             GenericContext::Cit(ctx) => ctx.in_bibliography,
-            GenericContext::Ref(ctx) => false,
+            GenericContext::Ref(_ctx) => false,
         }
     }
     pub fn format(&self) -> &O {
@@ -86,8 +85,8 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
 
 use crate::choose::CondChecker;
 use citeproc_io::DateOrRange;
-use csl::{CslType, Position};
 use csl::{AnyVariable, DateVariable};
+use csl::{CslType, Position};
 
 impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
     fn has_variable(&self, var: AnyVariable) -> bool {
@@ -152,7 +151,6 @@ impl<'c, O: OutputFormat> Renderer<'c, O, O> {
             ctx: GenericContext::Ref(c),
         }
     }
-
 }
 
 impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
@@ -185,7 +183,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         af: &Affixes,
         text_case: TextCase,
     ) -> O::Build {
-        use crate::number::{roman_lower, roman_representable};
         use citeproc_io::NumericToken;
         let fmt = self.fmt();
         match (val, form) {
@@ -199,7 +196,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                         s.push_str(&format!("{:08}", n));
                     }
                 }
-                let options = IngestOptions {
+                let _options = IngestOptions {
                     replace_hyphens: false,
                     text_case,
                 };

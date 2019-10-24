@@ -19,11 +19,11 @@ use std::str::FromStr;
 // differences.
 // It might be possible to go without this, by making anything that's a number in either variant
 // Definitely a number, and enforcing it on the proc phase.
-use csl::Lang;
-use csl::CslType;
 use csl::AnyVariable;
+use csl::CslType;
 use csl::Features;
 use csl::GetAttribute;
+use csl::Lang;
 
 use super::date::{Date, DateOrRange};
 use super::numeric::NumericValue;
