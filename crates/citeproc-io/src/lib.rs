@@ -38,7 +38,7 @@ pub use self::names::*;
 pub use self::numeric::*;
 pub use self::reference::*;
 
-use csl::style::TextCase;
+use csl::TextCase;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct IngestOptions {

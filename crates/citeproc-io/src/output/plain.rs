@@ -8,7 +8,7 @@ use super::micro_html::micro_html_to_string;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::IngestOptions;
 
-use csl::style::{DisplayMode, Formatting};
+use csl::{DisplayMode, Formatting};
 
 #[derive(Debug, Clone)]
 pub struct PlainText;

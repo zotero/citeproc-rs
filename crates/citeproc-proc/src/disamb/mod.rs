@@ -80,11 +80,11 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
 
-use csl::style::{
+use csl::{
     BodyDate, Choose, Cond, Conditions, IfThen, LabelElement, Match, Names, NumberElement,
     Position, TextElement, VariableForm,
 };
-use csl::variables::*;
+use csl::*;
 use csl::{Atom, IsIndependent};
 
 pub fn get_free_conds<'a, DB: IrDatabase>(db: &'a DB) -> FreeCondSets {

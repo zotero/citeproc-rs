@@ -4,11 +4,11 @@ use super::graph_with_stack;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
-use csl::style::{
+use csl::{
     Cond, GivenNameDisambiguationRule, Name as NameEl, NameEtAl, NameForm, NameLabel,
     NameLabelInput, Names, Position, Style,
 };
-use csl::variables::NameVariable;
+use csl::NameVariable;
 use csl::Atom;
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;

@@ -10,14 +10,18 @@ use super::DisambPass;
 use crate::choose::CondChecker;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
-use csl::locale::Locale;
-use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm, SortKey};
-use csl::variables::*;
-use csl::version::Features;
+use csl::Features;
+use csl::Locale;
+use csl::*;
+use csl::{CslType, Delimiter, Name as NameEl, Position, SortKey, Style, VariableForm};
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct CiteContext<'c, Output: OutputFormat + Sized = Markup, Input: OutputFormat + Sized = Output, > {
+pub struct CiteContext<
+    'c,
+    Output: OutputFormat + Sized = Markup,
+    Input: OutputFormat + Sized = Output,
+> {
     pub reference: &'c Reference,
     pub format: Output,
     pub cite_id: Option<CiteId>,
@@ -83,17 +87,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
     }
 
     pub fn has_variable(&self, var: AnyVariable) -> bool {
-        use csl::variables::AnyVariable::*;
         match var {
-            Name(NameVariable::Dummy) => false,
+            AnyVariable::Name(NameVariable::Dummy) => false,
             // TODO: finish this list
-            Number(NumberVariable::Locator) => self.cite.locators.is_some(),
+            AnyVariable::Number(NumberVariable::Locator) => self.cite.locators.is_some(),
             // we need Page to exist and be numeric
-            Number(NumberVariable::PageFirst) => {
+            AnyVariable::Number(NumberVariable::PageFirst) => {
                 self.is_numeric(AnyVariable::Number(NumberVariable::Page))
             }
-            Number(NumberVariable::FirstReferenceNoteNumber) => self.position.1.is_some(),
-            Number(NumberVariable::CitationNumber) => self.bib_number.is_some(),
+            AnyVariable::Number(NumberVariable::FirstReferenceNoteNumber) => {
+                self.position.1.is_some()
+            }
+            AnyVariable::Number(NumberVariable::CitationNumber) => self.bib_number.is_some(),
             _ => ref_has_variable(self.reference, var),
         }
     }
@@ -163,7 +168,7 @@ fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
     }
 }
 
-use csl::terms::LocatorType;
+use csl::LocatorType;
 
 impl<'c, O, I> CondChecker for CiteContext<'c, O, I>
 where

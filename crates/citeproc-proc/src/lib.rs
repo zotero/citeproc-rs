@@ -45,7 +45,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
 
-    pub use csl::style::{Affixes, Element, Formatting};
+    pub use csl::{Affixes, Element, Formatting};
 
     pub use crate::cite_context::CiteContext;
     pub use crate::group::GroupVars;
@@ -88,10 +88,10 @@ where
     ) -> IrSum<O>;
 }
 
-use csl::style::{
+use csl::{
     Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabel, NameLabelInput, Names,
 };
-use csl::variables::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
+use csl::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NamesInheritance {
@@ -111,7 +111,7 @@ pub struct NamesInheritance {
     // pub institution: Option<Institution>,
 }
 
-use csl::style::SortKey;
+use csl::SortKey;
 
 impl NamesInheritance {
     fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<Delimiter>, other: Self) -> Self {

@@ -4,10 +4,10 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use csl::error::{InvalidCsl, StyleError};
+use csl::{InvalidCsl, StyleError};
 use std::ops::Range;
 
-use csl::error::Severity as CslSeverity;
+use csl::Severity as CslSeverity;
 
 use codespan::{ByteIndex, ByteSpan, CodeMap, FileMap, Span};
 use codespan_reporting::termcolor::{ColorChoice, StandardStream};

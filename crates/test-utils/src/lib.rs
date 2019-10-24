@@ -9,7 +9,7 @@ extern crate serde_derive;
 
 use citeproc::prelude::*;
 use citeproc_io::{Cite, Cluster2, IntraNote, Reference};
-use csl::locale::Lang;
+use csl::Lang;
 
 use directories::ProjectDirs;
 

@@ -5,10 +5,10 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use crate::prelude::fnv_set_with_cap;
-use csl::style::{Cond, Position};
-use csl::style::{CondSet, Match};
-use csl::terms::LocatorType;
-use csl::variables::{AnyVariable, NumberVariable, Variable};
+use csl::{Cond, Position};
+use csl::{CondSet, Match};
+use csl::LocatorType;
+use csl::{AnyVariable, NumberVariable, Variable};
 use fnv::FnvHashSet;
 
 bitflags::bitflags! {
@@ -695,7 +695,7 @@ fn free_cross_product() {
 
 #[test]
 fn free_all_branches_match_all() {
-    use csl::style::Position;
+    use csl::Position;
     let ibid = Cond::Position(Position::Ibid);
     let mut if_inner = FreeCondSets::empty();
     if_inner.scalar_multiply_cond(ibid, true);
@@ -718,7 +718,7 @@ fn free_all_branches_match_all() {
 
 #[test]
 fn free_all_branches_match_none() {
-    use csl::style::Position;
+    use csl::Position;
     let ibid = Cond::Position(Position::Ibid);
     let mut if_inner = FreeCondSets::empty();
     if_inner.scalar_multiply_cond(ibid, true);
@@ -743,7 +743,7 @@ fn free_all_branches_match_none() {
 fn free_all_branches_match_any() {
     // inner = {IBID, IBID_FALSE};
     // conds = any (LOCATOR)
-    use csl::style::Position;
+    use csl::Position;
     let ibid = Cond::Position(Position::Ibid);
     let mut if_inner = FreeCondSets::empty();
     if_inner.scalar_multiply_cond(ibid, true);

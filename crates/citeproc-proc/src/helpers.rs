@@ -7,7 +7,7 @@
 use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
-use csl::style::{Affixes, Element, Formatting};
+use csl::{Affixes, Element, Formatting};
 use csl::Atom;
 
 pub fn sequence<'c, O, I>(

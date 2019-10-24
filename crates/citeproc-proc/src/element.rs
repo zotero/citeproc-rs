@@ -1,6 +1,6 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use csl::style::{
+use csl::{
     Affixes, Bibliography, Element, LabelElement, NumberElement, Style, TextElement, TextSource,
 };
 use csl::variables::*;
@@ -74,7 +74,7 @@ where
 
             Element::Text(ref text) => {
                 use citeproc_io::output::LocalizedQuotes;
-                use csl::style::TextSource;
+                use csl::TextSource;
                 let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
                 let _quotes = if text.quotes { Some(&q) } else { None };
                 match text.source {

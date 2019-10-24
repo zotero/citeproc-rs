@@ -26,12 +26,14 @@ pub mod terms;
 pub mod variables;
 pub mod version;
 
+pub use self::error::*;
+pub use self::locale::*;
+pub use self::style::*;
+pub use self::terms::*;
+pub use self::variables::*;
+pub use self::version::*;
+
 use self::attr::*;
-use self::error::{CslError, InvalidCsl, NeedVarType, PartitionResults, StyleError};
-use self::locale::*;
-use self::style::*;
-use self::terms::*;
-use self::version::*;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;

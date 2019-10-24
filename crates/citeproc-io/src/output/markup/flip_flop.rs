@@ -8,7 +8,7 @@ use super::InlineElement;
 use super::QuoteType;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
-use csl::style::{FontStyle, FontVariant, FontWeight, Formatting};
+use csl::{FontStyle, FontVariant, FontWeight, Formatting};
 
 #[derive(Default, Debug, Clone)]
 pub struct FlipFlopState {

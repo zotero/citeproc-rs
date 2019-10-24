@@ -25,7 +25,7 @@ use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
 use citeproc::Processor;
-use csl::locale::Lang;
+use csl::Lang;
 
 #[wasm_bindgen]
 pub struct Driver {

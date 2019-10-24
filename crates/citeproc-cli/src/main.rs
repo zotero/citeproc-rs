@@ -30,7 +30,7 @@ mod pandoc;
 use pandoc_types::definition::{Inline, MetaValue, Pandoc as PandocDocument};
 
 use citeproc::{LocaleFetchError, LocaleFetcher, Processor};
-use csl::locale::{Lang, Locale};
+use csl::{Lang, Locale};
 
 fn main() {
     // heuristically determine if we're running as an external pandoc filter

@@ -6,11 +6,7 @@
 
 use crate::prelude::*;
 use citeproc_db::LocaleFetcher;
-use csl::locale::Lang;
-use csl::style::{Name as NameEl, *};
-use csl::terms::*;
-use csl::variables::*;
-use csl::Atom;
+use csl::{Name as NameEl, *};
 use std::sync::Arc;
 
 use crate::choose::{CondChecker, UselessCondChecker};

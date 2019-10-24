@@ -9,8 +9,8 @@ use citeproc_io::{
     Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
     Suppression,
 };
-use csl::locale::Lang;
-use csl::terms::LocatorType;
+use csl::Lang;
+use csl::LocatorType;
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 use std::mem;

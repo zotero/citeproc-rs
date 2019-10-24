@@ -7,8 +7,8 @@
 use crate::prelude::*;
 
 use citeproc_io::Date;
-use csl::locale::LocaleDate;
-use csl::style::{
+use csl::LocaleDate;
+use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
     MonthForm, YearForm,
 };

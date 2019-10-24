@@ -2,16 +2,16 @@ use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::Name;
 use citeproc_io::{Locator, NumericValue, Reference};
-use csl::locale::Locale;
-use csl::style::{
+use csl::Locale;
+use csl::{
     DisplayMode, LabelElement, NameLabel, NumberElement, NumericForm, Plural, Style, TextCase,
     TextElement,
 };
-use csl::terms::{
+use csl::{
     GenderedTermSelector, LocatorType, RoleTerm, RoleTermSelector, TermForm, TermFormExtended,
     TextTermSelector,
 };
-use csl::variables::{NameVariable, NumberVariable, StandardVariable};
+use csl::{NameVariable, NumberVariable, StandardVariable};
 use csl::Atom;
 
 #[derive(Clone)]
@@ -86,8 +86,8 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
 
 use crate::choose::CondChecker;
 use citeproc_io::DateOrRange;
-use csl::style::{CslType, Position};
-use csl::variables::{AnyVariable, DateVariable};
+use csl::{CslType, Position};
+use csl::{AnyVariable, DateVariable};
 
 impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
     fn has_variable(&self, var: AnyVariable) -> bool {

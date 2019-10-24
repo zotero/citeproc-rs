@@ -6,7 +6,7 @@
 
 use cfg_if::cfg_if;
 use citeproc::prelude::*;
-use csl::locale::{IsoCountry, IsoLang, Lang};
+use csl::{IsoCountry, IsoLang, Lang};
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 

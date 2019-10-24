@@ -2,11 +2,7 @@ use crate::choose::CondChecker;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
-use csl::locale::Locale;
-use csl::style::{CslType, Delimiter, Name as NameEl, Position, Style, VariableForm};
-use csl::terms::LocatorType;
-use csl::variables::*;
-use csl::version::Features;
+use csl::{Name as NameEl, *};
 use std::sync::Arc;
 
 use crate::disamb::FreeCond;
@@ -223,7 +219,7 @@ impl<'a, O: OutputFormat> DisambCounter<'a, O> {
     }
 }
 
-use csl::style::{Choose, Conditions, IfThen};
+use csl::{Choose, Conditions, IfThen};
 
 impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
     type Output = u32;
@@ -258,7 +254,7 @@ mod test {
     use crate::prelude::*;
     use crate::test::with_test_citation;
     use citeproc_db::LocaleFetcher;
-    use csl::locale::Lang;
+    use csl::Lang;
     use csl::Atom;
 
     #[test]

@@ -7,15 +7,13 @@ use fnv::FnvHashMap;
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use csl::style::*;
-use csl::variables::*;
+use csl::*;
 
-use csl::variables::*;
 use std::cmp::Ordering;
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
-    use csl::style::{Element, TextCase, TextSource, VariableForm};
-    use csl::variables::{StandardVariable, Variable};
+    use csl::{Element, TextCase, TextSource, VariableForm};
+    use csl::{StandardVariable, Variable};
     TextElement {
         source: TextSource::Macro(macro_name),
         formatting: None,
@@ -128,8 +126,10 @@ pub fn bib_ordering(
         }
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string = db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
-                let b_string = db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
+                let a_string =
+                    db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
+                let b_string =
+                    db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
                 info!("cmp macro {}: {:?} <> {:?}", macro_name, a_string, b_string);
                 (a_string.cmp(&b_string), None)
             }
@@ -142,8 +142,20 @@ pub fn bib_ordering(
                 }
                 AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
                 AnyVariable::Name(v) => {
-                    let a_strings = crate::names::sort_strings_for_names(db, a, v, key, CiteOrBib::Bibliography);
-                    let b_strings = crate::names::sort_strings_for_names(db, b, v, key, CiteOrBib::Bibliography);
+                    let a_strings = crate::names::sort_strings_for_names(
+                        db,
+                        a,
+                        v,
+                        key,
+                        CiteOrBib::Bibliography,
+                    );
+                    let b_strings = crate::names::sort_strings_for_names(
+                        db,
+                        b,
+                        v,
+                        key,
+                        CiteOrBib::Bibliography,
+                    );
                     info!("{:?} <-> {:?}", a_strings, b_strings);
                     compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
                 }
@@ -161,7 +173,7 @@ pub fn bib_ordering(
     ord
 }
 
-/// Currently only works where 
+/// Currently only works where
 struct SortingWalker<'a, DB: IrDatabase, I: OutputFormat> {
     db: &'a DB,
     /// the cite is in its original format, but the formatter is PlainText
@@ -250,12 +262,10 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         (content.unwrap_or_default(), gv)
     }
 
-
-
     // SPEC:
     // For name sorting, there are four advantages in using the same macro rendering
     // and sorting, instead of sorting directly on the name variable.
-    // 
+    //
     // 1.  First, substitution is available (e.g. the "editor" variable might
     //     substitute for an empty "author" variable).
     // 2.  Secondly, et-al abbreviation can be used (using either the

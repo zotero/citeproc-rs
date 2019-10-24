@@ -21,7 +21,7 @@ use std::marker::{Send, Sync};
 // pub use self::plain::PlainText;
 // pub use self::markup::Markup;
 
-use csl::style::{Affixes, DisplayMode, Formatting};
+use csl::{Affixes, DisplayMode, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

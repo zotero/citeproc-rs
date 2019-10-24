@@ -1,6 +1,6 @@
-use csl::style::Cond;
-use csl::style::{Context, CslType, Position};
-use csl::variables::{AnyVariable, NumberVariable};
+use csl::Cond;
+use csl::{Context, CslType, Position};
+use csl::{AnyVariable, NumberVariable};
 use fnv::{FnvHashMap, FnvHashSet};
 use generational_arena::{Arena, Index as ArenaIndex};
 
@@ -334,7 +334,7 @@ pub fn cond_inferences(pair: &(Cond, bool)) -> Vec<(Cond, bool)> {
 // TODO: transform conds by adding everything they imply
 
 #[cfg(test)]
-use csl::variables::Variable;
+use csl::Variable;
 
 #[test]
 fn test_know() {

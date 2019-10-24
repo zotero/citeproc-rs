@@ -8,11 +8,11 @@ use crate::prelude::*;
 
 use crate::helpers::sequence;
 use citeproc_io::DateOrRange;
-use csl::style::{
+use csl::{
     Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
     Style,
 };
-use csl::variables::{AnyVariable, DateVariable};
+use csl::{AnyVariable, DateVariable};
 
 use std::sync::Arc;
 
@@ -233,8 +233,8 @@ where
     run_matcher(&mut iter_all, &cond_set.match_type)
 }
 
-use csl::terms::LocatorType;
-use csl::version::Features;
+use csl::LocatorType;
+use csl::Features;
 
 pub struct UselessCondChecker;
 impl CondChecker for UselessCondChecker {

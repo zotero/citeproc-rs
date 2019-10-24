@@ -9,7 +9,7 @@ use super::micro_html::MicroNode;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
-use csl::style::{
+use csl::{
     DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 

@@ -7,7 +7,7 @@
 use super::OutputFormat;
 use crate::utils::{IntercalateExact};
 
-use csl::style::{FontStyle, FontWeight, Formatting};
+use csl::{FontStyle, FontWeight, Formatting};
 
 // use typed_arena::Arena;
 use serde::{Serialize, Serializer};

@@ -13,11 +13,11 @@ use crate::prelude::*;
 use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
-use csl::style::{
+use csl::{
     DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
     NameEtAl, NameForm, NameLabel, NameLabelInput, NamePart, Names, Position,
 };
-use csl::variables::NameVariable;
+use csl::NameVariable;
 use csl::Atom;
 use std::sync::Arc;
 use parking_lot::Mutex;
@@ -119,7 +119,7 @@ fn render_label<O: OutputFormat, I: OutputFormat>(
 }
 
 use crate::NameOverrider;
-use csl::style::SortKey;
+use csl::SortKey;
 
 pub fn sort_strings_for_names(db: &impl IrDatabase, refr: &Reference, var: NameVariable, sort_key: &SortKey, loc: CiteOrBib) -> Option<Vec<String>> {
     let style = db.style();
@@ -727,7 +727,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     })
                 }
                 NameToken::EtAl => {
-                    use csl::terms::*;
+                    use csl::*;
                     let mut term = MiscTerm::EtAl;
                     let mut formatting = None;
                     if let Some(ref etal_element) = et_al {
@@ -750,7 +750,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
                 NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
                 NameToken::And => {
-                    use csl::terms::*;
+                    use csl::*;
                     let select = |form: TermFormExtended| {
                         TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
                     };
@@ -785,7 +785,7 @@ mod ord {
     //! Latin here means latin or cyrillic.
     //! TODO: use the regex crate with \\p{Cyrillic} and \\p{Latin}
 
-    use csl::style::DemoteNonDroppingParticle as DNDP;
+    use csl::DemoteNonDroppingParticle as DNDP;
 
     pub type DisplayOrdering = &'static [NamePartToken];
 

@@ -10,9 +10,9 @@ use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
-use csl::style::Style;
-use csl::style::{Cond, CslType, Position};
-use csl::variables::{AnyVariable, NumberVariable, Variable};
+use csl::Style;
+use csl::{Cond, CslType, Position};
+use csl::{AnyVariable, NumberVariable, Variable};
 use csl::IsIndependent;
 use fnv::FnvHashSet;
 
@@ -68,7 +68,7 @@ macro_rules! style {
 #[test]
 fn whole_apa() {
     let mut db = MockProcessor::new();
-    use csl::style::Style;
+    use csl::Style;
     use std::fs;
     db.set_style_text(include_str!("../../tests/data/apa.csl"));
     // let style = Style::from_str(&).unwrap();

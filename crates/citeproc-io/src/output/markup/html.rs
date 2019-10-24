@@ -8,7 +8,7 @@ use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
-use csl::style::DisplayMode;
+use csl::DisplayMode;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlWriter {

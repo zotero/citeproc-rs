@@ -12,8 +12,8 @@ use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name, Reference};
-use csl::style::{Bibliography, Position, Style, TextElement, SortKey};
-use csl::variables::NameVariable;
+use csl::{Bibliography, Position, Style, TextElement, SortKey};
+use csl::NameVariable;
 use csl::Atom;
 
 use parking_lot::{Mutex, MutexGuard};
@@ -636,10 +636,10 @@ fn disambiguate_add_givennames(
     None
 }
 
-use csl::style::Element;
+use csl::Element;
 fn plain_suffix_element() -> Element {
-    use csl::style::{Element, TextCase, TextSource, VariableForm};
-    use csl::variables::{StandardVariable, Variable};
+    use csl::{Element, TextCase, TextSource, VariableForm};
+    use csl::{StandardVariable, Variable};
     Element::Text(TextElement {
         source: TextSource::Variable(
             StandardVariable::Ordinary(Variable::YearSuffix),
@@ -660,7 +660,7 @@ fn disambiguate_add_year_suffix(
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
-    use csl::variables::{StandardVariable, Variable};
+    use csl::{StandardVariable, Variable};
     // First see if we can do it with an explicit one
     let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
         *piece = match piece {

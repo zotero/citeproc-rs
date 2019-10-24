@@ -6,7 +6,7 @@
 
 use super::{LocalizedQuotes, OutputFormat};
 use crate::utils::{Intercalate, JoinMany};
-use csl::style::{
+use csl::{
     FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
 };
 

@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
 use citeproc_io::{output::markup::Markup, Cite, Cluster2, IntraNote, Reference};
-use csl::locale::Lang;
-use csl::style::Style;
+use csl::Lang;
+use csl::Style;
 use csl::Atom;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -78,7 +78,7 @@ impl MockProcessor {
     }
 
     pub fn set_style_text(&mut self, style_text: &str) {
-        use csl::style::Style;
+        use csl::Style;
         use std::str::FromStr;
         let style = Style::from_str(style_text).unwrap();
         use salsa::Durability;

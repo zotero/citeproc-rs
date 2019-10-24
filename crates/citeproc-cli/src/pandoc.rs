@@ -21,7 +21,7 @@ use pandoc_types::{
 use citeproc::input::{Cite, CiteId, Cluster, ClusterId, Suppression};
 use citeproc::output::Pandoc;
 use citeproc::Processor;
-use csl::style::StyleClass;
+use csl::StyleClass;
 
 struct GetClusters {
     next_cluster_id: ClusterId,

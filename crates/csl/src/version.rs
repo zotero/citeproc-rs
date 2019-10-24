@@ -78,7 +78,7 @@ macro_rules! declare_features {
         #[derive(Clone, Eq, PartialEq, Debug, Default)]
         pub struct Features {
             // `#![feature]` attrs for language features, for error reporting
-            pub declared_lang_features: Vec<(Atom)>,
+            pub declared_lang_features: Vec<Atom>,
             $(pub $feature: bool),+
         }
 

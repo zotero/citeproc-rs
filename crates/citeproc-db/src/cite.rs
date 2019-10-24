@@ -6,8 +6,8 @@
 
 use super::xml::{LocaleDatabase, StyleDatabase};
 
-use csl::locale::Locale;
-use csl::style::{Position, Style};
+use csl::Locale;
+use csl::{Position, Style};
 use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -148,7 +148,7 @@ fn disamb_participants(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
 }
 
 use citeproc_io::Name;
-use csl::style::GivenNameDisambiguationRule;
+use csl::GivenNameDisambiguationRule;
 fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
     let style = db.style();
     if GivenNameDisambiguationRule::ByCite == style.citation.givenname_disambiguation_rule {

@@ -45,8 +45,8 @@ fn name_info_bibliography(db: &impl StyleDatabase) -> (Option<Delimiter>, Arc<Na
     style.name_info_bibliography()
 }
 
-use csl::style::Element;
-use csl::variables::NameVariable;
+use csl::Element;
+use csl::NameVariable;
 
 fn name_configurations_inner(
     style: &Style,
