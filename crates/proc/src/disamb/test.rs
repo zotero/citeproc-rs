@@ -10,11 +10,9 @@ use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::Reference;
-use csl::IsIndependent;
-use csl::Style;
-use csl::{AnyVariable, NumberVariable, Variable};
+
+use csl::Variable;
 use csl::{Cond, CslType, Position};
-use fnv::FnvHashSet;
 
 macro_rules! style_text_layout {
     ($ex:expr) => {{
@@ -68,8 +66,7 @@ macro_rules! style {
 #[test]
 fn whole_apa() {
     let mut db = MockProcessor::new();
-    use csl::Style;
-    use std::fs;
+
     db.set_style_text(include_str!("../../tests/data/apa.csl"));
     // let style = Style::from_str(&).unwrap();
     let fcs = get_free_conds(&db);
@@ -79,7 +76,7 @@ fn whole_apa() {
 #[test]
 fn whole_agcl() {
     let mut db = MockProcessor::new();
-    use std::fs;
+
     db.set_style_text(include_str!("../../tests/data/aglc.csl"));
     // let style = Style::from_str(&).unwrap();
     let fcs = get_free_conds(&db);
@@ -115,7 +112,6 @@ fn test_locator_macro() {
 }
 
 use crate::disamb::{create_dfa, create_ref_ir};
-use std::sync::Arc;
 
 #[test]
 fn test() {
@@ -148,7 +144,7 @@ fn test() {
     let dfa = create_dfa::<Markup, MockProcessor>(db, &refr);
     println!("{}", dfa.debug_graph(db));
 
-    let vec = create_ref_ir::<Markup, MockProcessor>(db, &refr2);
+    let _vec = create_ref_ir::<Markup, MockProcessor>(db, &refr2);
     let dfa2 = create_dfa::<Markup, MockProcessor>(db, &refr2);
     println!("{}", dfa2.debug_graph(db));
 

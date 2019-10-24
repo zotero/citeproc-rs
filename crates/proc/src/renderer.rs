@@ -271,7 +271,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     }
 
     pub fn text_value(&self, text: &TextElement, value: &str) -> Option<O::Build> {
-        if value.len() == 0 {
+        if value.is_empty() {
             return None;
         }
         let fmt = self.fmt();

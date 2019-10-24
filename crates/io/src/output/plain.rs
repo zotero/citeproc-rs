@@ -25,9 +25,7 @@ impl OutputFormat for PlainText {
     type Output = String;
     type BibMeta = ();
 
-    fn meta(&self) -> Self::BibMeta {
-        ()
-    }
+    fn meta(&self) -> Self::BibMeta {}
 
     #[inline]
     fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {

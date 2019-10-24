@@ -162,10 +162,9 @@ impl FromNode for Citation {
             .filter(|n| n.has_tag_name("layout"))
             .collect();
         if layouts.len() != 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<citation> must contain exactly one <layout>",
-            ))?);
+            return Err(
+                InvalidCsl::new(node, "<citation> must contain exactly one <layout>").into(),
+            );
         }
         let layout_node = layouts[0];
         Ok(Citation {
@@ -243,10 +242,9 @@ impl FromNode for Bibliography {
             .filter(|n| n.has_tag_name("layout"))
             .collect();
         if layouts.len() != 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<citation> must contain exactly one <layout>",
-            ))?);
+            return Err(
+                InvalidCsl::new(node, "<citation> must contain exactly one <layout>").into(),
+            );
         }
         let layout_node = layouts[0];
         let line_spaces = attribute_int(node, "line-spaces", 1)?;
@@ -256,12 +254,9 @@ impl FromNode for Bibliography {
         let entry_spacing = attribute_int(node, "entry-spacing", 1)?;
         let sorts: Vec<_> = node.children().filter(|n| n.has_tag_name("sort")).collect();
         if sorts.len() > 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<bibliography> can only contain one <sort>",
-            ))?);
+            return Err(InvalidCsl::new(node, "<bibliography> can only contain one <sort>").into());
         }
-        let sort = if sorts.len() == 0 {
+        let sort = if sorts.is_empty() {
             None
         } else {
             Some(Sort::from_node(&sorts[0], info)?)
@@ -570,20 +565,18 @@ impl FromNode for IfThen {
         let sub_conditions: Result<Option<Conditions>, CslError> = if info.features.conditions {
             // TODO: only accept <conditions> in head position
             max1_child(tag, "conditions", node.children(), info)
+        } else if let Some(invalid) = node
+            .children()
+            .filter(|n| n.has_tag_name("conditions"))
+            .nth(0)
+        {
+            Err(InvalidCsl::new(
+                &invalid,
+                "You must opt-in to the `conditions` feature to use <conditions>",
+            )
+            .into())
         } else {
-            if let Some(invalid) = node
-                .children()
-                .filter(|n| n.has_tag_name("conditions"))
-                .nth(0)
-            {
-                Err(InvalidCsl::new(
-                    &invalid,
-                    "You must opt-in to the `conditions` feature to use <conditions>",
-                )
-                .into())
-            } else {
-                Ok(None)
-            }
+            Ok(None)
         };
 
         use self::ConditionError::*;
@@ -601,13 +594,16 @@ impl FromNode for IfThen {
             (Err(Invalid(_)), Ok(Some(_)))
             | (Err(Invalid(_)), Err(_))
             | (Ok(_), Ok(Some(_)))
-            | (Ok(_), Err(_)) => Ok(Err(InvalidCsl::new(
-                node,
-                &format!(
-                    "{} can only have its own conditions OR a <conditions> block",
-                    tag
-                ),
-            ))?),
+            | (Ok(_), Err(_)) => {
+                return Err(InvalidCsl::new(
+                    node,
+                    &format!(
+                        "{} can only have its own conditions OR a <conditions> block",
+                        tag
+                    ),
+                )
+                .into())
+            }
         })?;
         let elements = node
             .children()
@@ -627,18 +623,16 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
 
     let unrecognised = |el, tag| {
         if tag == "if" || tag == "else-if" || tag == "else" {
-            return Ok(Err(InvalidCsl::new(
+            return Err(InvalidCsl::new(
                 el,
                 &format!(
                     "<choose> elements out of order; found <{}> in wrong position",
                     tag
                 ),
-            ))?);
+            )
+            .into());
         }
-        Ok(Err(InvalidCsl::new(
-            el,
-            &format!("Unrecognised element {} in <choose>", tag),
-        ))?)
+        Err(InvalidCsl::new(el, &format!("Unrecognised element {} in <choose>", tag)).into())
     };
 
     for el in node.children().filter(|n| n.is_element()) {
@@ -651,10 +645,7 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
                 seen_if = true;
                 if_block = Some(IfThen::from_node(&el, info)?);
             } else {
-                return Err(InvalidCsl::new(
-                    &el,
-                    "<choose> blocks must begin with an <if>",
-                ))?;
+                return Err(InvalidCsl::new(&el, "<choose> blocks must begin with an <if>").into());
             }
         } else if !seen_else {
             if tag == "else-if" {
@@ -690,7 +681,8 @@ fn max1_child<T: FromNode>(
                 "There can only be one <{}> in a <{}> block.",
                 child_tag, parent_tag
             ),
-        ))?;
+        )
+        .into());
     }
     let substs = subst_els
         .iter()
@@ -725,7 +717,8 @@ fn disallow_default<T: Default + FromNode + AttrChecker>(
                     "Disallowed attribute on node: {:?}",
                     T::relevant_attrs(node)
                 ),
-            ))?
+            )
+            .into())
         } else {
             Ok(T::default())
         }
@@ -816,7 +809,7 @@ impl FromNode for Element {
             "names" => Ok(Element::Names(Arc::new(Names::from_node(node, info)?))),
             "choose" => Ok(choose_el(node, info)?),
             "date" => Ok(Element::Date(Arc::new(BodyDate::from_node(node, info)?))),
-            _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
+            _ => Err(InvalidCsl::new(node, "Unrecognised node.").into()),
         }
     }
 }
@@ -831,10 +824,7 @@ fn get_toplevel<'a, 'd: 'a>(
         .filter(|n| n.has_tag_name(nodename))
         .collect();
     if matches.len() > 1 {
-        Ok(Err(InvalidCsl::new(
-            &root,
-            &format!("Cannot have more than one <{}>", nodename),
-        ))?)
+        Err(InvalidCsl::new(&root, &format!("Cannot have more than one <{}>", nodename)).into())
     } else {
         // move matches into its first item
         Ok(matches
@@ -855,10 +845,7 @@ impl FromNode for MacroMap {
         let name = match node.attribute("name") {
             Some(n) => n,
             None => {
-                return Ok(Err(InvalidCsl::new(
-                    node,
-                    "Macro must have a 'name' attribute.",
-                ))?);
+                return Err(InvalidCsl::new(node, "Macro must have a 'name' attribute.").into());
             }
         };
         Ok(MacroMap {
@@ -880,7 +867,8 @@ fn write_slot_once<T: FromNode>(
                 "There can only be one <{}> in a <names> block.",
                 el.tag_name().name(),
             ),
-        ))?;
+        )
+        .into());
     }
     let t = T::from_node(el, info)?;
     *slot = Some(t);
@@ -1116,7 +1104,7 @@ impl FromNode for TermPlurality {
                 multiple: m.0.unwrap_or_else(|| "".into()),
             }),
             // had one of <single> or <multiple>, but not the other
-            _ => Ok(Err(InvalidCsl::new(node, msg))?),
+            _ => Err(InvalidCsl::new(node, msg).into()),
         }
     }
 }
@@ -1148,8 +1136,7 @@ impl FromNode for CslVersionReq {
             VersionReq::parse(version.trim_end_matches("mlz1")).map_err(|_| {
                 InvalidCsl::new(
                     node,
-                    &format!(
-r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x", for example)"#),
+                    &"unsupported \"1.1mlz1\"-style version string (use variant=\"csl-m\" version=\"1.x\", for example)".to_string(),
                 )
             })?
         } else {
@@ -1205,10 +1192,9 @@ impl FromNode for Style {
             .filter(|n| n.has_tag_name("features"))
             .collect();
         let feat_node = if feat_matches.len() > 1 {
-            Ok(Err(InvalidCsl::new(
-                &node,
-                "Cannot have more than one <features> section",
-            ))?)
+            return Err(
+                InvalidCsl::new(&node, "Cannot have more than one <features> section").into(),
+            );
         } else {
             // move matches into its first item
             Ok(feat_matches.into_iter().nth(0))
@@ -1280,10 +1266,7 @@ impl FromNode for Style {
             .collect();
 
         let bib_node = if matches.len() > 1 {
-            Ok(Err(InvalidCsl::new(
-                &node,
-                "Cannot have more than one <bibliography>",
-            ))?)
+            return Err(InvalidCsl::new(&node, "Cannot have more than one <bibliography>").into());
         } else {
             // move matches into its first item
             Ok(matches.into_iter().nth(0))
@@ -1304,7 +1287,7 @@ impl FromNode for Style {
             }
         };
 
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             return Err(errors.into());
         }
 

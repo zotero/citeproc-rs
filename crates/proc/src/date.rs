@@ -211,7 +211,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     .contents
                     .push(IR::Rendered(Some(CiteEdgeData::Output(built)))),
             },
-            Either::Build(None) => return,
+            Either::Build(None) => {}
         }
     }
 

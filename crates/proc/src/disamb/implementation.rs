@@ -128,23 +128,21 @@ impl Disambiguation<Markup> for Element {
                             return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                         }
                     }
-                    if var == StandardVariable::Ordinary(Variable::YearSuffix) {
-                        if ctx.year_suffix {
-                            let edge = db.edge(EdgeData::YearSuffixExplicit);
-                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
-                        }
+                    if var == StandardVariable::Ordinary(Variable::YearSuffix) && ctx.year_suffix {
+                        let edge = db.edge(EdgeData::YearSuffixExplicit);
+                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }
-                    if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber) {
-                        if ctx.position == Position::Subsequent {
-                            let edge = db.edge(EdgeData::Frnn);
-                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
-                        }
+                    if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
+                        && ctx.position == Position::Subsequent
+                    {
+                        let edge = db.edge(EdgeData::Frnn);
+                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }
-                    if var == StandardVariable::Number(NumberVariable::CitationNumber) {
-                        if ctx.style.bibliography.is_some() {
-                            let edge = db.edge(EdgeData::CitationNumber);
-                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
-                        }
+                    if var == StandardVariable::Number(NumberVariable::CitationNumber)
+                        && ctx.style.bibliography.is_some()
+                    {
+                        let edge = db.edge(EdgeData::CitationNumber);
+                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
                     }
                     let content = match var {
                         StandardVariable::Ordinary(v) => {
@@ -237,7 +235,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 let content = ctx
                     .get_number(var)
-                    .and_then(|val| renderer.numeric_label(label, val.clone()))
+                    .and_then(|val| renderer.numeric_label(label, val))
                     .map(|x| fmt.output_in_context(x, stack))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));

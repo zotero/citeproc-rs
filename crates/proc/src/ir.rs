@@ -164,7 +164,7 @@ impl RefIR {
                         return true;
                     }
                 }
-                return false;
+                false
             }
             _ => false,
         }
@@ -368,7 +368,7 @@ impl IR<Markup> {
                         return true;
                     }
                 }
-                return false;
+                false
             }
             _ => false,
         }
@@ -385,7 +385,7 @@ impl IR<Markup> {
                     .as_ref()
                     .map(|x| fmt.output_in_context(x.clone(), formatting));
                 if let Some(o) = out {
-                    if o.len() > 0 {
+                    if !o.is_empty() {
                         edges.push(EdgeData::Output(o))
                     }
                 }
@@ -394,7 +394,6 @@ impl IR<Markup> {
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
             IR::Name(nir) => nir.lock().ir.append_edges(edges, fmt, formatting),
         }
-        ()
     }
 
     pub fn to_edge_stream(&self, fmt: &Markup) -> Vec<EdgeData> {
@@ -426,7 +425,7 @@ pub struct IrSeq<O: OutputFormat> {
 
 impl IrSeq<Markup> {
     fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
-        if self.contents.len() == 0 {
+        if self.contents.is_empty() {
             return;
         }
         let IrSeq {
@@ -449,7 +448,7 @@ impl IrSeq<Markup> {
             edges.push(EdgeData::Output(affixes.prefix.to_string()));
         }
 
-        if open_tags.len() > 0 {
+        if !open_tags.is_empty() {
             edges.push(EdgeData::Output(open_tags));
         }
 
@@ -459,7 +458,7 @@ impl IrSeq<Markup> {
         let mut sub = Vec::new();
         for (_n, ir) in contents.iter().enumerate() {
             ir.append_edges(&mut sub, fmt, sub_formatting);
-            if sub.len() > 0 {
+            if !sub.is_empty() {
                 if seen {
                     if !delimiter.is_empty() {
                         edges.push(EdgeData::Output(
@@ -472,7 +471,7 @@ impl IrSeq<Markup> {
                 edges.extend(sub.drain(..));
             }
         }
-        if close_tags.len() > 0 {
+        if !close_tags.is_empty() {
             edges.push(EdgeData::Output(close_tags));
         }
 

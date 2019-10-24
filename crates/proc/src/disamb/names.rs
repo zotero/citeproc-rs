@@ -334,7 +334,7 @@ pub enum NameDisambPass {
 #[cfg(test)]
 fn test(name: &NameEl, rule: GivenNameDisambiguationRule, primary: bool) -> Vec<NameDisambPass> {
     let method = SingleNameDisambMethod::from_rule(rule, primary);
-    let mut iter = SingleNameDisambIter::new(method, name);
+    let iter = SingleNameDisambIter::new(method, name);
     let passes: Vec<_> = iter.collect();
     passes
 }
@@ -599,11 +599,9 @@ where
         match self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
             Some((new_ir, _)) => {
                 *self.ir = new_ir;
-                return true;
+                true
             }
-            None => {
-                return false;
-            }
+            None => false,
         }
     }
 }

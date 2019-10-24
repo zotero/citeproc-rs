@@ -52,7 +52,7 @@ mod roman {
     //! Duplicated because we want lowercase by default to work with text-casing.
     //! Original, 'unlicensed': https://github.com/linfir/roman.rs
 
-    static ROMAN: &'static [(char, i32)] = &[
+    static ROMAN: &[(char, i32)] = &[
         ('i', 1),
         ('v', 5),
         ('x', 10),
@@ -61,7 +61,7 @@ mod roman {
         ('d', 500),
         ('m', 1000),
     ];
-    static ROMAN_PAIRS: &'static [(&'static str, i32)] = &[
+    static ROMAN_PAIRS: &[(&str, i32)] = &[
         ("m", 1000),
         ("cm", 900),
         ("d", 500),

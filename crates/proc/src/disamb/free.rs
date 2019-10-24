@@ -250,13 +250,13 @@ impl FreeCond {
         let prev = self;
         while self != prev {
             if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
-                self = self | FreeCond::IBID;
+                self |= FreeCond::IBID;
             }
             if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
-                self = self | FreeCond::IBID;
+                self |= FreeCond::IBID;
             }
             if self & FreeCond::IBID != FreeCond::empty() {
-                self = self | FreeCond::SUBSEQUENT;
+                self |= FreeCond::SUBSEQUENT;
             }
             if self & FreeCond::FIRST != FreeCond::empty() {
                 self = self
@@ -267,10 +267,10 @@ impl FreeCond {
                     | FreeCond::FAR_NOTE_FALSE;
             }
             if self & FreeCond::FIRST != FreeCond::empty() {
-                self = self | FreeCond::SUBSEQUENT_FALSE;
+                self |= FreeCond::SUBSEQUENT_FALSE;
             }
             if self.intersects(LT_MASK_TRUE) {
-                self = self | FreeCond::LOCATOR;
+                self |= FreeCond::LOCATOR;
             }
             // ugh what a pain
         }
@@ -398,7 +398,7 @@ impl FreeCondSets {
     }
     fn add_k_alone(neu: &mut FnvHashSet<FreeCond>, k: Cond, assumed_k_to_be: bool) {
         if let Some((a, neg_a)) = cond_to_frees(&k) {
-            if assumed_k_to_be == true {
+            if assumed_k_to_be {
                 neu.insert(neg_a);
             } else {
                 neu.insert(a);
@@ -420,13 +420,13 @@ impl FreeCondSets {
             let mut neu = fnv_set_with_cap(self.0.len());
             FreeCondSets::add_k_alone(&mut neu, k, assumed_k_to_be);
             for set in self.0.iter() {
-                if assumed_k_to_be == true {
+                if assumed_k_to_be {
                     let x = (*set | a).imply();
                     if !x.is_incompatible() {
                         neu.insert(x);
                     }
                 }
-                if assumed_k_to_be == false {
+                if !assumed_k_to_be {
                     let y = (*set | neg_a).imply();
                     if !y.is_incompatible() {
                         neu.insert(y);

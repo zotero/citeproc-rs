@@ -49,10 +49,10 @@ impl Hash for EdgeData {
         use std::mem::discriminant;
         match &*self {
             &EdgeData::Output(ref outp) => {
-                ::core::hash::Hash::hash(&discriminant(&self), state);
+                ::core::hash::Hash::hash(&discriminant(self), state);
                 ::core::hash::Hash::hash(&(*outp), state)
             }
-            _ => ::core::hash::Hash::hash(&discriminant(&self), state),
+            _ => ::core::hash::Hash::hash(&discriminant(self), state),
         }
     }
 }

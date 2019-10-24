@@ -141,8 +141,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 .reference
                 .number
                 .get(&NumberVariable::Page)
-                .and_then(|pp| pp.page_first())
-                .clone(),
+                .and_then(|pp| pp.page_first()),
             _ => self.reference.number.get(&var).cloned(),
             // TODO: finish this list
         }

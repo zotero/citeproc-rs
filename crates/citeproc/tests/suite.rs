@@ -54,7 +54,7 @@ use std::sync::Once;
 static INIT: Once = Once::new();
 fn setup() {
     INIT.call_once(|| {
-        let _ = env_logger::init();
+        env_logger::init();
     });
 }
 

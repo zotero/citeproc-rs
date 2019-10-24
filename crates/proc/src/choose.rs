@@ -112,7 +112,7 @@ impl Disambiguation<Markup> for Choose {
                 );
             }
         }
-        return ref_sequence(
+        ref_sequence(
             db,
             ctx,
             state,
@@ -120,7 +120,7 @@ impl Disambiguation<Markup> for Choose {
             "".into(),
             Some(stack),
             Affixes::default(),
-        );
+        )
     }
 }
 

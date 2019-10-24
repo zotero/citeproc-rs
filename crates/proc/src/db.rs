@@ -440,7 +440,7 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     }
     info!("searching for the nth {} name block", index);
     let mut nth = index;
-    find_name_block(&ref_ir, &mut nth).map(|rnir| rnir.clone())
+    find_name_block(&ref_ir, &mut nth).cloned()
 }
 
 type NameRef = Arc<Mutex<NameIR<Markup>>>;
@@ -780,7 +780,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     let ir0 = db.ir_gen0(id);
     // XXX: keep going if there is global name disambig to perform?
     if ir0.unambiguous() || !style.citation.disambiguate_add_names {
-        return ir0.clone();
+        return ir0;
     }
     let (mut ir, state) = ir0.fresh_copy();
 
@@ -801,7 +801,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     let ir1 = db.ir_gen1_add_names(id);
     if ir1.unambiguous() || !style.citation.disambiguate_add_givenname {
-        return ir1.clone();
+        return ir1;
     }
     let (mut ir, state) = ir1.fresh_copy();
 
@@ -820,11 +820,11 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let ir2 = db.ir_gen2_add_given_name(id);
     if !style.citation.disambiguate_add_year_suffix {
-        return ir2.clone();
+        return ir2;
     }
     let year_suffix = match db.year_suffix_for(cite.ref_id.clone()) {
         Some(y) => y,
-        _ => return ir2.clone(),
+        _ => return ir2,
     };
     let (mut ir, mut state) = ir2.fresh_copy();
 
@@ -846,7 +846,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     let ir3 = db.ir_gen3_add_year_suffix(id);
     if ir3.unambiguous() {
-        return ir3.clone();
+        return ir3;
     }
     let (mut ir, mut state) = ir3.fresh_copy();
 

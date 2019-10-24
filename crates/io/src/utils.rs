@@ -55,7 +55,7 @@ where
             None => return vec![],
         };
         let mut result: Vec<T> = Vec::new();
-        result.push(first.clone());
+        result.push(first);
 
         for v in iter {
             result.push(sep.clone());
@@ -85,7 +85,7 @@ where
             None => return vec![],
         };
         let mut result: Vec<T> = Vec::with_capacity(count * 2 - 1);
-        result.push(first.clone());
+        result.push(first);
         for v in iter {
             result.push(sep.clone());
             result.push(v.clone())

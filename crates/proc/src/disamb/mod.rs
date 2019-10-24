@@ -219,7 +219,7 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
             .collect();
         FreeCondSets::all_branches(
             first.into_iter(),
-            if else_.0.len() > 0 {
+            if !else_.0.is_empty() {
                 Some(self.fold(&else_.0, WalkerFoldType::Else))
             } else {
                 None
@@ -315,7 +315,7 @@ pub fn graph_with_stack(
     fmt.stack_preorder(&mut open_tags, &stack);
     fmt.stack_postorder(&mut close_tags, &stack);
     let mkedge = |s: &str| {
-        RefIR::Edge(if s.len() > 0 {
+        RefIR::Edge(if !s.is_empty() {
             Some(db.edge(EdgeData::Output(
                 fmt.output_in_context(fmt.plain(s), Default::default()),
             )))
@@ -357,7 +357,7 @@ pub fn add_to_graph(
                 delimiter,
             } = seq;
             let mkedge = |s: &str| {
-                RefIR::Edge(if s.len() > 0 {
+                RefIR::Edge(if !s.is_empty() {
                     Some(db.edge(EdgeData::Output(
                         fmt.output_in_context(fmt.plain(s), Default::default()),
                     )))
@@ -419,9 +419,9 @@ pub fn add_to_graph(
 
 #[test]
 fn test_determinism() {
-    let _ = env_logger::init();
+    env_logger::init();
     use crate::test::MockProcessor;
-    let mut db = MockProcessor::new();
+    let db = MockProcessor::new();
     let fmt = db.get_formatter();
     let aa = db.edge(EdgeData::Output("aa".into()));
     let bb = db.edge(EdgeData::Output("bb".into()));

@@ -136,8 +136,7 @@ where
                 .reference
                 .number
                 .get(&NumberVariable::Page)
-                .and_then(|pp| pp.page_first())
-                .clone(),
+                .and_then(|pp| pp.page_first()),
             _ => self.reference.number.get(&var).cloned(),
         }
     }
@@ -250,7 +249,7 @@ impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
 mod test {
     use super::*;
     use crate::disamb::FreeCond;
-    use crate::prelude::*;
+
     use crate::test::with_test_citation;
     use citeproc_db::LocaleFetcher;
     use csl::Atom;
