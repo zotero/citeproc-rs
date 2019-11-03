@@ -59,14 +59,18 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         setDriver(d);
     };
 
-    useEffect(() => {
+    const updateStyle = async (style: string) => {
         if (driver.is_ok()) {
             let d = driver.unwrap();
             setError(Option.from(d.setStyle(style)));
+            await flightFetcher(d);
+            setDocument(document.map(doc => doc.selfUpdate()));
         } else {
             createDriver(style);
         }
-    }, [ style ]);
+    }
+
+    useEffect(() => { updateStyle(style); }, [ style ]);
 
     useEffect(() => {
         setError(None());
