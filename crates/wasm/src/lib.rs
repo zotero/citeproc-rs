@@ -21,7 +21,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::futures_0_3::{future_to_promise, JsFuture};
+use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
 use citeproc::Processor;

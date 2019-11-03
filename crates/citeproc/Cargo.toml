@@ -33,10 +33,14 @@ citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 citeproc-db = { path = "../db" }
 
+[dependencies.datatest]
+git = "https://github.com/cormacrelf/datatest"
+branch = "test_type"
+features = ["post_v139"]
+
 [dev-dependencies]
 test_utils = { path = "../test-utils" }
 criterion = "0.3.0"
-datatest = "0.4.2"
 pretty_assertions = "0.6.1"
 lazy_static = "1.4.0"
 serde_yaml = "0.8.9"
