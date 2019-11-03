@@ -1,4 +1,4 @@
-import { Reference, Cite, NoteCluster, Driver, UpdateSummary } from '../../pkg';
+import { Reference, Cite, Cluster, NoteCluster, Driver, UpdateSummary, Lifecycle } from '../../pkg';
 import { produce, immerable, Draft, IProduce } from 'immer';
 
 export type ClusterId = number;
@@ -25,7 +25,6 @@ export class RenderedDocument {
             // TODO: send note through a round trip and get it from builtCluster
             this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
-        // this.bibliography = driver.makeBibliography();
     }
 
     public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>) {
@@ -54,6 +53,34 @@ export class RenderedDocument {
 
 type NonNumberedCluster = Omit<NoteCluster, "note">;
 
+class RefCounter {
+    private citekeyRefcounts = new Map<string, number>();
+    constructor(private constructor_: (string) => void, private destructor: (string) => void) {}
+    increment(cluster: Cluster) {
+        for (let cite of cluster.cites) {
+            let old = this.citekeyRefcounts.get(cite.id);
+            this.citekeyRefcounts.set(cite.id, (old || 0) + 1);
+            if (old === undefined) {
+                this.constructor_(cite.id);
+            }
+        }
+    }
+    decrement(cluster: Cluster) {
+        for (let cite of cluster.cites) {
+            let old = this.citekeyRefcounts.get(cite.id)
+            if (old !== undefined && old > 0) {
+                const neu = old - 1;
+                if (neu === 0) {
+                    this.citekeyRefcounts.delete(cite.id);
+                    this.destructor(cite.id);
+                } else {
+                    this.citekeyRefcounts.set(cite.id, neu);
+                }
+            }
+        }
+    }
+}
+
 /**
  * A Document wraps the Driver API and stores its own copy of the cite clusters.
  * It keeps the clusters in sync, and also maintains an up-to-date copy of the
@@ -65,6 +92,7 @@ type NonNumberedCluster = Omit<NoteCluster, "note">;
  * performant, as long as you use React.memo or PureComponent in the right places.
  * */
 export class Document {
+
     /** The brains of the operation */
     private driver: Driver;
 
@@ -73,16 +101,36 @@ export class Document {
 
     public rendered: RenderedDocument;
 
+    private refCounts: RefCounter;
+
     private nextClusterId = 100;
     private nextCiteId = 100;
 
-    constructor(clusters: NoteCluster[], driver: Driver) {
+    constructor(clusters: NoteCluster[], driver?: Driver) {
+        this.refCounts = new RefCounter(
+            key => {
+                // console.log("reference subscribed", key);
+            },
+            key => {
+                // Unsubscribe from changes in Zotero, etc.
+                // console.log("reference destructor:", key);
+            }
+        );
         this.clusters = clusters;
-        this.init(driver);
+        this.initCitekeys();
+        if (driver) {
+            this.init(driver);
+        }
     }
 
     private ordered() {
         return this.clusters.map(c => ({ id: c.id, note: c.note, }));
+    }
+
+    private initCitekeys() {
+        for (let cluster of this.clusters) {
+            this.refCounts.increment(cluster);
+        }
     }
 
     private init(driver: Driver) {
@@ -127,6 +175,8 @@ export class Document {
     replaceCluster(cluster: NoteCluster) {
         // Mutate
         let idx = this.clusters.findIndex(c => c.id === cluster.id);
+        this.refCounts.increment(cluster);
+        this.refCounts.decrement(this.clusters[idx]);
         this.clusters[idx] = cluster;
         // Inform the driver
         this.driver.insertCluster(cluster);
@@ -135,6 +185,7 @@ export class Document {
     removeCluster(id: number) {
         // Mutate
         let idx = this.clusters.findIndex(c => c.id === id);
+        this.refCounts.decrement(this.clusters[idx]);
         this.clusters.splice(idx, 1);
         // Inform the driver
         this.driver.removeCluster(id);
@@ -167,6 +218,8 @@ export class Document {
         if (pos !== -1) {
             let atPos = this.clusters[pos];
             cluster.note = atPos.note;
+            this.refCounts.increment(cluster);
+            this.refCounts.decrement(atPos);
             this.clusters.splice(pos, 0, cluster);
             let arr = [];
             // cascade to the rest of it;
@@ -199,28 +252,4 @@ function inc(x: number | [number, number]): number | [number, number] {
     } else {
         return x + 1;
     }
-}
-
-// Pandoc JSON won't be the output format forever -- when Salsa can do
-// generics, then we will produce preformatted HTML strings.
-interface Str { t: "Str", c: string };
-interface Span { t: "Span", c: [any, Inline[]] };
-interface Emph { t: "Emph", c: Inline[] };
-interface Strikeout { t: "Strikeout", c: Inline[] };
-interface Space { t: "Space" };
-type Inline = Str | Space | Span | Emph | Strikeout;
-export function stringifyInlinesPandoc(inlines: Inline[]): string {
-    return inlines.map(inl => {
-        switch (inl.t) {
-            case "Str": return inl.c;
-            case "Span": return "<span>" +stringifyInlines(inl.c) + '</span>';
-            case "Emph": return "<i>" + stringifyInlines(inl.c) + "</i>";
-            case "Space": return " ";
-            default: return "\"" + inl.t + "\" AST node not supported"
-        }
-    }).join("");
-}
-
-export function stringifyInlines(inlines: any): string {
-    return inlines
 }
