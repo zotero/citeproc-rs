@@ -108,10 +108,7 @@ pub fn bib_ordering(
         Right,
     }
     use natural_sort::NaturalCmp;
-    fn compare_demoting_none<T: Ord>(
-        aa: Option<T>,
-        bb: Option<T>,
-    ) -> (Ordering, Option<Demoted>) {
+    fn compare_demoting_none<T: Ord>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
         match (aa, bb) {
             (None, None) => (Ordering::Equal, None),
             (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
@@ -134,7 +131,10 @@ pub fn bib_ordering(
                 let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let x = compare_demoting_none(a_nat, b_nat);
-                info!("cmp macro {}: {} {:?} {:?} {} {:?}", macro_name, a.id, a_string, x.0, b.id, b_string);
+                info!(
+                    "cmp macro {}: {} {:?} {:?} {} {:?}",
+                    macro_name, a.id, a_string, x.0, b.id, b_string
+                );
                 x
             }
             // For variables, we're not going to use the CiteContext wrappers, because if a
@@ -360,15 +360,19 @@ pub mod natural_sort {
 
     impl<'a> Ord for CmpDate<'a> {
         fn cmp(&self, other: &Self) -> Ordering {
-            self.year.cmp(&other.year)
+            self.year
+                .cmp(&other.year)
                 .then_with(|| self.rest.cmp(other.rest))
         }
     }
 
     impl<'a> PartialOrd for CmpDate<'a> {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(self.year.cmp(&other.year)
-                .then_with(|| self.rest.cmp(other.rest)))
+            Some(
+                self.year
+                    .cmp(&other.year)
+                    .then_with(|| self.rest.cmp(other.rest)),
+            )
         }
     }
 
@@ -396,16 +400,16 @@ pub mod natural_sort {
     }
 
     use csl::Affixes;
-    use std::str::FromStr;
     use nom::{
-        IResult,
-        sequence::delimited,
-        character::complete::char,
-        bytes::complete::{take_while, take_while1, take_while_m_n},
-        combinator::{map, opt},
         branch::alt,
+        bytes::complete::{take_while, take_while1, take_while_m_n},
+        character::complete::char,
+        combinator::{map, opt},
+        sequence::delimited,
+        IResult,
     };
     use std::cmp::Ordering;
+    use std::str::FromStr;
 
     fn to_u32(s: &str) -> u32 {
         FromStr::from_str(s.trim_start_matches('0')).unwrap()
@@ -462,7 +466,7 @@ pub mod natural_sort {
             Token::Date(match d2 {
                 None => CmpRange::Single(first),
                 Some(d) => CmpRange::Range(first, d),
-            })
+            }),
         ))
     }
 
@@ -470,7 +474,7 @@ pub mod natural_sort {
         delimited(
             char(NUM_START),
             map(take_8_digits, |x| Token::Num(to_u32(x))),
-            char(NUM_END)
+            char(NUM_END),
         )(inp)
     }
 
@@ -565,16 +569,42 @@ pub mod natural_sort {
         env_logger::init();
         assert_eq!(natural_cmp("a", "z"), Ordering::Less, "a - z");
         assert_eq!(natural_cmp("z", "a"), Ordering::Greater, "z - a");
-        assert_eq!(natural_cmp("a\u{E000}20090407\u{E001}", "a\u{E000}20080407\u{E001}"), Ordering::Greater, "2009");
-        assert_eq!(natural_cmp("a\u{E000}20090507\u{E001}", "a\u{E000}20090407\u{E001}"), Ordering::Greater);
-        assert_eq!(natural_cmp("a\u{E000}-0100\u{E001}", "a\u{E000}0100\u{E001}"), Ordering::Less, "100BC < 100AD");
+        assert_eq!(
+            natural_cmp("a\u{E000}20090407\u{E001}", "a\u{E000}20080407\u{E001}"),
+            Ordering::Greater,
+            "2009"
+        );
+        assert_eq!(
+            natural_cmp("a\u{E000}20090507\u{E001}", "a\u{E000}20090407\u{E001}"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            natural_cmp("a\u{E000}-0100\u{E001}", "a\u{E000}0100\u{E001}"),
+            Ordering::Less,
+            "100BC < 100AD"
+        );
 
         // 2000, May 2000, May 1st 2000
-        assert_eq!(natural_cmp("a\u{E000}2000\u{E001}", "a\u{E000}200004\u{E001}"), Ordering::Less, "2000 < May 2000");
-        assert_eq!(natural_cmp("a\u{E000}200004\u{E001}", "a\u{E000}20000401\u{E001}"), Ordering::Less, "May 2000 < May 1st 2000");
+        assert_eq!(
+            natural_cmp("a\u{E000}2000\u{E001}", "a\u{E000}200004\u{E001}"),
+            Ordering::Less,
+            "2000 < May 2000"
+        );
+        assert_eq!(
+            natural_cmp("a\u{E000}200004\u{E001}", "a\u{E000}20000401\u{E001}"),
+            Ordering::Less,
+            "May 2000 < May 1st 2000"
+        );
 
-        assert_eq!(natural_cmp("\u{E002}1000\u{E003}", "\u{E001}1000\u{E003}"), Ordering::Equal, "1000 == 1000");
-        assert_eq!(natural_cmp("\u{E002}1000\u{E003}", "\u{E001}2000\u{E003}"), Ordering::Less, "1000 < 2000");
-
+        assert_eq!(
+            natural_cmp("\u{E002}1000\u{E003}", "\u{E001}1000\u{E003}"),
+            Ordering::Equal,
+            "1000 == 1000"
+        );
+        assert_eq!(
+            natural_cmp("\u{E002}1000\u{E003}", "\u{E001}2000\u{E003}"),
+            Ordering::Less,
+            "1000 < 2000"
+        );
     }
 }

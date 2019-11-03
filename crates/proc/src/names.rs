@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use self::initials::initialize;
+
 use super::unicode::is_latin_cyrillic;
 use crate::disamb::names::{
     DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
@@ -18,7 +19,7 @@ use csl::{
     NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position,
 };
 use std::sync::Arc;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 mod initials;
 
@@ -218,7 +219,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
 
     if name_irs.is_empty()
         || name_irs.iter().all(|ir| match ir {
-            IR::Name(nir) => nir.lock().disamb_names.is_empty(),
+            IR::Name(nir) => nir.lock().unwrap().disamb_names.is_empty(),
             _ => true,
         })
     {
@@ -724,7 +725,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 _ => acc,
             });
             if is_sort_key {
-                let b = fmt.affixed_text(format!("{:08}", count), None, &crate::sort::natural_sort::num_affixes());
+                let b = fmt.affixed_text(
+                    format!("{:08}", count),
+                    None,
+                    &crate::sort::natural_sort::num_affixes(),
+                );
                 return vec![NameTokenBuilt::Built(b)];
             } else {
                 // This isn't sort-mode, you can render NameForm::Count as text.

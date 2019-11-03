@@ -11,7 +11,7 @@ use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
-    MonthForm, YearForm, SortKey,
+    MonthForm, SortKey, YearForm,
 };
 use std::mem;
 
@@ -112,7 +112,6 @@ where
         _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
-
         match self {
             BodyDate::Indep(idate) => intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
             BodyDate::Local(ldate) => intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
@@ -340,8 +339,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     let fmt = ctx.format();
     if let Some(key) = ctx.sort_key() {
         let string = dp_render_sort_string(part, date, key);
-        return string
-            .map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))))
+        return string.map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))));
     }
     let string = dp_render_string(part, &ctx, date);
     string
@@ -369,12 +367,8 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
         .map(|x| (part.form, x))
 }
 
-fn dp_render_sort_string(
-    part: &DatePart,
-    date: &Date,
-    key: &SortKey,
-) -> Option<String> {
-    let should_return_zeroes =  key.is_macro();
+fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<String> {
+    let should_return_zeroes = key.is_macro();
     match part.form {
         DatePartForm::Year(_form) => Some(format!("{:04}", date.year)),
         DatePartForm::Month(_form, _strip_periods) => {
@@ -386,14 +380,14 @@ fn dp_render_sort_string(
             } else {
                 None
             }
-        },
+        }
         DatePartForm::Day(_form) => {
             if date.day == 0 && should_return_zeroes {
                 None
             } else {
                 Some(format!("{:02}", date.day))
             }
-        },
+        }
     }
 }
 

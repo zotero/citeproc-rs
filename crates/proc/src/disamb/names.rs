@@ -62,8 +62,13 @@ impl Disambiguation<Markup> for Names {
             let mut nfa = Nfa::new();
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
-            let mut ntbs =
-                runner.names_to_builds(&nir.disamb_names, ctx.position, ctx.locale, &self.et_al, false);
+            let mut ntbs = runner.names_to_builds(
+                &nir.disamb_names,
+                ctx.position,
+                ctx.locale,
+                &self.et_al,
+                false,
+            );
             let mut max_counted_tokens = 0u16;
             let mut counted_tokens = ntb_len(&ntbs);
 

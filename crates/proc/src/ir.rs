@@ -211,7 +211,7 @@ impl<O: OutputFormat> CiteEdgeData<O> {
 }
 
 use crate::disamb::names::NameIR;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 // Intermediate Representation
 #[derive(Debug, Clone)]
@@ -251,7 +251,7 @@ where
             IR::Rendered(None) | IR::YearSuffix(_, None) => true,
             IR::Seq(seq) if seq.contents.is_empty() => true,
             IR::ConditionalDisamb(_c, boxed) => boxed.is_empty(),
-            IR::Name(nir) => nir.lock().ir.is_empty(),
+            IR::Name(nir) => nir.lock().unwrap().ir.is_empty(),
             _ => false,
         }
     }
@@ -273,8 +273,8 @@ where
                 true
             }
             (IR::Name(self_nir), IR::Name(other_nir)) => {
-                let s = self_nir.lock();
-                let o = other_nir.lock();
+                let s = self_nir.lock().unwrap();
+                let o = other_nir.lock().unwrap();
                 *s == *o
             }
             _ => false,
@@ -296,7 +296,7 @@ impl<O: OutputFormat<Output = String>> IR<O> {
         match self {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Name(nir) => nir.lock().ir.flatten(fmt),
+            IR::Name(nir) => nir.lock().unwrap().ir.flatten(fmt),
             IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
@@ -392,7 +392,7 @@ impl IR<Markup> {
             }
             IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
-            IR::Name(nir) => nir.lock().ir.append_edges(edges, fmt, formatting),
+            IR::Name(nir) => nir.lock().unwrap().ir.append_edges(edges, fmt, formatting),
         }
     }
 

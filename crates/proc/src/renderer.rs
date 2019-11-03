@@ -3,8 +3,8 @@ use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
     Atom, GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
-    NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, StandardVariable, Style,
-    TextCase, TextElement, TextTermSelector, SortKey,
+    NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
+    StandardVariable, Style, TextCase, TextElement, TextTermSelector,
 };
 
 #[derive(Clone)]
@@ -203,7 +203,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 fmt.affixed_text(s, None, &crate::sort::natural_sort::num_affixes())
             }
             // TODO: text-case
-            _ => fmt.affixed_text(val.as_number(var.should_replace_hyphens()), None, &crate::sort::natural_sort::num_affixes()),
+            _ => fmt.affixed_text(
+                val.as_number(var.should_replace_hyphens()),
+                None,
+                &crate::sort::natural_sort::num_affixes(),
+            ),
         }
     }
 

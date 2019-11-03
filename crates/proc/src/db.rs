@@ -16,7 +16,7 @@ use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
 use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
-use parking_lot::{Mutex, MutexGuard};
+use std::sync::Mutex;
 
 pub trait HasFormatter {
     fn get_formatter(&self) -> Markup;
@@ -497,9 +497,9 @@ fn disambiguate_add_names(
             dfas.push(dfa);
         }
 
-        let total_ambiguity_number = |this_nir: &mut MutexGuard<'_, NameIR<Markup>>| -> u16 {
+        let total_ambiguity_number = || -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
-            let edges = MutexGuard::unlocked(this_nir, || ir.to_edge_stream(fmt));
+            let edges = ir.to_edge_stream(fmt);
             let count = dfas
                 .iter()
                 .filter(|dfa| dfa.accepts_data(db, &edges))
@@ -510,45 +510,35 @@ fn disambiguate_add_names(
             count
         };
 
-        let mut nir = nir_arc.lock();
         // So we can roll back to { bump = 0 }
-        nir.achieved_count(best);
+        nir_arc.lock().unwrap().achieved_count(best);
 
         // TODO: save, within NameIR, new_count and the lowest bump_name_count to achieve it,
         // so that it can roll back to that number easily
         while best > 1 {
-            let ret = nir.add_name(db, ctx);
+            let ret = nir_arc.lock().unwrap().add_name(db, ctx);
             if !ret {
                 break;
             }
             if also_expand {
-                expand_one_name_ir(
-                    db,
-                    ir,
-                    ctx,
-                    &initial_refs,
-                    &mut nir_arc.lock(),
-                    n as u32,
-                );
+                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir_arc.lock().unwrap(), n as u32);
             }
-            let new_count = total_ambiguity_number(&mut nir);
-            nir.achieved_count(new_count);
+            let new_count = total_ambiguity_number();
+            nir_arc.lock().unwrap().achieved_count(new_count);
             best = std::cmp::min(best, new_count);
         }
-        nir.rollback(db, ctx);
-        best = total_ambiguity_number(&mut nir);
+        nir_arc.lock().unwrap().rollback(db, ctx);
+        best = total_ambiguity_number();
     }
     best <= 1
 }
-
-type NameMutexGuard<'a> = MutexGuard<'a, NameIR<Markup>>;
 
 fn expand_one_name_ir(
     db: &impl IrDatabase,
     _ir: &IR<Markup>,
     ctx: &CiteContext<'_, Markup>,
     refs_accepting: &[Atom],
-    nir: &mut NameMutexGuard,
+    nir: &mut NameIR<Markup>,
     index: u32,
 ) {
     let mut double_vec: Vec<Vec<NameVariantMatcher>> = Vec::new();
@@ -626,7 +616,7 @@ fn disambiguate_add_givennames(
     let refs = refs_accepting_cite(db, ir, ctx);
     let name_refs = list_all_name_blocks(ir);
     for (n, nir_arc) in name_refs.into_iter().enumerate() {
-        let mut nir = nir_arc.lock();
+        let mut nir = nir_arc.lock().unwrap();
         expand_one_name_ir(db, ir, ctx, &refs, &mut nir, n as u32);
     }
     if also_add {

@@ -27,7 +27,7 @@ use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 use csl::Lang;
 use csl::Style;
@@ -92,7 +92,7 @@ impl salsa::Database for Processor {
         let kind = event_fn().kind;
         if let WillExecute { database_key } = kind {
             if let RDS(GroupKey::built_cluster(key)) = database_key.kind {
-                let mut q = self.queue.lock();
+                let mut q = self.queue.lock().unwrap();
                 let upd = DocUpdate::Cluster(key);
                 // info!("produced update, {:?}", upd);
                 q.push(upd);
@@ -258,7 +258,7 @@ impl Processor {
             return UpdateSummary::default();
         }
         self.compute();
-        let mut queue = self.queue.lock();
+        let mut queue = self.queue.lock().unwrap();
         let mut summary = UpdateSummary::summarize(self, &*queue);
         queue.clear();
         // Technically, you should probably have a lock over save_and_diff_bibliography as well, so
@@ -274,7 +274,7 @@ impl Processor {
 
     pub fn drain(&mut self) {
         self.compute();
-        let mut queue = self.queue.lock();
+        let mut queue = self.queue.lock().unwrap();
         queue.clear();
     }
 
@@ -417,7 +417,7 @@ impl Processor {
     }
 
     fn save_and_diff_bibliography(&self) -> Option<BibliographyUpdate> {
-        let mut last_bibliography = self.last_bibliography.lock();
+        let mut last_bibliography = self.last_bibliography.lock().unwrap();
         let new = self.get_bibliography_map();
         let old = std::mem::replace(&mut *last_bibliography, SavedBib::new());
         let mut update = BibliographyUpdate::new();

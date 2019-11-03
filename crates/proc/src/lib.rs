@@ -87,7 +87,7 @@ where
 }
 
 use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
-use csl::{AnyVariable, DateVariable, NameVariable, NumberVariable, Variable, NameAsSortOrder};
+use csl::{AnyVariable, DateVariable, NameAsSortOrder, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum DidSupplyName {
@@ -142,7 +142,11 @@ impl NamesInheritance {
     fn from_names(ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
         NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
-            did_supply_name: if names.name.is_some() { DidSupplyName::NameEl } else { DidSupplyName::None },
+            did_supply_name: if names.name.is_some() {
+                DidSupplyName::NameEl
+            } else {
+                DidSupplyName::None
+            },
             label: names.label.clone(),
             delimiter: names
                 .delimiter
