@@ -192,7 +192,7 @@ pub struct IrState {
     macro_stack: HashSet<Atom>,
     pub name_override: NameOverrider,
     suppressed: FnvHashSet<AnyVariable>,
-    disamb_count: u32,
+    pub disamb_count: u32,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
@@ -292,10 +292,6 @@ impl IrState {
 
     pub fn is_suppressed_date(&self, var: DateVariable) -> bool {
         self.suppressed.contains(&AnyVariable::Date(var))
-    }
-
-    pub fn inc_disamb_count(&mut self) {
-        self.disamb_count += 1;
     }
 }
 

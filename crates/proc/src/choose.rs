@@ -88,7 +88,7 @@ impl Disambiguation<Markup> for Choose {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
-        if let Some(els) = eval_ifthen_ref(head, ctx).0 {
+        if let Some(els) = eval_ifthen_ref(head, ctx, &mut state.disamb_count).0 {
             return ref_sequence(
                 db,
                 ctx,
@@ -101,7 +101,7 @@ impl Disambiguation<Markup> for Choose {
             );
         }
         for branch in rest {
-            if let Some(els) = eval_ifthen_ref(branch, ctx).0 {
+            if let Some(els) = eval_ifthen_ref(branch, ctx, &mut state.disamb_count).0 {
                 return ref_sequence(
                     db,
                     ctx,
@@ -144,8 +144,7 @@ where
     I: OutputFormat,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, mut disambiguate) = eval_conditions(conditions, ctx);
-    disambiguate = disambiguate && !ctx.is_disambiguate();
+    let (matched, disambiguate) = eval_conditions(conditions, ctx, /* phony, not used */ 0);
     let content = if matched {
         Some(sequence(
             db,
@@ -166,13 +165,15 @@ where
     }
 }
 
-fn eval_ifthen_ref<'c, Ck>(branch: &'c IfThen, checker: &Ck) -> (Option<&'c [Element]>, bool)
+fn eval_ifthen_ref<'c, Ck>(branch: &'c IfThen, checker: &Ck, disamb_count: &mut u32) -> (Option<&'c [Element]>, bool)
 where
     Ck: CondChecker,
 {
     let IfThen(ref conditions, ref elements) = *branch;
-    let (matched, mut disambiguate) = eval_conditions(conditions, checker);
-    disambiguate = disambiguate && !checker.is_disambiguate();
+    let (matched, disambiguate) = eval_conditions(conditions, checker, *disamb_count);
+    if disambiguate {
+        *disamb_count += 1;
+    }
     let content = if matched {
         Some(elements.as_slice())
     } else {
@@ -190,14 +191,17 @@ fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> b
     }
 }
 
-// first bool is the match result
-// second bool is disambiguate=true
-pub fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck) -> (bool, bool)
+/// first bool is the match result;
+/// second bool is disambiguate=true
+///
+/// Pass current_count = std::u32::MAX if you don't want a RefContext to return true from
+/// is_disambiguate()
+pub fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck, current_count: u32) -> (bool, bool)
 where
     Ck: CondChecker,
 {
     let Conditions(ref match_type, ref conditions) = *conditions;
-    let mut tests = conditions.iter().map(|c| eval_condset(c, checker));
+    let mut tests = conditions.iter().map(|c| eval_condset(c, checker, current_count));
     let disambiguate = conditions.iter().any(|c| {
         c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
     });
@@ -205,7 +209,7 @@ where
     (run_matcher(&mut tests, match_type), disambiguate)
 }
 
-fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck) -> bool
+fn eval_condset<'c, Ck>(cond_set: &'c CondSet, checker: &Ck, current_count: u32) -> bool
 where
     Ck: CondChecker,
 {
@@ -215,7 +219,7 @@ where
         Some(match cond {
             Cond::Variable(var) => checker.has_variable(*var),
             Cond::IsNumeric(var) => checker.is_numeric(*var),
-            Cond::Disambiguate(d) => *d == checker.is_disambiguate(),
+            Cond::Disambiguate(d) => *d == checker.is_disambiguate(current_count),
             Cond::Type(typ) => checker.csl_type() == *typ,
             Cond::Position(pos) => checker.position().matches(*pos),
             Cond::Locator(typ) => checker.locator_type() == Some(*typ),
@@ -247,7 +251,7 @@ impl CondChecker for UselessCondChecker {
     fn is_numeric(&self, _var: AnyVariable) -> bool {
         false
     }
-    fn is_disambiguate(&self) -> bool {
+    fn is_disambiguate(&self, _: u32) -> bool {
         false
     }
     fn csl_type(&self) -> CslType {
@@ -275,7 +279,10 @@ impl CondChecker for UselessCondChecker {
 pub trait CondChecker {
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
-    fn is_disambiguate(&self) -> bool;
+    /// Count is for references only, so IRs can slowly increase the disamb count and incrementally
+    /// enable disambiguate="true" (not technically part of the spec, but seems worthwhile); see
+    /// disambiguate_IncrementalExtraText.txt
+    fn is_disambiguate(&self, current_count: u32) -> bool;
     fn csl_type(&self) -> CslType;
     fn locator_type(&self) -> Option<LocatorType>;
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;

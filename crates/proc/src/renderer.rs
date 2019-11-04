@@ -101,10 +101,10 @@ impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
             Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_numeric(ctx, var),
         }
     }
-    fn is_disambiguate(&self) -> bool {
+    fn is_disambiguate(&self, current_count: u32) -> bool {
         match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_disambiguate(ctx),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_disambiguate(ctx),
+            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_disambiguate(ctx, current_count),
+            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_disambiguate(ctx, current_count),
         }
     }
     fn csl_type(&self) -> CslType {

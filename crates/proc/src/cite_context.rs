@@ -195,7 +195,8 @@ where
     fn position(&self) -> Position {
         self.position.0
     }
-    fn is_disambiguate(&self) -> bool {
+    fn is_disambiguate(&self, _current_count: u32) -> bool {
+        // ignore count as that's for references
         self.disamb_pass == Some(DisambPass::Conditionals)
     }
     fn features(&self) -> &Features {

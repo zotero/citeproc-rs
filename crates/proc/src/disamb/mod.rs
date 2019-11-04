@@ -284,6 +284,9 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
             let ctx =
                 RefContext::from_free_cond(fc, &fmt, &style, &locale, refr, CiteOrBib::Citation);
             let count = ctx.disamb_count;
+            // 0 = none of them enabled
+            // 1 = first disambiguate="X" tests as true
+            // count = all of the (reachable) checks test as true
             (0..=count).into_iter()
                 .map(move |c| {
                     let mut cloned = ctx.clone();
