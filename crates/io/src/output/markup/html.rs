@@ -94,10 +94,10 @@ impl MicroNode {
 impl FormatCmd {
     fn html_tag(self, options: &HtmlWriter) -> (&'static str, &'static str) {
         match self {
-            FormatCmd::DisplayBlock => ("div", r#"class="csl-block"#),
-            FormatCmd::DisplayIndent => ("div", r#"class="csl-indent"#),
-            FormatCmd::DisplayLeftMargin => ("div", r#"class="csl-left-margin"#),
-            FormatCmd::DisplayRightInline => ("div", r#"class="csl-right-inline"#),
+            FormatCmd::DisplayBlock => ("div", r#" class="csl-block""#),
+            FormatCmd::DisplayIndent => ("div", r#" class="csl-indent""#),
+            FormatCmd::DisplayLeftMargin => ("div", r#" class="csl-left-margin""#),
+            FormatCmd::DisplayRightInline => ("div", r#" class="csl-right-inline""#),
 
             FormatCmd::FontStyleItalic => ("i", ""),
             FormatCmd::FontStyleOblique => ("span", r#" style="font-style:oblique;""#),

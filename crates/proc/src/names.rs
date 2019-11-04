@@ -253,7 +253,11 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
             delimiter: names_inheritance
                 .delimiter
                 .unwrap_or_else(|| Atom::from("")),
-            display: names.display,
+            display: if ctx.in_bibliography {
+                names.display
+            } else {
+                None
+            },
         }),
         GroupVars::DidRender,
     )

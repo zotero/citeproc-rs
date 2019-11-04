@@ -94,7 +94,6 @@ pub struct RefIrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub delimiter: Atom,
-    pub display: Option<DisplayMode>,
 }
 
 impl RefIR {
@@ -323,8 +322,18 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
         if xs.is_empty() {
             return None;
         }
-        let grp = fmt.group(xs, &self.delimiter, self.formatting);
-        Some(fmt.affixed(grp, &self.affixes))
+        let IrSeq {
+            formatting,
+            ref delimiter,
+            ref affixes,
+            display,
+            ..
+        } = *self;
+        let grp = fmt.group(xs, delimiter, formatting);
+        let grp = fmt.affixed(grp, affixes);
+        // TODO: pass in_bibliography from ctx
+        let grp = fmt.with_display(grp, display, true);
+        Some(grp)
     }
 }
 

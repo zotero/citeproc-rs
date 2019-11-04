@@ -64,7 +64,6 @@ fn to_ref_ir(
             formatting: ir_seq.formatting,
             affixes: ir_seq.affixes,
             delimiter: ir_seq.delimiter,
-            display: ir_seq.display,
         }),
         IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
     }
@@ -261,7 +260,11 @@ where
             overall_delimiter: &locale_date.delimiter.0,
             overall_formatting: local.formatting,
             overall_affixes: &local.affixes,
-            display: local.display,
+            display: if ctx.in_bibliography() {
+                local.display
+            } else {
+                None
+            },
         }
     };
     // TODO: render date ranges
@@ -307,7 +310,11 @@ where
             overall_delimiter: &indep.delimiter.0,
             overall_formatting: indep.formatting,
             overall_affixes: &indep.affixes,
-            display: indep.display,
+            display: if ctx.in_bibliography() {
+                indep.display
+            } else {
+                None
+            },
         }
     };
     let date = ctx

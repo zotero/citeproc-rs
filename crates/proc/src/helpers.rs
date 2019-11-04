@@ -46,7 +46,11 @@ where
                 formatting,
                 affixes,
                 delimiter,
-                display,
+                display: if ctx.in_bibliography {
+                    display
+                } else {
+                    None
+                },
             }),
             gv,
         )
@@ -90,7 +94,6 @@ pub fn ref_sequence<'c>(
                 formatting,
                 affixes,
                 delimiter,
-                display,
             }),
             gv,
         )

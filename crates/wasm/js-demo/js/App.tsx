@@ -52,17 +52,17 @@ let initialStyle = `<style class="note">
   </citation>
   <bibliography>
       <layout>
-      <group>
-        <choose>
-            <if variable="author">
-                <text value="Some Author" display="left-margin" />
-            </if>
-            <else>
-                <text value="no author" display="left-margin" />
-            </else>
-        </choose>
-        <text variable="title" display="right-inline" />
-      </group>
+          <group display="left-margin">
+            <choose>
+                <if variable="author">
+                    <text value="Some Author" />
+                </if>
+                <else>
+                    <text value="no author" />
+                </else>
+            </choose>
+          </group>
+          <text variable="title" display="right-inline" />
       </layout>
   </bibliography>
 </style>`;
