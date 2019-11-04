@@ -24,15 +24,15 @@ matrix:
     before_script:
       - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
     script:
-      - (cd crates/citeproc-wasm/js-demo && yarn && yarn build)
+      - (cd crates/wasm/js-demo && yarn && yarn build)
       # - cargo test --all
-      # - (cd citeproc-wasm && wasm-pack build)
-      # - (cd citeproc-wasm && wasm-pack test --firefox --headless)
+      # - (cd wasm && wasm-pack build)
+      # - (cd wasm && wasm-pack test --firefox --headless)
     deploy:
       provider: pages
       skip_cleanup: true
-      local_dir: "crates/citeproc-wasm/js-demo/dist/"
-      repo: "cormacrelf/citeproc-wasm-demo"
+      local_dir: "crates/wasm/js-demo/dist/"
+      repo: "cormacrelf/wasm-demo"
       github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
       on:
         branch: master
