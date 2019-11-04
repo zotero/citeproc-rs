@@ -155,7 +155,6 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
     }
 
     fn date(&mut self, _date: &BodyDate) -> Self::Output {
-        // Position may be involved for NASO and primary disambiguation
         let mut base = FreeCondSets::mult_identity();
         let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
         base.scalar_multiply_cond(cond, true);
@@ -217,6 +216,7 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
                 (&ifc_cond_set[0], self.fold(if_els, WalkerFoldType::IfThen))
             }))
             .collect();
+        warn!("ifs {:?}", first);
         FreeCondSets::all_branches(
             first.into_iter(),
             if !else_.0.is_empty() {
@@ -274,24 +274,34 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
     let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
     let ysh_edge = db.edge(EdgeData::YearSuffix);
     let fcs = db.branch_runs();
+    let fmt = db.get_formatter();
     let mut vec: Vec<(FreeCond, RefIR)> = fcs
         .0
         .iter()
-        .map(|fc| {
-            let fmt = db.get_formatter();
-            let _name_info = db.name_info_citation();
+        .cloned()
+        .flat_map(|fc| {
+            // Now we construct one ctx for every different count of disambiguate="X" checks
             let ctx =
-                RefContext::from_free_cond(*fc, &fmt, &style, &locale, refr, CiteOrBib::Citation);
+                RefContext::from_free_cond(fc, &fmt, &style, &locale, refr, CiteOrBib::Citation);
+            let count = ctx.disamb_count;
+            (0..=count).into_iter()
+                .map(move |c| {
+                    let mut cloned = ctx.clone();
+                    cloned.disamb_count = c;
+                    (fc, cloned)
+                })
+        })
+        .map(|(fc, cloned)| {
             let mut state = IrState::new();
             let (mut ir, _gv) = Disambiguation::<Markup>::ref_ir(
                 &*style,
                 db,
-                &ctx,
+                &cloned,
                 &mut state,
                 Formatting::default(),
             );
             ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
-            (*fc, ir)
+            (fc, ir)
         })
         .collect();
     vec.sort_by_key(|(fc, _)| fc.bits());

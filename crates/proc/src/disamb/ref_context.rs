@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::disamb::FreeCond;
 
+#[derive(Clone)]
 pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub format: &'a O,
     pub style: &'a Style,
