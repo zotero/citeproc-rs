@@ -39,8 +39,8 @@ impl Default for CslVariant {
 }
 
 impl CslVariant {
-    pub fn filter_arg<T: EnumProperty>(&self, val: T) -> Option<T> {
-        let version = match *self {
+    pub fn filter_arg<T: EnumProperty>(self, val: T) -> Option<T> {
+        let version = match self {
             CslVariant::Csl => "csl",
             CslVariant::CslM => "cslM",
         };
@@ -78,7 +78,7 @@ macro_rules! declare_features {
         #[derive(Clone, Eq, PartialEq, Debug, Default)]
         pub struct Features {
             // `#![feature]` attrs for language features, for error reporting
-            pub declared_lang_features: Vec<(Atom)>,
+            pub declared_lang_features: Vec<Atom>,
             $(pub $feature: bool),+
         }
 

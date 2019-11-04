@@ -1,0 +1,6 @@
+.csl-bib-body { line-height: 1.35; display: grid; grid-template-columns: max-content 1fr; }
+.csl-entry { display: contents; }
+.csl-block { grid-column: 1/span 2; background: lightpink; }
+.csl-left-margin { background: aliceblue; padding-right: 1em;}
+.csl-right-inline {  background: lightgoldenrodyellow; }
+.csl-indent { margin-left: 2em; grid-column: 1/span 2; background: lightsalmon; }

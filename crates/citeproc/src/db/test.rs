@@ -7,15 +7,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use csl::locale::*;
-use csl::terms::*;
+use csl::*;
 
 use super::Processor;
 
 mod position {
     use super::*;
     use crate::prelude::*;
-    use csl::style::Position;
+    use csl::Position;
 
     #[test]
     fn cite_positions_ibid() {

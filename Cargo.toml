@@ -9,11 +9,11 @@ members = [ "crates/*" ]
 # for running `cargo test`, `cargo doc` etc at the workspace root
 default-members = [
   "crates/csl",
-  "crates/citeproc-io",
-  "crates/citeproc-db",
-  "crates/citeproc-proc",
+  "crates/io",
+  "crates/db",
+  "crates/proc",
+  "crates/wasm",
   "crates/citeproc",
-  "crates/citeproc-wasm"
 ]
 
 [profile.bench]
@@ -21,6 +21,14 @@ lto = "thin"
 
 [profile.release]
 lto = "thin"
+
+[patch.crates-io.parking_lot_core]
+git = "https://github.com/cormacrelf/parking_lot.git"
+branch = "wasm32"
+
+[patch.crates-io.parking_lot]
+git = "https://github.com/cormacrelf/parking_lot.git"
+branch = "wasm32"
 
 # [profile.dev]
 # rpath = true

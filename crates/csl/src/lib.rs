@@ -12,6 +12,8 @@ pub use string_cache::DefaultAtom as Atom;
 extern crate serde_derive;
 #[macro_use]
 extern crate strum_macros;
+#[macro_use]
+extern crate log;
 
 use std::sync::Arc;
 
@@ -24,12 +26,14 @@ pub mod terms;
 pub mod variables;
 pub mod version;
 
+pub use self::error::*;
+pub use self::locale::*;
+pub use self::style::*;
+pub use self::terms::*;
+pub use self::variables::*;
+pub use self::version::*;
+
 use self::attr::*;
-use self::error::{CslError, InvalidCsl, NeedVarType, PartitionResults, StyleError};
-use self::locale::*;
-use self::style::*;
-use self::terms::*;
-use self::version::*;
 use fnv::FnvHashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
@@ -62,8 +66,7 @@ where
     fn is_on_node<'a>(node: &'a Node) -> bool {
         node.attributes()
             .iter()
-            .filter(|a| Self::filter_attribute(a.name()))
-            .next()
+            .find(|a| Self::filter_attribute(a.name()))
             != None
     }
     fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
@@ -158,10 +161,9 @@ impl FromNode for Citation {
             .filter(|n| n.has_tag_name("layout"))
             .collect();
         if layouts.len() != 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<citation> must contain exactly one <layout>",
-            ))?);
+            return Err(
+                InvalidCsl::new(node, "<citation> must contain exactly one <layout>").into(),
+            );
         }
         let layout_node = layouts[0];
         Ok(Citation {
@@ -204,9 +206,9 @@ impl FromNode for SortKey {
         Ok(SortKey {
             sort_source: SortSource::from_node(node, info)?,
             names_min: attribute_option_int(node, "names-min")?,
-            names_use_first: attribute_option_int(node, "names-min")?,
-            names_use_last: attribute_option_int(node, "names-min")?,
-            sort: attribute_option(node, "sort", info)?,
+            names_use_first: attribute_option_int(node, "names-use-first")?,
+            names_use_last: attribute_option_bool(node, "names-use-last")?,
+            direction: attribute_option(node, "sort", info)?,
         })
     }
 }
@@ -239,10 +241,9 @@ impl FromNode for Bibliography {
             .filter(|n| n.has_tag_name("layout"))
             .collect();
         if layouts.len() != 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<citation> must contain exactly one <layout>",
-            ))?);
+            return Err(
+                InvalidCsl::new(node, "<citation> must contain exactly one <layout>").into(),
+            );
         }
         let layout_node = layouts[0];
         let line_spaces = attribute_int(node, "line-spaces", 1)?;
@@ -252,12 +253,9 @@ impl FromNode for Bibliography {
         let entry_spacing = attribute_int(node, "entry-spacing", 1)?;
         let sorts: Vec<_> = node.children().filter(|n| n.has_tag_name("sort")).collect();
         if sorts.len() > 1 {
-            return Ok(Err(InvalidCsl::new(
-                node,
-                "<bibliography> can only contain one <sort>",
-            ))?);
+            return Err(InvalidCsl::new(node, "<bibliography> can only contain one <sort>").into());
         }
-        let sort = if sorts.len() == 0 {
+        let sort = if sorts.is_empty() {
             None
         } else {
             Some(Sort::from_node(&sorts[0], info)?)
@@ -345,66 +343,72 @@ impl FromNode for TextTermSelector {
     }
 }
 
-fn text_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    let macro_ = node.attribute("macro");
-    let value = node.attribute("value");
-    let variable = node.attribute("variable");
-    let term = node.attribute("term");
-    let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
-
-    let source = match (macro_, value, variable, term) {
-        (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
-        (None, Some(val), None, None) => TextSource::Value(val.into()),
-        (None, None, Some(___), None) => TextSource::Variable(
-            attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
-            attribute_optional(node, "form", info)?,
-        ),
-        (None, None, None, Some(___)) => TextSource::Term(
-            TextTermSelector::from_node(node, info)?,
-            attribute_bool(node, "plural", false)?,
-        ),
-        _ => return Err(InvalidCsl::new(node, invalid).into()),
-    };
-
-    let formatting = Option::from_node(node, info)?;
-    let affixes = Affixes::from_node(node, info)?;
-    let quotes = attribute_bool(node, "quotes", false)?;
-    let strip_periods = attribute_bool(node, "strip-periods", false)?;
-    let text_case = TextCase::from_node(node, info)?;
-    let display = attribute_option(node, "display", info)?;
-
-    Ok(Element::Text(
-        source,
-        formatting,
-        affixes,
-        quotes,
-        strip_periods,
-        text_case,
-        display,
-    ))
+impl FromNode for LabelElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(LabelElement {
+            variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
+            form: attribute_optional(node, "form", info)?,
+            formatting: Option::from_node(node, info)?,
+            affixes: Affixes::from_node(node, info)?,
+            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            text_case: TextCase::from_node(node, info)?,
+            plural: attribute_optional(node, "plural", info)?,
+        })
+    }
 }
 
-fn label_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    Ok(Element::Label(
-        attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
-        attribute_optional(node, "form", info)?,
-        Option::from_node(node, info)?,
-        Affixes::from_node(node, info)?,
-        attribute_bool(node, "strip-periods", false)?,
-        TextCase::from_node(node, info)?,
-        attribute_optional(node, "plural", info)?,
-    ))
+impl FromNode for TextElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let macro_ = node.attribute("macro");
+        let value = node.attribute("value");
+        let variable = node.attribute("variable");
+        let term = node.attribute("term");
+        let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
+
+        let source = match (macro_, value, variable, term) {
+            (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
+            (None, Some(val), None, None) => TextSource::Value(val.into()),
+            (None, None, Some(_vv), None) => TextSource::Variable(
+                attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
+                attribute_optional(node, "form", info)?,
+            ),
+            (None, None, None, Some(_tt)) => TextSource::Term(
+                TextTermSelector::from_node(node, info)?,
+                attribute_bool(node, "plural", false)?,
+            ),
+            _ => return Err(InvalidCsl::new(node, invalid).into()),
+        };
+
+        let formatting = Option::from_node(node, info)?;
+        let affixes = Affixes::from_node(node, info)?;
+        let quotes = attribute_bool(node, "quotes", false)?;
+        let strip_periods = attribute_bool(node, "strip-periods", false)?;
+        let text_case = TextCase::from_node(node, info)?;
+        let display = attribute_option(node, "display", info)?;
+
+        Ok(TextElement {
+            source,
+            formatting,
+            affixes,
+            quotes,
+            strip_periods,
+            text_case,
+            display,
+        })
+    }
 }
 
-fn number_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
-    Ok(Element::Number(
-        attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
-        attribute_optional(node, "form", info)?,
-        Option::from_node(node, info)?,
-        Affixes::from_node(node, info)?,
-        attribute_optional(node, "plural", info)?,
-        attribute_option(node, "display", info)?,
-    ))
+impl FromNode for NumberElement {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(NumberElement {
+            variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
+            form: attribute_optional(node, "form", info)?,
+            formatting: Option::from_node(node, info)?,
+            affixes: Affixes::from_node(node, info)?,
+            text_case: attribute_optional(node, "plural", info)?,
+            display: attribute_option(node, "display", info)?,
+        })
+    }
 }
 
 impl FromNode for Group {
@@ -560,20 +564,18 @@ impl FromNode for IfThen {
         let sub_conditions: Result<Option<Conditions>, CslError> = if info.features.conditions {
             // TODO: only accept <conditions> in head position
             max1_child(tag, "conditions", node.children(), info)
+        } else if let Some(invalid) = node
+            .children()
+            .filter(|n| n.has_tag_name("conditions"))
+            .nth(0)
+        {
+            Err(InvalidCsl::new(
+                &invalid,
+                "You must opt-in to the `conditions` feature to use <conditions>",
+            )
+            .into())
         } else {
-            if let Some(invalid) = node
-                .children()
-                .filter(|n| n.has_tag_name("conditions"))
-                .nth(0)
-            {
-                Err(InvalidCsl::new(
-                    &invalid,
-                    "You must opt-in to the `conditions` feature to use <conditions>",
-                )
-                .into())
-            } else {
-                Ok(None)
-            }
+            Ok(None)
         };
 
         use self::ConditionError::*;
@@ -591,13 +593,16 @@ impl FromNode for IfThen {
             (Err(Invalid(_)), Ok(Some(_)))
             | (Err(Invalid(_)), Err(_))
             | (Ok(_), Ok(Some(_)))
-            | (Ok(_), Err(_)) => Ok(Err(InvalidCsl::new(
-                node,
-                &format!(
-                    "{} can only have its own conditions OR a <conditions> block",
-                    tag
-                ),
-            ))?),
+            | (Ok(_), Err(_)) => {
+                return Err(InvalidCsl::new(
+                    node,
+                    &format!(
+                        "{} can only have its own conditions OR a <conditions> block",
+                        tag
+                    ),
+                )
+                .into())
+            }
         })?;
         let elements = node
             .children()
@@ -617,18 +622,16 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
 
     let unrecognised = |el, tag| {
         if tag == "if" || tag == "else-if" || tag == "else" {
-            return Ok(Err(InvalidCsl::new(
+            return Err(InvalidCsl::new(
                 el,
                 &format!(
                     "<choose> elements out of order; found <{}> in wrong position",
                     tag
                 ),
-            ))?);
+            )
+            .into());
         }
-        Ok(Err(InvalidCsl::new(
-            el,
-            &format!("Unrecognised element {} in <choose>", tag),
-        ))?)
+        Err(InvalidCsl::new(el, &format!("Unrecognised element {} in <choose>", tag)).into())
     };
 
     for el in node.children().filter(|n| n.is_element()) {
@@ -641,10 +644,7 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
                 seen_if = true;
                 if_block = Some(IfThen::from_node(&el, info)?);
             } else {
-                return Err(InvalidCsl::new(
-                    &el,
-                    "<choose> blocks must begin with an <if>",
-                ))?;
+                return Err(InvalidCsl::new(&el, "<choose> blocks must begin with an <if>").into());
             }
         } else if !seen_else {
             if tag == "else-if" {
@@ -680,7 +680,8 @@ fn max1_child<T: FromNode>(
                 "There can only be one <{}> in a <{}> block.",
                 child_tag, parent_tag
             ),
-        ))?;
+        )
+        .into());
     }
     let substs = subst_els
         .iter()
@@ -715,7 +716,8 @@ fn disallow_default<T: Default + FromNode + AttrChecker>(
                     "Disallowed attribute on node: {:?}",
                     T::relevant_attrs(node)
                 ),
-            ))?
+            )
+            .into())
         } else {
             Ok(T::default())
         }
@@ -799,14 +801,14 @@ impl FromNode for BodyDate {
 impl FromNode for Element {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         match node.tag_name().name() {
-            "text" => Ok(text_el(node, info)?),
-            "label" => Ok(label_el(node, info)?),
+            "text" => Ok(Element::Text(TextElement::from_node(node, info)?)),
+            "label" => Ok(Element::Label(LabelElement::from_node(node, info)?)),
+            "number" => Ok(Element::Number(NumberElement::from_node(node, info)?)),
             "group" => Ok(Element::Group(Group::from_node(node, info)?)),
-            "number" => Ok(number_el(node, info)?),
             "names" => Ok(Element::Names(Arc::new(Names::from_node(node, info)?))),
             "choose" => Ok(choose_el(node, info)?),
             "date" => Ok(Element::Date(Arc::new(BodyDate::from_node(node, info)?))),
-            _ => Err(InvalidCsl::new(node, "Unrecognised node."))?,
+            _ => Err(InvalidCsl::new(node, "Unrecognised node.").into()),
         }
     }
 }
@@ -821,10 +823,7 @@ fn get_toplevel<'a, 'd: 'a>(
         .filter(|n| n.has_tag_name(nodename))
         .collect();
     if matches.len() > 1 {
-        Ok(Err(InvalidCsl::new(
-            &root,
-            &format!("Cannot have more than one <{}>", nodename),
-        ))?)
+        Err(InvalidCsl::new(&root, &format!("Cannot have more than one <{}>", nodename)).into())
     } else {
         // move matches into its first item
         Ok(matches
@@ -845,10 +844,7 @@ impl FromNode for MacroMap {
         let name = match node.attribute("name") {
             Some(n) => n,
             None => {
-                return Ok(Err(InvalidCsl::new(
-                    node,
-                    "Macro must have a 'name' attribute.",
-                ))?);
+                return Err(InvalidCsl::new(node, "Macro must have a 'name' attribute.").into());
             }
         };
         Ok(MacroMap {
@@ -858,14 +854,54 @@ impl FromNode for MacroMap {
     }
 }
 
+fn write_slot_once<T: FromNode>(
+    el: &Node,
+    info: &ParseInfo,
+    slot: &mut Option<T>,
+) -> FromNodeResult<()> {
+    if slot.is_some() {
+        return Err(InvalidCsl::new(
+            &el,
+            &format!(
+                "There can only be one <{}> in a <names> block.",
+                el.tag_name().name(),
+            ),
+        )
+        .into());
+    }
+    let t = T::from_node(el, info)?;
+    *slot = Some(t);
+    Ok(())
+}
+
 impl FromNode for Names {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let name = max1_child("names", "name", node.children(), info)?;
-        let institution = max1_child("names", "institution", node.children(), info)?;
-        let et_al = max1_child("names", "et-al", node.children(), info)?;
-        let label = max1_child("names", "label", node.children(), info)?;
-        let with = max1_child("names", "with", node.children(), info)?;
-        let substitute = max1_child("names", "substitute", node.children(), info)?;
+        let mut name = None;
+        let mut label: Option<NameLabelInput> = None;
+        let mut et_al = None;
+        let mut with = None;
+        let mut institution = None;
+        let mut substitute = None;
+        for child in node.children().filter(|node| node.is_element()) {
+            let tag_name = child.tag_name().name();
+            match tag_name {
+                "name" => write_slot_once(&child, info, &mut name)?,
+                "institution" => write_slot_once(&child, info, &mut institution)?,
+                "et-al" => write_slot_once(&child, info, &mut et_al)?,
+                "label" => {
+                    write_slot_once(&child, info, &mut label)?;
+                    if let Some(ref mut label) = label {
+                        label.after_name = name.is_some();
+                    }
+                }
+                "with" => write_slot_once(&child, info, &mut with)?,
+                "substitute" => write_slot_once(&child, info, &mut substitute)?,
+                _ => {
+                    return Err(InvalidCsl::unknown_element(&child).into());
+                }
+            }
+        }
+
         Ok(Names {
             variables: attribute_array_var(node, "variable", NeedVarType::Name, info)?,
             name,
@@ -874,7 +910,7 @@ impl FromNode for Names {
             et_al,
             label,
             substitute,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
@@ -1013,14 +1049,17 @@ impl FromNode for NamePart {
     }
 }
 
-impl FromNode for NameLabel {
+impl FromNode for NameLabelInput {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(NameLabel {
-            form: attribute_optional(node, "form", info)?,
+        Ok(NameLabelInput {
+            form: attribute_option(node, "form", info)?,
+            plural: attribute_option(node, "plural", info)?,
+            strip_periods: attribute_option_bool(node, "strip-periods")?,
             formatting: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
-            plural: attribute_optional(node, "plural", info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            affixes: Option::from_node(node, info)?,
+            text_case: Option::from_node(node, info)?,
+            // Context-dependent; we set this in Names::from_node()
+            after_name: false,
         })
     }
 }
@@ -1029,7 +1068,7 @@ impl FromNode for Substitute {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let els = node
             .children()
-            .filter(|n| n.is_element() && n.has_tag_name("name"))
+            .filter(|n| n.is_element())
             .map(|el| Element::from_node(&el, info))
             .partition_results()?;
         Ok(Substitute(els))
@@ -1064,7 +1103,7 @@ impl FromNode for TermPlurality {
                 multiple: m.0.unwrap_or_else(|| "".into()),
             }),
             // had one of <single> or <multiple>, but not the other
-            _ => Ok(Err(InvalidCsl::new(node, msg))?),
+            _ => Err(InvalidCsl::new(node, msg).into()),
         }
     }
 }
@@ -1096,8 +1135,7 @@ impl FromNode for CslVersionReq {
             VersionReq::parse(version.trim_end_matches("mlz1")).map_err(|_| {
                 InvalidCsl::new(
                     node,
-                    &format!(
-r#"unsupported "1.1mlz1"-style version string (use variant="csl-m" version="1.x", for example)"#),
+                    &"unsupported \"1.1mlz1\"-style version string (use variant=\"csl-m\" version=\"1.x\", for example)".to_string(),
                 )
             })?
         } else {
@@ -1153,10 +1191,9 @@ impl FromNode for Style {
             .filter(|n| n.has_tag_name("features"))
             .collect();
         let feat_node = if feat_matches.len() > 1 {
-            Ok(Err(InvalidCsl::new(
-                &node,
-                "Cannot have more than one <features> section",
-            ))?)
+            return Err(
+                InvalidCsl::new(&node, "Cannot have more than one <features> section").into(),
+            );
         } else {
             // move matches into its first item
             Ok(feat_matches.into_iter().nth(0))
@@ -1228,10 +1265,7 @@ impl FromNode for Style {
             .collect();
 
         let bib_node = if matches.len() > 1 {
-            Ok(Err(InvalidCsl::new(
-                &node,
-                "Cannot have more than one <bibliography>",
-            ))?)
+            return Err(InvalidCsl::new(&node, "Cannot have more than one <bibliography>").into());
         } else {
             // move matches into its first item
             Ok(matches.into_iter().nth(0))
@@ -1252,7 +1286,7 @@ impl FromNode for Style {
             }
         };
 
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             return Err(errors.into());
         }
 

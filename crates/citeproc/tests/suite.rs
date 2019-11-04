@@ -36,7 +36,7 @@ lazy_static! {
     static ref BIB_TESTS: HashSet<String> = {
         let mut m = HashSet::new();
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
-        let bibtests = include_str!("./data/bibtests.txt");
+        let bibtests = include_str!("./data/ignore.txt");
         for bibtest in bibtests.lines() {
             m.insert(bibtest.to_string());
         }
@@ -54,7 +54,7 @@ use std::sync::Once;
 static INIT: Once = Once::new();
 fn setup() {
     INIT.call_once(|| {
-        let _ = env_logger::init();
+        env_logger::init();
     });
 }
 
@@ -65,8 +65,9 @@ fn csl_test_suite(path: &Path) {
     setup();
     let input = read_to_string(path).unwrap();
     let mut test_case = parse_human_test(&input);
-    let res = test_case.execute();
-    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    if let Some(res) = test_case.execute() {
+        assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    }
 }
 
 #[datatest::files("tests/data/humans", {
@@ -78,6 +79,7 @@ fn humans(path: &Path) {
     let input = read_to_string(path).unwrap();
     let yaml_test_case: YamlTestCase = serde_yaml::from_str(&input).unwrap();
     let mut test_case: TestCase = yaml_test_case.into();
-    let res = test_case.execute();
-    assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    if let Some(res) = test_case.execute() {
+        assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    }
 }

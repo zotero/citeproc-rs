@@ -35,7 +35,7 @@ pub(crate) fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<b
         Some("true") => Ok(true),
         Some("false") => Ok(false),
         None => Ok(default),
-        Some(s) => return Err(InvalidCsl::attr_val(node, attr, s)),
+        Some(s) => Err(InvalidCsl::attr_val(node, attr, s)),
     }
 }
 
@@ -44,7 +44,7 @@ pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bo
         Some("true") => Ok(Some(true)),
         Some("false") => Ok(Some(false)),
         None => Ok(None),
-        Some(s) => return Err(InvalidCsl::attr_val(node, attr, s)),
+        Some(s) => Err(InvalidCsl::attr_val(node, attr, s)),
     }
 }
 

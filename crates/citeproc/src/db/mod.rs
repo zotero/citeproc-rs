@@ -4,6 +4,10 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+// For the salsa macro expansion
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::enum_variant_names)]
+
 pub mod update;
 
 #[cfg(test)]
@@ -11,25 +15,47 @@ mod test;
 
 use crate::prelude::*;
 
-use self::update::{DocUpdate, UpdateSummary};
+use self::update::{
+    BibliographyMeta, BibliographyUpdate, DocUpdate, SecondFieldAlign, UpdateSummary,
+};
 use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
 use citeproc_proc::db::IrDatabaseStorage;
 
-use parking_lot::Mutex;
 use salsa::Durability;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
-use csl::error::StyleError;
-use csl::locale::Lang;
-use csl::style::Style;
+use csl::Lang;
+use csl::Style;
+use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
+
+#[allow(dead_code)]
+type MarkupBuild = <Markup as OutputFormat>::Build;
+#[allow(dead_code)]
+type MarkupOutput = <Markup as OutputFormat>::Output;
+use fnv::FnvHashMap;
+
+struct SavedBib {
+    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>,
+    bib_entries: FnvHashMap<Atom, Arc<MarkupOutput>>,
+}
+
+impl SavedBib {
+    fn new() -> Self {
+        SavedBib {
+            sorted_refs: Arc::new(Default::default()),
+            bib_entries: Default::default(),
+        }
+    }
+}
 
 #[salsa::database(
     StyleDatabaseStorage,
@@ -40,9 +66,10 @@ use csl::Atom;
 pub struct Processor {
     runtime: salsa::Runtime<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
+    pub formatter: Markup,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
     save_updates: bool,
-    formatter: Markup,
+    last_bibliography: Arc<Mutex<SavedBib>>,
 }
 
 /// This impl tells salsa where to find the salsa runtime.
@@ -62,18 +89,15 @@ impl salsa::Database for Processor {
         use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
         use citeproc_proc::db::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
-        let mut q = self.queue.lock();
-        match event_fn().kind {
-            WillExecute { database_key } => match database_key.kind {
-                RDS(GroupKey::built_cluster(key)) => {
-                    let upd = DocUpdate::Cluster(key);
-                    // info!("produced update, {:?}", upd);
-                    q.push(upd)
-                }
-                _ => {}
-            },
-            _ => {}
-        };
+        let kind = event_fn().kind;
+        if let WillExecute { database_key } = kind {
+            if let RDS(GroupKey::built_cluster(key)) = database_key.kind {
+                let mut q = self.queue.lock().unwrap();
+                let upd = DocUpdate::Cluster(key);
+                // info!("produced update, {:?}", upd);
+                q.push(upd);
+            }
+        }
     }
 }
 
@@ -86,6 +110,7 @@ impl ParallelDatabase for Processor {
             queue: self.queue.clone(),
             save_updates: self.save_updates,
             formatter: self.formatter.clone(),
+            last_bibliography: self.last_bibliography.clone(),
         })
     }
 }
@@ -117,6 +142,7 @@ impl Clone for Snap {
 pub enum SupportedFormat {
     Html,
     Rtf,
+    Plain,
     #[cfg(feature = "test")]
     TestHtml,
 }
@@ -127,6 +153,7 @@ impl FromStr for SupportedFormat {
         match s {
             "html" => Ok(SupportedFormat::Html),
             "rtf" => Ok(SupportedFormat::Rtf),
+            "plain" => Ok(SupportedFormat::Plain),
             _ => Err(()),
         }
     }
@@ -152,6 +179,7 @@ impl Processor {
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
             formatter: Markup::default(),
+            last_bibliography: Arc::new(Mutex::new(SavedBib::new())),
         };
         citeproc_db::safe_default(&mut db);
         db
@@ -168,11 +196,9 @@ impl Processor {
         db.formatter = match format {
             SupportedFormat::Html => Markup::html(),
             SupportedFormat::Rtf => Markup::rtf(),
+            SupportedFormat::Plain => Markup::plain(),
             #[cfg(feature = "test")]
-            SupportedFormat::TestHtml => {
-                use citeproc_io::output::markup::HtmlOptions;
-                Markup::Html(HtmlOptions::test_suite())
-            }
+            SupportedFormat::TestHtml => Markup::test_html(),
         };
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style_with_durability(style, Durability::MEDIUM);
@@ -232,15 +258,23 @@ impl Processor {
             return UpdateSummary::default();
         }
         self.compute();
-        let mut queue = self.queue.lock();
-        let summary = UpdateSummary::summarize(self, &*queue);
+        let mut queue = self.queue.lock().unwrap();
+        let mut summary = UpdateSummary::summarize(self, &*queue);
         queue.clear();
+        // Technically, you should probably have a lock over save_and_diff_bibliography as well, so
+        // you get a point-in-time shapshot, but at the moment, that would mean recursively locking
+        // queue as computing the bibliography will also create salsa events.
+        drop(queue);
+        if self.get_style().bibliography.is_some() {
+            let bib = self.save_and_diff_bibliography();
+            summary.bibliography = bib;
+        }
         summary
     }
 
     pub fn drain(&mut self) {
         self.compute();
-        let mut queue = self.queue.lock();
+        let mut queue = self.queue.lock().unwrap();
         queue.clear();
     }
 
@@ -285,8 +319,8 @@ impl Processor {
         for cluster in clusters {
             let (cluster_id, number, cites) = cluster.split();
             let mut ids = Vec::new();
-            for cite in cites.iter() {
-                let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+            for (index, cite) in cites.iter().enumerate() {
+                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
@@ -321,8 +355,8 @@ impl Processor {
         }
 
         let mut ids = Vec::new();
-        for cite in cites.iter() {
-            let cite_id = self.cite(cluster_id, Arc::new(cite.clone()));
+        for (index, cite) in cites.iter().enumerate() {
+            let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
@@ -343,8 +377,75 @@ impl Processor {
         id.lookup(self)
     }
 
-    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<<Markup as OutputFormat>::Output> {
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<MarkupOutput> {
         self.built_cluster(cluster_id)
+    }
+
+    pub fn get_bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput> {
+        self.bib_item(ref_id)
+    }
+
+    fn get_bibliography_map(&self) -> FnvHashMap<Atom, Arc<MarkupOutput>> {
+        let sorted_refs = self.sorted_refs();
+        let mut m = FnvHashMap::with_capacity_and_hasher(
+            sorted_refs.0.len(),
+            fnv::FnvBuildHasher::default(),
+        );
+        for key in sorted_refs.0.iter() {
+            m.insert(key.clone(), self.bib_item(key.clone()));
+        }
+        m
+    }
+
+    pub fn get_bibliography_meta(&self) -> Option<BibliographyMeta> {
+        let style = self.get_style();
+        style.bibliography.as_ref().map(|bib| {
+            BibliographyMeta {
+                // TODO
+                max_offset: 0,
+                entry_spacing: bib.entry_spacing,
+                line_spacing: bib.line_spaces,
+                hanging_indent: bib.hanging_indent,
+                // To avoid serde derive in csl
+                second_field_align: bib.second_field_align.as_ref().map(|s| match s {
+                    csl::style::SecondFieldAlign::Flush => SecondFieldAlign::Flush,
+                    csl::style::SecondFieldAlign::Margin => SecondFieldAlign::Margin,
+                }),
+                format_meta: self.formatter.meta(),
+            }
+        })
+    }
+
+    fn save_and_diff_bibliography(&self) -> Option<BibliographyUpdate> {
+        let mut last_bibliography = self.last_bibliography.lock().unwrap();
+        let new = self.get_bibliography_map();
+        let old = std::mem::replace(&mut *last_bibliography, SavedBib::new());
+        let mut update = BibliographyUpdate::new();
+        for (k, v) in new.iter() {
+            let old_v = old.bib_entries.get(k);
+            if Some(v) != old_v {
+                update.updated_entries.insert(k.clone(), v.clone());
+            }
+        }
+        last_bibliography.bib_entries = new;
+        let sorted_refs = self.sorted_refs();
+        if sorted_refs != old.sorted_refs {
+            update.entry_ids = Some(sorted_refs.0.clone());
+            last_bibliography.sorted_refs = sorted_refs;
+            Some(update)
+        } else if update.updated_entries.is_empty() {
+            None
+        } else {
+            Some(update)
+        }
+    }
+
+    pub fn get_bibliography(&self) -> Vec<MarkupOutput> {
+        self.sorted_refs()
+            .0
+            .iter()
+            .map(|k| (*self.bib_item(k.clone())).clone())
+            .collect()
     }
 
     pub fn get_reference(&self, ref_id: Atom) -> Option<Arc<Reference>> {

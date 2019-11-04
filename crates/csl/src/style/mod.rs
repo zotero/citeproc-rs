@@ -30,36 +30,45 @@ pub enum TextSource {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
+pub struct TextElement {
+    pub source: TextSource,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub quotes: Quotes,
+    pub strip_periods: StripPeriods,
+    pub text_case: TextCase,
+    pub display: Option<DisplayMode>,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct LabelElement {
+    pub variable: NumberVariable,
+    pub form: TermForm,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub strip_periods: StripPeriods,
+    pub text_case: TextCase,
+    pub plural: Plural,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct NumberElement {
+    pub variable: NumberVariable,
+    pub form: NumericForm,
+    pub formatting: Option<Formatting>,
+    pub affixes: Affixes,
+    pub text_case: TextCase,
+    pub display: Option<DisplayMode>,
+}
+
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Element {
     /// <cs:text>
-    Text(
-        TextSource,
-        Option<Formatting>,
-        Affixes,
-        Quotes,
-        StripPeriods,
-        TextCase,
-        Option<DisplayMode>,
-    ),
+    Text(TextElement),
     /// <cs:label>
-    Label(
-        NumberVariable,
-        TermForm,
-        Option<Formatting>,
-        Affixes,
-        StripPeriods,
-        TextCase,
-        Plural,
-    ),
+    Label(LabelElement),
     /// <cs:number>
-    Number(
-        NumberVariable,
-        NumericForm,
-        Option<Formatting>,
-        Affixes,
-        TextCase,
-        Option<DisplayMode>,
-    ),
+    Number(NumberElement),
     /// <cs:group>
     Group(Group),
     /// <cs:choose>
@@ -87,6 +96,15 @@ pub struct Group {
 pub enum BodyDate {
     Indep(IndependentDate),
     Local(LocalizedDate),
+}
+
+impl BodyDate {
+    pub fn variable(&self) -> DateVariable {
+        match self {
+            BodyDate::Indep(i) => i.variable,
+            BodyDate::Local(l) => l.variable,
+        }
+    }
 }
 
 /// e.g. for <text variable="title" form="short" />
@@ -359,6 +377,8 @@ pub struct CondSet {
 
 impl From<ConditionParser> for CondSet {
     #[rustfmt::skip]
+    // Much neater to treat them all the same
+    #[allow(clippy::for_loop_over_option)]
     fn from(cp: ConditionParser) -> Self {
         let mut conds = FnvHashSet::default();
         for x in cp.position { conds.insert(Cond::Position(x)); }
@@ -490,12 +510,12 @@ pub struct Names {
     // non-inheritable
     pub variables: Vec<NameVariable>,
     pub name: Option<Name>,
-    pub label: Option<NameLabel>,
+    pub label: Option<NameLabelInput>,
     pub et_al: Option<NameEtAl>,
     pub substitute: Option<Substitute>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
 
     /// CSL-M: institutions
     pub with: Option<NameWith>,
@@ -693,8 +713,11 @@ impl Name {
     ///
     pub fn merge(&self, overrider: &Self) -> Self {
         Name {
-            and: overrider.and.clone().or(self.and.clone()),
-            delimiter: overrider.delimiter.clone().or(self.delimiter.clone()),
+            and: overrider.and.clone().or(self.and),
+            delimiter: overrider
+                .delimiter
+                .clone()
+                .or_else(|| self.delimiter.clone()),
             delimiter_precedes_et_al: overrider
                 .delimiter_precedes_et_al
                 .or(self.delimiter_precedes_et_al),
@@ -709,19 +732,19 @@ impl Name {
                 .et_al_subsequent_use_first
                 .or(self.et_al_subsequent_use_first),
             form: overrider.form.or(self.form),
-            initialize: overrider.initialize.or(self.initialize.clone()),
+            initialize: overrider.initialize.or(self.initialize),
             initialize_with: overrider
                 .initialize_with
                 .clone()
-                .or(self.initialize_with.clone()),
+                .or_else(|| self.initialize_with.clone()),
             name_as_sort_order: overrider.name_as_sort_order.or(self.name_as_sort_order),
             sort_separator: overrider
                 .sort_separator
                 .clone()
-                .or(self.sort_separator.clone()),
+                .or_else(|| self.sort_separator.clone()),
 
             // these four aren't inherited
-            formatting: overrider.formatting.clone(),
+            formatting: overrider.formatting,
             affixes: overrider.affixes.clone(),
             name_part_given: overrider.name_part_given.clone(),
             name_part_family: overrider.name_part_family.clone(),
@@ -732,14 +755,58 @@ impl Name {
         self.et_al_min.is_some() && self.et_al_use_first.is_some()
     }
 }
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
+pub struct NameLabelInput {
+    pub form: Option<TermFormExtended>,
+    pub formatting: Option<Formatting>,
+    pub plural: Option<Plural>,
+    pub strip_periods: Option<StripPeriods>,
+    pub affixes: Option<Affixes>,
+    pub text_case: Option<TextCase>,
+    pub after_name: bool,
+}
+
+impl NameLabelInput {
+    pub fn empty() -> Self {
+        Default::default()
+    }
+    pub fn concrete(&self) -> NameLabel {
+        NameLabel {
+            form: self.form.unwrap_or_default(),
+            formatting: self.formatting,
+            plural: self.plural.unwrap_or_default(),
+            strip_periods: self.strip_periods.unwrap_or(false),
+            affixes: self.affixes.as_ref().cloned().unwrap_or_default(),
+            text_case: self.text_case.unwrap_or_default(),
+            after_name: self.after_name,
+        }
+    }
+    pub fn merge(&self, other: &NameLabelInput) -> NameLabelInput {
+        NameLabelInput {
+            form: other.form.or(self.form),
+            formatting: other.formatting.or(self.formatting),
+            plural: other.plural.or(self.plural),
+            strip_periods: other.strip_periods.or(self.strip_periods),
+            affixes: other
+                .affixes
+                .as_ref()
+                .cloned()
+                .or_else(|| self.affixes.as_ref().cloned()),
+            text_case: other.text_case.or(self.text_case),
+            after_name: other.after_name,
+        }
+    }
+}
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct NameLabel {
     pub form: TermFormExtended,
     pub formatting: Option<Formatting>,
-    pub delimiter: Delimiter,
     pub plural: Plural,
     pub strip_periods: StripPeriods,
+    pub affixes: Affixes,
+    pub text_case: TextCase,
+    pub after_name: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -893,23 +960,32 @@ pub struct Sort {
     pub keys: Vec<SortKey>,
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct SortKey {
     pub sort_source: SortSource,
     pub names_min: Option<u32>,
     pub names_use_first: Option<u32>,
-    pub names_use_last: Option<u32>,
-    pub sort: Option<SortDirection>,
+    pub names_use_last: Option<bool>,
+    pub direction: Option<SortDirection>,
+}
+
+impl SortKey {
+    pub fn is_macro(&self) -> bool {
+        match self.sort_source {
+            SortSource::Macro(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /// You must sort on either a variable or a macro
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SortSource {
     Variable(AnyVariable),
     Macro(Atom),
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SortDirection {
     Ascending,
@@ -997,11 +1073,36 @@ impl Default for Style {
 }
 
 impl Style {
+    pub fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>) {
+        let nc = Arc::new(self.name_citation());
+        let nd = self.names_delimiter.clone();
+        let citation_nd = self.citation.names_delimiter.clone();
+        (citation_nd.or(nd), nc)
+    }
+    pub fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>) {
+        let nb = Arc::new(self.name_bibliography());
+        let nd = self.names_delimiter.clone();
+        let bib_nd = self
+            .bibliography
+            .as_ref()
+            .and_then(|bib| bib.names_delimiter.clone());
+        (bib_nd.or(nd), nb)
+    }
     pub fn name_citation(&self) -> Name {
         let default = Name::root_default();
         let root = &self.name_inheritance;
         let citation = &self.citation.name_inheritance;
         default.merge(root).merge(citation)
+    }
+    pub fn name_bibliography(&self) -> Name {
+        let default = Name::root_default();
+        let root = &self.name_inheritance;
+        let root = default.merge(root);
+        if let Some(bib) = &self.bibliography {
+            root.merge(&bib.name_inheritance)
+        } else {
+            root
+        }
     }
 }
 
@@ -1186,7 +1287,7 @@ pub enum PageRangeFormat {
     MinimalTwo,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,

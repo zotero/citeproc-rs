@@ -1,0 +1,55 @@
+mode: bibliography
+result: |-
+  <div class="csl-bib-body">
+    <div class="csl-entry">A</div>
+    <div class="csl-entry">B1</div>
+    <div class="csl-entry">B22</div>
+    <div class="csl-entry">B21</div>
+  </div>
+
+input:
+  - id: ITEM-4
+    type: book
+    title: 'B'
+    chapter-number: 2
+    publication-number: 1
+  - id: ITEM-3
+    type: book
+    title: 'B'
+    chapter-number: 2
+    publication-number: 2
+  - id: ITEM-2
+    type: book
+    title: 'B'
+    chapter-number: 1
+  - id: ITEM-1
+    type: book
+    title: 'A'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <macro name="title">
+      <text variable="title" />
+    </macro>
+    <macro name="chapter-number">
+      <number variable="chapter-number" />
+    </macro>
+    <macro name="publication-number">
+      <number variable="publication-number" />
+    </macro>
+    <citation><layout></layout></citation>
+    <bibliography>
+      <sort>
+        <key macro="title" />
+        <key macro="chapter-number" />
+        <key macro="publication-number" sort="descending" />
+      </sort>
+      <layout>
+        <text variable="title" />
+        <number variable="chapter-number" />
+        <number variable="publication-number" />
+      </layout>
+    </bibliography>
+  </style>

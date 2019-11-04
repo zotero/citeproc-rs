@@ -26,7 +26,7 @@ use citeproc::input::*;
 use citeproc::output::*;
 use citeproc::style::variables::*;
 use citeproc::Driver;
-use csl::style::CslType;
+use csl::CslType;
 
 use std::fs::File;
 use std::io::prelude::*;

@@ -1,0 +1,65 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright © 2018 Corporation for Digital Scholarship
+
+[package]
+name = "citeproc-wasm"
+version = "0.0.1"
+authors = ["Cormac Relf <web@cormacrelf.net>"]
+license = "MPL-2.0"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# use --features console
+console = ["console_error_panic_hook", "console_log", "fern"]
+# disable the source of js-demo's visualisation for the public API
+dot = []
+default = []
+
+[dependencies]
+citeproc = { path = "../citeproc", default-features = false, features=[] }
+csl = { path = "../csl" }
+citeproc-io = { path = "../io" }
+cfg-if = "0.1.9"
+console_log = { version = "0.1.2", optional = true }
+fern = { version = "0.5.8", optional = true }
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.6", optional = true }
+
+wasm-bindgen-futures = "0.4.3"
+js-sys = "0.3.27"
+serde = "1.0.100"
+serde_derive = "1.0.100"
+serde_json = "1.0.40"
+
+[dependencies.wasm-bindgen]
+version = "0.2.50"
+features = ["serde-serialize"]
+
+[dependencies.log]
+version = "0.4.8"
+features = ["release_max_level_error"]
+# this doesn't work
+# [target.'cfg(not(feature="console"))'.dependencies.log]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.2.50"
+
+# TODO: Set the opt level on new wasm-pack 0.6.0 config
+# when it's released, so as not to interfere with the
+# other native binary targets (cargo only lets you set it
+# on the workspace root)
+
+# [profile.release]
+# # Tell `rustc` to optimize for small code size.
+# opt-level = "s"
+# lto = true
