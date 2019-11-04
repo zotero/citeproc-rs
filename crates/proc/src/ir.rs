@@ -214,6 +214,13 @@ impl<O: OutputFormat> CiteEdgeData<O> {
 use crate::disamb::names::NameIR;
 use std::sync::Mutex;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConditionalDisambIR<O: OutputFormat> {
+    pub choose: Arc<Choose>,
+    pub done: bool,
+    pub ir: Box<IR<O>>,
+}
+
 // Intermediate Representation
 #[derive(Debug, Clone)]
 pub enum IR<O: OutputFormat = Markup> {
@@ -225,7 +232,7 @@ pub enum IR<O: OutputFormat = Markup> {
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
     /// Should also include `if variable="year-suffix"` because that could change.
-    ConditionalDisamb(Arc<Choose>, Box<IR<O>>),
+    ConditionalDisamb(Arc<Mutex<ConditionalDisambIR<O>>>),
     YearSuffix(YearSuffixHook, Option<O::Build>),
 
     // Think:
@@ -251,7 +258,7 @@ where
         match self {
             IR::Rendered(None) | IR::YearSuffix(_, None) => true,
             IR::Seq(seq) if seq.contents.is_empty() => true,
-            IR::ConditionalDisamb(_c, boxed) => boxed.is_empty(),
+            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.is_empty(),
             IR::Name(nir) => nir.lock().unwrap().ir.is_empty(),
             _ => false,
         }
@@ -268,10 +275,10 @@ where
             (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
             (IR::Seq(s), IR::Seq(o)) if s == o => true,
             (IR::YearSuffix(s1, s2), IR::YearSuffix(o1, o2)) if s1 == o1 && s2 == o2 => true,
-            (IR::ConditionalDisamb(s1, s2), IR::ConditionalDisamb(o1, o2))
-                if s1 == o1 && s2 == o2 =>
-            {
-                true
+            (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) => {
+                let aa = a.lock().unwrap();
+                let bb = b.lock().unwrap();
+                *aa == *bb
             }
             (IR::Name(self_nir), IR::Name(other_nir)) => {
                 let s = self_nir.lock().unwrap();
@@ -298,7 +305,7 @@ impl<O: OutputFormat<Output = String>> IR<O> {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::Name(nir) => nir.lock().unwrap().ir.flatten(fmt),
-            IR::ConditionalDisamb(_, ref xs) => (*xs).flatten(fmt),
+            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.flatten(fmt),
             IR::YearSuffix(_, ref x) => x.clone(),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
@@ -357,10 +364,10 @@ impl IR<Markup> {
     {
         match self {
             IR::YearSuffix(..) => callback(self),
-            IR::ConditionalDisamb(_, ref mut boxed) => {
+            IR::ConditionalDisamb(c) => {
                 // XXX(check this): boxed has already been rendered, so the `if` was with
                 // disambiguate=false, probably. So you can visit it.
-                boxed.visit_year_suffix_hooks(callback)
+                c.lock().unwrap().ir.visit_year_suffix_hooks(callback)
             }
             IR::Seq(seq) => {
                 for ir in seq.contents.iter_mut() {
@@ -391,7 +398,7 @@ impl IR<Markup> {
                     }
                 }
             }
-            IR::ConditionalDisamb(_, xs) => (*xs).append_edges(edges, fmt, formatting),
+            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
             IR::Name(nir) => nir.lock().unwrap().ir.append_edges(edges, fmt, formatting),
         }

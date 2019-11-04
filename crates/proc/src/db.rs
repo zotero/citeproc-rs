@@ -452,7 +452,10 @@ fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
             IR::Name(ref nir) => {
                 vec.push(nir.clone());
             }
-            IR::ConditionalDisamb(_, boxed) => list_all_name_blocks_inner(&**boxed, vec),
+            IR::ConditionalDisamb(c) => {
+                let lock = c.lock().unwrap();
+                list_all_name_blocks_inner(&*lock.ir, vec);
+            }
             IR::Seq(seq) => {
                 // assumes it's the first one that appears
                 for x in &seq.contents {
@@ -463,6 +466,30 @@ fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
     }
     let mut vec = Vec::new();
     list_all_name_blocks_inner(ir, &mut vec);
+    vec
+}
+
+type CondDisambRef = Arc<Mutex<ConditionalDisambIR<Markup>>>;
+
+fn list_all_cond_disambs(ir: &IR<Markup>) -> Vec<CondDisambRef> {
+    fn list_all_cd_inner(ir: &IR<Markup>, vec: &mut Vec<CondDisambRef>) {
+        match ir {
+            IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
+            IR::ConditionalDisamb(c) => {
+                vec.push(c.clone());
+                let lock = c.lock().unwrap();
+                list_all_cd_inner(&*lock.ir, vec);
+            }
+            IR::Seq(seq) => {
+                // assumes it's the first one that appears
+                for x in &seq.contents {
+                    list_all_cd_inner(x, vec)
+                }
+            }
+        }
+    }
+    let mut vec = Vec::new();
+    list_all_cd_inner(ir, &mut vec);
     vec
 }
 
@@ -692,50 +719,20 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let mut un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
+    let un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
     if un {
         return;
     }
-
-    let dfa = db.ref_dfa(ctx.reference.id.clone()).unwrap();
-    debug!("{}", dfa.debug_graph(db));
-
-    let mut done = false;
-    const ITER_MAX: u32 = 32;
-    let mut n = 0u32;
-    while !un && !done && n < ITER_MAX {
-        done = try_disambiguate(db, ir, state, ctx);
-        un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
-        n += 1;
-        debug!("done {done}, un {un}, n {n}", done = done, un = un, n = n);
-    }
-
-    fn try_disambiguate(
-        db: &impl IrDatabase,
-        ir: &mut IR<Markup>,
-        state: &mut IrState,
-        ctx: &CiteContext<'_, Markup>,
-    ) -> bool {
-        // retval = whether we're done
-        *ir = match ir {
-            IR::Name(_) | IR::YearSuffix(..) | IR::Rendered(_) => return true,
-            IR::ConditionalDisamb(ref el, ref _xs) => {
-                let (new_ir, _) = el.intermediate(db, state, ctx);
-                new_ir
-            }
-            IR::Seq(ref mut seq) => {
-                let mut count = seq.contents.len();
-                for sir in seq.contents.iter_mut() {
-                    let done = try_disambiguate(db, sir, state, ctx);
-                    if !done {
-                        break;
-                    }
-                    count -= 1;
-                }
-                return count == 0;
-            }
-        };
-        false
+    let cond_refs = list_all_cond_disambs(ir);
+    for (_n, cir_arc) in cond_refs.into_iter().enumerate() {
+        if is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id) {
+            info!("successfully disambiguated");
+            break;
+        }
+        let mut lock = cir_arc.lock().unwrap();
+        let (new_ir, _) = lock.choose.intermediate(db, state, ctx);
+        lock.done = true;
+        lock.ir = Box::new(new_ir);
     }
 }
 

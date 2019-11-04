@@ -12,8 +12,9 @@ use csl::{
     Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
 };
 use csl::{AnyVariable, DateVariable};
+use crate::ir::ConditionalDisambIR;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 impl<'c, O, I> Proc<'c, O, I> for Arc<Choose>
 where
@@ -26,6 +27,13 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
+        let make_mutex = |d: bool, content: IR<O>, gv: GroupVars| {
+            if d {
+                (IR::ConditionalDisamb(Arc::new(Mutex::new(ConditionalDisambIR { choose: self.clone(), done: false, ir: Box::new(content) }))), gv)
+            } else {
+                (content, gv)
+            }
+        };
         // XXX: should you treat conditional evaluations as a "variable test"?
         let Choose(ref head, ref rest, ref last) = **self;
         let mut disamb = false;
@@ -40,11 +48,7 @@ where
         }
         // check the <if> element
         if let Some((content, gv)) = found {
-            return if disamb {
-                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
-            } else {
-                (content, gv)
-            };
+            return make_mutex(disamb, content, gv);
         } else {
             // check the <else-if> elements
             for branch in rest.iter() {
@@ -61,20 +65,12 @@ where
         }
         // did any of the <else-if> elements match?
         if let Some((content, gv)) = found {
-            if disamb {
-                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
-            } else {
-                (content, gv)
-            }
+            make_mutex(disamb, content, gv)
         } else {
             // if not, <else>
             let Else(ref els) = last;
             let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default(), None);
-            if disamb {
-                (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
-            } else {
-                (content, gv)
-            }
+            make_mutex(disamb, content, gv)
         }
     }
 }
