@@ -8,6 +8,7 @@ use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use csl::Formatting;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct RtfWriter {}
@@ -36,6 +37,12 @@ impl FormatCmd {
     fn rtf_tag(self, _options: &RtfWriter) -> &'static str {
         use super::FormatCmd::*;
         match self {
+            // TODO: RTF display commands
+            DisplayBlock => "",
+            DisplayIndent => "",
+            DisplayLeftMargin => "",
+            DisplayRightInline => "",
+
             FontStyleItalic => "\\i ",
             FontStyleOblique => "\\i ",
             FontStyleNormal => "\\i0 ",
@@ -91,10 +98,8 @@ impl InlineElement {
             Text(text) => {
                 rtf_escape_into(text, s);
             }
-            Div(_display, inlines) => {
-                for i in inlines {
-                    i.to_rtf_inner(s, options);
-                }
+            Div(display, inlines) => {
+                options.stack_formats(s, inlines, Formatting::default(), Some(*display))
             }
             Micro(micros) => {
                 for micro in micros {
@@ -102,7 +107,7 @@ impl InlineElement {
                 }
             }
             Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting);
+                options.stack_formats(s, inlines, *formatting, None);
             }
             Quoted(_qt, inners) => {
                 s.push('"');

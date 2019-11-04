@@ -52,6 +52,10 @@ pub enum FormatCmd {
     VerticalAlignmentSuperscript,
     VerticalAlignmentSubscript,
     VerticalAlignmentBaseline,
+    DisplayBlock,
+    DisplayIndent,
+    DisplayLeftMargin,
+    DisplayRightInline,
 }
 
 use std::hash::Hash;
@@ -166,5 +170,5 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
 
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);
-    fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd>;
+    fn tag_stack(&self, formatting: Formatting, display: Option<DisplayMode>) -> Vec<FormatCmd>;
 }

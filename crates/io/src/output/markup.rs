@@ -233,8 +233,8 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn tag_stack(&self, formatting: Formatting) -> Vec<FormatCmd> {
-        tag_stack(formatting)
+    fn tag_stack(&self, formatting: Formatting, display: Option<DisplayMode>) -> Vec<FormatCmd> {
+        tag_stack(formatting, display)
     }
 }
 
@@ -278,8 +278,8 @@ pub trait MarkupWriter {
     }
 
     /// Use this to write an InlineElement::Formatted
-    fn stack_formats(&self, s: &mut String, inlines: &[InlineElement], formatting: Formatting) {
-        let stack = tag_stack(formatting);
+    fn stack_formats(&self, s: &mut String, inlines: &[InlineElement], formatting: Formatting, display: Option<DisplayMode>) {
+        let stack = tag_stack(formatting, display);
         self.stack_preorder(s, &stack);
         for inner in inlines {
             self.write_inline(s, inner);
@@ -288,9 +288,16 @@ pub trait MarkupWriter {
     }
 }
 
-fn tag_stack(formatting: Formatting) -> Vec<FormatCmd> {
+fn tag_stack(formatting: Formatting, display: Option<DisplayMode>) -> Vec<FormatCmd> {
     use super::FormatCmd::*;
     let mut stack = Vec::new();
+    match display {
+        Some(DisplayMode::Block) => stack.push(DisplayBlock),
+        Some(DisplayMode::Indent) => stack.push(DisplayIndent),
+        Some(DisplayMode::LeftMargin) => stack.push(DisplayLeftMargin),
+        Some(DisplayMode::RightInline) => stack.push(DisplayRightInline),
+        _ => {}
+    }
     match formatting.font_style {
         Some(FontStyle::Italic) => stack.push(FontStyleItalic),
         Some(FontStyle::Oblique) => stack.push(FontStyleOblique),

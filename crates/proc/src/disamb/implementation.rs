@@ -27,6 +27,7 @@ impl Disambiguation<Markup> for Style {
             "".into(),
             Some(stack),
             Affixes::default(),
+            None,
         )
     }
 }
@@ -50,6 +51,7 @@ impl Disambiguation<Markup> for Group {
             self.delimiter.0.clone(),
             stack,
             self.affixes.clone(),
+            self.display,
         );
         if group_vars.should_render_tree() {
             // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
@@ -195,6 +197,7 @@ impl Disambiguation<Markup> for Element {
                         "".into(),
                         text.formatting,
                         text.affixes.clone(),
+                        text.display,
                     );
                     state.pop_macro(name);
                     ret

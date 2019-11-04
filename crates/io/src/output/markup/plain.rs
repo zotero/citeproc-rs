@@ -8,6 +8,7 @@ use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use csl::Formatting;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct PlainWriter {}
@@ -51,10 +52,8 @@ impl InlineElement {
                 use v_htmlescape::escape;
                 s.push_str(&escape(text).to_string());
             }
-            Div(_display, inlines) => {
-                for i in inlines {
-                    i.to_plain_inner(s, options);
-                }
+            Div(display, inlines) => {
+                options.stack_formats(s, inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
                 for micro in micros {
@@ -62,7 +61,7 @@ impl InlineElement {
                 }
             }
             Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting);
+                options.stack_formats(s, inlines, *formatting, None);
             }
             Quoted(_qt, inners) => {
                 // TODO: use localized quotes

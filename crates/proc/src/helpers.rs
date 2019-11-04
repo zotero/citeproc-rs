@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
 use csl::Atom;
-use csl::{Affixes, Element, Formatting};
+use csl::{Affixes, Element, Formatting, DisplayMode};
 
 pub fn sequence<'c, O, I>(
     db: &impl IrDatabase,
@@ -18,6 +18,7 @@ pub fn sequence<'c, O, I>(
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Affixes,
+    display: Option<DisplayMode>,
 ) -> IrSum<O>
 where
     O: OutputFormat,
@@ -45,6 +46,7 @@ where
                 formatting,
                 affixes,
                 delimiter,
+                display,
             }),
             gv,
         )
@@ -59,6 +61,7 @@ pub fn ref_sequence<'c>(
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Affixes,
+    display: Option<DisplayMode>
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 
@@ -87,6 +90,7 @@ pub fn ref_sequence<'c>(
                 formatting,
                 affixes,
                 delimiter,
+                display,
             }),
             gv,
         )

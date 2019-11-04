@@ -8,6 +8,7 @@ use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use csl::Formatting;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HtmlWriter {
@@ -92,31 +93,35 @@ impl MicroNode {
 
 impl FormatCmd {
     fn html_tag(self, options: &HtmlWriter) -> (&'static str, &'static str) {
-        use super::FormatCmd::*;
         match self {
-            FontStyleItalic => ("i", ""),
-            FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
-            FontStyleNormal => ("span", r#" style="font-style:normal;""#),
+            FormatCmd::DisplayBlock => ("div", r#"class="csl-block"#),
+            FormatCmd::DisplayIndent => ("div", r#"class="csl-indent"#),
+            FormatCmd::DisplayLeftMargin => ("div", r#"class="csl-left-margin"#),
+            FormatCmd::DisplayRightInline => ("div", r#"class="csl-right-inline"#),
 
-            FontWeightBold => {
+            FormatCmd::FontStyleItalic => ("i", ""),
+            FormatCmd::FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
+            FormatCmd::FontStyleNormal => ("span", r#" style="font-style:normal;""#),
+
+            FormatCmd::FontWeightBold => {
                 if options.use_b_for_strong {
                     ("b", "")
                 } else {
                     ("strong", "")
                 }
             }
-            FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
-            FontWeightLight => ("span", r#" style="font-weight:light;""#),
+            FormatCmd::FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
+            FormatCmd::FontWeightLight => ("span", r#" style="font-weight:light;""#),
 
-            FontVariantSmallCaps => ("span", r#" style="font-variant:small-caps;""#),
-            FontVariantNormal => ("span", r#" style="font-variant:normal;""#),
+            FormatCmd::FontVariantSmallCaps => ("span", r#" style="font-variant:small-caps;""#),
+            FormatCmd::FontVariantNormal => ("span", r#" style="font-variant:normal;""#),
 
-            TextDecorationUnderline => ("span", r#" style="text-decoration:underline;""#),
-            TextDecorationNone => ("span", r#" style="text-decoration:none;""#),
+            FormatCmd::TextDecorationUnderline => ("span", r#" style="text-decoration:underline;""#),
+            FormatCmd::TextDecorationNone => ("span", r#" style="text-decoration:none;""#),
 
-            VerticalAlignmentSuperscript => ("sup", ""),
-            VerticalAlignmentSubscript => ("sub", ""),
-            VerticalAlignmentBaseline => ("span", r#" style="vertical-alignment:baseline;"#),
+            FormatCmd::VerticalAlignmentSuperscript => ("sup", ""),
+            FormatCmd::VerticalAlignmentSubscript => ("sub", ""),
+            FormatCmd::VerticalAlignmentBaseline => ("span", r#" style="vertical-alignment:baseline;"#),
         }
     }
 }
@@ -156,13 +161,7 @@ impl InlineElement {
                 s.push_str(&escape(text).to_string());
             }
             Div(display, inlines) => {
-                use std::fmt::Write;
-                let disp: &str = display.as_ref();
-                write!(s, "<div class=\"csl-{}\">", disp).unwrap();
-                for i in inlines {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str("</div>");
+                options.stack_formats(s, inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
                 for micro in micros {
@@ -170,7 +169,7 @@ impl InlineElement {
                 }
             }
             Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting);
+                options.stack_formats(s, inlines, *formatting, None);
             }
             Quoted(_qt, inners) => {
                 // TODO: use localized quotes

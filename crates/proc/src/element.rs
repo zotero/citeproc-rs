@@ -25,6 +25,7 @@ where
             "".into(),
             None,
             Affixes::default(),
+            None,
         )
     }
 }
@@ -50,6 +51,7 @@ where
             "".into(),
             None,
             Affixes::default(),
+            None,
         )
     }
 }
@@ -94,6 +96,7 @@ where
                             "".into(),
                             text.formatting,
                             text.affixes.clone(),
+                            text.display,
                         );
                         state.pop_macro(name);
                         out
@@ -192,6 +195,7 @@ where
                     g.delimiter.0.clone(),
                     g.formatting,
                     g.affixes.clone(),
+                    g.display,
                 );
                 if group_vars.should_render_tree() {
                     // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will

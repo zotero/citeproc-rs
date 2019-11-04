@@ -253,6 +253,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
             delimiter: names_inheritance
                 .delimiter
                 .unwrap_or_else(|| Atom::from("")),
+            display: names.display,
         }),
         GroupVars::DidRender,
     )
@@ -335,6 +336,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             formatting: runner.name_el.formatting,
             affixes: runner.name_el.affixes.clone(),
             delimiter: Atom::from(""),
+            display: None,
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))

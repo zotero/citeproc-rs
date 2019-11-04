@@ -105,7 +105,7 @@ impl OutputFormat for PlainText {
     #[inline]
     fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
     #[inline]
-    fn tag_stack(&self, _formatting: Formatting) -> Vec<FormatCmd> {
+    fn tag_stack(&self, _formatting: Formatting, _: Option<DisplayMode>) -> Vec<FormatCmd> {
         Vec::new()
     }
 }

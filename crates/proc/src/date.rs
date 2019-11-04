@@ -64,6 +64,7 @@ fn to_ref_ir(
             formatting: ir_seq.formatting,
             affixes: ir_seq.affixes,
             delimiter: ir_seq.delimiter,
+            display: ir_seq.display,
         }),
         IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
     }
@@ -147,6 +148,7 @@ struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
     overall_affixes: &'a Affixes,
     overall_delimiter: &'a Atom,
+    display: Option<DisplayMode>,
 }
 
 struct PartBuilder<'a, O: OutputFormat> {
@@ -180,6 +182,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     formatting: bits.overall_formatting,
                     delimiter: bits.overall_delimiter.clone(),
                     affixes: bits.overall_affixes.clone(),
+                    display: bits.display,
                 };
                 for built in vec {
                     seq.contents
@@ -249,6 +252,7 @@ where
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
         overall_affixes: &crate::sort::natural_sort::date_affixes(),
+        display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
         empty
@@ -257,6 +261,7 @@ where
             overall_delimiter: &locale_date.delimiter.0,
             overall_formatting: local.formatting,
             overall_affixes: &local.affixes,
+            display: local.display,
         }
     };
     // TODO: render date ranges
@@ -293,6 +298,7 @@ where
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
         overall_affixes: &crate::sort::natural_sort::date_affixes(),
+        display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
         empty
@@ -301,6 +307,7 @@ where
             overall_delimiter: &indep.delimiter.0,
             overall_formatting: indep.formatting,
             overall_affixes: &indep.affixes,
+            display: indep.display,
         }
     };
     let date = ctx
@@ -358,6 +365,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         affixes: part.affixes.clone(),
                         formatting: part.formatting,
                         delimiter: Atom::from(""),
+                        display: None,
                     })
                 })
             } else {

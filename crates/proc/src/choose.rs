@@ -69,7 +69,7 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default());
+            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default(), None);
             if disamb {
                 (IR::ConditionalDisamb(self.clone(), Box::new(content)), gv)
             } else {
@@ -97,6 +97,7 @@ impl Disambiguation<Markup> for Choose {
                 "".into(),
                 Some(stack),
                 Affixes::default(),
+                None,
             );
         }
         for branch in rest {
@@ -109,6 +110,7 @@ impl Disambiguation<Markup> for Choose {
                     "".into(),
                     Some(stack),
                     Affixes::default(),
+                    None,
                 );
             }
         }
@@ -120,6 +122,7 @@ impl Disambiguation<Markup> for Choose {
             "".into(),
             Some(stack),
             Affixes::default(),
+            None,
         )
     }
 }
@@ -152,6 +155,7 @@ where
             "".into(),
             None,
             Affixes::default(),
+            None,
         ))
     } else {
         None

@@ -94,6 +94,7 @@ pub struct RefIrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub delimiter: Atom,
+    pub display: Option<DisplayMode>,
 }
 
 impl RefIR {
@@ -421,24 +422,26 @@ pub struct IrSeq<O: OutputFormat> {
     pub formatting: Option<Formatting>,
     pub affixes: Affixes,
     pub delimiter: Atom,
+    pub display: Option<DisplayMode>,
 }
 
 impl IrSeq<Markup> {
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
+    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, format_context: Formatting) {
         if self.contents.is_empty() {
             return;
         }
         let IrSeq {
-            contents,
-            affixes,
-            formatting: seq_formatting,
-            delimiter,
-        } = self;
+            ref contents,
+            ref affixes,
+            ref delimiter,
+            formatting,
+            display,
+        } = *self;
 
-        let stack = fmt.tag_stack(self.formatting.unwrap_or_else(Default::default));
-        let sub_formatting = seq_formatting
-            .map(|mine| formatting.override_with(mine))
-            .unwrap_or(formatting);
+        let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), display);
+        let sub_formatting = formatting
+            .map(|mine| format_context.override_with(mine))
+            .unwrap_or(format_context);
         let mut open_tags = String::new();
         let mut close_tags = String::new();
         fmt.stack_preorder(&mut open_tags, &stack);

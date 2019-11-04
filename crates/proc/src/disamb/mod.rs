@@ -305,11 +305,12 @@ pub fn graph_with_stack(
     fmt: &Markup,
     nfa: &mut Nfa,
     formatting: Option<Formatting>,
+    display: Option<DisplayMode>,
     affixes: &Affixes,
     mut spot: NodeIndex,
     f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
 ) -> NodeIndex {
-    let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default));
+    let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), display);
     let mut open_tags = String::new();
     let mut close_tags = String::new();
     fmt.stack_preorder(&mut open_tags, &stack);
@@ -355,6 +356,7 @@ pub fn add_to_graph(
                 ref contents,
                 ref affixes,
                 ref delimiter,
+                display,
             } = *seq;
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
@@ -366,7 +368,7 @@ pub fn add_to_graph(
                 })
             };
             let delim = &mkedge(&*delimiter);
-            graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
+            graph_with_stack(db, fmt, nfa, formatting, display, affixes, spot, |nfa, mut spot| {
                 let mut seen = false;
                 for x in contents {
                     if x != &RefIR::Edge(None) {
