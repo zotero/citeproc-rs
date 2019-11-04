@@ -99,6 +99,9 @@ impl IsIndependent for Variable {
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum Variable {
+    /// Not sure where this is from, but it appears sometimes.
+    #[strum(serialize = "journalAbbreviation")]
+    JournalAbbreviation,
     /// abstract of the item (e.g. the abstract of a journal article)
     Abstract,
     /// reader’s notes about the item content

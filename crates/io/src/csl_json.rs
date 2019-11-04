@@ -567,6 +567,8 @@ impl<'de> Deserialize<'de> for DateOrRange {
                 V: MapAccess<'de>,
             {
                 let mut found = None;
+                let mut found_season: Option<IdOrNumber> = None;
+                let mut found_circa: Option<IdOrNumber> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         DateType::Raw => {
@@ -581,11 +583,21 @@ impl<'de> Deserialize<'de> for DateOrRange {
                             let dp: DateParts = map.next_value()?;
                             found = Some(dp.0);
                         }
-                        DateType::Season => unimplemented!(),
-                        DateType::Circa => unimplemented!(),
+                        DateType::Season => found_season = Some(map.next_value()?),
+                        DateType::Circa => found_circa = Some(map.next_value()?),
                     }
                 }
-                found.ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
+                found
+                    .map(|found| {
+                        if let Some(_season) = found_season {
+                            // Do something?
+                        }
+                        if let Some(_circa) = found_circa {
+                            // Do something?
+                        }
+                        found
+                    })
+                    .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
             }
         }
 
