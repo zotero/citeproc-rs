@@ -71,9 +71,11 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
     let refs = if let Some(ref sort) = bib {
         // dbg!(sort);
         preordered.sort_by(|a, b| {
+            let a_cnum = citation_numbers.get(a).unwrap();
+            let b_cnum = citation_numbers.get(b).unwrap();
             let ar = db.reference_input(a.clone());
             let br = db.reference_input(b.clone());
-            bib_ordering(db, &ar, &br, sort, &style)
+            bib_ordering(db, &ar, &br, *a_cnum, *b_cnum, sort, &style)
         });
         preordered
     } else {
@@ -99,6 +101,8 @@ pub fn bib_ordering(
     db: &impl IrDatabase,
     a: &Reference,
     b: &Reference,
+    a_cnum: u32,
+    b_cnum: u32,
     sort: &Sort,
     _style: &Style,
 ) -> Ordering {
@@ -144,6 +148,7 @@ pub fn bib_ordering(
                 AnyVariable::Ordinary(v) => {
                     compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
                 }
+                AnyVariable::Number(NumberVariable::CitationNumber) => compare_demoting_none(Some(a_cnum), Some(b_cnum)),
                 AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
                 AnyVariable::Name(v) => {
                     let a_strings = crate::names::sort_strings_for_names(
