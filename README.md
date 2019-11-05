@@ -136,23 +136,56 @@ open out.html
 
 ## Running the CSL test suite
 
+`citeproc-rs` comes with a full-featured test harness for the CSL test suite, 
+based on the Rust testing infrastructure. This includes colourful diffs, and 
+support for a new YAML-based test case format. However, given that at the 
+moment not all of the tests pass, a more nuanced way of detecting failure and 
+comparing results to find regressions between revisions is needed.
+
 ```sh
 # setup once
-cargo pull-locales # if not done already
+cargo pull-locales
 cargo pull-test-suite
 
-cd crates/citeproc
+cargo test-suite --help
 
 # the whole suite in parallel
-cargo test
+cargo test-suite run
+
+# the whole suite with deterministic test execution order
+# this helps show related tests alongside one another in the terminal output
+cargo test-suite run -- --test-threads 1
 
 # for a particular test, paste the file name
-cargo test name_ParsedDroppingParticleWithApostrophe.txt
+cargo test-suite run -- name_ParsedDroppingParticleWithApostrophe.txt
 
 # for a subset of tests with some commonality in the name (this runs 8 of them)
-cargo test name_Initials
-```
+cargo test-suite run -- name_Initials
 
-Run `cargo test -- --test-threads 1` to have the tests run in a deterministic 
-order (i.e. alphabetically); this helps show related tests alongside one 
-another in the terminal output. Run `cargo test -- --help` for more options.
+# store a test run for comparison
+# this will also save a copy in 'branch_name' and 'commit_hash' if your working 
+# directory is clean
+cargo test-suite store [name] [-- filter_pattern]
+cargo test-suite store disamb -- disamb # all of the disamb tests
+
+# diff two named, commit-named or commit-hash test results
+# outputs any regressions and fixed test cases
+# exits with code 1 if any regressions
+cargo test-suite diff master # compares to ..current
+
+# only checks the intersection of the tests, especially if you're using a filter
+cargo test-suite diff master..disamb
+# test result: 0 regressions, 0 new passing tests, 0 new ignores, out of 107 intersecting tests
+
+# saves in 'current'
+cargo test-suite store
+# copies 'current' to 'blessed'
+cargo test-suite bless
+# (make some changes)
+# compares blessed..current
+cargo test-suite store && cargo test-suite diff
+
+# in a clean repo, go back in time to a commit and store the captured
+# result by its commit SHA and an optional name, then checkout HEAD again
+cargo test-suite checkout-store [name]
+```

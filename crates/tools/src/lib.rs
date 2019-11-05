@@ -290,10 +290,25 @@ fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
     ))
 }
 
-fn get_test_stdout() -> Result<Vec<u8>, Error> {
+fn get_cmd_run(rest: &[String]) -> String {
+    let rest = rest.join(" ");
+    let mut cmd = "cargo +nightly test --package citeproc --test suite -- ".to_owned();
+    cmd.push_str(&rest);
+    cmd
+}
+
+fn get_cmd(rest: &[String]) -> String {
+    let rest = rest.join(" ");
+    let mut cmd = "cargo +nightly test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json -- ".to_owned();
+    cmd.push_str(&rest);
+    cmd
+}
+
+fn get_test_stdout(rest: &[String]) -> Result<Vec<u8>, Error> {
+    let cmd = get_cmd(rest);
     let child = Command::new("sh")
         .arg("-c")
-        .arg("cargo +nightly test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json")
+        .arg(&cmd)
         .stderr(Stdio::inherit())
         .output()?;
     // Check it's parseable
@@ -303,8 +318,20 @@ fn get_test_stdout() -> Result<Vec<u8>, Error> {
     Ok(child.stdout)
 }
 
-pub fn log_tests(name: &str) -> Result<(), Error> {
-    let stdout = get_test_stdout()?;
+pub fn run(rest: Vec<String>) -> Result<(), Error> {
+    let cmd = get_cmd_run(&rest);
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(&cmd)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    child.wait()?;
+    Ok(())
+}
+
+pub fn log_tests(name: &str, rest: Vec<String>) -> Result<(), Error> {
+    let stdout = get_test_stdout(&rest)?;
     let repo = RepoInfo::get()?;
     write_snapshot(&snapshot_path(name)?, &stdout)?;
     if let Some((branch, commit)) = repo.current_branch_commit()? {
@@ -322,7 +349,9 @@ pub fn store_at_rev(rev: &str, name: Option<&str>) -> Result<(), Error> {
     // Wait until the checkout has returned to HEAD before writing anything in .snapshot
     let stdout = repo.run_with_checkout(rev, |cid| {
         commit_id = Some(cid);
-        get_test_stdout()
+        // Don't provide any -- args; we're going back in time, and you run intersect() anyway so
+        // filters can be done back at HEAD.
+        get_test_stdout(&[][..])
     })?;
     let commit = commit_id.unwrap();
     let output = &stdout;

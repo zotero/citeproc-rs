@@ -49,16 +49,28 @@ impl std::str::FromStr for TestSuiteDiff {
     }
 }
 
+
 #[derive(StructOpt)]
 enum TestSuiteSub {
-    /// Runs the test suite and saves the result in .snapshots.
+    /// Just run the test suite.
     /// Runs by default if no subcommand provided.
+    #[structopt(setting = structopt::clap::AppSettings::TrailingVarArg)]
+    #[structopt(setting = structopt::clap::AppSettings::AllowLeadingHyphen)]
+    Run {
+        /// Any additional arguments are passed to the test harness (i.e. with -- --args)
+        rest: Vec<String>,
+    },
+    /// Runs the test suite and saves the result in .snapshots.
     /// Also saves the result as "$current_git_commit_hash", if the Git working directory is clean
     /// (ignoring untracked files).
+    #[structopt(setting = structopt::clap::AppSettings::TrailingVarArg)]
+    #[structopt(setting = structopt::clap::AppSettings::AllowLeadingHyphen)]
     Store {
         /// The name to store the result in.
         #[structopt(default_value = "current")]
         to: String,
+        /// Any additional arguments are passed to the test harness (i.e. with -- --args)
+        rest: Vec<String>,
     },
     /// If your working directory is clean, attempts to checkout a provided git ref and store a
     /// result from there.
@@ -107,8 +119,9 @@ fn main() -> Result<(), Error> {
         Tools::PullTestSuite => pull_test_suite(),
         Tools::PullLocales => pull_locales(),
         Tools::TestSuite(test_suite) => match test_suite.sub {
-            None => log_tests("current"),
-            Some(TestSuiteSub::Store { to }) => log_tests(&to),
+            None => run(Vec::new()),
+            Some(TestSuiteSub::Run { rest, .. }) => run(rest),
+            Some(TestSuiteSub::Store { to, rest, .. }) => log_tests(&to, rest),
             Some(TestSuiteSub::CheckoutStore { rev, to }) => {
                 store_at_rev(&rev, to.as_ref().map(|x| x.as_ref()))
             }
