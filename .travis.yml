@@ -16,6 +16,10 @@ branches:
 matrix:
   include:
   - rust: nightly
+    env:
+      - AWS_ACCESS_KEY_ID=$ARTIFACTS_KEY
+      - AWS_SECRET_ACCESS_KEY=$ARTIFACTS_SECRET
+      - AWS_DEFAULT_REGION=ap-southeast-2
     before_script:
       - pip install --user awscli
       - mkdir -p .snapshots/branches
@@ -37,7 +41,6 @@ matrix:
           - .snapshots/commits/$TRAVIS_COMMIT
         target_paths:
           - /
-        debug: true
 
   # new stage, so only runs if the previous one succeeded
   - stage: wasm-deploy
