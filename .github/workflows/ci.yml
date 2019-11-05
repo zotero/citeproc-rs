@@ -99,8 +99,10 @@ jobs:
         run: cd crates/wasm/js-demo && yarn build -p
       - name: Build and Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: JamesIves/github-pages-deploy-action@master
+        uses: JamesIves/github-pages-deploy-action@beta3
         env:
-          BASE_BRANCH: master
           BRANCH: gh-pages
+          ACCESS_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           FOLDER: crates/wasm/js-demo/dist
+          # only available in beta3: https://github.com/JamesIves/github-pages-deploy-action/issues/21
+          GITHUB_REPOSITORY: cormacrelf/citeproc-wasm-demo
