@@ -1,11 +1,9 @@
 name: CI
-on: [pull_request, push]
-# apparently this isn't running on master
-# on:
-  # pull_request: {}
-  # push: 
-    # branches:
-    # - master
+on:
+  pull_request: {}
+  push: 
+    branches:
+    - master
 jobs:
   regressions:
     name: CSL Test Suite Regressions
@@ -19,6 +17,9 @@ jobs:
         run: |
           echo "##[set-output name=head;]$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')"
           GITHUB_BASE=${{ github.base_ref }}
+          if test -z "$GITHUB_BASE"; then
+            GITHUB_BASE=$GITHUB_REF
+          fi
           echo "##[set-output name=base;]$(echo ${GITHUB_BASE#refs/heads/} | tr '/' '-')"
         id: branch
       - name: Download base output
