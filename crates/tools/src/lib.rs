@@ -163,6 +163,7 @@ impl TestSummary {
 
     fn diff(&self, base: &TestSummary) -> TestDiff<'_> {
         let common_keys = base.test_names.intersection(&self.test_names);
+        let count = common_keys.clone().count();
         let mut regressions = Vec::new();
         let mut improvements = Vec::new();
         let mut new_ignores = Vec::new();
@@ -186,6 +187,7 @@ impl TestSummary {
             regressions,
             improvements,
             new_ignores,
+            count,
         }
     }
 }
@@ -194,10 +196,12 @@ pub struct TestDiff<'a> {
     regressions: Vec<&'a Test>,
     improvements: Vec<&'a Test>,
     new_ignores: Vec<&'a Test>,
+    count: usize,
 }
 
 impl TestDiff<'_> {
-    fn print(&self) -> usize {
+    // True if should fail
+    fn print(&self) -> bool {
         for test in &self.regressions {
             println!(
                 "regression: {}\noutput:\n{}",
@@ -212,12 +216,13 @@ impl TestDiff<'_> {
             println!("newly ignored: {}", &test.name);
         }
         println!(
-            "{} regressions, {} new passing tests, {} new ignores",
+            "{} regressions, {} new passing tests, {} new ignores, out of {} intersecting tests",
             self.regressions.len(),
             self.improvements.len(),
-            self.new_ignores.len()
+            self.new_ignores.len(),
+            self.count
         );
-        self.regressions.len()
+        self.regressions.len() > 0 || self.count == 0
     }
 }
 
@@ -338,8 +343,8 @@ pub fn diff_tests(base_name: &str, current_name: &str) -> Result<(), Error> {
     let blessed = read_snapshot(base_name)?;
     let current = read_snapshot(current_name)?;
     let diff = current.diff(&blessed);
-    let num_regressions = diff.print();
-    if num_regressions > 0 {
+    let should_fail = diff.print();
+    if should_fail {
         std::process::exit(1);
     }
     Ok(())
