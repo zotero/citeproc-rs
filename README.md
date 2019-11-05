@@ -140,7 +140,9 @@ open out.html
 based on the Rust testing infrastructure. This includes colourful diffs, and 
 support for a new YAML-based test case format. However, given that at the 
 moment not all of the tests pass, a more nuanced way of detecting failure and 
-comparing results to find regressions between revisions is needed.
+comparing results to find regressions between revisions was necessary. So now 
+it can store and diff test runs. Pull requests that cause regressions (`Ok => 
+Failure`) compared to master will fail.
 
 ```sh
 # setup once
