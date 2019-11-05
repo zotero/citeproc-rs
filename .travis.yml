@@ -25,6 +25,7 @@ matrix:
       # check for regressions
       # travis doesn't set HEAD to a branch
       # 'diff' always succeeds on master branch, as those refs are identical
+      - cargo pull-locales
       - cargo test-suite store
       - cp .snapshots/current .snapshots/branches/$TRAVIS_BRANCH
       - cargo test-suite diff master..current
