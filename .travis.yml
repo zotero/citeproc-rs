@@ -16,29 +16,37 @@ branches:
 matrix:
   include:
   - rust: nightly
+    env:
+      - AWS_ACCESS_KEY_ID=$ARTIFACTS_KEY
+      - AWS_SECRET_ACCESS_KEY=$ARTIFACTS_SECRET
+      - AWS_DEFAULT_REGION=ap-southeast-2
     before_script:
       - pip install --user awscli
       - mkdir -p .snapshots/branches
-      - aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/master .snapshots/branches/master
+      - aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$TRAVIS_BRANCH .snapshots/branches/$TRAVIS_BRANCH
 
     script:
       # check for regressions
-      # travis doesn't set HEAD to a branch
+      # travis doesn't set HEAD to a branch, for whatever reason
       # 'diff' always succeeds on master branch, as those refs are identical
       - cargo pull-locales
       - cargo test-suite store
-      - cp .snapshots/current .snapshots/branches/$TRAVIS_BRANCH
+      - if test -z "$TRAVIS_PULL_REQUEST"; then cp .snapshots/current .snapshots/branches/$TRAVIS_BRANCH; fi
       - cargo test-suite diff master..current
+
+    after_script:
+      - if test -n "$TRAVIS_PULL_REQUEST"; then aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/pull-$TRAVIS_PULL_REQUEST; fi
+      - if test -n "$TRAVIS_PULL_REQUEST"; then aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$TRAVIS_COMMIT; fi
 
     addons:
       artifacts:
         s3_region: "ap-southeast-2"
         paths:
-          # artifacts only run on master
+          # artifacts only get uploaded on branch push builds
+          - .snapshots/branches/$TRAVIS_BRANCH
           - .snapshots/commits/$TRAVIS_COMMIT
         target_paths:
           - /
-        debug: true
 
   # new stage, so only runs if the previous one succeeded
   - stage: wasm-deploy
