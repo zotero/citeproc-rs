@@ -1,14 +1,50 @@
 use std::io::prelude::*;
 use std::fs::File;
 use std::process::{Command, Stdio};
-use std::path::PathBuf;
-use anyhow::Error;
+use std::path::{PathBuf, Path};
+use anyhow::{Error, anyhow};
 use cargo_suity::results::{parse_test_results, Test, Event, EventKind};
 use std::collections::{HashMap, HashSet};
-// use git2::Repository;
+use git2::{Repository, Branch};
 
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+
+struct RepoInfo {
+    repo: Repository,
+}
+
+impl RepoInfo {
+    fn get() -> Result<Self, Error> {
+        let repo = Repository::open(workspace_root())?;
+        Ok(RepoInfo {
+            repo,
+        })
+    }
+    fn is_clean(&self) -> Result<bool, Error> {
+        // i.e. not currently rebasing, etc.
+        if self.repo.state() != git2::RepositoryState::Clean {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+    fn current_branch_commit(&self) -> Result<(Option<String>, String), Error> {
+        if !self.is_clean()? {
+            return Err(anyhow!("Not checked out, clean, on a branch."));
+        }
+        let head = self.repo.head()?;
+        let commit = head.peel_to_commit()?;
+        let commit = commit.id().to_string();
+        let mut found_branch = None;
+        if head.is_branch() {
+            let branch = Branch::wrap(head);
+            if let Some(name) = branch.name()? {
+                found_branch = Some(String::from(name));
+            }
+        }
+        Ok((found_branch, commit))
+    }
+}
 
 static WORKSPACE_ROOT: Lazy<Mutex<PathBuf>> = Lazy::new(|| {
     let metadata = cargo_metadata::MetadataCommand::new().exec().expect("Unable to read cargo metadata");
@@ -125,16 +161,51 @@ fn snapshot_path(name: &str) -> Result<PathBuf, Error> {
     Ok(path)
 }
 
-fn write_snapshot(name: &str, bytes: &[u8]) -> Result<(), Error> {
-    let mut file = File::create(&snapshot_path(name)?)?;
+fn snapshot_path_branch(name: &str) -> Result<PathBuf, Error> {
+    let mut path = workspace_root();
+    path.push(".snapshots");
+    path.push("branches");
+    std::fs::create_dir_all(&path)?;
+    path.push(name);
+    Ok(path)
+}
+
+fn snapshot_path_commit(name: &str) -> Result<PathBuf, Error> {
+    let mut path = workspace_root();
+    path.push(".snapshots");
+    path.push("commit");
+    std::fs::create_dir_all(&path)?;
+    path.push(name);
+    Ok(path)
+}
+
+fn write_snapshot(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let mut file = File::create(path)?;
     file.write_all(bytes)?;
     Ok(())
 }
 
 fn read_snapshot(name: &str) -> Result<TestSummary, Error> {
-    let file = std::fs::read_to_string(&snapshot_path(name)?)?;
+    let file = std::fs::read_to_string(&follow_snapshot_ref(name)?)?;
     let base_result: Result<Vec<Event>, _> = file.lines().map(serde_json::from_str).collect();
     Ok(TestSummary::from_events(base_result?))
+}
+
+fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
+    // named takes precedence
+    let named_path = snapshot_path(s)?;
+    if named_path.exists() {
+        return Ok(named_path);
+    }
+    let branch_path = snapshot_path_branch(s)?;
+    if branch_path.exists() {
+        return Ok(branch_path);
+    }
+    let commit_path = snapshot_path_commit(s)?;
+    if commit_path.exists() {
+        return Ok(commit_path);
+    }
+    Err(anyhow!("Snapshot ref {} did not point to a stored snapshot", s))
 }
 
 pub fn log_tests(name: &str) -> Result<(), Error> {
@@ -145,14 +216,23 @@ pub fn log_tests(name: &str) -> Result<(), Error> {
         .stderr(Stdio::inherit())
         .output()?;
     // Check it's parseable
-    let output = std::str::from_utf8(&child.stdout)?;
-    let _events = parse_test_results(&output); // panics with Result::unwrap if not parseable by suity
-    write_snapshot(name, &child.stdout)?;
+    let output_str = std::str::from_utf8(&child.stdout)?;
+    let _events = parse_test_results(&output_str); // panics with Result::unwrap if not parseable by suity
+    let repo = RepoInfo::get()?;
+    let output = &child.stdout;
+    write_snapshot(&snapshot_path(name)?, output)?;
+    if repo.is_clean()? {
+        let (branch, commit) = repo.current_branch_commit()?;
+        write_snapshot(&snapshot_path_commit(&commit)?, output)?;
+        if let Some(branch) = branch {
+            write_snapshot(&snapshot_path_branch(&branch)?, output)?;
+        }
+    }
     Ok(())
 }
 
 pub fn bless(name: &str) -> Result<(), Error> {
-    let current_path = snapshot_path(name)?;
+    let current_path = follow_snapshot_ref(name)?;
     let blessed_path = snapshot_path("blessed")?;
     std::fs::copy(current_path, blessed_path)?;
     Ok(())
