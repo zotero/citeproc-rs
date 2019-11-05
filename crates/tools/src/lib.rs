@@ -246,7 +246,7 @@ fn snapshot_path_branch(name: &str) -> Result<PathBuf, Error> {
 fn snapshot_path_commit(name: &str) -> Result<PathBuf, Error> {
     let mut path = workspace_root();
     path.push(".snapshots");
-    path.push("commit");
+    path.push("commits");
     std::fs::create_dir_all(&path)?;
     path.push(name);
     Ok(path)

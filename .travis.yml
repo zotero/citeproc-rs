@@ -24,10 +24,16 @@ matrix:
     before_script:
       - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
     script:
+      # check for regressions
+      # 'diff' always succeeds on master branch, as those refs are identical
+      - cargo test-suite store
+      - cargo test-suite diff master..current
+
       - (cd crates/wasm/js-demo && yarn && yarn build)
       # - cargo test --all
       # - (cd wasm && wasm-pack build)
       # - (cd wasm && wasm-pack test --firefox --headless)
+
     deploy:
       provider: pages
       skip_cleanup: true
@@ -36,6 +42,15 @@ matrix:
       github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
       on:
         branch: master
+    addons:
+      artifacts:
+        s3_region: "ap-southeast-2"
+        paths:
+          - .snapshots/branches/master
+          - .snapshots/commits/$TRAVIS_COMMIT
+        target_paths:
+          - /
+        debug: true
 
   # # Builds with wasm-pack.
   # - rust: beta
