@@ -23,16 +23,20 @@ impl std::str::FromStr for TestSuiteDiff {
         let mut second = None;
         for bit in bits {
             if first.is_none() {
-                first = Some(bit);
+                if !bit.is_empty() {
+                    first = Some(bit);
+                }
             } else if second.is_none() {
-                second = Some(bit);
+                if !bit.is_empty() {
+                    second = Some(bit);
+                }
             } else {
                 return Err(anyhow!("could not parse diff range"));
             }
         }
         match (first, second) {
             (Some(base), Some(to)) => Ok(TestSuiteDiff { base, to }),
-            (Some(to), None) => Ok(TestSuiteDiff { base: "blessed".into(), to }),
+            (Some(base), None) => Ok(TestSuiteDiff { base, to: "current".into() }),
             (None, None) => Ok(TestSuiteDiff::default()),
             _ => unreachable!(),
         }
@@ -68,7 +72,8 @@ enum TestSuiteSub {
     /// Compare result runs for regressions. Exits with code 1 if any regressions found.
     ///
     /// Syntax: base..compare, where each of base and compare have been stored in .snapshots already.
-    ///         compare, where the base defaults to 'blessed' (see bless command)
+    ///         base, where the compare defaults to 'current'
+    ///         ..compare, where the base defaults to 'blessed' (see bless subcommand)
     /// Default: bless..current
     Diff {
         #[structopt(parse(try_from_str))]
