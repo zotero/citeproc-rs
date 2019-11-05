@@ -41,11 +41,26 @@ impl std::str::FromStr for TestSuiteDiff {
 
 #[derive(StructOpt)]
 enum TestSuiteSub {
+    /// Runs the test suite and saves the result in .snapshots
+    /// Runs by default if no subcommand provided.
+    /// Also saves the result as "$current_git_commit_hash", if the Git working directory is clean
+    /// (ignoring untracked files).
     Store {
-        #[structopt(short, long)]
-        to: Option<String>,
+        /// The name to store the result in.
+        #[structopt(default_value = "current")]
+        to: String,
     },
-    Bless,
+    /// Set the default result to compare to
+    Bless {
+        /// The stored result name to treat as "blessed". Must exist in .snapshots already.
+        #[structopt(default_value = "current")]
+        name: String,
+    },
+    /// Compare result runs for regressions. Exits with code 1 if any regressions found.
+    ///
+    /// Syntax: base..compare, where each of base and compare have been stored in .snapshots already.
+    ///         compare, where the base defaults to 'blessed' (see bless command)
+    /// Default: bless..current
     Diff {
         #[structopt(parse(try_from_str))]
         opts: Option<TestSuiteDiff>,
@@ -72,9 +87,9 @@ fn main() -> Result<(), Error> {
         Tools::PullTestSuite => pull_test_suite(),
         Tools::PullLocales => pull_locales(),
         Tools::TestSuite(test_suite) => match test_suite.sub {
-            None => log_tests(None),
-            Some(TestSuiteSub::Store { to }) => log_tests(to.as_ref().map(|x| x.as_ref())),
-            Some(TestSuiteSub::Bless) => bless_current(),
+            None => log_tests("current"),
+            Some(TestSuiteSub::Store { to }) => log_tests(&to),
+            Some(TestSuiteSub::Bless { name }) => bless(&name),
             Some(TestSuiteSub::Diff { opts: Some(TestSuiteDiff { base, to, }) }) => diff_tests(&base, &to),
             Some(TestSuiteSub::Diff { opts: None }) => diff_tests("blessed", "current"),
         }

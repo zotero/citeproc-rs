@@ -7,9 +7,16 @@ use cargo_suity::results::{parse_test_results, Test, Event, EventKind};
 use std::collections::{HashMap, HashSet};
 // use git2::Repository;
 
-fn workspace_root() -> Result<PathBuf, Error> {
-    let metadata = cargo_metadata::MetadataCommand::new().exec()?;
-    Ok(metadata.workspace_root)
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+static WORKSPACE_ROOT: Lazy<Mutex<PathBuf>> = Lazy::new(|| {
+    let metadata = cargo_metadata::MetadataCommand::new().exec().expect("Unable to read cargo metadata");
+    Mutex::new(metadata.workspace_root)
+});
+
+fn workspace_root() -> PathBuf {
+    WORKSPACE_ROOT.lock().unwrap().clone()
 }
 
 #[derive(Default, Debug)]
@@ -111,7 +118,7 @@ impl TestDiff<'_> {
 // }
 
 fn snapshot_path(name: &str) -> Result<PathBuf, Error> {
-    let mut path = workspace_root()?;
+    let mut path = workspace_root();
     path.push(".snapshots");
     std::fs::create_dir_all(&path)?;
     path.push(name);
@@ -130,7 +137,7 @@ fn read_snapshot(name: &str) -> Result<TestSummary, Error> {
     Ok(TestSummary::from_events(base_result?))
 }
 
-pub fn log_tests(name: Option<&str>) -> Result<(), Error> {
+pub fn log_tests(name: &str) -> Result<(), Error> {
     let child = Command::new("sh")
         .arg("-c")
         // .arg("cargo test --package citeproc --test suite | grep '^test ' | sort")
@@ -140,12 +147,12 @@ pub fn log_tests(name: Option<&str>) -> Result<(), Error> {
     // Check it's parseable
     let output = std::str::from_utf8(&child.stdout)?;
     let _events = parse_test_results(&output); // panics with Result::unwrap if not parseable by suity
-    write_snapshot(name.unwrap_or("current"), &child.stdout)?;
+    write_snapshot(name, &child.stdout)?;
     Ok(())
 }
 
-pub fn bless_current() -> Result<(), Error> {
-    let current_path = snapshot_path("current")?;
+pub fn bless(name: &str) -> Result<(), Error> {
+    let current_path = snapshot_path(name)?;
     let blessed_path = snapshot_path("blessed")?;
     std::fs::copy(current_path, blessed_path)?;
     Ok(())
