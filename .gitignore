@@ -5,3 +5,4 @@ target
 wasm-pack.log
 *.bench
 .DS_Store
+.snapshots

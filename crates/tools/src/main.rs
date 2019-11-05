@@ -1,19 +1,122 @@
-use clap::{App, SubCommand};
-use tools::{pull_locales, pull_styles, pull_test_suite};
+use anyhow::{anyhow, Error};
+use structopt::StructOpt;
+use tools::*;
 // use std::{env, path::PathBuf};
 
-fn main() -> Result<(), ()> {
-    let matches = App::new("tasks")
-        .setting(clap::AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(SubCommand::with_name("pull-test-suite"))
-        .subcommand(SubCommand::with_name("pull-locales"))
-        .subcommand(SubCommand::with_name("pull-styles"))
-        .get_matches();
-    match matches.subcommand() {
-        ("pull-test-suite", Some(_matches)) => pull_test_suite(),
-        ("pull-locales", Some(_matches)) => pull_locales(),
-        ("pull-styles", Some(_matches)) => pull_styles(),
-        _ => unreachable!(),
+#[derive(StructOpt)]
+struct TestSuiteDiff {
+    base: String,
+    to: String,
+}
+
+impl Default for TestSuiteDiff {
+    fn default() -> Self {
+        TestSuiteDiff {
+            base: "blessed".into(),
+            to: "current".into(),
+        }
     }
-    Ok(())
+}
+
+impl std::str::FromStr for TestSuiteDiff {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bits: Vec<_> = s.split("..").map(|x| x.to_owned()).collect();
+        let mut first = None;
+        let mut second = None;
+        for bit in bits {
+            if first.is_none() {
+                if !bit.is_empty() {
+                    first = Some(bit);
+                }
+            } else if second.is_none() {
+                if !bit.is_empty() {
+                    second = Some(bit);
+                }
+            } else {
+                return Err(anyhow!("could not parse diff range"));
+            }
+        }
+        match (first, second) {
+            (Some(base), Some(to)) => Ok(TestSuiteDiff { base, to }),
+            (Some(base), None) => Ok(TestSuiteDiff {
+                base,
+                to: "current".into(),
+            }),
+            (None, None) => Ok(TestSuiteDiff::default()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(StructOpt)]
+enum TestSuiteSub {
+    /// Runs the test suite and saves the result in .snapshots.
+    /// Runs by default if no subcommand provided.
+    /// Also saves the result as "$current_git_commit_hash", if the Git working directory is clean
+    /// (ignoring untracked files).
+    Store {
+        /// The name to store the result in.
+        #[structopt(default_value = "current")]
+        to: String,
+    },
+    /// If your working directory is clean, attempts to checkout a provided git ref and store a
+    /// result from there.
+    CheckoutStore {
+        /// A commit-ish to checkout
+        rev: String,
+        /// An optional name to store the result in as well
+        #[structopt(long)]
+        to: Option<String>,
+    },
+    /// Set the default result to compare to
+    Bless {
+        /// The stored result name to treat as "blessed". Must exist in .snapshots already.
+        #[structopt(default_value = "current")]
+        name: String,
+    },
+    /// Compare result runs for regressions. Exits with code 1 if any regressions found.
+    ///
+    /// Syntax: base..compare, where each of base and compare have been stored in .snapshots already.
+    ///         base, where the compare defaults to 'current'
+    ///         ..compare, where the base defaults to 'blessed' (see bless subcommand)
+    /// Default: bless..current
+    Diff {
+        #[structopt(parse(try_from_str))]
+        opts: Option<TestSuiteDiff>,
+    },
+}
+
+#[derive(StructOpt)]
+#[structopt(about = "run the test suite and compare the results for regressions")]
+struct TestSuite {
+    #[structopt(subcommand)]
+    sub: Option<TestSuiteSub>,
+}
+
+#[derive(StructOpt)]
+enum Tools {
+    PullTestSuite,
+    PullLocales,
+    TestSuite(TestSuite),
+}
+
+fn main() -> Result<(), Error> {
+    let opt = Tools::from_args();
+    match opt {
+        Tools::PullTestSuite => pull_test_suite(),
+        Tools::PullLocales => pull_locales(),
+        Tools::TestSuite(test_suite) => match test_suite.sub {
+            None => log_tests("current"),
+            Some(TestSuiteSub::Store { to }) => log_tests(&to),
+            Some(TestSuiteSub::CheckoutStore { rev, to }) => {
+                store_at_rev(&rev, to.as_ref().map(|x| x.as_ref()))
+            }
+            Some(TestSuiteSub::Bless { name }) => bless(&name),
+            Some(TestSuiteSub::Diff {
+                opts: Some(TestSuiteDiff { base, to }),
+            }) => diff_tests(&base, &to),
+            Some(TestSuiteSub::Diff { opts: None }) => diff_tests("blessed", "current"),
+        },
+    }
 }
