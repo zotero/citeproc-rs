@@ -1,6 +1,6 @@
-use tools::*;
-use anyhow::{Error, anyhow};
+use anyhow::{anyhow, Error};
 use structopt::StructOpt;
+use tools::*;
 // use std::{env, path::PathBuf};
 
 #[derive(StructOpt)]
@@ -11,7 +11,10 @@ struct TestSuiteDiff {
 
 impl Default for TestSuiteDiff {
     fn default() -> Self {
-        TestSuiteDiff { base: "blessed".into(), to: "current".into() }
+        TestSuiteDiff {
+            base: "blessed".into(),
+            to: "current".into(),
+        }
     }
 }
 
@@ -36,7 +39,10 @@ impl std::str::FromStr for TestSuiteDiff {
         }
         match (first, second) {
             (Some(base), Some(to)) => Ok(TestSuiteDiff { base, to }),
-            (Some(base), None) => Ok(TestSuiteDiff { base, to: "current".into() }),
+            (Some(base), None) => Ok(TestSuiteDiff {
+                base,
+                to: "current".into(),
+            }),
             (None, None) => Ok(TestSuiteDiff::default()),
             _ => unreachable!(),
         }
@@ -78,7 +84,7 @@ enum TestSuiteSub {
     Diff {
         #[structopt(parse(try_from_str))]
         opts: Option<TestSuiteDiff>,
-    }
+    },
 }
 
 #[derive(StructOpt)]
@@ -92,7 +98,7 @@ struct TestSuite {
 enum Tools {
     PullTestSuite,
     PullLocales,
-    TestSuite(TestSuite)
+    TestSuite(TestSuite),
 }
 
 fn main() -> Result<(), Error> {
@@ -103,10 +109,14 @@ fn main() -> Result<(), Error> {
         Tools::TestSuite(test_suite) => match test_suite.sub {
             None => log_tests("current"),
             Some(TestSuiteSub::Store { to }) => log_tests(&to),
-            Some(TestSuiteSub::CheckoutStore { rev, to }) => store_at_rev(&rev, to.as_ref().map(|x| x.as_ref())),
+            Some(TestSuiteSub::CheckoutStore { rev, to }) => {
+                store_at_rev(&rev, to.as_ref().map(|x| x.as_ref()))
+            }
             Some(TestSuiteSub::Bless { name }) => bless(&name),
-            Some(TestSuiteSub::Diff { opts: Some(TestSuiteDiff { base, to, }) }) => diff_tests(&base, &to),
+            Some(TestSuiteSub::Diff {
+                opts: Some(TestSuiteDiff { base, to }),
+            }) => diff_tests(&base, &to),
             Some(TestSuiteSub::Diff { opts: None }) => diff_tests("blessed", "current"),
-        }
+        },
     }
 }
