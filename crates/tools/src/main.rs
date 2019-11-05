@@ -41,7 +41,7 @@ impl std::str::FromStr for TestSuiteDiff {
 
 #[derive(StructOpt)]
 enum TestSuiteSub {
-    /// Runs the test suite and saves the result in .snapshots
+    /// Runs the test suite and saves the result in .snapshots.
     /// Runs by default if no subcommand provided.
     /// Also saves the result as "$current_git_commit_hash", if the Git working directory is clean
     /// (ignoring untracked files).
@@ -49,6 +49,15 @@ enum TestSuiteSub {
         /// The name to store the result in.
         #[structopt(default_value = "current")]
         to: String,
+    },
+    /// If your working directory is clean, attempts to checkout a provided git ref and store a
+    /// result from there.
+    CheckoutStore {
+        /// A commit-ish to checkout
+        rev: String,
+        /// An optional name to store the result in as well
+        #[structopt(long)]
+        to: Option<String>,
     },
     /// Set the default result to compare to
     Bless {
@@ -89,6 +98,7 @@ fn main() -> Result<(), Error> {
         Tools::TestSuite(test_suite) => match test_suite.sub {
             None => log_tests("current"),
             Some(TestSuiteSub::Store { to }) => log_tests(&to),
+            Some(TestSuiteSub::CheckoutStore { rev, to }) => store_at_rev(&rev, to.as_ref().map(|x| x.as_ref())),
             Some(TestSuiteSub::Bless { name }) => bless(&name),
             Some(TestSuiteSub::Diff { opts: Some(TestSuiteDiff { base, to, }) }) => diff_tests(&base, &to),
             Some(TestSuiteSub::Diff { opts: None }) => diff_tests("blessed", "current"),

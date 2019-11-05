@@ -5,32 +5,43 @@ use std::path::{PathBuf, Path};
 use anyhow::{Error, anyhow};
 use cargo_suity::results::{parse_test_results, Test, Event, EventKind};
 use std::collections::{HashMap, HashSet};
-use git2::{Repository, Branch};
+use git2::{Repository, Branch, StatusOptions, Tree};
 
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
 struct RepoInfo {
     repo: Repository,
+    clean: bool,
 }
 
 impl RepoInfo {
     fn get() -> Result<Self, Error> {
         let repo = Repository::open(workspace_root())?;
-        Ok(RepoInfo {
+        let mut info = RepoInfo {
             repo,
-        })
+            clean: false,
+        };
+        info.clean = info.is_clean()?;
+        Ok(info)
     }
     fn is_clean(&self) -> Result<bool, Error> {
         // i.e. not currently rebasing, etc.
         if self.repo.state() != git2::RepositoryState::Clean {
             return Ok(false);
         }
-        Ok(true)
+        let mut options = StatusOptions::new();
+        options.include_untracked(false);
+        options.include_ignored(false);
+        let statuses = self.repo.statuses(Some(&mut options))?;
+        // for stat in statuses.iter() {
+        //     println!("{:?}, {:?}", stat.status(), stat.path());
+        // }
+        Ok(statuses.is_empty())
     }
-    fn current_branch_commit(&self) -> Result<(Option<String>, String), Error> {
-        if !self.is_clean()? {
-            return Err(anyhow!("Not checked out, clean, on a branch."));
+    fn current_branch_commit(&self) -> Result<Option<(Option<String>, String)>, Error> {
+        if !self.clean {
+            return Ok(None);
         }
         let head = self.repo.head()?;
         let commit = head.peel_to_commit()?;
@@ -42,7 +53,40 @@ impl RepoInfo {
                 found_branch = Some(String::from(name));
             }
         }
-        Ok((found_branch, commit))
+        Ok(Some((found_branch, commit)))
+    }
+    // f is called with the commit hash that the revision parsed to
+    fn run_with_checkout<T>(&self, rev_to_parse: &str, mut f: impl FnMut(String) -> Result<T, Error>) -> Result<T, Error> {
+        if !self.clean {
+            return Err(anyhow!("unable to checkout {}; repo was not clean", rev_to_parse));
+        }
+        let head = self.repo.head()?;
+        let rev = self.repo.revparse_single(rev_to_parse)?;
+        let rev_commit = rev.peel_to_commit()?;
+        let _guard = CheckoutGuard {
+            repo: &self.repo,
+            head: head.name().ok_or_else(|| anyhow!("head.name was not unicode"))?,
+            head_tree: head.peel_to_tree()?,
+        };
+        println!("------------------- CHECKING OUT {} -------------------", rev_to_parse);
+        self.repo.checkout_tree(&rev, None)?;
+        let commit_id = rev_commit.id().to_string();
+        self.repo.set_head_detached(rev_commit.id())?;
+        let o = f(commit_id)?;
+        Ok(o)
+    }
+}
+
+struct CheckoutGuard<'a> {
+    repo: &'a Repository,
+    head: &'a str,
+    head_tree: Tree<'a>,
+}
+
+impl<'a> Drop for CheckoutGuard<'a> {
+    fn drop(&mut self) {
+        self.repo.checkout_tree(self.head_tree.as_object(), None).expect("could not reverse checkout in CheckoutGuard::drop");
+        self.repo.set_head(self.head).expect("unable to set head in CheckoutGuard::drop");
     }
 }
 
@@ -208,25 +252,44 @@ fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
     Err(anyhow!("Snapshot ref {} did not point to a stored snapshot", s))
 }
 
-pub fn log_tests(name: &str) -> Result<(), Error> {
+fn get_test_stdout() -> Result<Vec<u8>, Error> {
     let child = Command::new("sh")
         .arg("-c")
-        // .arg("cargo test --package citeproc --test suite | grep '^test ' | sort")
         .arg("cargo +nightly test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json")
         .stderr(Stdio::inherit())
         .output()?;
     // Check it's parseable
     let output_str = std::str::from_utf8(&child.stdout)?;
     let _events = parse_test_results(&output_str); // panics with Result::unwrap if not parseable by suity
+    Ok(child.stdout)
+}
+
+pub fn log_tests(name: &str) -> Result<(), Error> {
+    let stdout = get_test_stdout()?;
     let repo = RepoInfo::get()?;
-    let output = &child.stdout;
-    write_snapshot(&snapshot_path(name)?, output)?;
-    if repo.is_clean()? {
-        let (branch, commit) = repo.current_branch_commit()?;
-        write_snapshot(&snapshot_path_commit(&commit)?, output)?;
+    write_snapshot(&snapshot_path(name)?, &stdout)?;
+    if let Some((branch, commit)) = repo.current_branch_commit()? {
+        write_snapshot(&snapshot_path_commit(&commit)?, &stdout)?;
         if let Some(branch) = branch {
-            write_snapshot(&snapshot_path_branch(&branch)?, output)?;
+            write_snapshot(&snapshot_path_branch(&branch)?, &stdout)?;
         }
+    }
+    Ok(())
+}
+
+pub fn store_at_rev(rev: &str, name: Option<&str>) -> Result<(), Error> {
+    let repo = RepoInfo::get()?;
+    let mut commit_id = None;
+    // Wait until the checkout has returned to HEAD before writing anything in .snapshot
+    let stdout = repo.run_with_checkout(rev, |cid| {
+        commit_id = Some(cid);
+        get_test_stdout()
+    })?;
+    let commit = commit_id.unwrap();
+    let output = &stdout;
+    write_snapshot(&snapshot_path_commit(&commit)?, output)?;
+    if let Some(name) = name {
+        write_snapshot(&snapshot_path(name)?, output)?;
     }
     Ok(())
 }
