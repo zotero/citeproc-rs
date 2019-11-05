@@ -99,7 +99,7 @@ jobs:
         run: cd crates/wasm/js-demo && yarn build -p
       - name: Build and Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: JamesIves/github-pages-deploy-action@master
+        uses: JamesIves/github-pages-deploy-action@beta4
         env:
           BRANCH: gh-pages
           ACCESS_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
