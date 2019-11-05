@@ -201,7 +201,7 @@ pub struct TestDiff<'a> {
 
 impl TestDiff<'_> {
     // True if should fail
-    fn print(&self) -> bool {
+    fn print(&self, pad: String) -> bool {
         for test in &self.regressions {
             println!(
                 "regression: {}\noutput:\n{}",
@@ -216,7 +216,8 @@ impl TestDiff<'_> {
             println!("newly ignored: {}", &test.name);
         }
         println!(
-            "{} regressions, {} new passing tests, {} new ignores, out of {} intersecting tests",
+            "{}test result: {} regressions, {} new passing tests, {} new ignores, out of {} intersecting tests",
+            pad,
             self.regressions.len(),
             self.improvements.len(),
             self.new_ignores.len(),
@@ -342,8 +343,14 @@ pub fn bless(name: &str) -> Result<(), Error> {
 pub fn diff_tests(base_name: &str, current_name: &str) -> Result<(), Error> {
     let blessed = read_snapshot(base_name)?;
     let current = read_snapshot(current_name)?;
+    let max_len = std::cmp::max(base_name.len(), current_name.len()).max("test result".len());
     let diff = current.diff(&blessed);
-    let should_fail = diff.print();
+    let b_pad: String = std::iter::repeat(' ').take(max_len - base_name.len()).collect();
+    let c_pad: String = std::iter::repeat(' ').take(max_len - current_name.len()).collect();
+    let r_pad: String = std::iter::repeat(' ').take(max_len - "test_result".len()).collect();
+    let should_fail = diff.print(r_pad);
+    println!("{}{}: {} passed; {} failed; {} ignored", b_pad, base_name, blessed.ok.len(), blessed.failed.len(), blessed.ignored.len());
+    println!("{}{}: {} passed; {} failed; {} ignored", c_pad, current_name, current.ok.len(), current.failed.len(), current.ignored.len());
     if should_fail {
         std::process::exit(1);
     }
