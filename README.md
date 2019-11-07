@@ -191,3 +191,4 @@ cargo test-suite store && cargo test-suite diff
 # result by its commit SHA and an optional name, then checkout HEAD again
 cargo test-suite checkout-store [name]
 ```
+
