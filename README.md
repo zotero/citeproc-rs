@@ -144,6 +144,9 @@ comparing results to find regressions between revisions was necessary. So now
 it can store and diff test runs. Pull requests that cause regressions (`Ok => 
 Failure`) compared to master will fail.
 
+> To see how well `citeproc-rs` is doing on the tests, visit
+> https://cormacrelf.github.io/citeproc-rs-test-viewer/
+
 ```sh
 # setup once
 cargo pull-locales

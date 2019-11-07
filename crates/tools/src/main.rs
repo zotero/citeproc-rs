@@ -4,53 +4,6 @@ use tools::*;
 // use std::{env, path::PathBuf};
 
 #[derive(StructOpt)]
-struct TestSuiteDiff {
-    base: String,
-    to: String,
-}
-
-impl Default for TestSuiteDiff {
-    fn default() -> Self {
-        TestSuiteDiff {
-            base: "blessed".into(),
-            to: "current".into(),
-        }
-    }
-}
-
-impl std::str::FromStr for TestSuiteDiff {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bits: Vec<_> = s.split("..").map(|x| x.to_owned()).collect();
-        let mut first = None;
-        let mut second = None;
-        for bit in bits {
-            if first.is_none() {
-                if !bit.is_empty() {
-                    first = Some(bit);
-                }
-            } else if second.is_none() {
-                if !bit.is_empty() {
-                    second = Some(bit);
-                }
-            } else {
-                return Err(anyhow!("could not parse diff range"));
-            }
-        }
-        match (first, second) {
-            (Some(base), Some(to)) => Ok(TestSuiteDiff { base, to }),
-            (Some(base), None) => Ok(TestSuiteDiff {
-                base,
-                to: "current".into(),
-            }),
-            (None, None) => Ok(TestSuiteDiff::default()),
-            _ => unreachable!(),
-        }
-    }
-}
-
-
-#[derive(StructOpt)]
 enum TestSuiteSub {
     /// Just run the test suite.
     /// Runs by default if no subcommand provided.
