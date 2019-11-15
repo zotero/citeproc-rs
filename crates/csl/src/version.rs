@@ -5,21 +5,31 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::Atom;
-use lazy_static::lazy_static;
 use semver::{Version, VersionReq};
 use strum::EnumProperty;
 
-lazy_static! {
-    pub static ref COMPILED_VERSION: Version = { Version::parse("1.0.1").unwrap() };
-    pub static ref COMPILED_VERSION_M: Version = { Version::parse("1.1.0").unwrap() };
-}
+// Version::new could be a const fn, but isn't.
+pub const COMPILED_VERSION: Version = Version {
+    major: 1,
+    minor: 0,
+    patch: 1,
+    pre: Vec::new(),
+    build: Vec::new(),
+};
+pub const COMPILED_VERSION_M: Version = Version {
+    major: 1,
+    minor: 1,
+    patch: 0,
+    pre: Vec::new(),
+    build: Vec::new(),
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CslVersionReq(pub CslVariant, pub VersionReq);
 
 impl CslVersionReq {
     pub(crate) fn current_csl() -> Self {
-        CslVersionReq(CslVariant::Csl, VersionReq::exact(&*COMPILED_VERSION))
+        CslVersionReq(CslVariant::Csl, VersionReq::exact(&COMPILED_VERSION))
     }
 }
 

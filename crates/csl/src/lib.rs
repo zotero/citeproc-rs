@@ -1148,11 +1148,11 @@ impl FromNode for CslVersionReq {
                 )
             })?
         };
-        let supported = match &variant {
-            CslVariant::Csl => &*COMPILED_VERSION,
-            CslVariant::CslM => &*COMPILED_VERSION_M,
+        let supported = match variant {
+            CslVariant::Csl => COMPILED_VERSION,
+            CslVariant::CslM => COMPILED_VERSION_M,
         };
-        if !req.matches(supported) {
+        if !req.matches(&supported) {
             return Err(InvalidCsl::new(
                     node,
                     &format!(
