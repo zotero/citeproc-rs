@@ -40,13 +40,14 @@ https://cormacrelf.github.io/citeproc-rs-test-viewer/
 
 ## WebAssembly usage
 
-The WebAssembly shell lives in `crates/wasm`. It consists of a JavaScript API, 
-which includes asynchronous locale fetching. The API works mostly by 
-serializing to JSON and back, but this is invisible. It includes TypeScript 
-definitions, which are the main source of documentation. Open up the generated 
-`.d.ts` file or view the doc-comments with your editor or IDE. A useful 
-reference is the `js-demo`, which exercises most of its functionality and 
-demonstrates correct usage of the `batchedUpdates`/`UpdateSummary` API.
+The WebAssembly shell lives in `crates/wasm`. It consists of a JavaScript API 
+that wraps the `citeproc` crate, and a mechanism for asynchronous locale 
+fetching. The API works mostly by serializing to JSON and back, but this is 
+invisible. It includes TypeScript definitions, which are the main source of 
+documentation. Open up the generated `.d.ts` file or view the doc-comments with 
+your editor or IDE. A useful reference is the `js-demo`, which exercises most 
+of its functionality and demonstrates correct usage of the 
+`batchedUpdates`/`UpdateSummary` API.
 
 Note especially that `Driver` cannot be garbage collected. You will need to 
 `.free()` it manually, otherwise the whole engine and its cached data will be 
@@ -64,7 +65,7 @@ Refer to the
 [docs](https://rustwasm.github.io/docs/wasm-pack/commands/build.html) for on 
 how to get the output you need, particularly `--target`. 
 
-## Non-WemAssembly usage
+## Non-WebAssembly usage
 
 For Rust users, this package will available at some point on crates.io. The 
 `csl` crate is already available, if all you wanted to do was parse/validate 
