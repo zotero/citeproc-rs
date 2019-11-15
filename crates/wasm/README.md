@@ -1,18 +1,14 @@
 # `citeproc-wasm`
 
-(Not yet implemented.)
-
 This is a build of `citeproc` that is suitable for use in Node.js, a browser or 
 a Firefox/Chromium-based application like Zotero. It consists of a WebAssembly 
-(WASM) binary of roughly 100kB gzipped, and a fairly lightweight JavaScript 
-wrapper for that binary. If your programming language can link to C libraries 
-either natively or through FFI, it is preferable to use that instead.
+(WASM) binary, and a fairly lightweight JavaScript wrapper for that binary. 
 
 The wrapper consists of:
 
 * A JS class to wrap `citeproc::Driver`. The core processing code is 
-  synchronous, but it will be sufficiently fast to run in any interactive 
-  context.
+  synchronous, but it will generally be sufficiently fast to run in any 
+  interactive context.
 * A JS interface for library consumers to asynchronously fetch locales and 
   style modules at specific points in Driver's lifecycle. The fetching must 
   happen and complete before the processing actually begins, because processing 
@@ -26,11 +22,8 @@ The wrapper consists of:
   and sometimes even a hint for how to fix it, for common errors.
 * Input libraries are only CSL-JSON, serialized as a string. The other input 
   formats that `citeproc` may recognise will be disabled, to save bundle size.
-* Output is native JS objects. These are pretty much just the `serde_json` 
-  outputs from `citeproc` for your chosen format.
 * A TypeScript definition file auto-generated from the Rust types and 
-  interfaces via `wasm-bindgen` and 
-  [this](https://github.com/tcr/wasm-typescript-definition).
+  interfaces.
 
 The library is intended to replace `citeproc-js`, but the interface will be 
 different.
@@ -50,8 +43,7 @@ different.
   * Some of it doesn't make much sense, like requiring users to import Juris-M 
     abbreviation lists into each document rather than linking abbreviations to 
     styles or jurisdictions or the Courts that each item in those huge lists 
-    refers to. Some of the functionality just isn't documented enough to 
-    re-implement.
+    refers to.
 
 * You cannot deserialize your own XML. Any tree modifications you want to do 
   should be implemented as transforms on the Style AST within `citeproc`, 
@@ -63,27 +55,3 @@ different.
 Drop-in API compatibility will not be a goal, and given that, the whole 
 interface may as well be improved.
 
-
-
-# 🦀🕸️ Usage with `wasm-pack`
-
-`wasm-pack` has a bug with Cargo workspaces. Run `../link.sh` to make it work 
-for now.
-
-### 🛠️ Build with `wasm-pack build`
-
-```
-wasm-pack build
-```
-
-### 🔬 Test in Headless Browsers with `wasm-pack test`
-
-```
-wasm-pack test --headless --firefox
-```
-
-### 🎁 Publish to NPM with `wasm-pack publish`
-
-```
-wasm-pack publish
-```
