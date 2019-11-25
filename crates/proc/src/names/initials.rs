@@ -10,7 +10,7 @@ use std::borrow::Cow;
 /// "Jean-Luc K" = &[Name("Jean"), HyphenSegment("Luc"), Initial("K")]
 /// "R. L." = &[Initial("R"), Initial("L")]
 ///
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum GivenNameToken<'n> {
     Name(&'n str),
     Initial(&'n str),
@@ -24,7 +24,7 @@ pub fn initialize<'n>(
     given_name: &'n str,
     initialize: bool,
     with: Option<&str>,
-    initial_hyphens: bool,
+    initialize_with_hyphens: bool,
 ) -> Cow<'n, str> {
     if let Some(with) = with {
         let mut build = String::new();
@@ -59,7 +59,7 @@ pub fn initialize<'n>(
                 }
                 HyphenSegment(ref n) => {
                     if initialize {
-                        if initial_hyphens {
+                        if initialize_with_hyphens {
                             // Trim trailing whitespace from the previous with, as you don't want
                             // J. -L., you want J.-L.
                             build.truncate(build.trim_end().len());
@@ -89,27 +89,157 @@ pub fn initialize<'n>(
             // initialize-with=". " doesn't produce "W. A.  Mozart"
         };
 
-        for word in given_name.split(&[' ', '.'][..]) {
-            if word == "" {
-            } else if !word.chars().nth(0).unwrap().is_uppercase() {
-                // 'not uppercase' also includes uncased code points like Chinese or random punctuation
-                process_token(Other(word));
-            } else if word.len() == 1 && word.chars().all(|c| c.is_uppercase()) {
-                process_token(Initial(word));
-            } else {
-                let mut segs = word.split('-');
-                if let Some(first) = segs.next() {
-                    process_token(Name(first));
-                    for seg in segs {
-                        process_token(HyphenSegment(seg));
-                    }
-                }
-            }
+        for token in tokenize(given_name) {
+            process_token(token)
         }
+
         Cow::Owned(build.trim().to_string())
     } else {
         Cow::Borrowed(given_name)
     }
+}
+
+use nom::combinator::ParserIterator;
+
+use nom::{
+    branch::alt,
+    bytes::complete::{take_while, take_while1, take_while_m_n},
+    character::complete::char as nom_char,
+    combinator::{map, opt, recognize, rest},
+    sequence::{preceded, terminated, tuple},
+    IResult,
+};
+
+// Need:
+// Ph.  => [Initial("Ph")]
+// MA.  => [Initial("M"), Initial("A")]
+// M.A. => [Initial("M"), Initial("A")]
+// MA   => [Initial("M"), Initial("A")]
+// Ma   => [Name("Ma")]
+// aa   => [Other("aa")]
+
+fn uppercase_char(inp: &str) -> IResult<&str, &str> {
+    take_while_m_n(1, 1, |c: char| c.is_uppercase())(inp)
+}
+
+fn lowercase_char(inp: &str) -> IResult<&str, &str> {
+    take_while_m_n(1, 1, |c: char| c.is_lowercase())(inp)
+}
+
+// Don't need to be certain there's a dot on the end, as the whole-string-no-dots case is
+// already handled by name().
+// "M.Ph" => ["M", "Ph"]
+// "Ph."  => ["Ph"]
+fn without_dot(inp: &str) -> IResult<&str, &str> {
+    alt((
+        recognize(tuple((uppercase_char, take_while(|c: char| c != '.')))),
+        uppercase_char,
+    ))(inp)
+}
+
+// "P" => "P"
+// "Ph" => "Ph"
+// "Ph." => "Ph"
+fn initial_maybe_dot(inp: &str) -> IResult<&str, GivenNameToken<'_>> {
+    map(
+        terminated(without_dot, opt(nom_char('.'))),
+        GivenNameToken::Initial,
+    )(inp)
+}
+
+// "P" => "P"
+// "Ph" => "Ph"
+// "Ph." => "Ph"
+// "PA" => "P" with remaining "A"
+fn initial_with_dot(inp: &str) -> IResult<&str, GivenNameToken<'_>> {
+    map(
+        terminated(without_dot, nom_char('.')),
+        GivenNameToken::Initial,
+    )(inp)
+}
+
+fn normal(c: char) -> bool {
+    !(c == '.' || c == '-')
+}
+
+// Anything starting with uppercase and no dots in it.
+fn name(inp: &str) -> IResult<&str, GivenNameToken<'_>> {
+    map(
+        recognize(tuple((uppercase_char, take_while1(normal)))),
+        GivenNameToken::Name,
+    )(inp)
+}
+
+fn hyphen(inp: &str) -> IResult<&str, GivenNameToken<'_>> {
+    map(
+        preceded(nom_char('-'), take_while1(normal)),
+        GivenNameToken::HyphenSegment,
+    )(inp)
+}
+
+// E.g. "de"
+fn other(inp: &str) -> IResult<&str, GivenNameToken<'_>> {
+    map(rest, GivenNameToken::Other)(inp)
+}
+
+fn token(inp: &str, state: IterState) -> IResult<&str, GivenNameToken<'_>> {
+    match state {
+        IterState::Start => alt((hyphen, initial_with_dot, name, initial_maybe_dot, other))(inp),
+        IterState::TriedFull => alt((hyphen, initial_maybe_dot, other))(inp),
+    }
+}
+
+#[derive(Copy, Clone)]
+enum IterState {
+    Start,
+    TriedFull,
+}
+
+fn tokenize<'a>(given_name: &'a str) -> impl Iterator<Item = GivenNameToken<'a>> {
+    struct TokenIter<'a> {
+        state: IterState,
+        remain: &'a str,
+    }
+
+    impl<'a> Iterator for TokenIter<'a> {
+        type Item = GivenNameToken<'a>;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.remain.is_empty() {
+                None
+            } else if let Ok((remainder, token)) = token(self.remain, self.state) {
+                self.state = IterState::TriedFull;
+                self.remain = remainder;
+                Some(token)
+            } else {
+                None
+            }
+        }
+    }
+
+    given_name
+        .split(' ')
+        .filter(|x| !x.is_empty())
+        .flat_map(|word| TokenIter {
+            state: IterState::Start,
+            remain: word,
+        })
+}
+
+#[test]
+fn test_tokenize() {
+    fn tok(inp: &str) -> Vec<GivenNameToken<'_>> {
+        tokenize(inp).collect()
+    }
+    assert_eq!(
+        &tok("Ph. M.E.")[..],
+        &[
+            GivenNameToken::Initial("Ph"),
+            GivenNameToken::Initial("M"),
+            GivenNameToken::Initial("E"),
+        ][..]
+    );
+    assert_eq!(&tok("ME")[..], &[GivenNameToken::Name("ME")][..]);
+    assert_eq!(&tok("ME.")[..], &[GivenNameToken::Initial("ME")][..]);
 }
 
 #[test]
@@ -154,7 +284,7 @@ fn test_initialize_hyphen_space() {
 }
 
 #[test]
-fn test_initialize_normal() {
+fn test_initialize_false_period() {
     fn init(given_name: &str) -> Cow<'_, str> {
         initialize(given_name, false, Some("."), true)
     }
@@ -165,4 +295,5 @@ fn test_initialize_normal() {
     assert_eq!(init("John R.L."), "John R.L.");
     assert_eq!(init("John R L de Bortoli"), "John R.L. de Bortoli");
     assert_eq!(init("好 好"), "好 好");
+    assert_eq!(init("Immel, Ph. M.E."), "Immel, Ph.M.E.")
 }
