@@ -60,6 +60,9 @@ pub fn initialize<'n>(
                 HyphenSegment(ref n) => {
                     if initialize {
                         if initial_hyphens {
+                            // Trim trailing whitespace from the previous with, as you don't want
+                            // J. -L., you want J.-L.
+                            build.truncate(build.trim_end().len());
                             build.push('-');
                         }
                         build.push(n.chars().nth(0).unwrap());
@@ -73,6 +76,8 @@ pub fn initialize<'n>(
                 }
                 Other(ref n) => {
                     if !first {
+                        // Exactly one space please
+                        build.truncate(build.trim_end().len());
                         build.push_str(" ");
                     }
                     build.push_str(n);
@@ -131,6 +136,20 @@ fn test_initialize_hyphen() {
     assert_eq!(init("R L"), "R.L.");
     assert_eq!(init("John R.L."), "J.R.L.");
     assert_eq!(init("John R L de Bortoli"), "J.R.L. de B.");
+    assert_eq!(init("好 好"), "好 好");
+}
+
+#[test]
+fn test_initialize_hyphen_space() {
+    fn init(given_name: &str) -> Cow<'_, str> {
+        initialize(given_name, true, Some(". "), true)
+    }
+    assert_eq!(init("John R L"), "J. R. L.");
+    assert_eq!(init("Jean-Luc K"), "J.-L. K.");
+    assert_eq!(init("R. L."), "R. L.");
+    assert_eq!(init("R L"), "R. L.");
+    assert_eq!(init("John R.L."), "J. R. L.");
+    assert_eq!(init("John R L de Bortoli"), "J. R. L. de B.");
     assert_eq!(init("好 好"), "好 好");
 }
 
