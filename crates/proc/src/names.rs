@@ -477,7 +477,7 @@ fn should_delimit_after<O: OutputFormat>(
 #[derive(Eq, PartialEq, Clone)]
 enum NameToken<'a, B> {
     Name(&'a DisambNameRatchet<B>),
-    EtAl,
+    EtAl(&'a str, Option<Formatting>),
     Ellipsis,
     Delimiter,
     And,
@@ -532,6 +532,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         position: Position,
         names_slice: &'s [DisambNameRatchet<O::Build>],
         is_sort_key: bool,
+        et_al: &Option<NameEtAl>,
+        locale: &'s csl::locale::Locale,
     ) -> Vec<NameToken<'s, O::Build>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
@@ -556,16 +558,19 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
                 if !is_sort_key {
-                    let dpea = self
-                        .name_el
-                        .delimiter_precedes_et_al
-                        .unwrap_or(DelimiterPrecedes::Contextual);
-                    if should_delimit_after(dpea, self, ea_use_first) {
-                        nms.push(NameToken::Delimiter);
-                    } else {
-                        nms.push(NameToken::Space);
+                    let (term_text, formatting) = self.et_al_term(et_al, locale);
+                    if !term_text.is_empty() {
+                        let dpea = self
+                            .name_el
+                            .delimiter_precedes_et_al
+                            .unwrap_or(DelimiterPrecedes::Contextual);
+                        if should_delimit_after(dpea, self, ea_use_first) {
+                            nms.push(NameToken::Delimiter);
+                        } else {
+                            nms.push(NameToken::Space);
+                        }
+                        nms.push(NameToken::EtAl(term_text, formatting));
                     }
-                    nms.push(NameToken::EtAl);
                 }
                 nms
             }
@@ -660,6 +665,29 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
+    fn et_al_term<'l>(
+        &self,
+        et_al: &Option<NameEtAl>,
+        locale: &'l csl::locale::Locale,
+    ) -> (&'l str, Option<Formatting>) {
+        use csl::*;
+        let mut term = MiscTerm::EtAl;
+        let mut formatting = None;
+        if let Some(ref etal_element) = et_al {
+            if etal_element.term == "and others" {
+                term = MiscTerm::AndOthers;
+            }
+            formatting = etal_element.formatting;
+        }
+        let txt = locale
+            .get_text_term(
+                TextTermSelector::Simple(SimpleTermSelector::Misc(term, TermFormExtended::Long)),
+                false,
+            )
+            .unwrap_or("et al");
+        (txt, formatting)
+    }
+
     pub(crate) fn render_person_name(&self, pn: &PersonName, seen_one: bool) -> O::Build {
         let fmt = self.fmt;
 
@@ -722,13 +750,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         &self,
         names_slice: &'b [DisambNameRatchet<O::Build>],
         position: Position,
-        locale: &csl::locale::Locale,
+        locale: &'b csl::locale::Locale,
         et_al: &Option<NameEtAl>,
         is_sort_key: bool,
     ) -> Vec<NameTokenBuilt<'b, O::Build>> {
         let fmt = self.fmt.clone();
         let mut seen_one = false;
-        let name_tokens = self.name_tokens(position, names_slice, is_sort_key);
+        let name_tokens = self.name_tokens(position, names_slice, is_sort_key, et_al, locale);
 
         if self.name_el.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -764,26 +792,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         fmt.plain(", ")
                     })
                 }
-                NameToken::EtAl => {
-                    use csl::*;
-                    let mut term = MiscTerm::EtAl;
-                    let mut formatting = None;
-                    if let Some(ref etal_element) = et_al {
-                        if etal_element.term == "and others" {
-                            term = MiscTerm::AndOthers;
-                        }
-                        formatting = etal_element.formatting;
-                    }
-                    let text = locale
-                        .get_text_term(
-                            TextTermSelector::Simple(SimpleTermSelector::Misc(
-                                term,
-                                TermFormExtended::Long,
-                            )),
-                            false,
-                        )
-                        .unwrap_or("et al");
-                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), formatting))
+                NameToken::EtAl(text, formatting) => {
+                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), *formatting))
                 }
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
                 NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
