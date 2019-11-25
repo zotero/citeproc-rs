@@ -27,35 +27,46 @@ pub fn initialize<'n>(
     initialize_with_hyphens: bool,
 ) -> Cow<'n, str> {
     if let Some(with) = with {
+        #[derive(PartialEq)]
+        enum State {
+            Start,
+            AfterInitial,
+            AfterName,
+        }
+
+        let mut state = State::Start;
         let mut build = String::new();
-        let mut first = true;
-        let mut last_was_initial = false;
 
         let mut process_token = |token: GivenNameToken| {
-            match token {
+            state = match token {
                 Name(ref n) => {
                     if initialize {
-                        if !first && !last_was_initial {
+                        if state == State::AfterName {
+                            // Exactly one space please
+                            build.truncate(build.trim_end().len());
                             build.push(' ');
                         }
                         build.push(n.chars().nth(0).unwrap());
                         build.push_str(with);
-                        last_was_initial = true;
+                        State::AfterInitial
                     } else {
-                        if !first {
+                        if state != State::Start {
+                            build.truncate(build.trim_end().len());
                             build.push(' ');
                         }
                         build.push_str(n);
-                        last_was_initial = false;
+                        State::AfterName
                     }
                 }
                 Initial(ref n) => {
-                    if !first && !last_was_initial {
+                    if state == State::AfterName {
+                        // Exactly one space please
+                        build.truncate(build.trim_end().len());
                         build.push(' ');
                     }
                     build.push_str(n);
                     build.push_str(with);
-                    last_was_initial = true;
+                    State::AfterInitial
                 }
                 HyphenSegment(ref n) => {
                     if initialize {
@@ -67,26 +78,23 @@ pub fn initialize<'n>(
                         }
                         build.push(n.chars().nth(0).unwrap());
                         build.push_str(with);
-                        last_was_initial = true;
+                        State::AfterInitial
                     } else {
                         build.push('-');
                         build.push_str(n);
-                        last_was_initial = false;
+                        State::AfterName
                     }
                 }
                 Other(ref n) => {
-                    if !first {
+                    if state != State::Start {
                         // Exactly one space please
                         build.truncate(build.trim_end().len());
-                        build.push_str(" ");
+                        build.push(' ');
                     }
                     build.push_str(n);
-                    last_was_initial = false;
+                    State::AfterName
                 }
             }
-            first = false;
-            // slightly hacky, but you may want to disable adding extra spaces so
-            // initialize-with=". " doesn't produce "W. A.  Mozart"
         };
 
         for token in tokenize(given_name) {
@@ -98,8 +106,6 @@ pub fn initialize<'n>(
         Cow::Borrowed(given_name)
     }
 }
-
-use nom::combinator::ParserIterator;
 
 use nom::{
     branch::alt,
@@ -120,10 +126,6 @@ use nom::{
 
 fn uppercase_char(inp: &str) -> IResult<&str, &str> {
     take_while_m_n(1, 1, |c: char| c.is_uppercase())(inp)
-}
-
-fn lowercase_char(inp: &str) -> IResult<&str, &str> {
-    take_while_m_n(1, 1, |c: char| c.is_lowercase())(inp)
 }
 
 // Don't need to be certain there's a dot on the end, as the whole-string-no-dots case is
@@ -240,13 +242,20 @@ fn test_tokenize() {
     );
     assert_eq!(&tok("ME")[..], &[GivenNameToken::Name("ME")][..]);
     assert_eq!(&tok("ME.")[..], &[GivenNameToken::Initial("ME")][..]);
+    assert_eq!(
+        &tok("A. Alan")[..],
+        &[GivenNameToken::Initial("A"), GivenNameToken::Name("Alan")][..]
+    );
 }
 
 #[test]
-fn test_initialize_full() {
+fn test_initialize_true_empty() {
     fn init(given_name: &str) -> Cow<'_, str> {
         initialize(given_name, true, Some(""), false)
     }
+    assert_eq!(init("ME"), "M");
+    assert_eq!(init("ME."), "ME");
+    assert_eq!(init("A. Alan"), "AA");
     assert_eq!(init("John R L"), "JRL");
     assert_eq!(init("Jean-Luc K"), "JLK");
     assert_eq!(init("R. L."), "RL");
@@ -256,10 +265,13 @@ fn test_initialize_full() {
 }
 
 #[test]
-fn test_initialize_hyphen() {
+fn test_initialize_true_period() {
     fn init(given_name: &str) -> Cow<'_, str> {
         initialize(given_name, true, Some("."), true)
     }
+    assert_eq!(init("ME"), "M.");
+    assert_eq!(init("ME."), "ME.");
+    assert_eq!(init("A. Alan"), "A.A.");
     assert_eq!(init("John R L"), "J.R.L.");
     assert_eq!(init("Jean-Luc K"), "J.-L.K.");
     assert_eq!(init("R. L."), "R.L.");
@@ -270,10 +282,13 @@ fn test_initialize_hyphen() {
 }
 
 #[test]
-fn test_initialize_hyphen_space() {
+fn test_initialize_true_period_space() {
     fn init(given_name: &str) -> Cow<'_, str> {
         initialize(given_name, true, Some(". "), true)
     }
+    assert_eq!(init("ME"), "M.");
+    assert_eq!(init("ME."), "ME.");
+    assert_eq!(init("A. Alan"), "A. A.");
     assert_eq!(init("John R L"), "J. R. L.");
     assert_eq!(init("Jean-Luc K"), "J.-L. K.");
     assert_eq!(init("R. L."), "R. L.");
@@ -288,6 +303,9 @@ fn test_initialize_false_period() {
     fn init(given_name: &str) -> Cow<'_, str> {
         initialize(given_name, false, Some("."), true)
     }
+    assert_eq!(init("ME"), "ME");
+    assert_eq!(init("ME."), "ME.");
+    assert_eq!(init("A. Alan"), "A. Alan");
     assert_eq!(init("John R L"), "John R.L.");
     assert_eq!(init("Jean-Luc K"), "Jean-Luc K.");
     assert_eq!(init("R. L."), "R.L.");
@@ -296,4 +314,22 @@ fn test_initialize_false_period() {
     assert_eq!(init("John R L de Bortoli"), "John R.L. de Bortoli");
     assert_eq!(init("好 好"), "好 好");
     assert_eq!(init("Immel, Ph. M.E."), "Immel, Ph.M.E.")
+}
+
+#[test]
+fn test_initialize_false_period_space() {
+    fn init(given_name: &str) -> Cow<'_, str> {
+        initialize(given_name, false, Some(". "), true)
+    }
+    assert_eq!(init("ME"), "ME");
+    assert_eq!(init("ME."), "ME.");
+    assert_eq!(init("A. Alan"), "A. Alan");
+    assert_eq!(init("John R L"), "John R. L.");
+    assert_eq!(init("Jean-Luc K"), "Jean-Luc K.");
+    assert_eq!(init("R. L."), "R. L.");
+    assert_eq!(init("R L"), "R. L.");
+    assert_eq!(init("John R.L."), "John R. L.");
+    assert_eq!(init("John R L de Bortoli"), "John R. L. de Bortoli");
+    assert_eq!(init("好 好"), "好 好");
+    assert_eq!(init("Immel, Ph. M.E."), "Immel, Ph. M. E.")
 }
