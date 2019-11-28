@@ -28,6 +28,10 @@ impl MarkupWriter for RtfWriter {
         }
     }
 
+    fn write_micro(&self, s: &mut String, micro: &MicroNode) {
+        micro.to_rtf_inner(s, self);
+    }
+
     fn write_inline(&self, s: &mut String, inline: &InlineElement) {
         inline.to_rtf_inner(s, self);
     }
@@ -79,24 +83,18 @@ impl MicroNode {
                 children,
             } => {
                 s.push_str(localized.opening(*is_inner));
-                for i in children {
-                    i.to_rtf_inner(s, options);
-                }
+                options.write_micros(s, children);
                 s.push_str(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
                 let tag = cmd.rtf_tag(options);
                 *s += "{";
                 *s += tag;
-                for node in nodes {
-                    node.to_rtf_inner(s, options);
-                }
+                options.write_micros(s, nodes);
                 *s += "}";
             }
             NoCase(inners) => {
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
+                options.write_micros(s, inners);
             }
         }
     }
@@ -113,9 +111,7 @@ impl InlineElement {
                 options.stack_formats(s, inlines, Formatting::default(), Some(*display))
             }
             Micro(micros) => {
-                for micro in micros {
-                    micro.to_rtf_inner(s, options);
-                }
+                options.write_micros(s, micros);
             }
             Formatted(inlines, formatting) => {
                 options.stack_formats(s, inlines, *formatting, None);
@@ -126,9 +122,7 @@ impl InlineElement {
                 inlines,
             } => {
                 s.push_str(localized.opening(*is_inner));
-                for i in inlines {
-                    i.to_rtf_inner(s, options);
-                }
+                options.write_inlines(s, inlines);
                 s.push_str(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
@@ -137,9 +131,7 @@ impl InlineElement {
                 s.push_str(r#"<a href=""#);
                 s.push_str(&url);
                 s.push_str(r#"">"#);
-                for i in content {
-                    i.to_rtf_inner(s, options);
-                }
+                options.write_inlines(s, content);
                 s.push_str("</a>");
             }
         }

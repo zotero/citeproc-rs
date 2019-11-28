@@ -18,6 +18,10 @@ impl MarkupWriter for PlainWriter {
 
     fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
 
+    fn write_micro(&self, s: &mut String, micro: &MicroNode) {
+        micro.to_plain_inner(s, self);
+    }
+
     fn write_inline(&self, s: &mut String, inline: &InlineElement) {
         inline.to_plain_inner(s, self);
     }
@@ -36,20 +40,14 @@ impl MicroNode {
                 children,
             } => {
                 s.push_str(localized.opening(*is_inner));
-                for i in children {
-                    i.to_plain_inner(s, options);
-                }
+                options.write_micros(s, children);
                 s.push_str(localized.closing(*is_inner));
             }
             Formatted(nodes, _cmd) => {
-                for node in nodes {
-                    node.to_plain_inner(s, options);
-                }
+                options.write_micros(s, nodes);
             }
             NoCase(inners) => {
-                for i in inners {
-                    i.to_plain_inner(s, options);
-                }
+                options.write_micros(s, inners);
             }
         }
     }
@@ -67,9 +65,7 @@ impl InlineElement {
                 options.stack_formats(s, inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
-                for micro in micros {
-                    micro.to_plain_inner(s, options);
-                }
+                options.write_micros(s, micros);
             }
             Formatted(inlines, formatting) => {
                 options.stack_formats(s, inlines, *formatting, None);
@@ -81,15 +77,11 @@ impl InlineElement {
             } => {
                 // TODO: move punctuation
                 s.push_str(localized.opening(*is_inner));
-                for i in inlines {
-                    i.to_plain_inner(s, options);
-                }
+                options.write_inlines(s, inlines);
                 s.push_str(localized.closing(*is_inner));
             }
             Anchor { content, .. } => {
-                for i in content {
-                    i.to_plain_inner(s, options);
-                }
+                options.write_inlines(s, content);
             }
         }
     }

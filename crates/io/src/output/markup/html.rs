@@ -56,6 +56,10 @@ impl MarkupWriter for HtmlWriter {
         }
     }
 
+    fn write_micro(&self, s: &mut String, micro: &MicroNode) {
+        micro.to_html_inner(s, self);
+    }
+
     fn write_inline(&self, s: &mut String, inline: &InlineElement) {
         inline.to_html_inner(s, self);
     }
@@ -75,9 +79,7 @@ impl MicroNode {
                 children,
             } => {
                 s.push_str(localized.opening(*is_inner));
-                for i in children {
-                    i.to_html_inner(s, options);
-                }
+                output.write_micros(s, children);
                 s.push_str(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
@@ -86,17 +88,13 @@ impl MicroNode {
                 *s += tag.0;
                 *s += tag.1;
                 *s += ">";
-                for node in nodes {
-                    node.to_html_inner(s, options);
-                }
+                options.write_micros(s, nodes);
                 *s += "</";
                 *s += tag.0;
                 *s += ">";
             }
             NoCase(inners) => {
-                for i in inners {
-                    i.to_html_inner(s, options);
-                }
+                options.write_micros(s, inners);
             }
         }
     }
@@ -179,9 +177,7 @@ impl InlineElement {
                 options.stack_formats(s, inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
-                for micro in micros {
-                    micro.to_html_inner(s, options);
-                }
+                output.write_micros(s, micros);
             }
             Formatted(inlines, formatting) => {
                 options.stack_formats(s, inlines, *formatting, None);
@@ -193,9 +189,7 @@ impl InlineElement {
             }=> {
                 // TODO: move punctuation
                 s.push_str(localized.opening(*is_inner));
-                for i in inlines {
-                    i.to_html_inner(s, options);
-                }
+                output.write_inlines(s, inlines);
                 s.push_str(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
@@ -204,9 +198,7 @@ impl InlineElement {
                     // TODO: HTML-quoted-escape? the url?
                     s.push_str(&url.trim());
                     s.push_str(r#"">"#);
-                    for i in content {
-                        i.to_html_inner(s, options);
-                    }
+                    options.write_inlines(s, content);
                     s.push_str("</a>");
                 } else {
                     s.push_str(&url.trim());

@@ -265,6 +265,12 @@ impl Markup {
 pub trait MarkupWriter {
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);
+    fn write_micro(&self, s: &mut String, micro: &MicroNode);
+    fn write_micros(&self, s: &mut String, micros: &[MicroNode]) {
+        for m in micros {
+            self.write_micro(s, m);
+        }
+    }
     fn write_inline(&self, s: &mut String, inline: &InlineElement);
     fn write_inlines(&self, s: &mut String, inlines: &[InlineElement]) {
         for i in inlines {
