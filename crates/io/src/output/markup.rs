@@ -251,7 +251,8 @@ impl Markup {
         intermediate: <Self as OutputFormat>::Build,
         initial_state: FlipFlopState,
     ) -> <Self as OutputFormat>::Output {
-        let flipped = initial_state.flip_flop_inlines(&intermediate);
+        let mut flipped = initial_state.flip_flop_inlines(&intermediate);
+        move_punctuation(&mut flipped);
         let mut dest = String::new();
         match *self {
             Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped),
@@ -266,93 +267,6 @@ pub trait MarkupWriter {
     fn write_escaped(&mut self, text: &str);
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
-    fn write_micro(&mut self, micro: &MicroNode);
-    fn write_micros(&mut self, micros: &[MicroNode]) {
-        for m in micros {
-            self.write_micro(m);
-        }
-    }
-    fn write_inline(&mut self, inline: &InlineElement);
-    fn write_inlines(&mut self, inlines: &[InlineElement]) {
-        // impl(punctuation-in-quote)
-        //
-        // Why here, despite potentially making more work for new formats?
-        //
-        // 1. Can be done here without allocating new strings or mutating them
-        // 2. Has to be done on flattened IR anyway (can't easily get "adjacent text node") with
-        //    maybe-null IR in the way
-        // 3. Doing it on the output string means scanning for the particular quote characters in
-        //    use, but at InlineElement::Quoted level, they haven't been localized yet, so just
-        //    need to check the next node, append a comma/period before closing the quotes, and
-        //    skip over it in the next node.
-        //
-        // Could probably be moved to `proc` if the OutputFormat interface was a little better, and
-        // output() was a little more fine-grained / managed by
-        //
-        // We only move punctuation inside quotes for quotes created by putting quotes="true" on a
-        // rendering element. Not micros; don't mess with the quotation used in a title, for
-        // example. Could replicate this in write_micros if that's desirable, though.
-
-        let mut iter = inlines.iter().peekable();
-        while let Some(inline) = iter.next() {
-            if let InlineElement::Quoted {
-                is_inner,
-                localized,
-                inlines,
-            } = inline
-            {
-                if localized.punctuation_in_quote {
-                    match iter.peek() {
-                        Some(InlineElement::Text(text)) => {
-                            if text.starts_with(",")
-                                || text.starts_with(".")
-                                || text.starts_with("!")
-                            {
-                                let (punctuation, rest) = text.split_at(1);
-                                self.write_escaped(localized.opening(*is_inner));
-                                self.write_inlines(inlines);
-                                self.write_escaped(punctuation);
-                                self.write_escaped(localized.closing(*is_inner));
-                                self.write_escaped(rest);
-                                // skip the peeked text element, and don't write this Quoted twice
-                                iter.next();
-                                continue;
-                            }
-                        }
-                        Some(InlineElement::Micro(nodes)) => {
-                            // Check if starts with some text
-                            // TODO: process inline
-                            // You'll need another MarkupWriter method for micro node slices with
-                            // &nodes[1..]
-
-                            if let Some(MicroNode::Text(text)) = nodes.iter().nth(0) {
-                                if text.starts_with(",")
-                                    || text.starts_with(".")
-                                    || text.starts_with("!")
-                                {
-                                    let (punctuation, rest) = text.split_at(1);
-                                    self.write_escaped(localized.opening(*is_inner));
-                                    self.write_inlines(inlines);
-                                    self.write_escaped(punctuation);
-                                    self.write_escaped(localized.closing(*is_inner));
-                                    self.write_escaped(rest);
-                                    // then write the remaining micros
-                                    self.write_micros(&nodes[1..]);
-                                    // skip the peeked micro, and don't write this Quoted twice
-                                    iter.next();
-                                    continue;
-                                }
-                            }
-                        }
-                        _ => {
-                            // Do nothing with the peeked element, and process below
-                        }
-                    }
-                }
-            }
-            self.write_inline(inline);
-        }
-    }
 
     /// Use this to write an InlineElement::Formatted
     fn stack_formats(
@@ -365,6 +279,126 @@ pub trait MarkupWriter {
         self.stack_preorder(&stack);
         self.write_inlines(inlines);
         self.stack_postorder(&stack);
+    }
+
+    fn write_micro(&mut self, micro: &MicroNode);
+    /// Returned boolean = true if it used the peeked element to move some punctuation inside, and
+    /// hence should skip it.
+    fn write_micros(&mut self, micros: &[MicroNode]) {
+        for micro in micros {
+            self.write_micro(micro);
+        }
+    }
+    fn write_inline(&mut self, inline: &InlineElement);
+    fn write_inlines(&mut self, inlines: &[InlineElement]) {
+        for inline in inlines {
+            self.write_inline(inline);
+        }
+    }
+}
+
+// Basically, affixes go outside Quoted elements. So we can just look for text elements that come
+// right after quoted ones.
+fn move_punctuation(slice: &mut [InlineElement]) {
+    fn is_punc(c: char) -> bool {
+        c == '.' || c == ',' || c == '!'
+    }
+
+    if slice.len() < 2 {
+        return;
+    }
+    let len = slice.len();
+    for i in 0..len - 1 {
+        if let Some((first, rest)) = (&mut slice[i..]).split_first_mut() {
+            let next = rest
+                .get_mut(0)
+                .expect("only iterated to len-1, so infallible");
+
+            // Quoted elements are less common, so search for it first
+            let quoted = if let Some(x) = find_right_quote(first) {
+                x
+            } else {
+                continue;
+            };
+
+            // Must be followed by some text
+            let string = match next {
+                InlineElement::Text(ref mut string) => string,
+                InlineElement::Micro(ref mut micros) => {
+                    if let Some(MicroNode::Text(ref mut string)) = micros.get_mut(0) {
+                        string
+                    } else {
+                        continue;
+                    }
+                }
+                _ => continue,
+            };
+
+            // That text must be is_punc
+            if !string.chars().nth(0).map_or(false, is_punc) {
+                continue;
+            }
+            // O(n), but n tends to be 2, like with ", " so this is ok
+            let c = string.remove(0);
+            let mut s = String::new();
+            s.push(c);
+
+            match quoted {
+                Quoted::Inline(inlines) => {
+                    inlines.push(InlineElement::Text(s));
+                }
+                Quoted::Micro(children) => {
+                    children.push(MicroNode::Text(s));
+                }
+            }
+        }
+    }
+
+    enum Quoted<'a> {
+        Inline(&'a mut Vec<InlineElement>),
+        Micro(&'a mut Vec<MicroNode>),
+    }
+
+    fn find_right_quote<'a>(el: &'a mut InlineElement) -> Option<Quoted<'a>> {
+        fn find_right_quote_micro<'a>(micro: &'a mut MicroNode) -> Option<Quoted<'a>> {
+            match micro {
+                MicroNode::Quoted {
+                    localized,
+                    ref mut children,
+                    ..
+                } => {
+                    if localized.punctuation_in_quote {
+                        Some(Quoted::Micro(children))
+                    } else {
+                        None
+                    }
+                }
+                // Dive into formatted bits
+                MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+                    nodes.last_mut().and_then(find_right_quote_micro)
+                }
+                _ => None,
+            }
+        }
+
+        match el {
+            InlineElement::Quoted {
+                localized,
+                ref mut inlines,
+                ..
+            } => {
+                if localized.punctuation_in_quote {
+                    Some(Quoted::Inline(inlines))
+                } else {
+                    None
+                }
+            }
+            InlineElement::Micro(micros) => micros.last_mut().and_then(find_right_quote_micro),
+            InlineElement::Div(_, inlines) | InlineElement::Formatted(inlines, _) => {
+                inlines.last_mut().and_then(find_right_quote)
+            }
+            _ => None,
+        }
     }
 }
 
