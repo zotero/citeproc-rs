@@ -304,52 +304,72 @@ fn move_punctuation(slice: &mut [InlineElement]) {
         c == '.' || c == ',' || c == '!'
     }
 
-    if slice.len() < 2 {
-        return;
-    }
-    let len = slice.len();
-    for i in 0..len - 1 {
-        if let Some((first, rest)) = (&mut slice[i..]).split_first_mut() {
-            let next = rest
-                .get_mut(0)
-                .expect("only iterated to len-1, so infallible");
+    if slice.len() >= 2 {
+        let len = slice.len();
+        for i in 0..len - 1 {
+            if let Some((first, rest)) = (&mut slice[i..]).split_first_mut() {
+                let next = rest
+                    .first_mut()
+                    .expect("only iterated to len-1, so infallible");
 
-            // Quoted elements are less common, so search for it first
-            let quoted = if let Some(x) = find_right_quote(first) {
-                x
-            } else {
-                continue;
-            };
+                // Quoted elements are less common, so search for it first
+                let quoted = if let Some(x) = find_right_quote(first) {
+                    x
+                } else {
+                    continue;
+                };
 
-            // Must be followed by some text
-            let string = match next {
-                InlineElement::Text(ref mut string) => string,
-                InlineElement::Micro(ref mut micros) => {
-                    if let Some(MicroNode::Text(ref mut string)) = micros.get_mut(0) {
-                        string
-                    } else {
-                        continue;
+                fn find_string_micro(m: &mut MicroNode) -> Option<&mut String> {
+                    match m {
+                        MicroNode::Text(string) => Some(string),
+                        MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+                            nodes.first_mut().and_then(find_string_micro)
+                        }
+                        _ => None,
                     }
                 }
-                _ => continue,
-            };
 
-            // That text must be is_punc
-            if !string.chars().nth(0).map_or(false, is_punc) {
-                continue;
+                // Must be followed by some text
+                let string = match next {
+                    InlineElement::Text(ref mut string) => string,
+                    InlineElement::Micro(ref mut micros) => {
+                        if let Some(string) = micros.first_mut().and_then(find_string_micro) {
+                            string
+                        } else {
+                            continue;
+                        }
+                    }
+                    _ => continue,
+                };
+
+                // That text must be is_punc
+                if !string.chars().nth(0).map_or(false, is_punc) {
+                    continue;
+                }
+
+                // O(n), but n tends to be 2, like with ", " so this is ok
+                let c = string.remove(0);
+                let mut s = String::new();
+                s.push(c);
+
+                match quoted {
+                    Quoted::Inline(inlines) => {
+                        inlines.push(InlineElement::Text(s));
+                    }
+                    Quoted::Micro(children) => {
+                        children.push(MicroNode::Text(s));
+                    }
+                }
             }
-            // O(n), but n tends to be 2, like with ", " so this is ok
-            let c = string.remove(0);
-            let mut s = String::new();
-            s.push(c);
-
-            match quoted {
-                Quoted::Inline(inlines) => {
-                    inlines.push(InlineElement::Text(s));
-                }
-                Quoted::Micro(children) => {
-                    children.push(MicroNode::Text(s));
-                }
+        }
+    } else {
+        // recurse manually over the 0 or 1 items in it, and their children
+        for inl in slice.iter_mut() {
+            match inl {
+                InlineElement::Quoted { inlines, .. }
+                | InlineElement::Div(_, inlines)
+                | InlineElement::Formatted(inlines, _) => move_punctuation(inlines),
+                _ => {}
             }
         }
     }
@@ -359,35 +379,67 @@ fn move_punctuation(slice: &mut [InlineElement]) {
         Micro(&'a mut Vec<MicroNode>),
     }
 
-    fn find_right_quote<'a>(el: &'a mut InlineElement) -> Option<Quoted<'a>> {
-        fn find_right_quote_micro<'a>(micro: &'a mut MicroNode) -> Option<Quoted<'a>> {
-            match micro {
-                MicroNode::Quoted {
-                    localized,
-                    ref mut children,
-                    ..
-                } => {
-                    if localized.punctuation_in_quote {
-                        Some(Quoted::Micro(children))
-                    } else {
-                        None
-                    }
-                }
-                // Dive into formatted bits
-                MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
-                    nodes.last_mut().and_then(find_right_quote_micro)
-                }
-                _ => None,
-            }
-        }
-
-        match el {
-            InlineElement::Quoted {
+    fn find_right_quote_micro<'b>(micro: &'b mut MicroNode) -> Option<Quoted<'b>> {
+        match micro {
+            MicroNode::Quoted {
                 localized,
-                ref mut inlines,
+                children,
                 ..
             } => {
                 if localized.punctuation_in_quote {
+                    // prefer to dive deeper, and catch "'inner quotes,'" too.
+
+                    // This is a limitation of NLL borrowck analysis at the moment, but will be
+                    // solved with Polonius: https://users.rust-lang.org/t/solved-borrow-doesnt-drop-returning-this-value-requires-that/24182
+                    //
+                    // The unsafe is casting a vec to itself; it's safe.
+                    //
+                    // let deeper = children.last_mut().and_then(find_right_quote_micro);
+                    // if deeper.is_some() {
+                    //     return deeper;
+                    // }
+
+                    if !children.is_empty() {
+                        let len = children.len();
+                        let last_mut =
+                            unsafe { &mut (*((children) as *mut Vec<MicroNode>))[len - 1] };
+                        let deeper = find_right_quote_micro(last_mut);
+                        if deeper.is_some() {
+                            return deeper;
+                        }
+                    }
+
+                    Some(Quoted::Micro(children))
+                } else {
+                    None
+                }
+            }
+            // Dive into formatted bits
+            MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+                nodes.last_mut().and_then(find_right_quote_micro)
+            }
+            _ => None,
+        }
+    }
+
+    fn find_right_quote<'a>(el: &'a mut InlineElement) -> Option<Quoted<'a>> {
+        match el {
+            InlineElement::Quoted {
+                localized, inlines, ..
+            } => {
+                if localized.punctuation_in_quote {
+                    // prefer to dive deeper, and catch "'inner quotes,'" too.
+
+                    // See above re unsafe
+                    if !inlines.is_empty() {
+                        let len = inlines.len();
+                        let last_mut =
+                            unsafe { &mut (*((inlines) as *mut Vec<InlineElement>))[len - 1] };
+                        let deeper = find_right_quote(last_mut);
+                        if deeper.is_some() {
+                            return deeper;
+                        }
+                    }
                     Some(Quoted::Inline(inlines))
                 } else {
                     None
