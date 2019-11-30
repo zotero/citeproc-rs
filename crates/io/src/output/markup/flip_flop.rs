@@ -32,7 +32,7 @@ impl FlipFlopState {
     pub fn flip_flop_inlines(&self, inlines: &[InlineElement]) -> Vec<InlineElement> {
         inlines
             .iter()
-            .map(|inl| flip_flop(inl, self).unwrap_or_else(|| inl.clone()))
+            .filter_map(|inl| flip_flop(inl, self))
             .collect()
     }
 }
@@ -99,7 +99,9 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             })
         }
 
-        _ => None,
+        InlineElement::Text(ref string) if string.is_empty() => None,
+
+        _ => Some(inline.clone()),
     }
 
     // a => a
