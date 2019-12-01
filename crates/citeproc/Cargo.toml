@@ -32,6 +32,7 @@ csl = { path = "../csl" }
 citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 citeproc-db = { path = "../db" }
+thiserror = "1.0.6"
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }

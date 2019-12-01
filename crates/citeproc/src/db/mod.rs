@@ -482,3 +482,80 @@ impl Processor {
         langs.contains(lang)
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct DocumentPiece {
+    id: ClusterId,
+    /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<u32>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ErrorKind {
+    #[error("set_complete_document called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])")]
+    NonMonotonicNoteNumber(u32),
+}
+
+impl Processor {
+    /// Specifies which clusters are actually considered to be in the document, and sets their
+    /// order. You may insert as many clusters as you like, but the ones provided here are the only
+    /// ones used.
+    ///
+    /// If a piece does not provide a note, it is an in-text reference. Generally, this is what you
+    /// should be providing for note styles, such that first-reference-note-number does not gain a
+    /// value, but some users put in-text references inside footnotes, and it is unclear what the
+    /// processor should do in this situation so you could try providing note numbers there as
+    /// well.
+    ///
+    /// If a piece provides a { note: N } field, then that N must be monotically increasing
+    /// throughout the document. Two same-N-in-a-row clusters means they occupy the same footnote,
+    /// e.g. this would be two clusters:
+    ///
+    /// ```text
+    /// Some text with footnote.[Prefix @cite, suffix. Second prefix @another_cite, second suffix.]
+    /// ```
+    ///
+    /// This case is recognised and the order they appear in the input here is the order used for
+    /// determining cite positions (ibid, subsequent, etc). But the position:first cites within
+    /// them will all have the same first-reference-note-number if FRNN is used in later cites.
+    ///
+    /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
+    pub fn set_complete_document(&mut self, pieces: &[DocumentPiece]) -> Result<(), ErrorKind> {
+        let mut cluster_ids = Vec::with_capacity(pieces.len());
+        let mut intext_number = 1u32;
+        // (note number, next index)
+        let mut this_note: Option<(u32, u32)> = None;
+        for piece in pieces {
+            if let Some(nn) = piece.note {
+                if let Some(ref mut note) = this_note {
+                    if nn < note.0 {
+                        return Err(ErrorKind::NonMonotonicNoteNumber(nn));
+                    } else if nn == note.0 {
+                        // This note number ended up having more than one index in it;
+                        let (num, ref mut index) = *note;
+                        let i = *index;
+                        *index += 1;
+                        self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(num, i)));
+                    } else if nn > note.0 {
+                        self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(nn, 0)));
+                        *note = (nn, 1);
+                    }
+                } else {
+                    // the first note in the document
+                    this_note = Some((nn, 1));
+                    self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(nn, 0)));
+                }
+                cluster_ids.push(piece.id);
+            } else {
+                let num = intext_number;
+                intext_number += 1;
+                self.set_cluster_note_number(piece.id, ClusterNumber::InText(num));
+                cluster_ids.push(piece.id);
+            }
+        }
+        // This removes any clusters that did not appear.
+        self.set_cluster_ids(Arc::new(cluster_ids));
+        Ok(())
+    }
+}

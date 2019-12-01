@@ -11,7 +11,7 @@ extern crate serde_derive;
 
 pub(crate) mod db;
 pub use self::db::update::{DocUpdate, UpdateSummary};
-pub use self::db::Processor;
+pub use self::db::{Processor, DocumentPiece, ErrorKind};
 
 pub mod prelude {
     pub use crate::db::update::{DocUpdate, UpdateSummary};

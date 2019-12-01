@@ -24,7 +24,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
-use citeproc::Processor;
+use citeproc::{Processor, DocumentPiece};
 use csl::Lang;
 
 #[wasm_bindgen]
@@ -192,6 +192,38 @@ impl Driver {
         let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
         let mut eng = self.engine.borrow_mut();
         eng.renumber_clusters(&mappings);
+        Ok(())
+    }
+
+    /// Specifies which clusters are actually considered to be in the document, and sets their
+    /// order. You may insert as many clusters as you like, but the ones provided here are the only
+    /// ones used.
+    ///
+    /// If a piece does not provide a note, it is an in-text reference. Generally, this is what you
+    /// should be providing for note styles, such that first-reference-note-number does not gain a
+    /// value, but some users put in-text references inside footnotes, and it is unclear what the
+    /// processor should do in this situation so you could try providing note numbers there as
+    /// well.
+    ///
+    /// If a piece provides a { note: N } field, then that N must be monotically increasing
+    /// throughout the document. Two same-N-in-a-row clusters means they occupy the same footnote,
+    /// e.g. this would be two clusters:
+    ///
+    /// ```text
+    /// Some text with footnote.[Prefix @cite, suffix. Second prefix @another_cite, second suffix.]
+    /// ```
+    ///
+    /// This case is recognised and the order they appear in the input here is the order used for
+    /// determining cite positions (ibid, subsequent, etc). But the position:first cites within
+    /// them will all have the same first-reference-note-number if FRNN is used in later cites.
+    ///
+    /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
+    #[wasm_bindgen(js_name = "setCompleteDocument")]
+    pub fn set_complete_document(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
+        let pieces: Vec<DocumentPiece> = utils::read_js_array(pieces)?;
+        let mut eng = self.engine.borrow_mut();
+        eng.set_complete_document(&pieces)
+            .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
         Ok(())
     }
 

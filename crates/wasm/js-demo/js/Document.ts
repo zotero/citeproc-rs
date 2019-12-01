@@ -156,6 +156,8 @@ export class Document {
         let driver = this.driver;
         return produce(this, draft => {
             fn(draft);
+            let pieces = this.clusters.map(c => ({ id: c.id, note: c.note }));
+            driver.setCompleteDocument(pieces);
             let summary = driver.batchedUpdates();
             draft.rendered = draft.rendered.update(summary, this.ordered());
         });
@@ -221,17 +223,7 @@ export class Document {
             this.refCounts.increment(cluster);
             this.refCounts.decrement(atPos);
             this.clusters.splice(pos, 0, cluster);
-            let arr = [];
-            // cascade to the rest of it;
-            // modifies this.clusters at the same time as assembling an updater for the driver
-            // e.g. [2, 3, 3, 4, 4, 5, 5, 6, ...]
-            for (let i = pos + 1; i < this.clusters.length; i++) {
-                let cl = this.clusters[i];
-                cl.note = inc(cl.note);
-                arr.push([cl.id, { note: cl.note }]);
-            }
             this.driver.insertCluster(cluster);
-            this.driver.renumberClusters(arr)
         } else {
             if (this.clusters.length > 0) {
                 cluster.note = inc(this.clusters[this.clusters.length - 1].note);
