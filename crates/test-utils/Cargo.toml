@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-citeproc = { path = "../citeproc", features = ["test"] }
+citeproc = { path = "../citeproc" }
 citeproc-io = { path = "../io" }
 csl = { path = "../csl" }
 directories = "2.0.2"

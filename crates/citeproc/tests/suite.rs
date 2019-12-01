@@ -33,12 +33,16 @@ impl<'a> fmt::Debug for PrettyString<'a> {
 }
 
 lazy_static! {
-    static ref BIB_TESTS: HashSet<String> = {
+    static ref IGNORES: HashSet<String> = {
         let mut m = HashSet::new();
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
-        let bibtests = include_str!("./data/ignore.txt");
-        for bibtest in bibtests.lines() {
-            m.insert(bibtest.to_string());
+        let ignores = include_str!("./data/ignore.txt");
+        for name in ignores.lines() {
+            // Comments
+            if name.trim_start().starts_with("#") {
+                continue;
+            }
+            m.insert(name.to_string());
         }
         m
     };
@@ -46,7 +50,7 @@ lazy_static! {
 
 fn is_ignore(path: &Path) -> bool {
     let fname = path.file_name().unwrap().to_string_lossy();
-    BIB_TESTS.contains(&fname.into_owned())
+    IGNORES.contains(&fname.into_owned())
 }
 
 use std::sync::Once;
