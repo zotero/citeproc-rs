@@ -8,7 +8,7 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression,
+    Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression,
 };
 
 use lazy_static::lazy_static;
@@ -33,13 +33,13 @@ pub enum CitationItem {
 }
 
 impl CitationItem {
-    pub fn to_note_cluster(self, index: u32) -> Cluster2<Markup> {
+    pub fn to_note_cluster(self, index: u32) -> Cluster<Markup> {
         let v = match self {
             CitationItem::Array(v) => v,
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster2::Note {
+        Cluster::Note {
             id: index,
             note: IntraNote::Single(index),
             cites,
@@ -343,7 +343,7 @@ impl JsExecutor<'_> {
         self.to_renumbering(&mut renum, pre);
         self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
         self.to_renumbering(&mut renum, post);
-        let cluster = Cluster2::Note {
+        let cluster = Cluster::Note {
             id,
             note: IntraNote::Multi(note, n_sub),
             cites,

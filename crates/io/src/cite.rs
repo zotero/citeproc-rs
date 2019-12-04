@@ -247,7 +247,7 @@ impl PartialOrd for ClusterNumber {
 /// other.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(untagged, bound(deserialize = ""))]
-pub enum Cluster2<O: OutputFormat> {
+pub enum Cluster<O: OutputFormat> {
     Note {
         note: IntraNote,
         id: ClusterId,
@@ -261,22 +261,22 @@ pub enum Cluster2<O: OutputFormat> {
     },
 }
 
-impl<O: OutputFormat> Cluster2<O> {
+impl<O: OutputFormat> Cluster<O> {
     pub fn id(&self) -> ClusterId {
         match self {
-            Cluster2::InText { id, .. } | Cluster2::Note { id, .. } => *id,
+            Cluster::InText { id, .. } | Cluster::Note { id, .. } => *id,
         }
     }
     pub fn cluster_number(&self) -> ClusterNumber {
         match self {
-            Cluster2::InText { in_text, .. } => ClusterNumber::InText(*in_text),
-            Cluster2::Note { note, .. } => ClusterNumber::Note(*note),
+            Cluster::InText { in_text, .. } => ClusterNumber::InText(*in_text),
+            Cluster::Note { note, .. } => ClusterNumber::Note(*note),
         }
     }
     pub fn split(self) -> (ClusterId, ClusterNumber, Vec<Cite<O>>) {
         match self {
-            Cluster2::Note { id, note, cites } => (id, ClusterNumber::Note(note), cites),
-            Cluster2::InText { id, in_text, cites } => (id, ClusterNumber::InText(in_text), cites),
+            Cluster::Note { id, note, cites } => (id, ClusterNumber::Note(note), cites),
+            Cluster::InText { id, in_text, cites } => (id, ClusterNumber::InText(in_text), cites),
         }
     }
 }
@@ -284,31 +284,31 @@ impl<O: OutputFormat> Cluster2<O> {
 #[test]
 fn json_clusters() {
     use crate::output::markup::Markup;
-    let c: Cluster2<Markup> =
+    let c: Cluster<Markup> =
         serde_json::from_str(r#"{ "note": 32, "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c,
-        Cluster2::Note {
+        Cluster::Note {
             note: IntraNote::Single(32),
             id: 5,
             cites: vec![]
         }
     );
-    let c2: Cluster2<Markup> =
+    let c2: Cluster<Markup> =
         serde_json::from_str(r#"{ "note": [8, 2], "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c2,
-        Cluster2::Note {
+        Cluster::Note {
             note: IntraNote::Multi(8, 2),
             id: 5,
             cites: vec![]
         }
     );
-    let c3: Cluster2<Markup> =
+    let c3: Cluster<Markup> =
         serde_json::from_str(r#"{ "inText": 32, "id": 5, "cites": [] }"#).unwrap();
     assert_eq!(
         c3,
-        Cluster2::InText {
+        Cluster::InText {
             in_text: 32,
             id: 5,
             cites: vec![]

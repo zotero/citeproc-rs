@@ -8,7 +8,7 @@
 extern crate serde_derive;
 
 use citeproc::prelude::*;
-use citeproc_io::{Cite, Cluster2, IntraNote, Reference};
+use citeproc_io::{Cite, Cluster, IntraNote, Reference};
 use csl::Lang;
 
 use directories::ProjectDirs;
@@ -105,7 +105,7 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&refr.id));
                 }
-                clusters_auto.push(Cluster2::Note {
+                clusters_auto.push(Cluster::Note {
                     id: 1,
                     note: IntraNote::Single(1),
                     cites,

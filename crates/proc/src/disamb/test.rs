@@ -148,10 +148,10 @@ fn test() {
     let dfa2 = create_dfa::<Markup, MockProcessor>(db, &refr2);
     println!("{}", dfa2.debug_graph(db));
 
-    use citeproc_io::{Cite, Cluster2, IntraNote};
+    use citeproc_io::{Cite, Cluster, IntraNote};
 
     db.set_references(vec![refr, refr2]);
-    let cluster = Cluster2::Note {
+    let cluster = Cluster::Note {
         id: 1,
         note: IntraNote::Single(1),
         cites: vec![Cite::basic("ref_id")],

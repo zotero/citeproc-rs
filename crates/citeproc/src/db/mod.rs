@@ -34,7 +34,7 @@ use csl::Style;
 use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
 #[allow(dead_code)]
@@ -314,7 +314,7 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Markup>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
             let (cluster_id, number, cites) = cluster.split();
@@ -345,7 +345,7 @@ impl Processor {
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
-    pub fn insert_cluster(&mut self, cluster: Cluster2<Markup>) {
+    pub fn insert_cluster(&mut self, cluster: Cluster<Markup>) {
         let (cluster_id, number, cites) = cluster.split();
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {
