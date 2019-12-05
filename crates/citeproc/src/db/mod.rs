@@ -239,7 +239,7 @@ impl Processor {
                     snap.0.ir_gen2_add_given_name(cite_id);
                 });
             self.year_suffixes();
-            cluster
+            clusters
                 .par_iter()
                 .for_each_with(self.snap(), |snap, cluster| {
                     snap.0.built_cluster(cluster.id);
