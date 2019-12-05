@@ -136,6 +136,8 @@ export class Document {
     private init(driver: Driver) {
         this.driver = driver;
         driver.initClusters(this.clusters);
+        let pieces = this.clusters.map(c => ({ id: c.id, note: c.note }));
+        driver.setCompleteDocument(pieces);
         this.rendered = new RenderedDocument(this.clusters, driver);
         // Drain the update queue, because we know we're up to date
         this.driver.drain();

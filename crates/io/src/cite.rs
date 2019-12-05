@@ -246,38 +246,15 @@ impl PartialOrd for ClusterNumber {
 /// Similarly, it is up to a library consumer to make sure no clusters have the same number as any
 /// other.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(untagged, bound(deserialize = ""))]
-pub enum Cluster<O: OutputFormat> {
-    Note {
-        note: IntraNote,
-        id: ClusterId,
-        cites: Vec<Cite<O>>,
-    },
-    InText {
-        #[serde(rename = "inText")]
-        in_text: u32,
-        id: ClusterId,
-        cites: Vec<Cite<O>>,
-    },
+#[serde(bound(deserialize = ""))]
+pub struct Cluster<O: OutputFormat> {
+    pub id: ClusterId,
+    pub cites: Vec<Cite<O>>,
 }
 
 impl<O: OutputFormat> Cluster<O> {
     pub fn id(&self) -> ClusterId {
-        match self {
-            Cluster::InText { id, .. } | Cluster::Note { id, .. } => *id,
-        }
-    }
-    pub fn cluster_number(&self) -> ClusterNumber {
-        match self {
-            Cluster::InText { in_text, .. } => ClusterNumber::InText(*in_text),
-            Cluster::Note { note, .. } => ClusterNumber::Note(*note),
-        }
-    }
-    pub fn split(self) -> (ClusterId, ClusterNumber, Vec<Cite<O>>) {
-        match self {
-            Cluster::Note { id, note, cites } => (id, ClusterNumber::Note(note), cites),
-            Cluster::InText { id, in_text, cites } => (id, ClusterNumber::InText(in_text), cites),
-        }
+        self.id
     }
 }
 

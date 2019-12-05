@@ -226,7 +226,7 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) {
-        let cluster_ids = self.cluster_ids();
+        let clusters = self.clusters_sorted();
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
@@ -239,16 +239,16 @@ impl Processor {
                     snap.0.ir_gen2_add_given_name(cite_id);
                 });
             self.year_suffixes();
-            cluster_ids
+            cluster
                 .par_iter()
-                .for_each_with(self.snap(), |snap, &cluster_id| {
-                    snap.0.built_cluster(cluster_id);
+                .for_each_with(self.snap(), |snap, cluster| {
+                    snap.0.built_cluster(cluster.id);
                 });
         }
         #[cfg(not(feature = "rayon"))]
         {
-            for &cluster_id in cluster_ids.iter() {
-                self.built_cluster(cluster_id);
+            for cluster in clusters.iter() {
+                self.built_cluster(cluster.id);
             }
         }
     }
@@ -317,14 +317,14 @@ impl Processor {
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let (cluster_id, number, cites) = cluster.split();
+            let Cluster { id: cluster_id, cites } = cluster;
             let mut ids = Vec::new();
-            for (index, cite) in cites.iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
+            for (index, cite) in cites.into_iter().enumerate() {
+                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
-            self.set_cluster_note_number(cluster_id, number);
+            self.set_cluster_note_number(cluster_id, None);
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
@@ -335,7 +335,7 @@ impl Processor {
 
     pub fn remove_cluster(&mut self, cluster_id: ClusterId) {
         self.set_cluster_cites(cluster_id, Arc::new(Vec::new()));
-        self.set_cluster_note_number(cluster_id, ClusterNumber::InText(0));
+        self.set_cluster_note_number(cluster_id, None);
         let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
@@ -346,7 +346,7 @@ impl Processor {
     }
 
     pub fn insert_cluster(&mut self, cluster: Cluster<Markup>) {
-        let (cluster_id, number, cites) = cluster.split();
+        let Cluster { id: cluster_id, cites } = cluster;
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {
             let mut new_cluster_ids = (*cluster_ids).clone();
@@ -360,14 +360,14 @@ impl Processor {
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
-        self.set_cluster_note_number(cluster_id, number);
+        self.set_cluster_note_number(cluster_id, None);
     }
 
     pub fn renumber_clusters(&mut self, mappings: &[(u32, ClusterNumber)]) {
         for chunk in mappings {
             let cluster_id = chunk.0;
             let n = chunk.1;
-            self.set_cluster_note_number(cluster_id, n);
+            self.set_cluster_note_number(cluster_id, Some(n));
         }
     }
 
@@ -536,21 +536,21 @@ impl Processor {
                         let (num, ref mut index) = *note;
                         let i = *index;
                         *index += 1;
-                        self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(num, i)));
+                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(num, i))));
                     } else if nn > note.0 {
-                        self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(nn, 0)));
+                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
                         *note = (nn, 1);
                     }
                 } else {
                     // the first note in the document
                     this_note = Some((nn, 1));
-                    self.set_cluster_note_number(piece.id, ClusterNumber::Note(IntraNote::Multi(nn, 0)));
+                    self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
                 }
                 cluster_ids.push(piece.id);
             } else {
                 let num = intext_number;
                 intext_number += 1;
-                self.set_cluster_note_number(piece.id, ClusterNumber::InText(num));
+                self.set_cluster_note_number(piece.id, Some(ClusterNumber::InText(num)));
                 cluster_ids.push(piece.id);
             }
         }
