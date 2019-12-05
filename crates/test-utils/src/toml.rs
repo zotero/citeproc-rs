@@ -6,7 +6,7 @@
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster2, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
+    Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Locator, NumericValue, Reference,
     Suppression,
 };
 use csl::Lang;
@@ -72,7 +72,7 @@ use std::collections::HashMap;
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct TomlInstruction {
     #[serde(default)]
-    clusters: Vec<Cluster2<Html>>,
+    clusters: Vec<Cluster<Html>>,
     #[serde(default)]
     refs: Vec<Reference>,
     #[serde(default)]

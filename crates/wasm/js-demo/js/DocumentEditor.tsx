@@ -1,6 +1,6 @@
 import { Document, RenderedDocument } from './Document';
 import React, { useState, useEffect, useCallback } from 'react';
-import { NoteCluster, Cite } from '../../pkg';
+import { Cluster, Cite } from '../../pkg';
 
 import './bibliography.css';
 
@@ -16,7 +16,7 @@ export const DocumentEditor = ({document, onChange}: { document: Document; onCha
         });
         onChange(neu);
     };
-    let editors = document.clusters.map((cluster: NoteCluster) => {
+    let editors = document.clusters.map((cluster: Cluster) => {
         return <div key={cluster.id}>
             <button style={btnStyle} onClick={() => insertCluster(cluster.id)} >+cluster</button>
             <ClusterEditor
@@ -57,7 +57,7 @@ const ClusterViewer = React.memo(({note, html, touched}: { note: number | [numbe
     return <p className={"footnote"} style={style} dangerouslySetInnerHTML={{ __html: note + ". " + html }}></p>
 });
 
-const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: NoteCluster, removeCluster: () => void, updateCluster: (cluster: NoteCluster) => void}) => {
+const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: Cluster, removeCluster: () => void, updateCluster: (cluster: Cluster) => void}) => {
     let [me, setMe] = useState(cluster);
     let editors = cluster.cites.map((cite: Cite, i) => {
         return <CiteEditor key={i} cite={cite} update={ c => {

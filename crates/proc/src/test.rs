@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Cite, Cluster2, IntraNote, Reference};
+use citeproc_io::{output::markup::Markup, Cite, Cluster, IntraNote, Reference};
 use csl::Atom;
 
 use csl::Style;
@@ -86,17 +86,17 @@ impl MockProcessor {
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Markup>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let (cluster_id, number, cites) = cluster.split();
+            let Cluster { id: cluster_id, cites } = cluster;
             let mut ids = Vec::new();
-            for (index, cite) in cites.iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
+            for (index, cite) in cites.into_iter().enumerate() {
+                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
-            self.set_cluster_note_number(cluster_id, number);
+            self.set_cluster_note_number(cluster_id, None);
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));

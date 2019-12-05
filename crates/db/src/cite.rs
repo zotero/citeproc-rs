@@ -44,7 +44,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
 
     #[salsa::input]
-    fn cluster_note_number(&self, key: ClusterId) -> ClusterNumber;
+    fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
 
     // All cite ids, in the order they appear in the document
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
@@ -94,9 +94,9 @@ impl CiteId {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct ClusterData {
-    id: ClusterId,
-    number: ClusterNumber,
-    cites: Arc<Vec<CiteId>>,
+    pub id: ClusterId,
+    pub number: ClusterNumber,
+    pub cites: Arc<Vec<CiteId>>,
 }
 
 fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
@@ -170,10 +170,9 @@ fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
 
 fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     let mut ids = Vec::new();
-    let cluster_ids = db.cluster_ids();
-    let clusters = cluster_ids.iter().cloned().map(|id| db.cluster_cites(id));
-    for cluster in clusters {
-        ids.extend(cluster.iter().cloned());
+    let clusters = db.clusters_sorted();
+    for cluster in clusters.iter() {
+        ids.extend(cluster.cites.iter().cloned());
     }
     Arc::new(ids)
 }
@@ -182,9 +181,12 @@ fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
-        .map(|&id| ClusterData {
+        // No number? Not considered to be in document, position participant.
+        // Although may be disamb participant.
+        .filter_map(|&id| db.cluster_note_number(id).map(|n| (id, n)))
+        .map(|(id, number)| ClusterData {
             id,
-            number: db.cluster_note_number(id),
+            number,
             cites: db.cluster_cites(id),
         })
         .collect();

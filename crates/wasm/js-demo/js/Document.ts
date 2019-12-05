@@ -1,9 +1,8 @@
-import { Reference, Cite, Cluster, NoteCluster, Driver, UpdateSummary, Lifecycle } from '../../pkg';
+import { Reference, Cite, Cluster, ClusterPosition, Driver, UpdateSummary, Lifecycle } from '../../pkg';
 import { produce, immerable, Draft, IProduce } from 'immer';
 
 export type ClusterId = number;
 export type CiteId = number;
-export type OrderedClusterIds = Pick<NoteCluster, "id" | "note">;
 
 export class RenderedDocument {
 
@@ -13,21 +12,21 @@ export class RenderedDocument {
     public bibliographyIds: Array<string> = [];
     public bibliography: { [id: string]: string } = {};
 
-    public orderedClusterIds: Array<OrderedClusterIds> = [];
+    public orderedClusterIds: Array<ClusterPosition> = [];
 
     /** For showing a paint splash when clusters are updated */
     public updatedLastRevision: { [id: number]: boolean } = {};
 
-    constructor(clusters: NoteCluster[], driver: Driver) {
+    constructor(clusters: Cluster[], oci: Array<ClusterPosition>, driver: Driver) {
         this[immerable] = true;
+        this.orderedClusterIds = oci;
         for (let cluster of clusters) {
             this.builtClusters[cluster.id] = driver.builtCluster(cluster.id);
             // TODO: send note through a round trip and get it from builtCluster
-            this.orderedClusterIds.push({ id: cluster.id, note: cluster.note });
         }
     }
 
-    public update(summary: UpdateSummary, oci: Array<OrderedClusterIds>) {
+    public update(summary: UpdateSummary, oci: Array<ClusterPosition>) {
         let neu = produce(this, draft => {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
@@ -50,8 +49,6 @@ export class RenderedDocument {
     }
 
 }
-
-type NonNumberedCluster = Omit<NoteCluster, "note">;
 
 class RefCounter {
     private citekeyRefcounts = new Map<string, number>();
@@ -97,7 +94,7 @@ export class Document {
     private driver: Driver;
 
     /** The internal document model */
-    public clusters: NoteCluster[];
+    public clusters: Cluster[];
 
     public rendered: RenderedDocument;
 
@@ -106,7 +103,7 @@ export class Document {
     private nextClusterId = 100;
     private nextCiteId = 100;
 
-    constructor(clusters: NoteCluster[], driver?: Driver) {
+    constructor(clusters: Cluster[], driver?: Driver) {
         this.refCounts = new RefCounter(
             key => {
                 // console.log("reference subscribed", key);
@@ -123,10 +120,6 @@ export class Document {
         }
     }
 
-    private ordered() {
-        return this.clusters.map(c => ({ id: c.id, note: c.note, }));
-    }
-
     private initCitekeys() {
         for (let cluster of this.clusters) {
             this.refCounts.increment(cluster);
@@ -136,7 +129,8 @@ export class Document {
     private init(driver: Driver) {
         this.driver = driver;
         driver.initClusters(this.clusters);
-        this.rendered = new RenderedDocument(this.clusters, driver);
+        driver.setClusterOrder(this.clusterPositions());
+        this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
         // Drain the update queue, because we know we're up to date
         this.driver.drain();
     }
@@ -156,23 +150,29 @@ export class Document {
         let driver = this.driver;
         return produce(this, draft => {
             fn(draft);
+            driver.setClusterOrder(draft.clusterPositions());
             let summary = driver.batchedUpdates();
-            draft.rendered = draft.rendered.update(summary, this.ordered());
+            draft.rendered = draft.rendered.update(summary, this.clusterPositions());
         });
     };
+
+    clusterPositions(): Array<ClusterPosition> {
+        // Simple but good for a demo: one note number per cluster.
+        return this.clusters.map((c, i) => ({ id: c.id, note: i + 1 }));
+    }
 
     //////////////
     // Clusters //
     //////////////
 
-    createCluster(cites: Cite[]): NonNumberedCluster {
+    createCluster(cites: Cite[]): Cluster {
         return {
             id: this.nextClusterId++,
             cites: cites,
         };
     }
 
-    replaceCluster(cluster: NoteCluster) {
+    replaceCluster(cluster: Cluster) {
         // Mutate
         let idx = this.clusters.findIndex(c => c.id === cluster.id);
         this.refCounts.increment(cluster);
@@ -212,32 +212,15 @@ export class Document {
      * @param _cluster      A createCluster() result.
      * @param beforeCluster The cluster ID to insert this before; `null` = at the end.
      */
-    insertCluster(_cluster: NonNumberedCluster, beforeCluster: ClusterId | null) {
-        let cluster = _cluster as NoteCluster;
+    insertCluster(cluster: Cluster, beforeCluster: ClusterId | null) {
         let pos = beforeCluster === null ? -1 : this.clusters.findIndex(c => c.id === beforeCluster);
         if (pos !== -1) {
             let atPos = this.clusters[pos];
-            cluster.note = atPos.note;
             this.refCounts.increment(cluster);
             this.refCounts.decrement(atPos);
             this.clusters.splice(pos, 0, cluster);
-            let arr = [];
-            // cascade to the rest of it;
-            // modifies this.clusters at the same time as assembling an updater for the driver
-            // e.g. [2, 3, 3, 4, 4, 5, 5, 6, ...]
-            for (let i = pos + 1; i < this.clusters.length; i++) {
-                let cl = this.clusters[i];
-                cl.note = inc(cl.note);
-                arr.push([cl.id, { note: cl.note }]);
-            }
             this.driver.insertCluster(cluster);
-            this.driver.renumberClusters(arr)
         } else {
-            if (this.clusters.length > 0) {
-                cluster.note = inc(this.clusters[this.clusters.length - 1].note);
-            } else {
-                cluster.note = 1;
-            }
             this.clusters.push(cluster);
             this.driver.insertCluster(cluster);
         }

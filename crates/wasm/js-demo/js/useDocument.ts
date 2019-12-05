@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary, NoteCluster } from '../../pkg';
+import { Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary } from '../../pkg';
 import { ClusterId, Document, RenderedDocument } from './Document';
 import { Fetcher } from './Fetcher';
 
@@ -26,7 +26,7 @@ const fetcher = new Fetcher();
  * Again, you don't have to use React hooks/useState etc and the Rust-like `safe-types`.
  * An example that would work in an imperative app (e.g. without React's automatic updating) is below.
  */
-export const useDocument = (initialStyle: string, initialReferences: Reference[], initialClusters: NoteCluster[]) => {
+export const useDocument = (initialStyle: string, initialReferences: Reference[], initialClusters: Cluster[]) => {
     const [references, setReferences] = useState(initialReferences);
     const [document, setDocument] = useState(None() as Option<Document>);
     const [inFlight, setInFlight] = useState(false);

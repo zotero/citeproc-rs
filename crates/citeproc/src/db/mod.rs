@@ -34,7 +34,7 @@ use csl::Style;
 use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Cluster2, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
 #[allow(dead_code)]
@@ -226,7 +226,7 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) {
-        let cluster_ids = self.cluster_ids();
+        let clusters = self.clusters_sorted();
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
@@ -239,16 +239,16 @@ impl Processor {
                     snap.0.ir_gen2_add_given_name(cite_id);
                 });
             self.year_suffixes();
-            cluster_ids
+            clusters
                 .par_iter()
-                .for_each_with(self.snap(), |snap, &cluster_id| {
-                    snap.0.built_cluster(cluster_id);
+                .for_each_with(self.snap(), |snap, cluster| {
+                    snap.0.built_cluster(cluster.id);
                 });
         }
         #[cfg(not(feature = "rayon"))]
         {
-            for &cluster_id in cluster_ids.iter() {
-                self.built_cluster(cluster_id);
+            for cluster in clusters.iter() {
+                self.built_cluster(cluster.id);
             }
         }
     }
@@ -314,17 +314,17 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster2<Markup>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let (cluster_id, number, cites) = cluster.split();
+            let Cluster { id: cluster_id, cites } = cluster;
             let mut ids = Vec::new();
-            for (index, cite) in cites.iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
+            for (index, cite) in cites.into_iter().enumerate() {
+                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
-            self.set_cluster_note_number(cluster_id, number);
+            self.set_cluster_note_number(cluster_id, None);
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
@@ -335,7 +335,7 @@ impl Processor {
 
     pub fn remove_cluster(&mut self, cluster_id: ClusterId) {
         self.set_cluster_cites(cluster_id, Arc::new(Vec::new()));
-        self.set_cluster_note_number(cluster_id, ClusterNumber::InText(0));
+        self.set_cluster_note_number(cluster_id, None);
         let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
@@ -345,8 +345,8 @@ impl Processor {
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
-    pub fn insert_cluster(&mut self, cluster: Cluster2<Markup>) {
-        let (cluster_id, number, cites) = cluster.split();
+    pub fn insert_cluster(&mut self, cluster: Cluster<Markup>) {
+        let Cluster { id: cluster_id, cites } = cluster;
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {
             let mut new_cluster_ids = (*cluster_ids).clone();
@@ -360,14 +360,14 @@ impl Processor {
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
-        self.set_cluster_note_number(cluster_id, number);
+        self.set_cluster_note_number(cluster_id, None);
     }
 
     pub fn renumber_clusters(&mut self, mappings: &[(u32, ClusterNumber)]) {
         for chunk in mappings {
             let cluster_id = chunk.0;
             let n = chunk.1;
-            self.set_cluster_note_number(cluster_id, n);
+            self.set_cluster_note_number(cluster_id, Some(n));
         }
     }
 
@@ -377,8 +377,13 @@ impl Processor {
         id.lookup(self)
     }
 
-    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<MarkupOutput> {
-        self.built_cluster(cluster_id)
+    /// Returns None if the cluster has not been assigned a position in the document.
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Option<Arc<MarkupOutput>> {
+        if self.cluster_note_number(cluster_id).is_some() {
+            Some(self.built_cluster(cluster_id))
+        } else {
+            None
+        }
     }
 
     pub fn get_bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput> {
@@ -480,5 +485,82 @@ impl Processor {
     pub fn has_cached_locale(&self, lang: &Lang) -> bool {
         let langs = self.locale_input_langs();
         langs.contains(lang)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ClusterPosition {
+    pub id: ClusterId,
+    /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<u32>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ErrorKind {
+    #[error("set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])")]
+    NonMonotonicNoteNumber(u32),
+}
+
+impl Processor {
+    /// Specifies which clusters are actually considered to be in the document, and sets their
+    /// order. You may insert as many clusters as you like, but the ones provided here are the only
+    /// ones used.
+    ///
+    /// If a piece does not provide a note, it is an in-text reference. Generally, this is what you
+    /// should be providing for note styles, such that first-reference-note-number does not gain a
+    /// value, but some users put in-text references inside footnotes, and it is unclear what the
+    /// processor should do in this situation so you could try providing note numbers there as
+    /// well.
+    ///
+    /// If a piece provides a { note: N } field, then that N must be monotically increasing
+    /// throughout the document. Two same-N-in-a-row clusters means they occupy the same footnote,
+    /// e.g. this would be two clusters:
+    ///
+    /// ```text
+    /// Some text with footnote.[Prefix @cite, suffix. Second prefix @another_cite, second suffix.]
+    /// ```
+    ///
+    /// This case is recognised and the order they appear in the input here is the order used for
+    /// determining cite positions (ibid, subsequent, etc). But the position:first cites within
+    /// them will all have the same first-reference-note-number if FRNN is used in later cites.
+    ///
+    /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
+    pub fn set_cluster_order(&mut self, pieces: &[ClusterPosition]) -> Result<(), ErrorKind> {
+        let mut cluster_ids = Vec::with_capacity(pieces.len());
+        let mut intext_number = 1u32;
+        // (note number, next index)
+        let mut this_note: Option<(u32, u32)> = None;
+        for piece in pieces {
+            if let Some(nn) = piece.note {
+                if let Some(ref mut note) = this_note {
+                    if nn < note.0 {
+                        return Err(ErrorKind::NonMonotonicNoteNumber(nn));
+                    } else if nn == note.0 {
+                        // This note number ended up having more than one index in it;
+                        let (num, ref mut index) = *note;
+                        let i = *index;
+                        *index += 1;
+                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(num, i))));
+                    } else if nn > note.0 {
+                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
+                        *note = (nn, 1);
+                    }
+                } else {
+                    // the first note in the document
+                    this_note = Some((nn, 1));
+                    self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
+                }
+                cluster_ids.push(piece.id);
+            } else {
+                let num = intext_number;
+                intext_number += 1;
+                self.set_cluster_note_number(piece.id, Some(ClusterNumber::InText(num)));
+                cluster_ids.push(piece.id);
+            }
+        }
+        // This removes any clusters that did not appear.
+        self.set_cluster_ids(Arc::new(cluster_ids));
+        Ok(())
     }
 }

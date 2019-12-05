@@ -14,7 +14,8 @@ extern crate log;
 
 use self::utils::ErrorPlaceholder;
 
-use js_sys::{Error, Promise};
+use std::error::Error;
+use js_sys::{Error as JsError, Promise};
 use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -24,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
-use citeproc::Processor;
+use citeproc::{Processor, ClusterPosition};
 use csl::Lang;
 
 #[wasm_bindgen]
@@ -49,11 +50,11 @@ impl Driver {
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
         let us_fetcher = Arc::new(utils::USFetcher);
         let format = SupportedFormat::from_str(format)
-            .map_err(|_| Error::new(&format!("unknown format `{}`", format)))?;
+            .map_err(|_| JsError::new(&format!("unknown format `{}`", format)))?;
         let engine = Processor::new(style, us_fetcher, true, format)
             .map(RefCell::new)
             .map(Rc::new)
-            .map_err(|e| Error::new(&serde_json::to_string(&e).unwrap()))?;
+            .map_err(|e| JsError::new(&serde_json::to_string(&e).unwrap()))?;
 
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.
@@ -153,8 +154,13 @@ impl Driver {
     /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]
     pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
-        let built = (*self.engine.borrow().get_cluster(id)).clone();
-        Ok(JsValue::from_serde(&built).unwrap())
+        let eng = self.engine.borrow();
+        let built = eng.get_cluster(id);
+        Ok(built
+            .ok_or_else(|| JsError::new(&format!("Cluster {} has not been assigned a position in the document.", id)))
+            .and_then(|b| {
+                JsValue::from_serde(&b).map_err(|e| JsError::new(e.description()))
+            })?)
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]
@@ -192,6 +198,38 @@ impl Driver {
         let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
         let mut eng = self.engine.borrow_mut();
         eng.renumber_clusters(&mappings);
+        Ok(())
+    }
+
+    /// Specifies which clusters are actually considered to be in the document, and sets their
+    /// order. You may insert as many clusters as you like, but the ones provided here are the only
+    /// ones used.
+    ///
+    /// If a piece does not provide a note, it is an in-text reference. Generally, this is what you
+    /// should be providing for note styles, such that first-reference-note-number does not gain a
+    /// value, but some users put in-text references inside footnotes, and it is unclear what the
+    /// processor should do in this situation so you could try providing note numbers there as
+    /// well.
+    ///
+    /// If a piece provides a { note: N } field, then that N must be monotically increasing
+    /// throughout the document. Two same-N-in-a-row clusters means they occupy the same footnote,
+    /// e.g. this would be two clusters:
+    ///
+    /// ```text
+    /// Some text with footnote.[Prefix @cite, suffix. Second prefix @another_cite, second suffix.]
+    /// ```
+    ///
+    /// This case is recognised and the order they appear in the input here is the order used for
+    /// determining cite positions (ibid, subsequent, etc). But the position:first cites within
+    /// them will all have the same first-reference-note-number if FRNN is used in later cites.
+    ///
+    /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
+    #[wasm_bindgen(js_name = "setClusterOrder")]
+    pub fn set_cluster_order(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
+        let pieces: Vec<ClusterPosition> = utils::read_js_array(pieces)?;
+        let mut eng = self.engine.borrow_mut();
+        eng.set_cluster_order(&pieces)
+            .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
         Ok(())
     }
 
@@ -315,19 +353,16 @@ export type ClusterNumber = {
     inText: number
 };
 
-export type NoteCluster = {
+export type Cluster = {
     id: number;
     cites: Cite[];
-    note: number | [number, number]
 };
 
-export type InTextCluster = {
+export type ClusterPosition = {
     id: number;
-    cites: Cite[];
-    in_text: number;
-};
-
-export type Cluster = NoteCluster | InTextCluster;
+    /** Leaving off this field means this cluster is in-text. */
+    note?: number;
+}
 
 export type Reference = {
     id: string;
