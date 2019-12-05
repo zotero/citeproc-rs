@@ -498,7 +498,7 @@ pub struct DocumentPiece {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
-    #[error("set_complete_document called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])")]
+    #[error("set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])")]
     NonMonotonicNoteNumber(u32),
 }
 
@@ -526,7 +526,7 @@ impl Processor {
     /// them will all have the same first-reference-note-number if FRNN is used in later cites.
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
-    pub fn set_complete_document(&mut self, pieces: &[DocumentPiece]) -> Result<(), ErrorKind> {
+    pub fn set_cluster_order(&mut self, pieces: &[DocumentPiece]) -> Result<(), ErrorKind> {
         let mut cluster_ids = Vec::with_capacity(pieces.len());
         let mut intext_number = 1u32;
         // (note number, next index)

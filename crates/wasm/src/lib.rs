@@ -224,11 +224,11 @@ impl Driver {
     /// them will all have the same first-reference-note-number if FRNN is used in later cites.
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
-    #[wasm_bindgen(js_name = "setCompleteDocument")]
-    pub fn set_complete_document(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "setClusterOrder")]
+    pub fn set_cluster_order(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
         let pieces: Vec<DocumentPiece> = utils::read_js_array(pieces)?;
         let mut eng = self.engine.borrow_mut();
-        eng.set_complete_document(&pieces)
+        eng.set_cluster_order(&pieces)
             .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
         Ok(())
     }

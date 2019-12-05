@@ -137,7 +137,7 @@ export class Document {
         this.driver = driver;
         driver.initClusters(this.clusters);
         let pieces = this.clusters.map(c => ({ id: c.id, note: c.note }));
-        driver.setCompleteDocument(pieces);
+        driver.setClusterOrder(pieces);
         this.rendered = new RenderedDocument(this.clusters, driver);
         // Drain the update queue, because we know we're up to date
         this.driver.drain();
@@ -159,7 +159,7 @@ export class Document {
         return produce(this, draft => {
             fn(draft);
             let pieces = this.clusters.map(c => ({ id: c.id, note: c.note }));
-            driver.setCompleteDocument(pieces);
+            driver.setClusterOrder(pieces);
             let summary = driver.batchedUpdates();
             draft.rendered = draft.rendered.update(summary, this.ordered());
         });
