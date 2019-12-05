@@ -14,7 +14,8 @@ extern crate log;
 
 use self::utils::ErrorPlaceholder;
 
-use js_sys::{Error, Promise};
+use std::error::Error;
+use js_sys::{Error as JsError, Promise};
 use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -49,11 +50,11 @@ impl Driver {
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
         let us_fetcher = Arc::new(utils::USFetcher);
         let format = SupportedFormat::from_str(format)
-            .map_err(|_| Error::new(&format!("unknown format `{}`", format)))?;
+            .map_err(|_| JsError::new(&format!("unknown format `{}`", format)))?;
         let engine = Processor::new(style, us_fetcher, true, format)
             .map(RefCell::new)
             .map(Rc::new)
-            .map_err(|e| Error::new(&serde_json::to_string(&e).unwrap()))?;
+            .map_err(|e| JsError::new(&serde_json::to_string(&e).unwrap()))?;
 
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.
@@ -153,8 +154,13 @@ impl Driver {
     /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]
     pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
-        let built = (*self.engine.borrow().get_cluster(id)).clone();
-        Ok(JsValue::from_serde(&built).unwrap())
+        let eng = self.engine.borrow();
+        let built = eng.get_cluster(id);
+        Ok(built
+            .ok_or_else(|| JsError::new(&format!("Cluster {} has not been assigned a position in the document.", id)))
+            .and_then(|b| {
+                JsValue::from_serde(&b).map_err(|e| JsError::new(e.description()))
+            })?)
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]

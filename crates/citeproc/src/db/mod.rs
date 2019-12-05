@@ -377,8 +377,13 @@ impl Processor {
         id.lookup(self)
     }
 
-    pub fn get_cluster(&self, cluster_id: ClusterId) -> Arc<MarkupOutput> {
-        self.built_cluster(cluster_id)
+    /// Returns None if the cluster has not been assigned a position in the document.
+    pub fn get_cluster(&self, cluster_id: ClusterId) -> Option<Arc<MarkupOutput>> {
+        if self.cluster_note_number(cluster_id).is_some() {
+            Some(self.built_cluster(cluster_id))
+        } else {
+            None
+        }
     }
 
     pub fn get_bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput> {
