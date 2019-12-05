@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
-use citeproc::{Processor, DocumentPiece};
+use citeproc::{Processor, ClusterPosition};
 use csl::Lang;
 
 #[wasm_bindgen]
@@ -226,7 +226,7 @@ impl Driver {
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     #[wasm_bindgen(js_name = "setClusterOrder")]
     pub fn set_cluster_order(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
-        let pieces: Vec<DocumentPiece> = utils::read_js_array(pieces)?;
+        let pieces: Vec<ClusterPosition> = utils::read_js_array(pieces)?;
         let mut eng = self.engine.borrow_mut();
         eng.set_cluster_order(&pieces)
             .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
@@ -353,19 +353,16 @@ export type ClusterNumber = {
     inText: number
 };
 
-export type NoteCluster = {
+export type Cluster = {
     id: number;
     cites: Cite[];
-    note: number | [number, number]
 };
 
-export type InTextCluster = {
+export type ClusterPosition = {
     id: number;
-    cites: Cite[];
-    in_text: number;
-};
-
-export type Cluster = NoteCluster | InTextCluster;
+    /** Leaving off this field means this cluster is in-text. */
+    note?: number;
+}
 
 export type Reference = {
     id: string;

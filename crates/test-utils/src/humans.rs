@@ -39,9 +39,8 @@ impl CitationItem {
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster::Note {
+        Cluster {
             id: index,
-            note: IntraNote::Single(index),
             cites,
         }
     }
@@ -294,16 +293,17 @@ impl JsExecutor<'_> {
                 continue;
             }
             let &note = self.current_note_numbers.get(&id).unwrap();
-            let text = (*self.proc.get_cluster(id)).clone();
-            results.push(CiteResult {
-                kind: ResultKind::Dots,
-                id,
-                note,
-                text: text
-                    .replace("&#x2f;", "/")
-                    // citeproc-js uses the #38 version
-                    .replace("&amp;", "&#38;"),
-            })
+            if let Some(text) = self.proc.get_cluster(id) {
+                results.push(CiteResult {
+                    kind: ResultKind::Dots,
+                    id,
+                    note,
+                    text: text
+                        .replace("&#x2f;", "/")
+                        // citeproc-js uses the #38 version
+                        .replace("&amp;", "&#38;"),
+                })
+            }
         }
         results.sort_by_key(|x| x.note);
         Results(results)
@@ -339,16 +339,10 @@ impl JsExecutor<'_> {
         }
 
         let mut renum = Vec::new();
-        let n_sub = pre.iter().filter(|PrePost(_st, n)| *n == note).count() as u32;
         self.to_renumbering(&mut renum, pre);
         self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
         self.to_renumbering(&mut renum, post);
-        let cluster = Cluster::Note {
-            id,
-            note: IntraNote::Multi(note, n_sub),
-            cites,
-        };
-        self.proc.insert_cluster(cluster);
+        self.proc.insert_cluster(Cluster { id, cites });
         self.proc.renumber_clusters(&renum);
         for (i, nn) in renum {
             self.current_note_numbers.insert(i, nn);

@@ -8,7 +8,7 @@
 extern crate serde_derive;
 
 use citeproc::prelude::*;
-use citeproc_io::{Cite, Cluster, IntraNote, Reference};
+use citeproc_io::{Cite, Cluster, Reference};
 use csl::Lang;
 
 use directories::ProjectDirs;
@@ -33,7 +33,7 @@ pub struct TestCase {
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
-    pub clusters: Option<Vec<Cluster2<Markup>>>,
+    pub clusters: Option<Vec<Cluster<Markup>>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
 }
 
@@ -105,9 +105,8 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&refr.id));
                 }
-                clusters_auto.push(Cluster::Note {
+                clusters_auto.push(Cluster {
                     id: 1,
-                    note: IntraNote::Single(1),
                     cites,
                 });
                 &clusters_auto
@@ -115,14 +114,16 @@ impl TestCase {
 
             proc.set_references(self.input.clone());
             proc.init_clusters(clusters.clone());
+            proc.set_cluster_order(&[ClusterPosition { id: 1, note: Some(1) }]).unwrap();
             let mut pushed = false;
             for cluster in clusters.iter() {
-                let html = proc.get_cluster(cluster.id());
-                if pushed {
-                    res.push_str("\n");
+                if let Some(html) = proc.get_cluster(cluster.id()) {
+                    if pushed {
+                        res.push_str("\n");
+                    }
+                    res.push_str(&*html);
+                    pushed = true;
                 }
-                res.push_str(&*html);
-                pushed = true;
             }
             match self.mode {
                 Mode::Citation => {

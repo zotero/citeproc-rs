@@ -489,11 +489,11 @@ impl Processor {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct DocumentPiece {
-    id: ClusterId,
+pub struct ClusterPosition {
+    pub id: ClusterId,
     /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
     #[serde(skip_serializing_if = "Option::is_none")]
-    note: Option<u32>,
+    pub note: Option<u32>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -526,7 +526,7 @@ impl Processor {
     /// them will all have the same first-reference-note-number if FRNN is used in later cites.
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
-    pub fn set_cluster_order(&mut self, pieces: &[DocumentPiece]) -> Result<(), ErrorKind> {
+    pub fn set_cluster_order(&mut self, pieces: &[ClusterPosition]) -> Result<(), ErrorKind> {
         let mut cluster_ids = Vec::with_capacity(pieces.len());
         let mut intext_number = 1u32;
         // (note number, next index)
