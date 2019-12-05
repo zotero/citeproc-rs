@@ -39,10 +39,7 @@ impl CitationItem {
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster {
-            id: index,
-            cites,
-        }
+        Cluster { id: index, cites }
     }
 }
 

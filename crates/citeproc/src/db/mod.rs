@@ -317,7 +317,10 @@ impl Processor {
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let Cluster { id: cluster_id, cites } = cluster;
+            let Cluster {
+                id: cluster_id,
+                cites,
+            } = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
                 let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
@@ -346,7 +349,10 @@ impl Processor {
     }
 
     pub fn insert_cluster(&mut self, cluster: Cluster<Markup>) {
-        let Cluster { id: cluster_id, cites } = cluster;
+        let Cluster {
+            id: cluster_id,
+            cites,
+        } = cluster;
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {
             let mut new_cluster_ids = (*cluster_ids).clone();
@@ -498,7 +504,9 @@ pub struct ClusterPosition {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
-    #[error("set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])")]
+    #[error(
+        "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
+    )]
     NonMonotonicNoteNumber(u32),
 }
 
@@ -541,15 +549,24 @@ impl Processor {
                         let (num, ref mut index) = *note;
                         let i = *index;
                         *index += 1;
-                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(num, i))));
+                        self.set_cluster_note_number(
+                            piece.id,
+                            Some(ClusterNumber::Note(IntraNote::Multi(num, i))),
+                        );
                     } else if nn > note.0 {
-                        self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
+                        self.set_cluster_note_number(
+                            piece.id,
+                            Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))),
+                        );
                         *note = (nn, 1);
                     }
                 } else {
                     // the first note in the document
                     this_note = Some((nn, 1));
-                    self.set_cluster_note_number(piece.id, Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))));
+                    self.set_cluster_note_number(
+                        piece.id,
+                        Some(ClusterNumber::Note(IntraNote::Multi(nn, 0))),
+                    );
                 }
                 cluster_ids.push(piece.id);
             } else {

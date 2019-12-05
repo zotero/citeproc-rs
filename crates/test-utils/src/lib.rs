@@ -105,10 +105,7 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&refr.id));
                 }
-                clusters_auto.push(Cluster {
-                    id: 1,
-                    cites,
-                });
+                clusters_auto.push(Cluster { id: 1, cites });
                 &clusters_auto
             };
 
@@ -117,8 +114,9 @@ impl TestCase {
             let positions: Vec<_> = clusters
                 .iter()
                 .enumerate()
-                .map(|(ix, cluster)| {
-                    ClusterPosition { id: cluster.id, note: Some(ix as u32 + 1) }
+                .map(|(ix, cluster)| ClusterPosition {
+                    id: cluster.id,
+                    note: Some(ix as u32 + 1),
                 })
                 .collect();
 
