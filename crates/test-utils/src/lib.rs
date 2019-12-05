@@ -114,7 +114,15 @@ impl TestCase {
 
             proc.set_references(self.input.clone());
             proc.init_clusters(clusters.clone());
-            proc.set_cluster_order(&[ClusterPosition { id: 1, note: Some(1) }]).unwrap();
+            let positions: Vec<_> = clusters
+                .iter()
+                .enumerate()
+                .map(|(ix, cluster)| {
+                    ClusterPosition { id: cluster.id, note: Some(ix as u32 + 1) }
+                })
+                .collect();
+
+            proc.set_cluster_order(&positions).unwrap();
             let mut pushed = false;
             for cluster in clusters.iter() {
                 if let Some(html) = proc.get_cluster(cluster.id()) {
