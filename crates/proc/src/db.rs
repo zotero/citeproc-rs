@@ -548,7 +548,14 @@ fn disambiguate_add_names(
                 break;
             }
             if also_expand {
-                expand_one_name_ir(db, ir, ctx, &initial_refs, &mut nir_arc.lock().unwrap(), n as u32);
+                expand_one_name_ir(
+                    db,
+                    ir,
+                    ctx,
+                    &initial_refs,
+                    &mut nir_arc.lock().unwrap(),
+                    n as u32,
+                );
             }
             let new_count = total_ambiguity_number();
             nir_arc.lock().unwrap().achieved_count(new_count);

@@ -116,12 +116,16 @@ impl FormatCmd {
             FormatCmd::FontVariantSmallCaps => ("span", r#" style="font-variant:small-caps;""#),
             FormatCmd::FontVariantNormal => ("span", r#" style="font-variant:normal;""#),
 
-            FormatCmd::TextDecorationUnderline => ("span", r#" style="text-decoration:underline;""#),
+            FormatCmd::TextDecorationUnderline => {
+                ("span", r#" style="text-decoration:underline;""#)
+            }
             FormatCmd::TextDecorationNone => ("span", r#" style="text-decoration:none;""#),
 
             FormatCmd::VerticalAlignmentSuperscript => ("sup", ""),
             FormatCmd::VerticalAlignmentSubscript => ("sub", ""),
-            FormatCmd::VerticalAlignmentBaseline => ("span", r#" style="vertical-alignment:baseline;"#),
+            FormatCmd::VerticalAlignmentBaseline => {
+                ("span", r#" style="vertical-alignment:baseline;"#)
+            }
         }
     }
 }

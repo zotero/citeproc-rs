@@ -33,7 +33,8 @@ pub trait StyleWalker {
     /// Default impl tries to use `self.get_checker()`, otherwise false.
     fn should_take_branch(&mut self, conditions: &Conditions) -> bool {
         if let Some(ck) = self.get_checker() {
-            let (eval_true, _is_disambiguate) = crate::choose::eval_conditions(conditions, ck, std::u32::MAX);
+            let (eval_true, _is_disambiguate) =
+                crate::choose::eval_conditions(conditions, ck, std::u32::MAX);
             eval_true
         } else {
             false

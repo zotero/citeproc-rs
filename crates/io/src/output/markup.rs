@@ -278,7 +278,13 @@ pub trait MarkupWriter {
     }
 
     /// Use this to write an InlineElement::Formatted
-    fn stack_formats(&self, s: &mut String, inlines: &[InlineElement], formatting: Formatting, display: Option<DisplayMode>) {
+    fn stack_formats(
+        &self,
+        s: &mut String,
+        inlines: &[InlineElement],
+        formatting: Formatting,
+        display: Option<DisplayMode>,
+    ) {
         let stack = tag_stack(formatting, display);
         self.stack_preorder(s, &stack);
         for inner in inlines {

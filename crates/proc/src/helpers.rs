@@ -8,7 +8,7 @@ use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
 use csl::Atom;
-use csl::{Affixes, Element, Formatting, DisplayMode};
+use csl::{Affixes, DisplayMode, Element, Formatting};
 
 pub fn sequence<'c, O, I>(
     db: &impl IrDatabase,
@@ -46,11 +46,7 @@ where
                 formatting,
                 affixes,
                 delimiter,
-                display: if ctx.in_bibliography {
-                    display
-                } else {
-                    None
-                },
+                display: if ctx.in_bibliography { display } else { None },
             }),
             gv,
         )
@@ -65,7 +61,7 @@ pub fn ref_sequence<'c>(
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Affixes,
-    display: Option<DisplayMode>
+    display: Option<DisplayMode>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 

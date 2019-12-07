@@ -89,7 +89,10 @@ impl MockProcessor {
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let Cluster { id: cluster_id, cites } = cluster;
+            let Cluster {
+                id: cluster_id,
+                cites,
+            } = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
                 let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
