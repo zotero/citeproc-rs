@@ -8,6 +8,7 @@ use std::path::Path;
 use std::str::FromStr;
 use ucd_parse::{UnicodeData, Codepoint};
 use std::process::{Command, Stdio};
+use std::env;
 
 use super::workspace_root;
 
@@ -145,35 +146,39 @@ mod util {
 
 pub fn build_superscript_trie() -> Result<()> {
     let mut path = workspace_root();
-    // let child = Command::new("cd")
-    //     .arg(&path)
-    //     .spawn()?;
     path.push("crates");
-    path.push("io");
-    path.push("ucd.sh");
+    path.push("proc");
+    env::set_current_dir(&path)?;
     Command::new("sh")
-        .arg("-c")
-        .arg(&path)
+        .arg("ucd.sh")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()?
         .wait()?;
-    let ucd = parse_ucd_file("/tmp/ucd-11.0.0/Superscript.txt")?;
+    path.pop();
+    path.push("io");
+    env::set_current_dir(&path)?;
+    Command::new("sh")
+        .arg("ucd.sh")
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()?
+        .wait()?;
+    let ucd = parse_ucd_file("/tmp/ucd/Superscript.txt")?;
     let mut membership = BTreeSet::new();
     let mut lookup = BTreeMap::new();
     for line in ucd {
         membership.insert(line.codepoint.value());
         let s = codepoints_to_string(&line.decomposition.mapping);
-            lookup.insert(line.codepoint, s);
+        lookup.insert(line.codepoint, s);
     }
-    let ucd = parse_ucd_file("/tmp/ucd-11.0.0/Subscript.txt")?;
+    let ucd = parse_ucd_file("/tmp/ucd/Subscript.txt")?;
     let mut sub_membership = BTreeSet::new();
     for line in ucd {
         sub_membership.insert(line.codepoint.value());
         let s = codepoints_to_string(&line.decomposition.mapping);
         lookup.insert(line.codepoint, s);
     }
-    path.pop();
     path.push("src");
     path.push("unicode");
     std::fs::create_dir_all(&path)?;
