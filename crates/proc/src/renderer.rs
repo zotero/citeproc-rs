@@ -211,31 +211,42 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         }
     }
 
+    /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
-        use crate::number::{roman_lower, roman_representable};
+        use crate::number::{roman_lower, roman_representable, render_ordinal};
+        let string = if let NumericValue::Tokens(_, ts) = val {
+            match number.form {
+                NumericForm::Roman if roman_representable(&val) => {
+                    roman_lower(&ts)
+                }
+                NumericForm::Ordinal | NumericForm::LongOrdinal => {
+                    let locale = self.ctx.locale();
+                    let loc_type = if number.variable == NumberVariable::Locator {
+                        self.ctx
+                            .locator_type()
+                            .expect("already known that locator exists and therefore has a type")
+                    } else {
+                        // Not used
+                        LocatorType::default()
+                    };
+                    let gender = locale.get_num_gender(number.variable, loc_type);
+                    let long = number.form == NumericForm::LongOrdinal;
+                    render_ordinal(&ts, locale, gender, long)
+                }
+                _ => val.as_number(number.variable.should_replace_hyphens())
+            }
+        } else {
+            val.as_number(number.variable.should_replace_hyphens())
+        };
         let fmt = self.fmt();
-        match (val, number.form) {
-            (NumericValue::Tokens(_, ts), NumericForm::Roman) if roman_representable(&val) => {
-                let options = IngestOptions {
-                    replace_hyphens: number.variable.should_replace_hyphens(),
-                    text_case: number.text_case,
-                };
-                let string = roman_lower(&ts);
-                let b = fmt.ingest(&string, options);
-                let b = fmt.with_format(b, number.formatting);
-                let b = fmt.affixed(b, &number.affixes);
-                fmt.with_display(b, number.display, self.ctx.in_bibliography())
-            }
-            // TODO: text-case
-            _ => {
-                let b = fmt.affixed_text(
-                    val.as_number(number.variable.should_replace_hyphens()),
-                    number.formatting,
-                    &number.affixes,
-                );
-                fmt.with_display(b, number.display, self.ctx.in_bibliography())
-            }
-        }
+        let options = IngestOptions {
+            replace_hyphens: number.variable.should_replace_hyphens(),
+            text_case: number.text_case,
+        };
+        let b = fmt.ingest(&string, options);
+        let b = fmt.with_format(b, number.formatting);
+        let b = fmt.affixed(b, &number.affixes);
+        fmt.with_display(b, number.display, self.ctx.in_bibliography())
     }
 
     fn quotes(quo: bool) -> Option<LocalizedQuotes> {

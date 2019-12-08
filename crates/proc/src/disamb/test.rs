@@ -9,7 +9,7 @@ use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
-use citeproc_io::Reference;
+use citeproc_io::{Reference, ClusterNumber};
 
 use csl::Variable;
 use csl::{Cond, CslType, Position};
@@ -151,12 +151,12 @@ fn test() {
     use citeproc_io::{Cite, Cluster, IntraNote};
 
     db.set_references(vec![refr, refr2]);
-    let cluster = Cluster::Note {
+    let cluster = Cluster {
         id: 1,
-        note: IntraNote::Single(1),
         cites: vec![Cite::basic("ref_id")],
     };
     db.init_clusters(vec![cluster]);
+    db.set_cluster_note_number(1, Some(ClusterNumber::Note(IntraNote::Single(1))));
     let cite_ids = db.cluster_cites(1);
 
     let get_stream = |ind: usize| {

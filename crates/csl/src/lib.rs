@@ -1108,9 +1108,13 @@ impl FromNode for TermPlurality {
     }
 }
 
-impl FromNode for OrdinalMatch {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(attribute_optional(node, "match", info)?)
+impl OrdinalMatch {
+    pub fn default_for(n: u32) -> Self {
+        if n < 10 {
+            OrdinalMatch::LastDigit
+        } else {
+            OrdinalMatch::LastTwoDigits
+        }
     }
 }
 

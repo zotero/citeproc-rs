@@ -258,37 +258,3 @@ impl<O: OutputFormat> Cluster<O> {
     }
 }
 
-#[test]
-fn json_clusters() {
-    use crate::output::markup::Markup;
-    let c: Cluster<Markup> =
-        serde_json::from_str(r#"{ "note": 32, "id": 5, "cites": [] }"#).unwrap();
-    assert_eq!(
-        c,
-        Cluster::Note {
-            note: IntraNote::Single(32),
-            id: 5,
-            cites: vec![]
-        }
-    );
-    let c2: Cluster<Markup> =
-        serde_json::from_str(r#"{ "note": [8, 2], "id": 5, "cites": [] }"#).unwrap();
-    assert_eq!(
-        c2,
-        Cluster::Note {
-            note: IntraNote::Multi(8, 2),
-            id: 5,
-            cites: vec![]
-        }
-    );
-    let c3: Cluster<Markup> =
-        serde_json::from_str(r#"{ "inText": 32, "id": 5, "cites": [] }"#).unwrap();
-    assert_eq!(
-        c3,
-        Cluster::InText {
-            in_text: 32,
-            id: 5,
-            cites: vec![]
-        }
-    );
-}

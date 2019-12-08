@@ -7,6 +7,7 @@
 use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
+use crate::variables::NumberVariable;
 use crate::terms::*;
 use crate::{FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
@@ -216,15 +217,21 @@ impl FromNode for TermEl {
                 RoleTermSelector(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
-            Ordinal(t) => match content {
-                TermPlurality::Invariant(a) => Ok(TermEl::Ordinal(
-                    OrdinalTermSelector(
-                        t,
-                        attribute_optional(node, "gender-form", info)?,
-                        OrdinalMatch::from_node(node, info)?,
-                    ),
-                    a,
-                )),
+            Ordinal(mut t) => match content {
+                TermPlurality::Invariant(a) => {
+                    if let OrdinalTerm::Mod100(_, ref mut m) = t {
+                        if let Some(overrider) = attribute_option(node, "match", info)? {
+                            *m = overrider;
+                        }
+                    }
+                    Ok(TermEl::Ordinal(
+                        OrdinalTermSelector(
+                            t,
+                            attribute_optional(node, "gender-form", info)?,
+                        ),
+                        a,
+                    ))
+                },
                 _ => Err(InvalidCsl::new(node, "ordinal terms cannot be pluralized").into()),
             },
         }
@@ -260,6 +267,42 @@ impl Locale {
                 .filter_map(|sel| self.role_terms.get(&sel))
                 .next()
                 .map(|r| r.get(plural)),
+        }
+    }
+
+    pub fn get_ordinal_term(&self, selector: OrdinalTermSelector) -> Option<&str> {
+        let mut found = None;
+        for sel in selector.fallback() {
+            if let f @ Some(_) = self.ordinal_terms.get(&sel) {
+                found = f.map(|s| s.as_str());
+                break;
+            }
+        };
+        found
+    }
+
+    pub fn get_gendered_term(&self, selector: GenderedTermSelector) -> Option<&GenderedTerm> {
+        let mut found = None;
+        for sel in selector.fallback() {
+            if let f @ Some(_) = self.gendered_terms.get(&sel) {
+                found = f;
+                break;
+            }
+        };
+        found
+    }
+
+    pub fn get_num_gender(&self, var: NumberVariable, locator_type: LocatorType) -> Gender {
+        let selector = if var == NumberVariable::Locator {
+            GenderedTermSelector::Locator(locator_type, TermForm::Long)
+        } else {
+            GenderedTermSelector::Number(var, TermForm::Long)
+        };
+        // Don't use fallback, just the long form
+        if let Some(GenderedTerm(_, gender)) = self.gendered_terms.get(&selector) {
+            *gender
+        } else {
+            Gender::Neuter
         }
     }
 
