@@ -1,5 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
+
+pub mod ucd;
+
 use anyhow::{anyhow, Error};
 use git2::{Branch, Repository, StatusOptions, Tree};
 use std::collections::{HashMap, HashSet};

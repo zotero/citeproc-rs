@@ -10,6 +10,7 @@ use csl::Atom;
 #[cfg(feature = "markup")]
 pub mod markup;
 pub mod micro_html;
+mod superscript;
 #[cfg(feature = "pandoc")]
 pub mod pandoc;
 #[cfg(feature = "plain")]
