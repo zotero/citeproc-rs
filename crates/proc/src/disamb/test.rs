@@ -9,7 +9,7 @@ use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Reference, ClusterNumber};
+use citeproc_io::{ClusterNumber, Reference};
 
 use csl::Variable;
 use csl::{Cond, CslType, Position};

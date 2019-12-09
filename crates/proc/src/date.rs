@@ -473,7 +473,11 @@ impl<'a> DateRangePartsIter<'a> {
                 vec.push(DateToken::Part(first, part, is_max_diff));
             }
             if is_max_diff {
-                let delim = part.range_delimiter.as_ref().map(|rd| rd.0.as_ref()).unwrap_or("\u{2013}");
+                let delim = part
+                    .range_delimiter
+                    .as_ref()
+                    .map(|rd| rd.0.as_ref())
+                    .unwrap_or("\u{2013}");
                 vec.push(DateToken::RangeDelim(delim));
                 for p in parts {
                     if matches(p) && WhichDelim::from_form(&p.form) <= max_diff {
@@ -723,13 +727,17 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
         DatePartForm::Day(form) => match form {
             _ if date.day == 0 => None,
             DayForm::NumericLeadingZeros => Some(format!("{:02}", date.day)),
-            DayForm::Ordinal if !locale.options_node.limit_day_ordinals_to_day_1.unwrap_or(false) || date.day == 1 => {
+            DayForm::Ordinal
+                if !locale
+                    .options_node
+                    .limit_day_ordinals_to_day_1
+                    .unwrap_or(false)
+                    || date.day == 1 =>
+            {
                 use citeproc_io::NumericToken;
                 // The 'target noun' is the month term.
                 MonthTerm::from_u32(date.month)
-                    .map(|month| {
-                        locale.get_month_gender(month)
-                    })
+                    .map(|month| locale.get_month_gender(month))
                     .map(|gender| {
                         render_ordinal(&[NumericToken::Num(date.day)], locale, gender, false)
                     })

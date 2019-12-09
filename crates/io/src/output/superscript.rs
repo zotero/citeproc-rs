@@ -22,11 +22,17 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
     }
 
     let mut eject = |cur: Current| {
-        let s = |start, len| slice[start..start+len].to_owned();
+        let s = |start, len| slice[start..start + len].to_owned();
         let node = match cur {
             Current::Normal(start, len) => MicroNode::Text(s(start, len)),
-            Current::Super(sup) => MicroNode::Formatted(vec![MicroNode::Text(sup)], FormatCmd::VerticalAlignmentSuperscript),
-            Current::Sub(sub) => MicroNode::Formatted(vec![MicroNode::Text(sub)], FormatCmd::VerticalAlignmentSubscript),
+            Current::Super(sup) => MicroNode::Formatted(
+                vec![MicroNode::Text(sup)],
+                FormatCmd::VerticalAlignmentSuperscript,
+            ),
+            Current::Sub(sub) => MicroNode::Formatted(
+                vec![MicroNode::Text(sub)],
+                FormatCmd::VerticalAlignmentSubscript,
+            ),
         };
         stack.push(node);
     };
@@ -39,13 +45,12 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
                     *len += ch.len_utf8();
                     continue;
                 }
-                Some(cur @ Current::Super(_)) | 
-                Some(cur @ Current::Sub(_)) => {
+                Some(cur @ Current::Super(_)) | Some(cur @ Current::Sub(_)) => {
                     eject(cur);
                     Some(Current::Normal(ix, ch.len_utf8()))
                 }
                 None => Some(Current::Normal(ix, ch.len_utf8())),
-            }
+            },
             SupSub::Super(c) => match current {
                 Some(Current::Super(ref mut s)) => {
                     s.push_str(c);
@@ -56,7 +61,7 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
                     Some(Current::Super(c.into()))
                 }
                 None => Some(Current::Super(c.into())),
-            }
+            },
             SupSub::Sub(c) => match current {
                 Some(Current::Sub(ref mut s)) => {
                     s.push_str(c);
@@ -67,7 +72,7 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
                     Some(Current::Sub(c.into()))
                 }
                 None => Some(Current::Sub(c.into())),
-            }
+            },
         }
     }
     if let Some(last) = current {
@@ -79,21 +84,38 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
 #[test]
 fn mixed() {
     let mixed = "normalʳᵉ₉";
-    assert_eq!(parse_sup_sub(mixed), vec![
-        MicroNode::Text("normal".into()),
-        MicroNode::Formatted(vec![MicroNode::Text("re".into())], FormatCmd::VerticalAlignmentSuperscript),
-        MicroNode::Formatted(vec![MicroNode::Text("9".into())], FormatCmd::VerticalAlignmentSubscript),
-    ]);
+    assert_eq!(
+        parse_sup_sub(mixed),
+        vec![
+            MicroNode::Text("normal".into()),
+            MicroNode::Formatted(
+                vec![MicroNode::Text("re".into())],
+                FormatCmd::VerticalAlignmentSuperscript
+            ),
+            MicroNode::Formatted(
+                vec![MicroNode::Text("9".into())],
+                FormatCmd::VerticalAlignmentSubscript
+            ),
+        ]
+    );
 }
 
 #[test]
 fn french() {
     let re = "ʳᵉ";
-    assert_eq!(parse_sup_sub(re), vec![MicroNode::Formatted(vec![MicroNode::Text("re".into())], FormatCmd::VerticalAlignmentSuperscript)]);
+    assert_eq!(
+        parse_sup_sub(re),
+        vec![MicroNode::Formatted(
+            vec![MicroNode::Text("re".into())],
+            FormatCmd::VerticalAlignmentSuperscript
+        )]
+    );
 }
 
 fn to_sup_sub(c: char) -> SupSub {
-    use crate::unicode::sup_sub::{SUBSCRIPT_MEMBERSHIP, SUPERSCRIPT_MEMBERSHIP, lookup_decomposition};
+    use crate::unicode::sup_sub::{
+        lookup_decomposition, SUBSCRIPT_MEMBERSHIP, SUPERSCRIPT_MEMBERSHIP,
+    };
 
     fn is_in_ranges(c: char, ranges: &[(char, char)]) -> bool {
         for (from, upto) in ranges {
@@ -112,4 +134,3 @@ fn to_sup_sub(c: char) -> SupSub {
         SupSub::Normal
     }
 }
-

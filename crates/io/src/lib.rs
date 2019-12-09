@@ -28,8 +28,8 @@ mod names;
 mod numeric;
 pub mod output;
 mod reference;
-pub mod utils;
 pub(crate) mod unicode;
+pub mod utils;
 
 pub use csl_json::IdOrNumber;
 

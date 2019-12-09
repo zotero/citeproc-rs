@@ -697,7 +697,10 @@ impl AttrChecker for TextCase {
     }
 }
 
-impl<T> AttrChecker for Option<T> where T: AttrChecker {
+impl<T> AttrChecker for Option<T>
+where
+    T: AttrChecker,
+{
     fn filter_attribute(attr: &str) -> bool {
         T::filter_attribute(attr)
     }

@@ -970,7 +970,10 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         let layout = &style.bibliography.as_ref().unwrap().layout;
         let ir = &gen0.ir;
         let flat = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
-        let build = fmt.with_format(fmt.affixed(flat, layout.affixes.as_ref()), layout.formatting);
+        let build = fmt.with_format(
+            fmt.affixed(flat, layout.affixes.as_ref()),
+            layout.formatting,
+        );
         Arc::new(fmt.output(build))
     } else {
         // Whatever

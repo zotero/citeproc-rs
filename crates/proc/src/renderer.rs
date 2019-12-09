@@ -200,7 +200,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                 };
-                fmt.affixed_text(s, None, Some(crate::sort::natural_sort::num_affixes()).as_ref())
+                fmt.affixed_text(
+                    s,
+                    None,
+                    Some(crate::sort::natural_sort::num_affixes()).as_ref(),
+                )
             }
             // TODO: text-case
             _ => fmt.affixed_text(
@@ -213,12 +217,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
 
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
-        use crate::number::{roman_lower, roman_representable, render_ordinal};
+        use crate::number::{render_ordinal, roman_lower, roman_representable};
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => {
-                    roman_lower(&ts)
-                }
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts),
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
                     let locale = self.ctx.locale();
                     let loc_type = if number.variable == NumberVariable::Locator {
@@ -233,7 +235,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     let long = number.form == NumericForm::LongOrdinal;
                     render_ordinal(&ts, locale, gender, long)
                 }
-                _ => val.as_number(number.variable.should_replace_hyphens())
+                _ => val.as_number(number.variable.should_replace_hyphens()),
             }
         } else {
             val.as_number(number.variable.should_replace_hyphens())
@@ -353,7 +355,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
-                .map(|term_text| fmt.affixed_text(term_text.to_owned(), *formatting, affixes.as_ref()))
+                .map(|term_text| {
+                    fmt.affixed_text(term_text.to_owned(), *formatting, affixes.as_ref())
+                })
         })
     }
 

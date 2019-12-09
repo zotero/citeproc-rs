@@ -650,7 +650,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             None => fmt.plain(s),
             Some(ref part) => {
                 // TODO: text-case, IngestOptions
-                fmt.affixed(fmt.text_node(s.to_string(), part.formatting), part.affixes.as_ref())
+                fmt.affixed(
+                    fmt.text_node(s.to_string(), part.formatting),
+                    part.affixes.as_ref(),
+                )
             }
         }
     }

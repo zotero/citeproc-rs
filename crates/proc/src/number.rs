@@ -1,6 +1,6 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
-use csl::{Locale, Gender, OrdinalTerm, OrdinalTermSelector};
+use csl::{Gender, Locale, OrdinalTerm, OrdinalTermSelector};
 
 pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long: bool) -> String {
     let mut s = String::new();

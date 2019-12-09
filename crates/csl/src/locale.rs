@@ -7,8 +7,8 @@
 use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
-use crate::variables::NumberVariable;
 use crate::terms::*;
+use crate::variables::NumberVariable;
 use crate::{FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
@@ -225,13 +225,10 @@ impl FromNode for TermEl {
                         }
                     }
                     Ok(TermEl::Ordinal(
-                        OrdinalTermSelector(
-                            t,
-                            attribute_optional(node, "gender-form", info)?,
-                        ),
+                        OrdinalTermSelector(t, attribute_optional(node, "gender-form", info)?),
                         a,
                     ))
-                },
+                }
                 _ => Err(InvalidCsl::new(node, "ordinal terms cannot be pluralized").into()),
             },
         }
@@ -241,7 +238,10 @@ impl FromNode for TermEl {
 impl FromNode for LocaleOptionsNode {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
-            limit_day_ordinals_to_day_1: attribute_option_bool(node, "limit-day-ordinals-to-day-1")?,
+            limit_day_ordinals_to_day_1: attribute_option_bool(
+                node,
+                "limit-day-ordinals-to-day-1",
+            )?,
             punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
         })
     }
@@ -279,7 +279,7 @@ impl Locale {
                 found = f.map(|s| s.as_str());
                 break;
             }
-        };
+        }
         found
     }
 
@@ -290,7 +290,7 @@ impl Locale {
                 found = f;
                 break;
             }
-        };
+        }
         found
     }
 

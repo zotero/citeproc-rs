@@ -232,7 +232,7 @@ impl TestSummary {
                         x.lines().filter(|x| !x.contains("RUST_BACKTRACE"))
                     }
                     let changed = match (orig.stdout.as_ref(), mine.stdout.as_ref()) {
-                        (Some(orig), Some(mine)) => ! filt(&orig).eq(filt(&mine)),
+                        (Some(orig), Some(mine)) => !filt(&orig).eq(filt(&mine)),
                         (None, None) => false,
                         _ => true,
                     };

@@ -4,10 +4,10 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use super::MonthForm;
 use crate::error::*;
 use crate::version::Features;
 use std::str::FromStr;
-use super::MonthForm;
 
 use super::attr::GetAttribute;
 use super::variables::{NameVariable, NumberVariable};
@@ -183,7 +183,6 @@ impl GenderedTermSelector {
             )
         };
         Some(sel)
-
     }
 
     pub fn normalise(self) -> Self {

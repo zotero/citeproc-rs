@@ -257,4 +257,3 @@ impl<O: OutputFormat> Cluster<O> {
         self.id
     }
 }
-

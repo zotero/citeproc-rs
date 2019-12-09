@@ -1,7 +1,7 @@
 use anyhow::Error;
 use structopt::StructOpt;
-use tools::*;
 use tools::ucd::build_superscript_trie;
+use tools::*;
 // use std::{env, path::PathBuf};
 
 #[derive(StructOpt)]

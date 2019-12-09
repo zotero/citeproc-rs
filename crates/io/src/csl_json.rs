@@ -8,12 +8,12 @@
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
 
+use serde::de::Error;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::str::FromStr;
-use serde::de::Error;
 
 // You have to know which variant we're using before parsing a reference.
 // Why? Because some variables are numbers in CSL-M, but standard vars in CSL. And other
@@ -608,11 +608,20 @@ impl<'de> Deserialize<'de> for DateOrRange {
                         if let Some(season) = found_season {
                             if let DateOrRange::Single(ref mut date) = found {
                                 if !date.has_day() && !date.has_month() {
-                                    let season = season.to_number()
-                                        .map_err(|e| V::Error::custom(format!("season {:?} was not an integer: {}", season, e)))
+                                    let season = season
+                                        .to_number()
+                                        .map_err(|e| {
+                                            V::Error::custom(format!(
+                                                "season {:?} was not an integer: {}",
+                                                season, e
+                                            ))
+                                        })
                                         .and_then(|unsigned| {
                                             if unsigned < 1 || unsigned > 4 {
-                                                Err(V::Error::custom(format!("season {} was not in range [1, 4]", unsigned)))
+                                                Err(V::Error::custom(format!(
+                                                    "season {} was not in range [1, 4]",
+                                                    unsigned
+                                                )))
                                             } else {
                                                 Ok(unsigned as u32)
                                             }
