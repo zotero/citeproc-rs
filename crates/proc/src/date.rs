@@ -184,7 +184,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 let mut seq = IrSeq {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
-                    delimiter: bits.overall_delimiter.clone(),
+                    delimiter: Atom::from(""),
                     affixes: bits.overall_affixes.clone(),
                     display: bits.display,
                 };
@@ -229,7 +229,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     return Either::Build(None);
                 }
                 let built = fmt.affixed(
-                    fmt.group(each, &bits.overall_delimiter, bits.overall_formatting),
+                    fmt.group(each, "", bits.overall_formatting),
                     bits.overall_affixes,
                 );
                 Either::Build(Some(built))
@@ -332,21 +332,35 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                     }
                 })
                 .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
+            let delim = gen_date.overall_delimiter;
             let mut builder = PartBuilder::new(gen_date, len_hint);
+            let mut seen_one = false;
             for (_form, either) in each {
+                if seen_one && !delim.is_empty() {
+                    builder.push_either(Either::Build(Some(fmt.plain(&delim))))
+                }
+                seen_one = true;
                 builder.push_either(either);
             }
             builder.into_either(fmt)
         }
         DateOrRange::Range(first, second) => {
             let tokens = DateRangePartsIter::new(parts, selector, first, second);
+            let delim = gen_date.overall_delimiter;
             let mut builder = PartBuilder::new(gen_date, len_hint);
+            let mut seen_one = false;
+            let mut last_rdel = false;
             for token in tokens {
                 match token {
-                    DateToken::RangeDelim(delim) => {
-                        builder.push_either(Either::Build(Some(fmt.plain(delim))));
+                    DateToken::RangeDelim(range_delim) => {
+                        builder.push_either(Either::Build(Some(fmt.plain(range_delim))));
+                        last_rdel = true;
                     }
                     DateToken::Part(date, part, is_max_diff) => {
+                        if !last_rdel && seen_one && !delim.is_empty() {
+                            builder.push_either(Either::Build(Some(fmt.plain(&delim))))
+                        }
+                        last_rdel = false;
                         if let Some((_form, either)) =
                             dp_render_either(part, ctx.clone(), date, is_max_diff)
                         {
@@ -354,6 +368,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                         }
                     }
                 }
+                seen_one = true;
             }
             builder.into_either(fmt)
         }
