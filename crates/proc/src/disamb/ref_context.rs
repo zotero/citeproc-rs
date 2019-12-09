@@ -194,7 +194,7 @@ where
     }
     fn is_disambiguate(&self, current_count: u32) -> bool {
         // See docs on is_disambiguate
-        // current_count is mutated as IR is rolled out; 
+        // current_count is mutated as IR is rolled out;
         // so for
         //    RefContext { disamb_count: 0 } => is_disambiguate is always false
         //    RefContext { disamb_count: 1 } => is_disambiguate is true for the first disambiguate="X" check only
@@ -235,7 +235,8 @@ impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
         for branch in iter {
             // Run with a count of MAX so that eval_true means "true even without disambiguate set to
             // true", hence still works as a circuit-breaking "stop counting" mechanism.
-            let (eval_true, is_disambiguate) = crate::choose::eval_conditions(&branch.0, self.ctx, std::u32::MAX);
+            let (eval_true, is_disambiguate) =
+                crate::choose::eval_conditions(&branch.0, self.ctx, std::u32::MAX);
             if is_disambiguate {
                 sum += 1;
             }

@@ -11,11 +11,11 @@ extern crate serde_derive;
 
 pub(crate) mod db;
 pub use self::db::update::{DocUpdate, UpdateSummary};
-pub use self::db::{Processor, ClusterPosition, ErrorKind};
+pub use self::db::{ClusterPosition, ErrorKind, Processor};
 
 pub mod prelude {
     pub use crate::db::update::{DocUpdate, UpdateSummary};
-    pub use crate::db::{Processor, SupportedFormat, ClusterPosition};
+    pub use crate::db::{ClusterPosition, Processor, SupportedFormat};
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };

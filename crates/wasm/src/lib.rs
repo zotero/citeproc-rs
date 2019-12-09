@@ -14,10 +14,10 @@ extern crate log;
 
 use self::utils::ErrorPlaceholder;
 
-use std::error::Error;
 use js_sys::{Error as JsError, Promise};
 use serde::Serialize;
 use std::cell::RefCell;
+use std::error::Error;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
-use citeproc::{Processor, ClusterPosition};
+use citeproc::{ClusterPosition, Processor};
 use csl::Lang;
 
 #[wasm_bindgen]
@@ -157,10 +157,13 @@ impl Driver {
         let eng = self.engine.borrow();
         let built = eng.get_cluster(id);
         Ok(built
-            .ok_or_else(|| JsError::new(&format!("Cluster {} has not been assigned a position in the document.", id)))
-            .and_then(|b| {
-                JsValue::from_serde(&b).map_err(|e| JsError::new(e.description()))
-            })?)
+            .ok_or_else(|| {
+                JsError::new(&format!(
+                    "Cluster {} has not been assigned a position in the document.",
+                    id
+                ))
+            })
+            .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(e.description())))?)
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]

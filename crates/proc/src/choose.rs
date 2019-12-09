@@ -7,12 +7,12 @@
 use crate::prelude::*;
 
 use crate::helpers::sequence;
+use crate::ir::ConditionalDisambIR;
 use citeproc_io::DateOrRange;
 use csl::{
     Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
 };
 use csl::{AnyVariable, DateVariable};
-use crate::ir::ConditionalDisambIR;
 
 use std::sync::{Arc, Mutex};
 
@@ -29,7 +29,14 @@ where
     ) -> IrSum<O> {
         let make_mutex = |d: bool, content: IR<O>, gv: GroupVars| {
             if d {
-                (IR::ConditionalDisamb(Arc::new(Mutex::new(ConditionalDisambIR { choose: self.clone(), done: false, ir: Box::new(content) }))), gv)
+                (
+                    IR::ConditionalDisamb(Arc::new(Mutex::new(ConditionalDisambIR {
+                        choose: self.clone(),
+                        done: false,
+                        ir: Box::new(content),
+                    }))),
+                    gv,
+                )
             } else {
                 (content, gv)
             }
@@ -69,7 +76,16 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, Affixes::default(), None);
+            let (content, gv) = sequence(
+                db,
+                state,
+                ctx,
+                &els,
+                "".into(),
+                None,
+                Affixes::default(),
+                None,
+            );
             make_mutex(disamb, content, gv)
         }
     }
@@ -161,7 +177,11 @@ where
     }
 }
 
-fn eval_ifthen_ref<'c, Ck>(branch: &'c IfThen, checker: &Ck, disamb_count: &mut u32) -> (Option<&'c [Element]>, bool)
+fn eval_ifthen_ref<'c, Ck>(
+    branch: &'c IfThen,
+    checker: &Ck,
+    disamb_count: &mut u32,
+) -> (Option<&'c [Element]>, bool)
 where
     Ck: CondChecker,
 {
@@ -192,12 +212,18 @@ fn run_matcher<I: Iterator<Item = bool>>(bools: &mut I, match_type: &Match) -> b
 ///
 /// Pass current_count = std::u32::MAX if you don't want a RefContext to return true from
 /// is_disambiguate()
-pub fn eval_conditions<'c, Ck>(conditions: &'c Conditions, checker: &Ck, current_count: u32) -> (bool, bool)
+pub fn eval_conditions<'c, Ck>(
+    conditions: &'c Conditions,
+    checker: &Ck,
+    current_count: u32,
+) -> (bool, bool)
 where
     Ck: CondChecker,
 {
     let Conditions(ref match_type, ref conditions) = *conditions;
-    let mut tests = conditions.iter().map(|c| eval_condset(c, checker, current_count));
+    let mut tests = conditions
+        .iter()
+        .map(|c| eval_condset(c, checker, current_count));
     let disambiguate = conditions.iter().any(|c| {
         c.conds.contains(&Cond::Disambiguate(true)) || c.conds.contains(&Cond::Disambiguate(false))
     });

@@ -287,12 +287,11 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
             // 0 = none of them enabled
             // 1 = first disambiguate="X" tests as true
             // count = all of the (reachable) checks test as true
-            (0..=count).into_iter()
-                .map(move |c| {
-                    let mut cloned = ctx.clone();
-                    cloned.disamb_count = c;
-                    (fc, cloned)
-                })
+            (0..=count).into_iter().map(move |c| {
+                let mut cloned = ctx.clone();
+                cloned.disamb_count = c;
+                (fc, cloned)
+            })
         })
         .map(|(fc, cloned)| {
             let mut state = IrState::new();

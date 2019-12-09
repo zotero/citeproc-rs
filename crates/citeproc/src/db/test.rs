@@ -16,49 +16,102 @@ mod position {
     use crate::prelude::*;
     use csl::Position;
 
-    #[test]
-    fn cite_positions_ibid() {
+    fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
+        let len = ref_ids.len();
+        let mut clusters = Vec::with_capacity(len);
+        let mut order = Vec::with_capacity(len);
+        for i in 1..=len {
+            clusters.push(Cluster {
+                id: i as u32,
+                cites: vec![Cite::basic(ref_ids[i-1])],
+            });
+            order.push(ClusterPosition {
+                id: i as u32,
+                note: Some(i as u32),
+            });
+        }
+        db.init_clusters(clusters);
+        db.set_cluster_order(&order).unwrap();
+    }
+
+    fn test_ibid_1_2(ordering: &[ClusterPosition], pos1: (Position, Option<u32>), pos2: (Position, Option<u32>)) {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
-            Cluster::Note {
+            Cluster {
                 id: 1,
-                note: IntraNote::Single(1),
                 cites: vec![Cite::basic("one")],
             },
-            Cluster::Note {
+            Cluster {
                 id: 2,
-                note: IntraNote::Single(2),
                 cites: vec![Cite::basic("one")],
             },
         ]);
+        db.set_cluster_order(ordering).unwrap();
         let poss = db.cite_positions();
+        // Get the single cites inside
         let id1 = db.cluster_cites(1)[0];
         let id2 = db.cluster_cites(2)[0];
-        assert_eq!(poss[&id1], (Position::First, None));
-        assert_eq!(poss[&id2], (Position::Ibid, Some(1)));
+        // Check their positions
+        assert_eq!(poss[&id1], pos1, "position of cite in cluster 1");
+        assert_eq!(poss[&id2], pos2, "position of cite in cluster 2");
+    }
+
+    #[test]
+    fn cite_positions_note_ibid() {
+        test_ibid_1_2(
+            &[
+                ClusterPosition { id: 1, note: Some(1) },
+                ClusterPosition { id: 2, note: Some(2) },
+            ],
+            (Position::First, None),
+            (Position::Ibid, Some(1)),
+        )
+    }
+
+    #[test]
+    fn cite_positions_intext_ibid() {
+        test_ibid_1_2(
+            &[
+                // both in-text
+                ClusterPosition { id: 1, note: None },
+                ClusterPosition { id: 2, note: None },
+            ],
+            (Position::First, None),
+            // No FRNN as not in a note!
+            (Position::Ibid, None)
+        );
+    }
+
+    #[test]
+    fn cite_positions_mixed_noibid() {
+        test_ibid_1_2(
+            &[
+                ClusterPosition { id: 1, note: None },
+                ClusterPosition { id: 2, note: Some(1) },
+            ],
+            (Position::First, None),
+            (Position::First, None)
+        );
+    }
+
+    #[test]
+    fn cite_positions_mixed_notefirst() {
+        test_ibid_1_2(
+            &[
+                ClusterPosition { id: 1, note: Some(1) },
+                ClusterPosition { id: 2, note: None },
+            ],
+            (Position::First, None),
+            // XXX: should probably preserve relative ordering of notes and in-text clusters,
+            // so that this gets (Position::Subsequent, Some(1))
+            (Position::First, None)
+        );
     }
 
     #[test]
     fn cite_positions_near_note() {
         let mut db = Processor::test_db();
-        db.init_clusters(vec![
-            Cluster::Note {
-                id: 1,
-                note: IntraNote::Single(1),
-                cites: vec![Cite::basic("one")],
-            },
-            Cluster::Note {
-                id: 2,
-                note: IntraNote::Single(2),
-                cites: vec![Cite::basic("other")],
-            },
-            Cluster::Note {
-                id: 3,
-                note: IntraNote::Single(3),
-                cites: vec![Cite::basic("one")],
-            },
-        ]);
-        use citeproc_db::CiteDatabase;
+        insert_ascending_notes(&mut db, &["one", "other", "one"]);
         let poss = db.cite_positions();
         let id1 = db.cluster_cites(1)[0];
         let id2 = db.cluster_cites(2)[0];

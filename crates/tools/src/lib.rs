@@ -125,7 +125,7 @@ mod suity_ser {
         /// One specific instance of test
         Test,
         /// Group of tests
-        Suite
+        Suite,
     }
 
     #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -465,18 +465,37 @@ impl std::str::FromStr for TestSuiteDiff {
     }
 }
 
-
 pub fn diff_tests(base_name: &str, current_name: &str) -> Result<(), Error> {
     let blessed = read_snapshot(base_name)?;
     let current = read_snapshot(current_name)?;
     let max_len = std::cmp::max(base_name.len(), current_name.len()).max("test result".len());
     let diff = current.diff(&blessed);
-    let b_pad: String = std::iter::repeat(' ').take(max_len - base_name.len()).collect();
-    let c_pad: String = std::iter::repeat(' ').take(max_len - current_name.len()).collect();
-    let r_pad: String = std::iter::repeat(' ').take(max_len - "test_result".len()).collect();
+    let b_pad: String = std::iter::repeat(' ')
+        .take(max_len - base_name.len())
+        .collect();
+    let c_pad: String = std::iter::repeat(' ')
+        .take(max_len - current_name.len())
+        .collect();
+    let r_pad: String = std::iter::repeat(' ')
+        .take(max_len - "test_result".len())
+        .collect();
     let should_fail = diff.print(r_pad);
-    println!("{}{}: {} passed; {} failed; {} ignored", b_pad, base_name, blessed.ok.len(), blessed.failed.len(), blessed.ignored.len());
-    println!("{}{}: {} passed; {} failed; {} ignored", c_pad, current_name, current.ok.len(), current.failed.len(), current.ignored.len());
+    println!(
+        "{}{}: {} passed; {} failed; {} ignored",
+        b_pad,
+        base_name,
+        blessed.ok.len(),
+        blessed.failed.len(),
+        blessed.ignored.len()
+    );
+    println!(
+        "{}{}: {} passed; {} failed; {} ignored",
+        c_pad,
+        current_name,
+        current.ok.len(),
+        current.failed.len(),
+        current.ignored.len()
+    );
     if should_fail {
         std::process::exit(1);
     }

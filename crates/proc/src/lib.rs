@@ -45,7 +45,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
 
-    pub use csl::{Affixes, Element, Formatting, DisplayMode};
+    pub use csl::{Affixes, DisplayMode, Element, Formatting};
 
     pub use crate::cite_context::CiteContext;
     pub use crate::group::GroupVars;
