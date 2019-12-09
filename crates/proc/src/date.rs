@@ -6,8 +6,8 @@
 
 use crate::prelude::*;
 
-use csl::terms::*;
 use citeproc_io::Date;
+use csl::terms::*;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
@@ -459,29 +459,14 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 }
             }
             _ => {
-                if date.month > 12 && date.month < 17 {
-                    // it's a season; 1 -> Spring, etc
-                    let season = date.month - 12; 
-                }
-                if date.month == 0 || date.month > 12 {
-                    return None;
-                }
-                let term_form = match form {
-                    MonthForm::Long => TermForm::Long,
-                    MonthForm::Short => TermForm::Short,
-                    _ => TermForm::Long,
-                };
-                let sel = GenderedTermSelector::Month(
-                    MonthTerm::from_u32(date.month).expect("TODO: support seasons"),
-                    term_form,
-                );
+                let sel = GenderedTermSelector::from_month_u32(date.month, form)?;
                 Some(
                     locale
                         .gendered_terms
                         .get(&sel)
                         .map(|gt| gt.0.singular().to_string())
                         .unwrap_or_else(|| {
-                            let fallback = if term_form == TermForm::Short {
+                            let fallback = if form == MonthForm::Short {
                                 MONTHS_SHORT
                             } else {
                                 MONTHS_LONG
@@ -534,6 +519,10 @@ const MONTHS_SHORT: &[&str] = &[
     "Oct",
     "Nov",
     "Dec",
+    "Spring",
+    "Summer",
+    "Autumn",
+    "Winter",
 ];
 
 const MONTHS_LONG: &[&str] = &[
@@ -550,6 +539,8 @@ const MONTHS_LONG: &[&str] = &[
     "October",
     "November",
     "December",
+    "Spring",
+    "Summer",
+    "Autumn",
+    "Winter",
 ];
-
-const SEASONS_LONG: &[&str] = &["undefined", "Spring", "Summer", "Autumn", "Winter"];
