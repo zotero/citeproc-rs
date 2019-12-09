@@ -6,16 +6,17 @@
 
 use crate::prelude::*;
 
-#[cfg(test)]
-use pretty_assertions::{assert_eq, assert_ne};
+use crate::number::render_ordinal;
 use citeproc_io::{Date, DateOrRange};
 use csl::terms::*;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
-    BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, Locale, LocalizedDate,
-    MonthForm, SortKey, YearForm, TextCase, RangeDelimiter, DateVariable,
+    BodyDate, DatePart, DatePartForm, DateParts, DateVariable, DayForm, IndependentDate, Locale,
+    LocalizedDate, MonthForm, RangeDelimiter, SortKey, TextCase, YearForm,
 };
+#[cfg(test)]
+use pretty_assertions::{assert_eq, assert_ne};
 use std::fmt::Write;
 use std::mem;
 
@@ -269,7 +270,13 @@ where
             },
         }
     };
-    build_parts(&ctx, local.variable, gen_date, &locale_date.date_parts, Some(local.parts_selector))
+    build_parts(
+        &ctx,
+        local.variable,
+        gen_date,
+        &locale_date.date_parts,
+        Some(local.parts_selector),
+    )
 }
 
 fn intermediate_generic_indep<'c, O, I>(
@@ -303,53 +310,55 @@ where
     build_parts(&ctx, indep.variable, gen_date, &indep.date_parts, None)
 }
 
-fn build_parts<'c, O: OutputFormat, I: OutputFormat>(ctx: &GenericContext<'c, O, I>, var: DateVariable, gen_date: GenericDateBits, parts: &[DatePart], selector: Option<DateParts>) -> Option<Either<O>> {
+fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
+    ctx: &GenericContext<'c, O, I>,
+    var: DateVariable,
+    gen_date: GenericDateBits,
+    parts: &[DatePart],
+    selector: Option<DateParts>,
+) -> Option<Either<O>> {
     // TODO: text-case
     let fmt = ctx.format();
     let len_hint = parts.len();
-    ctx
-        .reference()
-        .date
-        .get(&var)
-        .map(|val| {
-            match val {
-                DateOrRange::Single(single) => {
-                    let each = parts
-                        .iter()
-                        .filter(|dp| if let Some(selector) = selector {
-                            dp_matches(dp, selector)
-                        } else {
-                            true
-                        })
-                        .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
-                    let mut builder = PartBuilder::new(gen_date, len_hint);
-                    for (_form, either) in each {
-                        builder.push_either(either);
+    ctx.reference().date.get(&var).map(|val| match val {
+        DateOrRange::Single(single) => {
+            let each = parts
+                .iter()
+                .filter(|dp| {
+                    if let Some(selector) = selector {
+                        dp_matches(dp, selector)
+                    } else {
+                        true
                     }
-                    builder.into_either(fmt)
-                }
-                DateOrRange::Range(first, second) => {
-                    let tokens = DateRangePartsIter::new(parts, selector, first, second);
-                    let mut builder = PartBuilder::new(gen_date, len_hint);
-                    for token in tokens {
-                        match token {
-                            DateToken::RangeDelim(delim) => {
-                                builder.push_either(Either::Build(Some(fmt.plain(delim))));
-                            }
-                            DateToken::Part(date, part, is_max_diff) => {
-                                if let Some((_form, either)) = dp_render_either(part, ctx.clone(), date, is_max_diff) {
-                                    builder.push_either(either);
-                                }
-                            }
+                })
+                .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
+            let mut builder = PartBuilder::new(gen_date, len_hint);
+            for (_form, either) in each {
+                builder.push_either(either);
+            }
+            builder.into_either(fmt)
+        }
+        DateOrRange::Range(first, second) => {
+            let tokens = DateRangePartsIter::new(parts, selector, first, second);
+            let mut builder = PartBuilder::new(gen_date, len_hint);
+            for token in tokens {
+                match token {
+                    DateToken::RangeDelim(delim) => {
+                        builder.push_either(Either::Build(Some(fmt.plain(delim))));
+                    }
+                    DateToken::Part(date, part, is_max_diff) => {
+                        if let Some((_form, either)) =
+                            dp_render_either(part, ctx.clone(), date, is_max_diff)
+                        {
+                            builder.push_either(either);
                         }
                     }
-                    builder.into_either(fmt)
-                }
-                DateOrRange::Literal(string) => {
-                    Either::Build(Some(fmt.plain(string)))
                 }
             }
-        })
+            builder.into_either(fmt)
+        }
+        DateOrRange::Literal(string) => Either::Build(Some(fmt.plain(string))),
+    })
 }
 
 type IsMaxDiff = bool;
@@ -389,19 +398,29 @@ impl WhichDelim {
         for part in parts {
             use std::cmp::max;
             match part.form {
-                DatePartForm::Day(_) if first.day != second.day => max_diff = max(max_diff, WhichDelim::Day), 
-                DatePartForm::Month(..) if first.month != second.month => max_diff = max(max_diff, WhichDelim::Month), 
-                DatePartForm::Year(_) if first.year != second.year => max_diff = max(max_diff, WhichDelim::Year), 
-                _ => {},
+                DatePartForm::Day(_) if first.day != second.day => {
+                    max_diff = max(max_diff, WhichDelim::Day)
+                }
+                DatePartForm::Month(..) if first.month != second.month => {
+                    max_diff = max(max_diff, WhichDelim::Month)
+                }
+                DatePartForm::Year(_) if first.year != second.year => {
+                    max_diff = max(max_diff, WhichDelim::Year)
+                }
+                _ => {}
             }
         }
         max_diff
     }
 }
 
-
 impl<'a> DateRangePartsIter<'a> {
-    fn new(parts: &'a [DatePart], selector: Option<DateParts>, first: &'a Date, second: &'a Date) -> Self {
+    fn new(
+        parts: &'a [DatePart],
+        selector: Option<DateParts>,
+        first: &'a Date,
+        second: &'a Date,
+    ) -> Self {
         let mut vec = Vec::with_capacity(parts.len() + 2);
 
         let max_diff = WhichDelim::diff(parts, first, second);
@@ -471,29 +490,50 @@ fn test_range_dp_sequence() {
     let month = &parts[1];
     let year = &parts[2];
 
-    let first = Date { year: 1998, month: 3, day: 27 };
-    let second = Date { year: 1998, month: 3, day: 29 };
+    let first = Date {
+        year: 1998,
+        month: 3,
+        day: 27,
+    };
+    let second = Date {
+        year: 1998,
+        month: 3,
+        day: 29,
+    };
     let iter = DateRangePartsIter::new(&parts, &first, &second);
-    assert_eq!(iter.collect::<Vec<_>>(), vec![
-        DateToken::Part(&first, day, true),
-        DateToken::RangeDelim(".."),
-        DateToken::Part(&second, day, false),
-        DateToken::Part(&first, month, false),
-        DateToken::Part(&first, year, false),
-    ]);
+    assert_eq!(
+        iter.collect::<Vec<_>>(),
+        vec![
+            DateToken::Part(&first, day, true),
+            DateToken::RangeDelim(".."),
+            DateToken::Part(&second, day, false),
+            DateToken::Part(&first, month, false),
+            DateToken::Part(&first, year, false),
+        ]
+    );
 
-    let first = Date { year: 1998, month: 3, day: 27 };
-    let second = Date { year: 1998, month: 4, day: 29 };
+    let first = Date {
+        year: 1998,
+        month: 3,
+        day: 27,
+    };
+    let second = Date {
+        year: 1998,
+        month: 4,
+        day: 29,
+    };
     let iter = DateRangePartsIter::new(&parts, &first, &second);
-    assert_eq!(iter.collect::<Vec<_>>(), vec![
-        DateToken::Part(&first, day, false),
-        DateToken::Part(&first, month, false),
-        DateToken::RangeDelim("-"),
-        DateToken::Part(&second, day, false),
-        DateToken::Part(&second, month, false),
-        DateToken::Part(&first, &parts[2], false),
-    ]);
-
+    assert_eq!(
+        iter.collect::<Vec<_>>(),
+        vec![
+            DateToken::Part(&first, day, false),
+            DateToken::Part(&first, month, false),
+            DateToken::RangeDelim("-"),
+            DateToken::Part(&second, day, false),
+            DateToken::Part(&second, month, false),
+            DateToken::Part(&first, &parts[2], false),
+        ]
+    );
 }
 
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
@@ -647,28 +687,24 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             }
         },
         DatePartForm::Day(form) => match form {
-            DayForm::Numeric => {
-                if date.day == 0 {
-                    None
-                } else {
-                    Some(format!("{}", date.day))
-                }
+            _ if date.day == 0 => None,
+            DayForm::NumericLeadingZeros => Some(format!("{:02}", date.day)),
+            DayForm::Ordinal if !locale.options_node.limit_day_ordinals_to_day_1.unwrap_or(false) || date.day == 1 => {
+                use citeproc_io::NumericToken;
+                debug!("using ordinal form of days");
+                // The 'target noun' is the month term.
+                MonthTerm::from_u32(date.month)
+                    .map(|month| {
+                        debug!("month: {:?}", month);
+                        locale.get_month_gender(month)
+                    })
+                    .map(|gender| {
+                        debug!("day: {}, month: {}, gender: {:?}", date.day, date.month, gender);
+                        render_ordinal(&[NumericToken::Num(date.day)], locale, gender, false)
+                    })
             }
-            DayForm::NumericLeadingZeros => {
-                if date.day == 0 {
-                    None
-                } else {
-                    Some(format!("{:02}", date.day))
-                }
-            }
-            // TODO: implement ordinals
-            DayForm::Ordinal => {
-                if date.day == 0 {
-                    None
-                } else {
-                    Some(format!("{}ORD", date.day))
-                }
-            }
+            // Numeric or ordinal with limit-day-ordinals-to-day-1
+            _ => Some(format!("{}", date.day)),
         },
     }
 }

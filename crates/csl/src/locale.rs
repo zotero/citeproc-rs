@@ -19,15 +19,15 @@ pub use self::lang::{IsoCountry, IsoLang, Lang, LocaleSource};
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocaleOptionsNode {
-    pub limit_ordinals_to_day_1: Option<bool>,
+    pub limit_day_ordinals_to_day_1: Option<bool>,
     pub punctuation_in_quote: Option<bool>,
 }
 
 impl LocaleOptionsNode {
     fn merge(&mut self, other: &Self) {
-        self.limit_ordinals_to_day_1 = other
-            .limit_ordinals_to_day_1
-            .or(self.limit_ordinals_to_day_1);
+        self.limit_day_ordinals_to_day_1 = other
+            .limit_day_ordinals_to_day_1
+            .or(self.limit_day_ordinals_to_day_1);
         self.punctuation_in_quote = other.punctuation_in_quote.or(self.punctuation_in_quote);
     }
 }
@@ -40,7 +40,7 @@ pub struct LocaleOptions {
 impl LocaleOptions {
     pub fn from_merged(node: &LocaleOptionsNode) -> Self {
         let mut this = Self::default();
-        if let Some(x) = node.limit_ordinals_to_day_1 {
+        if let Some(x) = node.limit_day_ordinals_to_day_1 {
             this.limit_ordinals_to_day_1 = x;
         }
         if let Some(x) = node.punctuation_in_quote {
@@ -241,7 +241,7 @@ impl FromNode for TermEl {
 impl FromNode for LocaleOptionsNode {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
-            limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
+            limit_day_ordinals_to_day_1: attribute_option_bool(node, "limit-day-ordinals-to-day-1")?,
             punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
         })
     }
@@ -273,7 +273,9 @@ impl Locale {
     pub fn get_ordinal_term(&self, selector: OrdinalTermSelector) -> Option<&str> {
         let mut found = None;
         for sel in selector.fallback() {
+            debug!("{:?}", sel);
             if let f @ Some(_) = self.ordinal_terms.get(&sel) {
+                debug!("{:?}", f);
                 found = f.map(|s| s.as_str());
                 break;
             }
@@ -290,6 +292,16 @@ impl Locale {
             }
         };
         found
+    }
+
+    pub fn get_month_gender(&self, month: MonthTerm) -> Gender {
+        let selector = GenderedTermSelector::Month(month, TermForm::Long);
+        // Don't use fallback, just the long form
+        if let Some(GenderedTerm(_, gender)) = self.gendered_terms.get(&selector) {
+            *gender
+        } else {
+            Gender::Neuter
+        }
     }
 
     pub fn get_num_gender(&self, var: NumberVariable, locator_type: LocatorType) -> Gender {
@@ -318,8 +330,10 @@ impl Locale {
         extend(&mut self.gendered_terms, &with.gendered_terms);
         extend(&mut self.role_terms, &with.role_terms);
         extend(&mut self.dates, &with.dates);
-        // replace the whole ordinals configuration
-        self.ordinal_terms = with.ordinal_terms.clone();
+        // replace the whole ordinals configuration if any of them are specified
+        if !with.ordinal_terms.is_empty() {
+            self.ordinal_terms = with.ordinal_terms.clone();
+        }
         self.options_node.merge(&with.options_node);
     }
 }
