@@ -18,7 +18,10 @@ jobs:
           echo "##[set-output name=head;]$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')"
           GITHUB_BASE=${{ github.base_ref }}
           if test -z "$GITHUB_BASE"; then
-            GITHUB_BASE=$GITHUB_REF
+            # github.base_ref is apparently not available when pushing to a existing pull request branch
+            # this is dumb
+            # let's just guess for now
+            GITHUB_BASE="refs/heads/master"
           fi
           echo "##[set-output name=base;]$(echo ${GITHUB_BASE#refs/heads/} | tr '/' '-')"
         id: branch
