@@ -8,13 +8,13 @@ use crate::prelude::*;
 
 #[cfg(test)]
 use pretty_assertions::{assert_eq, assert_ne};
-use citeproc_io::Date;
+use citeproc_io::{Date, DateOrRange};
 use csl::terms::*;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, Locale, LocalizedDate,
-    MonthForm, SortKey, YearForm, TextCase, RangeDelimiter,
+    MonthForm, SortKey, YearForm, TextCase, RangeDelimiter, DateVariable,
 };
 use std::fmt::Write;
 use std::mem;
@@ -246,9 +246,7 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
-    let fmt = ctx.format();
     let locale = ctx.locale();
-    let refr = ctx.reference();
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
     let empty = GenericDateBits {
@@ -271,25 +269,7 @@ where
             },
         }
     };
-    // TODO: render date ranges
-    // TODO: TextCase
-    let date = refr
-        .date
-        .get(&local.variable)
-        .and_then(|r| r.single_or_first());
-    date.map(|val| {
-        let len_hint = locale_date.date_parts.len();
-        let rendered_parts = locale_date
-            .date_parts
-            .iter()
-            .filter(|dp| dp_matches(dp, local.parts_selector))
-            .filter_map(|dp| dp_render_either(dp, ctx.clone(), &val));
-        let mut builder = PartBuilder::new(gen_date, len_hint);
-        for (_form, either) in rendered_parts {
-            builder.push_either(either);
-        }
-        builder.into_either(fmt)
-    })
+    build_parts(&ctx, local.variable, gen_date, &locale_date.date_parts, Some(local.parts_selector))
 }
 
 fn intermediate_generic_indep<'c, O, I>(
@@ -300,7 +280,6 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
-    let fmt = ctx.format();
     let empty = GenericDateBits {
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
@@ -321,24 +300,56 @@ where
             },
         }
     };
-    let date = ctx
+    build_parts(&ctx, indep.variable, gen_date, &indep.date_parts, None)
+}
+
+fn build_parts<'c, O: OutputFormat, I: OutputFormat>(ctx: &GenericContext<'c, O, I>, var: DateVariable, gen_date: GenericDateBits, parts: &[DatePart], selector: Option<DateParts>) -> Option<Either<O>> {
+    // TODO: text-case
+    let fmt = ctx.format();
+    let len_hint = parts.len();
+    ctx
         .reference()
         .date
-        .get(&indep.variable)
-        // TODO: render date ranges
-        .and_then(|r| r.single_or_first());
-    date.map(|val| {
-        let len_hint = indep.date_parts.len();
-        let each = indep
-            .date_parts
-            .iter()
-            .filter_map(|dp| dp_render_either(dp, ctx.clone(), &val));
-        let mut builder = PartBuilder::new(gen_date, len_hint);
-        for (_form, either) in each {
-            builder.push_either(either);
-        }
-        builder.into_either(fmt)
-    })
+        .get(&var)
+        .map(|val| {
+            match val {
+                DateOrRange::Single(single) => {
+                    let each = parts
+                        .iter()
+                        .filter(|dp| if let Some(selector) = selector {
+                            dp_matches(dp, selector)
+                        } else {
+                            true
+                        })
+                        .filter_map(|dp| dp_render_either(dp, ctx.clone(), single));
+                    let mut builder = PartBuilder::new(gen_date, len_hint);
+                    for (_form, either) in each {
+                        builder.push_either(either);
+                    }
+                    builder.into_either(fmt)
+                }
+                DateOrRange::Range(first, second) => {
+                    let tokens = DateRangePartsIter::new(parts, selector, first, second);
+                    let mut builder = PartBuilder::new(gen_date, len_hint);
+                    for token in tokens {
+                        match token {
+                            DateToken::RangeDelim(delim) => {
+                                builder.push_either(Either::Build(Some(fmt.plain(delim))));
+                            }
+                            DateToken::Part(date, part) => {
+                                if let Some((_form, either)) = dp_render_either(part, ctx.clone(), date) {
+                                    builder.push_either(either);
+                                }
+                            }
+                        }
+                    }
+                    builder.into_either(fmt)
+                }
+                DateOrRange::Literal(string) => {
+                    Either::Build(Some(fmt.plain(string)))
+                }
+            }
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -347,39 +358,30 @@ enum DateToken<'a> {
     RangeDelim(&'a str),
 }
 
-use std::iter::Peekable;
-
 struct DateRangePartsIter<'a> {
     tokens: std::vec::IntoIter<DateToken<'a>>,
-    first: &'a Date,
-    second: &'a Date,
 }
 
-impl<'a> DateRangePartsIter<'a> {
-    fn new(parts: &'a [DatePart], first: &'a Date, second: &'a Date) -> Self {
-        let mut vec = Vec::with_capacity(parts.len() + 2);
-
-        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-        #[repr(u8)]
-        enum WhichDelim {
-            None = 0,
-            Day = 1,
-            Month = 2,
-            Year = 3,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[repr(u8)]
+enum WhichDelim {
+    None = 0,
+    Day = 1,
+    Month = 2,
+    Year = 3,
+}
+impl WhichDelim {
+    fn matches_form(&self, form: &DatePartForm) -> bool {
+        *self == WhichDelim::from_form(form)
+    }
+    fn from_form(form: &DatePartForm) -> Self {
+        match form {
+            DatePartForm::Day(_) => WhichDelim::Day,
+            DatePartForm::Month(..) => WhichDelim::Month,
+            DatePartForm::Year(_) => WhichDelim::Year,
         }
-        impl WhichDelim {
-            fn matches_form(&self, form: &DatePartForm) -> bool {
-                *self == WhichDelim::from_form(form)
-            }
-            fn from_form(form: &DatePartForm) -> Self {
-                match form {
-                    DatePartForm::Day(_) => WhichDelim::Day,
-                    DatePartForm::Month(..) => WhichDelim::Month,
-                    DatePartForm::Year(_) => WhichDelim::Year,
-                }
-            }
-        }
-
+    }
+    fn diff(parts: &[DatePart], first: &Date, second: &Date) -> Self {
         // Find the biggest differing date part
         let mut max_diff = WhichDelim::None;
         for part in parts {
@@ -391,13 +393,32 @@ impl<'a> DateRangePartsIter<'a> {
                 _ => {},
             }
         }
+        max_diff
+    }
+}
 
+
+impl<'a> DateRangePartsIter<'a> {
+    fn new(parts: &'a [DatePart], selector: Option<DateParts>, first: &'a Date, second: &'a Date) -> Self {
+        let mut vec = Vec::with_capacity(parts.len() + 2);
+
+        let max_diff = WhichDelim::diff(parts, first, second);
         for part in parts {
+            if let Some(selector) = selector {
+                if !dp_matches(part, selector) {
+                    continue;
+                }
+            }
             vec.push(DateToken::Part(first, part));
             if max_diff.matches_form(&part.form) {
                 let delim = part.range_delimiter.0.as_ref();
                 vec.push(DateToken::RangeDelim(delim));
                 for p in parts {
+                    if let Some(selector) = selector {
+                        if !dp_matches(p, selector) {
+                            continue;
+                        }
+                    }
                     if WhichDelim::from_form(&p.form) <= max_diff {
                         vec.push(DateToken::Part(second, p));
                     }
@@ -407,8 +428,6 @@ impl<'a> DateRangePartsIter<'a> {
 
         DateRangePartsIter {
             tokens: vec.into_iter(),
-            first,
-            second,
         }
     }
 }
