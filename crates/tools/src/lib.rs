@@ -214,16 +214,32 @@ impl TestSummary {
         None
     }
 
-    pub fn diff(&self, base: &TestSummary) -> TestDiff<'_> {
+    pub fn diff<'a>(&'a self, base: &'a TestSummary) -> TestDiff<'a> {
         let common_keys = base.test_names.intersection(&self.test_names);
         let count = common_keys.clone().count();
         let mut regressions = Vec::new();
         let mut improvements = Vec::new();
         let mut new_ignores = Vec::new();
+        let mut output_changed = Vec::new();
         for key in common_keys {
             let base_kind = base.kind_for_name(key).unwrap();
             let my_kind = self.kind_for_name(key).unwrap();
             match (base_kind, my_kind) {
+                (EventKind::Failed, EventKind::Failed) => {
+                    let orig = base.failed.get(key).unwrap();
+                    let mine = self.failed.get(key).unwrap();
+                    fn filt<'a>(x: &'a str) -> impl Iterator<Item = &'a str> {
+                        x.lines().filter(|x| !x.contains("RUST_BACKTRACE"))
+                    }
+                    let changed = match (orig.stdout.as_ref(), mine.stdout.as_ref()) {
+                        (Some(orig), Some(mine)) => ! filt(&orig).eq(filt(&mine)),
+                        (None, None) => false,
+                        _ => true,
+                    };
+                    if changed {
+                        output_changed.push((orig, mine));
+                    }
+                }
                 (EventKind::Ok, EventKind::Failed) => {
                     regressions.push(self.failed.get(key).unwrap());
                 }
@@ -240,6 +256,7 @@ impl TestSummary {
             regressions,
             improvements,
             new_ignores,
+            output_changed,
             count,
         }
     }
@@ -249,6 +266,7 @@ pub struct TestDiff<'a> {
     regressions: Vec<&'a Test>,
     improvements: Vec<&'a Test>,
     new_ignores: Vec<&'a Test>,
+    output_changed: Vec<(&'a Test, &'a Test)>,
     count: usize,
 }
 
@@ -268,12 +286,29 @@ impl TestDiff<'_> {
         for test in &self.new_ignores {
             println!("newly ignored: {}", &test.name);
         }
+        for (orig, mine) in &self.output_changed {
+            println!("output changed: {}\n", &orig.name);
+            let indent_lines = |string: &str| {
+                for line in string.lines() {
+                    println!("        {}", line);
+                }
+            };
+            if let Some(orig) = orig.stdout.as_ref() {
+                println!("    base:");
+                indent_lines(orig);
+            }
+            if let Some(mine) = mine.stdout.as_ref() {
+                println!("    current:");
+                indent_lines(mine);
+            }
+        }
         println!(
-            "{}test result: {} regressions, {} new passing tests, {} new ignores, out of {} intersecting tests",
+            "{}test result: {} regressions, {} new passing tests, {} new ignores, {} outputs changed, out of {} intersecting tests",
             pad,
             self.regressions.len(),
             self.improvements.len(),
             self.new_ignores.len(),
+            self.output_changed.len(),
             self.count
         );
         self.regressions.len() > 0 || self.count == 0
