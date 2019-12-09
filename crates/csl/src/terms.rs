@@ -775,7 +775,7 @@ fn zero_through_99(inp: &str) -> IResult<&str, u32> {
 #[test]
 fn test_ordinals() {
     assert_eq!(
-        Ok(OrdinalTerm::Mod100(34)),
+        Ok(OrdinalTerm::Mod100(34, OrdinalMatch::default_for(34))),
         OrdinalTerm::from_str("ordinal-34")
     );
     assert_eq!(

@@ -501,17 +501,17 @@ fn test_range_dp_sequence() {
     let parts = vec![
         DatePart {
             form: DatePartForm::Day(DayForm::Numeric),
-            range_delimiter: RangeDelimiter(Atom::from("..")),
+            range_delimiter: Some(RangeDelimiter(Atom::from(".."))),
             ..Default::default()
         },
         DatePart {
             form: DatePartForm::Month(MonthForm::Numeric, false),
-            range_delimiter: RangeDelimiter(Atom::from("-")),
+            range_delimiter: Some(RangeDelimiter(Atom::from("-"))),
             ..Default::default()
         },
         DatePart {
             form: DatePartForm::Year(YearForm::Long),
-            range_delimiter: RangeDelimiter(Atom::from(" to ")),
+            range_delimiter: Some(RangeDelimiter(Atom::from(" to "))),
             ..Default::default()
         },
     ];
@@ -530,7 +530,7 @@ fn test_range_dp_sequence() {
         month: 3,
         day: 29,
     };
-    let iter = DateRangePartsIter::new(&parts, &first, &second);
+    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
@@ -552,7 +552,7 @@ fn test_range_dp_sequence() {
         month: 4,
         day: 29,
     };
-    let iter = DateRangePartsIter::new(&parts, &first, &second);
+    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
