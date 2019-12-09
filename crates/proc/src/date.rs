@@ -6,12 +6,13 @@
 
 use crate::prelude::*;
 
+use std::fmt::Write;
 use citeproc_io::Date;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
-    MonthForm, SortKey, YearForm,
+    MonthForm, SortKey, YearForm, Locale,
 };
 use std::mem;
 
@@ -406,6 +407,36 @@ fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<
     }
 }
 
+fn render_year(year: i32, form: YearForm, locale: &Locale) -> String {
+    use csl::terms::*;
+    let mut s = String::new();
+    // Only do short form ('07) for four-digit years
+    match (form, year > 1000) {
+        (YearForm::Short, true) => write!(s, "{:02}", year.abs() % 100).unwrap(),
+        (YearForm::Long, _) | (YearForm::Short, false) => {
+            write!(s, "{}", year.abs()).unwrap()
+        },
+    }
+    if year < 0 {
+        let sel = SimpleTermSelector::Misc(MiscTerm::Bc, TermFormExtended::Long);
+        let sel = TextTermSelector::Simple(sel);
+        if let Some(bc) = locale.get_text_term(sel, false) {
+            s.push_str(bc);
+        } else {
+            s.push_str("BC");
+        }
+    } else if year < 1000 {
+        let sel = SimpleTermSelector::Misc(MiscTerm::Ad, TermFormExtended::Long);
+        let sel = TextTermSelector::Simple(sel);
+        if let Some(ad) = locale.get_text_term(sel, false) {
+            s.push_str(ad);
+        } else {
+            s.push_str("AD");
+        }
+    }
+    s
+}
+
 fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: &GenericContext<'c, O, I>,
@@ -413,10 +444,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
 ) -> Option<String> {
     let locale = ctx.locale();
     match part.form {
-        DatePartForm::Year(form) => match form {
-            YearForm::Long => Some(format!("{}", date.year)),
-            YearForm::Short => Some(format!("{:02}", date.year % 100)),
-        },
+        DatePartForm::Year(form) => Some(render_year(date.year, form, ctx.locale())),
         DatePartForm::Month(form, _strip_periods) => match form {
             MonthForm::Numeric => {
                 if date.month == 0 || date.month > 12 {
@@ -489,6 +517,8 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
         },
     }
 }
+
+// Some fallbacks so we don't have to panic so much if en-US is absent.
 
 const MONTHS_SHORT: &[&str] = &[
     "undefined",
