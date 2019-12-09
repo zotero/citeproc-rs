@@ -667,7 +667,7 @@ fn plain_suffix_element() -> Element {
             VariableForm::Long,
         ),
         formatting: None,
-        affixes: Default::default(),
+        affixes: None,
         quotes: false,
         strip_periods: false,
         text_case: TextCase::None,
@@ -883,7 +883,7 @@ fn built_cluster(
     let build = fmt.with_format(
         fmt.affixed(
             fmt.group(built_cites, &layout.delimiter.0, None),
-            &layout.affixes,
+            layout.affixes.as_ref(),
         ),
         layout.formatting,
     );
@@ -970,7 +970,10 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         let layout = &style.bibliography.as_ref().unwrap().layout;
         let ir = &gen0.ir;
         let flat = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
-        let build = fmt.with_format(fmt.affixed(flat, &layout.affixes), layout.formatting);
+        let build = fmt.with_format(
+            fmt.affixed(flat, layout.affixes.as_ref()),
+            layout.formatting,
+        );
         Arc::new(fmt.output(build))
     } else {
         // Whatever

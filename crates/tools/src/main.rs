@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Error};
+use anyhow::Error;
 use structopt::StructOpt;
+use tools::ucd::build_superscript_trie;
 use tools::*;
 // use std::{env, path::PathBuf};
 
@@ -63,6 +64,7 @@ struct TestSuite {
 enum Tools {
     PullTestSuite,
     PullLocales,
+    BuildUcd,
     TestSuite(TestSuite),
 }
 
@@ -71,6 +73,7 @@ fn main() -> Result<(), Error> {
     match opt {
         Tools::PullTestSuite => pull_test_suite(),
         Tools::PullLocales => pull_locales(),
+        Tools::BuildUcd => build_superscript_trie(),
         Tools::TestSuite(test_suite) => match test_suite.sub {
             None => run(Vec::new()),
             Some(TestSuiteSub::Run { rest, .. }) => run(rest),

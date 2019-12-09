@@ -180,7 +180,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: NumberVariable,
         form: NumericForm,
         val: &NumericValue,
-        _af: &Affixes,
+        _af: Option<&Affixes>,
         text_case: TextCase,
     ) -> O::Build {
         use citeproc_io::NumericToken;
@@ -200,42 +200,55 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                 };
-                fmt.affixed_text(s, None, &crate::sort::natural_sort::num_affixes())
+                fmt.affixed_text(
+                    s,
+                    None,
+                    Some(crate::sort::natural_sort::num_affixes()).as_ref(),
+                )
             }
             // TODO: text-case
             _ => fmt.affixed_text(
                 val.as_number(var.should_replace_hyphens()),
                 None,
-                &crate::sort::natural_sort::num_affixes(),
+                Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
         }
     }
 
+    /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
-        use crate::number::{roman_lower, roman_representable};
+        use crate::number::{render_ordinal, roman_lower, roman_representable};
+        let string = if let NumericValue::Tokens(_, ts) = val {
+            match number.form {
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts),
+                NumericForm::Ordinal | NumericForm::LongOrdinal => {
+                    let locale = self.ctx.locale();
+                    let loc_type = if number.variable == NumberVariable::Locator {
+                        self.ctx
+                            .locator_type()
+                            .expect("already known that locator exists and therefore has a type")
+                    } else {
+                        // Not used
+                        LocatorType::default()
+                    };
+                    let gender = locale.get_num_gender(number.variable, loc_type);
+                    let long = number.form == NumericForm::LongOrdinal;
+                    render_ordinal(&ts, locale, gender, long)
+                }
+                _ => val.as_number(number.variable.should_replace_hyphens()),
+            }
+        } else {
+            val.as_number(number.variable.should_replace_hyphens())
+        };
         let fmt = self.fmt();
-        match (val, number.form) {
-            (NumericValue::Tokens(_, ts), NumericForm::Roman) if roman_representable(&val) => {
-                let options = IngestOptions {
-                    replace_hyphens: number.variable.should_replace_hyphens(),
-                    text_case: number.text_case,
-                };
-                let string = roman_lower(&ts);
-                let b = fmt.ingest(&string, options);
-                let b = fmt.with_format(b, number.formatting);
-                let b = fmt.affixed(b, &number.affixes);
-                fmt.with_display(b, number.display, self.ctx.in_bibliography())
-            }
-            // TODO: text-case
-            _ => {
-                let b = fmt.affixed_text(
-                    val.as_number(number.variable.should_replace_hyphens()),
-                    number.formatting,
-                    &number.affixes,
-                );
-                fmt.with_display(b, number.display, self.ctx.in_bibliography())
-            }
-        }
+        let options = IngestOptions {
+            replace_hyphens: number.variable.should_replace_hyphens(),
+            text_case: number.text_case,
+        };
+        let b = fmt.ingest(&string, options);
+        let b = fmt.with_format(b, number.formatting);
+        let b = fmt.affixed(b, number.affixes.as_ref());
+        fmt.with_display(b, number.display, self.ctx.in_bibliography())
     }
 
     fn quotes(quo: bool) -> Option<LocalizedQuotes> {
@@ -272,7 +285,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             StandardVariable::Number(_) => txt,
         };
-        let b = fmt.affixed_quoted(txt, &text.affixes, quotes.as_ref());
+        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), quotes.as_ref());
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
@@ -290,7 +303,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             },
         );
         let b = fmt.with_format(b, text.formatting);
-        let b = fmt.affixed_quoted(b, &text.affixes, quotes.as_ref());
+        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), quotes.as_ref());
         let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
         Some(b)
     }
@@ -308,7 +321,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             fmt.affixed_text_quoted(
                 val.to_owned(),
                 text.formatting,
-                &text.affixes,
+                text.affixes.as_ref(),
                 quotes.as_ref(),
             )
         })
@@ -342,7 +355,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
-                .map(|term_text| fmt.affixed_text(term_text.to_owned(), *formatting, affixes))
+                .map(|term_text| {
+                    fmt.affixed_text(term_text.to_owned(), *formatting, affixes.as_ref())
+                })
         })
     }
 
@@ -369,7 +384,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 .map(|val| {
                     let b = fmt.ingest(val, options);
                     let b = fmt.with_format(b, label.formatting);
-                    fmt.affixed(b, &label.affixes)
+                    fmt.affixed(b, label.affixes.as_ref())
                 })
         })
     }

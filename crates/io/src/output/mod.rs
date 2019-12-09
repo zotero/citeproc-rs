@@ -14,6 +14,7 @@ pub mod micro_html;
 pub mod pandoc;
 #[cfg(feature = "plain")]
 pub mod plain;
+mod superscript;
 
 use std::marker::{Send, Sync};
 
@@ -107,7 +108,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         &self,
         s: String,
         format_inner: Option<Formatting>,
-        affixes: &Affixes,
+        affixes: Option<&Affixes>,
         quotes: Option<&LocalizedQuotes>,
     ) -> Self::Build {
         self.affixed_quoted(self.text_node(s, format_inner), affixes, quotes)
@@ -117,7 +118,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         &self,
         s: String,
         format_inner: Option<Formatting>,
-        affixes: &Affixes,
+        affixes: Option<&Affixes>,
     ) -> Self::Build {
         self.affixed(self.text_node(s, format_inner), affixes)
     }
@@ -125,19 +126,19 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build;
 
     #[inline]
-    fn affixed(&self, b: Self::Build, affixes: &Affixes) -> Self::Build {
+    fn affixed(&self, b: Self::Build, affixes: Option<&Affixes>) -> Self::Build {
         self.affixed_quoted(b, affixes, None)
     }
 
     fn affixed_quoted(
         &self,
         b: Self::Build,
-        affixes: &Affixes,
+        affixes: Option<&Affixes>,
         quotes: Option<&LocalizedQuotes>,
     ) -> Self::Build {
         use std::iter::once;
-        let pre = affixes.prefix.is_empty();
-        let suf = affixes.suffix.is_empty();
+        let pre = affixes.map_or(true, |x| x.prefix.is_empty());
+        let suf = affixes.map_or(true, |x| x.suffix.is_empty());
         let b = if let Some(lq) = quotes {
             self.quoted(b, lq)
         } else {
@@ -146,14 +147,14 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         match (pre, suf) {
             (true, true) => b,
 
-            (false, true) => self.seq(once(self.plain(&affixes.prefix)).chain(once(b))),
+            (false, true) => self.seq(once(self.plain(&affixes.unwrap().prefix)).chain(once(b))),
 
-            (true, false) => self.seq(once(b).chain(once(self.plain(&affixes.suffix)))),
+            (true, false) => self.seq(once(b).chain(once(self.plain(&affixes.unwrap().suffix)))),
 
             (false, false) => self.seq(
-                once(self.plain(&affixes.prefix))
+                once(self.plain(&affixes.unwrap().prefix))
                     .chain(once(b))
-                    .chain(once(self.plain(&affixes.suffix))),
+                    .chain(once(self.plain(&affixes.unwrap().suffix))),
             ),
         }
     }

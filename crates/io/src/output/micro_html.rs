@@ -25,7 +25,7 @@ impl MicroNode {
 
 pub trait HtmlReader<T> {
     fn constructor(&self, tag: &Tag, children: Vec<T>) -> Vec<T>;
-    fn plain(&self, s: &str) -> Option<T>;
+    fn plain(&self, s: &str) -> Option<Vec<T>>;
     fn filter(&self, tag: &mut Tag) {
         if tag.name == "html" || tag.name == "body" {
             // ignore <html> and <body> tags, but still parse their children
@@ -80,13 +80,13 @@ impl HtmlReader<String> for PlainHtmlReader {
         }
     }
 
-    fn plain(&self, s: &str) -> Option<String> {
+    fn plain(&self, s: &str) -> Option<Vec<String>> {
         let x = if self.options.replace_hyphens {
             s.replace('-', "\u{2013}")
         } else {
             s.to_string()
         };
-        Some(x)
+        Some(vec![x])
     }
 }
 
@@ -115,13 +115,13 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
         vec![single]
     }
 
-    fn plain<'input>(&self, s: &'input str) -> Option<MicroNode> {
+    fn plain<'input>(&self, s: &'input str) -> Option<Vec<MicroNode>> {
         let x = if self.options.replace_hyphens {
             s.replace('-', "\u{2013}")
         } else {
             s.to_string()
         };
-        Some(MicroNode::Text(x))
+        Some(super::superscript::parse_sup_sub(&x))
     }
 }
 
@@ -241,7 +241,7 @@ impl<'input> TagParser {
                 NodeData::Text { contents } => {
                     let cont = &contents.borrow();
                     if let Some(s) = callbacks.plain(cont) {
-                        output.push(s)
+                        output.extend(s.into_iter())
                     }
                 }
                 NodeData::Comment { .. } => {}

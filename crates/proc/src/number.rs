@@ -1,5 +1,30 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
+use csl::{Gender, Locale, OrdinalTerm, OrdinalTermSelector};
+
+pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long: bool) -> String {
+    let mut s = String::new();
+    for token in ts {
+        match *token {
+            NumericToken::Num(n) => {
+                use std::fmt::Write;
+                if !long || n == 0 || n > 10 {
+                    write!(s, "{}", n).unwrap();
+                }
+                let term = OrdinalTerm::from_number_for_selector(n, long);
+                if let Some(suffix) = locale.get_ordinal_term(OrdinalTermSelector(term, gender)) {
+                    s.push_str(suffix);
+                }
+            }
+            Affixed(ref a) => s.push_str(&a),
+            Comma => s.push_str(", "),
+            // en-dash
+            Hyphen => s.push_str("\u{2013}"),
+            Ampersand => s.push_str(" & "),
+        }
+    }
+    s
+}
 
 /// Numbers bigger than 3999 are too cumbersome anyway
 pub fn roman_representable(val: &NumericValue) -> bool {

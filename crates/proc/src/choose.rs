@@ -76,16 +76,7 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence(
-                db,
-                state,
-                ctx,
-                &els,
-                "".into(),
-                None,
-                Affixes::default(),
-                None,
-            );
+            let (content, gv) = sequence(db, state, ctx, &els, "".into(), None, None, None);
             make_mutex(disamb, content, gv)
         }
     }
@@ -101,41 +92,14 @@ impl Disambiguation<Markup> for Choose {
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx, &mut state.disamb_count).0 {
-            return ref_sequence(
-                db,
-                ctx,
-                state,
-                els,
-                "".into(),
-                Some(stack),
-                Affixes::default(),
-                None,
-            );
+            return ref_sequence(db, ctx, state, els, "".into(), Some(stack), None, None);
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx, &mut state.disamb_count).0 {
-                return ref_sequence(
-                    db,
-                    ctx,
-                    state,
-                    els,
-                    "".into(),
-                    Some(stack),
-                    Affixes::default(),
-                    None,
-                );
+                return ref_sequence(db, ctx, state, els, "".into(), Some(stack), None, None);
             }
         }
-        ref_sequence(
-            db,
-            ctx,
-            state,
-            &last.0,
-            "".into(),
-            Some(stack),
-            Affixes::default(),
-            None,
-        )
+        ref_sequence(db, ctx, state, &last.0, "".into(), Some(stack), None, None)
     }
 }
 
@@ -165,7 +129,7 @@ where
             &elements,
             "".into(),
             None,
-            Affixes::default(),
+            None,
             None,
         ))
     } else {

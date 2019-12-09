@@ -92,7 +92,7 @@ pub enum RefIR {
 pub struct RefIrSeq {
     pub contents: Vec<RefIR>,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub delimiter: Atom,
 }
 
@@ -330,7 +330,7 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
             ..
         } = *self;
         let grp = fmt.group(xs, delimiter, formatting);
-        let grp = fmt.affixed(grp, affixes);
+        let grp = fmt.affixed(grp, affixes.as_ref());
         // TODO: pass in_bibliography from ctx
         let grp = fmt.with_display(grp, display, true);
         Some(grp)
@@ -436,7 +436,7 @@ impl IR<Markup> {
 pub struct IrSeq<O: OutputFormat> {
     pub contents: Vec<IR<O>>,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub delimiter: Atom,
     pub display: Option<DisplayMode>,
 }
@@ -453,6 +453,7 @@ impl IrSeq<Markup> {
             formatting,
             display,
         } = *self;
+        let affixes = affixes.as_ref();
 
         let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), display);
         let sub_formatting = formatting
@@ -463,8 +464,8 @@ impl IrSeq<Markup> {
         fmt.stack_preorder(&mut open_tags, &stack);
         fmt.stack_postorder(&mut close_tags, &stack);
 
-        if !affixes.prefix.is_empty() {
-            edges.push(EdgeData::Output(affixes.prefix.to_string()));
+        if !affixes.map_or(true, |a| a.prefix.is_empty()) {
+            edges.push(EdgeData::Output(affixes.unwrap().prefix.to_string()));
         }
 
         if !open_tags.is_empty() {
@@ -494,8 +495,8 @@ impl IrSeq<Markup> {
             edges.push(EdgeData::Output(close_tags));
         }
 
-        if !affixes.suffix.is_empty() {
-            edges.push(EdgeData::Output(affixes.suffix.to_string()));
+        if !affixes.map_or(true, |a| a.suffix.is_empty()) {
+            edges.push(EdgeData::Output(affixes.unwrap().suffix.to_string()));
         }
     }
 }

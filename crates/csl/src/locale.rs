@@ -8,6 +8,7 @@ use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
 use crate::terms::*;
+use crate::variables::NumberVariable;
 use crate::{FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
@@ -18,15 +19,15 @@ pub use self::lang::{IsoCountry, IsoLang, Lang, LocaleSource};
 
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocaleOptionsNode {
-    pub limit_ordinals_to_day_1: Option<bool>,
+    pub limit_day_ordinals_to_day_1: Option<bool>,
     pub punctuation_in_quote: Option<bool>,
 }
 
 impl LocaleOptionsNode {
     fn merge(&mut self, other: &Self) {
-        self.limit_ordinals_to_day_1 = other
-            .limit_ordinals_to_day_1
-            .or(self.limit_ordinals_to_day_1);
+        self.limit_day_ordinals_to_day_1 = other
+            .limit_day_ordinals_to_day_1
+            .or(self.limit_day_ordinals_to_day_1);
         self.punctuation_in_quote = other.punctuation_in_quote.or(self.punctuation_in_quote);
     }
 }
@@ -39,7 +40,7 @@ pub struct LocaleOptions {
 impl LocaleOptions {
     pub fn from_merged(node: &LocaleOptionsNode) -> Self {
         let mut this = Self::default();
-        if let Some(x) = node.limit_ordinals_to_day_1 {
+        if let Some(x) = node.limit_day_ordinals_to_day_1 {
             this.limit_ordinals_to_day_1 = x;
         }
         if let Some(x) = node.punctuation_in_quote {
@@ -196,16 +197,16 @@ impl FromNode for TermEl {
                 GenderedTermSelector::Month(mt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
+            Season(t) => Ok(TermEl::Gendered(
+                GenderedTermSelector::Season(t, TermForm::from_node(node, info)?),
+                GenderedTerm(content, attribute_optional(node, "gender", info)?),
+            )),
             Loc(lt) => Ok(TermEl::Gendered(
                 GenderedTermSelector::Locator(lt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
             Misc(t) => Ok(TermEl::Simple(
                 SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
-                content,
-            )),
-            Season(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Season(t, TermForm::from_node(node, info)?),
                 content,
             )),
             Quote(t) => Ok(TermEl::Simple(
@@ -216,15 +217,18 @@ impl FromNode for TermEl {
                 RoleTermSelector(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
-            Ordinal(t) => match content {
-                TermPlurality::Invariant(a) => Ok(TermEl::Ordinal(
-                    OrdinalTermSelector(
-                        t,
-                        attribute_optional(node, "gender-form", info)?,
-                        OrdinalMatch::from_node(node, info)?,
-                    ),
-                    a,
-                )),
+            Ordinal(mut t) => match content {
+                TermPlurality::Invariant(a) => {
+                    if let OrdinalTerm::Mod100(_, ref mut m) = t {
+                        if let Some(overrider) = attribute_option(node, "match", info)? {
+                            *m = overrider;
+                        }
+                    }
+                    Ok(TermEl::Ordinal(
+                        OrdinalTermSelector(t, attribute_optional(node, "gender-form", info)?),
+                        a,
+                    ))
+                }
                 _ => Err(InvalidCsl::new(node, "ordinal terms cannot be pluralized").into()),
             },
         }
@@ -234,7 +238,10 @@ impl FromNode for TermEl {
 impl FromNode for LocaleOptionsNode {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
-            limit_ordinals_to_day_1: attribute_option_bool(node, "limit-ordinals-to-day-1")?,
+            limit_day_ordinals_to_day_1: attribute_option_bool(
+                node,
+                "limit-day-ordinals-to-day-1",
+            )?,
             punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
         })
     }
@@ -263,6 +270,54 @@ impl Locale {
         }
     }
 
+    pub fn get_ordinal_term(&self, selector: OrdinalTermSelector) -> Option<&str> {
+        let mut found = None;
+        for sel in selector.fallback() {
+            debug!("{:?}", sel);
+            if let f @ Some(_) = self.ordinal_terms.get(&sel) {
+                debug!("{:?}", f);
+                found = f.map(|s| s.as_str());
+                break;
+            }
+        }
+        found
+    }
+
+    pub fn get_gendered_term(&self, selector: GenderedTermSelector) -> Option<&GenderedTerm> {
+        let mut found = None;
+        for sel in selector.fallback() {
+            if let f @ Some(_) = self.gendered_terms.get(&sel) {
+                found = f;
+                break;
+            }
+        }
+        found
+    }
+
+    pub fn get_month_gender(&self, month: MonthTerm) -> Gender {
+        let selector = GenderedTermSelector::Month(month, TermForm::Long);
+        // Don't use fallback, just the long form
+        if let Some(GenderedTerm(_, gender)) = self.gendered_terms.get(&selector) {
+            *gender
+        } else {
+            Gender::Neuter
+        }
+    }
+
+    pub fn get_num_gender(&self, var: NumberVariable, locator_type: LocatorType) -> Gender {
+        let selector = if var == NumberVariable::Locator {
+            GenderedTermSelector::Locator(locator_type, TermForm::Long)
+        } else {
+            GenderedTermSelector::Number(var, TermForm::Long).normalise()
+        };
+        // Don't use fallback, just the long form
+        if let Some(GenderedTerm(_, gender)) = self.gendered_terms.get(&selector) {
+            *gender
+        } else {
+            Gender::Neuter
+        }
+    }
+
     pub fn merge(&mut self, with: &Self) {
         fn extend<K: Clone + Eq + std::hash::Hash, V: Clone>(
             map: &mut FnvHashMap<K, V>,
@@ -275,8 +330,10 @@ impl Locale {
         extend(&mut self.gendered_terms, &with.gendered_terms);
         extend(&mut self.role_terms, &with.role_terms);
         extend(&mut self.dates, &with.dates);
-        // replace the whole ordinals configuration
-        self.ordinal_terms = with.ordinal_terms.clone();
+        // replace the whole ordinals configuration if any of them are specified
+        if !with.ordinal_terms.is_empty() {
+            self.ordinal_terms = with.ordinal_terms.clone();
+        }
         self.options_node.merge(&with.options_node);
     }
 }

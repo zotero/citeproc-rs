@@ -1,9 +1,12 @@
 # cargo install --force ucd-generate
+VERSION=12.1.0
 
-(mkdir -p /tmp/ucd-11.0.0 && \
-cd /tmp/ucd-11.0.0 && \
-curl -LO https://www.unicode.org/Public/zipped/11.0.0/UCD.zip && \
-unzip UCD.zip)
-mkdir -p src/input/unicode/
-ucd-generate script /tmp/ucd-11.0.0 --include Common,Latin,Cyrillic --trie-set > src/input/unicode/script.rs
+PROC=$(pwd)
+
+mkdir -p /tmp/ucd && \
+cd /tmp/ucd && \
+curl -LO https://www.unicode.org/Public/zipped/$VERSION/UCD.zip && \
+unzip -o UCD.zip && \
+mkdir -p $PROC/src/unicode && \
+ucd-generate script /tmp/ucd --include Common,Latin,Cyrillic --trie-set > $PROC/src/unicode/script.rs
 

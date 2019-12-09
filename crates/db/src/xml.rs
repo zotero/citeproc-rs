@@ -259,7 +259,10 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
                     acc
                 }
             })
-            .unwrap_or_else(Locale::default),
+            .unwrap_or_else(|| {
+                warn!("Using default, empty locale");
+                Locale::default()
+            }),
     )
 }
 

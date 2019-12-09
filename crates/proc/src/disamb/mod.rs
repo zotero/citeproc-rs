@@ -317,7 +317,7 @@ pub fn graph_with_stack(
     fmt: &Markup,
     nfa: &mut Nfa,
     formatting: Option<Formatting>,
-    affixes: &Affixes,
+    affixes: Option<&Affixes>,
     mut spot: NodeIndex,
     f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
 ) -> NodeIndex {
@@ -337,13 +337,15 @@ pub fn graph_with_stack(
     };
     let open_tags = &mkedge(&*open_tags);
     let close_tags = &mkedge(&*close_tags);
-    let pre = &mkedge(&*affixes.prefix);
-    let suf = &mkedge(&*affixes.suffix);
-    spot = add_to_graph(db, fmt, nfa, pre, spot);
+    if let Some(pre) = affixes.as_ref().map(|a| mkedge(&*a.prefix)) {
+        spot = add_to_graph(db, fmt, nfa, &pre, spot);
+    }
     spot = add_to_graph(db, fmt, nfa, open_tags, spot);
     spot = f(nfa, spot);
     spot = add_to_graph(db, fmt, nfa, close_tags, spot);
-    spot = add_to_graph(db, fmt, nfa, suf, spot);
+    if let Some(suf) = affixes.as_ref().map(|a| mkedge(&*a.suffix)) {
+        spot = add_to_graph(db, fmt, nfa, &suf, spot);
+    }
     spot
 }
 
@@ -368,6 +370,7 @@ pub fn add_to_graph(
                 ref affixes,
                 ref delimiter,
             } = *seq;
+            let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
                     Some(db.edge(EdgeData::Output(

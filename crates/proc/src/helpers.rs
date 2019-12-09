@@ -17,7 +17,7 @@ pub fn sequence<'c, O, I>(
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
-    affixes: Affixes,
+    affixes: Option<&Affixes>,
     display: Option<DisplayMode>,
 ) -> IrSum<O>
 where
@@ -44,7 +44,7 @@ where
             IR::Seq(IrSeq {
                 contents: inner,
                 formatting,
-                affixes,
+                affixes: affixes.cloned(),
                 delimiter,
                 display: if ctx.in_bibliography { display } else { None },
             }),
@@ -60,7 +60,7 @@ pub fn ref_sequence<'c>(
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
-    affixes: Affixes,
+    affixes: Option<&Affixes>,
     display: Option<DisplayMode>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
@@ -88,7 +88,7 @@ pub fn ref_sequence<'c>(
             RefIR::Seq(RefIrSeq {
                 contents: inner,
                 formatting,
-                affixes,
+                affixes: affixes.cloned(),
                 delimiter,
             }),
             gv,

@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use super::MonthForm;
 use crate::error::*;
 use crate::version::Features;
 use std::str::FromStr;
@@ -61,7 +62,6 @@ impl GetAttribute for AnyTermName {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermFormExtended),
-    Season(SeasonTerm, TermForm),
     Quote(QuoteTerm, TermForm),
 }
 
@@ -71,10 +71,6 @@ impl SimpleTermSelector {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
             }
-            SimpleTermSelector::Season(t, form) => Box::new(
-                form.fallback()
-                    .map(move |x| SimpleTermSelector::Season(t, x)),
-            ),
             SimpleTermSelector::Quote(t, form) => Box::new(
                 form.fallback()
                     .map(move |x| SimpleTermSelector::Quote(t, x)),
@@ -84,7 +80,54 @@ impl SimpleTermSelector {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct OrdinalTermSelector(pub OrdinalTerm, pub Gender, pub OrdinalMatch);
+pub struct OrdinalTermSelector(pub OrdinalTerm, pub Gender);
+
+struct OrdinalTermIter(Option<OrdinalTerm>);
+
+impl Iterator for OrdinalTermIter {
+    type Item = OrdinalTerm;
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = if let Some(x) = self.0 {
+            match x {
+                // The end
+                OrdinalTerm::Ordinal => None,
+                // Second last
+                OrdinalTerm::Mod100(_, OrdinalMatch::LastDigit) => Some(OrdinalTerm::Ordinal),
+                OrdinalTerm::Mod100(n, OrdinalMatch::LastTwoDigits) => {
+                    Some(OrdinalTerm::Mod100(n % 10, OrdinalMatch::LastDigit))
+                }
+                OrdinalTerm::Mod100(n, OrdinalMatch::WholeNumber) => {
+                    Some(OrdinalTerm::Mod100(n, OrdinalMatch::LastTwoDigits))
+                }
+                // The rest are LongOrdinal*, which should fall back with LongOrdinal01 -> Mod100(1), etc.
+                t => Some(OrdinalTerm::Mod100(
+                    t.to_number(),
+                    OrdinalMatch::WholeNumber,
+                )),
+            }
+        } else {
+            None
+        };
+        mem::replace(&mut self.0, next)
+    }
+}
+
+impl OrdinalTerm {
+    pub fn fallback(self) -> impl Iterator<Item = Self> {
+        OrdinalTermIter(Some(self))
+    }
+}
+
+impl OrdinalTermSelector {
+    pub fn fallback(self) -> impl Iterator<Item = OrdinalTermSelector> {
+        use std::iter::once;
+        let OrdinalTermSelector(term, gender) = self;
+        term.fallback().flat_map(move |term| {
+            once(OrdinalTermSelector(term, gender))
+                .chain(once(OrdinalTermSelector(term, Gender::Neuter)))
+        })
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum GenderedTermSelector {
@@ -92,6 +135,7 @@ pub enum GenderedTermSelector {
     Number(NumberVariable, TermForm),
     Locator(LocatorType, TermForm),
     Month(MonthTerm, TermForm),
+    Season(SeasonTerm, TermForm),
 }
 
 impl GenderedTermSelector {
@@ -108,6 +152,39 @@ impl GenderedTermSelector {
             v => Some(GenderedTermSelector::Number(v, form)),
         }
     }
+
+    pub fn from_month_u32(month_or_season: u32, form: MonthForm) -> Option<Self> {
+        let term_form = match form {
+            MonthForm::Long => TermForm::Long,
+            MonthForm::Short => TermForm::Short,
+            // Not going to be using the terms anyway
+            _ => return None,
+        };
+        if month_or_season == 0 || month_or_season > 16 {
+            return None;
+        }
+        let sel = if month_or_season > 12 {
+            // it's a season; 1 -> Spring, etc
+            let season = month_or_season - 12;
+            GenderedTermSelector::Season(
+                match season {
+                    1 => SeasonTerm::Season01,
+                    2 => SeasonTerm::Season02,
+                    3 => SeasonTerm::Season03,
+                    4 => SeasonTerm::Season04,
+                    _ => return None,
+                },
+                term_form,
+            )
+        } else {
+            GenderedTermSelector::Month(
+                MonthTerm::from_u32(month_or_season).expect("we know it's a month now"),
+                term_form,
+            )
+        };
+        Some(sel)
+    }
+
     pub fn normalise(self) -> Self {
         use GenderedTermSelector::*;
         match self {
@@ -117,6 +194,7 @@ impl GenderedTermSelector {
             g => g,
         }
     }
+
     pub fn fallback(self) -> Box<dyn Iterator<Item = Self>> {
         match self {
             GenderedTermSelector::Number(t, form) => Box::new(
@@ -130,6 +208,10 @@ impl GenderedTermSelector {
             GenderedTermSelector::Month(t, form) => Box::new(
                 form.fallback()
                     .map(move |x| GenderedTermSelector::Month(t, x)),
+            ),
+            GenderedTermSelector::Season(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| GenderedTermSelector::Season(t, x)),
             ),
         }
     }
@@ -294,9 +376,9 @@ impl TermPlurality {
 ///    gets back `GenderedTerm(TermPlurality::Invariant("issue"), Gender::Feminine)`
 /// 3. It then needs an ordinal to match `Gender::Feminine`, so it looks up, in order:
 ///
-///    1. `OrdinalTermSelector(Mod100(1), Feminine, WholeNumber)` and finds no match;
-///    2. `OrdinalTermSelector(Mod100(1), Feminine, LastTwoDigits)` and finds a match with content
+///    1. `OrdinalTermSelector(Mod100(1), Feminine, LastDigit)` and finds a match with content
 ///       `FFF`.
+///    2. Would also look up OridnalMatch::LastTwoDigits Neuter
 ///
 #[derive(AsStaticStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
@@ -318,13 +400,17 @@ impl Default for Gender {
 #[derive(AsStaticStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum OrdinalMatch {
+    /// Default for `Mod100(n) if n < 10`. Matches 9, 29, 109, 129.
+    LastDigit,
+    /// Default for `Mod100(n) if n >= 10`. Matches 9, 109.
     LastTwoDigits,
+    /// Not a default. Matches 9.
     WholeNumber,
 }
 
 impl Default for OrdinalMatch {
     fn default() -> Self {
-        OrdinalMatch::LastTwoDigits
+        OrdinalMatch::LastDigit
     }
 }
 
@@ -555,7 +641,7 @@ impl MonthTerm {
 #[derive(EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum OrdinalTerm {
     Ordinal,
-    Mod100(u32),
+    Mod100(u32, OrdinalMatch),
     LongOrdinal01,
     LongOrdinal02,
     LongOrdinal03,
@@ -566,6 +652,52 @@ pub enum OrdinalTerm {
     LongOrdinal08,
     LongOrdinal09,
     LongOrdinal10,
+}
+
+impl OrdinalTerm {
+    /// Returns 0 for OrdinalTerm::Ordinal, and clipped by the match property for Mod100. Useful for fallback to ordinal terms.
+    pub fn to_number(&self) -> u32 {
+        match self {
+            OrdinalTerm::Ordinal => 0,
+            OrdinalTerm::Mod100(n, m) => match m {
+                OrdinalMatch::LastDigit => n % 10,
+                OrdinalMatch::LastTwoDigits | OrdinalMatch::WholeNumber => n % 100,
+            },
+            OrdinalTerm::LongOrdinal01 => 1,
+            OrdinalTerm::LongOrdinal02 => 2,
+            OrdinalTerm::LongOrdinal03 => 3,
+            OrdinalTerm::LongOrdinal04 => 4,
+            OrdinalTerm::LongOrdinal05 => 5,
+            OrdinalTerm::LongOrdinal06 => 6,
+            OrdinalTerm::LongOrdinal07 => 7,
+            OrdinalTerm::LongOrdinal08 => 8,
+            OrdinalTerm::LongOrdinal09 => 9,
+            OrdinalTerm::LongOrdinal10 => 10,
+        }
+    }
+    pub fn from_number_long(n: u32) -> Self {
+        match n {
+            1 => OrdinalTerm::LongOrdinal01,
+            2 => OrdinalTerm::LongOrdinal02,
+            3 => OrdinalTerm::LongOrdinal03,
+            4 => OrdinalTerm::LongOrdinal04,
+            5 => OrdinalTerm::LongOrdinal05,
+            6 => OrdinalTerm::LongOrdinal06,
+            7 => OrdinalTerm::LongOrdinal07,
+            8 => OrdinalTerm::LongOrdinal08,
+            9 => OrdinalTerm::LongOrdinal09,
+            10 => OrdinalTerm::LongOrdinal10,
+            // Less code than panicking
+            _ => OrdinalTerm::Ordinal,
+        }
+    }
+    pub fn from_number_for_selector(n: u32, long: bool) -> Self {
+        if long && n > 0 && n <= 10 {
+            OrdinalTerm::from_number_long(n)
+        } else {
+            OrdinalTerm::Mod100(n % 100, OrdinalMatch::WholeNumber)
+        }
+    }
 }
 
 // impl std::convert::AsRef<str> for OrdinalTerm {
@@ -590,6 +722,8 @@ pub enum OrdinalTerm {
 //     }
 // }
 
+/// For Mod100, gives the default OrdinalMatch only; that must be parsed separately and overwritten
+/// if present.
 impl FromStr for OrdinalTerm {
     type Err = UnknownAttributeValue;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -607,8 +741,8 @@ impl FromStr for OrdinalTerm {
             "long-ordinal-09" => Ok(LongOrdinal09),
             "long-ordinal-10" => Ok(LongOrdinal10),
             _ => {
-                if let Ok(("", o)) = zero_through_99(s) {
-                    Ok(o)
+                if let Ok(("", n)) = zero_through_99(s) {
+                    Ok(OrdinalTerm::Mod100(n, OrdinalMatch::default_for(n)))
                 } else {
                     Err(UnknownAttributeValue::new(s))
                 }
@@ -619,7 +753,7 @@ impl FromStr for OrdinalTerm {
 
 use nom::{
     bytes::complete::{tag, take_while_m_n},
-    combinator::{map, map_res},
+    combinator::map_res,
     sequence::preceded,
     IResult,
 };
@@ -632,17 +766,15 @@ fn two_digit_num(inp: &str) -> IResult<&str, u32> {
     map_res(take_while_m_n(2, 2, is_digit), |s: &str| s.parse())(inp)
 }
 
-fn zero_through_99(inp: &str) -> IResult<&str, OrdinalTerm> {
-    map(preceded(tag("ordinal-"), two_digit_num), |n| {
-        OrdinalTerm::Mod100(n)
-    })(inp)
+fn zero_through_99(inp: &str) -> IResult<&str, u32> {
+    preceded(tag("ordinal-"), two_digit_num)(inp)
 }
 
 #[cfg(test)]
 #[test]
 fn test_ordinals() {
     assert_eq!(
-        Ok(OrdinalTerm::Mod100(34)),
+        Ok(OrdinalTerm::Mod100(34, OrdinalMatch::default_for(34))),
         OrdinalTerm::from_str("ordinal-34")
     );
     assert_eq!(

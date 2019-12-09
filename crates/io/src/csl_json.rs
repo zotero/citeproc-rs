@@ -8,6 +8,7 @@
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
 
+use serde::de::Error;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
@@ -87,7 +88,7 @@ enum Field {
     Any(WrapVar),
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum IdOrNumber {
     S(String),
@@ -99,6 +100,12 @@ impl IdOrNumber {
         match self {
             IdOrNumber::S(s) => s,
             IdOrNumber::N(i) => i.to_string(),
+        }
+    }
+    pub fn to_number(&self) -> Result<i32, std::num::ParseIntError> {
+        match self {
+            IdOrNumber::S(s) => s.parse(),
+            IdOrNumber::N(i) => Ok(*i),
         }
     }
 }
@@ -477,7 +484,13 @@ impl<'de> Deserialize<'de> for Date {
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
                 let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let month = if month >= 1 && month <= 12 { month } else { 0 };
+                let month = if month >= 1 && month <= 16 {
+                    month
+                } else if month >= 21 && month <= 24 {
+                    month - 8
+                } else {
+                    0
+                };
                 let day = if day >= 1 && day <= 31 { day } else { 0 };
                 Ok(Date::new(year.0, month, day))
             }
@@ -573,10 +586,12 @@ impl<'de> Deserialize<'de> for DateOrRange {
                     match key {
                         DateType::Raw => {
                             let v: Cow<'de, str> = map.next_value()?;
-                            found = Some(
-                                DateOrRange::from_str(&v)
-                                    .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
-                            )
+                            if found.is_none() {
+                                found = Some(
+                                    DateOrRange::from_str(&v)
+                                        .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
+                                )
+                            }
                         }
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
                         DateType::DateParts => {
@@ -588,16 +603,43 @@ impl<'de> Deserialize<'de> for DateOrRange {
                     }
                 }
                 found
-                    .map(|found| {
-                        if let Some(_season) = found_season {
-                            // Do something?
+                    .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
+                    .and_then(|mut found| {
+                        if let Some(season) = found_season {
+                            if let DateOrRange::Single(ref mut date) = found {
+                                if !date.has_day() && !date.has_month() {
+                                    let season = season
+                                        .to_number()
+                                        .map_err(|e| {
+                                            V::Error::custom(format!(
+                                                "season {:?} was not an integer: {}",
+                                                season, e
+                                            ))
+                                        })
+                                        .and_then(|unsigned| {
+                                            if unsigned < 1 || unsigned > 4 {
+                                                Err(V::Error::custom(format!(
+                                                    "season {} was not in range [1, 4]",
+                                                    unsigned
+                                                )))
+                                            } else {
+                                                Ok(unsigned as u32)
+                                            }
+                                        });
+                                    let mut season = season?;
+                                    if season > 20 {
+                                        // handle 21, 22, 23, 24
+                                        season -= 20;
+                                    }
+                                    date.month = season + 12;
+                                }
+                            }
                         }
                         if let Some(_circa) = found_circa {
                             // Do something?
                         }
-                        found
+                        Ok(found)
                     })
-                    .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
             }
         }
 

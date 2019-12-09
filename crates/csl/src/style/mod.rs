@@ -33,7 +33,7 @@ pub enum TextSource {
 pub struct TextElement {
     pub source: TextSource,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub quotes: Quotes,
     pub strip_periods: StripPeriods,
     pub text_case: TextCase,
@@ -45,7 +45,7 @@ pub struct LabelElement {
     pub variable: NumberVariable,
     pub form: TermForm,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub strip_periods: StripPeriods,
     pub text_case: TextCase,
     pub plural: Plural,
@@ -56,7 +56,7 @@ pub struct NumberElement {
     pub variable: NumberVariable,
     pub form: NumericForm,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub text_case: TextCase,
     pub display: Option<DisplayMode>,
 }
@@ -85,7 +85,7 @@ pub enum Element {
 pub struct Group {
     pub formatting: Option<Formatting>,
     pub delimiter: Delimiter,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub elements: Vec<Element>,
     pub display: Option<DisplayMode>,
     /// CSL-M only
@@ -540,7 +540,7 @@ pub enum NameAnd {
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct NameWith {
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
@@ -569,7 +569,7 @@ pub struct Institution {
 pub struct InstitutionPart {
     pub name: InstitutionPartName,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     // TODO: is this better achieved using initialize-with?
     pub strip_periods: StripPeriods,
 }
@@ -634,7 +634,7 @@ pub struct Name {
     pub name_as_sort_order: Option<NameAsSortOrder>,
     pub sort_separator: Option<Atom>,
     pub formatting: Option<Formatting>,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub name_part_given: Option<NamePart>,
     pub name_part_family: Option<NamePart>,
 }
@@ -776,7 +776,7 @@ impl NameLabelInput {
             formatting: self.formatting,
             plural: self.plural.unwrap_or_default(),
             strip_periods: self.strip_periods.unwrap_or(false),
-            affixes: self.affixes.as_ref().cloned().unwrap_or_default(),
+            affixes: self.affixes.as_ref().cloned(),
             text_case: self.text_case.unwrap_or_default(),
             after_name: self.after_name,
         }
@@ -804,7 +804,7 @@ pub struct NameLabel {
     pub formatting: Option<Formatting>,
     pub plural: Plural,
     pub strip_periods: StripPeriods,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub text_case: TextCase,
     pub after_name: bool,
 }
@@ -870,7 +870,7 @@ pub enum NamePartName {
 #[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct NamePart {
     pub name: NamePartName,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub text_case: TextCase,
     pub formatting: Option<Formatting>,
 }
@@ -1001,7 +1001,7 @@ impl Default for SortDirection {
 // TODO: Multiple layouts in CSL-M with locale="en es de" etc
 #[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct Layout {
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
     // TODO: only allow delimiter inside <citation>
     pub delimiter: Delimiter,
@@ -1204,13 +1204,20 @@ pub enum DatePartForm {
     Year(YearForm),
 }
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct DatePart {
     pub form: DatePartForm,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
-    pub text_case: TextCase,
-    pub range_delimiter: RangeDelimiter,
+    pub text_case: Option<TextCase>,
+    pub range_delimiter: Option<RangeDelimiter>,
+}
+
+// Only for DatePart::default()
+impl Default for DatePartForm {
+    fn default() -> Self {
+        DatePartForm::Year(YearForm::Long)
+    }
 }
 
 /// A date element that fully defines its own output.
@@ -1221,7 +1228,7 @@ pub struct IndependentDate {
     // TODO: limit each <date-part name="XXX"> to one per?
     pub date_parts: Vec<DatePart>,
     pub delimiter: Delimiter,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
     pub text_case: TextCase,
@@ -1234,7 +1241,7 @@ pub struct LocalizedDate {
     pub parts_selector: DateParts,
     pub date_parts: Vec<DatePart>,
     pub form: DateForm,
-    pub affixes: Affixes,
+    pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
     pub text_case: TextCase,

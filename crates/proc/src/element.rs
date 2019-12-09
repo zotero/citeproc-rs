@@ -24,7 +24,7 @@ where
             &layout.elements,
             "".into(),
             None,
-            Affixes::default(),
+            None,
             None,
         )
     }
@@ -50,7 +50,7 @@ where
             &layout.elements,
             "".into(),
             None,
-            Affixes::default(),
+            None,
             None,
         )
     }
@@ -95,7 +95,7 @@ where
                             &macro_unsafe,
                             "".into(),
                             text.formatting,
-                            text.affixes.clone(),
+                            text.affixes.as_ref(),
                             text.display,
                         );
                         state.pop_macro(name);
@@ -194,7 +194,7 @@ where
                     g.elements.as_ref(),
                     g.delimiter.0.clone(),
                     g.formatting,
-                    g.affixes.clone(),
+                    g.affixes.as_ref(),
                     g.display,
                 );
                 if group_vars.should_render_tree() {

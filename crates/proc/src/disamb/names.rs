@@ -40,7 +40,7 @@ impl Disambiguation<Markup> for Names {
         let mut seq = RefIrSeq {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
-            affixes: self.affixes.clone().unwrap_or_default(),
+            affixes: self.affixes.clone(),
             delimiter: names_inheritance
                 .delimiter
                 .clone()
@@ -78,7 +78,7 @@ impl Disambiguation<Markup> for Names {
                     fmt,
                     &mut nfa,
                     runner.name_el.formatting,
-                    &runner.name_el.affixes,
+                    runner.name_el.affixes.as_ref(),
                     start,
                     |nfa, mut spot| {
                         for ntb in &ntbs {

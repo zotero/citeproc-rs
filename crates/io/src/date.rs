@@ -13,8 +13,9 @@ pub struct Date {
     /// think 10,000 BC; it's a signed int
     /// "not present" is expressed by not having a date in the first place
     pub year: i32,
-    /// range 1 to 12 inclusive
+    /// range 1 to 16 inclusive
     /// 0 is "not present"
+    /// > 12 is a season identified by (month - 12)
     pub month: u32,
     /// range 1 to 31 inclusive
     /// 0 is "not present"
@@ -42,7 +43,7 @@ impl Date {
         let d = *parts.get(2).unwrap_or(&0);
         Some(Date {
             year: *parts.get(0)?,
-            month: if m >= 1 && m <= 12 { m as u32 } else { 0 },
+            month: if m >= 1 && m <= 16 { m as u32 } else { 0 },
             day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
         })
     }

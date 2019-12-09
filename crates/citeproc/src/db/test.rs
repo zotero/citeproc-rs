@@ -23,7 +23,7 @@ mod position {
         for i in 1..=len {
             clusters.push(Cluster {
                 id: i as u32,
-                cites: vec![Cite::basic(ref_ids[i-1])],
+                cites: vec![Cite::basic(ref_ids[i - 1])],
             });
             order.push(ClusterPosition {
                 id: i as u32,
@@ -34,7 +34,11 @@ mod position {
         db.set_cluster_order(&order).unwrap();
     }
 
-    fn test_ibid_1_2(ordering: &[ClusterPosition], pos1: (Position, Option<u32>), pos2: (Position, Option<u32>)) {
+    fn test_ibid_1_2(
+        ordering: &[ClusterPosition],
+        pos1: (Position, Option<u32>),
+        pos2: (Position, Option<u32>),
+    ) {
         let mut db = Processor::test_db();
         db.init_clusters(vec![
             Cluster {
@@ -60,8 +64,14 @@ mod position {
     fn cite_positions_note_ibid() {
         test_ibid_1_2(
             &[
-                ClusterPosition { id: 1, note: Some(1) },
-                ClusterPosition { id: 2, note: Some(2) },
+                ClusterPosition {
+                    id: 1,
+                    note: Some(1),
+                },
+                ClusterPosition {
+                    id: 2,
+                    note: Some(2),
+                },
             ],
             (Position::First, None),
             (Position::Ibid, Some(1)),
@@ -78,7 +88,7 @@ mod position {
             ],
             (Position::First, None),
             // No FRNN as not in a note!
-            (Position::Ibid, None)
+            (Position::Ibid, None),
         );
     }
 
@@ -87,10 +97,13 @@ mod position {
         test_ibid_1_2(
             &[
                 ClusterPosition { id: 1, note: None },
-                ClusterPosition { id: 2, note: Some(1) },
+                ClusterPosition {
+                    id: 2,
+                    note: Some(1),
+                },
             ],
             (Position::First, None),
-            (Position::First, None)
+            (Position::First, None),
         );
     }
 
@@ -98,13 +111,16 @@ mod position {
     fn cite_positions_mixed_notefirst() {
         test_ibid_1_2(
             &[
-                ClusterPosition { id: 1, note: Some(1) },
+                ClusterPosition {
+                    id: 1,
+                    note: Some(1),
+                },
                 ClusterPosition { id: 2, note: None },
             ],
             (Position::First, None),
             // XXX: should probably preserve relative ordering of notes and in-text clusters,
             // so that this gets (Position::Subsequent, Some(1))
-            (Position::First, None)
+            (Position::First, None),
         );
     }
 
