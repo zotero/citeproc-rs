@@ -270,11 +270,34 @@ where
             },
         }
     };
+    let mut parts = Vec::with_capacity(locale_date.date_parts.len());
+    for part in &locale_date.date_parts {
+        let form = WhichDelim::from_form(&part.form);
+        if let Some(localized) = local.date_parts.iter().find(|p| form.matches_form(&p.form)) {
+            let merged = DatePart {
+                form: part.form,
+                // Attributes for affixes are allowed, unless cs:date calls a localized date format.
+                // So localized.affixes should be ignored.
+                affixes: part.affixes.clone(),
+                formatting: localized.formatting.or(part.formatting),
+                text_case: if localized.text_case != TextCase::None {
+                    localized.text_case
+                } else {
+                    part.text_case
+                },
+                // TODO: should use Option<RangeDelimiter>
+                range_delimiter: part.range_delimiter.clone(),
+            };
+            parts.push(merged);
+        } else {
+            parts.push(part.clone());
+        }
+    }
     build_parts(
         &ctx,
         local.variable,
         gen_date,
-        &locale_date.date_parts,
+        &parts,
         Some(local.parts_selector),
     )
 }
@@ -706,15 +729,12 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             DayForm::NumericLeadingZeros => Some(format!("{:02}", date.day)),
             DayForm::Ordinal if !locale.options_node.limit_day_ordinals_to_day_1.unwrap_or(false) || date.day == 1 => {
                 use citeproc_io::NumericToken;
-                debug!("using ordinal form of days");
                 // The 'target noun' is the month term.
                 MonthTerm::from_u32(date.month)
                     .map(|month| {
-                        debug!("month: {:?}", month);
                         locale.get_month_gender(month)
                     })
                     .map(|gender| {
-                        debug!("day: {}, month: {}, gender: {:?}", date.day, date.month, gender);
                         render_ordinal(&[NumericToken::Num(date.day)], locale, gender, false)
                     })
             }
