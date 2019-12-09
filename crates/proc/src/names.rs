@@ -249,7 +249,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         IR::Seq(IrSeq {
             contents: name_irs,
             formatting: names_inheritance.formatting,
-            affixes: names_inheritance.affixes.clone().unwrap_or_default(),
+            affixes: names_inheritance.affixes.clone(),
             delimiter: names_inheritance
                 .delimiter
                 .unwrap_or_else(|| Atom::from("")),
@@ -650,7 +650,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             None => fmt.plain(s),
             Some(ref part) => {
                 // TODO: text-case, IngestOptions
-                fmt.affixed(fmt.text_node(s.to_string(), part.formatting), &part.affixes)
+                fmt.affixed(fmt.text_node(s.to_string(), part.formatting), part.affixes.as_ref())
             }
         }
     }
@@ -734,7 +734,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 let b = fmt.affixed_text(
                     format!("{:08}", count),
                     None,
-                    &crate::sort::natural_sort::num_affixes(),
+                    Some(&crate::sort::natural_sort::num_affixes()),
                 );
                 return vec![NameTokenBuilt::Built(b)];
             } else {

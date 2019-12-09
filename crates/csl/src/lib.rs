@@ -294,7 +294,7 @@ impl FromNode for Layout {
             .partition_results()?;
         Ok(Layout {
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             delimiter: Delimiter::from_node(node, info)?,
             locale: attribute_array(node, "locale", info)?,
             elements,
@@ -349,7 +349,7 @@ impl FromNode for LabelElement {
             variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
             form: attribute_optional(node, "form", info)?,
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             strip_periods: attribute_bool(node, "strip-periods", false)?,
             text_case: TextCase::from_node(node, info)?,
             plural: attribute_optional(node, "plural", info)?,
@@ -380,7 +380,7 @@ impl FromNode for TextElement {
         };
 
         let formatting = Option::from_node(node, info)?;
-        let affixes = Affixes::from_node(node, info)?;
+        let affixes = Option::from_node(node, info)?;
         let quotes = attribute_bool(node, "quotes", false)?;
         let strip_periods = attribute_bool(node, "strip-periods", false)?;
         let text_case = TextCase::from_node(node, info)?;
@@ -404,7 +404,7 @@ impl FromNode for NumberElement {
             variable: attribute_var_type(node, "variable", NeedVarType::NumberVariable, info)?,
             form: attribute_optional(node, "form", info)?,
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             text_case: attribute_optional(node, "plural", info)?,
             display: attribute_option(node, "display", info)?,
         })
@@ -422,7 +422,7 @@ impl FromNode for Group {
             elements,
             formatting: Option::from_node(node, info)?,
             delimiter: Delimiter::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             // TODO: CSL-M only
             is_parallel: attribute_bool(node, "is-parallel", false)?,
@@ -697,6 +697,12 @@ impl AttrChecker for TextCase {
     }
 }
 
+impl<T> AttrChecker for Option<T> where T: AttrChecker {
+    fn filter_attribute(attr: &str) -> bool {
+        T::filter_attribute(attr)
+    }
+}
+
 impl FromNode for TextCase {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(attribute_optional(node, "text-case", info)?)
@@ -742,8 +748,8 @@ impl DatePart {
             // affixes not allowed in a locale date
             affixes: disallow_default(node, !full, info)?,
             formatting: Option::from_node(node, info)?,
-            text_case: TextCase::from_node(node, info)?,
-            range_delimiter: RangeDelimiter::from_node(node, info)?,
+            text_case: Option::from_node(node, info)?,
+            range_delimiter: Option::from_node(node, info)?,
         })
     }
 }
@@ -759,7 +765,7 @@ impl FromNode for IndependentDate {
             variable: attribute_var_type(node, "variable", NeedVarType::Date, info)?,
             date_parts: elements,
             text_case: TextCase::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             delimiter: Delimiter::from_node(node, info)?,
@@ -780,7 +786,7 @@ impl FromNode for LocalizedDate {
             parts_selector: attribute_optional(node, "date-parts", info)?,
             date_parts: elements,
             form: attribute_required(node, "form", info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             text_case: TextCase::from_node(node, info)?,
@@ -954,7 +960,7 @@ impl FromNode for InstitutionPart {
         Ok(InstitutionPart {
             name: InstitutionPartName::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             strip_periods: attribute_bool(node, "strip-periods", false)?,
         })
     }
@@ -1013,7 +1019,7 @@ impl FromNode for Name {
             name_as_sort_order: attribute_option(node, "name-as-sort-order", info)?,
             sort_separator: attribute_option_atom(node, "sort-separator"),
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
             name_part_given,
             name_part_family,
         })
@@ -1033,7 +1039,7 @@ impl FromNode for NameWith {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(NameWith {
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
         })
     }
 }
@@ -1044,7 +1050,7 @@ impl FromNode for NamePart {
             name: attribute_required(node, "name", info)?,
             text_case: TextCase::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
-            affixes: Affixes::from_node(node, info)?,
+            affixes: Option::from_node(node, info)?,
         })
     }
 }

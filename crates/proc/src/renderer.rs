@@ -180,7 +180,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: NumberVariable,
         form: NumericForm,
         val: &NumericValue,
-        _af: &Affixes,
+        _af: Option<&Affixes>,
         text_case: TextCase,
     ) -> O::Build {
         use citeproc_io::NumericToken;
@@ -200,13 +200,13 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                 };
-                fmt.affixed_text(s, None, &crate::sort::natural_sort::num_affixes())
+                fmt.affixed_text(s, None, Some(crate::sort::natural_sort::num_affixes()).as_ref())
             }
             // TODO: text-case
             _ => fmt.affixed_text(
                 val.as_number(var.should_replace_hyphens()),
                 None,
-                &crate::sort::natural_sort::num_affixes(),
+                Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
         }
     }
@@ -245,7 +245,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         };
         let b = fmt.ingest(&string, options);
         let b = fmt.with_format(b, number.formatting);
-        let b = fmt.affixed(b, &number.affixes);
+        let b = fmt.affixed(b, number.affixes.as_ref());
         fmt.with_display(b, number.display, self.ctx.in_bibliography())
     }
 
@@ -283,7 +283,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             StandardVariable::Number(_) => txt,
         };
-        let b = fmt.affixed_quoted(txt, &text.affixes, quotes.as_ref());
+        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), quotes.as_ref());
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
@@ -301,7 +301,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             },
         );
         let b = fmt.with_format(b, text.formatting);
-        let b = fmt.affixed_quoted(b, &text.affixes, quotes.as_ref());
+        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), quotes.as_ref());
         let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
         Some(b)
     }
@@ -319,7 +319,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             fmt.affixed_text_quoted(
                 val.to_owned(),
                 text.formatting,
-                &text.affixes,
+                text.affixes.as_ref(),
                 quotes.as_ref(),
             )
         })
@@ -353,7 +353,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
-                .map(|term_text| fmt.affixed_text(term_text.to_owned(), *formatting, affixes))
+                .map(|term_text| fmt.affixed_text(term_text.to_owned(), *formatting, affixes.as_ref()))
         })
     }
 
@@ -380,7 +380,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 .map(|val| {
                     let b = fmt.ingest(val, options);
                     let b = fmt.with_format(b, label.formatting);
-                    fmt.affixed(b, &label.affixes)
+                    fmt.affixed(b, label.affixes.as_ref())
                 })
         })
     }

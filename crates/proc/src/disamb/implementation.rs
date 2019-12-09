@@ -26,7 +26,7 @@ impl Disambiguation<Markup> for Style {
             &els,
             "".into(),
             Some(stack),
-            Affixes::default(),
+            None,
             None,
         )
     }
@@ -50,7 +50,7 @@ impl Disambiguation<Markup> for Group {
             &els,
             self.delimiter.0.clone(),
             stack,
-            self.affixes.clone(),
+            self.affixes.as_ref(),
             self.display,
         );
         if group_vars.should_render_tree() {
@@ -196,7 +196,7 @@ impl Disambiguation<Markup> for Element {
                         &macro_unsafe,
                         "".into(),
                         text.formatting,
-                        text.affixes.clone(),
+                        text.affixes.as_ref(),
                         text.display,
                     );
                     state.pop_macro(name);

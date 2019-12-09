@@ -262,7 +262,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         let renderer = self.renderer();
         let var = number.variable;
         let content = self.ctx.get_number(var).map(|val| {
-            renderer.number_sort_string(var, number.form, &val, &number.affixes, number.text_case)
+            renderer.number_sort_string(var, number.form, &val, number.affixes.as_ref(), number.text_case)
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)

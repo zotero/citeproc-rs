@@ -83,7 +83,7 @@ where
                 &els,
                 "".into(),
                 None,
-                Affixes::default(),
+                None,
                 None,
             );
             make_mutex(disamb, content, gv)
@@ -108,7 +108,7 @@ impl Disambiguation<Markup> for Choose {
                 els,
                 "".into(),
                 Some(stack),
-                Affixes::default(),
+                None,
                 None,
             );
         }
@@ -121,7 +121,7 @@ impl Disambiguation<Markup> for Choose {
                     els,
                     "".into(),
                     Some(stack),
-                    Affixes::default(),
+                    None,
                     None,
                 );
             }
@@ -133,7 +133,7 @@ impl Disambiguation<Markup> for Choose {
             &last.0,
             "".into(),
             Some(stack),
-            Affixes::default(),
+            None,
             None,
         )
     }
@@ -165,7 +165,7 @@ where
             &elements,
             "".into(),
             None,
-            Affixes::default(),
+            None,
             None,
         ))
     } else {

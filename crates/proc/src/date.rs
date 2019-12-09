@@ -150,7 +150,7 @@ impl Disambiguation<Markup> for BodyDate {
 
 struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
-    overall_affixes: &'a Affixes,
+    overall_affixes: Option<&'a Affixes>,
     overall_delimiter: &'a Atom,
     display: Option<DisplayMode>,
 }
@@ -185,7 +185,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
                     delimiter: Atom::from(""),
-                    affixes: bits.overall_affixes.clone(),
+                    affixes: bits.overall_affixes.cloned(),
                     display: bits.display,
                 };
                 for built in vec {
@@ -250,10 +250,11 @@ where
     let locale = ctx.locale();
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
+    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let empty = GenericDateBits {
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
-        overall_affixes: &crate::sort::natural_sort::date_affixes(),
+        overall_affixes: natural_affix.as_ref(),
         display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
@@ -262,7 +263,7 @@ where
         GenericDateBits {
             overall_delimiter: &locale_date.delimiter.0,
             overall_formatting: local.formatting,
-            overall_affixes: &local.affixes,
+            overall_affixes: local.affixes.as_ref(),
             display: if ctx.in_bibliography() {
                 local.display
             } else {
@@ -280,11 +281,7 @@ where
                 // So localized.affixes should be ignored.
                 affixes: part.affixes.clone(),
                 formatting: localized.formatting.or(part.formatting),
-                text_case: if localized.text_case != TextCase::None {
-                    localized.text_case
-                } else {
-                    part.text_case
-                },
+                text_case: localized.text_case.or(part.text_case),
                 // TODO: should use Option<RangeDelimiter>
                 range_delimiter: part.range_delimiter.clone(),
             };
@@ -310,10 +307,11 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
+    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let empty = GenericDateBits {
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
-        overall_affixes: &crate::sort::natural_sort::date_affixes(),
+        overall_affixes: natural_affix.as_ref(),
         display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
@@ -322,7 +320,7 @@ where
         GenericDateBits {
             overall_delimiter: &indep.delimiter.0,
             overall_formatting: indep.formatting,
-            overall_affixes: &indep.affixes,
+            overall_affixes: indep.affixes.as_ref(),
             display: if ctx.in_bibliography() {
                 indep.display
             } else {
@@ -475,7 +473,7 @@ impl<'a> DateRangePartsIter<'a> {
                 vec.push(DateToken::Part(first, part, is_max_diff));
             }
             if is_max_diff {
-                let delim = part.range_delimiter.0.as_ref();
+                let delim = part.range_delimiter.as_ref().map(|rd| rd.0.as_ref()).unwrap_or("\u{2013}");
                 vec.push(DateToken::RangeDelim(delim));
                 for p in parts {
                     if matches(p) && WhichDelim::from_form(&p.form) <= max_diff {
@@ -503,24 +501,18 @@ fn test_range_dp_sequence() {
     let parts = vec![
         DatePart {
             form: DatePartForm::Day(DayForm::Numeric),
-            affixes: Default::default(),
-            formatting: None,
-            text_case: TextCase::None,
             range_delimiter: RangeDelimiter(Atom::from("..")),
+            ..Default::default()
         },
         DatePart {
             form: DatePartForm::Month(MonthForm::Numeric, false),
-            affixes: Default::default(),
-            formatting: None,
-            text_case: TextCase::None,
             range_delimiter: RangeDelimiter(Atom::from("-")),
+            ..Default::default()
         },
         DatePart {
             form: DatePartForm::Year(YearForm::Long),
-            affixes: Default::default(),
-            formatting: None,
-            text_case: TextCase::None,
             range_delimiter: RangeDelimiter(Atom::from(" to ")),
+            ..Default::default()
         },
     ];
 
@@ -605,24 +597,28 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         let hook = IR::YearSuffix(YearSuffixHook::Plain, None);
                         contents.push(hook);
                     }
-                    let mut aff = part.affixes.clone();
+                    let mut affixes = part.affixes.clone();
                     if is_max_diff {
-                        aff.suffix = Atom::from("");
+                        if let Some(ref mut aff) = affixes {
+                            aff.suffix = Atom::from("");
+                        }
                     }
                     IR::Seq(IrSeq {
                         contents,
-                        affixes: aff,
+                        affixes,
                         formatting: part.formatting,
                         delimiter: Atom::from(""),
                         display: None,
                     })
                 })
             } else {
-                let mut aff = part.affixes.clone();
+                let mut affixes = part.affixes.clone();
                 if is_max_diff {
-                    aff.suffix = Atom::from("");
+                    if let Some(ref mut aff) = affixes {
+                        aff.suffix = Atom::from("");
+                    }
                 }
-                Either::Build(Some(fmt.affixed_text(s, part.formatting, &aff)))
+                Either::Build(Some(fmt.affixed_text(s, part.formatting, affixes.as_ref())))
             }
         })
         .map(|x| (part.form, x))
