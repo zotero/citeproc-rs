@@ -61,7 +61,6 @@ impl GetAttribute for AnyTermName {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermFormExtended),
-    Season(SeasonTerm, TermForm),
     Quote(QuoteTerm, TermForm),
 }
 
@@ -71,10 +70,6 @@ impl SimpleTermSelector {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
             }
-            SimpleTermSelector::Season(t, form) => Box::new(
-                form.fallback()
-                    .map(move |x| SimpleTermSelector::Season(t, x)),
-            ),
             SimpleTermSelector::Quote(t, form) => Box::new(
                 form.fallback()
                     .map(move |x| SimpleTermSelector::Quote(t, x)),
@@ -139,6 +134,7 @@ pub enum GenderedTermSelector {
     Number(NumberVariable, TermForm),
     Locator(LocatorType, TermForm),
     Month(MonthTerm, TermForm),
+    Season(SeasonTerm, TermForm),
 }
 
 impl GenderedTermSelector {
@@ -177,6 +173,10 @@ impl GenderedTermSelector {
             GenderedTermSelector::Month(t, form) => Box::new(
                 form.fallback()
                     .map(move |x| GenderedTermSelector::Month(t, x)),
+            ),
+            GenderedTermSelector::Season(t, form) => Box::new(
+                form.fallback()
+                    .map(move |x| GenderedTermSelector::Season(t, x)),
             ),
         }
     }

@@ -6,14 +6,15 @@
 
 use crate::prelude::*;
 
-use std::fmt::Write;
+use csl::terms::*;
 use citeproc_io::Date;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
-    BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, LocalizedDate,
-    MonthForm, SortKey, YearForm, Locale,
+    BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, Locale, LocalizedDate,
+    MonthForm, SortKey, YearForm,
 };
+use std::fmt::Write;
 use std::mem;
 
 enum Either<O: OutputFormat> {
@@ -408,14 +409,11 @@ fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<
 }
 
 fn render_year(year: i32, form: YearForm, locale: &Locale) -> String {
-    use csl::terms::*;
     let mut s = String::new();
     // Only do short form ('07) for four-digit years
     match (form, year > 1000) {
         (YearForm::Short, true) => write!(s, "{:02}", year.abs() % 100).unwrap(),
-        (YearForm::Long, _) | (YearForm::Short, false) => {
-            write!(s, "{}", year.abs()).unwrap()
-        },
+        (YearForm::Long, _) | (YearForm::Short, false) => write!(s, "{}", year.abs()).unwrap(),
     }
     if year < 0 {
         let sel = SimpleTermSelector::Misc(MiscTerm::Bc, TermFormExtended::Long);
@@ -461,11 +459,13 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 }
             }
             _ => {
-                // TODO: support seasons
+                if date.month > 12 && date.month < 17 {
+                    // it's a season; 1 -> Spring, etc
+                    let season = date.month - 12; 
+                }
                 if date.month == 0 || date.month > 12 {
                     return None;
                 }
-                use csl::terms::*;
                 let term_form = match form {
                     MonthForm::Long => TermForm::Long,
                     MonthForm::Short => TermForm::Short,
@@ -551,3 +551,5 @@ const MONTHS_LONG: &[&str] = &[
     "November",
     "December",
 ];
+
+const SEASONS_LONG: &[&str] = &["undefined", "Spring", "Summer", "Autumn", "Winter"];

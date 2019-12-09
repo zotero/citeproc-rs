@@ -316,6 +316,10 @@ impl FromNode for TextTermSelector {
                 t,
                 TermForm::from_node(node, info)?,
             ))),
+            Season(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Season(
+                t,
+                TermForm::from_node(node, info)?,
+            ))),
             Loc(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Locator(
                 t,
                 TermForm::from_node(node, info)?,
@@ -323,10 +327,6 @@ impl FromNode for TextTermSelector {
             Misc(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Misc(
                 t,
                 TermFormExtended::from_node(node, info)?,
-            ))),
-            Season(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Season(
-                t,
-                TermForm::from_node(node, info)?,
             ))),
             Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(
                 t,

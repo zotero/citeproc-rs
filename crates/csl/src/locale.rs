@@ -197,16 +197,16 @@ impl FromNode for TermEl {
                 GenderedTermSelector::Month(mt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
+            Season(t) => Ok(TermEl::Gendered(
+                GenderedTermSelector::Season(t, TermForm::from_node(node, info)?),
+                GenderedTerm(content, attribute_optional(node, "gender", info)?),
+            )),
             Loc(lt) => Ok(TermEl::Gendered(
                 GenderedTermSelector::Locator(lt, TermForm::from_node(node, info)?),
                 GenderedTerm(content, attribute_optional(node, "gender", info)?),
             )),
             Misc(t) => Ok(TermEl::Simple(
                 SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
-                content,
-            )),
-            Season(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Season(t, TermForm::from_node(node, info)?),
                 content,
             )),
             Quote(t) => Ok(TermEl::Simple(
