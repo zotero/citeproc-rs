@@ -308,7 +308,7 @@ impl Locale {
         let selector = if var == NumberVariable::Locator {
             GenderedTermSelector::Locator(locator_type, TermForm::Long)
         } else {
-            GenderedTermSelector::Number(var, TermForm::Long)
+            GenderedTermSelector::Number(var, TermForm::Long).normalise()
         };
         // Don't use fallback, just the long form
         if let Some(GenderedTerm(_, gender)) = self.gendered_terms.get(&selector) {
