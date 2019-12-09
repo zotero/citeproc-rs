@@ -321,7 +321,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(ctx: &GenericContext<'c, O,
                         } else {
                             true
                         })
-                        .filter_map(|dp| dp_render_either(dp, ctx.clone(), single));
+                        .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
                     let mut builder = PartBuilder::new(gen_date, len_hint);
                     for (_form, either) in each {
                         builder.push_either(either);
@@ -336,8 +336,8 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(ctx: &GenericContext<'c, O,
                             DateToken::RangeDelim(delim) => {
                                 builder.push_either(Either::Build(Some(fmt.plain(delim))));
                             }
-                            DateToken::Part(date, part) => {
-                                if let Some((_form, either)) = dp_render_either(part, ctx.clone(), date) {
+                            DateToken::Part(date, part, is_max_diff) => {
+                                if let Some((_form, either)) = dp_render_either(part, ctx.clone(), date, is_max_diff) {
                                     builder.push_either(either);
                                 }
                             }
@@ -352,9 +352,11 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(ctx: &GenericContext<'c, O,
         })
 }
 
+type IsMaxDiff = bool;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum DateToken<'a> {
-    Part(&'a Date, &'a DatePart),
+    Part(&'a Date, &'a DatePart, IsMaxDiff),
     RangeDelim(&'a str),
 }
 
@@ -403,24 +405,24 @@ impl<'a> DateRangePartsIter<'a> {
         let mut vec = Vec::with_capacity(parts.len() + 2);
 
         let max_diff = WhichDelim::diff(parts, first, second);
-        for part in parts {
+        let matches = |part: &DatePart| {
             if let Some(selector) = selector {
-                if !dp_matches(part, selector) {
-                    continue;
-                }
+                dp_matches(part, selector)
+            } else {
+                true
             }
-            vec.push(DateToken::Part(first, part));
-            if max_diff.matches_form(&part.form) {
+        };
+        for part in parts {
+            let is_max_diff = max_diff.matches_form(&part.form);
+            if matches(part) {
+                vec.push(DateToken::Part(first, part, is_max_diff));
+            }
+            if is_max_diff {
                 let delim = part.range_delimiter.0.as_ref();
                 vec.push(DateToken::RangeDelim(delim));
                 for p in parts {
-                    if let Some(selector) = selector {
-                        if !dp_matches(p, selector) {
-                            continue;
-                        }
-                    }
-                    if WhichDelim::from_form(&p.form) <= max_diff {
-                        vec.push(DateToken::Part(second, p));
+                    if matches(p) && WhichDelim::from_form(&p.form) <= max_diff {
+                        vec.push(DateToken::Part(second, p, false));
                     }
                 }
             }
@@ -473,23 +475,23 @@ fn test_range_dp_sequence() {
     let second = Date { year: 1998, month: 3, day: 29 };
     let iter = DateRangePartsIter::new(&parts, &first, &second);
     assert_eq!(iter.collect::<Vec<_>>(), vec![
-        DateToken::Part(&first, day),
+        DateToken::Part(&first, day, true),
         DateToken::RangeDelim(".."),
-        DateToken::Part(&second, day),
-        DateToken::Part(&first, month),
-        DateToken::Part(&first, year),
+        DateToken::Part(&second, day, false),
+        DateToken::Part(&first, month, false),
+        DateToken::Part(&first, year, false),
     ]);
 
     let first = Date { year: 1998, month: 3, day: 27 };
     let second = Date { year: 1998, month: 4, day: 29 };
     let iter = DateRangePartsIter::new(&parts, &first, &second);
     assert_eq!(iter.collect::<Vec<_>>(), vec![
-        DateToken::Part(&first, day),
-        DateToken::Part(&first, month),
+        DateToken::Part(&first, day, false),
+        DateToken::Part(&first, month, false),
         DateToken::RangeDelim("-"),
-        DateToken::Part(&second, day),
-        DateToken::Part(&second, month),
-        DateToken::Part(&first, &parts[2]),
+        DateToken::Part(&second, day, false),
+        DateToken::Part(&second, month, false),
+        DateToken::Part(&first, &parts[2], false),
     ]);
 
 }
@@ -506,6 +508,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: GenericContext<'c, O, I>,
     date: &Date,
+    is_max_diff: bool,
 ) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
     if let Some(key) = ctx.sort_key() {
@@ -524,16 +527,24 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         let hook = IR::YearSuffix(YearSuffixHook::Plain, None);
                         contents.push(hook);
                     }
+                    let mut aff = part.affixes.clone();
+                    if is_max_diff {
+                        aff.suffix = Atom::from("");
+                    }
                     IR::Seq(IrSeq {
                         contents,
-                        affixes: part.affixes.clone(),
+                        affixes: aff,
                         formatting: part.formatting,
                         delimiter: Atom::from(""),
                         display: None,
                     })
                 })
             } else {
-                Either::Build(Some(fmt.affixed_text(s, part.formatting, &part.affixes)))
+                let mut aff = part.affixes.clone();
+                if is_max_diff {
+                    aff.suffix = Atom::from("");
+                }
+                Either::Build(Some(fmt.affixed_text(s, part.formatting, &aff)))
             }
         })
         .map(|x| (part.form, x))
@@ -565,6 +576,10 @@ fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<
 
 fn render_year(year: i32, form: YearForm, locale: &Locale) -> String {
     let mut s = String::new();
+    if year == 0 {
+        // Open year range
+        return s;
+    }
     // Only do short form ('07) for four-digit years
     match (form, year > 1000) {
         (YearForm::Short, true) => write!(s, "{:02}", year.abs() % 100).unwrap(),

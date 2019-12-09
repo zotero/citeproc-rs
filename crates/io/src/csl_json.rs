@@ -484,7 +484,13 @@ impl<'de> Deserialize<'de> for Date {
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
                 let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let month = if month >= 1 && month <= 16 { month } else { 0 };
+                let month = if month >= 1 && month <= 16 {
+                    month
+                } else if month >= 21 && month <= 24 {
+                    month - 8
+                } else {
+                    0
+                };
                 let day = if day >= 1 && day <= 31 { day } else { 0 };
                 Ok(Date::new(year.0, month, day))
             }
@@ -580,10 +586,12 @@ impl<'de> Deserialize<'de> for DateOrRange {
                     match key {
                         DateType::Raw => {
                             let v: Cow<'de, str> = map.next_value()?;
-                            found = Some(
-                                DateOrRange::from_str(&v)
-                                    .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
-                            )
+                            if found.is_none() {
+                                found = Some(
+                                    DateOrRange::from_str(&v)
+                                        .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
+                                )
+                            }
                         }
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
                         DateType::DateParts => {
@@ -600,7 +608,6 @@ impl<'de> Deserialize<'de> for DateOrRange {
                         if let Some(season) = found_season {
                             if let DateOrRange::Single(ref mut date) = found {
                                 if !date.has_day() && !date.has_month() {
-                                    use std::convert::TryInto;
                                     let season = season.to_number()
                                         .map_err(|e| V::Error::custom(format!("season {:?} was not an integer: {}", season, e)))
                                         .and_then(|unsigned| {
@@ -610,7 +617,12 @@ impl<'de> Deserialize<'de> for DateOrRange {
                                                 Ok(unsigned as u32)
                                             }
                                         });
-                                    date.month = season? + 12;
+                                    let mut season = season?;
+                                    if season > 20 {
+                                        // handle 21, 22, 23, 24
+                                        season -= 20;
+                                    }
+                                    date.month = season + 12;
                                 }
                             }
                         }
