@@ -282,7 +282,6 @@ where
                 affixes: part.affixes.clone(),
                 formatting: localized.formatting.or(part.formatting),
                 text_case: localized.text_case.or(part.text_case),
-                // TODO: should use Option<RangeDelimiter>
                 range_delimiter: part.range_delimiter.clone(),
             };
             parts.push(merged);
