@@ -33,3 +33,4 @@ nom = { version = "5.0.1", default-features = false, features = ["std"] }
 [dev-dependencies]
 lazy_static = "1.4.0"
 env_logger = "0.7.0"
+pretty_assertions = "0.6.1"

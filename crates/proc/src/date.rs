@@ -6,13 +6,15 @@
 
 use crate::prelude::*;
 
+#[cfg(test)]
+use pretty_assertions::{assert_eq, assert_ne};
 use citeproc_io::Date;
 use csl::terms::*;
 use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DayForm, IndependentDate, Locale, LocalizedDate,
-    MonthForm, SortKey, YearForm,
+    MonthForm, SortKey, YearForm, TextCase, RangeDelimiter,
 };
 use std::fmt::Write;
 use std::mem;
@@ -337,6 +339,140 @@ where
         }
         builder.into_either(fmt)
     })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DateToken<'a> {
+    Part(&'a Date, &'a DatePart),
+    RangeDelim(&'a str),
+}
+
+use std::iter::Peekable;
+
+struct DateRangePartsIter<'a> {
+    tokens: std::vec::IntoIter<DateToken<'a>>,
+    first: &'a Date,
+    second: &'a Date,
+}
+
+impl<'a> DateRangePartsIter<'a> {
+    fn new(parts: &'a [DatePart], first: &'a Date, second: &'a Date) -> Self {
+        let mut vec = Vec::with_capacity(parts.len() + 2);
+
+        #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+        #[repr(u8)]
+        enum WhichDelim {
+            None = 0,
+            Day = 1,
+            Month = 2,
+            Year = 3,
+        }
+        impl WhichDelim {
+            fn matches_form(&self, form: &DatePartForm) -> bool {
+                *self == WhichDelim::from_form(form)
+            }
+            fn from_form(form: &DatePartForm) -> Self {
+                match form {
+                    DatePartForm::Day(_) => WhichDelim::Day,
+                    DatePartForm::Month(..) => WhichDelim::Month,
+                    DatePartForm::Year(_) => WhichDelim::Year,
+                }
+            }
+        }
+
+        // Find the biggest differing date part
+        let mut max_diff = WhichDelim::None;
+        for part in parts {
+            use std::cmp::max;
+            match part.form {
+                DatePartForm::Day(_) if first.day != second.day => max_diff = max(max_diff, WhichDelim::Day), 
+                DatePartForm::Month(..) if first.month != second.month => max_diff = max(max_diff, WhichDelim::Month), 
+                DatePartForm::Year(_) if first.year != second.year => max_diff = max(max_diff, WhichDelim::Year), 
+                _ => {},
+            }
+        }
+
+        for part in parts {
+            vec.push(DateToken::Part(first, part));
+            if max_diff.matches_form(&part.form) {
+                let delim = part.range_delimiter.0.as_ref();
+                vec.push(DateToken::RangeDelim(delim));
+                for p in parts {
+                    if WhichDelim::from_form(&p.form) <= max_diff {
+                        vec.push(DateToken::Part(second, p));
+                    }
+                }
+            }
+        }
+
+        DateRangePartsIter {
+            tokens: vec.into_iter(),
+            first,
+            second,
+        }
+    }
+}
+
+impl<'a> Iterator for DateRangePartsIter<'a> {
+    type Item = DateToken<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.tokens.next()
+    }
+}
+
+#[test]
+fn test_range_dp_sequence() {
+    let parts = vec![
+        DatePart {
+            form: DatePartForm::Day(DayForm::Numeric),
+            affixes: Default::default(),
+            formatting: None,
+            text_case: TextCase::None,
+            range_delimiter: RangeDelimiter(Atom::from("..")),
+        },
+        DatePart {
+            form: DatePartForm::Month(MonthForm::Numeric, false),
+            affixes: Default::default(),
+            formatting: None,
+            text_case: TextCase::None,
+            range_delimiter: RangeDelimiter(Atom::from("-")),
+        },
+        DatePart {
+            form: DatePartForm::Year(YearForm::Long),
+            affixes: Default::default(),
+            formatting: None,
+            text_case: TextCase::None,
+            range_delimiter: RangeDelimiter(Atom::from(" to ")),
+        },
+    ];
+
+    let day = &parts[0];
+    let month = &parts[1];
+    let year = &parts[2];
+
+    let first = Date { year: 1998, month: 3, day: 27 };
+    let second = Date { year: 1998, month: 3, day: 29 };
+    let iter = DateRangePartsIter::new(&parts, &first, &second);
+    assert_eq!(iter.collect::<Vec<_>>(), vec![
+        DateToken::Part(&first, day),
+        DateToken::RangeDelim(".."),
+        DateToken::Part(&second, day),
+        DateToken::Part(&first, month),
+        DateToken::Part(&first, year),
+    ]);
+
+    let first = Date { year: 1998, month: 3, day: 27 };
+    let second = Date { year: 1998, month: 4, day: 29 };
+    let iter = DateRangePartsIter::new(&parts, &first, &second);
+    assert_eq!(iter.collect::<Vec<_>>(), vec![
+        DateToken::Part(&first, day),
+        DateToken::Part(&first, month),
+        DateToken::RangeDelim("-"),
+        DateToken::Part(&second, day),
+        DateToken::Part(&second, month),
+        DateToken::Part(&first, &parts[2]),
+    ]);
+
 }
 
 fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
