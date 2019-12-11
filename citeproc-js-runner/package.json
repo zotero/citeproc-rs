@@ -1,5 +1,6 @@
 {
   "name": "citeproc-js-runner",
+  "version": "0.0.1",
   "bin": {
     "citeproc-js-runner": "./index.js"
   },
