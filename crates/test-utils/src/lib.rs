@@ -23,7 +23,6 @@ use std::sync::Arc;
 
 pub mod humans;
 // pub mod toml;
-pub mod inspect;
 pub mod yaml;
 
 use humans::{CiteprocJsInstruction, JsExecutor, Results};

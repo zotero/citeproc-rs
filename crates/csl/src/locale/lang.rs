@@ -271,16 +271,16 @@ impl Iterator for InlineIter {
 }
 
 impl FromStr for Lang {
-    type Err = ();
+    type Err = String;
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         if let Ok((remainder, parsed)) = parse_lang(&input) {
             if remainder.is_empty() {
                 Ok(parsed)
             } else {
-                Err(())
+                Err("".into())
             }
         } else {
-            Err(())
+            Err("".into())
         }
     }
 }
