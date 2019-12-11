@@ -115,7 +115,7 @@ static WORKSPACE_ROOT: Lazy<Mutex<PathBuf>> = Lazy::new(|| {
     Mutex::new(metadata.workspace_root)
 });
 
-fn workspace_root() -> PathBuf {
+pub fn workspace_root() -> PathBuf {
     WORKSPACE_ROOT.lock().unwrap().clone()
 }
 

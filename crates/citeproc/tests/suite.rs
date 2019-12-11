@@ -7,7 +7,7 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(datatest::runner)]
 
-use test_utils::{humans::parse_human_test, TestCase};
+use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
 
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
@@ -75,10 +75,8 @@ fn csl_test_suite(path: &Path) {
 })]
 fn humans(path: &Path) {
     setup();
-    use test_utils::yaml::YamlTestCase;
     let input = read_to_string(path).unwrap();
-    let yaml_test_case: YamlTestCase = serde_yaml::from_str(&input).unwrap();
-    let mut test_case: TestCase = yaml_test_case.into();
+    let mut test_case = parse_yaml_test(&input).unwrap();
     if let Some(res) = test_case.execute() {
         assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
     }

@@ -151,12 +151,17 @@ impl Default for Affixes {
     }
 }
 
-#[derive(Eq, Copy, Clone, Default, PartialEq, Hash)]
+#[derive(Eq, Copy, Clone, Default, PartialEq, Hash, Serialize)]
 pub struct Formatting {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub font_style: Option<FontStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub font_variant: Option<FontVariant>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub font_weight: Option<FontWeight>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub vertical_alignment: Option<VerticalAlignment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text_decoration: Option<TextDecoration>,
     // TODO: put this somewhere else, like directly on text nodes?
     // pub hyperlink: String,
@@ -224,7 +229,7 @@ impl fmt::Debug for Formatting {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DisplayMode {
     Block,
@@ -251,7 +256,7 @@ impl Default for TextCase {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontStyle {
     Normal,
@@ -265,7 +270,7 @@ impl Default for FontStyle {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontVariant {
     Normal,
@@ -278,7 +283,7 @@ impl Default for FontVariant {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[strum(serialize_all = "kebab_case")]
 pub enum FontWeight {
     Normal,
@@ -292,7 +297,7 @@ impl Default for FontWeight {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 #[strum(serialize_all = "kebab_case")]
 pub enum TextDecoration {
     None,
@@ -305,7 +310,7 @@ impl Default for TextDecoration {
     }
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum VerticalAlignment {
     #[strum(serialize = "baseline")]
     Baseline,

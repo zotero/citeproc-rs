@@ -4,7 +4,7 @@ use crate::IngestOptions;
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct MicroHtml(pub String);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum MicroNode {
     Text(String),
 
