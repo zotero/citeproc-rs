@@ -5,12 +5,20 @@ pub mod ucd;
 
 use anyhow::{anyhow, Error};
 use git2::{Branch, Repository, StatusOptions, Tree};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use structopt::StructOpt;
+
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -228,8 +236,11 @@ impl TestSummary {
                 (EventKind::Failed, EventKind::Failed) => {
                     let orig = base.failed.get(key).unwrap();
                     let mine = self.failed.get(key).unwrap();
-                    fn filt<'a>(x: &'a str) -> impl Iterator<Item = &'a str> {
-                        x.lines().filter(|x| !x.contains("RUST_BACKTRACE"))
+                    fn filt<'a>(x: &'a str) -> impl Iterator<Item = Cow<'a, str>> {
+                        let re = regex!(r#", crates/.+$"#);
+                        x.lines()
+                            .filter(|x| !x.contains("RUST_BACKTRACE"))
+                            .map(move |x| re.replace_all(&x, ""))
                     }
                     let changed = match (orig.stdout.as_ref(), mine.stdout.as_ref()) {
                         (Some(orig), Some(mine)) => !filt(&orig).eq(filt(&mine)),
