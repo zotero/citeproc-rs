@@ -103,7 +103,7 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
+    fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
         vec![InlineElement::Micro(MicroNode::parse(input, options))]
     }
 

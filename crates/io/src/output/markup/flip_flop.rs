@@ -82,7 +82,7 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             Some(InlineElement::Quoted {
                 is_inner: flop.in_inner_quotes,
                 localized: localized.clone(),
-                inlines: subs
+                inlines: subs,
             })
         }
 
@@ -113,6 +113,20 @@ fn flip_flop_nodes(nodes: &[MicroNode], state: &FlipFlopState) -> Vec<MicroNode>
 
 fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> {
     match node {
+        MicroNode::Quoted {
+            ref children,
+            ref localized,
+            ..
+        } => {
+            let mut flop = state.clone();
+            flop.in_inner_quotes = !state.in_inner_quotes;
+            let subs = flip_flop_nodes(children, &flop);
+            Some(MicroNode::Quoted {
+                is_inner: flop.in_inner_quotes,
+                localized: localized.clone(),
+                children: subs,
+            })
+        }
         MicroNode::Formatted(ref nodes, cmd) => {
             let mut flop = state.clone();
             match cmd {

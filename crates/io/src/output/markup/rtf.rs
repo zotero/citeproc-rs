@@ -73,6 +73,17 @@ impl MicroNode {
             Text(text) => {
                 rtf_escape_into(text, s);
             }
+            Quoted {
+                is_inner,
+                localized,
+                children,
+            } => {
+                s.push_str(localized.opening(*is_inner));
+                for i in children {
+                    i.to_rtf_inner(s, options);
+                }
+                s.push_str(localized.closing(*is_inner));
+            }
             Formatted(nodes, cmd) => {
                 let tag = cmd.rtf_tag(options);
                 *s += "{";
@@ -113,7 +124,7 @@ impl InlineElement {
                 is_inner,
                 localized,
                 inlines,
-            }=> {
+            } => {
                 s.push_str(localized.opening(*is_inner));
                 for i in inlines {
                     i.to_rtf_inner(s, options);

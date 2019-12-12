@@ -30,6 +30,17 @@ impl MicroNode {
             Text(text) => {
                 s.push_str(&text);
             }
+            Quoted {
+                is_inner,
+                localized,
+                children,
+            } => {
+                s.push_str(localized.opening(*is_inner));
+                for i in children {
+                    i.to_plain_inner(s, options);
+                }
+                s.push_str(localized.closing(*is_inner));
+            }
             Formatted(nodes, _cmd) => {
                 for node in nodes {
                     node.to_plain_inner(s, options);
@@ -67,7 +78,7 @@ impl InlineElement {
                 is_inner,
                 localized,
                 inlines,
-            }=> {
+            } => {
                 // TODO: move punctuation
                 s.push_str(localized.opening(*is_inner));
                 for i in inlines {

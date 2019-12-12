@@ -199,6 +199,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 let _options = IngestOptions {
                     replace_hyphens: false,
                     text_case,
+                    quotes: self.quotes(),
                 };
                 fmt.affixed_text(
                     s,
@@ -244,15 +245,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let options = IngestOptions {
             replace_hyphens: number.variable.should_replace_hyphens(),
             text_case: number.text_case,
+            quotes: self.quotes(),
         };
-        let b = fmt.ingest(&string, options);
+        let b = fmt.ingest(&string, &options);
         let b = fmt.with_format(b, number.formatting);
         let b = fmt.affixed(b, number.affixes.as_ref());
         fmt.with_display(b, number.display, self.ctx.in_bibliography())
     }
-
-    pub fn quotes(&self, quo: bool) -> Option<LocalizedQuotes> {
-        let q = LocalizedQuotes::from_locale(self.ctx.locale());
+    pub fn quotes(&self) -> LocalizedQuotes {
+        LocalizedQuotes::from_locale(self.ctx.locale())
+    }
+    pub fn quotes_if(&self, quo: bool) -> Option<LocalizedQuotes> {
+        let q = self.quotes();
         if quo {
             Some(q)
         } else {
@@ -273,8 +277,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 StandardVariable::Number(v) => v.should_replace_hyphens(),
             },
             text_case: text.text_case,
+            quotes: self.quotes(),
         };
-        let b = fmt.ingest(value, options);
+        let b = fmt.ingest(value, &options);
         let txt = fmt.with_format(b, text.formatting);
 
         let txt = match var {
@@ -284,7 +289,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             StandardVariable::Number(_) => txt,
         };
-        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), self.quotes(text.quotes));
+        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), self.quotes_if(text.quotes));
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
@@ -295,13 +300,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let fmt = self.fmt();
         let b = fmt.ingest(
             value,
-            IngestOptions {
+            &IngestOptions {
                 text_case: text.text_case,
+                quotes: self.quotes(),
                 ..Default::default()
             },
         );
         let b = fmt.with_format(b, text.formatting);
-        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes(text.quotes));
+        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes_if(text.quotes));
         let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
         Some(b)
     }
@@ -319,7 +325,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 val.to_owned(),
                 text.formatting,
                 text.affixes.as_ref(),
-                self.quotes(text.quotes),
+                self.quotes_if(text.quotes),
             )
         })
     }
@@ -373,13 +379,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         selector.and_then(|sel| {
             let options = IngestOptions {
                 text_case: label.text_case,
+                quotes: self.quotes(),
                 ..Default::default()
             };
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
                 .map(|val| {
-                    let b = fmt.ingest(val, options);
+                    let b = fmt.ingest(val, &options);
                     let b = fmt.with_format(b, label.formatting);
                     fmt.affixed(b, label.affixes.as_ref())
                 })

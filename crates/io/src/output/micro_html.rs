@@ -1,4 +1,5 @@
 use super::FormatCmd;
+use crate::output::LocalizedQuotes;
 use crate::IngestOptions;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -10,13 +11,20 @@ pub enum MicroNode {
 
     Formatted(Vec<MicroNode>, FormatCmd),
 
+    Quoted {
+        /// Holds false until flip_flop_nodes gives it a meaningful value
+        is_inner: bool,
+        localized: LocalizedQuotes,
+        children: Vec<MicroNode>,
+    },
+
     /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
 }
 
 impl MicroNode {
     /// TODO: catch errors and get the input back as a String
-    pub fn parse(fragment: &str, options: IngestOptions) -> Vec<MicroNode> {
+    pub fn parse(fragment: &str, options: &IngestOptions) -> Vec<MicroNode> {
         let mut tag_parser = TagParser::new(&fragment);
         let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
         result
@@ -41,9 +49,11 @@ pub trait HtmlReader<T> {
     }
 }
 
-pub fn micro_html_to_string(fragment: &str, options: IngestOptions) -> String {
+pub fn micro_html_to_string(fragment: &str, options: &IngestOptions) -> String {
     let mut parser = TagParser::new(&fragment);
-    let reader = PlainHtmlReader { options };
+    let reader = PlainHtmlReader {
+        options: options.clone(),
+    };
     let result: Vec<String> = parser.walk(&reader);
     let mut res: Option<String> = None;
     for r in result {
@@ -90,11 +100,11 @@ impl HtmlReader<String> for PlainHtmlReader {
     }
 }
 
-struct MicroHtmlReader {
-    options: IngestOptions,
+struct MicroHtmlReader<'a> {
+    options: &'a IngestOptions,
 }
 
-impl HtmlReader<MicroNode> for MicroHtmlReader {
+impl HtmlReader<MicroNode> for MicroHtmlReader<'_> {
     fn constructor(&self, tag: &Tag, children: Vec<MicroNode>) -> Vec<MicroNode> {
         let single = match tag.name {
             "i" => MicroNode::Formatted(children, FormatCmd::FontStyleItalic),
@@ -116,12 +126,8 @@ impl HtmlReader<MicroNode> for MicroHtmlReader {
     }
 
     fn plain<'input>(&self, s: &'input str) -> Option<Vec<MicroNode>> {
-        let x = if self.options.replace_hyphens {
-            s.replace('-', "\u{2013}")
-        } else {
-            s.to_string()
-        };
-        Some(super::superscript::parse_sup_sub(&x))
+        let plain = self.options.plain(s);
+        Some(super::superscript::parse_sup_sub(&plain))
     }
 }
 

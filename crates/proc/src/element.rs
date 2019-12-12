@@ -96,7 +96,7 @@ where
                             text.formatting,
                             text.affixes.as_ref(),
                             text.display,
-                            renderer.quotes(text.quotes),
+                            renderer.quotes_if(text.quotes),
                         );
                         state.pop_macro(name);
                         out

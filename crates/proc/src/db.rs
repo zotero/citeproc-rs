@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
-use citeproc_io::output::{markup::Markup, OutputFormat};
+use citeproc_io::output::{markup::Markup, LocalizedQuotes, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
 use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
 use std::sync::Mutex;
@@ -857,18 +857,15 @@ fn built_cluster(
         .iter()
         .map(|&id| {
             let gen4 = db.ir_gen4_conditionals(id);
+            let locale = db.locale_by_cite(id);
+            let quotes = LocalizedQuotes::from_locale(&locale);
+            let ingest = IngestOptions::default_with_quotes(quotes);
             let ir = &gen4.ir;
             let cite = id.lookup(db);
             let flattened = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
             // TODO: strip punctuation on these
-            let prefix = cite
-                .prefix
-                .as_ref()
-                .map(|pre| fmt.ingest(pre, Default::default()));
-            let suffix = cite
-                .suffix
-                .as_ref()
-                .map(|pre| fmt.ingest(pre, Default::default()));
+            let prefix = cite.prefix.as_ref().map(|pre| fmt.ingest(pre, &ingest));
+            let suffix = cite.suffix.as_ref().map(|pre| fmt.ingest(pre, &ingest));
             use std::iter::once;
             match (prefix, suffix) {
                 (Some(pre), Some(suf)) => {

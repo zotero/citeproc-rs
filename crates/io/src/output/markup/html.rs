@@ -69,6 +69,17 @@ impl MicroNode {
                 use v_htmlescape::escape;
                 s.push_str(&escape(text).to_string());
             }
+            Quoted {
+                is_inner,
+                localized,
+                children,
+            } => {
+                s.push_str(localized.opening(*is_inner));
+                for i in children {
+                    i.to_html_inner(s, options);
+                }
+                s.push_str(localized.closing(*is_inner));
+            }
             Formatted(nodes, cmd) => {
                 let tag = cmd.html_tag(options);
                 *s += "<";

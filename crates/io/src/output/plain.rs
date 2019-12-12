@@ -28,7 +28,7 @@ impl OutputFormat for PlainText {
     fn meta(&self) -> Self::BibMeta {}
 
     #[inline]
-    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build {
+    fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
         micro_html_to_string(input, options)
     }
 
