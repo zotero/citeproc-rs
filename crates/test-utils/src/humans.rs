@@ -149,7 +149,7 @@ impl FromStr for Results {
                 // incorrect, but we don't actually know except by looking at the instructions what
                 // the right note number is
                 note: ClusterNumber::Note(IntraNote::Single(n)),
-                text: String::from(f),
+                text: crate::normalise_html(&f),
             })(inp)
         }
         fn whole_thing(inp: &str) -> IResult<&str, Vec<CiteResult>> {
@@ -279,10 +279,7 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Arrows,
                 id,
                 note,
-                text: text
-                    .replace("&#x2f;", "/")
-                    // citeproc-js uses the #38 version
-                    .replace("&amp;", "&#38;"),
+                text: crate::normalise_html(&text),
             })
         }
         for &id in self.current_note_numbers.keys() {
@@ -295,10 +292,7 @@ impl JsExecutor<'_> {
                     kind: ResultKind::Dots,
                     id,
                     note,
-                    text: text
-                        .replace("&#x2f;", "/")
-                        // citeproc-js uses the #38 version
-                        .replace("&amp;", "&#38;"),
+                    text: crate::normalise_html(&text),
                 })
             }
         }

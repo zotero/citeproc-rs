@@ -167,11 +167,7 @@ impl TestCase {
                     // Because citeproc-rs is a bit keen to escape things
                     // Slashes are fine if they're not next to angle braces
                     // let's hope they're not
-                    Some(
-                        res.replace("&#x2f;", "/")
-                            // citeproc-js uses the #38 version
-                            .replace("&amp;", "&#38;"),
-                    )
+                    Some(normalise_html(&res))
                 }
                 Mode::Bibliography => Some(get_bib_string(&self.processor)),
             }
@@ -198,7 +194,7 @@ fn get_bib_string(proc: &Processor) -> String {
         }
     }
     string.push_str("\n</div>");
-    string
+    normalise_html(&string)
 }
 
 struct Filesystem {
@@ -235,4 +231,12 @@ impl LocaleFetcher for Filesystem {
             },
         }
     }
+}
+
+pub fn normalise_html(strg: &str) -> String {
+    strg.replace("&#x2f;", "/")
+        .replace("&#x27;", "'")
+        .replace("&quot;", "\"")
+        // citeproc-js uses the #38 version
+        .replace("&amp;", "&#38;")
 }
