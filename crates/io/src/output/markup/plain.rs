@@ -22,6 +22,9 @@ impl<'a> PlainWriter<'a> {
 }
 
 impl<'a> MarkupWriter for PlainWriter<'a> {
+    fn write_escaped(&mut self, text: &str) {
+        self.dest.push_str(text);
+    }
     fn stack_preorder(&mut self, _stack: &[FormatCmd]) {}
 
     fn stack_postorder(&mut self, _stack: &[FormatCmd]) {}
@@ -30,7 +33,7 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
         use MicroNode::*;
         match micro {
             Text(text) => {
-                self.dest.push_str(&text);
+                self.write_escaped(text);
             }
             Quoted {
                 is_inner,
@@ -54,8 +57,7 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
         use super::InlineElement::*;
         match inline {
             Text(text) => {
-                use v_htmlescape::escape;
-                self.dest.push_str(&escape(text).to_string());
+                self.write_escaped(text);
             }
             Div(display, inlines) => {
                 self.stack_formats(inlines, Formatting::default(), Some(*display));
@@ -72,9 +74,9 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 inlines,
             } => {
                 // TODO: move punctuation
-                self.dest.push_str(localized.opening(*is_inner));
+                self.write_escaped(localized.opening(*is_inner));
                 self.write_inlines(inlines);
-                self.dest.push_str(localized.closing(*is_inner));
+                self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { content, .. } => {
                 self.write_inlines(content);

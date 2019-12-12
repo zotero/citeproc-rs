@@ -49,6 +49,10 @@ impl<'a> HtmlWriter<'a> {
 }
 
 impl<'a> MarkupWriter for HtmlWriter<'a> {
+    fn write_escaped(&mut self, text: &str) {
+        use v_htmlescape::escape;
+        self.dest.push_str(&escape(text).to_string());
+    }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
             let tag = cmd.html_tag(&self.options);
@@ -72,17 +76,16 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
         use MicroNode::*;
         match micro {
             Text(text) => {
-                use v_htmlescape::escape;
-                self.dest.push_str(&escape(text).to_string());
+                self.write_escaped(text);
             }
             Quoted {
                 is_inner,
                 localized,
                 children,
             } => {
-                self.dest.push_str(localized.opening(*is_inner));
+                self.write_escaped(localized.opening(*is_inner));
                 self.write_micros(children);
-                self.dest.push_str(localized.closing(*is_inner));
+                self.write_escaped(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
                 self.stack_preorder(&[*cmd][..]);
@@ -99,8 +102,7 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
         use super::InlineElement::*;
         match inline {
             Text(text) => {
-                use v_htmlescape::escape;
-                self.dest.push_str(&escape(text).to_string());
+                self.write_escaped(text);
             }
             Div(display, inlines) => {
                 self.stack_formats(inlines, Formatting::default(), Some(*display));
@@ -117,9 +119,9 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                 inlines,
             } => {
                 // TODO: move punctuation
-                self.dest.push_str(localized.opening(*is_inner));
+                self.write_escaped(localized.opening(*is_inner));
                 self.write_inlines(inlines);
-                self.dest.push_str(localized.closing(*is_inner));
+                self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
                 if self.options.link_anchors {

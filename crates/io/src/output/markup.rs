@@ -263,6 +263,7 @@ impl Markup {
 }
 
 pub trait MarkupWriter {
+    fn write_escaped(&mut self, text: &str);
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
     fn write_micro(&mut self, micro: &MicroNode);
@@ -273,8 +274,83 @@ pub trait MarkupWriter {
     }
     fn write_inline(&mut self, inline: &InlineElement);
     fn write_inlines(&mut self, inlines: &[InlineElement]) {
-        for i in inlines {
-            self.write_inline(i);
+        // impl(punctuation-in-quote)
+        //
+        // Why here, despite potentially making more work for new formats?
+        //
+        // 1. Can be done here without allocating new strings or mutating them
+        // 2. Has to be done on flattened IR anyway (can't easily get "adjacent text node") with
+        //    maybe-null IR in the way
+        // 3. Doing it on the output string means scanning for the particular quote characters in
+        //    use, but at InlineElement::Quoted level, they haven't been localized yet, so just
+        //    need to check the next node, append a comma/period before closing the quotes, and
+        //    skip over it in the next node.
+        //
+        // Could probably be moved to `proc` if the OutputFormat interface was a little better, and
+        // output() was a little more fine-grained / managed by
+        //
+        // We only move punctuation inside quotes for quotes created by putting quotes="true" on a
+        // rendering element. Not micros; don't mess with the quotation used in a title, for
+        // example. Could replicate this in write_micros if that's desirable, though.
+
+        let mut iter = inlines.iter().peekable();
+        while let Some(inline) = iter.next() {
+            if let InlineElement::Quoted {
+                is_inner,
+                localized,
+                inlines,
+            } = inline
+            {
+                if localized.punctuation_in_quote {
+                    match iter.peek() {
+                        Some(InlineElement::Text(text)) => {
+                            if text.starts_with(",")
+                                || text.starts_with(".")
+                                || text.starts_with("!")
+                            {
+                                let (punctuation, rest) = text.split_at(1);
+                                self.write_escaped(localized.opening(*is_inner));
+                                self.write_inlines(inlines);
+                                self.write_escaped(punctuation);
+                                self.write_escaped(localized.closing(*is_inner));
+                                self.write_escaped(rest);
+                                // skip the peeked text element, and don't write this Quoted twice
+                                iter.next();
+                                continue;
+                            }
+                        }
+                        Some(InlineElement::Micro(nodes)) => {
+                            // Check if starts with some text
+                            // TODO: process inline
+                            // You'll need another MarkupWriter method for micro node slices with
+                            // &nodes[1..]
+
+                            if let Some(MicroNode::Text(text)) = nodes.iter().nth(0) {
+                                if text.starts_with(",")
+                                    || text.starts_with(".")
+                                    || text.starts_with("!")
+                                {
+                                    let (punctuation, rest) = text.split_at(1);
+                                    self.write_escaped(localized.opening(*is_inner));
+                                    self.write_inlines(inlines);
+                                    self.write_escaped(punctuation);
+                                    self.write_escaped(localized.closing(*is_inner));
+                                    self.write_escaped(rest);
+                                    // then write the remaining micros
+                                    self.write_micros(&nodes[1..]);
+                                    // skip the peeked micro, and don't write this Quoted twice
+                                    iter.next();
+                                    continue;
+                                }
+                            }
+                        }
+                        _ => {
+                            // Do nothing with the peeked element, and process below
+                        }
+                    }
+                }
+            }
+            self.write_inline(inline);
         }
     }
 

@@ -22,6 +22,9 @@ impl<'a> RtfWriter<'a> {
 }
 
 impl<'a> MarkupWriter for RtfWriter<'a> {
+    fn write_escaped(&mut self, text: &str) {
+        rtf_escape_into(text, self.dest);
+    }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
             let tag = cmd.rtf_tag();
@@ -40,16 +43,16 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
         use MicroNode::*;
         match micro {
             Text(text) => {
-                rtf_escape_into(text, self.dest);
+                self.write_escaped(text);
             }
             Quoted {
                 is_inner,
                 localized,
                 children,
             } => {
-                self.dest.push_str(localized.opening(*is_inner));
+                self.write_escaped(localized.opening(*is_inner));
                 self.write_micros(children);
-                self.dest.push_str(localized.closing(*is_inner));
+                self.write_escaped(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
                 let tag = cmd.rtf_tag();
@@ -84,9 +87,9 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 localized,
                 inlines,
             } => {
-                self.dest.push_str(localized.opening(*is_inner));
+                self.write_escaped(localized.opening(*is_inner));
                 self.write_inlines(inlines);
-                self.dest.push_str(localized.closing(*is_inner));
+                self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
                 // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
