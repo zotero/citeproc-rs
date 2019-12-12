@@ -68,11 +68,8 @@ impl OutputFormat for PlainText {
         nodes.join(delimiter)
     }
 
-    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build {
-        match quotes {
-            LocalizedQuotes::Single(ref open, ref close)
-            | LocalizedQuotes::Double(ref open, ref close) => open.to_string() + &b + &close,
-        }
+    fn quoted(&self, b: Self::Build, quotes: LocalizedQuotes) -> Self::Build {
+        quotes.opening(false).to_owned() + &b + quotes.closing(false)
     }
 
     #[inline]

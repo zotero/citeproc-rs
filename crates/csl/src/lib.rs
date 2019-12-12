@@ -331,10 +331,7 @@ impl TextTermSelector {
                 t,
                 read_term_form_extended()?,
             ))),
-            Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(
-                t,
-                read_term_form()?,
-            ))),
+            Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(t))),
             Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
                 t,
                 read_term_form_extended()?,
@@ -1139,7 +1136,7 @@ impl FromNode for TermPlurality {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let always: Option<String> = TextContent::from_node(node, info)?
             .0
-            .map(|s| s.trim().into());
+            .map(|s| s.into());
         let single: Option<TextContent> = max1_child("term", "single", node.children(), info)?;
         let multiple: Option<TextContent> = max1_child("term", "multiple", node.children(), info)?;
         let msg = "<term> must contain either only text content or both <single> and <multiple>";

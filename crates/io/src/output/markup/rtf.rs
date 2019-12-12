@@ -109,12 +109,16 @@ impl InlineElement {
             Formatted(inlines, formatting) => {
                 options.stack_formats(s, inlines, *formatting, None);
             }
-            Quoted(_qt, inners) => {
-                s.push('"');
-                for i in inners {
+            Quoted {
+                is_inner,
+                localized,
+                inlines,
+            }=> {
+                s.push_str(localized.opening(*is_inner));
+                for i in inlines {
                     i.to_rtf_inner(s, options);
                 }
-                s.push('"');
+                s.push_str(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
                 // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}

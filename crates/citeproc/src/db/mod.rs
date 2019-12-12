@@ -143,7 +143,6 @@ pub enum SupportedFormat {
     Html,
     Rtf,
     Plain,
-    #[cfg(feature = "test")]
     TestHtml,
 }
 
@@ -197,7 +196,6 @@ impl Processor {
             SupportedFormat::Html => Markup::html(),
             SupportedFormat::Rtf => Markup::rtf(),
             SupportedFormat::Plain => Markup::plain(),
-            #[cfg(feature = "test")]
             SupportedFormat::TestHtml => Markup::test_html(),
         };
         let style = Arc::new(Style::from_str(style_string)?);

@@ -62,7 +62,8 @@ impl GetAttribute for AnyTermName {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermFormExtended),
-    Quote(QuoteTerm, TermForm),
+    Season(SeasonTerm, TermForm),
+    Quote(QuoteTerm),
 }
 
 impl SimpleTermSelector {
@@ -71,9 +72,14 @@ impl SimpleTermSelector {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
             }
-            SimpleTermSelector::Quote(t, form) => Box::new(
+            SimpleTermSelector::Season(t, form) => Box::new(
                 form.fallback()
-                    .map(move |x| SimpleTermSelector::Quote(t, x)),
+                    .map(move |x| SimpleTermSelector::Season(t, x)),
+            ),
+            SimpleTermSelector::Quote(t) => Box::new(
+                // Quotes don't do fallback. Not spec'd, but what on earth is the long form of a
+                // close quote mark? "', she said sarcastically."?
+                std::iter::once(SimpleTermSelector::Quote(t)),
             ),
         }
     }

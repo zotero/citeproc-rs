@@ -32,12 +32,6 @@ pub enum Markup {
     Plain(PlainWriter),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum QuoteType {
-    SingleQuote,
-    DoubleQuote,
-}
-
 /// TODO: serialize and deserialize using an HTML parser?
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub enum InlineElement {
@@ -46,7 +40,12 @@ pub enum InlineElement {
     Micro(Vec<MicroNode>),
 
     Formatted(Vec<InlineElement>, Formatting),
-    Quoted(QuoteType, Vec<InlineElement>),
+    /// Bool is "is_inner"
+    Quoted {
+        is_inner: bool,
+        localized: LocalizedQuotes,
+        inlines: Vec<InlineElement>,
+    },
     Text(String),
     Anchor {
         title: String,
@@ -165,17 +164,13 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build {
-        let qt = match quotes {
-            LocalizedQuotes::Single(..) => QuoteType::SingleQuote,
-            LocalizedQuotes::Double(..) => QuoteType::SingleQuote,
-            // Would this be better? Only allow
-            // LocalizedQuotes::Double(open, close) |
-            // LocalizedQuotes::Single(open, close) => {
-            //     return self.affixed(b, Affixes { prefix: open.clone(), suffix: close.clone() });
-            // }
-        };
-        vec![InlineElement::Quoted(qt, b)]
+    fn quoted(&self, b: Self::Build, quotes: LocalizedQuotes) -> Self::Build {
+        // Default not is_inner; figure out which ones are inner/outer when doing flip-flop later.
+        vec![InlineElement::Quoted {
+            is_inner: false,
+            localized: quotes,
+            inlines: b,
+        }]
     }
 
     #[inline]

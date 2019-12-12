@@ -1,6 +1,5 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
-use citeproc_io::output::LocalizedQuotes;
 use csl::variables::*;
 use csl::{Affixes, Atom, Bibliography, Element, Style, TextSource};
 
@@ -23,6 +22,7 @@ where
             ctx,
             &layout.elements,
             "".into(),
+            None,
             None,
             None,
             None,
@@ -52,6 +52,7 @@ where
             None,
             None,
             None,
+            None,
         )
     }
 }
@@ -73,8 +74,6 @@ where
             Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
 
             Element::Text(ref text) => {
-                let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
-                let _quotes = if text.quotes { Some(&q) } else { None };
                 match text.source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
@@ -97,6 +96,7 @@ where
                             text.formatting,
                             text.affixes.as_ref(),
                             text.display,
+                            renderer.quotes(text.quotes),
                         );
                         state.pop_macro(name);
                         out
@@ -196,6 +196,7 @@ where
                     g.formatting,
                     g.affixes.as_ref(),
                     g.display,
+                    None,
                 );
                 if group_vars.should_render_tree() {
                     // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will

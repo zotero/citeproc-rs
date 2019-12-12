@@ -7,6 +7,7 @@
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
+use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
 use csl::{NumberVariable, StandardVariable, Variable};
@@ -94,6 +95,7 @@ pub struct RefIrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
     pub delimiter: Atom,
+    pub quotes: Option<LocalizedQuotes>,
 }
 
 impl RefIR {
@@ -326,11 +328,12 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
             formatting,
             ref delimiter,
             ref affixes,
+            ref quotes,
             display,
             ..
         } = *self;
         let grp = fmt.group(xs, delimiter, formatting);
-        let grp = fmt.affixed(grp, affixes.as_ref());
+        let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
         // TODO: pass in_bibliography from ctx
         let grp = fmt.with_display(grp, display, true);
         Some(grp)
@@ -439,10 +442,14 @@ pub struct IrSeq<O: OutputFormat> {
     pub affixes: Option<Affixes>,
     pub delimiter: Atom,
     pub display: Option<DisplayMode>,
+    pub quotes: Option<LocalizedQuotes>,
 }
 
 impl IrSeq<Markup> {
     fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, format_context: Formatting) {
+        // Currently recreates the whole markup-formatting infrastructure, but keeps the same
+        // granularity of edges that RefIR will produce.
+
         if self.contents.is_empty() {
             return;
         }
@@ -450,11 +457,15 @@ impl IrSeq<Markup> {
             ref contents,
             ref affixes,
             ref delimiter,
+            // TODO: use these
+            ref quotes,
             formatting,
             display,
         } = *self;
         let affixes = affixes.as_ref();
 
+        // TODO: move display out of tag_stack, so that quotes can go inside it.
+        // Damn those macros.
         let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), display);
         let sub_formatting = formatting
             .map(|mine| format_context.override_with(mine))

@@ -51,7 +51,7 @@ pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bo
 pub(crate) fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
-            let parsed = u32::from_str_radix(s, 10);
+            let parsed = u32::from_str_radix(s.trim(), 10);
             parsed.map_err(|e| InvalidCsl::bad_int(node, attr, &e))
         }
         None => Ok(default),
@@ -61,7 +61,7 @@ pub(crate) fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32
 pub(crate) fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
-            let parsed = u32::from_str_radix(s, 10);
+            let parsed = u32::from_str_radix(s.trim(), 10);
             parsed
                 .map(Some)
                 .map_err(|e| InvalidCsl::bad_int(node, attr, &e))

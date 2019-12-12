@@ -251,8 +251,8 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         fmt.with_display(b, number.display, self.ctx.in_bibliography())
     }
 
-    fn quotes(quo: bool) -> Option<LocalizedQuotes> {
-        let q = LocalizedQuotes::Single(Atom::from("'"), Atom::from("'"));
+    pub fn quotes(&self, quo: bool) -> Option<LocalizedQuotes> {
+        let q = LocalizedQuotes::from_locale(self.ctx.locale());
         if quo {
             Some(q)
         } else {
@@ -267,7 +267,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         value: &str,
     ) -> O::Build {
         let fmt = self.fmt();
-        let quotes = Renderer::<O>::quotes(text.quotes);
         let options = IngestOptions {
             replace_hyphens: match var {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
@@ -285,7 +284,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             StandardVariable::Number(_) => txt,
         };
-        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), quotes.as_ref());
+        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), self.quotes(text.quotes));
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
@@ -294,7 +293,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             return None;
         }
         let fmt = self.fmt();
-        let quotes = Renderer::<O>::quotes(text.quotes);
         let b = fmt.ingest(
             value,
             IngestOptions {
@@ -303,7 +301,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             },
         );
         let b = fmt.with_format(b, text.formatting);
-        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), quotes.as_ref());
+        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes(text.quotes));
         let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
         Some(b)
     }
@@ -316,13 +314,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     ) -> Option<O::Build> {
         let fmt = self.fmt();
         let locale = self.ctx.locale();
-        let quotes = Renderer::<O>::quotes(text.quotes);
         locale.get_text_term(term_selector, plural).map(|val| {
             fmt.affixed_text_quoted(
                 val.to_owned(),
                 text.formatting,
                 text.affixes.as_ref(),
-                quotes.as_ref(),
+                self.quotes(text.quotes),
             )
         })
     }

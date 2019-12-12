@@ -5,7 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::IngestOptions;
-use csl::Atom;
+use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 
 #[cfg(feature = "markup")]
 pub mod markup;
@@ -26,16 +26,44 @@ use csl::{Affixes, DisplayMode, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LocalizedQuotes {
-    Single(Atom, Atom),
-    Double(Atom, Atom),
-    // Would this be better?
-    // /// When the locale supplied single quotes that were just unicode curly quotes, you can use
-    // /// optimized HTML/Pandoc objects that do the flip-flopping for you. Otherwise, flip flopping
-    // /// is not supported.
-    // SystemSingle,
-    // // See SystemSingle
-    // SystemDouble,
+pub struct LocalizedQuotes {
+    pub outer: (Atom, Atom),
+    pub inner: (Atom, Atom),
+    /// Default false, pulled from LocaleOptions
+    pub punctuation_in_quote: bool,
+}
+
+impl LocalizedQuotes {
+    pub fn closing(&self, is_inner: bool) -> &str {
+        if is_inner {
+            self.outer.1.as_ref()
+        } else {
+            self.inner.1.as_ref()
+        }
+    }
+    pub fn opening(&self, is_inner: bool) -> &str {
+        if is_inner {
+            self.outer.0.as_ref()
+        } else {
+            self.inner.0.as_ref()
+        }
+    }
+    pub fn from_locale(locale: &Locale) -> Self {
+        let getter = |qt: QuoteTerm| locale
+            .simple_terms
+            .get(&SimpleTermSelector::Quote(qt))
+            .unwrap()
+            .singular();
+        let open_outer = getter(QuoteTerm::OpenQuote);
+        let close_outer = getter(QuoteTerm::CloseQuote);
+        let open_inner = getter(QuoteTerm::OpenInnerQuote);
+        let close_inner = getter(QuoteTerm::CloseInnerQuote);
+        LocalizedQuotes {
+            outer: (Atom::from(open_outer), Atom::from(close_outer)),
+            inner: (Atom::from(open_inner), Atom::from(close_inner)),
+            punctuation_in_quote: locale.options_node.punctuation_in_quote.unwrap_or(false),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -109,7 +137,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         s: String,
         format_inner: Option<Formatting>,
         affixes: Option<&Affixes>,
-        quotes: Option<&LocalizedQuotes>,
+        quotes: Option<LocalizedQuotes>,
     ) -> Self::Build {
         self.affixed_quoted(self.text_node(s, format_inner), affixes, quotes)
     }
@@ -123,7 +151,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         self.affixed(self.text_node(s, format_inner), affixes)
     }
 
-    fn quoted(&self, b: Self::Build, quotes: &LocalizedQuotes) -> Self::Build;
+    fn quoted(&self, b: Self::Build, quotes: LocalizedQuotes) -> Self::Build;
 
     #[inline]
     fn affixed(&self, b: Self::Build, affixes: Option<&Affixes>) -> Self::Build {
@@ -134,7 +162,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         &self,
         b: Self::Build,
         affixes: Option<&Affixes>,
-        quotes: Option<&LocalizedQuotes>,
+        quotes: Option<LocalizedQuotes>,
     ) -> Self::Build {
         use std::iter::once;
         let pre = affixes.map_or(true, |x| x.prefix.is_empty());
