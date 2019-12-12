@@ -331,10 +331,7 @@ impl TextTermSelector {
                 t,
                 read_term_form_extended()?,
             ))),
-            Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(
-                t,
-                read_term_form()?,
-            ))),
+            Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(t))),
             Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
                 t,
                 read_term_form_extended()?,

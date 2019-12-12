@@ -5,18 +5,17 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::InlineElement;
-use super::QuoteType;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::{FontStyle, FontVariant, FontWeight, Formatting};
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct FlipFlopState {
     in_emph: bool,
     emph: FontStyle,
     in_strong: bool,
     in_small_caps: bool,
-    in_outer_quotes: bool,
+    in_inner_quotes: bool,
 }
 
 impl FlipFlopState {
@@ -27,8 +26,7 @@ impl FlipFlopState {
                 || f.font_style == Some(FontStyle::Oblique),
             in_strong: f.font_weight == Some(FontWeight::Bold),
             in_small_caps: f.font_variant == Some(FontVariant::SmallCaps),
-            // TODO: quotes
-            in_outer_quotes: false,
+            in_inner_quotes: false,
         }
     }
     pub fn flip_flop_inlines(&self, inlines: &[InlineElement]) -> Vec<InlineElement> {
@@ -40,15 +38,14 @@ impl FlipFlopState {
 }
 
 fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElement> {
-    use super::InlineElement::*;
-    match inline {
-        Micro(nodes) => {
+    match *inline {
+        InlineElement::Micro(ref nodes) => {
             let subs = flip_flop_nodes(nodes, state);
-            Some(Micro(subs))
+            Some(InlineElement::Micro(subs))
         }
-        Formatted(ils, f) => {
+        InlineElement::Formatted(ref ils, f) => {
             let mut flop = state.clone();
-            let mut new_f = *f;
+            let mut new_f = f;
             if let Some(fs) = f.font_style {
                 let samey = fs == state.emph;
                 if samey {
@@ -75,27 +72,27 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
                 flop.in_small_caps = want_small_caps;
             }
             let subs = flop.flip_flop_inlines(ils);
-            Some(Formatted(subs, new_f))
+            Some(InlineElement::Formatted(subs, new_f))
         }
 
-        Quoted(ref _q, ref ils) => {
+        InlineElement::Quoted { is_inner: _, ref localized, ref inlines } => {
             let mut flop = state.clone();
-            flop.in_outer_quotes = !flop.in_outer_quotes;
-            let subs = flop.flip_flop_inlines(ils);
-            if !state.in_outer_quotes {
-                Some(Quoted(QuoteType::SingleQuote, subs))
-            } else {
-                Some(Quoted(QuoteType::DoubleQuote, subs))
-            }
+            flop.in_inner_quotes = !flop.in_inner_quotes;
+            let subs = flop.flip_flop_inlines(inlines);
+            Some(InlineElement::Quoted {
+                is_inner: flop.in_inner_quotes,
+                localized: localized.clone(),
+                inlines: subs
+            })
         }
 
-        Anchor {
-            title,
-            url,
-            content,
+        InlineElement::Anchor {
+            ref title,
+            ref url,
+            ref content,
         } => {
             let subs = state.flip_flop_inlines(content);
-            Some(Anchor {
+            Some(InlineElement::Anchor {
                 title: title.clone(),
                 url: url.clone(),
                 content: subs,

@@ -368,6 +368,8 @@ pub fn add_to_graph(
                 ref contents,
                 ref affixes,
                 ref delimiter,
+                // TODO: use these
+                ref quotes,
             } = *seq;
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {

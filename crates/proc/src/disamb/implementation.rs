@@ -19,7 +19,7 @@ impl Disambiguation<Markup> for Style {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(db, ctx, state, &els, "".into(), Some(stack), None, None)
+        ref_sequence(db, ctx, state, &els, "".into(), Some(stack), None, None, None)
     }
 }
 
@@ -43,6 +43,7 @@ impl Disambiguation<Markup> for Group {
             stack,
             self.affixes.as_ref(),
             self.display,
+            None,
         );
         if group_vars.should_render_tree() {
             // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
@@ -189,6 +190,7 @@ impl Disambiguation<Markup> for Element {
                         text.formatting,
                         text.affixes.as_ref(),
                         text.display,
+                        renderer.quotes(text.quotes),
                     );
                     state.pop_macro(name);
                     ret

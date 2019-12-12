@@ -63,14 +63,17 @@ impl InlineElement {
             Formatted(inlines, formatting) => {
                 options.stack_formats(s, inlines, *formatting, None);
             }
-            Quoted(_qt, inners) => {
-                // TODO: use localized quotes
+            Quoted {
+                is_inner,
+                localized,
+                inlines,
+            }=> {
                 // TODO: move punctuation
-                s.push('“');
-                for i in inners {
+                s.push_str(localized.opening(*is_inner));
+                for i in inlines {
                     i.to_plain_inner(s, options);
                 }
-                s.push('”');
+                s.push_str(localized.closing(*is_inner));
             }
             Anchor { content, .. } => {
                 for i in content {

@@ -7,6 +7,7 @@
 use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
+use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, DisplayMode, Element, Formatting};
 
@@ -19,6 +20,8 @@ pub fn sequence<'c, O, I>(
     formatting: Option<Formatting>,
     affixes: Option<&Affixes>,
     display: Option<DisplayMode>,
+    // Only because <text macro="xxx" /> supports quotes.
+    quotes: Option<LocalizedQuotes>
 ) -> IrSum<O>
 where
     O: OutputFormat,
@@ -46,7 +49,12 @@ where
                 formatting,
                 affixes: affixes.cloned(),
                 delimiter,
-                display: if ctx.in_bibliography { display } else { None },
+                display: if ctx.in_bibliography {
+                    display
+                } else {
+                    None
+                },
+                quotes,
             }),
             gv,
         )
@@ -62,6 +70,7 @@ pub fn ref_sequence<'c>(
     formatting: Option<Formatting>,
     affixes: Option<&Affixes>,
     display: Option<DisplayMode>,
+    quotes: Option<LocalizedQuotes>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 
@@ -90,6 +99,7 @@ pub fn ref_sequence<'c>(
                 formatting,
                 affixes: affixes.cloned(),
                 delimiter,
+                quotes,
             }),
             gv,
         )

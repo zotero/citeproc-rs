@@ -69,6 +69,7 @@ fn to_ref_ir(
             formatting: ir_seq.formatting,
             affixes: ir_seq.affixes,
             delimiter: ir_seq.delimiter,
+            quotes: None,
         }),
         IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
     }
@@ -187,6 +188,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     delimiter: Atom::from(""),
                     affixes: bits.overall_affixes.cloned(),
                     display: bits.display,
+                    quotes: None,
                 };
                 for built in vec {
                     seq.contents
@@ -612,6 +614,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         formatting: part.formatting,
                         delimiter: Atom::from(""),
                         display: None,
+                        quotes: None,
                     })
                 })
             } else {
