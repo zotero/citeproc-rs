@@ -17,7 +17,7 @@ mod rtf;
 use self::rtf::RtfWriter;
 
 mod html;
-use self::html::HtmlWriter;
+use self::html::{HtmlOptions, HtmlWriter};
 
 mod plain;
 use self::plain::PlainWriter;
@@ -27,9 +27,9 @@ use self::flip_flop::FlipFlopState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {
-    Html(HtmlWriter),
-    Rtf(RtfWriter),
-    Plain(PlainWriter),
+    Html(HtmlOptions),
+    Rtf,
+    Plain,
 }
 
 /// TODO: serialize and deserialize using an HTML parser?
@@ -57,22 +57,22 @@ pub enum InlineElement {
 
 impl Markup {
     pub fn html() -> Self {
-        Markup::Html(HtmlWriter::default())
+        Markup::Html(HtmlOptions::default())
     }
     pub fn test_html() -> Self {
-        Markup::Html(HtmlWriter::test_suite())
+        Markup::Html(HtmlOptions::test_suite())
     }
     pub fn rtf() -> Self {
-        Markup::Rtf(RtfWriter::default())
+        Markup::Rtf
     }
     pub fn plain() -> Self {
-        Markup::Plain(PlainWriter::default())
+        Markup::Plain
     }
 }
 
 impl Default for Markup {
     fn default() -> Self {
-        Markup::Html(HtmlWriter::default())
+        Markup::Html(HtmlOptions::default())
     }
 }
 
@@ -93,8 +93,8 @@ impl OutputFormat for Markup {
     fn meta(&self) -> Self::BibMeta {
         let (pre, post) = match self {
             Markup::Html(_) => ("<div class=\"csl-bib-body\">", "</div>"),
-            Markup::Rtf(_) => ("", ""),
-            Markup::Plain(_) => ("", ""),
+            Markup::Rtf => ("", ""),
+            Markup::Plain => ("", ""),
         };
         MarkupBibMeta {
             markup_pre: pre.to_string(),
@@ -210,20 +210,20 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
-        match self {
-            Markup::Html(ref writer) => writer.stack_preorder(s, stack),
-            Markup::Rtf(ref writer) => writer.stack_preorder(s, stack),
-            Markup::Plain(ref writer) => writer.stack_preorder(s, stack),
+    fn stack_preorder(&self, dest: &mut String, stack: &[FormatCmd]) {
+        match *self {
+            Markup::Html(options) => HtmlWriter::new(dest, options).stack_preorder(stack),
+            Markup::Rtf => PlainWriter::new(dest).stack_preorder(stack),
+            Markup::Plain => PlainWriter::new(dest).stack_preorder(stack),
         }
     }
 
     #[inline]
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
-        match self {
-            Markup::Html(ref writer) => writer.stack_postorder(s, stack),
-            Markup::Rtf(ref writer) => writer.stack_postorder(s, stack),
-            Markup::Plain(ref writer) => writer.stack_postorder(s, stack),
+    fn stack_postorder(&self, dest: &mut String, stack: &[FormatCmd]) {
+        match *self {
+            Markup::Html(options) => HtmlWriter::new(dest, options).stack_postorder(stack),
+            Markup::Rtf => PlainWriter::new(dest).stack_postorder(stack),
+            Markup::Plain => PlainWriter::new(dest).stack_postorder(stack),
         }
     }
 
@@ -252,46 +252,43 @@ impl Markup {
         initial_state: FlipFlopState,
     ) -> <Self as OutputFormat>::Output {
         let flipped = initial_state.flip_flop_inlines(&intermediate);
-        let mut string = String::new();
-        match self {
-            Markup::Html(ref writer) => writer.write_inlines(&mut string, &flipped),
-            Markup::Rtf(ref writer) => writer.write_inlines(&mut string, &flipped),
-            Markup::Plain(ref writer) => writer.write_inlines(&mut string, &flipped),
+        let mut dest = String::new();
+        match *self {
+            Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped),
+            Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped),
+            Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped),
         }
-        string
+        dest
     }
 }
 
 pub trait MarkupWriter {
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);
-    fn write_micro(&self, s: &mut String, micro: &MicroNode);
-    fn write_micros(&self, s: &mut String, micros: &[MicroNode]) {
+    fn stack_preorder(&mut self, stack: &[FormatCmd]);
+    fn stack_postorder(&mut self, stack: &[FormatCmd]);
+    fn write_micro(&mut self, micro: &MicroNode);
+    fn write_micros(&mut self, micros: &[MicroNode]) {
         for m in micros {
-            self.write_micro(s, m);
+            self.write_micro(m);
         }
     }
-    fn write_inline(&self, s: &mut String, inline: &InlineElement);
-    fn write_inlines(&self, s: &mut String, inlines: &[InlineElement]) {
+    fn write_inline(&mut self, inline: &InlineElement);
+    fn write_inlines(&mut self, inlines: &[InlineElement]) {
         for i in inlines {
-            self.write_inline(s, i);
+            self.write_inline(i);
         }
     }
 
     /// Use this to write an InlineElement::Formatted
     fn stack_formats(
-        &self,
-        s: &mut String,
+        &mut self,
         inlines: &[InlineElement],
         formatting: Formatting,
         display: Option<DisplayMode>,
     ) {
         let stack = tag_stack(formatting, display);
-        self.stack_preorder(s, &stack);
-        for inner in inlines {
-            self.write_inline(s, inner);
-        }
-        self.stack_postorder(s, &stack);
+        self.stack_preorder(&stack);
+        self.write_inlines(inlines);
+        self.stack_postorder(&stack);
     }
 }
 

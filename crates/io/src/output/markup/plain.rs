@@ -10,65 +10,61 @@ use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::Formatting;
 
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
-pub struct PlainWriter {}
+#[derive(Debug)]
+pub struct PlainWriter<'a> {
+    dest: &'a mut String,
+}
 
-impl MarkupWriter for PlainWriter {
-    fn stack_preorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
-
-    fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
-
-    fn write_micro(&self, s: &mut String, micro: &MicroNode) {
-        micro.to_plain_inner(s, self);
-    }
-
-    fn write_inline(&self, s: &mut String, inline: &InlineElement) {
-        inline.to_plain_inner(s, self);
+impl<'a> PlainWriter<'a> {
+    pub fn new(dest: &'a mut String) -> Self {
+        PlainWriter { dest }
     }
 }
 
-impl MicroNode {
-    fn to_plain_inner(&self, s: &mut String, options: &PlainWriter) {
+impl<'a> MarkupWriter for PlainWriter<'a> {
+    fn stack_preorder(&mut self, _stack: &[FormatCmd]) {}
+
+    fn stack_postorder(&mut self, _stack: &[FormatCmd]) {}
+
+    fn write_micro(&mut self, micro: &MicroNode) {
         use MicroNode::*;
-        match self {
+        match micro {
             Text(text) => {
-                s.push_str(&text);
+                self.dest.push_str(&text);
             }
             Quoted {
                 is_inner,
                 localized,
                 children,
             } => {
-                s.push_str(localized.opening(*is_inner));
-                options.write_micros(s, children);
-                s.push_str(localized.closing(*is_inner));
+                self.dest.push_str(localized.opening(*is_inner));
+                self.write_micros(children);
+                self.dest.push_str(localized.closing(*is_inner));
             }
             Formatted(nodes, _cmd) => {
-                options.write_micros(s, nodes);
+                self.write_micros(nodes);
             }
             NoCase(inners) => {
-                options.write_micros(s, inners);
+                self.write_micros(inners);
             }
         }
     }
-}
 
-impl InlineElement {
-    fn to_plain_inner(&self, s: &mut String, options: &PlainWriter) {
+    fn write_inline(&mut self, inline: &InlineElement) {
         use super::InlineElement::*;
-        match self {
+        match inline {
             Text(text) => {
                 use v_htmlescape::escape;
-                s.push_str(&escape(text).to_string());
+                self.dest.push_str(&escape(text).to_string());
             }
             Div(display, inlines) => {
-                options.stack_formats(s, inlines, Formatting::default(), Some(*display));
+                self.stack_formats(inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
-                options.write_micros(s, micros);
+                self.write_micros(micros);
             }
             Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting, None);
+                self.stack_formats(inlines, *formatting, None);
             }
             Quoted {
                 is_inner,
@@ -76,12 +72,12 @@ impl InlineElement {
                 inlines,
             } => {
                 // TODO: move punctuation
-                s.push_str(localized.opening(*is_inner));
-                options.write_inlines(s, inlines);
-                s.push_str(localized.closing(*is_inner));
+                self.dest.push_str(localized.opening(*is_inner));
+                self.write_inlines(inlines);
+                self.dest.push_str(localized.closing(*is_inner));
             }
             Anchor { content, .. } => {
-                options.write_inlines(s, content);
+                self.write_inlines(content);
             }
         }
     }
