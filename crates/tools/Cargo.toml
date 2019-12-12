@@ -6,6 +6,14 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+inspect = ["test_utils"]
+
+[[bin]]
+name = "inspect"
+path = "src/bin/inspect.rs"
+required-features = ["inspect"]
+
 [dependencies]
 directories = "2.0.2"
 git2 = "0.10.1"
@@ -18,4 +26,9 @@ structopt = "0.3.3"
 cargo_metadata = "0.9.0"
 once_cell = "1.2.0"
 serde_derive = "1.0.102"
+test_utils = { path = "../test-utils", optional = true }
+clap = "2.33.0"
+env_logger = "0.7.1"
+serde_sexpr = "0.1.0"
 ucd-parse = "0.1.4"
+csl = { path = "../csl" }

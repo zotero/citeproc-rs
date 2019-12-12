@@ -7,6 +7,8 @@
 #[macro_use]
 extern crate serde_derive;
 
+pub use citeproc as citeproc;
+
 use citeproc::prelude::*;
 use citeproc_io::{Cite, Cluster, Reference};
 use csl::Lang;
@@ -24,18 +26,6 @@ pub mod humans;
 pub mod yaml;
 
 use humans::{CiteprocJsInstruction, JsExecutor, Results};
-
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct TestCase {
-    pub mode: Mode,
-    #[serde(default)]
-    pub format: Format,
-    pub csl: String,
-    pub input: Vec<Reference>,
-    pub result: String,
-    pub clusters: Option<Vec<Cluster<Markup>>>,
-    pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
-}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -70,17 +60,55 @@ impl Default for Format {
     }
 }
 
-impl TestCase {
-    pub fn execute(&mut self) -> Option<String> {
-        let fet = Arc::new(Filesystem::project_dirs());
-        let mut proc = Processor::new(&self.csl, fet, true, self.format.0)
-            .expect("could not construct processor");
+#[derive(Deserialize)]
+pub struct TestCase {
+    pub mode: Mode,
+    #[serde(default)]
+    pub format: Format,
+    pub csl: String,
+    pub input: Vec<Reference>,
+    pub result: String,
+    pub clusters: Option<Vec<Cluster<Markup>>>,
+    pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
+    #[serde(skip, default = "unreach")]
+    pub processor: Processor,
+}
 
+fn unreach() -> Processor {
+    unreachable!()
+}
+
+impl TestCase {
+    pub fn new(
+        mode: Mode,
+        format: Format,
+        csl: String,
+        input: Vec<Reference>,
+        result: String,
+        clusters: Option<Vec<Cluster<Markup>>>,
+        process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
+    ) -> Self {
+        let processor = {
+            let fet = Arc::new(Filesystem::project_dirs());
+            Processor::new(&csl, fet, true, format.0).expect("could not construct processor")
+        };
+        TestCase {
+            mode,
+            format,
+            csl,
+            input,
+            result,
+            clusters,
+            process_citation_clusters,
+            processor,
+        }
+    }
+    pub fn execute(&mut self) -> Option<String> {
         let mut res = String::new();
         if let Some(ref instructions) = &self.process_citation_clusters {
             self.result.push_str("\n");
-            proc.set_references(self.input.clone());
-            let mut executor = JsExecutor::new(&mut proc);
+            self.processor.set_references(self.input.clone());
+            let mut executor = JsExecutor::new(&mut self.processor);
             for instruction in instructions.iter() {
                 executor.execute(instruction);
             }
@@ -92,7 +120,7 @@ impl TestCase {
                     let actual = executor.get_results();
                     Some(actual.output_independent())
                 }
-                Mode::Bibliography => Some(get_bib_string(&proc)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor)),
             }
         // turns out it's easier to just produce the string the same way
         } else {
@@ -109,8 +137,8 @@ impl TestCase {
                 &clusters_auto
             };
 
-            proc.set_references(self.input.clone());
-            proc.init_clusters(clusters.clone());
+            self.processor.set_references(self.input.clone());
+            self.processor.init_clusters(clusters.clone());
             let positions: Vec<_> = clusters
                 .iter()
                 .enumerate()
@@ -120,10 +148,10 @@ impl TestCase {
                 })
                 .collect();
 
-            proc.set_cluster_order(&positions).unwrap();
+            self.processor.set_cluster_order(&positions).unwrap();
             let mut pushed = false;
             for cluster in clusters.iter() {
-                if let Some(html) = proc.get_cluster(cluster.id()) {
+                if let Some(html) = self.processor.get_cluster(cluster.id()) {
                     if pushed {
                         res.push_str("\n");
                     }
@@ -145,7 +173,7 @@ impl TestCase {
                             .replace("&amp;", "&#38;"),
                     )
                 }
-                Mode::Bibliography => Some(get_bib_string(&proc)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor)),
             }
         }
     }

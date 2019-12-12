@@ -38,7 +38,7 @@ pub enum LocalizedQuotes {
     // SystemDouble,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum FormatCmd {
     FontStyleItalic,
     FontStyleOblique,

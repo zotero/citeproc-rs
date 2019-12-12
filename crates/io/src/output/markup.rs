@@ -39,7 +39,7 @@ pub enum QuoteType {
 }
 
 /// TODO: serialize and deserialize using an HTML parser?
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub enum InlineElement {
     /// This is how we can flip-flop only user-supplied styling.
     /// Inside this is parsed micro html

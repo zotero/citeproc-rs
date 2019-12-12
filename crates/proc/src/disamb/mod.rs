@@ -216,7 +216,6 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
                 (&ifc_cond_set[0], self.fold(if_els, WalkerFoldType::IfThen))
             }))
             .collect();
-        warn!("ifs {:?}", first);
         FreeCondSets::all_branches(
             first.into_iter(),
             if !else_.0.is_empty() {

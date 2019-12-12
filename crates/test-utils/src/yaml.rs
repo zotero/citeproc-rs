@@ -4,9 +4,15 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use anyhow::Error;
 use super::humans::{CitationItem, CiteprocJsInstruction};
 use super::{Format, Mode, TestCase};
 use citeproc_io::Reference;
+
+pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {
+    let yaml_test_case: YamlTestCase = serde_yaml::from_str(s)?;
+    Ok(yaml_test_case.into())
+}
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -23,19 +29,19 @@ pub struct YamlTestCase {
 
 impl From<YamlTestCase> for TestCase {
     fn from(yaml: YamlTestCase) -> Self {
-        TestCase {
-            mode: yaml.mode,
-            format: yaml.format,
-            csl: yaml.csl,
-            input: yaml.input,
-            result: yaml.result,
-            clusters: yaml.clusters.map(|cls| {
+        TestCase::new(
+            yaml.mode,
+            yaml.format,
+            yaml.csl,
+            yaml.input,
+            yaml.result,
+            yaml.clusters.map(|cls| {
                 cls.into_iter()
                     .enumerate()
                     .map(|(n, c_item)| c_item.to_note_cluster(n as u32 + 1u32))
                     .collect()
             }),
-            process_citation_clusters: yaml.process_citation_clusters,
-        }
+            yaml.process_citation_clusters,
+        )
     }
 }

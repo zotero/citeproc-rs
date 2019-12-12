@@ -496,26 +496,28 @@ pub fn parse_human_test(contents: &str) -> TestCase {
             }
         }
     }
-    TestCase {
-        mode: mode.map(|(m, _)| m).unwrap_or(Mode::Citation),
-        format: mode
+
+    TestCase::new(
+        mode.map(|(m, _)| m).unwrap_or(Mode::Citation),
+        mode
             .map(|(_, f)| Format(f))
             .unwrap_or(Format(SupportedFormat::TestHtml)),
-        input: input.expect("test case without an INPUT section"),
-        result: result.expect("test case without a RESULT section"),
-        csl: csl.expect("test case without a CSL section"),
-        clusters: citation_items.map(|items: Vec<CitationItem>| {
+        csl.expect("test case without a CSL section"),
+        input.expect("test case without an INPUT section"),
+        result
+            .expect("test case without a RESULT section"),
+        citation_items.map(|items: Vec<CitationItem>| {
             items
                 .into_iter()
                 .enumerate()
                 .map(|(n, c_item): (usize, CitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
                 .collect()
         }),
-        process_citation_clusters: process_citation_clusters.map(|inst2s| {
+        process_citation_clusters.map(|inst2s| {
             inst2s
                 .into_iter()
                 .map(|x| CiteprocJsInstruction::from(x))
                 .collect()
         }),
-    }
+    )
 }

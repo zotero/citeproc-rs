@@ -264,7 +264,7 @@ fn ref_bib_number(db: &impl IrDatabase, ref_id: &Atom) -> u32 {
 
 #[derive(Debug, Clone)]
 pub struct IrGen {
-    pub(crate) ir: IR<Markup>,
+    pub ir: IR<Markup>,
     pub(crate) state: IrState,
     pub(crate) matching_refs: Vec<Atom>,
 }

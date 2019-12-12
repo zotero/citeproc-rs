@@ -302,44 +302,86 @@ impl FromNode for Layout {
     }
 }
 
-impl FromNode for TextTermSelector {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+impl TextTermSelector {
+    fn from_term_and_form<E, FRT, FRTE, TO>(term: &AnyTermName, read_term_form: FRT, read_term_form_extended: FRTE, throw_ordinal: TO) -> Result<Self, E>
+        where
+            FRT: Fn() -> Result<TermForm, E>,
+            FRTE: Fn() -> Result<TermFormExtended, E>,
+            TO: Fn() -> E,
+    {
         use self::terms::AnyTermName::*;
-        // we already know term is on there
-        let t = attribute_required(node, "term", info)?;
-        match t {
+        match *term {
             Number(v) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Number(
                 v,
-                TermForm::from_node(node, info)?,
+                read_term_form()?,
             ))),
             Month(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Month(
                 t,
-                TermForm::from_node(node, info)?,
+                read_term_form()?,
             ))),
             Season(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Season(
                 t,
-                TermForm::from_node(node, info)?,
+                read_term_form()?,
             ))),
             Loc(t) => Ok(TextTermSelector::Gendered(GenderedTermSelector::Locator(
                 t,
-                TermForm::from_node(node, info)?,
+                read_term_form()?,
             ))),
             Misc(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Misc(
                 t,
-                TermFormExtended::from_node(node, info)?,
+                read_term_form_extended()?,
             ))),
             Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(
                 t,
-                TermForm::from_node(node, info)?,
+                read_term_form()?,
             ))),
             Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
                 t,
-                TermFormExtended::from_node(node, info)?,
+                read_term_form_extended()?,
             ))),
             Ordinal(_) => {
-                Err(InvalidCsl::new(node, "you cannot render an ordinal term directly").into())
+                Err(throw_ordinal())
             }
         }
+    }
+
+    pub fn from_term_form_unwrap(term: &str, form: Option<&str>, features: &Features) -> Self {
+        let term = AnyTermName::get_attr(term, features).expect("Could not parse input term as a term.");
+        let ordinal = || panic!("ordinal terms not accessible");
+        if let Some(form) = form {
+            let term_form = || Ok(TermForm::get_attr(form, features).expect("Could not parse input term as a term."));
+            let term_form_extended = || Ok(TermFormExtended::get_attr(form, features).expect("Could not parse input term as a term."));
+            TextTermSelector::from_term_and_form(
+                &term,
+                term_form,
+                term_form_extended,
+                ordinal,
+            ).unwrap()
+        } else {
+            TextTermSelector::from_term_and_form(
+                &term,
+                || Ok(Default::default()),
+                || Ok(Default::default()),
+                ordinal,
+            ).unwrap()
+        }
+
+    }
+}
+
+impl FromNode for TextTermSelector {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        // we already know term is on there
+        let term = attribute_required(node, "term", info)?;
+        Ok(TextTermSelector::from_term_and_form(
+            &term,
+            || TermForm::from_node(node, info),
+            || TermFormExtended::from_node(node, info),
+            || InvalidCsl::new(
+                    node,
+                    "you cannot render an ordinal term directly"
+                ).into()
+        )?)
     }
 }
 
