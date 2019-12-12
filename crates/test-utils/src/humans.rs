@@ -499,6 +499,7 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
         result
+            .map(|x| crate::normalise_html(&x))
             .expect("test case without a RESULT section"),
         citation_items.map(|items: Vec<CitationItem>| {
             items
