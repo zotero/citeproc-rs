@@ -3,18 +3,17 @@ use crate::LocalizedQuotes;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 
-pub fn parse_quotes(slice: &mut [MicroNode]) {
+pub fn parse_quotes(mut original: Vec<MicroNode>) -> Vec<MicroNode> {
     let options = IngestOptions::default_with_quotes(LocalizedQuotes::simple());
-    let matcher = QuoteMatcher {
-        stack: vec![],
-        options: &options,
+    let inters = {
+        QuoteMatcher {
+            original: &original,
+            options: &options,
+        }
+        .to_intermediates()
     };
-    // matcher.parse_quotes(slice);
-}
-
-struct QuoteMatcher<'a> {
-    stack: Vec<Option<StackFrame>>,
-    options: &'a IngestOptions,
+    unimplemented!()
+    // stamp(inters.len(), inters.into_iter(), &mut original)
 }
 
 enum Intermediate<'a> {
@@ -62,8 +61,8 @@ impl QuotedStack {
     }
 }
 
-fn stamp<'a>(intermediates: impl ExactSizeIterator + Iterator<Item = Intermediate<'a>>, orig: &mut Vec<MicroNode>) -> Vec<MicroNode> {
-    let mut stack = QuotedStack::with_capacity(intermediates.len());
+fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate<'a>>, orig: &mut Vec<MicroNode>) -> Vec<MicroNode> {
+    let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
     let mut drain = |start: usize, end: usize, stack: &mut QuotedStack| {
         debug!("{}..{}", start - drained, end - drained);
@@ -147,7 +146,7 @@ fn test_stamp() {
         Intermediate::Event(Event::Text("suffix")),
     ];
     assert_eq!(
-        &stamp(inters.into_iter(), &mut orig),
+        &stamp(2, inters.into_iter(), &mut orig),
         &[
             MicroNode::Text("prefix, '".into()),
             MicroNode::Text("hi".into()),
@@ -164,7 +163,7 @@ fn test_stamp() {
         Intermediate::Event(Event::Text(", suffix")),
     ];
     assert_eq!(
-        &stamp(inters.into_iter(), &mut orig),
+        &stamp(2, inters.into_iter(), &mut orig),
         &[
             MicroNode::Text("prefix, ".into()),
             MicroNode::Quoted {
@@ -180,68 +179,60 @@ fn test_stamp() {
     );
 }
 
-impl<'a> QuoteMatcher<'a> {
-//     // Quotes are parsed after <i> and friends.
-//     // So you cannot have quotes that surround an open-tag.
-//     pub fn parse_quotes(&mut self, slice: Vec<MicroNode>) -> Vec<MicroNode> {
-//         // Cow is so we can put either references or owned nodes in there.
-//         // Not because they need to be mutated in particular.
-//         let mut assembling_quote: Option<Vec<Cow<'_, MicroNode>>> = None;
-//         let mut building: Vec<Intermediate<'a>> = Vec::with_capacity(slice.len());
-//         let mut prev = None;
-//         for (ix, node) in slice.iter_mut().enumerate() {
-//             match node {
-//                 MicroNode::Quoted { ref mut children, .. }
-//                 | MicroNode::NoCase(ref mut children)
-//                     | MicroNode::Formatted(ref mut children, _) => {
-//                         building.push(children);
-//                         parse_quotes(&mut *children);
-//                     },
-//                 MicroNode::Text(string) => {
-//                     // Going to need to search for open & close quotes.
-//                     // Any imbalance either goes onto the stack or is popped off.
-//                     // Then handle case where there is no close quote, when ending a
-//                     // stack frame.
-//                     let splitter = QuoteSplitter {
-//                         string: &string,
-//                         previous_text_node: None, // TODO
-//                         subsequent_text_node: None, // TODO
-//                     };
-//                     let mut seen_any = false;
-//                     splitter.iterate_events(|event| {
-//                         seen_any = true;
-//                         building.push(event);
-//                     });
-//                 }
-//             }
-//         }
-//     }
+struct QuoteMatcher<'a> {
+    original: &'a Vec<MicroNode>,
+    options: &'a IngestOptions,
+}
 
-
-    fn new(options: &'a IngestOptions) -> Self {
-        QuoteMatcher {
-            options,
-            stack: vec![]
+fn leaning_text(node: &MicroNode, rightmost: bool) -> Option<&str> {
+    match node {
+        MicroNode::Quoted { ref children, .. }
+        | MicroNode::NoCase(ref children)
+        | MicroNode::Formatted(ref children, _) => {
+            if rightmost {
+                children.last()
+            } else {
+                children.first()
+            }
+            .and_then(|n| leaning_text(n, rightmost))
         }
+        MicroNode::Text(text) => Some(text.as_str()),
+    }
+}
+
+impl<'a> QuoteMatcher<'a> {
+
+    // Rewrite as an iterator
+    fn to_intermediates(self) -> Vec<Intermediate<'a>> {
+        let mut building = Vec::with_capacity(self.original.len());
+        for (ix, node) in self.original.iter().enumerate() {
+            match node {
+                MicroNode::Quoted { ref children, .. }
+                | MicroNode::NoCase(ref children)
+                    | MicroNode::Formatted(ref children, _) => {
+                        building.push(Intermediate::Index(ix));
+                    },
+                MicroNode::Text(string) => {
+                    let prev = self.original.get(ix - 1).and_then(|n| leaning_text(n, true));
+                    let next = self.original.get(ix + 1).and_then(|n| leaning_text(n, false));
+                    let splitter = QuoteSplitter::new(&string, prev, next);
+                    let mut seen_any = false;
+                    for event in splitter.events() {
+                        seen_any = true;
+                        building.push(Intermediate::Event(event))
+                    }
+                    if !seen_any {
+                        building.push(Intermediate::Index(ix));
+                    }
+                }
+            }
+        }
+        building
     }
 
-    // fn pop_to_parent(&mut self) -> Option<()> {
-    //     if self.stack.len() < 2 {
-    //         return None;
-    //     }
-    //     let top = self.stack.pop()?;
-    //     let last = self.stack.last_mut()?;
-    //     last.children.push(top.package(&self.options.quotes));
-    //     Some(())
-    // }
-
 }
 
-struct QuoteSplitter<'a> {
-    string: &'a str,
-    previous_text_node: Option<&'a str>,
-    subsequent_text_node: Option<&'a str>,
-}
+type IsPossible = fn (c: &(usize, char)) -> bool;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Event<'a> {
@@ -253,10 +244,61 @@ enum Event<'a> {
     SmartQuoteDoubleClose, // => return self.end_tag(Some(MicroTag::DoubleQuote)),
 }
 
-impl<'a> QuoteSplitter<'a> {
-    fn iterate_events(&self, mut callback: impl FnMut(Event<'a>)) {
-        let mut text_start = 0;
-        for (ix, quote_char) in self.iterate_possibles() {
+struct QuoteSplitter<'a> {
+    string: &'a str,
+    previous_text_node: Option<&'a str>,
+    subsequent_text_node: Option<&'a str>,
+    text_start: usize,
+    possibles: std::iter::Filter<std::str::CharIndices<'a>, IsPossible>,
+    emitted_last: bool,
+}
+
+fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
+    let ev = match ch {
+        (SmartQuoteKind::Open, '\'') => Event::SmartQuoteSingleOpen,
+        (SmartQuoteKind::Close, '\'') => Event::SmartQuoteSingleClose,
+        (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen,
+        (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose,
+        (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma,
+        // Don't parse this as a quote at all
+        _ => return None,
+    };
+    Some(ev)
+}
+use std::mem;
+struct Thingo<'a> {
+    quote_event: Option<Event<'a>>,
+    upto: Option<Event<'a>>,
+    post: Option<Option<Event<'a>>>,
+}
+impl<'a> Thingo<'a> {
+    fn post(s: &'a str) -> Self {
+        Thingo {
+            quote_event: None,
+            upto: None,
+            post: Some(Some(Event::Text(s))),
+        }
+    }
+}
+impl<'a> Iterator for Thingo<'a> {
+    type Item = Event<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref mut post) = self.post {
+            return mem::replace(post, None);
+        }
+        if self.quote_event.is_none() {
+            return None;
+        }
+        mem::replace(&mut self.upto, None)
+            .or_else(|| mem::replace(&mut self.quote_event, None))
+    }
+}
+
+impl<'a> Iterator for QuoteSplitter<'a> {
+    type Item = Thingo<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((ix, quote_char)) = self.possibles.next() {
+            // next_char is either ' or "
             let mut prefix = &self.string[..ix];
             let mut suffix = &self.string[ix+1..];
             if prefix.is_empty() {
@@ -269,45 +311,50 @@ impl<'a> QuoteSplitter<'a> {
                     suffix = next;
                 }
             }
-            if let Some(kind) = quote_kind(quote_char as u8, prefix, suffix) {
-                callback(Event::Text(&self.string[text_start..ix]));
-                let quote_event = match (kind, quote_char) {
-                    (SmartQuoteKind::Open, '\'') => Event::SmartQuoteSingleOpen,
-                    (SmartQuoteKind::Close, '\'') => Event::SmartQuoteSingleClose,
-                    (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen,
-                    (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose,
-                    (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma,
-                    // Don't parse this as a quote at all
-                    _ => continue,
-                };
-                callback(quote_event);
-                text_start = ix + 1;
+            let upto = Some(Event::Text(&self.string[self.text_start..ix]));
+            let quote_event = quote_kind(quote_char as u8, prefix, suffix)
+                .and_then(|kind| quote_event((kind, quote_char)));
+            if quote_event.is_some() {
+                self.text_start = ix + 1;
             }
-        }
-        if text_start > 0 {
-            callback(Event::Text(&self.string[text_start..]));
+            Some(Thingo { quote_event, upto, post: None })
+        } else if !self.emitted_last && self.text_start > 0 {
+            // the remainder, after the last quote char
+            self.emitted_last = true;
+            Some(Thingo::post(&self.string[self.text_start..]))
+        } else {
+            None
         }
     }
-    // TODO: should this find guillements or localized quote terms? Maybe no.
-    fn iterate_possibles(&self) -> impl Iterator<Item = (usize, char)> + 'a {
-        self.string
-            .char_indices()
-            .filter(|(ix, ch)| *ch == '\'' || *ch == '"')
+}
+
+impl<'a> QuoteSplitter<'a> {
+    fn new(string: &'a str, prev: Option<&'a str>, next: Option<&'a str>) -> Self {
+        QuoteSplitter {
+            string,
+            previous_text_node: prev,
+            subsequent_text_node: next,
+            text_start: 0,
+            possibles: string
+                .char_indices()
+                .filter(|(ix, ch)| *ch == '\'' || *ch == '"'),
+            emitted_last: false,
+        }
+    }
+
+    fn events(self) -> impl Iterator<Item = Event<'a>> {
+        self.flat_map(|x| x)
     }
 }
 
 #[test]
 fn test_quote_splitter_simple() {
     let string = "hello, I'm a man with a plan, \"Canal Panama\".";
-    let splitter = QuoteSplitter {
-        string,
-        previous_text_node: None,
-        subsequent_text_node: None,
-    };
+    let splitter = QuoteSplitter::new(string, None, None);
     let mut events = Vec::new();
-    splitter.iterate_events(|event| {
+    for event in splitter.events() {
         events.push(event);
-    });
+    }
     assert_eq!(events, vec![
         Event::Text("hello, I"),
         Event::SmartMidwordInvertedComma,
