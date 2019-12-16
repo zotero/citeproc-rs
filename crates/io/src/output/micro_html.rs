@@ -22,12 +22,14 @@ pub enum MicroNode {
     NoCase(Vec<MicroNode>),
 }
 
+use crate::output::markup::parse_quotes;
+
 impl MicroNode {
     /// TODO: catch errors and get the input back as a String
     pub fn parse(fragment: &str, options: &IngestOptions) -> Vec<MicroNode> {
         let mut tag_parser = TagParser::new(&fragment);
         let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
-        result
+        parse_quotes(result, options)
     }
 }
 

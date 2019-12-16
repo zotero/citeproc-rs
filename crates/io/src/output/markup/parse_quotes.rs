@@ -1,27 +1,43 @@
 use crate::IngestOptions;
 use crate::LocalizedQuotes;
 use crate::output::micro_html::MicroNode;
-use crate::output::FormatCmd;
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 
-pub fn parse_quotes(mut original: Vec<MicroNode>) -> Vec<MicroNode> {
-    let options = IngestOptions::default_with_quotes(LocalizedQuotes::simple());
-    let inters = {
-        QuoteMatcher {
-            original: &original,
-            options: &options,
-        }
-        .to_intermediates()
+pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Vec<MicroNode> {
+    let matcher = QuoteMatcher {
+        original: &original,
+        options: &options,
     };
-    unimplemented!()
-    // stamp(inters.len(), inters.into_iter(), &mut original)
+    let inters: Vec<_> = matcher.intermediates()
+        .collect();
+    debug!("{:?}", inters);
+    stamp(inters.len(), inters.into_iter(), &mut original, options)
 }
 
-enum Intermediate<'a> {
-    Event(Event<'a>),
+#[test]
+fn test_parse_quotes() {
+    assert_eq!(
+        parse_quotes(vec![MicroNode::Text("'hello'".to_owned())], &LocalizedQuotes::simple()),
+        vec![
+            MicroNode::Quoted {
+                is_inner: false,
+                localized: LocalizedQuotes::simple(),
+                children: vec![
+                    MicroNode::Text("hello".to_owned()),
+                ]
+            }
+        ]
+    );
+}
+
+#[derive(Debug)]
+enum Intermediate {
+    Event(EventOwned),
     Index(usize),
 }
 
-
+#[derive(Debug)]
 struct QuotedStack {
     dest: Vec<MicroNode>,
     stack: Vec<(SFQuoteKind, Vec<MicroNode>)>,
@@ -49,7 +65,15 @@ impl QuotedStack {
         if let Some(MicroNode::Text(ref mut string)) = dest.last_mut() {
             string.push_str(txt);
         } else {
-            dest.push(MicroNode::Text(txt.into()));
+            dest.push(MicroNode::Text(txt.to_owned()));
+        }
+    }
+    fn push_string(&mut self, txt: String) {
+        let dest = self.mut_ref();
+        if let Some(MicroNode::Text(ref mut string)) = dest.last_mut() {
+            string.push_str(&txt);
+        } else {
+            dest.push(MicroNode::Text(txt))
         }
     }
     fn collapse_hanging(mut self) -> Vec<MicroNode> {
@@ -61,7 +85,7 @@ impl QuotedStack {
     }
 }
 
-fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate<'a>>, orig: &mut Vec<MicroNode>) -> Vec<MicroNode> {
+fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate>, orig: &mut Vec<MicroNode>, options: &IngestOptions) -> Vec<MicroNode> {
     let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
     let mut drain = |start: usize, end: usize, stack: &mut QuotedStack| {
@@ -81,32 +105,32 @@ fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate<'
                     range_wip = None;
                 }
                 match ev {
-                    Event::Text(txt) => stack.push_str(txt),
-                    Event::SmartMidwordInvertedComma => stack.push_str("\u{2019}"),
-                    Event::SmartQuoteSingleOpen => {
+                    EventOwned::Text(txt) => stack.push_string(txt),
+                    EventOwned::SmartMidwordInvertedComma => stack.push_str("\u{2019}"),
+                    EventOwned::SmartQuoteSingleOpen => {
                         stack.stack.push((SFQuoteKind::Single, Vec::new()));
                     }
-                    Event::SmartQuoteDoubleOpen => {
+                    EventOwned::SmartQuoteDoubleOpen => {
                         stack.stack.push((SFQuoteKind::Double, Vec::new()));
                     }
-                    Event::SmartQuoteSingleClose => {
+                    EventOwned::SmartQuoteSingleClose => {
                         if let Some((SFQuoteKind::Single, _)) = stack.stack.last() {
                             let (_, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: LocalizedQuotes::simple(),
+                                localized: options.quotes.clone(),
                                 children,
                             });
                         } else {
                             stack.push_str(SFQuoteKind::Single.unmatched_str());
                         }
                     }
-                    Event::SmartQuoteDoubleClose => {
+                    EventOwned::SmartQuoteDoubleClose => {
                         if let Some((SFQuoteKind::Double, _)) = stack.stack.last() {
                             let (_, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: LocalizedQuotes::simple(),
+                                localized: options.quotes.clone(),
                                 children,
                             });
                         } else {
@@ -131,6 +155,9 @@ fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate<'
             }
         }
     }
+    if let Some(ref mut range) = range_wip {
+        drain(range.0, range.1, &mut stack);
+    }
     stack.collapse_hanging()
 }
 
@@ -139,11 +166,11 @@ fn test_stamp() {
     env_logger::init();
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let inters = vec![
-        Intermediate::Event(Event::Text("prefix, ")),
-        Intermediate::Event(Event::SmartQuoteSingleOpen),
+        Intermediate::Event(EventOwned::Text("prefix, ".into())),
+        Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
         Intermediate::Index(0),
         Intermediate::Index(1),
-        Intermediate::Event(Event::Text("suffix")),
+        Intermediate::Event(EventOwned::Text("suffix".into())),
     ];
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig),
@@ -155,12 +182,12 @@ fn test_stamp() {
     );
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let inters = vec![
-        Intermediate::Event(Event::Text("prefix, ")),
-        Intermediate::Event(Event::SmartQuoteSingleOpen),
+        Intermediate::Event(EventOwned::Text("prefix, ".to_owned())),
+        Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
         Intermediate::Index(0),
         Intermediate::Index(1),
-        Intermediate::Event(Event::SmartQuoteSingleClose),
-        Intermediate::Event(Event::Text(", suffix")),
+        Intermediate::Event(EventOwned::SmartQuoteSingleClose),
+        Intermediate::Event(EventOwned::Text(", suffix".to_owned())),
     ];
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig),
@@ -179,11 +206,13 @@ fn test_stamp() {
     );
 }
 
+#[derive(Debug)]
 struct QuoteMatcher<'a> {
     original: &'a Vec<MicroNode>,
     options: &'a IngestOptions,
 }
 
+/// Find x in `[a, x]`, `[a, [b, [c, x]]]`, etc
 fn leaning_text(node: &MicroNode, rightmost: bool) -> Option<&str> {
     match node {
         MicroNode::Quoted { ref children, .. }
@@ -200,34 +229,64 @@ fn leaning_text(node: &MicroNode, rightmost: bool) -> Option<&str> {
     }
 }
 
-impl<'a> QuoteMatcher<'a> {
+#[derive(Debug)]
+enum EachSplitter<'a, I: Iterator<Item = Event<'a>> + 'a> {
+    Index(Option<usize>),
+    Splitter {
+        splitter: I,
+        seen_any: Option<bool>,
+        index: usize,
+    },
+}
 
-    // Rewrite as an iterator
-    fn to_intermediates(self) -> Vec<Intermediate<'a>> {
-        let mut building = Vec::with_capacity(self.original.len());
-        for (ix, node) in self.original.iter().enumerate() {
-            match node {
+impl<'a, I: Iterator<Item = Event<'a>>> Iterator for EachSplitter<'a, I> {
+    type Item = Intermediate;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            EachSplitter::Index(ref mut opt_ix) => mem::replace(opt_ix, None).map(Intermediate::Index),
+            EachSplitter::Splitter {
+                index,
+                ref mut splitter,
+                ref mut seen_any,
+            } => {
+                let nxt = splitter.next()
+                    .map(|ev| Intermediate::Event(ev.into()))
+                    .or_else(|| mem::replace(seen_any, None)
+                        .and_then(|any| if any {
+                            None
+                        } else {
+                            Some(Intermediate::Index(*index))
+                        })
+                    );
+                if nxt.is_some() {
+                    *seen_any = Some(true);
+                }
+                nxt
+            }
+        }
+    }
+}
+
+impl<'a> QuoteMatcher<'a> {
+    fn intermediates(&'a self) -> impl Iterator<Item = Intermediate> + 'a {
+        self.original.iter().enumerate()
+            .flat_map(move |(ix, node)| match node {
                 MicroNode::Quoted { ref children, .. }
                 | MicroNode::NoCase(ref children)
                     | MicroNode::Formatted(ref children, _) => {
-                        building.push(Intermediate::Index(ix));
+                        EachSplitter::Index(Some(ix))
                     },
-                MicroNode::Text(string) => {
-                    let prev = self.original.get(ix - 1).and_then(|n| leaning_text(n, true));
+                MicroNode::Text(ref string) => {
+                    let prev = self.original.get(ix.wrapping_sub(1)).and_then(|n| leaning_text(n, true));
                     let next = self.original.get(ix + 1).and_then(|n| leaning_text(n, false));
-                    let splitter = QuoteSplitter::new(&string, prev, next);
-                    let mut seen_any = false;
-                    for event in splitter.events() {
-                        seen_any = true;
-                        building.push(Intermediate::Event(event))
-                    }
-                    if !seen_any {
-                        building.push(Intermediate::Index(ix));
+                    let splitter = QuoteSplitter::new(&string, prev, next).events();
+                    EachSplitter::Splitter {
+                        index: ix,
+                        splitter,
+                        seen_any: Some(false),
                     }
                 }
-            }
-        }
-        building
+            })
     }
 
 }
@@ -237,13 +296,37 @@ type IsPossible = fn (c: &(usize, char)) -> bool;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Event<'a> {
     Text(&'a str),
-    SmartMidwordInvertedComma, // => return self.append_text("\u{2019}"),
-    SmartQuoteSingleOpen, // => self.open_tag(MicroTag::SingleQuote),
-    SmartQuoteDoubleOpen, // => self.open_tag(MicroTag::DoubleQuote),
-    SmartQuoteSingleClose, // => return self.end_tag(Some(MicroTag::SingleQuote)),
-    SmartQuoteDoubleClose, // => return self.end_tag(Some(MicroTag::DoubleQuote)),
+    SmartMidwordInvertedComma,
+    SmartQuoteSingleOpen,
+    SmartQuoteDoubleOpen,
+    SmartQuoteSingleClose,
+    SmartQuoteDoubleClose,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum EventOwned {
+    Text(String),
+    SmartMidwordInvertedComma,
+    SmartQuoteSingleOpen,
+    SmartQuoteDoubleOpen,
+    SmartQuoteSingleClose,
+    SmartQuoteDoubleClose,
+}
+
+impl<'a> From<Event<'a>> for EventOwned {
+    fn from(ev: Event<'a>) -> Self {
+        match ev {
+            Event::Text(s) => EventOwned::Text(s.to_owned()),
+            Event::SmartMidwordInvertedComma => EventOwned::SmartMidwordInvertedComma,
+            Event::SmartQuoteSingleOpen => EventOwned::SmartQuoteSingleOpen,
+            Event::SmartQuoteDoubleOpen => EventOwned::SmartQuoteDoubleOpen,
+            Event::SmartQuoteSingleClose => EventOwned::SmartQuoteSingleClose,
+            Event::SmartQuoteDoubleClose => EventOwned::SmartQuoteDoubleClose,
+        }
+    }
+}
+
+#[derive(Debug)]
 struct QuoteSplitter<'a> {
     string: &'a str,
     previous_text_node: Option<&'a str>,
@@ -266,6 +349,7 @@ fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
     Some(ev)
 }
 use std::mem;
+#[derive(Debug)]
 struct Thingo<'a> {
     quote_event: Option<Event<'a>>,
     upto: Option<Event<'a>>,
@@ -344,6 +428,10 @@ impl<'a> QuoteSplitter<'a> {
 
     fn events(self) -> impl Iterator<Item = Event<'a>> {
         self.flat_map(|x| x)
+            .filter(|ev| match ev {
+                Event::Text("") => false,
+                _ => true,
+            })
     }
 }
 
@@ -455,6 +543,7 @@ impl SFQuoteKind {
     }
 }
 
+#[derive(Debug)]
 struct StackFrame {
     kind: SFQuoteKind,
     children: Vec<MicroNode>,
