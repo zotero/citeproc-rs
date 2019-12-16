@@ -135,7 +135,7 @@ impl HtmlReader<MicroNode> for MicroHtmlReader<'_> {
 fn test_sanitize() {
     let fragment =
         r#"<span class="nocase"><i class="whatever">Italic</i></span> <img src="5" /> <b>Bold</b>"#;
-    let result = MicroNode::parse(fragment, Default::default());
+    let result = MicroNode::parse(fragment, &Default::default());
     use FormatCmd::*;
     use MicroNode::*;
     assert_eq!(

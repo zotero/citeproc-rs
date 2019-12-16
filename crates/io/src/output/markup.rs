@@ -25,7 +25,10 @@ use self::plain::PlainWriter;
 mod flip_flop;
 use self::flip_flop::FlipFlopState;
 mod move_punctuation;
+mod parse_quotes;
 use self::move_punctuation::move_punctuation;
+use self::parse_quotes::parse_quotes;
+pub(self) mod puncttable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {
