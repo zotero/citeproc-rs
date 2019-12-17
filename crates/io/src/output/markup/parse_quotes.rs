@@ -291,8 +291,6 @@ impl<'a> QuoteMatcher<'a> {
 
 }
 
-type IsPossible = fn (c: &(usize, char)) -> bool;
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Event<'a> {
     Text(&'a str),
@@ -326,18 +324,12 @@ impl<'a> From<Event<'a>> for EventOwned {
     }
 }
 
-#[derive(Debug)]
-struct QuoteSplitter<'a> {
-    string: &'a str,
-    previous_text_node: Option<&'a str>,
-    subsequent_text_node: Option<&'a str>,
-    text_start: usize,
-    possibles: std::iter::Filter<std::str::CharIndices<'a>, IsPossible>,
-    emitted_last: bool,
-}
-
 fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
     let ev = match ch {
+        (SmartQuoteKind::OpenSingle, _) => Event::SmartQuoteSingleOpen,
+        (SmartQuoteKind::CloseSingle, _) => Event::SmartQuoteSingleClose,
+        (SmartQuoteKind::OpenDouble, _) => Event::SmartQuoteDoubleOpen,
+        (SmartQuoteKind::CloseDouble, _) => Event::SmartQuoteDoubleClose,
         (SmartQuoteKind::Open, '\'') => Event::SmartQuoteSingleOpen,
         (SmartQuoteKind::Close, '\'') => Event::SmartQuoteSingleClose,
         (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen,
@@ -384,7 +376,7 @@ impl<'a> Iterator for QuoteSplitter<'a> {
         if let Some((ix, quote_char)) = self.possibles.next() {
             // next_char is either ' or "
             let mut prefix = &self.string[..ix];
-            let mut suffix = &self.string[ix+1..];
+            let mut suffix = &self.string[ix + quote_char.len_utf8()..];
             if prefix.is_empty() {
                 if let Some(prev) = self.previous_text_node {
                     prefix = prev;
@@ -396,10 +388,10 @@ impl<'a> Iterator for QuoteSplitter<'a> {
                 }
             }
             let upto = Some(Event::Text(&self.string[self.text_start..ix]));
-            let quote_event = quote_kind(quote_char as u8, prefix, suffix)
+            let quote_event = quote_kind(quote_char, prefix, suffix)
                 .and_then(|kind| quote_event((kind, quote_char)));
             if quote_event.is_some() {
-                self.text_start = ix + 1;
+                self.text_start = ix + quote_char.len_utf8();
             }
             Some(Thingo { quote_event, upto, post: None })
         } else if !self.emitted_last && self.text_start > 0 {
@@ -412,6 +404,25 @@ impl<'a> Iterator for QuoteSplitter<'a> {
     }
 }
 
+fn quote_is_possible(ch: char) -> bool {
+    match ch {
+        SINGLE_OPEN | SINGLE_CLOSE | DOUBLE_OPEN | DOUBLE_CLOSE | '\'' | '"' => true,
+        _ => false,
+    }
+}
+
+#[derive(Debug)]
+struct QuoteSplitter<'a> {
+    string: &'a str,
+    previous_text_node: Option<&'a str>,
+    subsequent_text_node: Option<&'a str>,
+    text_start: usize,
+    possibles: std::iter::Filter<std::str::CharIndices<'a>, IsPossible>,
+    emitted_last: bool,
+}
+
+type IsPossible = fn (c: &(usize, char)) -> bool;
+
 impl<'a> QuoteSplitter<'a> {
     fn new(string: &'a str, prev: Option<&'a str>, next: Option<&'a str>) -> Self {
         QuoteSplitter {
@@ -421,7 +432,7 @@ impl<'a> QuoteSplitter<'a> {
             text_start: 0,
             possibles: string
                 .char_indices()
-                .filter(|(ix, ch)| *ch == '\'' || *ch == '"'),
+                .filter(|&(_, ch)| quote_is_possible(ch)),
             emitted_last: false,
         }
     }
@@ -459,12 +470,36 @@ enum SmartQuoteKind {
     Open,
     Close,
     Midword,
+    OpenSingle,
+    OpenDouble,
+    CloseSingle,
+    CloseDouble,
+}
+
+impl SmartQuoteKind {
+    fn from_curly(ch: char) -> Option<Self> {
+        if ch == SINGLE_OPEN {
+            Some(SmartQuoteKind::OpenSingle)
+        } else if ch == SINGLE_CLOSE {
+            Some(SmartQuoteKind::CloseSingle)
+        } else if ch == DOUBLE_OPEN {
+            Some(SmartQuoteKind::OpenDouble)
+        } else if ch == DOUBLE_CLOSE {
+            Some(SmartQuoteKind::CloseDouble)
+        } else {
+            None
+        }
+    }
 }
 
 use super::puncttable::is_punctuation;
 
 /// Determines what kind a smart quote should open at this point
-fn quote_kind(character: u8, prefix: &str, suffix: &str) -> Option<SmartQuoteKind> {
+fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteKind> {
+    let curly = SmartQuoteKind::from_curly(character);
+    if curly.is_some() {
+        return curly;
+    }
     let not_italic_ish = |c: &char| { *c != '*' && *c != '~' && *c != '_' && *c != '\'' && *c != '"' };
 
     // Beginning and end of line == whitespace.
@@ -479,7 +514,7 @@ fn quote_kind(character: u8, prefix: &str, suffix: &str) -> Option<SmartQuoteKin
 
     if prev_white && next_white {
         None
-    } else if prev_white && next_char.is_numeric() && character == b'\'' {
+    } else if prev_white && next_char.is_numeric() && character == '\'' {
         // '09 -- force a close quote
         Some(SmartQuoteKind::Midword)
     } else if !prev_white && next_white {
@@ -492,7 +527,7 @@ fn quote_kind(character: u8, prefix: &str, suffix: &str) -> Option<SmartQuoteKin
         Some(SmartQuoteKind::Close)
     } else if not_term_punc(prev_char) && is_punctuation(next_char) {
         Some(SmartQuoteKind::Open)
-    } else if wordy(prev_char) && wordy(next_char) && character == b'\'' {
+    } else if wordy(prev_char) && wordy(next_char) && character == '\'' {
         Some(SmartQuoteKind::Midword)
     } else if is_punctuation(prev_char) && wordy(next_char) {
         Some(SmartQuoteKind::Open)
@@ -501,30 +536,6 @@ fn quote_kind(character: u8, prefix: &str, suffix: &str) -> Option<SmartQuoteKin
     } else {
         None
     }
-}
-
-#[derive(Copy, Clone, PartialEq, Debug)]
-enum MicroTag {
-    None,
-    Italic,
-    Bold,
-    SmallCaps,
-    Sup,
-    Sub,
-    Underline,
-    SingleQuote,
-    DoubleQuote,
-    NoCase,
-}
-
-impl MicroTag {
-    fn is_quote(self) -> bool {
-        match self {
-            MicroTag::SingleQuote | MicroTag::DoubleQuote => true,
-            _ => false,
-        }
-    }
-
 }
 
 #[derive(Debug)]
@@ -543,8 +554,7 @@ impl SFQuoteKind {
     }
 }
 
-#[derive(Debug)]
-struct StackFrame {
-    kind: SFQuoteKind,
-    children: Vec<MicroNode>,
-}
+const SINGLE_OPEN: char = '\u{2018}';
+const SINGLE_CLOSE: char = '\u{2019}';
+const DOUBLE_OPEN: char = '\u{201c}';
+const DOUBLE_CLOSE: char = '\u{201d}';
