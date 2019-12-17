@@ -10,7 +10,7 @@ use crate::helpers::sequence;
 use crate::ir::ConditionalDisambIR;
 use citeproc_io::DateOrRange;
 use csl::{
-    Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
+    Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
 };
 use csl::{AnyVariable, DateVariable};
 

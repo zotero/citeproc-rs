@@ -1,5 +1,6 @@
 use crate::output::micro_html::MicroNode;
 use crate::IngestOptions;
+#[cfg(test)]
 use crate::LocalizedQuotes;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
@@ -19,7 +20,7 @@ fn test_parse_quotes() {
     assert_eq!(
         parse_quotes(
             vec![MicroNode::Text("'hello'".to_owned())],
-            &LocalizedQuotes::simple()
+            &IngestOptions::default_with_quotes(LocalizedQuotes::simple())
         ),
         vec![MicroNode::Quoted {
             is_inner: false,
@@ -170,6 +171,7 @@ fn stamp<'a>(
 fn test_stamp() {
     env_logger::init();
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
+    let options = IngestOptions::default_with_quotes(LocalizedQuotes::simple());
     let inters = vec![
         Intermediate::Event(EventOwned::Text("prefix, ".into())),
         Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
@@ -178,7 +180,7 @@ fn test_stamp() {
         Intermediate::Event(EventOwned::Text("suffix".into())),
     ];
     assert_eq!(
-        &stamp(2, inters.into_iter(), &mut orig),
+        &stamp(2, inters.into_iter(), &mut orig, &options),
         &[
             MicroNode::Text("prefix, '".into()),
             MicroNode::Text("hi".into()),
@@ -195,7 +197,7 @@ fn test_stamp() {
         Intermediate::Event(EventOwned::Text(", suffix".to_owned())),
     ];
     assert_eq!(
-        &stamp(2, inters.into_iter(), &mut orig),
+        &stamp(2, inters.into_iter(), &mut orig, &options),
         &[
             MicroNode::Text("prefix, ".into()),
             MicroNode::Quoted {

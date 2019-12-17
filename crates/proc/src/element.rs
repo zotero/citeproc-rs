@@ -1,7 +1,7 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
 use csl::variables::*;
-use csl::{Affixes, Atom, Bibliography, Element, Style, TextSource};
+use csl::{Bibliography, Element, Style, TextSource};
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where

@@ -458,7 +458,7 @@ impl IrSeq<Markup> {
             ref affixes,
             ref delimiter,
             // TODO: use these
-            ref quotes,
+            quotes: _,
             formatting,
             display,
         } = *self;

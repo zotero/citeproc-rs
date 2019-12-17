@@ -2,7 +2,7 @@ use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
-    Atom, GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
+    GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
     StandardVariable, Style, TextCase, TextElement, TextTermSelector,
 };

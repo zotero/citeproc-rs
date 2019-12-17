@@ -65,7 +65,7 @@ pub fn ref_sequence<'c>(
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Option<&Affixes>,
-    display: Option<DisplayMode>,
+    _display: Option<DisplayMode>,
     quotes: Option<LocalizedQuotes>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
