@@ -8,7 +8,6 @@ fn is_punc(c: char) -> bool {
 // Basically, affixes go outside Quoted elements. So we can just look for text elements that come
 // right after quoted ones.
 pub fn move_punctuation(slice: &mut [InlineElement]) {
-
     if slice.len() >= 2 {
         // Basically windows(2)/peekable() iteration, but &mut.
         let len = slice.len();
@@ -126,8 +125,7 @@ fn find_right_quote_micro<'b>(micro: &'b mut MicroNode) -> Option<RightQuoteInse
 
                 if !children.is_empty() {
                     let len = children.len();
-                    let last_mut =
-                        unsafe { &mut (*((children) as *mut Vec<MicroNode>))[len - 1] };
+                    let last_mut = unsafe { &mut (*((children) as *mut Vec<MicroNode>))[len - 1] };
                     let deeper = find_right_quote_micro(last_mut);
                     if deeper.is_some() {
                         return deeper;
@@ -194,9 +192,9 @@ impl RightQuoteInsertionPoint<'_> {
 fn ends_with_punctuation(i: &InlineElement) -> bool {
     match i {
         InlineElement::Micro(micros) => micros.last().map_or(false, ends_with_punctuation_micro),
-        InlineElement::Quoted { inlines, .. } |
-        InlineElement::Div(_, inlines) |
-        InlineElement::Formatted(inlines, _) => {
+        InlineElement::Quoted { inlines, .. }
+        | InlineElement::Div(_, inlines)
+        | InlineElement::Formatted(inlines, _) => {
             inlines.last().map_or(false, ends_with_punctuation)
         }
         InlineElement::Text(string) => string.chars().last().map_or(false, is_punc),
@@ -206,9 +204,9 @@ fn ends_with_punctuation(i: &InlineElement) -> bool {
 
 fn ends_with_punctuation_micro(i: &MicroNode) -> bool {
     match i {
-        MicroNode::Quoted { children, .. } |
-        MicroNode::NoCase(children) |
-        MicroNode::Formatted(children, _) => {
+        MicroNode::Quoted { children, .. }
+        | MicroNode::NoCase(children)
+        | MicroNode::Formatted(children, _) => {
             children.last().map_or(false, ends_with_punctuation_micro)
         }
         MicroNode::Text(string) => string.chars().last().map_or(false, is_punc),

@@ -75,7 +75,11 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             Some(InlineElement::Formatted(subs, new_f))
         }
 
-        InlineElement::Quoted { is_inner: _, ref localized, ref inlines } => {
+        InlineElement::Quoted {
+            is_inner: _,
+            ref localized,
+            ref inlines,
+        } => {
             let mut flop = state.clone();
             flop.in_inner_quotes = !flop.in_inner_quotes;
             let subs = flop.flip_flop_inlines(inlines);

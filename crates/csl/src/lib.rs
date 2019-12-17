@@ -303,11 +303,16 @@ impl FromNode for Layout {
 }
 
 impl TextTermSelector {
-    fn from_term_and_form<E, FRT, FRTE, TO>(term: &AnyTermName, read_term_form: FRT, read_term_form_extended: FRTE, throw_ordinal: TO) -> Result<Self, E>
-        where
-            FRT: Fn() -> Result<TermForm, E>,
-            FRTE: Fn() -> Result<TermFormExtended, E>,
-            TO: Fn() -> E,
+    fn from_term_and_form<E, FRT, FRTE, TO>(
+        term: &AnyTermName,
+        read_term_form: FRT,
+        read_term_form_extended: FRTE,
+        throw_ordinal: TO,
+    ) -> Result<Self, E>
+    where
+        FRT: Fn() -> Result<TermForm, E>,
+        FRTE: Fn() -> Result<TermFormExtended, E>,
+        TO: Fn() -> E,
     {
         use self::terms::AnyTermName::*;
         match *term {
@@ -336,33 +341,34 @@ impl TextTermSelector {
                 t,
                 read_term_form_extended()?,
             ))),
-            Ordinal(_) => {
-                Err(throw_ordinal())
-            }
+            Ordinal(_) => Err(throw_ordinal()),
         }
     }
 
     pub fn from_term_form_unwrap(term: &str, form: Option<&str>, features: &Features) -> Self {
-        let term = AnyTermName::get_attr(term, features).expect("Could not parse input term as a term.");
+        let term =
+            AnyTermName::get_attr(term, features).expect("Could not parse input term as a term.");
         let ordinal = || panic!("ordinal terms not accessible");
         if let Some(form) = form {
-            let term_form = || Ok(TermForm::get_attr(form, features).expect("Could not parse input term as a term."));
-            let term_form_extended = || Ok(TermFormExtended::get_attr(form, features).expect("Could not parse input term as a term."));
-            TextTermSelector::from_term_and_form(
-                &term,
-                term_form,
-                term_form_extended,
-                ordinal,
-            ).unwrap()
+            let term_form = || {
+                Ok(TermForm::get_attr(form, features)
+                    .expect("Could not parse input term as a term."))
+            };
+            let term_form_extended = || {
+                Ok(TermFormExtended::get_attr(form, features)
+                    .expect("Could not parse input term as a term."))
+            };
+            TextTermSelector::from_term_and_form(&term, term_form, term_form_extended, ordinal)
+                .unwrap()
         } else {
             TextTermSelector::from_term_and_form(
                 &term,
                 || Ok(Default::default()),
                 || Ok(Default::default()),
                 ordinal,
-            ).unwrap()
+            )
+            .unwrap()
         }
-
     }
 }
 
@@ -374,10 +380,7 @@ impl FromNode for TextTermSelector {
             &term,
             || TermForm::from_node(node, info),
             || TermFormExtended::from_node(node, info),
-            || InvalidCsl::new(
-                    node,
-                    "you cannot render an ordinal term directly"
-                ).into()
+            || InvalidCsl::new(node, "you cannot render an ordinal term directly").into(),
         )?)
     }
 }
@@ -1134,9 +1137,7 @@ impl FromNode for TextContent {
 
 impl FromNode for TermPlurality {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let always: Option<String> = TextContent::from_node(node, info)?
-            .0
-            .map(|s| s.into());
+        let always: Option<String> = TextContent::from_node(node, info)?.0.map(|s| s.into());
         let single: Option<TextContent> = max1_child("term", "single", node.children(), info)?;
         let multiple: Option<TextContent> = max1_child("term", "multiple", node.children(), info)?;
         let msg = "<term> must contain either only text content or both <single> and <multiple>";

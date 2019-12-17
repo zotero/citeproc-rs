@@ -1,6 +1,6 @@
+use crate::output::micro_html::MicroNode;
 use crate::IngestOptions;
 use crate::LocalizedQuotes;
-use crate::output::micro_html::MicroNode;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
@@ -9,8 +9,7 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
         original: &original,
         options: &options,
     };
-    let inters: Vec<_> = matcher.intermediates()
-        .collect();
+    let inters: Vec<_> = matcher.intermediates().collect();
     debug!("{:?}", inters);
     stamp(inters.len(), inters.into_iter(), &mut original, options)
 }
@@ -18,16 +17,15 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
 #[test]
 fn test_parse_quotes() {
     assert_eq!(
-        parse_quotes(vec![MicroNode::Text("'hello'".to_owned())], &LocalizedQuotes::simple()),
-        vec![
-            MicroNode::Quoted {
-                is_inner: false,
-                localized: LocalizedQuotes::simple(),
-                children: vec![
-                    MicroNode::Text("hello".to_owned()),
-                ]
-            }
-        ]
+        parse_quotes(
+            vec![MicroNode::Text("'hello'".to_owned())],
+            &LocalizedQuotes::simple()
+        ),
+        vec![MicroNode::Quoted {
+            is_inner: false,
+            localized: LocalizedQuotes::simple(),
+            children: vec![MicroNode::Text("hello".to_owned()),]
+        }]
     );
 }
 
@@ -85,12 +83,19 @@ impl QuotedStack {
     }
 }
 
-fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate>, orig: &mut Vec<MicroNode>, options: &IngestOptions) -> Vec<MicroNode> {
+fn stamp<'a>(
+    len_hint: usize,
+    intermediates: impl Iterator<Item = Intermediate>,
+    orig: &mut Vec<MicroNode>,
+    options: &IngestOptions,
+) -> Vec<MicroNode> {
     let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
     let mut drain = |start: usize, end: usize, stack: &mut QuotedStack| {
         debug!("{}..{}", start - drained, end - drained);
-        stack.mut_ref().extend(orig.drain(start - drained .. end - drained));
+        stack
+            .mut_ref()
+            .extend(orig.drain(start - drained..end - drained));
         drained += end - start;
     };
     let mut range_wip: Option<(usize, usize)> = None;
@@ -139,7 +144,7 @@ fn stamp<'a>(len_hint: usize, intermediates: impl Iterator<Item = Intermediate>,
                     }
                     _ => unimplemented!(),
                 }
-            },
+            }
             // Move sequential index references out of the array together where possible
             Intermediate::Index(ix) => {
                 if let Some(ref mut range) = range_wip {
@@ -196,10 +201,7 @@ fn test_stamp() {
             MicroNode::Quoted {
                 localized: LocalizedQuotes::simple(),
                 is_inner: false,
-                children: vec![
-                    MicroNode::Text("hi".into()),
-                    MicroNode::Text("ho".into()),
-                ]
+                children: vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into()),]
             },
             MicroNode::Text(", suffix".into()),
         ]
@@ -217,14 +219,12 @@ fn leaning_text(node: &MicroNode, rightmost: bool) -> Option<&str> {
     match node {
         MicroNode::Quoted { ref children, .. }
         | MicroNode::NoCase(ref children)
-        | MicroNode::Formatted(ref children, _) => {
-            if rightmost {
-                children.last()
-            } else {
-                children.first()
-            }
-            .and_then(|n| leaning_text(n, rightmost))
+        | MicroNode::Formatted(ref children, _) => if rightmost {
+            children.last()
+        } else {
+            children.first()
         }
+        .and_then(|n| leaning_text(n, rightmost)),
         MicroNode::Text(text) => Some(text.as_str()),
     }
 }
@@ -243,21 +243,26 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for EachSplitter<'a, I> {
     type Item = Intermediate;
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            EachSplitter::Index(ref mut opt_ix) => mem::replace(opt_ix, None).map(Intermediate::Index),
+            EachSplitter::Index(ref mut opt_ix) => {
+                mem::replace(opt_ix, None).map(Intermediate::Index)
+            }
             EachSplitter::Splitter {
                 index,
                 ref mut splitter,
                 ref mut seen_any,
             } => {
-                let nxt = splitter.next()
+                let nxt = splitter
+                    .next()
                     .map(|ev| Intermediate::Event(ev.into()))
-                    .or_else(|| mem::replace(seen_any, None)
-                        .and_then(|any| if any {
-                            None
-                        } else {
-                            Some(Intermediate::Index(*index))
+                    .or_else(|| {
+                        mem::replace(seen_any, None).and_then(|any| {
+                            if any {
+                                None
+                            } else {
+                                Some(Intermediate::Index(*index))
+                            }
                         })
-                    );
+                    });
                 if nxt.is_some() {
                     *seen_any = Some(true);
                 }
@@ -269,16 +274,22 @@ impl<'a, I: Iterator<Item = Event<'a>>> Iterator for EachSplitter<'a, I> {
 
 impl<'a> QuoteMatcher<'a> {
     fn intermediates(&'a self) -> impl Iterator<Item = Intermediate> + 'a {
-        self.original.iter().enumerate()
+        self.original
+            .iter()
+            .enumerate()
             .flat_map(move |(ix, node)| match node {
                 MicroNode::Quoted { ref children, .. }
                 | MicroNode::NoCase(ref children)
-                    | MicroNode::Formatted(ref children, _) => {
-                        EachSplitter::Index(Some(ix))
-                    },
+                | MicroNode::Formatted(ref children, _) => EachSplitter::Index(Some(ix)),
                 MicroNode::Text(ref string) => {
-                    let prev = self.original.get(ix.wrapping_sub(1)).and_then(|n| leaning_text(n, true));
-                    let next = self.original.get(ix + 1).and_then(|n| leaning_text(n, false));
+                    let prev = self
+                        .original
+                        .get(ix.wrapping_sub(1))
+                        .and_then(|n| leaning_text(n, true));
+                    let next = self
+                        .original
+                        .get(ix + 1)
+                        .and_then(|n| leaning_text(n, false));
                     let splitter = QuoteSplitter::new(&string, prev, next).events();
                     EachSplitter::Splitter {
                         index: ix,
@@ -288,7 +299,6 @@ impl<'a> QuoteMatcher<'a> {
                 }
             })
     }
-
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -365,8 +375,7 @@ impl<'a> Iterator for Thingo<'a> {
         if self.quote_event.is_none() {
             return None;
         }
-        mem::replace(&mut self.upto, None)
-            .or_else(|| mem::replace(&mut self.quote_event, None))
+        mem::replace(&mut self.upto, None).or_else(|| mem::replace(&mut self.quote_event, None))
     }
 }
 
@@ -393,7 +402,11 @@ impl<'a> Iterator for QuoteSplitter<'a> {
             if quote_event.is_some() {
                 self.text_start = ix + quote_char.len_utf8();
             }
-            Some(Thingo { quote_event, upto, post: None })
+            Some(Thingo {
+                quote_event,
+                upto,
+                post: None,
+            })
         } else if !self.emitted_last && self.text_start > 0 {
             // the remainder, after the last quote char
             self.emitted_last = true;
@@ -421,7 +434,7 @@ struct QuoteSplitter<'a> {
     emitted_last: bool,
 }
 
-type IsPossible = fn (c: &(usize, char)) -> bool;
+type IsPossible = fn(c: &(usize, char)) -> bool;
 
 impl<'a> QuoteSplitter<'a> {
     fn new(string: &'a str, prev: Option<&'a str>, next: Option<&'a str>) -> Self {
@@ -438,11 +451,10 @@ impl<'a> QuoteSplitter<'a> {
     }
 
     fn events(self) -> impl Iterator<Item = Event<'a>> {
-        self.flat_map(|x| x)
-            .filter(|ev| match ev {
-                Event::Text("") => false,
-                _ => true,
-            })
+        self.flat_map(|x| x).filter(|ev| match ev {
+            Event::Text("") => false,
+            _ => true,
+        })
     }
 }
 
@@ -454,15 +466,18 @@ fn test_quote_splitter_simple() {
     for event in splitter.events() {
         events.push(event);
     }
-    assert_eq!(events, vec![
-        Event::Text("hello, I"),
-        Event::SmartMidwordInvertedComma,
-        Event::Text("m a man with a plan, "),
-        Event::SmartQuoteDoubleOpen,
-        Event::Text("Canal Panama"),
-        Event::SmartQuoteDoubleClose,
-        Event::Text("."),
-    ]);
+    assert_eq!(
+        events,
+        vec![
+            Event::Text("hello, I"),
+            Event::SmartMidwordInvertedComma,
+            Event::Text("m a man with a plan, "),
+            Event::SmartQuoteDoubleOpen,
+            Event::Text("Canal Panama"),
+            Event::SmartQuoteDoubleClose,
+            Event::Text("."),
+        ]
+    );
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -500,11 +515,16 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
     if curly.is_some() {
         return curly;
     }
-    let not_italic_ish = |c: &char| { *c != '*' && *c != '~' && *c != '_' && *c != '\'' && *c != '"' };
+    let not_italic_ish = |c: &char| *c != '*' && *c != '~' && *c != '_' && *c != '\'' && *c != '"';
 
     // Beginning and end of line == whitespace.
     let next_char = suffix.chars().filter(not_italic_ish).nth(0).unwrap_or(' ');
-    let prev_char = prefix.chars().rev().filter(not_italic_ish).nth(0).unwrap_or(' ');
+    let prev_char = prefix
+        .chars()
+        .rev()
+        .filter(not_italic_ish)
+        .nth(0)
+        .unwrap_or(' ');
 
     let next_white = next_char.is_whitespace();
     let prev_white = prev_char.is_whitespace();

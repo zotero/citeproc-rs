@@ -19,7 +19,17 @@ impl Disambiguation<Markup> for Style {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(db, ctx, state, &els, "".into(), Some(stack), None, None, None)
+        ref_sequence(
+            db,
+            ctx,
+            state,
+            &els,
+            "".into(),
+            Some(stack),
+            None,
+            None,
+            None,
+        )
     }
 }
 

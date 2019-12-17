@@ -4,9 +4,9 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use anyhow::Error;
 use super::humans::{CitationItem, CiteprocJsInstruction};
 use super::{Format, Mode, TestCase};
+use anyhow::Error;
 use citeproc_io::Reference;
 
 pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {

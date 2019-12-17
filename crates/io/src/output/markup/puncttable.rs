@@ -349,4 +349,3 @@ mod tests {
         assert!(!is_punctuation('\u{1BCA0}'));
     }
 }
-
