@@ -189,19 +189,21 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         } else {
             b
         };
-        match (pre, suf) {
-            (true, true) => b,
-
-            (false, true) => self.seq(once(self.plain(&affixes.unwrap().prefix)).chain(once(b))),
-
-            (true, false) => self.seq(once(b).chain(once(self.plain(&affixes.unwrap().suffix)))),
-
-            (false, false) => self.seq(
-                once(self.plain(&affixes.unwrap().prefix))
-                    .chain(once(b))
-                    .chain(once(self.plain(&affixes.unwrap().suffix))),
-            ),
+        let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_ref()) {
+            if !prefix.is_empty() {
+                self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
+            } else {
+                b
+            }
+        } else {
+            b
+        };
+        if let Some(suffix) = affixes.map(|a| a.suffix.as_ref()) {
+            if !suffix.is_empty() {
+                self.append_suffix(&mut pre_and_content, suffix);
+            }
         }
+        pre_and_content
     }
 
     /// Do any punctuation-moving here.

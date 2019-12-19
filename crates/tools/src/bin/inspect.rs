@@ -40,7 +40,7 @@ struct Inspect {
 
 fn main() -> Result<(), Error> {
     use env_logger::Env;
-    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug")).init();
+    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug,citeproc_io=debug")).init();
     let opt = Inspect::from_args();
     let mut path = workspace_root();
     path.push("crates");
@@ -113,7 +113,6 @@ fn main() -> Result<(), Error> {
             } else {
                 println!("{:#?}", locale);
             }
-            // println!("{}", serde_sexpr::to_string(&locale)?);
         }
     }
     Ok(())
@@ -126,5 +125,6 @@ fn debug_gen4_flat(eng: &Processor, cite_id: CiteId) -> Result<String, Error> {
         .ir
         .flatten(&fmt)
         .ok_or_else(|| anyhow!("flatten was none"))?;
-    Ok(serde_sexpr::to_string(&flat)?)
+    Ok(format!("{:#?}", &flat))
+    // Ok(serde_sexpr::to_string(&flat)?)
 }

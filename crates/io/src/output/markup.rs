@@ -119,6 +119,9 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn text_node(&self, text: String, f: Option<Formatting>) -> Vec<InlineElement> {
+        if text.is_empty() {
+            return vec![];
+        }
         let v = vec![Text(text)];
         self.fmt_vec(v, f)
     }

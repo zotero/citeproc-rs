@@ -1,46 +1,41 @@
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
 
+
 pub fn append_suffix(pre_and_content: &mut Vec<InlineElement>, mut suffix: Vec<MicroNode>) {
-    fn normal_append(preand: &mut Vec<InlineElement>, suffix: Vec<MicroNode>) {
-        preand.push(InlineElement::Micro(suffix));
+    if let Some(last) = pre_and_content.last_mut() {
+        // Must be followed by some text
+        if let Some(string) = suffix.first_mut().and_then(find_string_left_micro) {
+            append_suffix_inner(last, string);
+        }
     }
-    if let Some(insertion_point) = pre_and_content.last_mut().and_then(find_right_quote) {
+    pre_and_content.push(InlineElement::Micro(suffix));
+}
+
+pub fn append_suffix_inner(last: &mut InlineElement, suffix: &mut String) -> Option<()> {
+    debug!("append_suffix_inner {:?} {:?}", last, suffix);
+    if let Some(mut insertion_point) = find_right_quote(last) {
         // Last element burrowed down to a right quotation mark
 
-        // Must be followed by some text
-        let string = if let Some(x) = suffix.first_mut().and_then(find_string_left_micro) {
-            x
-        } else {
-            return normal_append(pre_and_content, suffix);
-        };
-
         // That text must be is_punc
-        if !string.chars().nth(0).map_or(false, is_punc) {
-            return normal_append(pre_and_content, suffix);
+        if !suffix.chars().nth(0).map_or(false, is_punc) {
+            return None;
         }
 
         // O(n), but n tends to be 2, like with ", " so this is ok
-        let c = string.remove(0);
+        let c = suffix.remove(0);
 
         // "Something?," is bad, so stop at removing it from the ", "
         if insertion_point.ends_with_punctuation() {
-            return normal_append(pre_and_content, suffix);
+            return None;
         }
 
-        let mut s = String::new();
-        s.push(c);
-
-        match insertion_point {
-            RightQuoteInsertionPoint::Inline(inlines) => {
-                inlines.push(InlineElement::Text(s));
-            }
-            RightQuoteInsertionPoint::Micro(children) => {
-                children.push(MicroNode::Text(s));
-            }
-        }
-    } else if let Some(last) = pre_and_content.last_mut() {
-    };
+        // Will always be Some, as we established this with ends_with_punctuation()
+        let insert = insertion_point.last_string_mut()?;
+        insert.push(c);
+    } else {
+    }
+    Some(())
 }
 
 fn is_punc(c: char) -> bool {
@@ -71,17 +66,10 @@ pub fn move_punctuation(slice: &mut [InlineElement]) {
         // Basically windows(2)/peekable() iteration, but &mut.
         let len = slice.len();
         for i in 0..len - 1 {
-            if let Some((first, rest)) = (&mut slice[i..]).split_first_mut() {
+            if let Some((this_last, rest)) = (&mut slice[i..]).split_first_mut() {
                 let next = rest
                     .first_mut()
                     .expect("only iterated to len-1, so infallible");
-
-                // Quoted elements are less common, so search for it first
-                let insertion_point = if let Some(x) = find_right_quote(first) {
-                    x
-                } else {
-                    continue;
-                };
 
                 // Must be followed by some text
                 let string = if let Some(x) = find_string_left(next) {
@@ -90,30 +78,7 @@ pub fn move_punctuation(slice: &mut [InlineElement]) {
                     continue;
                 };
 
-                // That text must be is_punc
-                if !string.chars().nth(0).map_or(false, is_punc) {
-                    continue;
-                }
-
-                // O(n), but n tends to be 2, like with ", " so this is ok
-                let c = string.remove(0);
-
-                // "Something?," is bad, so stop at removing it from the ", "
-                if insertion_point.ends_with_punctuation() {
-                    continue;
-                }
-
-                let mut s = String::new();
-                s.push(c);
-
-                match insertion_point {
-                    RightQuoteInsertionPoint::Inline(inlines) => {
-                        inlines.push(InlineElement::Text(s));
-                    }
-                    RightQuoteInsertionPoint::Micro(children) => {
-                        children.push(MicroNode::Text(s));
-                    }
-                }
+                append_suffix_inner(this_last, string);
             }
         }
     } else {
