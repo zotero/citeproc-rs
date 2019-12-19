@@ -45,8 +45,8 @@ use std::borrow::Cow;
 
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
-use unic_segment::{WordBoundIndices, WordBounds, Words, Graphemes, GraphemeIndices};
 use csl::{FontVariant, VerticalAlignment};
+use unic_segment::{GraphemeIndices, Graphemes, WordBoundIndices, WordBounds, Words};
 
 use phf::phf_set;
 
@@ -134,150 +134,154 @@ static SPEC_STOPWORDS: phf::Set<&'static str> = phf_set! {
     "yet",
 };
 
-static CITEPROC_JS_STOPWORD_REGEX: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+static CITEPROC_JS_STOPWORD_REGEX: once_cell::sync::OnceCell<regex::Regex> =
+    once_cell::sync::OnceCell::new();
 fn stopword_regex() -> &'static regex::Regex {
     let re = concat![
         // Match case insensitive (regex crate's simple case folding is fine)
         "(?i)",
         // Match the start only
         "^(?:",
-        "about|",
-        "above|",
-        "across|",
-        "afore|",
-        "after|",
-        "against|",
-        "al|",
-        "along|",
-        "alongside|",
-        "amid|",
-        "amidst|",
-        "among|",
-        "amongst|",
-        "anenst|",
-        "apropos|",
-        "apud|",
-        "around|",
-        "as|",
-        "aside|",
-        "astride|",
-        "at|",
-        "athwart|",
-        "atop|",
-        "barring|",
-        "before|",
-        "behind|",
-        "below|",
-        "beneath|",
-        "beside|",
-        "besides|",
-        "between|",
-        "beyond|",
-        "but|",
-        "by|",
-        "circa|",
-        "despite|",
-        "down|",
-        "during|",
-        "et|",
-        "except|",
-        "for|",
-        "forenenst|",
-        "from|",
-        "given|",
-        "in|",
-        "inside|",
-        "into|",
-        "lest|",
-        "like|",
-        "modulo|",
-        "near|",
-        "next|",
+        // Sort lines by length so that longer matches are preferred
+        // vim: visual select, then, type !awk '{ print length(), $0 | "sort -n" }'
         "notwithstanding|",
-        "of|",
-        "off|",
-        "on|",
-        "onto|",
-        "out|",
-        "over|",
-        "per|",
-        "plus|",
-        "pro|",
-        "qua|",
-        "sans|",
-        "since|",
-        "than|",
-        "through|",
-        "thru|",
-        "throughout|",
-        "thruout|",
-        "till|",
-        "to|",
-        "toward|",
-        "towards|",
-        "under|",
-        "underneath|",
-        "until|",
-        "unto|",
-        "up|",
-        "upon|",
-        "versus|",
-        "vs.|",
-        "v.|",
-        "vs|",
-        "v|",
-        "via|",
-        "vis-à-vis|",
-        "with|",
-        "within|",
-        "without|",
-        "according to|",
-        "ahead of|",
-        "apart from|",
-        "as for|",
-        "as of|",
-        "as per|",
-        "as regards|",
-        "aside from|",
-        "back to|",
-        "because of|",
-        "close to|",
-        "due to|",
-        "except for|",
-        "far from|",
-        "inside of|",
-        "instead of|",
-        "near to|",
-        "next to|",
-        "on to|",
-        "out from|",
-        "out of|",
-        "outside of|",
-        "prior to|",
-        "pursuant to|",
-        "rather than|",
         "regardless of|",
-        "such as|",
-        "that of|",
-        "up to|",
+        "according to|",
+        "rather than|",
+        "pursuant to|",
+        "vis-à-vis|",
+        "underneath|",
+        "throughout|",
+        "outside of|",
+        "instead of|",
+        "except for|",
+        "because of|",
+        "aside from|",
+        "as regards|",
+        "apart from|",
+        "inside of|",
+        "forenenst|",
+        "alongside|",
         "where as|",
-        "or|",
+        "prior to|",
+        "out from|",
+        "far from|",
+        "close to|",
+        "ahead of|",
+        "without|",
+        "towards|",
+        "thruout|",
+        "through|",
+        "that of|",
+        "such as|",
+        "next to|",
+        "near to|",
+        "despite|",
+        "between|",
+        "besides|",
+        "beneath|",
+        "barring|",
+        "back to|",
+        "athwart|",
+        "astride|",
+        "apropos|",
+        "amongst|",
+        "against|",
+        "within|",
+        "versus|",
+        "toward|",
+        "out of|",
+        "modulo|",
+        "inside|",
+        "except|",
+        "during|",
+        "due to|",
+        "beyond|",
+        "beside|",
+        "behind|",
+        "before|",
+        "as per|",
+        "as for|",
+        "around|",
+        "anenst|",
+        "amidst|",
+        "across|",
+        "up to|",
+        "until|",
+        "under|",
+        "since|",
+        "on to|",
+        "given|",
+        "circa|",
+        "below|",
+        "aside|",
+        "as of|",
+        "among|",
+        "along|",
+        "after|",
+        "afore|",
+        "above|",
+        "about|",
+        "with|",
+        "upon|",
+        "unto|",
+        "till|",
+        "thru|",
+        "than|",
+        "sans|",
+        "plus|",
+        "over|",
+        "onto|",
+        "next|",
+        "near|",
+        "like|",
+        "lest|",
+        "into|",
+        "from|",
+        "down|",
+        "atop|",
+        "apud|",
+        "amid|",
         "yet|",
-        "so|",
-        "and|",
-        "nor|",
-        "a|",
-        "an|",
-        "the|",
-        "c|",
-        "ca|",
-        // textcase_SkipNameParticlesInTitleCase
-        "de|",
-        "d|",
+        "vs.|",
         "von|",
-        "van",
+        "via|",
+        "the|",
+        "qua|",
+        "pro|",
+        "per|",
+        "out|",
+        "off|",
+        "nor|",
+        "for|",
+        "but|",
+        "and|",
+        "vs|",
+        "van|",
+        "v.|",
+        "up|",
+        "to|",
+        "so|",
+        "or|",
+        "on|",
+        "of|",
+        "in|",
+        "et|",
+        "de|",
+        "ca|",
+        "by|",
+        "at|",
+        "as|",
+        "an|",
+        "al|",
+        "v|",
+        "c|",
+        "a",
         // Skip the | on the last one
-        ")$"
+        ")\\s|",
+        // John d’Doe
+        "(?-i)d\u{2019}[[:upper:]]|",
+        "(?i)of-"
     ];
 
     CITEPROC_JS_STOPWORD_REGEX.get_or_init(|| regex::Regex::new(re).unwrap())
@@ -285,12 +289,17 @@ fn stopword_regex() -> &'static regex::Regex {
 
 #[test]
 fn stopwords() {
+    fn is_stopword(word_and_rest: &str) -> bool {
+        stopword_regex().is_match(word_and_rest)
+    }
+
     assert!(is_stopword("and"));
     assert!(!is_stopword("grandiloquent"));
 }
 
-fn is_stopword(word: &str) -> bool {
-    stopword_regex().is_match(word)
+/// Returns the length of the matched word
+fn is_stopword(word_and_rest: &str) -> Option<usize> {
+    stopword_regex().find(word_and_rest).map(|mat| mat.end())
 }
 
 fn upper_word_to_title(word: &str) -> Option<String> {
@@ -307,49 +316,89 @@ fn upper_word_to_title(word: &str) -> Option<String> {
     None
 }
 
-fn transform_sentence_case(mut s: String, seen_one: bool, is_last: bool, is_uppercase: bool) -> String {
+fn transform_sentence_case(
+    mut s: String,
+    seen_one: bool,
+    is_last: bool,
+    is_uppercase: bool,
+) -> String {
     if is_uppercase {
-        transform_each_word(&s, seen_one, is_last, |word, is_first, no_stop| {
-            if is_first {
-                if let Some(upper) = upper_word_to_title(word) {
-                    return Cow::Owned(upper);
+        transform_each_word(
+            &s,
+            seen_one,
+            is_last,
+            |word, _word_and_rest, is_first, no_stop| {
+                if is_first {
+                    if let Some(upper) = upper_word_to_title(word) {
+                        return (Cow::Owned(upper), None);
+                    }
                 }
-            }
-            Cow::Owned(word.to_lowercase())
-        })
+                (Cow::Owned(word.to_lowercase()), None)
+            },
+        )
     } else {
         transform_first_word(s, transform_uppercase_first)
     }
 }
 
-fn title_case_word(word: &str, entire_is_uppercase: bool, no_stopword: bool) -> Cow<'_, str> {
+fn title_case_word<'a>(
+    word: &'a str,
+    word_and_rest: &'a str,
+    entire_is_uppercase: bool,
+    no_stopword: bool,
+) -> (Cow<'a, str>, Option<usize>) {
     let expect = "only called with nonempty words";
     debug!("title_case_word {}", word);
-    if !no_stopword && is_stopword(word) {
-        return Cow::Owned(word.to_lowercase());
+    if !no_stopword {
+        if let Some(mut match_len) = is_stopword(word_and_rest) {
+            // drop the trailing whitespace
+            let matched = &word_and_rest[..match_len];
+            let last_char = matched.chars().rev().nth(0).map_or(0, |c| c.len_utf8());
+            match_len = match_len - last_char;
+            let lowered = word_and_rest[..match_len].to_lowercase();
+            return (Cow::Owned(lowered), Some(match_len));
+        }
     }
-    if !word.chars().any(|c| c.is_ascii_alphabetic()) {
+    if !word.chars().any(|c| c.is_ascii_alphabetic() || c == '.') {
         // Entirely non-English
         // e.g. "β" in "β-Carotine"
-        return Cow::Borrowed(word);
+        return (Cow::Borrowed(word), None);
     }
     if entire_is_uppercase {
         if let Some(ret) = upper_word_to_title(word) {
-            return Cow::Owned(ret);
+            return (Cow::Owned(ret), None);
         }
     }
-    transform_first_char_of_word(word, |c| c.to_uppercase())
+    (
+        transform_first_char_of_word(word, |c| c.to_uppercase()),
+        None,
+    )
 }
 
 fn transform_title_case(s: &str, seen_one: bool, is_last: bool) -> String {
-    transform_each_word(&s, seen_one, is_last, |word, _is_first, no_stop| title_case_word(word, false, no_stop))
+    transform_each_word(
+        &s,
+        seen_one,
+        is_last,
+        |word, word_and_rest, _is_first, no_stop| {
+            title_case_word(word, word_and_rest, false, no_stop)
+        },
+    )
 }
 
-fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl Fn(&str, bool, bool) -> Cow<'_, str>) -> String {
+fn transform_each_word<'a, F>(
+    mut s: &'a str,
+    seen_one: bool,
+    is_last: bool,
+    transform: F,
+) -> String
+where
+    F: Fn(&'a str, &'a str, bool, bool) -> (Cow<'a, str>, Option<usize>),
+{
     let mut acc = String::with_capacity(s.len());
     let mut is_first = !seen_one;
-    let mut bounds = WordBoundIndices::new(s).peekable();
-    for (ix, substr) in bounds {
+    let mut bounds = WordBoundIndices::new(s);
+    while let Some((ix, substr)) = bounds.next() {
         if is_word(substr) {
             let before = &s[..ix].chars().rev().filter(|c| !c.is_whitespace()).nth(0);
             let follows_colon = *before == Some(':')
@@ -360,8 +409,13 @@ fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl F
             let is_last = is_last && (rest.is_empty() || !is_word(rest));
             let no_stopword = is_first || is_last || follows_colon;
             let word = substr;
-            let tx = transform(word, is_first, no_stopword);
+            let (tx, fast_forward) = transform(word, &s[ix..], is_first, no_stopword);
             acc.push_str(&tx);
+            if let Some(ff) = fast_forward {
+                s = &s[ix + ff..];
+                debug!("fast_forward to {}", s);
+                bounds = WordBoundIndices::new(s);
+            }
         } else {
             acc.push_str(substr);
         }
@@ -406,37 +460,44 @@ impl IngestOptions {
         }
         cow
     }
-    pub fn apply_text_case_inner(&self, inlines: &mut [InlineElement], mut seen_one: bool, is_uppercase: bool) -> bool {
+    pub fn apply_text_case_inner(
+        &self,
+        inlines: &mut [InlineElement],
+        mut seen_one: bool,
+        is_uppercase: bool,
+    ) -> bool {
         let mut mine = false;
         let len = inlines.len();
         for (ix, inline) in inlines.iter_mut().enumerate() {
             let is_last = ix == len - 1;
             // order or short-circuits matters
             match inline {
-
                 InlineElement::Text(txt) => {
                     let text = std::mem::replace(txt, String::new());
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
-                },
+                }
                 InlineElement::Micro(micros) => {
-                    seen_one = self.apply_text_case_micro_inner(micros.as_mut(), seen_one, is_uppercase) || seen_one;
+                    seen_one =
+                        self.apply_text_case_micro_inner(micros.as_mut(), seen_one, is_uppercase)
+                            || seen_one;
                 }
                 InlineElement::Quoted { inlines, .. }
                 | InlineElement::Div(_, inlines)
-                    | InlineElement::Anchor {
-                        content: inlines,
-                        ..
-                    }
-                => {
-                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase) || seen_one;
+                | InlineElement::Anchor {
+                    content: inlines, ..
+                } => {
+                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase)
+                        || seen_one;
                 }
-                InlineElement::Formatted(inlines, formatting) if
-                    formatting.font_variant != Some(FontVariant::SmallCaps)
-                    && formatting.vertical_alignment != Some(VerticalAlignment::Superscript)
-                    && formatting.vertical_alignment != Some(VerticalAlignment::Subscript)
-                => {
-                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase) || seen_one;
+                InlineElement::Formatted(inlines, formatting)
+                    if formatting.font_variant != Some(FontVariant::SmallCaps)
+                        && formatting.vertical_alignment
+                            != Some(VerticalAlignment::Superscript)
+                        && formatting.vertical_alignment != Some(VerticalAlignment::Subscript) =>
+                {
+                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase)
+                        || seen_one;
                 }
                 InlineElement::Formatted(inlines, _) => {
                     seen_one = seen_one || self.contains_word(inlines.as_ref());
@@ -449,7 +510,12 @@ impl IngestOptions {
         let is_uppercase = self.is_uppercase_micro(micros);
         self.apply_text_case_micro_inner(micros, false, is_uppercase);
     }
-    pub fn apply_text_case_micro_inner(&self, micros: &mut [MicroNode], mut seen_one: bool, is_uppercase: bool) -> bool {
+    pub fn apply_text_case_micro_inner(
+        &self,
+        micros: &mut [MicroNode],
+        mut seen_one: bool,
+        is_uppercase: bool,
+    ) -> bool {
         let mut mine = false;
         let len = micros.len();
         for (ix, micro) in micros.iter_mut().enumerate() {
@@ -469,7 +535,9 @@ impl IngestOptions {
                     seen_one = seen_one || self.contains_word_micro(children.as_ref());
                 }
                 MicroNode::Formatted(children, _) | MicroNode::Quoted { children, .. } => {
-                    seen_one = self.apply_text_case_micro_inner(children.as_mut(), seen_one, is_uppercase) || seen_one;
+                    seen_one =
+                        self.apply_text_case_micro_inner(children.as_mut(), seen_one, is_uppercase)
+                            || seen_one;
                 }
             }
         }
@@ -487,13 +555,17 @@ impl IngestOptions {
     fn is_uppercase_micro(&self, micros: &[MicroNode]) -> bool {
         any_micros(any_lowercase, true, micros)
     }
-    pub fn transform_case(&self, s: String, seen_one: bool, is_last: bool, entire_is_uppercase: bool) -> String {
+    pub fn transform_case(
+        &self,
+        s: String,
+        seen_one: bool,
+        is_last: bool,
+        entire_is_uppercase: bool,
+    ) -> String {
         match self.text_case {
             TextCase::Lowercase => s.to_lowercase(),
             TextCase::Uppercase => s.to_uppercase(),
-            TextCase::CapitalizeFirst => {
-                transform_first_word(s, transform_uppercase_first)
-            }
+            TextCase::CapitalizeFirst => transform_first_word(s, transform_uppercase_first),
             TextCase::Sentence if !seen_one => {
                 transform_sentence_case(s, seen_one, is_last, entire_is_uppercase)
             }
@@ -502,7 +574,9 @@ impl IngestOptions {
                 debug!("Title casing: {:?}", s);
                 transform_title_case(&s, seen_one, is_last)
             }
-            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _, _| transform_uppercase_first(word)),
+            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _, _, _| {
+                (transform_uppercase_first(word), None)
+            }),
             TextCase::None | _ => s,
         }
     }
@@ -525,12 +599,9 @@ fn any_inlines<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, inlines: &[Inline
         InlineElement::Quoted { inlines, .. }
         | InlineElement::Div(_, inlines)
         | InlineElement::Anchor {
-            content: inlines,
-            ..
+            content: inlines, ..
         }
-        | InlineElement::Formatted(inlines, _) => {
-            any_inlines(f, invert, inlines.as_ref()) ^ invert
-        }
+        | InlineElement::Formatted(inlines, _) => any_inlines(f, invert, inlines.as_ref()) ^ invert,
     }) ^ invert
 }
 
@@ -545,8 +616,12 @@ fn any_micros<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, micros: &[MicroNod
 
 #[test]
 fn test_any_micros() {
-    fn parse(x: &str) -> Vec<MicroNode> { MicroNode::parse(x, &Default::default()) }
-    fn upper(x: &str) -> bool { any_micros(any_lowercase, true, &parse(x)) }
+    fn parse(x: &str) -> Vec<MicroNode> {
+        MicroNode::parse(x, &Default::default())
+    }
+    fn upper(x: &str) -> bool {
+        any_micros(any_lowercase, true, &parse(x))
+    }
     assert_eq!(upper("Hello, <sup>superscript</sup>"), false);
     assert_eq!(upper("HELLOSUPERSCRIPT"), true);
     assert_eq!(upper("HELLO, <sup>SUPERSCRIPT</sup>"), true);

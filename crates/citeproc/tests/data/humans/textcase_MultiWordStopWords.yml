@@ -1,0 +1,17 @@
+mode: citation
+result: Test Should Pass instead of Failing
+
+input:
+  - id: ITEM-1
+    type: book
+    title: 'Test should pass instead of failing'
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <text variable="title" text-case="title" />
+      </layout>
+    </citation>
+  </style>
