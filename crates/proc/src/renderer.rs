@@ -2,7 +2,7 @@ use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
-    GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
+    GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
     StandardVariable, Style, TextCase, TextElement, TextTermSelector, Variable,
 };
@@ -25,6 +25,21 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
         match self {
             GenericContext::Cit(ctx) => ctx.locale,
             GenericContext::Ref(ctx) => ctx.locale,
+        }
+    }
+    pub fn cite_lang(&self) -> Option<&Lang> {
+        let refr = self.reference();
+        refr.language.as_ref()
+    }
+    /// https://docs.citationstyles.org/en/stable/specification.html#non-english-items
+    pub fn is_english(&self) -> bool {
+        let sty = self.style();
+        let cite = self.cite_lang();
+        // Bit messy but matches the spec wording
+        if sty.default_locale.is_english() {
+            cite.map_or(true, |l| l.is_english())
+        } else {
+            cite.map_or(false, |l| l.is_english())
         }
     }
     pub fn style(&self) -> &Style {
@@ -200,6 +215,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                     quotes: self.quotes(),
+                    is_english: self.ctx.is_english(),
                     ..Default::default()
                 };
                 fmt.affixed_text(
@@ -247,6 +263,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             replace_hyphens: number.variable.should_replace_hyphens(),
             text_case: number.text_case,
             quotes: self.quotes(),
+            is_english: self.ctx.is_english(),
             ..Default::default()
         };
         let b = fmt.ingest(&string, &options);
@@ -280,6 +297,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             text_case: text.text_case,
             quotes: self.quotes(),
             strip_periods: text.strip_periods,
+            is_english: self.ctx.is_english(),
             ..Default::default()
         };
         let hyper = match var {
@@ -297,6 +315,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             text_case: text.text_case,
             quotes: self.quotes(),
             strip_periods: text.strip_periods,
+            is_english: self.ctx.is_english(),
             ..Default::default()
         };
         Some(self.render_text_el(value, text, &options, None))
@@ -314,6 +333,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 text_case: text.text_case,
                 quotes: self.quotes(),
                 strip_periods: text.strip_periods,
+                is_english: self.ctx.is_english(),
                 ..Default::default()
             };
             self.render_text_el(val, text, &options, None)
@@ -388,6 +408,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             let options = IngestOptions {
                 text_case: label.text_case,
                 quotes: self.quotes(),
+                is_english: self.ctx.is_english(),
                 ..Default::default()
             };
             self.ctx

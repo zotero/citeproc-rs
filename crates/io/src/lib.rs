@@ -43,8 +43,10 @@ use self::output::LocalizedQuotes;
 use csl::TextCase;
 use std::borrow::Cow;
 
-use unic_segment::{Words, WordBounds, WordBoundIndices};
 use crate::output::micro_html::MicroNode;
+use unic_segment::{WordBoundIndices, WordBounds, Words, Graphemes, GraphemeIndices};
+
+use phf::phf_set;
 
 #[derive(Debug, Clone, Default)]
 pub struct IngestOptions {
@@ -52,6 +54,7 @@ pub struct IngestOptions {
     pub text_case: TextCase,
     pub quotes: LocalizedQuotes,
     pub strip_periods: bool,
+    pub is_english: bool,
 }
 
 /// https://stackoverflow.com/a/38406885
@@ -72,8 +75,9 @@ fn is_word(s: &str) -> bool {
 }
 
 fn transform_first_char_of_word<F, I>(word: &str, f: F) -> Cow<'_, str>
-    where F: Fn(char) -> I,
-          I: Iterator<Item = char> + Clone,
+where
+    F: Fn(char) -> I,
+    I: Iterator<Item = char> + Clone,
 {
     // Naively capitalizes without a stopword filter
     let mut len = word.len();
@@ -91,7 +95,7 @@ fn transform_first_char_of_word<F, I>(word: &str, f: F) -> Cow<'_, str>
             // Fast convert back from iterator which knows its own byte offset
             s.push_str(chars.as_str());
             Cow::Owned(s)
-        },
+        }
     }
 }
 
@@ -99,25 +103,73 @@ fn transform_uppercase_first(word: &str) -> Cow<'_, str> {
     transform_first_char_of_word(word, |c| c.to_uppercase())
 }
 
-fn transform_each_word(s: &str, transform: impl Fn(&str) -> Cow<'_, str>) -> String {
+static SPEC_STOPWORDS: phf::Set<&'static str> = phf_set! {
+    "a", "an", "and", "as", "at", "but", "by", "down", "for", "from", "in", "into", "nor", "of", "on", "onto", "or", "over", "so", "the", "till", "to", "up", "via", "with", "yet",
+};
+
+// Not great; allocates for every word in your document!
+fn is_stopword(word: &str) -> Option<String> {
+    let lower = word.to_lowercase();
+    let as_str: &str = lower.as_ref();
+    if SPEC_STOPWORDS.contains(as_str) {
+        Some(lower)
+    } else {
+        None
+    }
+}
+
+fn title_case_word(word: &str, entire_is_uppercase: bool, no_stopword: bool) -> Cow<'_, str> {
+    let expect = "only called with nonempty words";
+    if !no_stopword {
+        if let Some(lower) = is_stopword(word) {
+            return Cow::Owned(lower);
+        }
+    }
+    if entire_is_uppercase {
+        let lowered = word.to_lowercase();
+        let mut upper_gs = GraphemeIndices::new(word);
+        if let Some((_, first_g)) = upper_gs.next() {
+            let mut ret = String::with_capacity(word.len());
+            ret.push_str(first_g);
+            if let Some((rest_ix, _)) = upper_gs.next() {
+                ret.push_str(&word[rest_ix..].to_lowercase());
+            }
+            return Cow::Owned(ret);
+        }
+    }
+    transform_first_char_of_word(word, |c| c.to_uppercase())
+}
+
+fn transform_title_case(s: &str, seen_one: bool, is_last: bool) -> String {
+    transform_each_word(&s, seen_one, is_last, |word, no_stop| title_case_word(word, false, no_stop))
+}
+
+fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl Fn(&str, bool) -> Cow<'_, str>) -> String {
     let mut acc = String::with_capacity(s.len());
-    for substr in WordBounds::new(s) {
+    let mut is_first = !seen_one;
+    let mut bounds = WordBoundIndices::new(s).peekable();
+    for (ix, substr) in bounds {
         if is_word(substr) {
+            let before = &s[..ix].chars().filter(|c| !c.is_whitespace()).nth(0);
+            let follows_colon = *before == Some(':');
+            let rest = &s[ix + substr.len()..];
+            let is_last = is_last && (rest.is_empty() || !is_word(rest));
+            let no_stopword = is_first || is_last || follows_colon;
             let word = substr;
-            let tx = transform(word);
+            let tx = transform(word, no_stopword);
             acc.push_str(&tx);
         } else {
             acc.push_str(substr);
         }
+        is_first = false;
     }
     acc
 }
 
 fn transform_first_word<'a>(mut s: String, transform: impl Fn(&str) -> Cow<'_, str>) -> String {
     let mut bounds = WordBoundIndices::new(&s);
-    let mut seen_word = false;
     while let Some((ix, bound)) = bounds.next() {
-        if is_word(bound) && !seen_word {
+        if is_word(bound) {
             let tx = transform(bound);
             if tx != bound {
                 let mut ret = String::with_capacity(s.len());
@@ -151,23 +203,26 @@ impl IngestOptions {
         cow
     }
     pub fn apply_text_case(&self, micros: &mut [MicroNode]) {
-        self.apply_text_case_inner(micros, false);
+        let is_uppercase = self.is_uppercase(micros);
+        self.apply_text_case_inner(micros, false, is_uppercase);
     }
-    pub fn apply_text_case_inner(&self, micros: &mut [MicroNode], mut seen_one: bool) -> bool {
+    pub fn apply_text_case_inner(&self, micros: &mut [MicroNode], mut seen_one: bool, is_uppercase: bool) -> bool {
         let mut mine = false;
-        for micro in micros.iter_mut() {
+        let len = micros.len();
+        for (ix, micro) in micros.iter_mut().enumerate() {
+            let is_last = ix == len - 1;
             // order or short-circuits matters
             match micro {
                 MicroNode::Text(ref mut txt) => {
                     let text = std::mem::replace(txt, String::new());
-                    *txt = self.transform_case(text, seen_one);
+                    *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }
                 MicroNode::NoCase(children) => {
                     seen_one = seen_one || self.contains_word(children.as_ref());
                 }
-                MicroNode::Formatted(children, _) | MicroNode::Quoted{ children, .. } => {
-                    seen_one = self.apply_text_case_inner(children.as_mut(), seen_one) || seen_one;
+                MicroNode::Formatted(children, _) | MicroNode::Quoted { children, .. } => {
+                    seen_one = self.apply_text_case_inner(children.as_mut(), seen_one, is_uppercase) || seen_one;
                 }
             }
         }
@@ -176,28 +231,37 @@ impl IngestOptions {
     fn contains_word(&self, micros: &[MicroNode]) -> bool {
         micros.iter().any(|m| match m {
             MicroNode::Text(txt) => string_contains_word(&txt),
-            MicroNode::Formatted(children, _) | MicroNode::Quoted { children, .. } | MicroNode::NoCase(children) => {
-                self.contains_word(children.as_ref())
-            }
+            MicroNode::Formatted(children, _)
+            | MicroNode::Quoted { children, .. }
+            | MicroNode::NoCase(children) => self.contains_word(children.as_ref()),
         })
     }
-    fn transform_case(&self, s: String, seen_one: bool) -> String {
+    fn is_uppercase(&self, micros: &[MicroNode]) -> bool {
+        !micros.iter().any(|m| match m {
+            MicroNode::Text(txt) => txt.chars().any(|c| c.is_lowercase()),
+            MicroNode::Formatted(children, _)
+            | MicroNode::Quoted { children, .. }
+            | MicroNode::NoCase(children) => !self.is_uppercase(children.as_ref()),
+        })
+    }
+    fn transform_case(&self, s: String, seen_one: bool, is_last: bool, entire_is_uppercase: bool) -> String {
         match self.text_case {
             TextCase::Lowercase => s.to_lowercase(),
             TextCase::Uppercase => s.to_uppercase(),
-            TextCase::CapitalizeFirst if !seen_one => {
-                transform_first_word(s, transform_uppercase_first)
-            }
-            TextCase::CapitalizeAll => {
-                transform_each_word(&s, transform_uppercase_first)
-            }
-            TextCase::Sentence => {
+            TextCase::Sentence if self.is_english => {
+                // TODO: stopwords
                 // TODO: sentence case, but only do the initial capital if !seen_one
                 transform_first_word(s, transform_uppercase_first)
-            },
-            TextCase::Title => {
-                transform_each_word(&s, transform_uppercase_first)
             }
+            TextCase::CapitalizeFirst | TextCase::Sentence if !seen_one => {
+                transform_first_word(s, transform_uppercase_first)
+            }
+            // Fallback is nothing
+            TextCase::Title if self.is_english => {
+                debug!("Title casing: {:?}", s);
+                transform_title_case(&s, seen_one, is_last)
+            }
+            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _| transform_uppercase_first(word)),
             TextCase::None | _ => s,
         }
     }

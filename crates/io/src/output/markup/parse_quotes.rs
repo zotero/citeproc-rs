@@ -77,7 +77,12 @@ impl QuotedStack {
     fn collapse_hanging(mut self) -> Vec<MicroNode> {
         while let Some((kind, quoted)) = self.stack.pop() {
             self.push_str(kind.unmatched_str());
-            self.mut_ref().extend(quoted.into_iter());
+            for node in quoted {
+                match node {
+                    MicroNode::Text(txt) => self.push_string(txt),
+                    _ => self.push(node),
+                }
+            }
         }
         self.dest
     }
