@@ -311,7 +311,11 @@ pub enum NumberVariable {
 
 impl NumberVariable {
     pub fn should_replace_hyphens(self) -> bool {
-        self == NumberVariable::Locator
+        match self {
+            NumberVariable::Locator => true,
+            NumberVariable::Page => true,
+            _ => false,
+        }
     }
 }
 

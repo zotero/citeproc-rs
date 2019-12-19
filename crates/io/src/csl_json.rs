@@ -79,7 +79,7 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(field_identifier, rename_all = "kebab-case")]
 enum Field {
     Id,
@@ -128,6 +128,7 @@ impl<'de> Deserialize<'de> for WrapType {
     }
 }
 
+#[derive(Debug)]
 struct WrapVar(AnyVariable);
 
 impl<'de> Deserialize<'de> for WrapVar {
@@ -185,7 +186,6 @@ impl<'de> Deserialize<'de> for Reference {
                         Field::Any(WrapVar(AnyVariable::Ordinary(v))) => {
                             match ordinary.entry(v) {
                                 Entry::Occupied(_) => {
-                                    // TODO: don't use Debug for this
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
@@ -196,7 +196,6 @@ impl<'de> Deserialize<'de> for Reference {
                         Field::Any(WrapVar(AnyVariable::Number(v))) => {
                             match number.entry(v) {
                                 Entry::Occupied(_) => {
-                                    // TODO: don't use Debug for this
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
@@ -207,7 +206,6 @@ impl<'de> Deserialize<'de> for Reference {
                         Field::Any(WrapVar(AnyVariable::Name(v))) => {
                             match name.entry(v) {
                                 Entry::Occupied(_) => {
-                                    // TODO: don't use Debug for this
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
@@ -218,7 +216,6 @@ impl<'de> Deserialize<'de> for Reference {
                         Field::Any(WrapVar(AnyVariable::Date(v))) => {
                             match date.entry(v) {
                                 Entry::Occupied(_) => {
-                                    // TODO: don't use Debug for this
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {

@@ -654,11 +654,19 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         match o_part {
             None => fmt.plain(s),
             Some(ref part) => {
-                // TODO: text-case, IngestOptions
-                fmt.affixed(
-                    fmt.text_node(s.to_string(), part.formatting),
-                    part.affixes.as_ref(),
-                )
+                let NamePart {
+                    text_case,
+                    formatting,
+                    ref affixes,
+                    ..
+                } = *part;
+                let b = fmt.ingest(s, &IngestOptions {
+                    text_case: part.text_case,
+                    // TODO: use the correct quotes? They shouldn't be appearing in names anyway.
+                    ..Default::default()
+                });
+                let b = fmt.with_format(b, formatting);
+                fmt.affixed(b, affixes.as_ref())
             }
         }
     }
