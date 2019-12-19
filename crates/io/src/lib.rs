@@ -80,62 +80,261 @@ fn transform_first_char_of_word<F, I>(word: &str, f: F) -> Cow<'_, str>
 where
     F: Fn(char) -> I,
     I: Iterator<Item = char> + Clone,
-    {
-        // Naively capitalizes without a stopword filter
-        let mut len = word.len();
-        let mut chars = word.chars();
-        match chars.next() {
-            None => Cow::Borrowed(word),
-            Some(first) => {
-                let tx = f(first);
-                // Don't allocate for Already Capitalized Words
-                if tx.clone().count() == 1 && tx.clone().nth(0) == Some(first) {
-                    return Cow::Borrowed(word);
-                }
-                let mut s = String::with_capacity(len);
-                s.extend(tx);
-                // Fast convert back from iterator which knows its own byte offset
-                s.push_str(chars.as_str());
-                Cow::Owned(s)
+{
+    // Naively capitalizes without a stopword filter
+    let mut len = word.len();
+    let mut chars = word.chars();
+    match chars.next() {
+        None => Cow::Borrowed(word),
+        Some(first) => {
+            let tx = f(first);
+            // Don't allocate for Already Capitalized Words
+            if tx.clone().count() == 1 && tx.clone().nth(0) == Some(first) {
+                return Cow::Borrowed(word);
             }
+            let mut s = String::with_capacity(len);
+            s.extend(tx);
+            // Fast convert back from iterator which knows its own byte offset
+            s.push_str(chars.as_str());
+            Cow::Owned(s)
         }
     }
+}
 
 fn transform_uppercase_first(word: &str) -> Cow<'_, str> {
     transform_first_char_of_word(word, |c| c.to_uppercase())
 }
 
 static SPEC_STOPWORDS: phf::Set<&'static str> = phf_set! {
-    "a", "an", "and", "as", "at", "but", "by", "down", "for", "from", "in", "into", "nor", "of", "on", "onto", "or", "over", "so", "the", "till", "to", "up", "via", "with", "yet",
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "but",
+    "by",
+    "down",
+    "for",
+    "from",
+    "in",
+    "into",
+    "nor",
+    "of",
+    "on",
+    "onto",
+    "or",
+    "over",
+    "so",
+    "the",
+    "till",
+    "to",
+    "up",
+    "via",
+    "with",
+    "yet",
 };
 
-// Not great; allocates for every word in your document!
-fn is_stopword(word: &str) -> Option<String> {
-    let lower = word.to_lowercase();
-    let as_str: &str = lower.as_ref();
-    if SPEC_STOPWORDS.contains(as_str) {
-        Some(lower)
+static CITEPROC_JS_STOPWORD_REGEX: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+fn stopword_regex() -> &'static regex::Regex {
+    let re = concat![
+        // Match case insensitive (regex crate's simple case folding is fine)
+        "(?i)",
+        // Match the start only
+        "^(?:",
+        "about|",
+        "above|",
+        "across|",
+        "afore|",
+        "after|",
+        "against|",
+        "al|",
+        "along|",
+        "alongside|",
+        "amid|",
+        "amidst|",
+        "among|",
+        "amongst|",
+        "anenst|",
+        "apropos|",
+        "apud|",
+        "around|",
+        "as|",
+        "aside|",
+        "astride|",
+        "at|",
+        "athwart|",
+        "atop|",
+        "barring|",
+        "before|",
+        "behind|",
+        "below|",
+        "beneath|",
+        "beside|",
+        "besides|",
+        "between|",
+        "beyond|",
+        "but|",
+        "by|",
+        "circa|",
+        "despite|",
+        "down|",
+        "during|",
+        "et|",
+        "except|",
+        "for|",
+        "forenenst|",
+        "from|",
+        "given|",
+        "in|",
+        "inside|",
+        "into|",
+        "lest|",
+        "like|",
+        "modulo|",
+        "near|",
+        "next|",
+        "notwithstanding|",
+        "of|",
+        "off|",
+        "on|",
+        "onto|",
+        "out|",
+        "over|",
+        "per|",
+        "plus|",
+        "pro|",
+        "qua|",
+        "sans|",
+        "since|",
+        "than|",
+        "through|",
+        "thru|",
+        "throughout|",
+        "thruout|",
+        "till|",
+        "to|",
+        "toward|",
+        "towards|",
+        "under|",
+        "underneath|",
+        "until|",
+        "unto|",
+        "up|",
+        "upon|",
+        "versus|",
+        "vs.|",
+        "v.|",
+        "vs|",
+        "v|",
+        "via|",
+        "vis-à-vis|",
+        "with|",
+        "within|",
+        "without|",
+        "according to|",
+        "ahead of|",
+        "apart from|",
+        "as for|",
+        "as of|",
+        "as per|",
+        "as regards|",
+        "aside from|",
+        "back to|",
+        "because of|",
+        "close to|",
+        "due to|",
+        "except for|",
+        "far from|",
+        "inside of|",
+        "instead of|",
+        "near to|",
+        "next to|",
+        "on to|",
+        "out from|",
+        "out of|",
+        "outside of|",
+        "prior to|",
+        "pursuant to|",
+        "rather than|",
+        "regardless of|",
+        "such as|",
+        "that of|",
+        "up to|",
+        "where as|",
+        "or|",
+        "yet|",
+        "so|",
+        "and|",
+        "nor|",
+        "a|",
+        "an|",
+        "the|",
+        "c|",
+        "ca|",
+        // textcase_SkipNameParticlesInTitleCase
+        "de|",
+        "d|",
+        "von|",
+        "van",
+        // Skip the | on the last one
+        ")$"
+    ];
+
+    CITEPROC_JS_STOPWORD_REGEX.get_or_init(|| regex::Regex::new(re).unwrap())
+}
+
+#[test]
+fn stopwords() {
+    assert!(is_stopword("and"));
+    assert!(!is_stopword("grandiloquent"));
+}
+
+fn is_stopword(word: &str) -> bool {
+    stopword_regex().is_match(word)
+}
+
+fn upper_word_to_title(word: &str) -> Option<String> {
+    let lowered = word.to_lowercase();
+    let mut upper_gs = GraphemeIndices::new(word);
+    if let Some((_, first_g)) = upper_gs.next() {
+        let mut ret = String::with_capacity(word.len());
+        ret.push_str(first_g);
+        if let Some((rest_ix, _)) = upper_gs.next() {
+            ret.push_str(&word[rest_ix..].to_lowercase());
+        }
+        return Some(ret);
+    }
+    None
+}
+
+fn transform_sentence_case(mut s: String, seen_one: bool, is_last: bool, is_uppercase: bool) -> String {
+    if is_uppercase {
+        transform_each_word(&s, seen_one, is_last, |word, is_first, no_stop| {
+            if is_first {
+                if let Some(upper) = upper_word_to_title(word) {
+                    return Cow::Owned(upper);
+                }
+            }
+            Cow::Owned(word.to_lowercase())
+        })
     } else {
-        None
+        transform_first_word(s, transform_uppercase_first)
     }
 }
 
 fn title_case_word(word: &str, entire_is_uppercase: bool, no_stopword: bool) -> Cow<'_, str> {
     let expect = "only called with nonempty words";
-    if !no_stopword {
-        if let Some(lower) = is_stopword(word) {
-            return Cow::Owned(lower);
-        }
+    debug!("title_case_word {}", word);
+    if !no_stopword && is_stopword(word) {
+        return Cow::Owned(word.to_lowercase());
+    }
+    if !word.chars().any(|c| c.is_ascii_alphabetic()) {
+        // Entirely non-English
+        // e.g. "β" in "β-Carotine"
+        return Cow::Borrowed(word);
     }
     if entire_is_uppercase {
-        let lowered = word.to_lowercase();
-        let mut upper_gs = GraphemeIndices::new(word);
-        if let Some((_, first_g)) = upper_gs.next() {
-            let mut ret = String::with_capacity(word.len());
-            ret.push_str(first_g);
-            if let Some((rest_ix, _)) = upper_gs.next() {
-                ret.push_str(&word[rest_ix..].to_lowercase());
-            }
+        if let Some(ret) = upper_word_to_title(word) {
             return Cow::Owned(ret);
         }
     }
@@ -143,10 +342,10 @@ fn title_case_word(word: &str, entire_is_uppercase: bool, no_stopword: bool) -> 
 }
 
 fn transform_title_case(s: &str, seen_one: bool, is_last: bool) -> String {
-    transform_each_word(&s, seen_one, is_last, |word, no_stop| title_case_word(word, false, no_stop))
+    transform_each_word(&s, seen_one, is_last, |word, _is_first, no_stop| title_case_word(word, false, no_stop))
 }
 
-fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl Fn(&str, bool) -> Cow<'_, str>) -> String {
+fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl Fn(&str, bool, bool) -> Cow<'_, str>) -> String {
     let mut acc = String::with_capacity(s.len());
     let mut is_first = !seen_one;
     let mut bounds = WordBoundIndices::new(s).peekable();
@@ -161,7 +360,7 @@ fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl F
             let is_last = is_last && (rest.is_empty() || !is_word(rest));
             let no_stopword = is_first || is_last || follows_colon;
             let word = substr;
-            let tx = transform(word, no_stopword);
+            let tx = transform(word, is_first, no_stopword);
             acc.push_str(&tx);
         } else {
             acc.push_str(substr);
@@ -292,20 +491,18 @@ impl IngestOptions {
         match self.text_case {
             TextCase::Lowercase => s.to_lowercase(),
             TextCase::Uppercase => s.to_uppercase(),
-            TextCase::Sentence if self.is_english => {
-                // TODO: stopwords
-                // TODO: sentence case, but only do the initial capital if !seen_one
+            TextCase::CapitalizeFirst => {
                 transform_first_word(s, transform_uppercase_first)
             }
-            TextCase::CapitalizeFirst | TextCase::Sentence if !seen_one => {
-                transform_first_word(s, transform_uppercase_first)
+            TextCase::Sentence if !seen_one => {
+                transform_sentence_case(s, seen_one, is_last, entire_is_uppercase)
             }
             // Fallback is nothing
             TextCase::Title if self.is_english => {
                 debug!("Title casing: {:?}", s);
                 transform_title_case(&s, seen_one, is_last)
             }
-            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _| transform_uppercase_first(word)),
+            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _, _| transform_uppercase_first(word)),
             TextCase::None | _ => s,
         }
     }
