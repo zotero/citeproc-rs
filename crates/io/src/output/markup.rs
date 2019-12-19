@@ -10,7 +10,7 @@ use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::{
-    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
+    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment, TextCase,
 };
 
 mod rtf;
@@ -251,6 +251,9 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
+        if options.text_case == TextCase::None {
+            return;
+        }
         let is_uppercase = options.is_uppercase(build);
         options.apply_text_case_inner(build, false, is_uppercase);
     }

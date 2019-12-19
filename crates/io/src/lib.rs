@@ -278,10 +278,10 @@ fn stopword_regex() -> &'static regex::Regex {
         "c|",
         "a",
         // Skip the | on the last one
-        ")\\s|",
+        ")(?:\\s|$)",
         // John d’Doe
-        "(?-i)d\u{2019}[[:upper:]]|",
-        "(?i)of-"
+        "|(?-i)d\u{2019}",
+        "|(?-i)of-"
     ];
 
     CITEPROC_JS_STOPWORD_REGEX.get_or_init(|| regex::Regex::new(re).unwrap())
@@ -293,8 +293,10 @@ fn stopwords() {
         stopword_regex().is_match(word_and_rest)
     }
 
-    assert!(is_stopword("and"));
-    assert!(!is_stopword("grandiloquent"));
+    assert!(is_stopword("and "));
+    assert!(!is_stopword("grandiloquent "));
+    assert!(is_stopword("l’Anglais "));
+    assert!(is_stopword("l’Égypte "));
 }
 
 /// Returns the length of the matched word
@@ -348,12 +350,12 @@ fn title_case_word<'a>(
     no_stopword: bool,
 ) -> (Cow<'a, str>, Option<usize>) {
     let expect = "only called with nonempty words";
-    debug!("title_case_word {}", word);
+    trace!("title_case_word {}", word);
     if !no_stopword {
         if let Some(mut match_len) = is_stopword(word_and_rest) {
             // drop the trailing whitespace
             let matched = &word_and_rest[..match_len];
-            let last_char = matched.chars().rev().nth(0).map_or(0, |c| c.len_utf8());
+            let last_char = matched.chars().rev().nth(0).map_or(0, |c| if c == '-' || c.is_whitespace() { c.len_utf8() } else { 0 });
             match_len = match_len - last_char;
             let lowered = word_and_rest[..match_len].to_lowercase();
             return (Cow::Owned(lowered), Some(match_len));
@@ -362,6 +364,7 @@ fn title_case_word<'a>(
     if !word.chars().any(|c| c.is_ascii_alphabetic() || c == '.') {
         // Entirely non-English
         // e.g. "β" in "β-Carotine"
+        // Full stop is so A.D. doesn't become a.D.
         return (Cow::Borrowed(word), None);
     }
     if entire_is_uppercase {
@@ -413,7 +416,7 @@ where
             acc.push_str(&tx);
             if let Some(ff) = fast_forward {
                 s = &s[ix + ff..];
-                debug!("fast_forward to {}", s);
+                trace!("fast_forward to {}", s);
                 bounds = WordBoundIndices::new(s);
             }
         } else {
@@ -482,31 +485,34 @@ impl IngestOptions {
                         self.apply_text_case_micro_inner(micros.as_mut(), seen_one, is_uppercase)
                             || seen_one;
                 }
-                InlineElement::Quoted { inlines, .. }
-                | InlineElement::Div(_, inlines)
+                InlineElement::Quoted { inlines: content, .. }
+                | InlineElement::Div(_, content)
                 | InlineElement::Anchor {
-                    content: inlines, ..
+                    content, ..
                 } => {
-                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase)
+                    seen_one = self.apply_text_case_inner(content.as_mut(), seen_one, is_uppercase)
                         || seen_one;
                 }
-                InlineElement::Formatted(inlines, formatting)
+                InlineElement::Formatted(content, formatting)
                     if formatting.font_variant != Some(FontVariant::SmallCaps)
                         && formatting.vertical_alignment
                             != Some(VerticalAlignment::Superscript)
                         && formatting.vertical_alignment != Some(VerticalAlignment::Subscript) =>
                 {
-                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase)
+                    seen_one = self.apply_text_case_inner(content.as_mut(), seen_one, is_uppercase)
                         || seen_one;
                 }
-                InlineElement::Formatted(inlines, _) => {
-                    seen_one = seen_one || self.contains_word(inlines.as_ref());
+                InlineElement::Formatted(content, _) => {
+                    seen_one = seen_one || self.contains_word(content.as_ref());
                 }
             }
         }
         seen_one
     }
     pub fn apply_text_case_micro(&self, micros: &mut [MicroNode]) {
+        if self.text_case == TextCase::None {
+            return;
+        }
         let is_uppercase = self.is_uppercase_micro(micros);
         self.apply_text_case_micro_inner(micros, false, is_uppercase);
     }
@@ -571,7 +577,6 @@ impl IngestOptions {
             }
             // Fallback is nothing
             TextCase::Title if self.is_english => {
-                debug!("Title casing: {:?}", s);
                 transform_title_case(&s, seen_one, is_last)
             }
             TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _, _, _| {
