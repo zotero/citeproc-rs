@@ -109,7 +109,9 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
-        vec![InlineElement::Micro(MicroNode::parse(input, options))]
+        let mut nodes = MicroNode::parse(input, options);
+        options.apply_text_case(&mut nodes);
+        vec![InlineElement::Micro(nodes)]
     }
 
     #[inline]

@@ -93,12 +93,8 @@ impl HtmlReader<String> for PlainHtmlReader {
     }
 
     fn plain(&self, s: &str) -> Option<Vec<String>> {
-        let x = if self.options.replace_hyphens {
-            s.replace('-', "\u{2013}")
-        } else {
-            s.to_string()
-        };
-        Some(vec![x])
+        let plain = self.options.plain(s);
+        Some(vec![plain.into_owned()])
     }
 }
 
