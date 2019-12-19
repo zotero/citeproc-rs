@@ -152,8 +152,11 @@ fn transform_each_word(s: &str, seen_one: bool, is_last: bool, transform: impl F
     let mut bounds = WordBoundIndices::new(s).peekable();
     for (ix, substr) in bounds {
         if is_word(substr) {
-            let before = &s[..ix].chars().filter(|c| !c.is_whitespace()).nth(0);
-            let follows_colon = *before == Some(':');
+            let before = &s[..ix].chars().rev().filter(|c| !c.is_whitespace()).nth(0);
+            let follows_colon = *before == Some(':')
+                || *before == Some('?')
+                || *before == Some('!')
+                || *before == Some('.');
             let rest = &s[ix + substr.len()..];
             let is_last = is_last && (rest.is_empty() || !is_word(rest));
             let no_stopword = is_first || is_last || follows_colon;
