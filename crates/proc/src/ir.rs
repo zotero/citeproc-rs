@@ -89,13 +89,14 @@ pub enum RefIR {
     // Branch(Arc<Conditions>, Box<IR<O>>),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct RefIrSeq {
     pub contents: Vec<RefIR>,
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
     pub delimiter: Atom,
     pub quotes: Option<LocalizedQuotes>,
+    pub text_case: TextCase,
 }
 
 impl RefIR {
@@ -316,26 +317,30 @@ impl<O: OutputFormat<Output = String>> IR<O> {
 impl<O: OutputFormat<Output = String>> IrSeq<O> {
     // TODO: Groupvars
     fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
-        let xs: Vec<_> = self
-            .contents
-            .iter()
-            .filter_map(|i| i.flatten(fmt))
-            .collect();
-        if xs.is_empty() {
-            return None;
-        }
         let IrSeq {
             formatting,
             ref delimiter,
             ref affixes,
             ref quotes,
             display,
-            ..
+            text_case,
+            ref contents,
         } = *self;
+        let xs: Vec<_> = contents
+            .iter()
+            .filter_map(|i| i.flatten(fmt))
+            .collect();
+        if xs.is_empty() {
+            return None;
+        }
         let grp = fmt.group(xs, delimiter, formatting);
         let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
         // TODO: pass in_bibliography from ctx
-        let grp = fmt.with_display(grp, display, true);
+        let mut grp = fmt.with_display(grp, display, true);
+        fmt.apply_text_case(&mut grp, &IngestOptions {
+            text_case,
+            ..Default::default()
+        });
         Some(grp)
     }
 }
@@ -435,7 +440,7 @@ impl IR<Markup> {
 //     }
 // }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrSeq<O: OutputFormat> {
     pub contents: Vec<IR<O>>,
     pub formatting: Option<Formatting>,
@@ -443,6 +448,7 @@ pub struct IrSeq<O: OutputFormat> {
     pub delimiter: Atom,
     pub display: Option<DisplayMode>,
     pub quotes: Option<LocalizedQuotes>,
+    pub text_case: TextCase,
 }
 
 impl IrSeq<Markup> {
@@ -461,6 +467,7 @@ impl IrSeq<Markup> {
             quotes: _,
             formatting,
             display,
+            text_case,
         } = *self;
         let affixes = affixes.as_ref();
 

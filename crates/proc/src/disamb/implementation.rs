@@ -21,14 +21,15 @@ impl Disambiguation<Markup> for Style {
         let els = &self.citation.layout.elements;
         ref_sequence(
             db,
-            ctx,
             state,
+            ctx,
             &els,
             "".into(),
             Some(stack),
             None,
             None,
             None,
+            TextCase::None,
         )
     }
 }
@@ -46,14 +47,15 @@ impl Disambiguation<Markup> for Group {
         let els = &self.elements;
         let (seq, group_vars) = ref_sequence(
             db,
-            ctx,
             state,
+            ctx,
             &els,
             self.delimiter.0.clone(),
             stack,
             self.affixes.as_ref(),
             self.display,
             None,
+            TextCase::None,
         );
         if group_vars.should_render_tree() {
             // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
@@ -193,14 +195,15 @@ impl Disambiguation<Markup> for Element {
                     state.push_macro(name);
                     let ret = ref_sequence(
                         db,
-                        ctx,
                         state,
+                        ctx,
                         &macro_unsafe,
                         "".into(),
                         text.formatting,
                         text.affixes.as_ref(),
                         text.display,
                         renderer.quotes_if(text.quotes),
+                        text.text_case,
                     );
                     state.pop_macro(name);
                     ret

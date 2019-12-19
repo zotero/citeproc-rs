@@ -204,10 +204,6 @@ impl IngestOptions {
         }
         cow
     }
-    pub fn apply_text_case(&self, inlines: &mut [InlineElement]) {
-        let is_uppercase = self.is_uppercase(inlines);
-        self.apply_text_case_inner(inlines, false, is_uppercase);
-    }
     pub fn apply_text_case_inner(&self, inlines: &mut [InlineElement], mut seen_one: bool, is_uppercase: bool) -> bool {
         let mut mine = false;
         let len = inlines.len();
@@ -283,13 +279,13 @@ impl IngestOptions {
     fn contains_word_micro(&self, micros: &[MicroNode]) -> bool {
         any_micros(string_contains_word, false, micros)
     }
-    fn is_uppercase(&self, inlines: &[InlineElement]) -> bool {
+    pub fn is_uppercase(&self, inlines: &[InlineElement]) -> bool {
         any_inlines(any_lowercase, true, inlines)
     }
     fn is_uppercase_micro(&self, micros: &[MicroNode]) -> bool {
         any_micros(any_lowercase, true, micros)
     }
-    fn transform_case(&self, s: String, seen_one: bool, is_last: bool, entire_is_uppercase: bool) -> String {
+    pub fn transform_case(&self, s: String, seen_one: bool, is_last: bool, entire_is_uppercase: bool) -> String {
         match self.text_case {
             TextCase::Lowercase => s.to_lowercase(),
             TextCase::Uppercase => s.to_uppercase(),

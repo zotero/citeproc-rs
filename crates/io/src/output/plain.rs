@@ -111,4 +111,11 @@ impl OutputFormat for PlainText {
         // TODO: do moving punctuation here as well
         pre_and_content.push_str(suffix)
     }
+
+    #[inline]
+    fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
+        let is_uppercase = !build.chars().any(|c| c.is_lowercase());
+        let string = std::mem::replace(build, String::new());
+        *build = options.transform_case(string, false, true, is_uppercase);
+    }
 }

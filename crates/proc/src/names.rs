@@ -258,7 +258,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
             } else {
                 None
             },
-            quotes: None,
+            ..Default::default()
         }),
         GroupVars::DidRender,
     )
@@ -340,9 +340,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             contents: iter.collect(),
             formatting: runner.name_el.formatting,
             affixes: runner.name_el.affixes.clone(),
-            delimiter: Atom::from(""),
-            display: None,
-            quotes: None,
+            ..Default::default()
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))

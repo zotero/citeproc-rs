@@ -248,6 +248,12 @@ impl OutputFormat for Markup {
         use self::move_punctuation::append_suffix;
         append_suffix(pre_and_content, suffix);
     }
+
+    #[inline]
+    fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
+        let is_uppercase = options.is_uppercase(build);
+        options.apply_text_case_inner(build, false, is_uppercase);
+    }
 }
 
 impl Markup {

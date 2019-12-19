@@ -45,7 +45,7 @@ impl Disambiguation<Markup> for Names {
                 .delimiter
                 .clone()
                 .unwrap_or_else(|| Atom::from("")),
-            quotes: None,
+            ..Default::default()
         };
 
         let name_irs = crate::names::to_individual_name_irs(
