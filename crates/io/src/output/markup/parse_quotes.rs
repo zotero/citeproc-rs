@@ -184,9 +184,7 @@ fn test_stamp() {
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig, &options),
         &[
-            MicroNode::Text("prefix, '".into()),
-            MicroNode::Text("hi".into()),
-            MicroNode::Text("hosuffix".into()),
+            MicroNode::Text("prefix, 'hihosuffix".into()),
         ]
     );
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
