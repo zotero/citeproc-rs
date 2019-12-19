@@ -236,6 +236,13 @@ impl OutputFormat for Markup {
     fn tag_stack(&self, formatting: Formatting, display: Option<DisplayMode>) -> Vec<FormatCmd> {
         tag_stack(formatting, display)
     }
+
+    #[inline]
+    fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str) {
+        let suffix = MicroNode::parse(suffix, &IngestOptions::default());
+        use self::move_punctuation::append_suffix;
+        append_suffix(pre_and_content, suffix);
+    }
 }
 
 impl Markup {

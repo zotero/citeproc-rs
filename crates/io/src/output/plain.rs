@@ -105,4 +105,10 @@ impl OutputFormat for PlainText {
     fn tag_stack(&self, _formatting: Formatting, _: Option<DisplayMode>) -> Vec<FormatCmd> {
         Vec::new()
     }
+
+    #[inline]
+    fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str) {
+        // TODO: do moving punctuation here as well
+        pre_and_content.push_str(suffix)
+    }
 }
