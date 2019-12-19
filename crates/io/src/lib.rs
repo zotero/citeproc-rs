@@ -48,6 +48,7 @@ pub struct IngestOptions {
     pub replace_hyphens: bool,
     pub text_case: TextCase,
     pub quotes: LocalizedQuotes,
+    pub strip_periods: bool,
 }
 
 impl IngestOptions {

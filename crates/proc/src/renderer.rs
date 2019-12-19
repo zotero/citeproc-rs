@@ -4,7 +4,7 @@ use citeproc_io::{Locator, Name, NumericValue, Reference};
 use csl::{
     GenderedTermSelector, LabelElement, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
-    StandardVariable, Style, TextCase, TextElement, TextTermSelector,
+    StandardVariable, Style, TextCase, TextElement, TextTermSelector, Variable,
 };
 
 #[derive(Clone)]
@@ -200,6 +200,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     replace_hyphens: false,
                     text_case,
                     quotes: self.quotes(),
+                    ..Default::default()
                 };
                 fmt.affixed_text(
                     s,
@@ -246,6 +247,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             replace_hyphens: number.variable.should_replace_hyphens(),
             text_case: number.text_case,
             quotes: self.quotes(),
+            ..Default::default()
         };
         let b = fmt.ingest(&string, &options);
         let b = fmt.with_format(b, number.formatting);
@@ -270,7 +272,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: StandardVariable,
         value: &str,
     ) -> O::Build {
-        let fmt = self.fmt();
         let options = IngestOptions {
             replace_hyphens: match var {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
@@ -278,38 +279,27 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             },
             text_case: text.text_case,
             quotes: self.quotes(),
+            strip_periods: text.strip_periods,
+            ..Default::default()
         };
-        let b = fmt.ingest(value, &options);
-        let txt = fmt.with_format(b, text.formatting);
-
-        let txt = match var {
-            StandardVariable::Ordinary(v) => {
-                let maybe_link = v.hyperlink(value);
-                fmt.hyperlinked(txt, maybe_link)
-            }
-            StandardVariable::Number(_) => txt,
+        let hyper = match var {
+            StandardVariable::Ordinary(v) => Some(v),
+            StandardVariable::Number(_) => None,
         };
-        let b = fmt.affixed_quoted(txt, text.affixes.as_ref(), self.quotes_if(text.quotes));
-        fmt.with_display(b, text.display, self.ctx.in_bibliography())
+        self.render_text_el(value, text, &options, hyper)
     }
 
     pub fn text_value(&self, text: &TextElement, value: &str) -> Option<O::Build> {
         if value.is_empty() {
             return None;
         }
-        let fmt = self.fmt();
-        let b = fmt.ingest(
-            value,
-            &IngestOptions {
-                text_case: text.text_case,
-                quotes: self.quotes(),
-                ..Default::default()
-            },
-        );
-        let b = fmt.with_format(b, text.formatting);
-        let b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes_if(text.quotes));
-        let b = fmt.with_display(b, text.display, self.ctx.in_bibliography());
-        Some(b)
+        let options = IngestOptions {
+            text_case: text.text_case,
+            quotes: self.quotes(),
+            strip_periods: text.strip_periods,
+            ..Default::default()
+        };
+        Some(self.render_text_el(value, text, &options, None))
     }
 
     pub fn text_term(
@@ -318,16 +308,34 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         term_selector: TextTermSelector,
         plural: bool,
     ) -> Option<O::Build> {
-        let fmt = self.fmt();
         let locale = self.ctx.locale();
         locale.get_text_term(term_selector, plural).map(|val| {
-            fmt.affixed_text_quoted(
-                val.to_owned(),
-                text.formatting,
-                text.affixes.as_ref(),
-                self.quotes_if(text.quotes),
-            )
+            let options = IngestOptions {
+                text_case: text.text_case,
+                quotes: self.quotes(),
+                strip_periods: text.strip_periods,
+                ..Default::default()
+            };
+            self.render_text_el(val, text, &options, None)
         })
+    }
+
+    fn render_text_el(
+        &self,
+        string: &str,
+        text: &TextElement,
+        options: &IngestOptions,
+        hyper: Option<Variable>,
+    ) -> O::Build {
+        let fmt = self.fmt();
+        let mut b = fmt.ingest(string, &options);
+        b = fmt.with_format(b, text.formatting);
+        if let Some(hyper) = hyper {
+            let maybe_link = hyper.hyperlink(string);
+            b = fmt.hyperlinked(b, maybe_link)
+        }
+        b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes_if(text.quotes));
+        fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
     pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
