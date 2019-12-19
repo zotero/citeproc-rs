@@ -43,8 +43,10 @@ use self::output::LocalizedQuotes;
 use csl::TextCase;
 use std::borrow::Cow;
 
+use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use unic_segment::{WordBoundIndices, WordBounds, Words, Graphemes, GraphemeIndices};
+use csl::{FontVariant, VerticalAlignment};
 
 use phf::phf_set;
 
@@ -78,26 +80,26 @@ fn transform_first_char_of_word<F, I>(word: &str, f: F) -> Cow<'_, str>
 where
     F: Fn(char) -> I,
     I: Iterator<Item = char> + Clone,
-{
-    // Naively capitalizes without a stopword filter
-    let mut len = word.len();
-    let mut chars = word.chars();
-    match chars.next() {
-        None => Cow::Borrowed(word),
-        Some(first) => {
-            let tx = f(first);
-            // Don't allocate for Already Capitalized Words
-            if tx.clone().count() == 1 && tx.clone().nth(0) == Some(first) {
-                return Cow::Borrowed(word);
+    {
+        // Naively capitalizes without a stopword filter
+        let mut len = word.len();
+        let mut chars = word.chars();
+        match chars.next() {
+            None => Cow::Borrowed(word),
+            Some(first) => {
+                let tx = f(first);
+                // Don't allocate for Already Capitalized Words
+                if tx.clone().count() == 1 && tx.clone().nth(0) == Some(first) {
+                    return Cow::Borrowed(word);
+                }
+                let mut s = String::with_capacity(len);
+                s.extend(tx);
+                // Fast convert back from iterator which knows its own byte offset
+                s.push_str(chars.as_str());
+                Cow::Owned(s)
             }
-            let mut s = String::with_capacity(len);
-            s.extend(tx);
-            // Fast convert back from iterator which knows its own byte offset
-            s.push_str(chars.as_str());
-            Cow::Owned(s)
         }
     }
-}
 
 fn transform_uppercase_first(word: &str) -> Cow<'_, str> {
     transform_first_char_of_word(word, |c| c.to_uppercase())
@@ -202,15 +204,59 @@ impl IngestOptions {
         }
         cow
     }
-    pub fn apply_text_case(&self, micros: &mut [MicroNode]) {
-        let is_uppercase = self.is_uppercase(micros);
-        self.apply_text_case_inner(micros, false, is_uppercase);
+    pub fn apply_text_case(&self, inlines: &mut [InlineElement]) {
+        let is_uppercase = self.is_uppercase(inlines);
+        self.apply_text_case_inner(inlines, false, is_uppercase);
     }
-    pub fn apply_text_case_inner(&self, micros: &mut [MicroNode], mut seen_one: bool, is_uppercase: bool) -> bool {
+    pub fn apply_text_case_inner(&self, inlines: &mut [InlineElement], mut seen_one: bool, is_uppercase: bool) -> bool {
+        let mut mine = false;
+        let len = inlines.len();
+        for (ix, inline) in inlines.iter_mut().enumerate() {
+            let is_last = ix == len - 1;
+            // order or short-circuits matters
+            match inline {
+
+                InlineElement::Text(txt) => {
+                    let text = std::mem::replace(txt, String::new());
+                    *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
+                    seen_one = string_contains_word(txt.as_ref()) || seen_one;
+                },
+                InlineElement::Micro(micros) => {
+                    seen_one = self.apply_text_case_micro_inner(micros.as_mut(), seen_one, is_uppercase) || seen_one;
+                }
+                InlineElement::Quoted { inlines, .. }
+                | InlineElement::Div(_, inlines)
+                    | InlineElement::Anchor {
+                        content: inlines,
+                        ..
+                    }
+                => {
+                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase) || seen_one;
+                }
+                InlineElement::Formatted(inlines, formatting) if
+                    formatting.font_variant != Some(FontVariant::SmallCaps)
+                    && formatting.vertical_alignment != Some(VerticalAlignment::Superscript)
+                    && formatting.vertical_alignment != Some(VerticalAlignment::Subscript)
+                => {
+                    seen_one = self.apply_text_case_inner(inlines.as_mut(), seen_one, is_uppercase) || seen_one;
+                }
+                InlineElement::Formatted(inlines, _) => {
+                    seen_one = seen_one || self.contains_word(inlines.as_ref());
+                }
+            }
+        }
+        seen_one
+    }
+    pub fn apply_text_case_micro(&self, micros: &mut [MicroNode]) {
+        let is_uppercase = self.is_uppercase_micro(micros);
+        self.apply_text_case_micro_inner(micros, false, is_uppercase);
+    }
+    pub fn apply_text_case_micro_inner(&self, micros: &mut [MicroNode], mut seen_one: bool, is_uppercase: bool) -> bool {
         let mut mine = false;
         let len = micros.len();
         for (ix, micro) in micros.iter_mut().enumerate() {
             let is_last = ix == len - 1;
+            use crate::output::FormatCmd;
             // order or short-circuits matters
             match micro {
                 MicroNode::Text(ref mut txt) => {
@@ -218,31 +264,30 @@ impl IngestOptions {
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }
-                MicroNode::NoCase(children) => {
-                    seen_one = seen_one || self.contains_word(children.as_ref());
+                MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript)
+                | MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
+                | MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript)
+                | MicroNode::NoCase(children) => {
+                    seen_one = seen_one || self.contains_word_micro(children.as_ref());
                 }
                 MicroNode::Formatted(children, _) | MicroNode::Quoted { children, .. } => {
-                    seen_one = self.apply_text_case_inner(children.as_mut(), seen_one, is_uppercase) || seen_one;
+                    seen_one = self.apply_text_case_micro_inner(children.as_mut(), seen_one, is_uppercase) || seen_one;
                 }
             }
         }
         seen_one
     }
-    fn contains_word(&self, micros: &[MicroNode]) -> bool {
-        micros.iter().any(|m| match m {
-            MicroNode::Text(txt) => string_contains_word(&txt),
-            MicroNode::Formatted(children, _)
-            | MicroNode::Quoted { children, .. }
-            | MicroNode::NoCase(children) => self.contains_word(children.as_ref()),
-        })
+    fn contains_word(&self, micros: &[InlineElement]) -> bool {
+        any_inlines(string_contains_word, false, micros)
     }
-    fn is_uppercase(&self, micros: &[MicroNode]) -> bool {
-        !micros.iter().any(|m| match m {
-            MicroNode::Text(txt) => txt.chars().any(|c| c.is_lowercase()),
-            MicroNode::Formatted(children, _)
-            | MicroNode::Quoted { children, .. }
-            | MicroNode::NoCase(children) => !self.is_uppercase(children.as_ref()),
-        })
+    fn contains_word_micro(&self, micros: &[MicroNode]) -> bool {
+        any_micros(string_contains_word, false, micros)
+    }
+    fn is_uppercase(&self, inlines: &[InlineElement]) -> bool {
+        any_inlines(any_lowercase, true, inlines)
+    }
+    fn is_uppercase_micro(&self, micros: &[MicroNode]) -> bool {
+        any_micros(any_lowercase, true, micros)
     }
     fn transform_case(&self, s: String, seen_one: bool, is_last: bool, entire_is_uppercase: bool) -> String {
         match self.text_case {
@@ -271,4 +316,42 @@ impl IngestOptions {
             ..Default::default()
         }
     }
+}
+
+fn any_lowercase(s: &str) -> bool {
+    s.chars().any(|c| c.is_lowercase())
+}
+
+fn any_inlines<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, inlines: &[InlineElement]) -> bool {
+    inlines.iter().any(|i| match i {
+        InlineElement::Text(txt) => f(txt.as_ref()),
+        InlineElement::Micro(micros) => any_micros(f, invert, micros.as_ref()),
+        InlineElement::Quoted { inlines, .. }
+        | InlineElement::Div(_, inlines)
+        | InlineElement::Anchor {
+            content: inlines,
+            ..
+        }
+        | InlineElement::Formatted(inlines, _) => {
+            any_inlines(f, invert, inlines.as_ref()) ^ invert
+        }
+    }) ^ invert
+}
+
+fn any_micros<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, micros: &[MicroNode]) -> bool {
+    micros.iter().any(|m| match m {
+        MicroNode::Text(txt) => f(txt.as_ref()),
+        MicroNode::Formatted(children, _)
+        | MicroNode::Quoted { children, .. }
+        | MicroNode::NoCase(children) => any_micros(f, invert, children) ^ invert,
+    }) ^ invert
+}
+
+#[test]
+fn test_any_micros() {
+    fn parse(x: &str) -> Vec<MicroNode> { MicroNode::parse(x, &Default::default()) }
+    fn upper(x: &str) -> bool { any_micros(any_lowercase, true, &parse(x)) }
+    assert_eq!(upper("Hello, <sup>superscript</sup>"), false);
+    assert_eq!(upper("HELLOSUPERSCRIPT"), true);
+    assert_eq!(upper("HELLO, <sup>SUPERSCRIPT</sup>"), true);
 }
