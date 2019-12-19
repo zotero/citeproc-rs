@@ -182,8 +182,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         quotes: Option<LocalizedQuotes>,
     ) -> Self::Build {
         use std::iter::once;
-        let pre = affixes.map_or(true, |x| x.prefix.is_empty());
-        let suf = affixes.map_or(true, |x| x.suffix.is_empty());
         let b = if let Some(lq) = quotes {
             self.quoted(b, lq)
         } else {

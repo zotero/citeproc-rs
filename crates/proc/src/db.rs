@@ -855,18 +855,16 @@ fn built_cluster(
     let layout = &style.citation.layout;
     let built_cites: Vec<_> = cite_ids
         .iter()
-        .map(|&id| {
+        .filter_map(|&id| {
             let gen4 = db.ir_gen4_conditionals(id);
             let ir = &gen4.ir;
             let cite = id.lookup(db);
-            let flattened = ir.flatten(&fmt)
-                .unwrap_or_else(|| fmt.plain(""));
-            // TODO: strip punctuation on these
+            let flattened = ir.flatten(&fmt)?;
             let aff = Affixes {
                 prefix: Atom::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
                 suffix: Atom::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or("")),
             };
-            fmt.affixed(flattened, Some(&aff))
+            Some(fmt.affixed(flattened, Some(&aff)))
         })
         .collect();
     let build = fmt.with_format(
