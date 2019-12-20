@@ -84,7 +84,7 @@ impl AttrChecker for Formatting {
             || attr == "font-variant"
             || attr == "font-weight"
             || attr == "text-decoration"
-            || attr == "vertical-alignment"
+            || attr == "vertical-align"
             || attr == "strip-periods"
     }
 }
@@ -146,7 +146,7 @@ impl FromNode for Formatting {
             font_variant: attribute_option(node, "font-variant", info)?,
             font_weight: attribute_option(node, "font-weight", info)?,
             text_decoration: attribute_option(node, "text-decoration", info)?,
-            vertical_alignment: attribute_option(node, "vertical-alignment", info)?,
+            vertical_alignment: attribute_option(node, "vertical-align", info)?,
             // TODO: carry options from root
             // hyperlink: String::from(""),
         })

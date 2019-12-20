@@ -241,4 +241,7 @@ pub fn normalise_html(strg: &str) -> String {
         .replace("&quot;", "\"")
         // citeproc-js uses the #38 version
         .replace("&#38;", "&amp;")
+        // citeproc-js puts successive unicode superscript transforms in their own tags,
+        // citeproc-rs joins them.
+        .replace("</sup><sup>", "")
 }
