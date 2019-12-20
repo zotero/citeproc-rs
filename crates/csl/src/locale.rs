@@ -209,6 +209,10 @@ impl FromNode for TermEl {
                 SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
+            Category(t) => Ok(TermEl::Simple(
+                SimpleTermSelector::Category(t, TermForm::from_node(node, info)?),
+                content,
+            )),
             Quote(t) => Ok(TermEl::Simple(SimpleTermSelector::Quote(t), content)),
             Role(t) => Ok(TermEl::Role(
                 RoleTermSelector(t, TermFormExtended::from_node(node, info)?),
@@ -284,6 +288,17 @@ impl Locale {
         let mut found = None;
         for sel in selector.fallback() {
             if let f @ Some(_) = self.gendered_terms.get(&sel) {
+                found = f;
+                break;
+            }
+        }
+        found
+    }
+
+    pub fn get_simple_term(&self, selector: SimpleTermSelector) -> Option<&TermPlurality> {
+        let mut found = None;
+        for sel in selector.fallback() {
+            if let f @ Some(_) = self.simple_terms.get(&sel) {
                 found = f;
                 break;
             }

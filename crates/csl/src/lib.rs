@@ -336,6 +336,10 @@ impl TextTermSelector {
                 t,
                 read_term_form_extended()?,
             ))),
+            Category(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Category(
+                t,
+                read_term_form()?,
+            ))),
             Quote(t) => Ok(TextTermSelector::Simple(SimpleTermSelector::Quote(t))),
             Role(t) => Ok(TextTermSelector::Role(RoleTermSelector(
                 t,
@@ -1230,6 +1234,23 @@ impl FromNode for Features {
     }
 }
 
+impl FromNode for Info {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let categories = node
+            .children()
+            .filter(|el| el.has_tag_name("category"))
+            .map(|el| Category::from_node(&el, info))
+            .partition_results()?;
+        Ok(Info { categories })
+    }
+}
+
+impl FromNode for Category {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(attribute_required(node, "name", info)?)
+    }
+}
+
 impl FromNode for Style {
     fn from_node(node: &Node, default_info: &ParseInfo) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
@@ -1351,7 +1372,7 @@ impl FromNode for Style {
             citation: citation?,
             features,
             bibliography,
-            info: Info {},
+            info: Info::from_node(&node, &info)?,
             class: attribute_required(node, "class", &info)?,
             name_inheritance: Name::from_node(&node, &info)?,
             page_range_format: attribute_option(node, "page-range-format", &info)?,
