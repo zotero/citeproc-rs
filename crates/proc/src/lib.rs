@@ -26,6 +26,7 @@ mod helpers;
 mod ir;
 mod names;
 mod number;
+mod page_range;
 mod renderer;
 mod sort;
 mod unicode;

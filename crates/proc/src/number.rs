@@ -66,26 +66,49 @@ fn tokens_to_string(ts: &[NumericToken], locale: &Locale, prf: Option<PageRangeF
         SeenNumHyphen(u32),
     }
     let mut state = None;
-    for t in ts {
-        match t {
+    let mut iter = ts.iter().peekable();
+    while let Some(t) = iter.next() {
+        state = match *t {
             // TODO: ordinals, etc
             Num(i) => {
-
-                match (prf, state) {
+                let (cropped, newstate) = match (prf, state) {
                     (Some(prf), Some(NumBefore::SeenNumHyphen(prev))) => {
+                        (crate::page_range::truncate_prf(prf, prev, i), None)
                     }
-                    _ => {}
-                }
-                s.push_str(&format!("{}", i))
+                    _ => (i, Some(NumBefore::SeenNum(i))),
+
+                };
+                s.push_str(&format!("{}", cropped));
+                newstate
             }
-            Affixed(a) => s.push_str(&a),
-            Comma => s.push_str(", "),
-            // en-dash
-            Hyphen => s.push_str(get_hyphen(locale, prf.is_some())),
+            Affixed(ref a) => {
+                s.push_str(&a);
+                None
+            },
+            Comma => {
+                s.push_str(", ");
+                None
+            }
+            Hyphen => {
+                let mut hyphen = "-"; // actual hyphen
+                if prf.is_some() {
+                    if let Some(NumBefore::SeenNum(_)) = state {
+                        if let Some(Num(_)) = iter.peek() {
+                            hyphen = get_hyphen(locale, prf.is_some());
+                        }
+                    }
+                }
+                s.push_str(hyphen);
+                match state {
+                    Some(NumBefore::SeenNum(i)) => Some(NumBefore::SeenNumHyphen(i)),
+                    _ => None,
+                }
+            }
             Ampersand => {
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
+                None
             }
         }
     }

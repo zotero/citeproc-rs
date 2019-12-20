@@ -86,7 +86,17 @@ impl NumericValue {
     }
     pub fn is_multiple(&self) -> bool {
         match *self {
-            NumericValue::Tokens(_, ref ts) => ts.len() > 1,
+            NumericValue::Tokens(_, ref ts) => {
+                match ts.len() {
+                    0 => false,
+                    1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
+                        *i != 1
+                    } else {
+                        false
+                    }
+                    _ => true
+                }
+            },
 
             // TODO: fallback interpretation of "multiple" to include unparsed numerics that have
             // multiple numbers etc
