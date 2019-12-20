@@ -84,17 +84,21 @@ impl NumericValue {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn is_multiple(&self) -> bool {
+    pub fn is_multiple(&self, var_is_quantity: bool) -> bool {
         match *self {
             NumericValue::Tokens(_, ref ts) => {
-                match ts.len() {
-                    0 => false,
-                    1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
-                        *i != 1
-                    } else {
-                        false
+                if var_is_quantity {
+                    match ts.len() {
+                        0 => true, // doesn't matter
+                        1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
+                            *i != 1
+                        } else {
+                            false
+                        }
+                        _ => true
                     }
-                    _ => true
+                } else {
+                    ts.len() > 1
                 }
             },
 

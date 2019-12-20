@@ -8,6 +8,7 @@ use super::attr::GetAttribute;
 use super::error::*;
 use super::version::Features;
 use super::IsIndependent;
+use super::Style;
 
 #[derive(Debug, Eq, Copy, Clone, PartialEq, EnumProperty, Hash)]
 pub enum AnyVariable {
@@ -310,10 +311,17 @@ pub enum NumberVariable {
 }
 
 impl NumberVariable {
-    pub fn should_replace_hyphens(self) -> bool {
+    pub fn should_replace_hyphens(self, style: &Style) -> bool {
         match self {
             NumberVariable::Locator => true,
-            NumberVariable::Page => true,
+            NumberVariable::Page => style.page_range_format.is_some(),
+            _ => false,
+        }
+    }
+    pub fn is_quantity(self) -> bool {
+        match self {
+            NumberVariable::NumberOfVolumes => true,
+            NumberVariable::NumberOfPages => true,
             _ => false,
         }
     }

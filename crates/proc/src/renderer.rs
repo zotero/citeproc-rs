@@ -233,7 +233,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             // TODO: text-case
             _ => fmt.affixed_text(
-                arabic_number(val, locale, prf),
+                arabic_number(val, locale, var, prf),
                 None,
                 Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
@@ -252,7 +252,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         };
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, prf),
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, number.variable, prf),
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
@@ -264,16 +264,16 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     };
                     let gender = locale.get_num_gender(number.variable, loc_type);
                     let long = number.form == NumericForm::LongOrdinal;
-                    render_ordinal(&ts, locale, prf, gender, long)
+                    render_ordinal(&ts, locale, number.variable, prf, gender, long)
                 }
-                _ => arabic_number(val, locale, prf),
+                _ => arabic_number(val, locale, number.variable, prf),
             }
         } else {
-            arabic_number(val, locale, prf)
+            arabic_number(val, locale, number.variable, prf)
         };
         let fmt = self.fmt();
         let options = IngestOptions {
-            replace_hyphens: number.variable.should_replace_hyphens(),
+            replace_hyphens: number.variable.should_replace_hyphens(style),
             text_case: number.text_case,
             quotes: self.quotes(),
             is_english: self.ctx.is_english(),
@@ -305,7 +305,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     ) -> O::Build {
         let style = self.ctx.style();
         let mod_page = style.page_range_format.is_some();
-        if variable == NumberVariable::Locator || (variable == NumberVariable::Page && mod_page) {
+        if variable == NumberVariable::Locator || variable == NumberVariable::Page {
             let number = csl::NumberElement {
                 variable,
                 form: csl::NumericForm::default(),
@@ -329,7 +329,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let options = IngestOptions {
             replace_hyphens: match var {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
-                StandardVariable::Number(v) => v.should_replace_hyphens(),
+                StandardVariable::Number(v) => v.should_replace_hyphens(self.ctx.style()),
             },
             text_case: text.text_case,
             quotes: self.quotes(),
@@ -436,10 +436,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             label.variable,
             label.form,
         );
-        let plural = match (num_val, label.plural) {
-            (ref val, Plural::Contextual) => val.is_multiple(),
-            (_, Plural::Always) => true,
-            (_, Plural::Never) => false,
+        let plural = match label.plural {
+            Plural::Contextual => num_val.is_multiple(label.variable.is_quantity()),
+            Plural::Always => true,
+            Plural::Never => false,
         };
         selector.and_then(|sel| {
             let options = IngestOptions {
