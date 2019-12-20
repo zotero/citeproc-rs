@@ -86,7 +86,7 @@ impl Disambiguation<Markup> for Names {
                             match ntb {
                                 NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
                                     if !fmt.is_empty(b) {
-                                        let out = fmt.output_in_context(b.clone(), stack);
+                                        let out = fmt.output_in_context(b.clone(), stack, None);
                                         let e = db.edge(EdgeData::Output(out));
                                         let ir = RefIR::Edge(Some(e));
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
@@ -94,7 +94,7 @@ impl Disambiguation<Markup> for Names {
                                 }
                                 NameTokenBuilt::Built(b) => {
                                     if !fmt.is_empty(&b) {
-                                        let out = fmt.output_in_context(b.to_vec(), stack);
+                                        let out = fmt.output_in_context(b.to_vec(), stack, None);
                                         let e = db.edge(EdgeData::Output(out));
                                         let ir = RefIR::Edge(Some(e));
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
@@ -201,7 +201,7 @@ impl DisambNameData {
         let fmt = &db.get_formatter();
         let style = db.style();
         let built = self.single_name(fmt, &style);
-        let o = fmt.output_in_context(built, stack);
+        let o = fmt.output_in_context(built, stack, None);
         db.edge(EdgeData::Output(o))
     }
 

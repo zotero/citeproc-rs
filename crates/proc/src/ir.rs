@@ -326,10 +326,7 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
             text_case,
             ref contents,
         } = *self;
-        let xs: Vec<_> = contents
-            .iter()
-            .filter_map(|i| i.flatten(fmt))
-            .collect();
+        let xs: Vec<_> = contents.iter().filter_map(|i| i.flatten(fmt)).collect();
         if xs.is_empty() {
             return None;
         }
@@ -337,19 +334,26 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
         let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
         // TODO: pass in_bibliography from ctx
         let mut grp = fmt.with_display(grp, display, true);
-        fmt.apply_text_case(&mut grp, &IngestOptions {
-            text_case,
-            ..Default::default()
-        });
+        fmt.apply_text_case(
+            &mut grp,
+            &IngestOptions {
+                text_case,
+                ..Default::default()
+            },
+        );
         Some(grp)
     }
 }
 
 impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
-    pub(crate) fn to_edge_data(&self, fmt: &O, formatting: Formatting) -> EdgeData {
+    pub(crate) fn to_edge_data(
+        &self,
+        fmt: &O,
+        formatting: Formatting,
+    ) -> EdgeData {
         match self {
             CiteEdgeData::Output(x) => {
-                EdgeData::Output(fmt.output_in_context(x.clone(), formatting))
+                EdgeData::Output(fmt.output_in_context(x.clone(), formatting, None))
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
             CiteEdgeData::Frnn(_) => EdgeData::Frnn,
@@ -399,16 +403,23 @@ impl IR<Markup> {
         }
     }
 
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
+    fn append_edges(
+        &self,
+        edges: &mut Vec<EdgeData>,
+        fmt: &Markup,
+        formatting: Formatting,
+    ) {
         match self {
             IR::Rendered(None) => {}
-            IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
+            IR::Rendered(Some(ed)) => {
+                edges.push(ed.to_edge_data(fmt, formatting))
+            }
             // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
             // inside
             IR::YearSuffix(_hook, x) => {
                 let out = x
                     .as_ref()
-                    .map(|x| fmt.output_in_context(x.clone(), formatting));
+                    .map(|x| fmt.output_in_context(x.clone(), formatting, None));
                 if let Some(o) = out {
                     if !o.is_empty() {
                         edges.push(EdgeData::Output(o))
@@ -500,7 +511,7 @@ impl IrSeq<Markup> {
                 if seen {
                     if !delimiter.is_empty() {
                         edges.push(EdgeData::Output(
-                            fmt.output_in_context(fmt.plain(delimiter.as_ref()), sub_formatting),
+                            fmt.output_in_context(fmt.plain(delimiter.as_ref()), sub_formatting, None),
                         ));
                     }
                 } else {

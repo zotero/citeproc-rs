@@ -204,9 +204,9 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn output(&self, intermediate: Self::Build) -> Self::Output {
+    fn output(&self, intermediate: Self::Build, punctuation_in_quote: bool) -> Self::Output {
         let null = FlipFlopState::default();
-        self.output_with_state(intermediate, null)
+        self.output_with_state(intermediate, null, Some(punctuation_in_quote))
     }
 
     #[inline]
@@ -214,9 +214,10 @@ impl OutputFormat for Markup {
         &self,
         intermediate: Self::Build,
         format_stacked: Formatting,
+        punctuation_in_quote: Option<bool>,
     ) -> Self::Output {
         let state = FlipFlopState::from_formatting(format_stacked);
-        self.output_with_state(intermediate, state)
+        self.output_with_state(intermediate, state, punctuation_in_quote)
     }
 
     #[inline]
@@ -276,9 +277,10 @@ impl Markup {
         &self,
         intermediate: <Self as OutputFormat>::Build,
         initial_state: FlipFlopState,
+        punctuation_in_quote: Option<bool>,
     ) -> <Self as OutputFormat>::Output {
         let mut flipped = initial_state.flip_flop_inlines(&intermediate);
-        move_punctuation(&mut flipped);
+        move_punctuation(&mut flipped, punctuation_in_quote);
         let mut dest = String::new();
         match *self {
             Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped),

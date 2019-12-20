@@ -137,15 +137,16 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
     fn join_delim(&self, a: Self::Build, delim: &str, b: Self::Build) -> Self::Build;
 
     fn is_empty(&self, a: &Self::Build) -> bool;
-    fn output(&self, intermediate: Self::Build) -> Self::Output;
+    fn output(&self, intermediate: Self::Build, punctuation_in_quote: bool) -> Self::Output {
+        self.output_in_context(intermediate, Formatting::default(), Some(punctuation_in_quote))
+    }
+
     fn output_in_context(
         &self,
         intermediate: Self::Build,
         _format_stacked: Formatting,
-    ) -> Self::Output {
-        // XXX: unnecessary, just to skip rewriting a bunch of formats
-        self.output(intermediate)
-    }
+        punctuation_in_quote: Option<bool>,
+    ) -> Self::Output;
 
     fn plain(&self, s: &str) -> Self::Build;
 

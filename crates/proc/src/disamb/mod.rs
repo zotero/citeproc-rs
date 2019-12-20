@@ -328,7 +328,7 @@ pub fn graph_with_stack(
     let mkedge = |s: &str| {
         RefIR::Edge(if !s.is_empty() {
             Some(db.edge(EdgeData::Output(
-                fmt.output_in_context(fmt.plain(s), Default::default()),
+                fmt.output_in_context(fmt.plain(s), Default::default(), None),
             )))
         } else {
             None
@@ -370,13 +370,13 @@ pub fn add_to_graph(
                 ref delimiter,
                 // TODO: use these
                 ref quotes,
-                text_case: _,
+                text_case,
             } = *seq;
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
                     Some(db.edge(EdgeData::Output(
-                        fmt.output_in_context(fmt.plain(s), Default::default()),
+                        fmt.output_in_context(fmt.plain(s), Default::default(), None),
                     )))
                 } else {
                     None

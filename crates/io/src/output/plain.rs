@@ -93,7 +93,7 @@ impl OutputFormat for PlainText {
     }
 
     #[inline]
-    fn output(&self, intermediate: Self::Build) -> Self::Output {
+    fn output_in_context(&self, intermediate: Self::Build, _formatting: Formatting, _punctuation_in_quote: Option<bool>) -> Self::Output {
         intermediate
     }
 

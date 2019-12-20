@@ -113,7 +113,7 @@ impl Disambiguation<Markup> for Element {
                     }
                 };
                 let content = content
-                    .map(|x| fmt.output_in_context(x, stack))
+                    .map(|x| fmt.output_in_context(x, stack, None))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));
                 let gv = GroupVars::rendered_if(content.is_some());
@@ -164,7 +164,7 @@ impl Disambiguation<Markup> for Element {
                         }
                     };
                     let content = content
-                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(|x| fmt.output_in_context(x, stack, None))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     let gv = GroupVars::rendered_if(content.is_some());
@@ -173,7 +173,7 @@ impl Disambiguation<Markup> for Element {
                 TextSource::Value(ref val) => {
                     let content = renderer
                         .text_value(text, &val)
-                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(|x| fmt.output_in_context(x, stack, None))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     (RefIR::Edge(content), GroupVars::new())
@@ -181,7 +181,7 @@ impl Disambiguation<Markup> for Element {
                 TextSource::Term(term_selector, plural) => {
                     let content = renderer
                         .text_term(text, term_selector, plural)
-                        .map(|x| fmt.output_in_context(x, stack))
+                        .map(|x| fmt.output_in_context(x, stack, None))
                         .map(EdgeData::<Markup>::Output)
                         .map(|label| db.edge(label));
                     (RefIR::Edge(content), GroupVars::new())
@@ -238,7 +238,7 @@ impl Disambiguation<Markup> for Element {
                 let content = ctx
                     .get_number(var)
                     .and_then(|val| renderer.numeric_label(label, val))
-                    .map(|x| fmt.output_in_context(x, stack))
+                    .map(|x| fmt.output_in_context(x, stack, None))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));
                 let gv = GroupVars::rendered_if(content.is_some());

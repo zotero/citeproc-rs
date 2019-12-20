@@ -845,6 +845,13 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
+fn get_piq(db: &impl IrDatabase) -> bool {
+    // We pant PIQ to be global in a document, not change within a cluster because one cite
+    // decided to use a different language. Use the default locale to get it.
+    let default_locale = db.default_locale();
+    default_locale.options_node.punctuation_in_quote.unwrap_or(false)
+}
+
 fn built_cluster(
     db: &impl IrDatabase,
     cluster_id: ClusterId,
@@ -874,7 +881,7 @@ fn built_cluster(
         ),
         layout.formatting,
     );
-    Arc::new(fmt.output(build))
+    Arc::new(fmt.output(build, get_piq(db)))
 }
 
 // TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then
@@ -961,9 +968,9 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
             fmt.affixed(flat, layout.affixes.as_ref()),
             layout.formatting,
         );
-        Arc::new(fmt.output(build))
+        Arc::new(fmt.output(build, get_piq(db)))
     } else {
         // Whatever
-        Arc::new(fmt.output(fmt.plain("")))
+        Arc::new(fmt.output(fmt.plain(""), get_piq(db)))
     }
 }
