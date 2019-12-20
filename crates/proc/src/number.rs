@@ -1,6 +1,6 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
-use csl::{Gender, Locale, OrdinalTerm, OrdinalTermSelector};
+use csl::{Gender, Locale, OrdinalTerm, MiscTerm, TermFormExtended, SimpleTermSelector, OrdinalTermSelector};
 
 pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long: bool) -> String {
     let mut s = String::new();
@@ -20,7 +20,48 @@ pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long
             Comma => s.push_str(", "),
             // en-dash
             Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
+        }
+    }
+    s
+}
+
+fn get_ampersand(locale: &Locale) -> &str {
+    let sel = SimpleTermSelector::Misc(MiscTerm::And, TermFormExtended::Symbol);
+    // NO fallback; only want the symbol
+    if let Some(amp) = locale.simple_terms.get(&sel) {
+        amp.singular().trim()
+    } else {
+        "&"
+    }
+}
+
+pub fn arabic_number(num: &NumericValue, locale: &Locale) -> String {
+    match num {
+        NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale),
+        NumericValue::Str(s) => s.to_owned(),
+    }
+}
+
+fn tokens_to_string(ts: &[NumericToken], locale: &Locale) -> String {
+    let mut s = String::with_capacity(ts.len());
+    for t in ts {
+        match t {
+            // TODO: ordinals, etc
+            Num(i) => s.push_str(&format!("{}", i)),
+            Affixed(a) => s.push_str(&a),
+            Comma => s.push_str(", "),
+            // en-dash
+            Hyphen => s.push_str("\u{2013}"),
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
         }
     }
     s
@@ -37,7 +78,7 @@ pub fn roman_representable(val: &NumericValue) -> bool {
     }
 }
 
-pub fn roman_lower(ts: &[NumericToken]) -> String {
+pub fn roman_lower(ts: &[NumericToken], locale: &Locale) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;
     for t in ts {
@@ -52,7 +93,11 @@ pub fn roman_lower(ts: &[NumericToken]) -> String {
             Comma => s.push_str(", "),
             // en-dash
             Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
         }
     }
     s
@@ -67,7 +112,7 @@ fn test_roman_lower() {
         NumericToken::Comma,
         NumericToken::Affixed("2E".into()),
     ];
-    assert_eq!(&roman_lower(&ts[..]), "iii\u{2013}xi, 2E");
+    assert_eq!(&roman_lower(&ts[..], &Locale::default()), "iii\u{2013}xi, 2E");
 }
 
 #[allow(dead_code)]

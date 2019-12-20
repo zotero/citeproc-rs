@@ -33,22 +33,6 @@ impl NumericToken {
     }
 }
 
-fn tokens_to_string(ts: &[NumericToken]) -> String {
-    let mut s = String::with_capacity(ts.len());
-    for t in ts {
-        match t {
-            // TODO: ordinals, etc
-            Num(i) => s.push_str(&format!("{}", i)),
-            Affixed(a) => s.push_str(&a),
-            Comma => s.push_str(", "),
-            // en-dash
-            Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
-        }
-    }
-    s
-}
-
 /// Either a parsed vector of numeric tokens, or the raw string input.
 ///
 /// Relevant parts of the Spec:
@@ -119,19 +103,6 @@ impl NumericValue {
         match self {
             NumericValue::Tokens(verb, _) => verb.as_str(),
             NumericValue::Str(s) => s.as_str(),
-        }
-    }
-
-    pub fn as_number(&self, replace_hyphens: bool) -> String {
-        match self {
-            NumericValue::Tokens(_, ts) => tokens_to_string(ts),
-            NumericValue::Str(s) => {
-                if replace_hyphens {
-                    s.replace('-', "\u{2013}")
-                } else {
-                    s.clone()
-                }
-            }
         }
     }
 }

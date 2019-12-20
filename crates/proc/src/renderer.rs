@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, Name, NumericValue, Reference};
+use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
+use crate::number::{render_ordinal, roman_lower, roman_representable, arabic_number};
 use csl::{
     GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
@@ -198,7 +199,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         _af: Option<&Affixes>,
         text_case: TextCase,
     ) -> O::Build {
-        use citeproc_io::NumericToken;
+        let locale = self.ctx.locale();
         let fmt = self.fmt();
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
@@ -226,7 +227,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             // TODO: text-case
             _ => fmt.affixed_text(
-                val.as_number(var.should_replace_hyphens()),
+                arabic_number(val, locale),
                 None,
                 Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
@@ -235,12 +236,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
 
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
-        use crate::number::{render_ordinal, roman_lower, roman_representable};
+        let locale = self.ctx.locale();
+        debug!("number {:?}", val);
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts),
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale),
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
-                    let locale = self.ctx.locale();
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
                             .locator_type()
@@ -253,10 +254,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     let long = number.form == NumericForm::LongOrdinal;
                     render_ordinal(&ts, locale, gender, long)
                 }
-                _ => val.as_number(number.variable.should_replace_hyphens()),
+                _ => arabic_number(val, locale),
             }
         } else {
-            val.as_number(number.variable.should_replace_hyphens())
+            arabic_number(val, locale)
         };
         let fmt = self.fmt();
         let options = IngestOptions {
@@ -280,6 +281,28 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             Some(q)
         } else {
             None
+        }
+    }
+
+
+    pub fn text_number_variable(
+        &self,
+        text: &TextElement,
+        variable: NumberVariable,
+        val: &NumericValue,
+    ) -> O::Build {
+        if variable == NumberVariable::Locator {
+            let number = csl::NumberElement {
+                variable,
+                form: csl::NumericForm::default(),
+                formatting: text.formatting,
+                affixes: text.affixes.clone(),
+                text_case: text.text_case,
+                display: text.display,
+            };
+            self.number(&number, val)
+        } else {
+            self.text_variable(text, StandardVariable::Number(variable), val.verbatim())
         }
     }
 
