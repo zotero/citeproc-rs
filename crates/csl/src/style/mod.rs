@@ -1292,7 +1292,7 @@ impl Position {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#appendix-v-page-range-formats)
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
 pub enum PageRangeFormat {
     Chicago,

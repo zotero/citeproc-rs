@@ -1,8 +1,8 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
-use csl::{Gender, Locale, OrdinalTerm, MiscTerm, TermFormExtended, SimpleTermSelector, OrdinalTermSelector};
+use csl::{Gender, Locale, OrdinalTerm, MiscTerm, TermFormExtended, SimpleTermSelector, OrdinalTermSelector, PageRangeFormat};
 
-pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long: bool) -> String {
+pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, prf: Option<PageRangeFormat>, gender: Gender, long: bool) -> String {
     let mut s = String::new();
     for token in ts {
         match *token {
@@ -19,7 +19,7 @@ pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long
             Affixed(ref a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // en-dash
-            Hyphen => s.push_str("\u{2013}"),
+            Hyphen => s.push_str(get_hyphen(locale, prf.is_some())),
             Ampersand => {
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
@@ -40,23 +40,48 @@ fn get_ampersand(locale: &Locale) -> &str {
     }
 }
 
-pub fn arabic_number(num: &NumericValue, locale: &Locale) -> String {
+fn get_hyphen(locale: &Locale, is_page: bool) -> &str {
+    let sel = SimpleTermSelector::Misc(MiscTerm::PageRangeDelimiter, TermFormExtended::Symbol);
+    if is_page {
+        if let Some(amp) = locale.get_simple_term(sel) {
+            return amp.singular().trim();
+        }
+    }
+    "\u{2013}"
+}
+
+pub fn arabic_number(num: &NumericValue, locale: &Locale, prf: Option<PageRangeFormat>) -> String {
+    debug!("{:?}", num);
     match num {
-        NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale),
+        NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, prf),
         NumericValue::Str(s) => s.to_owned(),
     }
 }
 
-fn tokens_to_string(ts: &[NumericToken], locale: &Locale) -> String {
+fn tokens_to_string(ts: &[NumericToken], locale: &Locale, prf: Option<PageRangeFormat>) -> String {
     let mut s = String::with_capacity(ts.len());
+    #[derive(Copy, Clone)]
+    enum NumBefore {
+        SeenNum(u32),
+        SeenNumHyphen(u32),
+    }
+    let mut state = None;
     for t in ts {
         match t {
             // TODO: ordinals, etc
-            Num(i) => s.push_str(&format!("{}", i)),
+            Num(i) => {
+
+                match (prf, state) {
+                    (Some(prf), Some(NumBefore::SeenNumHyphen(prev))) => {
+                    }
+                    _ => {}
+                }
+                s.push_str(&format!("{}", i))
+            }
             Affixed(a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // en-dash
-            Hyphen => s.push_str("\u{2013}"),
+            Hyphen => s.push_str(get_hyphen(locale, prf.is_some())),
             Ampersand => {
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
@@ -78,7 +103,7 @@ pub fn roman_representable(val: &NumericValue) -> bool {
     }
 }
 
-pub fn roman_lower(ts: &[NumericToken], locale: &Locale) -> String {
+pub fn roman_lower(ts: &[NumericToken], locale: &Locale, prf: Option<PageRangeFormat>) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;
     for t in ts {
@@ -92,7 +117,7 @@ pub fn roman_lower(ts: &[NumericToken], locale: &Locale) -> String {
             Affixed(a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // en-dash
-            Hyphen => s.push_str("\u{2013}"),
+            Hyphen => s.push_str(get_hyphen(locale, prf.is_some())),
             Ampersand => {
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
@@ -112,7 +137,7 @@ fn test_roman_lower() {
         NumericToken::Comma,
         NumericToken::Affixed("2E".into()),
     ];
-    assert_eq!(&roman_lower(&ts[..], &Locale::default()), "iii\u{2013}xi, 2E");
+    assert_eq!(&roman_lower(&ts[..], &Locale::default(), None), "iii\u{2013}xi, 2E");
 }
 
 #[allow(dead_code)]

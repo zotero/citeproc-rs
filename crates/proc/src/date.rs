@@ -741,7 +741,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 MonthTerm::from_u32(date.month)
                     .map(|month| locale.get_month_gender(month))
                     .map(|gender| {
-                        render_ordinal(&[NumericToken::Num(date.day)], locale, gender, false)
+                        render_ordinal(&[NumericToken::Num(date.day)], locale, None, gender, false)
                     })
             }
             // Numeric or ordinal with limit-day-ordinals-to-day-1

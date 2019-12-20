@@ -200,7 +200,13 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         text_case: TextCase,
     ) -> O::Build {
         let locale = self.ctx.locale();
+        let style = self.ctx.style();
         let fmt = self.fmt();
+        let prf = if var == NumberVariable::Page && style.page_range_format.is_some() {
+            style.page_range_format
+        } else {
+            None
+        };
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
                 let mut s = String::new();
@@ -227,7 +233,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             // TODO: text-case
             _ => fmt.affixed_text(
-                arabic_number(val, locale),
+                arabic_number(val, locale, prf),
                 None,
                 Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
@@ -237,10 +243,16 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
         let locale = self.ctx.locale();
+        let style = self.ctx.style();
         debug!("number {:?}", val);
+        let prf = if number.variable == NumberVariable::Page && style.page_range_format.is_some() {
+            style.page_range_format
+        } else {
+            None
+        };
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale),
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, prf),
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
@@ -252,12 +264,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     };
                     let gender = locale.get_num_gender(number.variable, loc_type);
                     let long = number.form == NumericForm::LongOrdinal;
-                    render_ordinal(&ts, locale, gender, long)
+                    render_ordinal(&ts, locale, prf, gender, long)
                 }
-                _ => arabic_number(val, locale),
+                _ => arabic_number(val, locale, prf),
             }
         } else {
-            arabic_number(val, locale)
+            arabic_number(val, locale, prf)
         };
         let fmt = self.fmt();
         let options = IngestOptions {
@@ -291,7 +303,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         variable: NumberVariable,
         val: &NumericValue,
     ) -> O::Build {
-        if variable == NumberVariable::Locator {
+        let style = self.ctx.style();
+        let mod_page = style.page_range_format.is_some();
+        if variable == NumberVariable::Locator || (variable == NumberVariable::Page && mod_page) {
             let number = csl::NumberElement {
                 variable,
                 form: csl::NumericForm::default(),
