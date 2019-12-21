@@ -205,7 +205,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         pre_and_content
     }
 
-    /// Do any punctuation-moving here.
     fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str);
 
     fn apply_text_case(&self, mutable: &mut Self::Build, options: &IngestOptions);
