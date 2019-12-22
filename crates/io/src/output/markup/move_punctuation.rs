@@ -193,11 +193,13 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
 
         let mut pop_count = 1;
         let mut out_remove_count = 1;
+        let mut inside_authentic = true;
 
         if !is_punc(inside_char) && !is_punc(outside_char) {
             return None;
         } else if !is_punc(inside_char) {
             if let Some(second) = has_two_puncs {
+                inside_authentic = false;
                 pop_count = 0;
                 out_remove_count = 2;
                 inside_char = outside_char;
@@ -231,7 +233,6 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
         // No panics here because all the punctuation characters are ASCII
         let bytes: [u8; 2] = [inside_char as u8, outside_char as u8];
 
-
         // XXX: this shouldn't examine characters from inside a quote (i.e. in the original field);
         // it should look at sequences of characters in a row that appear next to a quote.
 
@@ -261,7 +262,13 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
                 return Some(Motion::RemovedAndRetry(remove_empty_left(els, ix + 1)));
             }
             Where::Out(in_str) => {
-                {
+                // magic_PunctuationInQuoteFalseSuppressExtra.txt -- the ? came from a field, i.e.
+                // inside a parsed MicroNode, so . This is approximate, has a false positive for
+                // question marks from style-provided text nodes inside InlineElement::Quoted. But
+                // those are pretty rare, so don't bother for now. (Only appears in one style:
+                // universite-du-quebec-a-montreal.csl)
+                let moves_out = !inside_authentic || can_move_out(inside_char);
+                if moves_out {
                     let insert = insertion_point.last_string_mut()?;
                     for _ in 0..pop_count {
                         insert.pop();
@@ -272,7 +279,12 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
                     for _ in 0..out_remove_count {
                         outside.remove(0);
                     }
-                    outside.insert_str(0, in_str);
+                    if moves_out {
+                        outside.insert_str(0, in_str);
+                    } else {
+                        // don't include the first char
+                        outside.insert_str(0, &in_str[1..]);
+                    }
                 }
                 drop(insertion_point);
                 return None;
