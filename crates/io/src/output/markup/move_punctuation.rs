@@ -17,6 +17,23 @@ fn normalise() {
     assert_eq!(&nodes[..], &[InlineElement::Micro(MicroNode::parse("ab", &Default::default()))][..]);
 }
 
+fn smash_string_push(base: &mut String, suff: &str) {
+    info!("smash_string_push {:?} <- {:?}", base, suff);
+    let base_len = base.len();
+    let suff_len = suff.len();
+    base.push_str(suff);
+    // Smash across the boundary
+    if base_len > 0 && suff_len > 0 {
+        // We know all punctuation characters here are 1 byte long, so we can ignore unicode for the
+        // lookups
+        let start = base_len - 1;
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[start..start+2]) {
+            info!("smash_string_push REPLACING {:?} with {:?}", &base[start..start+2], *replacement);
+            base.replace_range(start..start + 2, *replacement);
+        }
+    }
+}
+
 pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
     let mut len = slice.len();
@@ -30,7 +47,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
             if let Some(head_2) = tail.first_mut() {
                 match (head, head_2) {
                     (InlineElement::Text(ref mut s), InlineElement::Text(s2)) => {
-                        s.push_str(&s2);
+                        smash_string_push(s, &s2);
                         pop_tail = true;
                     }
                     (InlineElement::Micro(ref mut ms), InlineElement::Micro(ref mut ms2)) => {
@@ -78,7 +95,7 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
             if let Some(head_2) = tail.first_mut() {
                 match (head, head_2) {
                     (MicroNode::Text(ref mut s), MicroNode::Text(s2)) => {
-                        s.push_str(&s2);
+                        smash_string_push(s, &s2);
                         pop_tail = true;
                     }
                     _ => {}
