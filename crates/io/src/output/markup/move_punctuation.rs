@@ -20,7 +20,11 @@ fn normalise() {
 pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
     let mut len = slice.len();
-    while ix < len-1 {
+    if len < 1 {
+        return;
+    }
+    len -= 1;
+    while ix < len {
         let mut pop_tail = false;
         if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
             if let Some(head_2) = tail.first_mut() {
@@ -30,8 +34,14 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
                         pop_tail = true;
                     }
                     (InlineElement::Micro(ref mut ms), InlineElement::Micro(ref mut ms2)) => {
-                        ms.extend(ms2.drain(..));
-                        pop_tail = true;
+                        // Only join if it doesn't end with a quoted
+                        if ms.last().map_or(false, |x| match x {
+                            MicroNode::Text(_) => true,
+                            _ => false,
+                        }) {
+                            ms.extend(ms2.drain(..));
+                            pop_tail = true;
+                        }
                     }
                     _ => {}
                 }
@@ -39,7 +49,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
         }
         if pop_tail {
             slice.remove(ix + 1);
-            len -= 1;
+            len = len.saturating_sub(1);
         } else {
             ix += 1;
         }
@@ -58,7 +68,11 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
 pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
     let mut ix = 0;
     let mut len = slice.len();
-    while ix < len-1 {
+    if len < 1 {
+        return;
+    }
+    len -= 1;
+    while ix < len {
         let mut pop_tail = false;
         if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
             if let Some(head_2) = tail.first_mut() {
@@ -72,7 +86,7 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
             }
         }
         if pop_tail {
-            len -= 1;
+            len = len.saturating_sub(1);
             slice.remove(ix + 1);
         } else {
             ix += 1;
@@ -152,10 +166,16 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
         debug!("{:?}", insertion_point.next_string_mut());
         // Last element burrowed down to a right quotation mark
         let mut needs_removal = false;
-        let outside_char = {
+        let mut has_two_puncs = None;
+        let mut outside_char = {
             let suffix = insertion_point.next_string_mut()?;
 
             if let Some(first) = suffix.chars().nth(0) {
+                if let Some(second) = suffix.chars().nth(1) {
+                    if is_punc(first) && is_punc(second) {
+                        has_two_puncs = Some(second)
+                    }
+                }
                 first as char
             } else {
                 // the string is empty! let's fix it just because;
@@ -165,16 +185,25 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
             }
         };
 
-        let inside_char = {
+        let mut inside_char = {
             // Will always be Some, as we established this with ends_with_punctuation()
             let insert = insertion_point.last_string_mut()?;
             insert.chars().rev().nth(0)?
         };
 
+        let mut pop_count = 1;
+        let mut out_remove_count = 1;
+
         if !is_punc(inside_char) && !is_punc(outside_char) {
             return None;
         } else if !is_punc(inside_char) {
-            if piq && can_move_in(outside_char) {
+            if let Some(second) = has_two_puncs {
+                pop_count = 0;
+                out_remove_count = 2;
+                inside_char = outside_char;
+                outside_char = second;
+                // Continue onwards
+            } else if piq && can_move_in(outside_char) {
                 {
                     let insert = insertion_point.last_string_mut()?;
                     insert.push(outside_char);
@@ -214,36 +243,57 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
             QUOTES_BOTH_PUNC_OUT.get(&bytes[..])
         }?;
 
-        match result {
+        match *result {
             Where::In(in_str) => {
                 {
                     let insert = insertion_point.last_string_mut()?;
-                    insert.pop();
+                    for _ in 0..pop_count {
+                        insert.pop();
+                    }
                     insert.push_str(in_str);
                 }
                 {
                     let outside = insertion_point.next_string_mut()?;
-                    outside.remove(0);
+                    for _ in 0..out_remove_count {
+                        outside.remove(0);
+                    }
                 }
                 return Some(Motion::RemovedAndRetry(remove_empty_left(els, ix + 1)));
             }
             Where::Out(in_str) => {
                 {
                     let insert = insertion_point.last_string_mut()?;
-                    insert.pop();
+                    for _ in 0..pop_count {
+                        insert.pop();
+                    }
                 }
                 {
                     let outside = insertion_point.next_string_mut()?;
-                    outside.remove(0);
+                    for _ in 0..out_remove_count {
+                        outside.remove(0);
+                    }
                     outside.insert_str(0, in_str);
                 }
                 drop(insertion_point);
                 return None;
             }
-            Where::Noop => {
-                // noop!
+            Where::Split(inn, out) => {
+                {
+                    let insert = insertion_point.last_string_mut()?;
+                    for _ in 0..pop_count {
+                        insert.pop();
+                    }
+                    insert.push(inn);
+                }
+                {
+                    let outside = insertion_point.next_string_mut()?;
+                    for _ in 0..out_remove_count {
+                        outside.remove(0);
+                    }
+                    outside.insert(0, out);
+                }
                 drop(insertion_point);
-                return Some(Motion::RemovedNoChanges(remove_empty_left(els, ix + 1)));
+                return None;
             }
         }
     }
@@ -257,8 +307,7 @@ enum Where {
     In(&'static str),
     // Leave no punctuation inside the quote, and replace the char on the right with this
     Out(&'static str),
-    Noop,
-    // Split(char, char),
+    Split(char, char),
 }
 
 fn is_punc(c: char) -> bool {
@@ -540,11 +589,11 @@ pub fn append_suffix(pre_and_content: &mut Vec<InlineElement>, suffix: Vec<Micro
 static QUOTES_BOTH_PUNC_IN: phf::Map<&'static [u8], Where> = phf_map! {
     // Colon
     b"::" => Where::Out(":"),
-    b".:" => Where::Noop,
+    b".:" => Where::Split('.', ':'),
     b";:" => Where::Out(";"),
     b"!:" => Where::In("!"),
     b"?:" => Where::In("?"),
-    b",:" => Where::Noop,
+    b",:" => Where::Split(',', ':'),
     // Period
     b":." => Where::Out(":"),
     b".." => Where::In("."),
@@ -554,11 +603,11 @@ static QUOTES_BOTH_PUNC_IN: phf::Map<&'static [u8], Where> = phf_map! {
     b",." => Where::In(",."),
     // Semicolon
     b":;" => Where::Out(":;"),
-    b".;" => Where::Noop,
+    b".;" => Where::Split('.', ';'),
     b";;" => Where::Out(";"),
-    b"!;" => Where::Noop,
-    b"?;" => Where::Noop,
-    b",;" => Where::Noop,
+    b"!;" => Where::Split('!', ';'),
+    b"?;" => Where::Split('?', ';'),
+    b",;" => Where::Split(',', ';'),
     // Exclamation
     b":!" => Where::In("!"),
     b".!" => Where::In(".!"),
