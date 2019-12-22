@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 citeproc = { path = "../citeproc" }
 citeproc-io = { path = "../io" }
+citeproc-proc = { path = "../proc" }
 csl = { path = "../csl" }
 directories = "2.0.2"
 lazy_static = "1.4.0"

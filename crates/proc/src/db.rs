@@ -857,6 +857,15 @@ fn built_cluster(
     cluster_id: ClusterId,
 ) -> Arc<<Markup as OutputFormat>::Output> {
     let fmt = db.get_formatter();
+    let build = built_cluster_before_output(db, cluster_id);
+    Arc::new(fmt.output(build, get_piq(db)))
+}
+
+pub fn built_cluster_before_output(
+    db: &impl IrDatabase,
+    cluster_id: ClusterId,
+) -> <Markup as OutputFormat>::Build {
+    let fmt = db.get_formatter();
     let cite_ids = db.cluster_cites(cluster_id);
     let style = db.style();
     let layout = &style.citation.layout;
@@ -874,14 +883,13 @@ fn built_cluster(
             Some(fmt.affixed(flattened, Some(&aff)))
         })
         .collect();
-    let build = fmt.with_format(
+    fmt.with_format(
         fmt.affixed(
             fmt.group(built_cites, &layout.delimiter.0, None),
             layout.affixes.as_ref(),
         ),
         layout.formatting,
-    );
-    Arc::new(fmt.output(build, get_piq(db)))
+    )
 }
 
 // TODO: intermediate layer before bib_item, which is before subsequent-author-substitute. Then

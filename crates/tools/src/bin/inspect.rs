@@ -81,8 +81,9 @@ fn main() -> Result<(), Error> {
     let features = &style.features;
     let cluster = || {
         for &id in case.processor.cluster_ids().iter() {
-            let built = case.processor.built_cluster(id);
-            println!("ClusterId({:?}): {}", id, built);
+            use test_utils::citeproc_proc::built_cluster_before_output;
+            let built = built_cluster_before_output(&case.processor, id);
+            println!("ClusterId({:?}): {:#?}", id, built);
         }
     };
     match opt.kind.unwrap_or_else(Default::default) {

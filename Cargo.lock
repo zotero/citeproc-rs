@@ -1752,6 +1752,7 @@ dependencies = [
  "anyhow 1.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "citeproc 0.0.1",
  "citeproc-io 0.1.0",
+ "citeproc-proc 0.1.0",
  "csl 0.0.1",
  "directories 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
