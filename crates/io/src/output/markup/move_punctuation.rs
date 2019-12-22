@@ -17,8 +17,18 @@ fn normalise() {
     assert_eq!(&nodes[..], &[InlineElement::Micro(MicroNode::parse("ab", &Default::default()))][..]);
 }
 
-fn smash_string_push(base: &mut String, suff: &str) {
+fn smash_string_push(base: &mut String, mut suff: &str) {
     info!("smash_string_push {:?} <- {:?}", base, suff);
+    let suff_trimmed = suff.trim_start();
+    if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
+        && suff_trimmed.chars().nth(0).map_or(false, is_punc)
+    {
+        suff = suff_trimmed;
+        let trimmed = base.trim_end();
+        if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
+            base.truncate(trimmed.len())
+        }
+    }
     let base_len = base.len();
     let suff_len = suff.len();
     base.push_str(suff);
@@ -34,6 +44,19 @@ fn smash_string_push(base: &mut String, suff: &str) {
     }
 }
 
+impl InlineElement {
+    fn normalise_micro_single_text(&mut self) {
+        if let InlineElement::Micro(ref mut m) = self {
+            if m.len() == 1 {
+                if let Some(text) = m.first_mut().unwrap().take_text() {
+                    drop(m);
+                    *self = InlineElement::Text(text);
+                }
+            }
+        }
+    }
+}
+
 pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
     let mut len = slice.len();
@@ -44,7 +67,9 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     while ix < len {
         let mut pop_tail = false;
         if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
+            head.normalise_micro_single_text();
             if let Some(head_2) = tail.first_mut() {
+                head_2.normalise_micro_single_text();
                 match (head, head_2) {
                     (InlineElement::Text(ref mut s), InlineElement::Text(s2)) => {
                         smash_string_push(s, &s2);
