@@ -1,6 +1,93 @@
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
 
+#[test]
+fn normalise() {
+    let mut nodes = vec![
+        InlineElement::Text("a".to_owned()),
+        InlineElement::Text("b".to_owned()),
+    ];
+    normalise_text_elements(&mut nodes);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
+    let mut nodes = vec![
+        InlineElement::Micro(MicroNode::parse("a", &Default::default())),
+        InlineElement::Micro(MicroNode::parse("b", &Default::default())),
+    ];
+    normalise_text_elements(&mut nodes);
+    assert_eq!(&nodes[..], &[InlineElement::Micro(MicroNode::parse("ab", &Default::default()))][..]);
+}
+
+pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
+    let mut ix = 0;
+    let mut len = slice.len();
+    while ix < len-1 {
+        let mut pop_tail = false;
+        if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
+            if let Some(head_2) = tail.first_mut() {
+                match (head, head_2) {
+                    (InlineElement::Text(ref mut s), InlineElement::Text(s2)) => {
+                        s.push_str(&s2);
+                        pop_tail = true;
+                    }
+                    (InlineElement::Micro(ref mut ms), InlineElement::Micro(ref mut ms2)) => {
+                        ms.extend(ms2.drain(..));
+                        pop_tail = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if pop_tail {
+            slice.remove(ix + 1);
+            len -= 1;
+        } else {
+            ix += 1;
+        }
+    }
+    for inl in slice.iter_mut() {
+        match inl {
+            InlineElement::Quoted { inlines, .. }
+            | InlineElement::Div(_, inlines)
+            | InlineElement::Formatted(inlines, _) => normalise_text_elements(inlines),
+            | InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
+            _ => {}
+        }
+    }
+}
+
+pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
+    let mut ix = 0;
+    let mut len = slice.len();
+    while ix < len-1 {
+        let mut pop_tail = false;
+        if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
+            if let Some(head_2) = tail.first_mut() {
+                match (head, head_2) {
+                    (MicroNode::Text(ref mut s), MicroNode::Text(s2)) => {
+                        s.push_str(&s2);
+                        pop_tail = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if pop_tail {
+            len -= 1;
+            slice.remove(ix + 1);
+        } else {
+            ix += 1;
+        }
+    }
+    for inl in slice.iter_mut() {
+        match inl {
+            MicroNode::Quoted { children, .. }
+            | MicroNode::NoCase(children)
+            | MicroNode::Formatted(children, _) => normalise_text_elements_micro(children),
+            _ => {}
+        }
+    }
+}
+
 enum Motion {
     RemovedAndRetry(usize),
     RemovedNoChanges(usize),
@@ -9,7 +96,9 @@ enum Motion {
 // Basically, affixes go outside Quoted elements. So we can just look for text elements that come
 // right after quoted ones.
 pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Option<bool>) {
-    if slice.len() >= 2 {
+    normalise_text_elements(slice);
+
+    if slice.len() > 1 {
         // Basically windows(2)/peekable() iteration, but &mut.
         let mut len = slice.len();
         let mut ix = 0;
@@ -19,7 +108,7 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
             // output
             let mut new_ix = ix + 1;
             if let Some(piq) = punctuation_in_quote {
-                if let Some(motion) = append_suffix_inner(slice, ix, piq) {
+                if let Some(motion) = move_around_quote(slice, ix, piq) {
                     match motion {
                         Motion::RemovedAndRetry(removed) => {
                             len -= removed;
@@ -56,8 +145,8 @@ fn can_move_out(ch: char) -> bool {
 
 /// Return value = how many extra inlines were consumed by moving al the text out and then being
 /// removed.
-fn append_suffix_inner(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Option<Motion> {
-    debug!("append_suffix_inner {:?} {:?} {:?}", els.get(ix), ix, piq);
+fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Option<Motion> {
+    debug!("move_around_quote {:?} {:?} {:?}", els.get(ix), ix, piq);
     if let Some(mut insertion_point) = find_right_quote(els, ix, piq) {
         debug!("{:?}", insertion_point.last_string_mut());
         debug!("{:?}", insertion_point.next_string_mut());
@@ -112,6 +201,10 @@ fn append_suffix_inner(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Op
 
         // No panics here because all the punctuation characters are ASCII
         let bytes: [u8; 2] = [inside_char as u8, outside_char as u8];
+
+
+        // XXX: this shouldn't examine characters from inside a quote (i.e. in the original field);
+        // it should look at sequences of characters in a row that appear next to a quote.
 
         debug!("looking up [{:?}, {:?}]", inside_char, outside_char);
 
@@ -435,7 +528,7 @@ pub fn append_suffix(pre_and_content: &mut Vec<InlineElement>, suffix: Vec<Micro
     // if let Some(last) = pre_and_content.last_mut() {
     //     // Must be followed by some text
     //     if let Some(string) = suffix.first_mut().and_then(find_string_left_micro) {
-    //         append_suffix_inner(last, string);
+    //         move_around_quote(last, string);
     //     }
     // }
     // Do punctuation moves later; simply avoid doing anything while the inlines could still be

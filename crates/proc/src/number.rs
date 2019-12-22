@@ -190,7 +190,7 @@ fn test_roman_lower() {
         NumericToken::Affixed("2E".into()),
     ];
     assert_eq!(
-        &roman_lower(&ts[..], &Locale::default(), None),
+        &roman_lower(&ts[..], &Locale::default(), NumberVariable::Locator, None),
         "iii\u{2013}xi, 2E"
     );
 }
