@@ -447,11 +447,17 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
 
 fn pn_filter_part(pn: &PersonName, token: NamePartToken) -> bool {
     match token {
-        NamePartToken::Given => pn.given.is_some(),
-        NamePartToken::Family => pn.family.is_some(),
-        NamePartToken::NonDroppingParticle => pn.non_dropping_particle.is_some(),
-        NamePartToken::DroppingParticle => pn.dropping_particle.is_some(),
-        NamePartToken::Suffix => pn.suffix.is_some(),
+        NamePartToken::Given => pn.given.as_ref().map_or(false, |s| !s.is_empty()),
+        NamePartToken::Family => pn.family.as_ref().map_or(false, |s| !s.is_empty()),
+        NamePartToken::NonDroppingParticle => pn
+            .non_dropping_particle
+            .as_ref()
+            .map_or(false, |s| !s.is_empty()),
+        NamePartToken::DroppingParticle => pn
+            .dropping_particle
+            .as_ref()
+            .map_or(false, |s| !s.is_empty()),
+        NamePartToken::Suffix => pn.suffix.as_ref().map_or(false, |s| !s.is_empty()),
         NamePartToken::Space => true,
         NamePartToken::SortSeparator => true,
     }
@@ -660,11 +666,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     ref affixes,
                     ..
                 } = *part;
-                let b = fmt.ingest(s, &IngestOptions {
-                    text_case: part.text_case,
-                    // TODO: use the correct quotes? They shouldn't be appearing in names anyway.
-                    ..Default::default()
-                });
+                let b = fmt.ingest(
+                    s,
+                    &IngestOptions {
+                        text_case: part.text_case,
+                        // TODO: use the correct quotes? They shouldn't be appearing in names anyway.
+                        ..Default::default()
+                    },
+                );
                 let b = fmt.with_format(b, formatting);
                 fmt.affixed(b, affixes.as_ref())
             }
