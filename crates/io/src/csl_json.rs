@@ -49,6 +49,8 @@ impl<'de> Visitor<'de> for LanguageVisitor {
     }
 }
 
+struct MaybeDate(Option<DateOrRange>);
+
 pub struct WrapLang(Lang);
 
 impl<'de> Deserialize<'de> for WrapLang {
@@ -219,7 +221,9 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
+                                    if let MaybeDate(Some(d)) = map.next_value()? {
+                                        ve.insert(d);
+                                    }
                                 }
                             }
                         }
@@ -318,7 +322,7 @@ impl<'de> Deserialize<'de> for NumericValue {
 }
 
 // newtype these so we can have a different implementation
-struct DateParts(DateOrRange);
+struct DateParts(Option<DateOrRange>);
 
 struct DateInt(i32);
 
@@ -458,7 +462,9 @@ impl<'de> Deserialize<'de> for DateUInt {
     }
 }
 
-impl<'de> Deserialize<'de> for Date {
+struct OptDate(Option<Date>);
+
+impl<'de> Deserialize<'de> for OptDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -466,7 +472,7 @@ impl<'de> Deserialize<'de> for Date {
         struct SingleDatePartVisitor;
 
         impl<'de> Visitor<'de> for SingleDatePartVisitor {
-            type Value = Date;
+            type Value = OptDate;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a date-part, e.g. [2004, 8, 19]")
@@ -476,20 +482,21 @@ impl<'de> Deserialize<'de> for Date {
             where
                 V: SeqAccess<'de>,
             {
-                let year: DateInt = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let month = if month >= 1 && month <= 16 {
-                    month
-                } else if month >= 21 && month <= 24 {
-                    month - 8
+                if let Some(year) = seq.next_element::<DateInt>()? {
+                    let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
+                    let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
+                    let month = if month >= 1 && month <= 16 {
+                        month
+                    } else if month >= 21 && month <= 24 {
+                        month - 8
+                    } else {
+                        0
+                    };
+                    let day = if day >= 1 && day <= 31 { day } else { 0 };
+                    Ok(OptDate(Some(Date::new(year.0, month, day))))
                 } else {
-                    0
-                };
-                let day = if day >= 1 && day <= 31 { day } else { 0 };
-                Ok(Date::new(year.0, month, day))
+                    Ok(OptDate(None))
+                }
             }
 
             // citeproc-rs may wish to parse its own pandoc Meta blocks without forking out
@@ -520,12 +527,13 @@ impl<'de> Deserialize<'de> for DateParts {
             where
                 V: SeqAccess<'de>,
             {
-                let from = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                match seq.next_element()? {
-                    Some(to) => Ok(DateParts(DateOrRange::Range(from, to))),
-                    None => Ok(DateParts(DateOrRange::Single(from))),
+                if let Some(OptDate(Some(from))) = seq.next_element()? {
+                    match seq.next_element()? {
+                        Some(OptDate(Some(to))) => Ok(DateParts(Some(DateOrRange::Range(from, to)))),
+                        _ => Ok(DateParts(Some(DateOrRange::Single(from)))),
+                    }
+                } else {
+                    Ok(DateParts(None))
                 }
             }
         }
@@ -534,7 +542,7 @@ impl<'de> Deserialize<'de> for DateParts {
 }
 
 /// TODO:implement seasons
-impl<'de> Deserialize<'de> for DateOrRange {
+impl<'de> Deserialize<'de> for MaybeDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -552,7 +560,7 @@ impl<'de> Deserialize<'de> for DateOrRange {
         struct DateVisitor;
 
         impl<'de> Visitor<'de> for DateVisitor {
-            type Value = DateOrRange;
+            type Value = MaybeDate;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a date")
@@ -562,14 +570,14 @@ impl<'de> Deserialize<'de> for DateOrRange {
             where
                 E: de::Error,
             {
-                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string())))
+                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string()))).map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value)))
+                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value))).map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
@@ -593,14 +601,17 @@ impl<'de> Deserialize<'de> for DateOrRange {
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
                         DateType::DateParts => {
                             let dp: DateParts = map.next_value()?;
-                            found = Some(dp.0);
+                            if dp.0.is_some() {
+                                found = dp.0;
+                            }
                         }
                         DateType::Season => found_season = Some(map.next_value()?),
                         DateType::Circa => found_circa = Some(map.next_value()?),
                     }
                 }
-                found
-                    .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
+                Ok(found
+                    .ok_or(())
+                    // .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
                     .and_then(|mut found| {
                         if let Some(season) = found_season {
                             if let DateOrRange::Single(ref mut date) = found {
@@ -623,20 +634,23 @@ impl<'de> Deserialize<'de> for DateOrRange {
                                                 Ok(unsigned as u32)
                                             }
                                         });
-                                    let mut season = season?;
-                                    if season > 20 {
-                                        // handle 21, 22, 23, 24
-                                        season -= 20;
+                                    if let Ok(mut season) = season {
+                                        if season > 20 {
+                                            // handle 21, 22, 23, 24
+                                            season -= 20;
+                                        }
+                                        date.month = season + 12;
                                     }
-                                    date.month = season + 12;
                                 }
                             }
                         }
                         if let Some(_circa) = found_circa {
                             // Do something?
                         }
-                        Ok(found)
+                        Ok(MaybeDate(Some(found)))
                     })
+                    .ok()
+                    .unwrap_or(MaybeDate(None)))
             }
         }
 
