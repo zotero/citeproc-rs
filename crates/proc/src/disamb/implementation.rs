@@ -19,7 +19,17 @@ impl Disambiguation<Markup> for Style {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(db, ctx, state, &els, "".into(), Some(stack), None, None, None)
+        ref_sequence(
+            db,
+            ctx,
+            state,
+            &els,
+            "".into(),
+            Some(stack),
+            None,
+            None,
+            None,
+        )
     }
 }
 
@@ -190,7 +200,7 @@ impl Disambiguation<Markup> for Element {
                         text.formatting,
                         text.affixes.as_ref(),
                         text.display,
-                        renderer.quotes(text.quotes),
+                        renderer.quotes_if(text.quotes),
                     );
                     state.pop_macro(name);
                     ret

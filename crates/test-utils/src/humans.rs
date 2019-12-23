@@ -493,8 +493,7 @@ pub fn parse_human_test(contents: &str) -> TestCase {
 
     TestCase::new(
         mode.map(|(m, _)| m).unwrap_or(Mode::Citation),
-        mode
-            .map(|(_, f)| Format(f))
+        mode.map(|(_, f)| Format(f))
             .unwrap_or(Format(SupportedFormat::TestHtml)),
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),

@@ -21,7 +21,7 @@ pub fn sequence<'c, O, I>(
     affixes: Option<&Affixes>,
     display: Option<DisplayMode>,
     // Only because <text macro="xxx" /> supports quotes.
-    quotes: Option<LocalizedQuotes>
+    quotes: Option<LocalizedQuotes>,
 ) -> IrSum<O>
 where
     O: OutputFormat,
@@ -49,11 +49,7 @@ where
                 formatting,
                 affixes: affixes.cloned(),
                 delimiter,
-                display: if ctx.in_bibliography {
-                    display
-                } else {
-                    None
-                },
+                display: if ctx.in_bibliography { display } else { None },
                 quotes,
             }),
             gv,
@@ -69,7 +65,7 @@ pub fn ref_sequence<'c>(
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Option<&Affixes>,
-    display: Option<DisplayMode>,
+    _display: Option<DisplayMode>,
     quotes: Option<LocalizedQuotes>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;

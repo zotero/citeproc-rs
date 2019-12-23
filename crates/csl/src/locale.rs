@@ -209,10 +209,7 @@ impl FromNode for TermEl {
                 SimpleTermSelector::Misc(t, TermFormExtended::from_node(node, info)?),
                 content,
             )),
-            Quote(t) => Ok(TermEl::Simple(
-                SimpleTermSelector::Quote(t),
-                content,
-            )),
+            Quote(t) => Ok(TermEl::Simple(SimpleTermSelector::Quote(t), content)),
             Role(t) => Ok(TermEl::Role(
                 RoleTermSelector(t, TermFormExtended::from_node(node, info)?),
                 content,

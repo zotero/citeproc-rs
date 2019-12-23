@@ -10,31 +10,102 @@ use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::Formatting;
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct RtfWriter {}
+#[derive(Debug)]
+pub struct RtfWriter<'a> {
+    dest: &'a mut String,
+}
 
-impl MarkupWriter for RtfWriter {
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
+impl<'a> RtfWriter<'a> {
+    pub fn new(dest: &'a mut String) -> Self {
+        RtfWriter { dest }
+    }
+}
+
+impl<'a> MarkupWriter for RtfWriter<'a> {
+    fn write_escaped(&mut self, text: &str) {
+        rtf_escape_into(text, self.dest);
+    }
+    fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
-            let tag = cmd.rtf_tag(self);
-            s.push('{');
-            s.push_str(tag);
+            let tag = cmd.rtf_tag();
+            self.dest.push('{');
+            self.dest.push_str(tag);
         }
     }
 
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
+    fn stack_postorder(&mut self, stack: &[FormatCmd]) {
         for _cmd in stack.iter() {
-            s.push('}');
+            self.dest.push('}');
         }
     }
 
-    fn write_inline(&self, s: &mut String, inline: &InlineElement) {
-        inline.to_rtf_inner(s, self);
+    fn write_micro(&mut self, micro: &MicroNode) {
+        use MicroNode::*;
+        match micro {
+            Text(text) => {
+                self.write_escaped(text);
+            }
+            Quoted {
+                is_inner,
+                localized,
+                children,
+            } => {
+                self.write_escaped(localized.opening(*is_inner));
+                self.write_micros(children);
+                self.write_escaped(localized.closing(*is_inner));
+            }
+            Formatted(nodes, cmd) => {
+                let tag = cmd.rtf_tag();
+                self.dest.push('{');
+                self.dest.push_str(tag);
+                self.write_micros(nodes);
+                self.dest.push('}');
+            }
+            NoCase(inners) => {
+                self.write_micros(inners);
+            }
+        }
+    }
+
+    fn write_inline(&mut self, inline: &InlineElement) {
+        use super::InlineElement::*;
+        match inline {
+            Text(text) => {
+                rtf_escape_into(text, self.dest);
+            }
+            Div(display, inlines) => {
+                self.stack_formats(inlines, Formatting::default(), Some(*display))
+            }
+            Micro(micros) => {
+                self.write_micros(micros);
+            }
+            Formatted(inlines, formatting) => {
+                self.stack_formats(inlines, *formatting, None);
+            }
+            Quoted {
+                is_inner,
+                localized,
+                inlines,
+            } => {
+                self.write_escaped(localized.opening(*is_inner));
+                self.write_inlines(inlines);
+                self.write_escaped(localized.closing(*is_inner));
+            }
+            Anchor { url, content, .. } => {
+                // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
+                // TODO: HTML-quoted-escape? the url?
+                self.dest.push_str(r#"<a href=""#);
+                self.dest.push_str(&url);
+                self.dest.push_str(r#"">"#);
+                self.write_inlines(content);
+                self.dest.push_str("</a>");
+            }
+        }
     }
 }
 
 impl FormatCmd {
-    fn rtf_tag(self, _options: &RtfWriter) -> &'static str {
+    fn rtf_tag(self) -> &'static str {
         use super::FormatCmd::*;
         match self {
             // TODO: RTF display commands
@@ -62,75 +133,6 @@ impl FormatCmd {
             VerticalAlignmentSuperscript => "\\super ",
             VerticalAlignmentSubscript => "\\sub ",
             VerticalAlignmentBaseline => "\\nosupersub ",
-        }
-    }
-}
-
-impl MicroNode {
-    fn to_rtf_inner(&self, s: &mut String, options: &RtfWriter) {
-        use MicroNode::*;
-        match self {
-            Text(text) => {
-                rtf_escape_into(text, s);
-            }
-            Formatted(nodes, cmd) => {
-                let tag = cmd.rtf_tag(options);
-                *s += "{";
-                *s += tag;
-                for node in nodes {
-                    node.to_rtf_inner(s, options);
-                }
-                *s += "}";
-            }
-            NoCase(inners) => {
-                for i in inners {
-                    i.to_rtf_inner(s, options);
-                }
-            }
-        }
-    }
-}
-
-impl InlineElement {
-    fn to_rtf_inner(&self, s: &mut String, options: &RtfWriter) {
-        use super::InlineElement::*;
-        match self {
-            Text(text) => {
-                rtf_escape_into(text, s);
-            }
-            Div(display, inlines) => {
-                options.stack_formats(s, inlines, Formatting::default(), Some(*display))
-            }
-            Micro(micros) => {
-                for micro in micros {
-                    micro.to_rtf_inner(s, options);
-                }
-            }
-            Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting, None);
-            }
-            Quoted {
-                is_inner,
-                localized,
-                inlines,
-            }=> {
-                s.push_str(localized.opening(*is_inner));
-                for i in inlines {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str(localized.closing(*is_inner));
-            }
-            Anchor { url, content, .. } => {
-                // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
-                // TODO: HTML-quoted-escape? the url?
-                s.push_str(r#"<a href=""#);
-                s.push_str(&url);
-                s.push_str(r#"">"#);
-                for i in content {
-                    i.to_rtf_inner(s, options);
-                }
-                s.push_str("</a>");
-            }
         }
     }
 }

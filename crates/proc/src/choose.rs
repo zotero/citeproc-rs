@@ -10,7 +10,7 @@ use crate::helpers::sequence;
 use crate::ir::ConditionalDisambIR;
 use citeproc_io::DateOrRange;
 use csl::{
-    Affixes, Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
+    Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
 };
 use csl::{AnyVariable, DateVariable};
 
@@ -92,14 +92,44 @@ impl Disambiguation<Markup> for Choose {
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx, &mut state.disamb_count).0 {
-            return ref_sequence(db, ctx, state, els, "".into(), Some(stack), None, None, None);
+            return ref_sequence(
+                db,
+                ctx,
+                state,
+                els,
+                "".into(),
+                Some(stack),
+                None,
+                None,
+                None,
+            );
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx, &mut state.disamb_count).0 {
-                return ref_sequence(db, ctx, state, els, "".into(), Some(stack), None, None, None);
+                return ref_sequence(
+                    db,
+                    ctx,
+                    state,
+                    els,
+                    "".into(),
+                    Some(stack),
+                    None,
+                    None,
+                    None,
+                );
             }
         }
-        ref_sequence(db, ctx, state, &last.0, "".into(), Some(stack), None, None, None)
+        ref_sequence(
+            db,
+            ctx,
+            state,
+            &last.0,
+            "".into(),
+            Some(stack),
+            None,
+            None,
+            None,
+        )
     }
 }
 

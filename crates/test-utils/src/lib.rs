@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-pub use citeproc as citeproc;
+pub use citeproc;
 
 use citeproc::prelude::*;
 use citeproc_io::{Cite, Cluster, Reference};

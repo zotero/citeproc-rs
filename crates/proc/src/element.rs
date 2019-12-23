@@ -1,7 +1,7 @@
 use crate::helpers::sequence;
 use crate::prelude::*;
 use csl::variables::*;
-use csl::{Affixes, Atom, Bibliography, Element, Style, TextSource};
+use csl::{Bibliography, Element, Style, TextSource};
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -96,7 +96,7 @@ where
                             text.formatting,
                             text.affixes.as_ref(),
                             text.display,
-                            renderer.quotes(text.quotes),
+                            renderer.quotes_if(text.quotes),
                         );
                         state.pop_macro(name);
                         out

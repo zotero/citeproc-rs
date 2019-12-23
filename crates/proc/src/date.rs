@@ -13,10 +13,12 @@ use csl::Atom;
 use csl::LocaleDate;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DateVariable, DayForm, IndependentDate, Locale,
-    LocalizedDate, MonthForm, RangeDelimiter, SortKey, TextCase, YearForm,
+    LocalizedDate, MonthForm, SortKey, YearForm,
 };
 #[cfg(test)]
-use pretty_assertions::{assert_eq, assert_ne};
+use csl::RangeDelimiter;
+#[cfg(test)]
+use pretty_assertions::assert_eq;
 use std::fmt::Write;
 use std::mem;
 

@@ -10,81 +10,129 @@ use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::Formatting;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HtmlWriter {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct HtmlOptions {
     // TODO: is it enough to have one set of localized quotes for the entire style?
     // quotes: LocalizedQuotes,
     use_b_for_strong: bool,
     link_anchors: bool,
 }
 
-impl Default for HtmlWriter {
+impl Default for HtmlOptions {
     fn default() -> Self {
-        HtmlWriter {
+        HtmlOptions {
             use_b_for_strong: false,
             link_anchors: true,
         }
     }
 }
 
-impl HtmlWriter {
+impl HtmlOptions {
     pub fn test_suite() -> Self {
-        HtmlWriter {
+        HtmlOptions {
             use_b_for_strong: true,
             link_anchors: false,
         }
     }
 }
 
-impl MarkupWriter for HtmlWriter {
-    fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]) {
-        for cmd in stack.iter() {
-            let tag = cmd.html_tag(self);
-            s.push_str("<");
-            s.push_str(tag.0);
-            s.push_str(tag.1);
-            s.push_str(">");
-        }
-    }
+#[derive(Debug)]
+pub struct HtmlWriter<'a> {
+    dest: &'a mut String,
+    options: HtmlOptions,
+}
 
-    fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]) {
-        for cmd in stack.iter().rev() {
-            let tag = cmd.html_tag(self);
-            s.push_str("</");
-            s.push_str(tag.0);
-            s.push_str(">");
-        }
-    }
-
-    fn write_inline(&self, s: &mut String, inline: &InlineElement) {
-        inline.to_html_inner(s, self);
+impl<'a> HtmlWriter<'a> {
+    pub fn new(dest: &'a mut String, options: HtmlOptions) -> Self {
+        HtmlWriter { dest, options }
     }
 }
 
-impl MicroNode {
-    fn to_html_inner(&self, s: &mut String, options: &HtmlWriter) {
+impl<'a> MarkupWriter for HtmlWriter<'a> {
+    fn write_escaped(&mut self, text: &str) {
+        use v_htmlescape::escape;
+        self.dest.push_str(&escape(text).to_string());
+    }
+    fn stack_preorder(&mut self, stack: &[FormatCmd]) {
+        for cmd in stack.iter() {
+            let tag = cmd.html_tag(&self.options);
+            self.dest.push_str("<");
+            self.dest.push_str(tag.0);
+            self.dest.push_str(tag.1);
+            self.dest.push_str(">");
+        }
+    }
+
+    fn stack_postorder(&mut self, stack: &[FormatCmd]) {
+        for cmd in stack.iter().rev() {
+            let tag = cmd.html_tag(&self.options);
+            self.dest.push_str("</");
+            self.dest.push_str(tag.0);
+            self.dest.push_str(">");
+        }
+    }
+
+    fn write_micro(&mut self, micro: &MicroNode) {
         use MicroNode::*;
-        match self {
+        match micro {
             Text(text) => {
-                use v_htmlescape::escape;
-                s.push_str(&escape(text).to_string());
+                self.write_escaped(text);
+            }
+            Quoted {
+                is_inner,
+                localized,
+                children,
+            } => {
+                self.write_escaped(localized.opening(*is_inner));
+                self.write_micros(children);
+                self.write_escaped(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
-                let tag = cmd.html_tag(options);
-                *s += "<";
-                *s += tag.0;
-                *s += tag.1;
-                *s += ">";
-                for node in nodes {
-                    node.to_html_inner(s, options);
-                }
-                *s += "</";
-                *s += tag.0;
-                *s += ">";
+                self.stack_preorder(&[*cmd][..]);
+                self.write_micros(nodes);
+                self.stack_postorder(&[*cmd][..]);
             }
             NoCase(inners) => {
-                for i in inners {
-                    i.to_html_inner(s, options);
+                self.write_micros(inners);
+            }
+        }
+    }
+
+    fn write_inline(&mut self, inline: &InlineElement) {
+        use super::InlineElement::*;
+        match inline {
+            Text(text) => {
+                self.write_escaped(text);
+            }
+            Div(display, inlines) => {
+                self.stack_formats(inlines, Formatting::default(), Some(*display));
+            }
+            Micro(micros) => {
+                self.write_micros(micros);
+            }
+            Formatted(inlines, formatting) => {
+                self.stack_formats(inlines, *formatting, None);
+            }
+            Quoted {
+                is_inner,
+                localized,
+                inlines,
+            } => {
+                // TODO: move punctuation
+                self.write_escaped(localized.opening(*is_inner));
+                self.write_inlines(inlines);
+                self.write_escaped(localized.closing(*is_inner));
+            }
+            Anchor { url, content, .. } => {
+                if self.options.link_anchors {
+                    self.dest.push_str(r#"<a href=""#);
+                    // TODO: HTML-quoted-escape? the url?
+                    self.dest.push_str(&url.trim());
+                    self.dest.push_str(r#"">"#);
+                    self.write_inlines(content);
+                    self.dest.push_str("</a>");
+                } else {
+                    self.dest.push_str(&url.trim());
                 }
             }
         }
@@ -92,7 +140,7 @@ impl MicroNode {
 }
 
 impl FormatCmd {
-    fn html_tag(self, options: &HtmlWriter) -> (&'static str, &'static str) {
+    fn html_tag(self, options: &HtmlOptions) -> (&'static str, &'static str) {
         match self {
             FormatCmd::DisplayBlock => ("div", r#" class="csl-block""#),
             FormatCmd::DisplayIndent => ("div", r#" class="csl-indent""#),
@@ -130,77 +178,31 @@ impl FormatCmd {
     }
 }
 
-impl InlineElement {
-    // fn is_disp(&self, disp: DisplayMode) -> bool {
-    //     match *self {
-    //         Div(display, _) => disp == display,
-    //         _ => false,
-    //     }
-    // }
-    // fn collapsing_left_margin(inlines: &[InlineElement], s: &mut s) {
-    //     use super::InlineElement::*;
-    //     let mut iter = inlines.iter().peekable();
-    //     while let Some(i) = iter.next() {
-    //         let peek = iter.peek();
-    //         match i {
-    //             Div(display, inlines) => {
-    //                 if display == DisplayMode::LeftMargin {
-    //                     if let Some(peek) = iter.peek() {
-    //                         if !peek.is_disp(DisplayMode::RightInline) {
-    //                             Div(DisplayMode::Block)
-    //                             continue;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //         i.to_html_inner(&mut s, options);
-    //     }
-    // }
-    fn to_html_inner(&self, s: &mut String, options: &HtmlWriter) {
-        use super::InlineElement::*;
-        match self {
-            Text(text) => {
-                use v_htmlescape::escape;
-                s.push_str(&escape(text).to_string());
-            }
-            Div(display, inlines) => {
-                options.stack_formats(s, inlines, Formatting::default(), Some(*display));
-            }
-            Micro(micros) => {
-                for micro in micros {
-                    micro.to_html_inner(s, options);
-                }
-            }
-            Formatted(inlines, formatting) => {
-                options.stack_formats(s, inlines, *formatting, None);
-            }
-            Quoted {
-                is_inner,
-                localized,
-                inlines,
-            }=> {
-                // TODO: move punctuation
-                s.push_str(localized.opening(*is_inner));
-                for i in inlines {
-                    i.to_html_inner(s, options);
-                }
-                s.push_str(localized.closing(*is_inner));
-            }
-            Anchor { url, content, .. } => {
-                if options.link_anchors {
-                    s.push_str(r#"<a href=""#);
-                    // TODO: HTML-quoted-escape? the url?
-                    s.push_str(&url.trim());
-                    s.push_str(r#"">"#);
-                    for i in content {
-                        i.to_html_inner(s, options);
-                    }
-                    s.push_str("</a>");
-                } else {
-                    s.push_str(&url.trim());
-                }
-            }
-        }
-    }
-}
+// impl InlineElement {
+// fn is_disp(&self, disp: DisplayMode) -> bool {
+//     match *self {
+//         Div(display, _) => disp == display,
+//         _ => false,
+//     }
+// }
+// fn collapsing_left_margin(inlines: &[InlineElement], s: &mut s) {
+//     use super::InlineElement::*;
+//     let mut iter = inlines.iter().peekable();
+//     while let Some(i) = iter.next() {
+//         let peek = iter.peek();
+//         match i {
+//             Div(display, inlines) => {
+//                 if display == DisplayMode::LeftMargin {
+//                     if let Some(peek) = iter.peek() {
+//                         if !peek.is_disp(DisplayMode::RightInline) {
+//                             Div(DisplayMode::Block)
+//                             continue;
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//         i.to_html_inner(&mut s, options);
+//     }
+// }
+// }

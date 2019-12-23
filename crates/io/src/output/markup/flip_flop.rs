@@ -32,7 +32,7 @@ impl FlipFlopState {
     pub fn flip_flop_inlines(&self, inlines: &[InlineElement]) -> Vec<InlineElement> {
         inlines
             .iter()
-            .map(|inl| flip_flop(inl, self).unwrap_or_else(|| inl.clone()))
+            .filter_map(|inl| flip_flop(inl, self))
             .collect()
     }
 }
@@ -75,14 +75,18 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             Some(InlineElement::Formatted(subs, new_f))
         }
 
-        InlineElement::Quoted { is_inner: _, ref localized, ref inlines } => {
+        InlineElement::Quoted {
+            is_inner: _,
+            ref localized,
+            ref inlines,
+        } => {
             let mut flop = state.clone();
             flop.in_inner_quotes = !flop.in_inner_quotes;
             let subs = flop.flip_flop_inlines(inlines);
             Some(InlineElement::Quoted {
                 is_inner: flop.in_inner_quotes,
                 localized: localized.clone(),
-                inlines: subs
+                inlines: subs,
             })
         }
 
@@ -99,7 +103,9 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             })
         }
 
-        _ => None,
+        InlineElement::Text(ref string) if string.is_empty() => None,
+
+        _ => Some(inline.clone()),
     }
 
     // a => a
@@ -113,6 +119,20 @@ fn flip_flop_nodes(nodes: &[MicroNode], state: &FlipFlopState) -> Vec<MicroNode>
 
 fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Option<MicroNode> {
     match node {
+        MicroNode::Quoted {
+            ref children,
+            ref localized,
+            ..
+        } => {
+            let mut flop = state.clone();
+            flop.in_inner_quotes = !state.in_inner_quotes;
+            let subs = flip_flop_nodes(children, &flop);
+            Some(MicroNode::Quoted {
+                is_inner: flop.in_inner_quotes,
+                localized: localized.clone(),
+                children: subs,
+            })
+        }
         MicroNode::Formatted(ref nodes, cmd) => {
             let mut flop = state.clone();
             match cmd {

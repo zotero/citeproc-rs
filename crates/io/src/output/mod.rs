@@ -48,12 +48,23 @@ impl LocalizedQuotes {
             self.inner.0.as_ref()
         }
     }
+
+    pub fn simple() -> Self {
+        LocalizedQuotes {
+            outer: (Atom::from("\u{201C}"), Atom::from("\u{201D}")),
+            inner: (Atom::from("\u{2018}"), Atom::from("\u{2019}")),
+            punctuation_in_quote: false,
+        }
+    }
+
     pub fn from_locale(locale: &Locale) -> Self {
-        let getter = |qt: QuoteTerm| locale
-            .simple_terms
-            .get(&SimpleTermSelector::Quote(qt))
-            .unwrap()
-            .singular();
+        let getter = |qt: QuoteTerm| {
+            locale
+                .simple_terms
+                .get(&SimpleTermSelector::Quote(qt))
+                .unwrap()
+                .singular()
+        };
         let open_outer = getter(QuoteTerm::OpenQuote);
         let close_outer = getter(QuoteTerm::CloseQuote);
         let open_inner = getter(QuoteTerm::OpenInnerQuote);
@@ -63,6 +74,12 @@ impl LocalizedQuotes {
             inner: (Atom::from(open_inner), Atom::from(close_inner)),
             punctuation_in_quote: locale.options_node.punctuation_in_quote.unwrap_or(false),
         }
+    }
+}
+
+impl Default for LocalizedQuotes {
+    fn default() -> Self {
+        LocalizedQuotes::simple()
     }
 }
 
@@ -97,7 +114,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
 
     fn meta(&self) -> Self::BibMeta;
 
-    fn ingest(&self, input: &str, options: IngestOptions) -> Self::Build;
+    fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build;
 
     /// Affixes are not included in the formatting on a text node. They are converted into text
     /// nodes themselves, with no formatting except whatever is applied by a parent group.

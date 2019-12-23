@@ -39,10 +39,29 @@ pub use self::names::*;
 pub use self::numeric::*;
 pub use self::reference::*;
 
+use self::output::LocalizedQuotes;
 use csl::TextCase;
+use std::borrow::Cow;
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct IngestOptions {
     pub replace_hyphens: bool,
     pub text_case: TextCase,
+    pub quotes: LocalizedQuotes,
+}
+
+impl IngestOptions {
+    pub fn plain<'s>(&self, s: &'s str) -> Cow<'s, str> {
+        if self.replace_hyphens {
+            Cow::Owned(s.replace('-', "\u{2013}"))
+        } else {
+            Cow::Borrowed(s)
+        }
+    }
+    pub fn default_with_quotes(quotes: LocalizedQuotes) -> Self {
+        IngestOptions {
+            quotes,
+            ..Default::default()
+        }
+    }
 }

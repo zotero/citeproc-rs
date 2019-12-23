@@ -442,7 +442,7 @@ pub enum LocatorType {
     Section,
     // hyphenated is when it's a variable matcher, spaced is as a term name
     #[strum(serialize = "sub-verbo", serialize = "sub verbo")]
-    #[serde(rename = "sub-verbo")]
+    #[serde(rename = "sub-verbo", alias = "sub verbo")]
     SubVerbo,
     Verse,
     Volume,
