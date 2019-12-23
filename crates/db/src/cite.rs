@@ -177,18 +177,22 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     Arc::new(ids)
 }
 
+fn get_cluster_data(db: &impl CiteDatabase, id: ClusterId) -> Option<ClusterData> {
+    db.cluster_note_number(id)
+        .map(|number| ClusterData {
+            id,
+            number,
+            cites: db.cluster_cites(id),
+        })
+}
+
 fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
         // No number? Not considered to be in document, position participant.
         // Although may be disamb participant.
-        .filter_map(|&id| db.cluster_note_number(id).map(|n| (id, n)))
-        .map(|(id, number)| ClusterData {
-            id,
-            number,
-            cites: db.cluster_cites(id),
-        })
+        .filter_map(|&id| get_cluster_data(db, id))
         .collect();
     clusters.sort_by_key(|cluster| cluster.number);
     Arc::new(clusters)
@@ -210,7 +214,15 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
     // detail, but in-text styles are often just author-date or a bibligraphy item number.
     let mut first_seen: FnvHashMap<Atom, ClusterNumber> = FnvHashMap::default();
 
+    let mut last_note_num = None;
+    let mut clusters_in_last_note: Vec<u32> = Vec::new();
+
     for (i, cluster) in clusters.iter().enumerate() {
+        let prev_in_group = if let ClusterNumber::Note(_) = cluster.number {
+            !clusters_in_last_note.is_empty()
+        } else {
+            false
+        };
         let is_near = move |n: u32| {
             cluster
                 .number
@@ -257,13 +269,25 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                             ClusterNumber::Note(intra) => Some(intra.note_number()),
                             _ => None,
                         };
-                        if prev_in_text == in_text.is_some()
+                        let cites_all_same = if prev_in_group && in_text.is_none() {
+                            // { id: 1, note: 4, cites: [A] },
+                            // { id: 2, note: 4, cites: [B] },
+                            // { id: 3: note: 5, cites: [B] } => subsequent
+                            // (because prev note wasn't homogenous)
+                            clusters_in_last_note
+                                .iter()
+                                .filter_map(|&cluster_id| get_cluster_data(db, cluster_id))
+                                .flat_map(|cluster| (*cluster.cites).clone().into_iter())
+                                .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
+                        } else {
+                            prev_in_text == in_text.is_some()
                             && prev_cluster.cites.len() > 0
                             && prev_cluster
                                 .cites
                                 .iter()
                                 .all(|&pid| pid.lookup(db).ref_id == cite.ref_id)
-                        {
+                        };
+                        if cites_all_same {
                             // Pick the last one to match locators against
                             prev_cluster
                                 .cites
@@ -336,7 +360,6 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                         first_note_number,
                     );
                     let unsigned = first_note_number.note_number();
-                    let diff = cluster.number.sub_note(first_note_number);
                     if let Some(pos) = matching_prev {
                         map.insert(cite_id, (pos, Some(unsigned)));
                     } else if cluster.number == first_number || is_near(unsigned) {
@@ -374,6 +397,15 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     first_seen.insert(cite.ref_id.clone(), cluster.number);
                 }
             }
+        }
+
+        if let ClusterNumber::Note(n) = cluster.number {
+            let n = n.note_number();
+            if last_note_num != Some(n) {
+                last_note_num = Some(n);
+                clusters_in_last_note.clear();
+            }
+            clusters_in_last_note.push(cluster.id);
         }
     }
 
