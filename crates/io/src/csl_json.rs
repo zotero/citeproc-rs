@@ -229,7 +229,7 @@ impl<'de> Deserialize<'de> for Reference {
                     id: id
                         .map(|i| csl::Atom::from(i.into_string()))
                         .ok_or_else(|| de::Error::missing_field("id"))?,
-                    csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
+                    csl_type: csl_type.unwrap_or(WrapType(CslType::Article)).0,
                     language,
                     ordinary,
                     number,
