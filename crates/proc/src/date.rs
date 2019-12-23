@@ -280,13 +280,13 @@ where
         let form = WhichDelim::from_form(&part.form);
         if let Some(localized) = local.date_parts.iter().find(|p| form.matches_form(&p.form)) {
             let merged = DatePart {
-                form: part.form,
+                form: localized.form,
                 // Attributes for affixes are allowed, unless cs:date calls a localized date format.
                 // So localized.affixes should be ignored.
                 affixes: part.affixes.clone(),
                 formatting: localized.formatting.or(part.formatting),
                 text_case: localized.text_case.or(part.text_case),
-                range_delimiter: part.range_delimiter.clone(),
+                range_delimiter: localized.range_delimiter.clone(),
             };
             parts.push(merged);
         } else {
@@ -624,7 +624,14 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         aff.suffix = Atom::from("");
                     }
                 }
-                Either::Build(Some(fmt.affixed_text(s, part.formatting, affixes.as_ref())))
+                let options = IngestOptions {
+                    text_case: part.text_case.unwrap_or_default(),
+                    ..Default::default()
+                };
+                let b = fmt.ingest(&s, &options);
+                let b = fmt.with_format(b, part.formatting);
+                let b = fmt.affixed(b, affixes.as_ref());
+                Either::Build(Some(b))
             }
         })
         .map(|x| (part.form, x))
