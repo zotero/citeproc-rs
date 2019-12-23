@@ -26,6 +26,7 @@ pub enum AnyTermName {
     Loc(LocatorType),
 
     Misc(MiscTerm),
+    Category(Category),
     Season(SeasonTerm),
     Quote(QuoteTerm),
 
@@ -36,23 +37,24 @@ pub enum AnyTermName {
 
 impl GetAttribute for AnyTermName {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
-        use self::AnyTermName::*;
         if let Ok(v) = MiscTerm::get_attr(s, features) {
-            return Ok(Misc(v));
+            return Ok(AnyTermName::Misc(v));
         } else if let Ok(v) = MonthTerm::get_attr(s, features) {
-            return Ok(Month(v));
+            return Ok(AnyTermName::Month(v));
         } else if let Ok(v) = NumberVariable::get_attr(s, features) {
-            return Ok(Number(v));
+            return Ok(AnyTermName::Number(v));
         } else if let Ok(v) = LocatorType::get_attr(s, features) {
-            return Ok(Loc(v));
+            return Ok(AnyTermName::Loc(v));
         } else if let Ok(v) = SeasonTerm::get_attr(s, features) {
-            return Ok(Season(v));
+            return Ok(AnyTermName::Season(v));
         } else if let Ok(v) = QuoteTerm::get_attr(s, features) {
-            return Ok(Quote(v));
+            return Ok(AnyTermName::Quote(v));
         } else if let Ok(v) = RoleTerm::get_attr(s, features) {
-            return Ok(Role(v));
+            return Ok(AnyTermName::Role(v));
         } else if let Ok(v) = OrdinalTerm::get_attr(s, features) {
-            return Ok(Ordinal(v));
+            return Ok(AnyTermName::Ordinal(v));
+        } else if let Ok(v) = Category::get_attr(s, features) {
+            return Ok(AnyTermName::Category(v));
         }
         Err(UnknownAttributeValue::new(s))
     }
@@ -62,7 +64,7 @@ impl GetAttribute for AnyTermName {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SimpleTermSelector {
     Misc(MiscTerm, TermFormExtended),
-    Season(SeasonTerm, TermForm),
+    Category(Category, TermForm),
     Quote(QuoteTerm),
 }
 
@@ -72,9 +74,9 @@ impl SimpleTermSelector {
             SimpleTermSelector::Misc(t, form) => {
                 Box::new(form.fallback().map(move |x| SimpleTermSelector::Misc(t, x)))
             }
-            SimpleTermSelector::Season(t, form) => Box::new(
+            SimpleTermSelector::Category(t, form) => Box::new(
                 form.fallback()
-                    .map(move |x| SimpleTermSelector::Season(t, x)),
+                    .map(move |x| SimpleTermSelector::Category(t, x)),
             ),
             SimpleTermSelector::Quote(t) => Box::new(
                 // Quotes don't do fallback. Not spec'd, but what on earth is the long form of a
@@ -547,6 +549,42 @@ impl RoleTerm {
 /// This is all the "miscellaneous" terms from the spec, EXCEPT `edition`. Edition is the only one
 /// that matches "terms accompanying the number variables" in [option (a)
 /// here](https://docs.citationstyles.org/en/stable/specification.html#gender-specific-ordinals)
+
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Category {
+    Anthropology,
+    Astronomy,
+    Biology,
+    Botany,
+    Chemistry,
+    Communications,
+    Engineering,
+    /// Used for generic styles like Harvard and APA
+    GenericBase,
+    Geography,
+    Geology,
+    History,
+    Humanities,
+    Law,
+    Linguistics,
+    Literature,
+    Math,
+    Medicine,
+    Philosophy,
+    Physics,
+    /// Accepts both kebab-case and snake_case as the snake_case is anomalous
+    #[strum(serialize = "political-science", serialize = "political_science")]
+    PoliticalScience,
+    Psychology,
+    Science,
+    /// Accepts both kebab-case and snake_case as the snake_case is anomalous
+    #[strum(serialize = "social-science", serialize = "social_science")]
+    SocialScience,
+    Sociology,
+    Theology,
+    Zoology,
+}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]

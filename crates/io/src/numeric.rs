@@ -33,22 +33,6 @@ impl NumericToken {
     }
 }
 
-fn tokens_to_string(ts: &[NumericToken]) -> String {
-    let mut s = String::with_capacity(ts.len());
-    for t in ts {
-        match t {
-            // TODO: ordinals, etc
-            Num(i) => s.push_str(&format!("{}", i)),
-            Affixed(a) => s.push_str(&a),
-            Comma => s.push_str(", "),
-            // en-dash
-            Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
-        }
-    }
-    s
-}
-
 /// Either a parsed vector of numeric tokens, or the raw string input.
 ///
 /// Relevant parts of the Spec:
@@ -100,9 +84,23 @@ impl NumericValue {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn is_multiple(&self) -> bool {
+    pub fn is_multiple(&self, var_is_quantity: bool) -> bool {
         match *self {
-            NumericValue::Tokens(_, ref ts) => ts.len() > 1,
+            NumericValue::Tokens(_, ref ts) => {
+                if var_is_quantity {
+                    match ts.len() {
+                        0 => true, // doesn't matter
+                        1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
+                            *i != 1
+                        } else {
+                            false
+                        }
+                        _ => true
+                    }
+                } else {
+                    ts.len() > 1
+                }
+            },
 
             // TODO: fallback interpretation of "multiple" to include unparsed numerics that have
             // multiple numbers etc
@@ -119,19 +117,6 @@ impl NumericValue {
         match self {
             NumericValue::Tokens(verb, _) => verb.as_str(),
             NumericValue::Str(s) => s.as_str(),
-        }
-    }
-
-    pub fn as_number(&self, replace_hyphens: bool) -> String {
-        match self {
-            NumericValue::Tokens(_, ts) => tokens_to_string(ts),
-            NumericValue::Str(s) => {
-                if replace_hyphens {
-                    s.replace('-', "\u{2013}")
-                } else {
-                    s.clone()
-                }
-            }
         }
     }
 }

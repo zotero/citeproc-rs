@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, Name, NumericValue, Reference};
+use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
+use crate::number::{render_ordinal, roman_lower, roman_representable, arabic_number};
 use csl::{
     GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
     NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
@@ -198,8 +199,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         _af: Option<&Affixes>,
         text_case: TextCase,
     ) -> O::Build {
-        use citeproc_io::NumericToken;
+        let locale = self.ctx.locale();
+        let style = self.ctx.style();
         let fmt = self.fmt();
+        let prf = if var == NumberVariable::Page && style.page_range_format.is_some() {
+            style.page_range_format
+        } else {
+            None
+        };
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
                 let mut s = String::new();
@@ -226,7 +233,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             }
             // TODO: text-case
             _ => fmt.affixed_text(
-                val.as_number(var.should_replace_hyphens()),
+                arabic_number(val, locale, var, prf),
                 None,
                 Some(crate::sort::natural_sort::num_affixes()).as_ref(),
             ),
@@ -235,12 +242,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
 
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
-        use crate::number::{render_ordinal, roman_lower, roman_representable};
+        let locale = self.ctx.locale();
+        let style = self.ctx.style();
+        debug!("number {:?}", val);
+        let prf = if number.variable == NumberVariable::Page && style.page_range_format.is_some() {
+            style.page_range_format
+        } else {
+            None
+        };
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts),
+                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, number.variable, prf),
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
-                    let locale = self.ctx.locale();
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
                             .locator_type()
@@ -251,16 +264,16 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                     };
                     let gender = locale.get_num_gender(number.variable, loc_type);
                     let long = number.form == NumericForm::LongOrdinal;
-                    render_ordinal(&ts, locale, gender, long)
+                    render_ordinal(&ts, locale, number.variable, prf, gender, long)
                 }
-                _ => val.as_number(number.variable.should_replace_hyphens()),
+                _ => arabic_number(val, locale, number.variable, prf),
             }
         } else {
-            val.as_number(number.variable.should_replace_hyphens())
+            arabic_number(val, locale, number.variable, prf)
         };
         let fmt = self.fmt();
         let options = IngestOptions {
-            replace_hyphens: number.variable.should_replace_hyphens(),
+            replace_hyphens: number.variable.should_replace_hyphens(style),
             text_case: number.text_case,
             quotes: self.quotes(),
             is_english: self.ctx.is_english(),
@@ -283,6 +296,30 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         }
     }
 
+
+    pub fn text_number_variable(
+        &self,
+        text: &TextElement,
+        variable: NumberVariable,
+        val: &NumericValue,
+    ) -> O::Build {
+        let style = self.ctx.style();
+        let mod_page = style.page_range_format.is_some();
+        if variable == NumberVariable::Locator || variable == NumberVariable::Page {
+            let number = csl::NumberElement {
+                variable,
+                form: csl::NumericForm::default(),
+                formatting: text.formatting,
+                affixes: text.affixes.clone(),
+                text_case: text.text_case,
+                display: text.display,
+            };
+            self.number(&number, val)
+        } else {
+            self.text_variable(text, StandardVariable::Number(variable), val.verbatim())
+        }
+    }
+
     pub fn text_variable(
         &self,
         text: &TextElement,
@@ -292,7 +329,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let options = IngestOptions {
             replace_hyphens: match var {
                 StandardVariable::Ordinary(v) => v.should_replace_hyphens(),
-                StandardVariable::Number(v) => v.should_replace_hyphens(),
+                StandardVariable::Number(v) => v.should_replace_hyphens(self.ctx.style()),
             },
             text_case: text.text_case,
             quotes: self.quotes(),
@@ -399,10 +436,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             label.variable,
             label.form,
         );
-        let plural = match (num_val, label.plural) {
-            (ref val, Plural::Contextual) => val.is_multiple(),
-            (_, Plural::Always) => true,
-            (_, Plural::Never) => false,
+        let plural = match label.plural {
+            Plural::Contextual => num_val.is_multiple(label.variable.is_quantity()),
+            Plural::Always => true,
+            Plural::Never => false,
         };
         selector.and_then(|sel| {
             let options = IngestOptions {

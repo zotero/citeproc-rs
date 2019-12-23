@@ -236,7 +236,12 @@ impl LocaleFetcher for Filesystem {
 pub fn normalise_html(strg: &str) -> String {
     strg.replace("&#x2f;", "/")
         .replace("&#x27;", "'")
+        .replace("&#60;", "&lt;")
+        .replace("&#62;", "&gt;")
         .replace("&quot;", "\"")
         // citeproc-js uses the #38 version
-        .replace("&amp;", "&#38;")
+        .replace("&#38;", "&amp;")
+        // citeproc-js puts successive unicode superscript transforms in their own tags,
+        // citeproc-rs joins them.
+        .replace("</sup><sup>", "")
 }

@@ -1,13 +1,23 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
-use csl::{Gender, Locale, OrdinalTerm, OrdinalTermSelector};
+use csl::{
+    Gender, Locale, MiscTerm, OrdinalTerm, OrdinalTermSelector, PageRangeFormat,
+    SimpleTermSelector, TermFormExtended, NumberVariable,
+};
+use std::fmt::Write;
 
-pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long: bool) -> String {
+pub fn render_ordinal(
+    ts: &[NumericToken],
+    locale: &Locale,
+    variable: NumberVariable,
+    prf: Option<PageRangeFormat>,
+    gender: Gender,
+    long: bool,
+) -> String {
     let mut s = String::new();
     for token in ts {
         match *token {
             NumericToken::Num(n) => {
-                use std::fmt::Write;
                 if !long || n == 0 || n > 10 {
                     write!(s, "{}", n).unwrap();
                 }
@@ -19,8 +29,116 @@ pub fn render_ordinal(ts: &[NumericToken], locale: &Locale, gender: Gender, long
             Affixed(ref a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // en-dash
-            Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
+            Hyphen => s.push_str(get_hyphen(locale, variable)),
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
+        }
+    }
+    s
+}
+
+fn get_ampersand(locale: &Locale) -> &str {
+    let sel = SimpleTermSelector::Misc(MiscTerm::And, TermFormExtended::Symbol);
+    // NO fallback; only want the symbol
+    if let Some(amp) = locale.simple_terms.get(&sel) {
+        amp.singular().trim()
+    } else {
+        "&"
+    }
+}
+
+pub fn get_hyphen(locale: &Locale, variable: NumberVariable) -> &str {
+    // A few more than the spec's list of en-dashable variables
+    // https://github.com/Juris-M/citeproc-js/blob/1aa49dd2ab9a1c85d3060073780d65c86754a438/src/util_number.js#L584
+    let get = |term: MiscTerm| {
+        let sel = SimpleTermSelector::Misc(term, TermFormExtended::Symbol);
+        locale.get_simple_term(sel)
+            .map(|amp| amp.singular().trim())
+            .unwrap_or("\u{2013}")
+    };
+    match variable {
+        NumberVariable::Page
+        | NumberVariable::Locator
+        | NumberVariable::Issue
+        | NumberVariable::Volume
+        | NumberVariable::Edition
+        | NumberVariable::Number => get(MiscTerm::PageRangeDelimiter),
+        NumberVariable::CollectionNumber => get(MiscTerm::YearRangeDelimiter),
+        _ => "-",
+    }
+}
+
+#[test]
+fn test_get_hyphen() {
+    let loc = &Locale::default();
+    assert_eq!(get_hyphen(loc, NumberVariable::Locator), "\u{2013}");
+}
+
+pub fn arabic_number(
+    num: &NumericValue,
+    locale: &Locale,
+    variable: NumberVariable,
+    prf: Option<PageRangeFormat>,
+) -> String {
+    debug!("{:?}", num);
+    match num {
+        NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, variable, prf),
+        NumericValue::Str(s) => s.to_owned(),
+    }
+}
+
+fn tokens_to_string(
+    ts: &[NumericToken],
+    locale: &Locale,
+    variable: NumberVariable,
+    prf: Option<PageRangeFormat>,
+) -> String {
+    let mut s = String::with_capacity(ts.len());
+    #[derive(Copy, Clone)]
+    enum NumBefore {
+        SeenNum(u32),
+        SeenNumHyphen(u32),
+    }
+    let mut state = None;
+    let mut iter = ts.iter().peekable();
+    while let Some(t) = iter.next() {
+        state = match *t {
+            // TODO: ordinals, etc
+            Num(i) => {
+                let (cropped, newstate) = match (prf, state) {
+                    (Some(prf), Some(NumBefore::SeenNumHyphen(prev))) => {
+                        (crate::page_range::truncate_prf(prf, prev, i), None)
+                    }
+                    _ => (i, Some(NumBefore::SeenNum(i))),
+                };
+                write!(s, "{}", cropped).unwrap();
+                newstate
+            }
+            Affixed(ref a) => {
+                s.push_str(&a);
+                None
+            }
+            Comma => {
+                s.push_str(", ");
+                None
+            }
+            Hyphen => {
+                let mut hyphen = get_hyphen(locale, variable);
+                s.push_str(hyphen);
+                match state {
+                    Some(NumBefore::SeenNum(i)) => Some(NumBefore::SeenNumHyphen(i)),
+                    _ => None,
+                }
+            }
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+                None
+            }
         }
     }
     s
@@ -37,7 +155,7 @@ pub fn roman_representable(val: &NumericValue) -> bool {
     }
 }
 
-pub fn roman_lower(ts: &[NumericToken]) -> String {
+pub fn roman_lower(ts: &[NumericToken], locale: &Locale, variable: NumberVariable, prf: Option<PageRangeFormat>) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;
     for t in ts {
@@ -51,8 +169,12 @@ pub fn roman_lower(ts: &[NumericToken]) -> String {
             Affixed(a) => s.push_str(&a),
             Comma => s.push_str(", "),
             // en-dash
-            Hyphen => s.push_str("\u{2013}"),
-            Ampersand => s.push_str(" & "),
+            Hyphen => s.push_str(get_hyphen(locale, variable)),
+            Ampersand => {
+                s.push(' ');
+                s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
         }
     }
     s
@@ -67,7 +189,10 @@ fn test_roman_lower() {
         NumericToken::Comma,
         NumericToken::Affixed("2E".into()),
     ];
-    assert_eq!(&roman_lower(&ts[..]), "iii\u{2013}xi, 2E");
+    assert_eq!(
+        &roman_lower(&ts[..], &Locale::default(), None),
+        "iii\u{2013}xi, 2E"
+    );
 }
 
 #[allow(dead_code)]

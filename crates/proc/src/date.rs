@@ -11,12 +11,12 @@ use citeproc_io::{Date, DateOrRange};
 use csl::terms::*;
 use csl::Atom;
 use csl::LocaleDate;
-use csl::{
-    BodyDate, DatePart, DatePartForm, DateParts, DateVariable, DayForm, IndependentDate, Locale,
-    LocalizedDate, MonthForm, SortKey, YearForm,
-};
 #[cfg(test)]
 use csl::RangeDelimiter;
+use csl::{
+    BodyDate, DatePart, DatePartForm, DateParts, DateVariable, DayForm, IndependentDate, Locale,
+    LocalizedDate, MonthForm, NumberVariable, SortKey, YearForm,
+};
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 use std::fmt::Write;
@@ -741,7 +741,16 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 MonthTerm::from_u32(date.month)
                     .map(|month| locale.get_month_gender(month))
                     .map(|gender| {
-                        render_ordinal(&[NumericToken::Num(date.day)], locale, gender, false)
+                        // the specific number variable does not matter as the tokens do not
+                        // contain any hyphens to pick \u{2013} for
+                        render_ordinal(
+                            &[NumericToken::Num(date.day)],
+                            locale,
+                            NumberVariable::Number,
+                            None,
+                            gender,
+                            false,
+                        )
                     })
             }
             // Numeric or ordinal with limit-day-ordinals-to-day-1

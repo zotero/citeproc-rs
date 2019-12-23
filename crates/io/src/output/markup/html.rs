@@ -172,7 +172,7 @@ impl FormatCmd {
             FormatCmd::VerticalAlignmentSuperscript => ("sup", ""),
             FormatCmd::VerticalAlignmentSubscript => ("sub", ""),
             FormatCmd::VerticalAlignmentBaseline => {
-                ("span", r#" style="vertical-alignment:baseline;"#)
+                ("span", r#" style="vertical-alignment:baseline;""#)
             }
         }
     }

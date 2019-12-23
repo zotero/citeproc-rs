@@ -159,7 +159,7 @@ impl Disambiguation<Markup> for Element {
                             } else {
                                 state.maybe_suppress_num(v);
                                 ctx.get_number(v)
-                                    .map(|val| renderer.text_variable(text, var, val.verbatim()))
+                                    .map(|val| renderer.text_number_variable(text, v, &val))
                             }
                         }
                     };
