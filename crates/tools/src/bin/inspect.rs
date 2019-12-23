@@ -12,6 +12,7 @@ enum InspectKind {
     Default,
     Output,
     Gen4,
+    /// A debug view of built_cluster_before_output
     Cluster,
     Locale {
         #[structopt(long)]

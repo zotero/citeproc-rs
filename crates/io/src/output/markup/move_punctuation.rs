@@ -45,31 +45,51 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
 }
 
 impl InlineElement {
-    fn normalise_micro_single_text(&mut self) {
+    // If returns Some, insert the string before the micro.
+    fn normalise_micro_single_text(&mut self) -> Option<Vec<InlineElement>> {
         if let InlineElement::Micro(ref mut m) = self {
-            if m.len() == 1 {
+            let len = m.len();
+            if len == 1 {
                 if let Some(text) = m.first_mut().unwrap().take_text() {
                     drop(m);
                     *self = InlineElement::Text(text);
+                    return Some(Vec::new());
+                }
+            } else if len > 1 {
+                let mut vec = vec![];
+                while let Some(text) = m.first_mut().unwrap().take_text() {
+                    m.remove(0);
+                    vec.push(InlineElement::Text(text));
+                }
+                if vec.len() > 0 {
+                    return Some(vec);
                 }
             }
         }
+        None
     }
 }
 
 pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
-    let mut len = slice.len();
-    if len < 1 {
-        return;
-    }
-    len -= 1;
-    while ix < len {
+    while ix < slice.len().saturating_sub(1) {
         let mut pop_tail = false;
+        if let Some(head) = slice.get_mut(ix) {
+            if let Some(before_head) = head.normalise_micro_single_text() {
+                drop(head);
+                drop(slice.splice(ix..ix, before_head.into_iter()));
+                continue;
+            }
+        }
+        if let Some(tail_head) = slice.get_mut(ix + 1) {
+            if let Some(before) = tail_head.normalise_micro_single_text() {
+                drop(tail_head);
+                drop(slice.splice(ix + 1..ix +1, before.into_iter()));
+                continue;
+            }
+        }
         if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
-            head.normalise_micro_single_text();
             if let Some(head_2) = tail.first_mut() {
-                head_2.normalise_micro_single_text();
                 match (head, head_2) {
                     (InlineElement::Text(ref mut s), InlineElement::Text(s2)) => {
                         smash_string_push(s, &s2);
@@ -91,15 +111,15 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
         }
         if pop_tail {
             slice.remove(ix + 1);
-            len = len.saturating_sub(1);
-        } else {
-            ix += 1;
+            continue;
         }
+        ix += 1;
     }
     for inl in slice.iter_mut() {
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
+            | InlineElement::Anchor { content: inlines, .. }
             | InlineElement::Formatted(inlines, _) => normalise_text_elements(inlines),
             | InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
             _ => {}
@@ -109,12 +129,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
 
 pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
     let mut ix = 0;
-    let mut len = slice.len();
-    if len < 1 {
-        return;
-    }
-    len -= 1;
-    while ix < len {
+    while ix < slice.len().saturating_sub(1) {
         let mut pop_tail = false;
         if let Some((head, tail)) = (&mut slice[ix..]).split_first_mut() {
             if let Some(head_2) = tail.first_mut() {
@@ -128,7 +143,6 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
             }
         }
         if pop_tail {
-            len = len.saturating_sub(1);
             slice.remove(ix + 1);
         } else {
             ix += 1;
@@ -152,6 +166,7 @@ enum Motion {
 // Basically, affixes go outside Quoted elements. So we can just look for text elements that come
 // right after quoted ones.
 pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Option<bool>) {
+    info!("move_punctuation {:?} {:?}", slice, punctuation_in_quote);
     normalise_text_elements(slice);
 
     if slice.len() > 1 {
@@ -178,15 +193,17 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
             }
             ix = new_ix;
         }
-    } else {
-        // recurse manually over the 0 or 1 items in it, and their children
-        for inl in slice.iter_mut() {
-            match inl {
-                InlineElement::Quoted { inlines, .. }
-                | InlineElement::Div(_, inlines)
-                | InlineElement::Formatted(inlines, _) => move_punctuation(inlines, punctuation_in_quote),
-                _ => {}
-            }
+    }
+
+    // recurse manually over the 0 or 1 items in it, and their children
+    for inl in slice.iter_mut() {
+        match inl {
+            InlineElement::Quoted { inlines, .. }
+            | InlineElement::Div(_, inlines)
+                | InlineElement::Anchor { content: inlines, .. }
+            | InlineElement::Anchor { content: inlines, .. }
+            | InlineElement::Formatted(inlines, _) => move_punctuation(inlines, punctuation_in_quote),
+            _ => {}
         }
     }
 }
@@ -204,8 +221,6 @@ fn can_move_out(ch: char) -> bool {
 fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Option<Motion> {
     debug!("move_around_quote {:?} {:?} {:?}", els.get(ix), ix, piq);
     if let Some(mut insertion_point) = find_right_quote(els, ix, piq) {
-        debug!("{:?}", insertion_point.last_string_mut());
-        debug!("{:?}", insertion_point.next_string_mut());
         // Last element burrowed down to a right quotation mark
         let mut needs_removal = false;
         let mut has_two_puncs = None;
