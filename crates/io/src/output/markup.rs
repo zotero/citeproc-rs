@@ -111,6 +111,9 @@ impl OutputFormat for Markup {
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
         let mut nodes = MicroNode::parse(input, options);
         options.apply_text_case_micro(&mut nodes);
+        if nodes.is_empty() {
+            return Vec::new();
+        }
         vec![InlineElement::Micro(nodes)]
     }
 

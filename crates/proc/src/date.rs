@@ -564,7 +564,7 @@ fn test_range_dp_sequence() {
         iter.collect::<Vec<_>>(),
         vec![
             DateToken::Part(&first, day, false),
-            DateToken::Part(&first, month, false),
+            DateToken::Part(&first, month, true),
             DateToken::RangeDelim("-"),
             DateToken::Part(&second, day, false),
             DateToken::Part(&second, month, false),
