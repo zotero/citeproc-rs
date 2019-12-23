@@ -234,8 +234,15 @@ impl LocaleFetcher for Filesystem {
     }
 }
 
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+
 pub fn normalise_html(strg: &str) -> String {
-    strg.replace("&#x2f;", "/")
+    let rep = strg.replace("&#x2f;", "/")
         .replace("&#x27;", "'")
         .replace("&#60;", "&lt;")
         .replace("&#62;", "&gt;")
@@ -244,5 +251,12 @@ pub fn normalise_html(strg: &str) -> String {
         .replace("&#38;", "&amp;")
         // citeproc-js puts successive unicode superscript transforms in their own tags,
         // citeproc-rs joins them.
-        .replace("</sup><sup>", "")
+        .replace("</sup><sup>", "");
+    let newlines = regex!(r"(?m)>\n*\s*<(/?)div");
+    newlines.replace_all(&rep, ">\n<${1}div").into_owned()
+}
+
+#[test]
+fn test_normalise() {
+    assert_eq!(normalise_html("<div>\n  <div>"), "<div><div>".to_owned());
 }
