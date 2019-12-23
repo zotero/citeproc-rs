@@ -399,17 +399,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let NameLabel {
             form,
             formatting,
-            plural,
-            affixes,
-            ..
-            // after_name: _,
-            // TODO: strip-periods
-            // strip_periods: _,
-            // TODO: text-case
-            // text_case: _,
-        } = label;
+            ref plural,
+            ref affixes,
+            strip_periods,
+            text_case,
+            after_name: _,
+        } = *label;
         let fmt = self.fmt();
-        let selector = RoleTermSelector::from_name_variable(var, *form);
+        let selector = RoleTermSelector::from_name_variable(var, form);
         let val = self.ctx.get_name(var);
         let len = val.map(|v| v.len()).unwrap_or(0);
         let plural = match (len, plural) {
@@ -425,13 +422,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 .get_text_term(TextTermSelector::Role(sel), plural)
                 .map(|term_text| {
                     let options = IngestOptions {
-                        text_case: label.text_case,
+                        text_case,
+                        strip_periods,
                         quotes: self.quotes(),
                         is_english: self.ctx.is_english(),
                         ..Default::default()
                     };
                     let b = fmt.ingest(term_text, &options);
-                    let b = fmt.with_format(b, *formatting);
+                    let b = fmt.with_format(b, formatting);
                     fmt.affixed(b, affixes.as_ref())
                 })
         })

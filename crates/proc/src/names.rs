@@ -338,8 +338,9 @@ impl<'c, O: OutputFormat> NameIR<O> {
             .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
         let mut seq = IrSeq {
             contents: iter.collect(),
-            formatting: runner.name_el.formatting,
-            affixes: runner.name_el.affixes.clone(),
+            formatting: None,
+            affixes: None,
+            display: None,
             ..Default::default()
         };
         if seq.contents.is_empty() {
@@ -758,7 +759,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
 
         fmt.affixed(
-            fmt.seq(build.into_iter()),
+            fmt.with_format(
+                fmt.seq(build.into_iter()),
+                self.name_el.formatting
+            ),
             self.name_el.affixes.as_ref(),
         )
     }
