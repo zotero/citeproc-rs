@@ -492,14 +492,6 @@ impl Processor {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct ClusterPosition {
-    pub id: ClusterId,
-    /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<u32>,
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
     #[error(
