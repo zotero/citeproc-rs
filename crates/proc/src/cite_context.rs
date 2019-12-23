@@ -192,8 +192,11 @@ where
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
         self.reference.date.get(&dvar)
     }
-    fn position(&self) -> Position {
-        self.position.0
+    fn position(&self) -> Option<Position> {
+        if self.in_bibliography {
+            return None;
+        }
+        Some(self.position.0)
     }
     fn is_disambiguate(&self, _current_count: u32) -> bool {
         // ignore count as that's for references

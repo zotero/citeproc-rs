@@ -189,8 +189,8 @@ where
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
         self.reference.date.get(&dvar)
     }
-    fn position(&self) -> Position {
-        self.position
+    fn position(&self) -> Option<Position> {
+        Some(self.position)
     }
     fn is_disambiguate(&self, current_count: u32) -> bool {
         // See docs on is_disambiguate

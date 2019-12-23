@@ -141,7 +141,7 @@ impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
             Cit(ctx) => <CiteContext<'a, O> as CondChecker>::get_date(ctx, dvar),
         }
     }
-    fn position(&self) -> Position {
+    fn position(&self) -> Option<Position> {
         match self {
             Ref(ctx) => <RefContext<'a, O> as CondChecker>::position(ctx),
             Cit(ctx) => <CiteContext<'a, O> as CondChecker>::position(ctx),
