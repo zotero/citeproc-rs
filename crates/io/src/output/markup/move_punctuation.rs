@@ -749,6 +749,9 @@ static QUOTES_BOTH_PUNC_OUT: phf::Map<&'static [u8], Where> = phf_map! {
 /// From `punctuation_FullMontyPlain.txt` and `punctuation_FullMontyField.txt`,
 /// which have identical output. If None, do nothing.
 static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map! {
+    // Misc
+    b"  " => Some(" "),
+
     // Colon
     b"::" => Some(":"),
     b".:" => None,
