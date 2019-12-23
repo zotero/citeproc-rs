@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Cite, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, ClusterId, ClusterNumber, IntraNote, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -200,8 +200,9 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
 
     let mut map = FnvHashMap::default();
 
-    // TODO: configure
-    let near_note_distance = 5;
+    let style = db.style();
+    let near_note_distance = style.citation.near_note_distance;
+    warn!("near_note_distance {}", near_note_distance);
 
     // Backref table for FRNN
     // No entries for first ref == an in-text reference, only first time it appeared in a
@@ -210,6 +211,12 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
     let mut first_seen: FnvHashMap<Atom, ClusterNumber> = FnvHashMap::default();
 
     for (i, cluster) in clusters.iter().enumerate() {
+        let is_near = move |n: u32| {
+            cluster
+                .number
+                .sub_note(IntraNote::Single(n))
+                .map_or(false, |d| d <= near_note_distance)
+        };
         let in_text = match cluster.number {
             ClusterNumber::InText(n) => Some(n),
             _ => None,
@@ -221,8 +228,22 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                 // 0 - 1 == usize::MAX is never going to come up with anything
                 .get(j.wrapping_sub(1))
                 .map(|&prev_id| prev_id.lookup(db));
+            enum Where {
+                SameCluster(Arc<Cite<Markup>>),
+                // Note Number here, so we can selectively apply near-note
+                // There could be a bunch of non-cluster footnotes in between,
+                // so we can't just assume two neighbouring clusters are actually next to each
+                // other in the document.
+                PrevCluster(Arc<Cite<Markup>>, Option<u32>),
+            }
             let matching_prev = prev_cite
-                .filter(|p| p.ref_id == cite.ref_id)
+                .and_then(|p| {
+                    if p.ref_id == cite.ref_id {
+                        Some(Where::SameCluster(p))
+                    } else {
+                        None
+                    }
+                })
                 .or_else(|| {
                     if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
                         // Clusters are sorted, with in-text all going first.
@@ -232,6 +253,10 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                             ClusterNumber::InText(_) => true,
                             _ => false,
                         };
+                        let prev_number = match prev_cluster.number {
+                            ClusterNumber::Note(intra) => Some(intra.note_number()),
+                            _ => None,
+                        };
                         if prev_in_text == in_text.is_some()
                             && prev_cluster.cites.len() > 0
                             && prev_cluster
@@ -240,7 +265,10 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                                 .all(|&pid| pid.lookup(db).ref_id == cite.ref_id)
                         {
                             // Pick the last one to match locators against
-                            prev_cluster.cites.last().map(|&pid| pid.lookup(db))
+                            prev_cluster
+                                .cites
+                                .last()
+                                .map(|&pid| Where::PrevCluster(pid.lookup(db), prev_number))
                         } else {
                             None
                         }
@@ -248,17 +276,55 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                         None
                     }
                 })
-                .map(
-                    |prev| match (prev.locators.as_ref(), cite.locators.as_ref()) {
-                        (None, None) => Position::Ibid,
-                        (None, Some(_cur)) => Position::IbidWithLocator,
-                        // XXX: should this be Position::NearNote, and also subsequent by
-                        // implication? Probably, despite "position can only be subsequent".
-                        (Some(_pre), None) => Position::Subsequent,
-                        (Some(pre), Some(cur)) if pre == cur => Position::Ibid,
-                        _ => Position::IbidWithLocator,
-                    },
-                );
+                .map(|prev| {
+                    enum Num {
+                        SameCluster,
+                        PrevButInText,
+                        PrevNote(u32),
+                    }
+                    let nn = match &prev {
+                        Where::SameCluster(_) => Num::SameCluster,
+                        Where::PrevCluster(_, None) => Num::PrevButInText,
+                        Where::PrevCluster(_, Some(n)) => Num::PrevNote(*n),
+                    };
+                    let near = match nn {
+                        Num::SameCluster => true,
+                        Num::PrevButInText => false,
+                        Num::PrevNote(n) => is_near(n),
+                    };
+                    let prev = match &prev {
+                        Where::SameCluster(prev) | Where::PrevCluster(prev, _) => prev,
+                    };
+                    match (prev.locators.as_ref(), cite.locators.as_ref(), near) {
+                        (None, None, false) => Position::Ibid,
+                        (None, None, true) => Position::IbidNear,
+                        (None, Some(_cur), false) => Position::IbidWithLocator,
+                        (None, Some(_cur), true) => Position::IbidWithLocatorNear,
+                        // Despite "position can only be subsequent", we get
+                        // near/far note, as they imply subsequent.
+                        (Some(_pre), None, x) => {
+                            if x {
+                                Position::NearNote
+                            } else {
+                                Position::FarNote
+                            }
+                        }
+                        (Some(pre), Some(cur), x) if pre == cur => {
+                            if x {
+                                Position::IbidNear
+                            } else {
+                                Position::Ibid
+                            }
+                        }
+                        (_, _, x) => {
+                            if x {
+                                Position::IbidWithLocatorNear
+                            } else {
+                                Position::IbidWithLocator
+                            }
+                        }
+                    }
+                });
             let seen = first_seen.get(&cite.ref_id).cloned();
             match seen {
                 Some(ClusterNumber::Note(first_note_number)) => {
@@ -273,9 +339,7 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     let diff = cluster.number.sub_note(first_note_number);
                     if let Some(pos) = matching_prev {
                         map.insert(cite_id, (pos, Some(unsigned)));
-                    } else if cluster.number == first_number
-                        || diff.map(|d| d < near_note_distance).unwrap_or(false)
-                    {
+                    } else if cluster.number == first_number || is_near(unsigned) {
                         // XXX: not sure about this one
                         // unimplemented!("cite position for same number, but different cluster");
                         map.insert(cite_id, (Position::NearNote, Some(unsigned)));
@@ -296,7 +360,7 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                             let diff = itnum.wrapping_sub(seen_in_text_num);
                             let pos = if let Some(pos) = matching_prev {
                                 pos
-                            } else if diff < near_note_distance {
+                            } else if diff <= near_note_distance {
                                 Position::NearNote
                             } else {
                                 Position::FarNote

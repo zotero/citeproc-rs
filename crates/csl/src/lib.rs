@@ -185,6 +185,7 @@ impl FromNode for Citation {
                 .attribute("names-delimiter")
                 .map(Atom::from)
                 .map(Delimiter),
+            near_note_distance: attribute_option_int(node, "near-note-distance")?.unwrap_or(5),
         })
     }
 }

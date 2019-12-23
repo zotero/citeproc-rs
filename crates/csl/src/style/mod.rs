@@ -908,6 +908,7 @@ pub struct Citation {
     pub layout: Layout,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
+    pub near_note_distance: u32,
 }
 
 impl Default for Citation {
@@ -920,6 +921,7 @@ impl Default for Citation {
             layout: Default::default(),
             name_inheritance: Default::default(),
             names_delimiter: None,
+            near_note_distance: 5,
         }
     }
 }
@@ -1263,6 +1265,13 @@ pub enum Position {
     Subsequent,
     NearNote,
 
+    // Not supported as a condition check, but this means both ibid and near, which is usually the
+    // case for an ibid, except when near-note-distance="0" and the ibid refers to a previous cluster.
+    #[strum(props(csl = "0", cslM = "0"))]
+    IbidNear,
+    #[strum(props(csl = "0", cslM = "0"))]
+    IbidWithLocatorNear,
+
     /// CSL-M only
     ///
     /// It [would
@@ -1281,6 +1290,13 @@ impl Position {
     pub fn matches(self, in_cond: Self) -> bool {
         use self::Position::*;
         match (self, in_cond) {
+            (IbidNear, Ibid) => true,
+            (IbidNear, NearNote) => true,
+            (IbidNear, Subsequent) => true,
+            (IbidWithLocatorNear, IbidWithLocator) => true,
+            (IbidWithLocatorNear, Ibid) => true,
+            (IbidWithLocatorNear, NearNote) => true,
+            (IbidWithLocatorNear, Subsequent) => true,
             (IbidWithLocator, Ibid) => true,
             (IbidWithLocator, Subsequent) => true,
             (Ibid, Subsequent) => true,
