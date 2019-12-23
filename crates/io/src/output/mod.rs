@@ -182,27 +182,32 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         quotes: Option<LocalizedQuotes>,
     ) -> Self::Build {
         use std::iter::once;
-        let pre = affixes.map_or(true, |x| x.prefix.is_empty());
-        let suf = affixes.map_or(true, |x| x.suffix.is_empty());
         let b = if let Some(lq) = quotes {
             self.quoted(b, lq)
         } else {
             b
         };
-        match (pre, suf) {
-            (true, true) => b,
-
-            (false, true) => self.seq(once(self.plain(&affixes.unwrap().prefix)).chain(once(b))),
-
-            (true, false) => self.seq(once(b).chain(once(self.plain(&affixes.unwrap().suffix)))),
-
-            (false, false) => self.seq(
-                once(self.plain(&affixes.unwrap().prefix))
-                    .chain(once(b))
-                    .chain(once(self.plain(&affixes.unwrap().suffix))),
-            ),
+        let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_ref()) {
+            if !prefix.is_empty() {
+                self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
+            } else {
+                b
+            }
+        } else {
+            b
+        };
+        if let Some(suffix) = affixes.map(|a| a.suffix.as_ref()) {
+            if !suffix.is_empty() {
+                self.append_suffix(&mut pre_and_content, suffix);
+            }
         }
+        pre_and_content
     }
+
+    /// Do any punctuation-moving here.
+    fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str);
+
+    fn apply_text_case(&self, mutable: &mut Self::Build, options: &IngestOptions);
 
     fn with_format(&self, a: Self::Build, f: Option<Formatting>) -> Self::Build;
     fn with_display(

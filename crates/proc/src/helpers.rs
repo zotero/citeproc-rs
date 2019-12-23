@@ -11,6 +11,20 @@ use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, DisplayMode, Element, Formatting};
 
+pub fn sequence_basic<'c, O, I>(
+    db: &impl IrDatabase,
+    state: &mut IrState,
+    ctx: &CiteContext<'c, O, I>,
+    els: &[Element],
+) -> IrSum<O>
+where
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    sequence(db, state, ctx, els, "".into(), None, None, None, None, TextCase::None)
+}
+
+
 pub fn sequence<'c, O, I>(
     db: &impl IrDatabase,
     state: &mut IrState,
@@ -22,6 +36,7 @@ pub fn sequence<'c, O, I>(
     display: Option<DisplayMode>,
     // Only because <text macro="xxx" /> supports quotes.
     quotes: Option<LocalizedQuotes>,
+    text_case: TextCase,
 ) -> IrSum<O>
 where
     O: OutputFormat,
@@ -51,22 +66,35 @@ where
                 delimiter,
                 display: if ctx.in_bibliography { display } else { None },
                 quotes,
+                text_case,
             }),
             gv,
         )
     }
 }
 
+pub fn ref_sequence_basic<'c>(
+    db: &impl IrDatabase,
+    state: &mut IrState,
+    ctx: &RefContext<'c>,
+    els: &[Element],
+    stack: Formatting,
+) -> (RefIR, GroupVars) {
+    ref_sequence(db, state, ctx, els, "".into(), Some(stack), None, None, None, TextCase::None)
+}
+
+
 pub fn ref_sequence<'c>(
     db: &impl IrDatabase,
-    ctx: &RefContext<'c, Markup>,
     state: &mut IrState,
+    ctx: &RefContext<'c, Markup>,
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
     affixes: Option<&Affixes>,
     _display: Option<DisplayMode>,
     quotes: Option<LocalizedQuotes>,
+    text_case: TextCase,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 
@@ -96,6 +124,7 @@ pub fn ref_sequence<'c>(
                 affixes: affixes.cloned(),
                 delimiter,
                 quotes,
+                text_case,
             }),
             gv,
         )

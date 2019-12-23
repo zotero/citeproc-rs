@@ -447,7 +447,7 @@ impl FromNode for NumberElement {
             form: attribute_optional(node, "form", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            text_case: attribute_optional(node, "plural", info)?,
+            text_case: attribute_optional(node, "text-case", info)?,
             display: attribute_option(node, "display", info)?,
         })
     }

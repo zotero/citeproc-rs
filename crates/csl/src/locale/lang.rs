@@ -64,8 +64,7 @@ impl Lang {
     }
 
     /// Useful for title-casing.
-    #[allow(dead_code)]
-    pub(crate) fn is_english(&self) -> bool {
+    pub fn is_english(&self) -> bool {
         match self {
             Lang::Iso(IsoLang::English, _) => true,
             _ => false,

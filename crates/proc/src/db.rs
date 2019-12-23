@@ -855,26 +855,16 @@ fn built_cluster(
     let layout = &style.citation.layout;
     let built_cites: Vec<_> = cite_ids
         .iter()
-        .map(|&id| {
+        .filter_map(|&id| {
             let gen4 = db.ir_gen4_conditionals(id);
-            let locale = db.locale_by_cite(id);
-            let quotes = LocalizedQuotes::from_locale(&locale);
-            let ingest = IngestOptions::default_with_quotes(quotes);
             let ir = &gen4.ir;
             let cite = id.lookup(db);
-            let flattened = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
-            // TODO: strip punctuation on these
-            let prefix = cite.prefix.as_ref().map(|pre| fmt.ingest(pre, &ingest));
-            let suffix = cite.suffix.as_ref().map(|pre| fmt.ingest(pre, &ingest));
-            use std::iter::once;
-            match (prefix, suffix) {
-                (Some(pre), Some(suf)) => {
-                    fmt.seq(once(pre).chain(once(flattened)).chain(once(suf)))
-                }
-                (Some(pre), None) => fmt.seq(once(pre).chain(once(flattened))),
-                (None, Some(suf)) => fmt.seq(once(flattened).chain(once(suf))),
-                (None, None) => flattened,
-            }
+            let flattened = ir.flatten(&fmt)?;
+            let aff = Affixes {
+                prefix: Atom::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
+                suffix: Atom::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or("")),
+            };
+            Some(fmt.affixed(flattened, Some(&aff)))
         })
         .collect();
     let build = fmt.with_format(

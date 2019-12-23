@@ -72,6 +72,7 @@ fn to_ref_ir(
             affixes: ir_seq.affixes,
             delimiter: ir_seq.delimiter,
             quotes: None,
+            text_case: ir_seq.text_case,
         }),
         IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
     }
@@ -187,10 +188,9 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 let mut seq = IrSeq {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
-                    delimiter: Atom::from(""),
                     affixes: bits.overall_affixes.cloned(),
                     display: bits.display,
-                    quotes: None,
+                    ..Default::default()
                 };
                 for built in vec {
                     seq.contents
@@ -614,9 +614,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                         contents,
                         affixes,
                         formatting: part.formatting,
-                        delimiter: Atom::from(""),
-                        display: None,
-                        quotes: None,
+                        ..Default::default()
                     })
                 })
             } else {

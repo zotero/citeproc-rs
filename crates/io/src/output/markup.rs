@@ -10,7 +10,7 @@ use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::{
-    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment,
+    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment, TextCase,
 };
 
 mod rtf;
@@ -109,7 +109,9 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
-        vec![InlineElement::Micro(MicroNode::parse(input, options))]
+        let mut nodes = MicroNode::parse(input, options);
+        options.apply_text_case_micro(&mut nodes);
+        vec![InlineElement::Micro(nodes)]
     }
 
     #[inline]
@@ -119,6 +121,9 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn text_node(&self, text: String, f: Option<Formatting>) -> Vec<InlineElement> {
+        if text.is_empty() {
+            return vec![];
+        }
         let v = vec![Text(text)];
         self.fmt_vec(v, f)
     }
@@ -235,6 +240,22 @@ impl OutputFormat for Markup {
     #[inline]
     fn tag_stack(&self, formatting: Formatting, display: Option<DisplayMode>) -> Vec<FormatCmd> {
         tag_stack(formatting, display)
+    }
+
+    #[inline]
+    fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str) {
+        let suffix = MicroNode::parse(suffix, &IngestOptions::default());
+        use self::move_punctuation::append_suffix;
+        append_suffix(pre_and_content, suffix);
+    }
+
+    #[inline]
+    fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
+        if options.text_case == TextCase::None {
+            return;
+        }
+        let is_uppercase = options.is_uppercase(build);
+        options.apply_text_case_inner(build, false, is_uppercase);
     }
 }
 

@@ -11,7 +11,6 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
         options: &options,
     };
     let inters: Vec<_> = matcher.intermediates().collect();
-    debug!("{:?}", inters);
     stamp(inters.len(), inters.into_iter(), &mut original, options)
 }
 
@@ -78,7 +77,12 @@ impl QuotedStack {
     fn collapse_hanging(mut self) -> Vec<MicroNode> {
         while let Some((kind, quoted)) = self.stack.pop() {
             self.push_str(kind.unmatched_str());
-            self.mut_ref().extend(quoted.into_iter());
+            for node in quoted {
+                match node {
+                    MicroNode::Text(txt) => self.push_string(txt),
+                    _ => self.push(node),
+                }
+            }
         }
         self.dest
     }
@@ -93,7 +97,6 @@ fn stamp<'a>(
     let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
     let mut drain = |start: usize, end: usize, stack: &mut QuotedStack| {
-        debug!("{}..{}", start - drained, end - drained);
         stack
             .mut_ref()
             .extend(orig.drain(start - drained..end - drained));
@@ -143,7 +146,6 @@ fn stamp<'a>(
                             stack.push_str(SFQuoteKind::Double.unmatched_str());
                         }
                     }
-                    _ => unimplemented!(),
                 }
             }
             // Move sequential index references out of the array together where possible
@@ -182,9 +184,7 @@ fn test_stamp() {
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig, &options),
         &[
-            MicroNode::Text("prefix, '".into()),
-            MicroNode::Text("hi".into()),
-            MicroNode::Text("hosuffix".into()),
+            MicroNode::Text("prefix, 'hihosuffix".into()),
         ]
     );
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
@@ -280,9 +280,9 @@ impl<'a> QuoteMatcher<'a> {
             .iter()
             .enumerate()
             .flat_map(move |(ix, node)| match node {
-                MicroNode::Quoted { ref children, .. }
-                | MicroNode::NoCase(ref children)
-                | MicroNode::Formatted(ref children, _) => EachSplitter::Index(Some(ix)),
+                MicroNode::Quoted { .. }
+                | MicroNode::NoCase(_)
+                | MicroNode::Formatted(..) => EachSplitter::Index(Some(ix)),
                 MicroNode::Text(ref string) => {
                     let prev = self
                         .original

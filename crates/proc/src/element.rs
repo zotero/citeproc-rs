@@ -1,4 +1,3 @@
-use crate::helpers::sequence;
 use crate::prelude::*;
 use csl::variables::*;
 use csl::{Bibliography, Element, Style, TextSource};
@@ -16,17 +15,7 @@ where
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence(
-            db,
-            state,
-            ctx,
-            &layout.elements,
-            "".into(),
-            None,
-            None,
-            None,
-            None,
-        )
+        sequence_basic(db, state, ctx, &layout.elements)
     }
 }
 
@@ -43,17 +32,7 @@ where
     ) -> IrSum<O> {
         let layout = &self.layout;
         // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence(
-            db,
-            state,
-            ctx,
-            &layout.elements,
-            "".into(),
-            None,
-            None,
-            None,
-            None,
-        )
+        sequence_basic(db, state, ctx, &layout.elements)
     }
 }
 
@@ -97,6 +76,7 @@ where
                             text.affixes.as_ref(),
                             text.display,
                             renderer.quotes_if(text.quotes),
+                            text.text_case,
                         );
                         state.pop_macro(name);
                         out
@@ -197,6 +177,7 @@ where
                     g.affixes.as_ref(),
                     g.display,
                     None,
+                    TextCase::None,
                 );
                 if group_vars.should_render_tree() {
                     // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will

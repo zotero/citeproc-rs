@@ -258,7 +258,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
             } else {
                 None
             },
-            quotes: None,
+            ..Default::default()
         }),
         GroupVars::DidRender,
     )
@@ -340,9 +340,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             contents: iter.collect(),
             formatting: runner.name_el.formatting,
             affixes: runner.name_el.affixes.clone(),
-            delimiter: Atom::from(""),
-            display: None,
-            quotes: None,
+            ..Default::default()
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::OnlyEmpty))
@@ -656,11 +654,19 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         match o_part {
             None => fmt.plain(s),
             Some(ref part) => {
-                // TODO: text-case, IngestOptions
-                fmt.affixed(
-                    fmt.text_node(s.to_string(), part.formatting),
-                    part.affixes.as_ref(),
-                )
+                let NamePart {
+                    text_case,
+                    formatting,
+                    ref affixes,
+                    ..
+                } = *part;
+                let b = fmt.ingest(s, &IngestOptions {
+                    text_case: part.text_case,
+                    // TODO: use the correct quotes? They shouldn't be appearing in names anyway.
+                    ..Default::default()
+                });
+                let b = fmt.with_format(b, formatting);
+                fmt.affixed(b, affixes.as_ref())
             }
         }
     }
