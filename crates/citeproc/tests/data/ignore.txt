@@ -9,3 +9,5 @@ disambiguate_BasedOnSubsequentFormWithBackref.txt
 disambiguate_BasedOnSubsequentFormWithLocator.txt
 # uses a whole lot of citeproc-js options
 form_ShortTitleOnly.txt
+# only the order of in-text items is different; citeproc-rs outputs them first
+position_IbidInText.txt

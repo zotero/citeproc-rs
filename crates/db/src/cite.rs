@@ -65,6 +65,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
+    // #[salsa::input]
+    // fn cluster_positions(&self) -> Arc<Vec<ClusterPosition>>;
 }
 
 #[macro_export]
@@ -217,6 +219,9 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
     let mut last_note_num = None;
     let mut clusters_in_last_note: Vec<u32> = Vec::new();
 
+    let mut prev_in_text: Option<&ClusterData> = None;
+    let mut prev_note: Option<&ClusterData> = None;
+
     for (i, cluster) in clusters.iter().enumerate() {
         let prev_in_group = if let ClusterNumber::Note(_) = cluster.number {
             !clusters_in_last_note.is_empty()
@@ -257,14 +262,10 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                     }
                 })
                 .or_else(|| {
-                    if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
-                        // Clusters are sorted, with in-text all going first.
-                        // So, i-1 == "the previous cluster of the same (kind == intext|note)" in every
-                        // case except "the first note cluster after in-text". So we have to check.
-                        let prev_in_text = match prev_cluster.number {
-                            ClusterNumber::InText(_) => true,
-                            _ => false,
-                        };
+                    if let Some(prev_cluster) = match cluster.number {
+                        ClusterNumber::InText(_) => prev_in_text,
+                        ClusterNumber::Note(_) => prev_note,
+                    } {
                         let prev_number = match prev_cluster.number {
                             ClusterNumber::Note(intra) => Some(intra.note_number()),
                             _ => None,
@@ -280,13 +281,12 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
                                 .flat_map(|cluster| (*cluster.cites).clone().into_iter())
                                 .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
                         } else {
-                            prev_in_text == in_text.is_some()
-                            && prev_cluster.cites.len() > 0
-                            && prev_cluster
+                            prev_cluster
                                 .cites
                                 .iter()
                                 .all(|&pid| pid.lookup(db).ref_id == cite.ref_id)
                         };
+                        // Even if len was 0, fine because last() will end up with None anyway
                         if cites_all_same {
                             // Pick the last one to match locators against
                             prev_cluster
@@ -407,6 +407,16 @@ fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, O
             }
             clusters_in_last_note.push(cluster.id);
         }
+        prev_in_text = if let ClusterNumber::InText(_i) = cluster.number {
+            Some(cluster)
+        } else {
+            None
+        };
+        prev_note = if let ClusterNumber::Note(_i) = cluster.number {
+            Some(cluster)
+        } else {
+            None
+        };
     }
 
     Arc::new(map)
