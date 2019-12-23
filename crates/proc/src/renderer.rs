@@ -424,7 +424,15 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
                 .map(|term_text| {
-                    fmt.affixed_text(term_text.to_owned(), *formatting, affixes.as_ref())
+                    let options = IngestOptions {
+                        text_case: label.text_case,
+                        quotes: self.quotes(),
+                        is_english: self.ctx.is_english(),
+                        ..Default::default()
+                    };
+                    let b = fmt.ingest(term_text, &options);
+                    let b = fmt.with_format(b, *formatting);
+                    fmt.affixed(b, affixes.as_ref())
                 })
         })
     }
