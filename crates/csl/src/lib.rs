@@ -83,9 +83,8 @@ impl AttrChecker for Formatting {
         attr == "font-style"
             || attr == "font-variant"
             || attr == "font-weight"
-            || attr == "text-decoration"
             || attr == "vertical-align"
-            || attr == "strip-periods"
+            || attr == "text-decoration"
     }
 }
 
