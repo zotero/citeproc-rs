@@ -757,7 +757,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             }
         }
 
-        fmt.seq(build.into_iter())
+        fmt.affixed(
+            fmt.seq(build.into_iter()),
+            self.name_el.affixes.as_ref(),
+        )
     }
 
     /// without the <name /> formatting and affixes applied
