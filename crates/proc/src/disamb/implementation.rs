@@ -193,7 +193,7 @@ impl Disambiguation<Markup> for Element {
                         .get(name)
                         .expect("macro errors not implemented!");
                     state.push_macro(name);
-                    let ret = ref_sequence(
+                    let (seq, group_vars) = ref_sequence(
                         db,
                         state,
                         ctx,
@@ -206,7 +206,15 @@ impl Disambiguation<Markup> for Element {
                         text.text_case,
                     );
                     state.pop_macro(name);
-                    ret
+                    if group_vars.should_render_tree() {
+                        // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
+                        // render the NoneSeen part. Groups shouldn't look inside inner
+                        // groups.
+                        (seq, group_vars)
+                    } else {
+                        // Don't render the group!
+                        (RefIR::Edge(None), GroupVars::NoneSeen)
+                    }
                 }
             },
             Element::Label(label) => {

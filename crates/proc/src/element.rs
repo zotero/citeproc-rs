@@ -66,7 +66,7 @@ where
                         // already have panicked when it was run the first time! So we're OK.
                         // XXX: that's not quite true
                         state.push_macro(name);
-                        let out = sequence(
+                        let (seq, group_vars) = sequence(
                             db,
                             state,
                             ctx,
@@ -79,7 +79,15 @@ where
                             text.text_case,
                         );
                         state.pop_macro(name);
-                        out
+                        if group_vars.should_render_tree() {
+                            // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
+                            // render the NoneSeen part. Groups shouldn't look inside inner
+                            // groups.
+                            (seq, group_vars)
+                        } else {
+                            // Don't render the group!
+                            (IR::Rendered(None), GroupVars::NoneSeen)
+                        }
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
