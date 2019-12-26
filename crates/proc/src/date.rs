@@ -156,6 +156,7 @@ struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
     overall_affixes: Option<&'a Affixes>,
     overall_delimiter: &'a Atom,
+    overall_text_case: TextCase,
     display: Option<DisplayMode>,
 }
 
@@ -189,6 +190,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
                     affixes: bits.overall_affixes.cloned(),
+                    text_case: bits.overall_text_case,
                     display: bits.display,
                     ..Default::default()
                 };
@@ -236,7 +238,16 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                     fmt.group(each, "", bits.overall_formatting),
                     bits.overall_affixes,
                 );
-                Either::Build(Some(built))
+                if bits.overall_text_case != TextCase::None {
+                    // apply text casing by surrounding with an IrSeq,
+                    Either::Ir(IR::Seq(IrSeq {
+                        contents: vec![IR::Rendered(Some(CiteEdgeData::Output(built)))],
+                        text_case: bits.overall_text_case,
+                        ..Default::default()
+                    }))
+                } else {
+                    Either::Build(Some(built))
+                }
             }
             PartAccumulator::Seq(seq) => Either::Ir(IR::Seq(seq)),
         }
@@ -259,6 +270,7 @@ where
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
         overall_affixes: natural_affix.as_ref(),
+        overall_text_case: TextCase::None,
         display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
@@ -268,6 +280,7 @@ where
             overall_delimiter: &locale_date.delimiter.0,
             overall_formatting: local.formatting,
             overall_affixes: local.affixes.as_ref(),
+            overall_text_case: local.text_case,
             display: if ctx.in_bibliography() {
                 local.display
             } else {
@@ -315,6 +328,7 @@ where
         overall_delimiter: &Atom::from(""),
         overall_formatting: None,
         overall_affixes: natural_affix.as_ref(),
+        overall_text_case: indep.text_case,
         display: None,
     };
     let gen_date = if ctx.sort_key().is_some() {
@@ -324,6 +338,7 @@ where
             overall_delimiter: &indep.delimiter.0,
             overall_formatting: indep.formatting,
             overall_affixes: indep.affixes.as_ref(),
+            overall_text_case: indep.text_case,
             display: if ctx.in_bibliography() {
                 indep.display
             } else {
@@ -396,7 +411,16 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             }
             builder.into_either(fmt)
         }
-        DateOrRange::Literal(string) => Either::Build(Some(fmt.plain(string))),
+        DateOrRange::Literal(string) => {
+            let options = IngestOptions {
+                text_case: gen_date.overall_text_case,
+                ..Default::default()
+            };
+            let b = fmt.ingest(&string, &options);
+            let b = fmt.with_format(b, gen_date.overall_formatting);
+            let b = fmt.affixed(b, gen_date.overall_affixes);
+            Either::Build(Some(b))
+        }
     })
 }
 
