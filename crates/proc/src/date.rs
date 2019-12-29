@@ -152,16 +152,16 @@ impl Disambiguation<Markup> for BodyDate {
     }
 }
 
-struct GenericDateBits<'a> {
+struct GenericDateBits {
     overall_formatting: Option<Formatting>,
-    overall_affixes: Option<&'a Affixes>,
-    overall_delimiter: &'a Atom,
+    overall_affixes: Option<Affixes>,
+    overall_delimiter: Atom,
     overall_text_case: TextCase,
     display: Option<DisplayMode>,
 }
 
-struct PartBuilder<'a, O: OutputFormat> {
-    bits: GenericDateBits<'a>,
+struct PartBuilder<O: OutputFormat> {
+    bits: GenericDateBits,
     acc: PartAccumulator<O>,
 }
 
@@ -170,8 +170,8 @@ enum PartAccumulator<O: OutputFormat> {
     Seq(IrSeq<O>),
 }
 
-impl<'a, O: OutputFormat> PartBuilder<'a, O> {
-    fn new(bits: GenericDateBits<'a>, len_hint: usize) -> Self {
+impl<'a, O: OutputFormat> PartBuilder<O> {
+    fn new(bits: GenericDateBits, len_hint: usize) -> Self {
         PartBuilder {
             bits,
             acc: PartAccumulator::Builds(Vec::with_capacity(len_hint)),
@@ -179,17 +179,14 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
     }
 
     fn upgrade(&mut self) {
-        let PartBuilder {
-            ref mut acc,
-            ref mut bits,
-        } = self;
+        let PartBuilder { ref mut acc, ref mut bits } = self;
         *acc = match acc {
             PartAccumulator::Builds(ref mut vec) => {
                 let vec = mem::replace(vec, Vec::new());
                 let mut seq = IrSeq {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
-                    affixes: bits.overall_affixes.cloned(),
+                    affixes: bits.overall_affixes.clone(),
                     text_case: bits.overall_text_case,
                     display: bits.display,
                     ..Default::default()
@@ -236,7 +233,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 }
                 let built = fmt.affixed(
                     fmt.group(each, "", bits.overall_formatting),
-                    bits.overall_affixes,
+                    bits.overall_affixes.as_ref(),
                 );
                 if bits.overall_text_case != TextCase::None {
                     // apply text casing by surrounding with an IrSeq,
@@ -254,6 +251,18 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
     }
 }
 
+impl GenericDateBits {
+    fn sorting() -> Self {
+        GenericDateBits {
+            overall_delimiter: Atom::from(""),
+            overall_formatting: None,
+            overall_affixes: Some(crate::sort::natural_sort::date_affixes()),
+            overall_text_case: TextCase::None,
+            display: None,
+        }
+    }
+}
+
 fn intermediate_generic_local<'c, O, I>(
     local: &LocalizedDate,
     ctx: GenericContext<'c, O, I>,
@@ -266,20 +275,13 @@ where
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
-    let empty = GenericDateBits {
-        overall_delimiter: &Atom::from(""),
-        overall_formatting: None,
-        overall_affixes: natural_affix.as_ref(),
-        overall_text_case: TextCase::None,
-        display: None,
-    };
     let gen_date = if ctx.sort_key().is_some() {
-        empty
+        GenericDateBits::sorting()
     } else {
         GenericDateBits {
-            overall_delimiter: &locale_date.delimiter.0,
+            overall_delimiter: locale_date.delimiter.0.clone(),
             overall_formatting: local.formatting,
-            overall_affixes: local.affixes.as_ref(),
+            overall_affixes: local.affixes.clone(),
             overall_text_case: local.text_case,
             display: if ctx.in_bibliography() {
                 local.display
@@ -324,20 +326,13 @@ where
     I: OutputFormat,
 {
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
-    let empty = GenericDateBits {
-        overall_delimiter: &Atom::from(""),
-        overall_formatting: None,
-        overall_affixes: natural_affix.as_ref(),
-        overall_text_case: indep.text_case,
-        display: None,
-    };
     let gen_date = if ctx.sort_key().is_some() {
-        empty
+        GenericDateBits::sorting()
     } else {
         GenericDateBits {
-            overall_delimiter: &indep.delimiter.0,
+            overall_delimiter: indep.delimiter.0.clone(),
             overall_formatting: indep.formatting,
-            overall_affixes: indep.affixes.as_ref(),
+            overall_affixes: indep.affixes.clone(),
             overall_text_case: indep.text_case,
             display: if ctx.in_bibliography() {
                 indep.display
@@ -371,7 +366,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                     }
                 })
                 .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
-            let delim = gen_date.overall_delimiter;
+            let delim = gen_date.overall_delimiter.clone();
             let mut builder = PartBuilder::new(gen_date, len_hint);
             let mut seen_one = false;
             for (_form, either) in each {
@@ -385,7 +380,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
         }
         DateOrRange::Range(first, second) => {
             let tokens = DateRangePartsIter::new(parts, selector, first, second);
-            let delim = gen_date.overall_delimiter;
+            let delim = gen_date.overall_delimiter.clone();
             let mut builder = PartBuilder::new(gen_date, len_hint);
             let mut seen_one = false;
             let mut last_rdel = false;
@@ -418,7 +413,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             };
             let b = fmt.ingest(&string, &options);
             let b = fmt.with_format(b, gen_date.overall_formatting);
-            let b = fmt.affixed(b, gen_date.overall_affixes);
+            let b = fmt.affixed(b, gen_date.overall_affixes.as_ref());
             Either::Build(Some(b))
         }
     })
