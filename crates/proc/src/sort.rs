@@ -1,4 +1,4 @@
-use crate::db::with_bib_context;
+use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_io::output::plain::PlainText;
 use citeproc_io::Reference;
@@ -7,6 +7,21 @@ use fnv::FnvHashMap;
 use std::sync::Arc;
 
 use std::cmp::Ordering;
+#[derive(Debug)]
+enum Demoted {
+    Left,
+    Right,
+}
+use natural_sort::NaturalCmp;
+
+fn compare_demoting_none<T: PartialOrd>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
+    match (aa, bb) {
+        (None, None) => (Ordering::Equal, None),
+        (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
+        (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
+        (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
+    }
+}
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
     TextElement {
@@ -21,11 +36,17 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
 }
 
 pub fn sort_string_citation(
-    _db: &impl IrDatabase,
-    _ref_id: Atom,
-    _macro_name: Atom,
-) -> Arc<String> {
-    unimplemented!()
+    db: &impl IrDatabase,
+    cite_id: CiteId,
+    macro_name: Atom,
+    key: SortKey,
+) -> Option<Arc<String>> {
+    with_cite_context(db, cite_id, None, Some(key), true, |ctx| {
+        let mut walker = SortingWalker::new(db, &ctx);
+        let text = plain_macro_element(macro_name.clone());
+        let (string, _gv) = walker.text_macro(&text, &macro_name);
+        Arc::new(string)
+    })
 }
 
 // Cached by the DB because typically the output needs to be compared more than once
@@ -75,7 +96,18 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
             let b_cnum = citation_numbers.get(b).unwrap();
             let ar = db.reference_input(a.clone());
             let br = db.reference_input(b.clone());
-            bib_ordering(db, &ar, &br, *a_cnum, *b_cnum, sort, &style)
+            bib_ordering(
+                db,
+                |db, _cite_id, ref_id, macro_name, key| db.sort_string_bibliography(ref_id, macro_name, key),
+                None,
+                None,
+                &ar,
+                &br,
+                *a_cnum,
+                *b_cnum,
+                sort,
+                &style
+            )
         });
         preordered
     } else {
@@ -97,8 +129,37 @@ pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
 }
 
 /// Creates a total ordering of References from a Sort element. (Not a query)
-pub fn bib_ordering(
+pub fn cite_ordering(
     db: &impl IrDatabase,
+    a_id: CiteId,
+    b_id: CiteId,
+    a: &Reference,
+    b: &Reference,
+    a_cnum: u32,
+    b_cnum: u32,
+    sort: &Sort,
+    style: &Style,
+) -> Ordering {
+    bib_ordering(
+        db,
+        |db, cite_id, _ref_id, macro_name, key| db.sort_string_citation(cite_id.expect("passed Some earlier"), macro_name, key),
+        Some(a_id),
+        Some(b_id),
+        a,
+        b,
+        a_cnum,
+        b_cnum,
+        sort,
+        style
+    )
+}
+
+/// Creates a total ordering of References from a Sort element. (Not a query)
+pub fn bib_ordering<DB: IrDatabase, M: Fn(&DB, Option<CiteId>, Atom, Atom, SortKey) -> Option<Arc<String>>>(
+    db: &DB,
+    sort_macro: M,
+    a_cite_id: Option<CiteId>,
+    b_cite_id: Option<CiteId>,
     a: &Reference,
     b: &Reference,
     a_cnum: u32,
@@ -106,20 +167,6 @@ pub fn bib_ordering(
     sort: &Sort,
     _style: &Style,
 ) -> Ordering {
-    #[derive(Debug)]
-    enum Demoted {
-        Left,
-        Right,
-    }
-    use natural_sort::NaturalCmp;
-    fn compare_demoting_none<T: PartialOrd>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
-        match (aa, bb) {
-            (None, None) => (Ordering::Equal, None),
-            (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
-            (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
-            (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
-        }
-    }
     let mut ord = Ordering::Equal;
     for key in sort.keys.iter() {
         // If an ordering is found, you don't need to tie-break any further with more sort keys.
@@ -128,10 +175,8 @@ pub fn bib_ordering(
         }
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string =
-                    db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
-                let b_string =
-                    db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
+                let a_string = sort_macro(db, a_cite_id, a.id.clone(), macro_name.clone(), key.clone());
+                let b_string = sort_macro(db, b_cite_id, b.id.clone(), macro_name.clone(), key.clone());
                 let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let x = compare_demoting_none(a_nat, b_nat);

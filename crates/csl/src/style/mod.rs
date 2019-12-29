@@ -909,6 +909,7 @@ pub struct Citation {
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
     pub near_note_distance: u32,
+    pub sort: Option<Sort>,
 }
 
 impl Default for Citation {
@@ -922,6 +923,7 @@ impl Default for Citation {
             name_inheritance: Default::default(),
             names_delimiter: None,
             near_note_distance: 5,
+            sort: None,
         }
     }
 }
