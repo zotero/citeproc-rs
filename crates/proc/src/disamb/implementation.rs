@@ -57,15 +57,7 @@ impl Disambiguation<Markup> for Group {
             None,
             TextCase::None,
         );
-        if group_vars.should_render_tree() {
-            // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
-            // render the NoneSeen part. Groups shouldn't look inside inner
-            // groups.
-            (seq, group_vars)
-        } else {
-            // Don't render the group!
-            (RefIR::Edge(None), GroupVars::NoneSeen)
-        }
+        group_vars.implicit_conditional(seq)
     }
 }
 
@@ -206,15 +198,7 @@ impl Disambiguation<Markup> for Element {
                         text.text_case,
                     );
                     state.pop_macro(name);
-                    if group_vars.should_render_tree() {
-                        // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
-                        // render the NoneSeen part. Groups shouldn't look inside inner
-                        // groups.
-                        (seq, group_vars)
-                    } else {
-                        // Don't render the group!
-                        (RefIR::Edge(None), GroupVars::NoneSeen)
-                    }
+                    group_vars.implicit_conditional(seq)
                 }
             },
             Element::Label(label) => {

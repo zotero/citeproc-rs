@@ -10,7 +10,7 @@ use crate::IngestOptions;
 
 use csl::{DisplayMode, Formatting};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlainText;
 
 impl Default for PlainText {

@@ -106,7 +106,7 @@ pub enum FormatCmd {
 
 use std::hash::Hash;
 
-pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
+pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::Debug {
     type Input: std::fmt::Debug + DeserializeOwned + Default + Clone + Send + Sync + Eq + Hash;
     type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;
     type Output: Default + Clone + Send + Sync + Eq + Serialize;

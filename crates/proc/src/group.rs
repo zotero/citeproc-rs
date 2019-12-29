@@ -83,4 +83,20 @@ impl GroupVars {
     pub fn should_render_tree(self) -> bool {
         self != OnlyEmpty
     }
+
+    #[inline]
+    pub fn implicit_conditional<T: Default + PartialEq>(self, ir: T) -> (T, Self) {
+        let default = T::default();
+        if self.should_render_tree() && ir != default {
+            // "reset" the group vars so that G(NoneSeen, G(OnlyEmpty)) will
+            // render the NoneSeen part. Groups shouldn't look inside inner
+            // groups.
+            //
+            // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
+            (ir, GroupVars::DidRender)
+        } else {
+            // Don't render the group! But also don't infect the whole tree with OnlyEmpty.
+            (default, GroupVars::NoneSeen)
+        }
+    }
 }

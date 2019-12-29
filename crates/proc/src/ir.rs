@@ -298,6 +298,12 @@ impl<O: OutputFormat> Default for IR<O> {
     }
 }
 
+impl Default for RefIR {
+    fn default() -> Self {
+        RefIR::Edge(None)
+    }
+}
+
 /// Currently, flattening into EdgeData(String) only works when the Output type is String
 /// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
 impl<O: OutputFormat<Output = String>> IR<O> {
