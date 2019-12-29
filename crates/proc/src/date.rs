@@ -759,7 +759,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     let locale = ctx.locale();
     match part.form {
         DatePartForm::Year(form) => Some(render_year(date.year, form, ctx.locale())),
-        DatePartForm::Month(form, _strip_periods) => match form {
+        DatePartForm::Month(form, strip_periods) => match form {
             MonthForm::Numeric => {
                 if date.month == 0 || date.month > 12 {
                     None
@@ -776,20 +776,23 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             }
             _ => {
                 let sel = GenderedTermSelector::from_month_u32(date.month, form)?;
-                Some(
-                    locale
-                        .gendered_terms
-                        .get(&sel)
-                        .map(|gt| gt.0.singular().to_string())
-                        .unwrap_or_else(|| {
-                            let fallback = if form == MonthForm::Short {
-                                MONTHS_SHORT
-                            } else {
-                                MONTHS_LONG
-                            };
-                            fallback[date.month as usize].to_string()
-                        }),
-                )
+                let string = locale
+                    .gendered_terms
+                    .get(&sel)
+                    .map(|gt| gt.0.singular().to_string())
+                    .unwrap_or_else(|| {
+                        let fallback = if form == MonthForm::Short {
+                            MONTHS_SHORT
+                        } else {
+                            MONTHS_LONG
+                        };
+                        fallback[date.month as usize].to_string()
+                    });
+                Some(if strip_periods {
+                    string.replace('.', "")
+                } else {
+                    string
+                })
             }
         },
         DatePartForm::Day(form) => match form {
