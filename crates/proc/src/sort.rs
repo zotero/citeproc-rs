@@ -303,12 +303,14 @@ fn test_date_as_macro_strip_delims() {
            <macro name="local">
                <date variable="issued" date-parts="year" form="numeric"/>
            </macro>
+           <macro name="term">
+             <text term="anonymous"/>
+           </macro>
            <macro name="indep">
              <text variable="title" />
              <date variable="issued">
                <date-part name="year" form="short" prefix="PREFIX" suffix="SUFFIX" />
                <date-part name="month" form="long" vertical-align="sup" prefix="PREFIX" suffix="SUFFIX" />
-               <!-- day should be 00 -->
              </date>
            </macro>
            <citation><layout></layout></citation>
@@ -321,6 +323,7 @@ fn test_date_as_macro_strip_delims() {
            </bibliography>
         </style>
     "#);
+
     assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "indep".into(), SortKey::macro_named("indep")), Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".to_owned())));
 
     assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "local".into(), SortKey::macro_named("local")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
@@ -328,6 +331,8 @@ fn test_date_as_macro_strip_delims() {
     assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "year-date".into(), SortKey::macro_named("year-date")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
 
     assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "year-date-choose".into(), SortKey::macro_named("year-date-choose")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
+
+    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "term".into(), SortKey::macro_named("term")), Some(Arc::new("anonymous".to_owned())));
 }
 
 impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
@@ -360,6 +365,17 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
     fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
         let renderer = self.renderer();
         let val = renderer.text_value(text, &value);
+        (val.unwrap_or_default(), GroupVars::new())
+    }
+
+    fn text_term(
+        &mut self,
+        text: &TextElement,
+        sel: TextTermSelector,
+        plural: bool,
+    ) -> Self::Output {
+        let renderer = self.renderer();
+        let val = renderer.text_term(text, sel, plural);
         (val.unwrap_or_default(), GroupVars::new())
     }
 
@@ -400,6 +416,14 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)
+    }
+
+    fn label(&mut self, label: &LabelElement) -> Self::Output {
+        let renderer = self.renderer();
+        let var = label.variable;
+        let content = self.ctx.get_number(var)
+            .and_then(|val| renderer.numeric_label(label, val));
+        (content.unwrap_or_default(), GroupVars::new())
     }
 
     // SPEC:
