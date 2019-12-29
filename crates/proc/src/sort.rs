@@ -211,6 +211,45 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
     }
 }
 
+#[test]
+fn test_date_as_macro_strip_delims() {
+    use crate::test::MockProcessor;
+    let mut db = MockProcessor::new();
+    let mut refr = Reference::empty("ref_id".into(), CslType::Book);
+    use citeproc_io::{DateOrRange, Date};
+    let mac = "indep";
+    refr.ordinary.insert(Variable::Title, String::from("title"));
+    refr.date.insert(DateVariable::Issued, DateOrRange::Single(Date::new(2000, 1, 1)));
+    db.set_references(vec![refr]);
+    db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
+        <style version="1.0" class="note">
+           <macro name="local">
+               <date variable="issued" date-parts="year" form="numeric"/>
+           </macro>
+           <macro name="indep">
+             <text variable="title" />
+             <date variable="issued">
+               <date-part name="year" form="short" prefix="PREFIX" suffix="SUFFIX" />
+               <date-part name="month" form="long" vertical-align="sup" prefix="PREFIX" suffix="SUFFIX" />
+               <!-- day should be 00 -->
+             </date>
+           </macro>
+           <citation><layout></layout></citation>
+           <bibliography>
+             <sort>
+               <key macro="indep" />
+             </sort>
+             <layout>
+             </layout>
+           </bibliography>
+        </style>
+    "#);
+    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "indep".into(), SortKey::macro_named("indep")), Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".to_owned())));
+
+    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "local".into(), SortKey::macro_named("local")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
+
+}
+
 impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
     type Output = (String, GroupVars);
     type Checker = GenericContext<'a, PlainText>;
@@ -309,6 +348,9 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
     }
 
+    // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
+    // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
+    //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
         let (ir, gv) = date.intermediate(self.db, &mut self.state, &self.ctx);
         (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
@@ -372,7 +414,7 @@ pub mod natural_sort {
 
     #[derive(PartialEq, Eq, Debug)]
     struct CmpDate<'a> {
-        year: i32,
+        year: Option<i32>,
         rest: &'a str,
     }
 
@@ -442,7 +484,7 @@ pub mod natural_sort {
     }
 
     fn take_8_digits(inp: &str) -> IResult<&str, &str> {
-        take_while_m_n(8, 8, |c: char| c.is_ascii_digit())(inp)
+        take_while_m_n(1, 8, |c: char| c.is_ascii_digit())(inp)
     }
 
     fn year_prefix(inp: &str) -> IResult<&str, char> {
@@ -452,8 +494,9 @@ pub mod natural_sort {
     fn year(inp: &str) -> IResult<&str, i32> {
         let (rem1, pref) = opt(year_prefix)(inp)?;
         let (rem2, y) = take_4_digits(rem1)?;
+        let (rem3, _) = char('_')(rem2)?;
         Ok((
-            rem2,
+            rem3,
             match pref {
                 Some('-') => -to_i32(y),
                 _ => to_i32(y),
@@ -462,9 +505,9 @@ pub mod natural_sort {
     }
 
     fn date(inp: &str) -> IResult<&str, CmpDate> {
-        let (rem1, year) = year(inp)?;
+        let (rem1, year) = opt(year)(inp)?;
         fn still_date(c: char) -> bool {
-            c != DATE_END && c != '-'
+            c != DATE_END && c != '/'
         }
         let (rem2, rest) = take_while(still_date)(rem1)?;
         Ok((rem2, CmpDate { year, rest }))
@@ -474,7 +517,7 @@ pub mod natural_sort {
         let (rem1, _) = char(DATE_START)(inp)?;
         let (rem2, first) = date(rem1)?;
         fn and_ymd(inp: &str) -> IResult<&str, CmpDate> {
-            let (rem1, _) = char('-')(inp)?;
+            let (rem1, _) = char('/')(inp)?;
             Ok(date(rem1)?)
         }
         let (rem3, d2) = opt(and_ymd)(rem2)?;
@@ -584,45 +627,52 @@ pub mod natural_sort {
 
     #[test]
     fn natural_cmp_strings() {
-        env_logger::init();
         assert_eq!(natural_cmp("a", "z"), Ordering::Less, "a - z");
         assert_eq!(natural_cmp("z", "a"), Ordering::Greater, "z - a");
         assert_eq!(
-            natural_cmp("a\u{E000}20090407\u{E001}", "a\u{E000}20080407\u{E001}"),
+            natural_cmp("a\u{E000}2009_0407\u{E001}", "a\u{E000}2008_0407\u{E001}"),
             Ordering::Greater,
-            "2009"
+            "2009 > 2008"
         );
         assert_eq!(
-            natural_cmp("a\u{E000}20090507\u{E001}", "a\u{E000}20090407\u{E001}"),
+            natural_cmp("a\u{E000}2009_0507\u{E001}", "a\u{E000}2009_0407\u{E001}"),
             Ordering::Greater
         );
         assert_eq!(
-            natural_cmp("a\u{E000}-0100\u{E001}", "a\u{E000}0100\u{E001}"),
+            natural_cmp("a\u{E000}-0100_\u{E001}", "a\u{E000}0100_\u{E001}"),
             Ordering::Less,
             "100BC < 100AD"
         );
 
         // 2000, May 2000, May 1st 2000
         assert_eq!(
-            natural_cmp("a\u{E000}2000\u{E001}", "a\u{E000}200004\u{E001}"),
+            natural_cmp("a\u{E000}2000_\u{E001}", "a\u{E000}2000_04\u{E001}"),
             Ordering::Less,
             "2000 < May 2000"
         );
         assert_eq!(
-            natural_cmp("a\u{E000}200004\u{E001}", "a\u{E000}20000401\u{E001}"),
+            natural_cmp("a\u{E000}2000_04\u{E001}", "a\u{E000}2000_0401\u{E001}"),
             Ordering::Less,
             "May 2000 < May 1st 2000"
         );
 
         assert_eq!(
-            natural_cmp("\u{E002}1000\u{E003}", "\u{E001}1000\u{E003}"),
+            natural_cmp("a\u{E000}2009_0407/0000_0000\u{E001}", "a\u{E000}2009_0407/2010_0509\u{E001}"),
+            Ordering::Less,
+            "2009 < 2009/2010"
+        );
+
+        // Numbers
+        assert_eq!(
+            natural_cmp("\u{E002}1000\u{E003}", "\u{E002}1000\u{E003}"),
             Ordering::Equal,
             "1000 == 1000"
         );
         assert_eq!(
-            natural_cmp("\u{E002}1000\u{E003}", "\u{E001}2000\u{E003}"),
+            natural_cmp("\u{E002}1000\u{E003}", "\u{E002}2000\u{E003}"),
             Ordering::Less,
             "1000 < 2000"
         );
+
     }
 }

@@ -158,6 +158,7 @@ struct GenericDateBits {
     overall_delimiter: Atom,
     overall_text_case: TextCase,
     display: Option<DisplayMode>,
+    sorting: bool,
 }
 
 struct PartBuilder<O: OutputFormat> {
@@ -259,6 +260,7 @@ impl GenericDateBits {
             overall_affixes: Some(crate::sort::natural_sort::date_affixes()),
             overall_text_case: TextCase::None,
             display: None,
+            sorting: true,
         }
     }
 }
@@ -288,6 +290,7 @@ where
             } else {
                 None
             },
+            sorting: false,
         }
     };
     let mut parts = Vec::with_capacity(locale_date.date_parts.len());
@@ -307,6 +310,9 @@ where
         } else {
             parts.push(part.clone());
         }
+    }
+    if gen_date.sorting {
+        parts.sort_by_key(|part| part.form)
     }
     build_parts(
         &ctx,
@@ -339,8 +345,18 @@ where
             } else {
                 None
             },
+            sorting: false,
         }
     };
+    let mut parts_slice = indep.date_parts.as_slice();
+    let mut parts = Vec::new();
+    if gen_date.sorting {
+        parts = indep.date_parts.clone();
+        // The parts are filtered, but we're not going to be able to parse out the year if they are
+        // not in order YYYY-MM-DD.
+        parts.sort_by_key(|part| part.form);
+        parts_slice = parts.as_slice();
+    }
     build_parts(&ctx, indep.variable, gen_date, &indep.date_parts, None)
 }
 
@@ -354,39 +370,61 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     // TODO: text-case
     let fmt = ctx.format();
     let len_hint = parts.len();
-    ctx.reference().date.get(&var).map(|val| match val {
+    let mut val = ctx.reference().date.get(&var)?.clone();
+    if gen_date.sorting {
+        // force range with zeroes on the end date if single
+        val = match val {
+            DateOrRange::Single(single) => DateOrRange::Range(single, Date::new(0, 0, 0)),
+            _ => val,
+        };
+    }
+    let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
+        let each = parts
+            .iter()
+            .filter(|dp| {
+                if let Some(selector) = selector {
+                    dp_matches(dp, selector)
+                } else {
+                    true
+                }
+            })
+            .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
+        let mut seen_one = false;
+        for (_form, either) in each {
+            if seen_one && !delim.is_empty() {
+                builder.push_either(Either::Build(Some(fmt.plain(delim))))
+            }
+            seen_one = true;
+            builder.push_either(either);
+        }
+    };
+    match &val {
         DateOrRange::Single(single) => {
-            let each = parts
-                .iter()
-                .filter(|dp| {
-                    if let Some(selector) = selector {
-                        dp_matches(dp, selector)
-                    } else {
-                        true
-                    }
-                })
-                .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
             let delim = gen_date.overall_delimiter.clone();
             let mut builder = PartBuilder::new(gen_date, len_hint);
-            let mut seen_one = false;
-            for (_form, either) in each {
-                if seen_one && !delim.is_empty() {
-                    builder.push_either(Either::Build(Some(fmt.plain(&delim))))
-                }
-                seen_one = true;
-                builder.push_either(either);
-            }
-            builder.into_either(fmt)
+            do_single(&mut builder, single, &delim);
+            Some(builder.into_either(fmt))
         }
         DateOrRange::Range(first, second) => {
-            let tokens = DateRangePartsIter::new(parts, selector, first, second);
+            let sorting = gen_date.sorting;
             let delim = gen_date.overall_delimiter.clone();
+            if sorting {
+                let mut builder = PartBuilder::new(gen_date, len_hint);
+                do_single(&mut builder, first, &delim);
+                builder.push_either(Either::Build(Some(fmt.plain("/"))));
+                do_single(&mut builder, second, &delim);
+                return Some(builder.into_either(fmt));
+            }
+            let tokens = DateRangePartsIter::new(gen_date.sorting, parts, selector, first, second);
             let mut builder = PartBuilder::new(gen_date, len_hint);
             let mut seen_one = false;
             let mut last_rdel = false;
             for token in tokens {
                 match token {
-                    DateToken::RangeDelim(range_delim) => {
+                    DateToken::RangeDelim(mut range_delim) => {
+                        if sorting {
+                            range_delim = "/";
+                        }
                         builder.push_either(Either::Build(Some(fmt.plain(range_delim))));
                         last_rdel = true;
                     }
@@ -404,7 +442,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                 }
                 seen_one = true;
             }
-            builder.into_either(fmt)
+            Some(builder.into_either(fmt))
         }
         DateOrRange::Literal(string) => {
             let options = IngestOptions {
@@ -414,9 +452,9 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             let b = fmt.ingest(&string, &options);
             let b = fmt.with_format(b, gen_date.overall_formatting);
             let b = fmt.affixed(b, gen_date.overall_affixes.as_ref());
-            Either::Build(Some(b))
+            Some(Either::Build(Some(b)))
         }
-    })
+    }
 }
 
 type IsMaxDiff = bool;
@@ -474,6 +512,7 @@ impl WhichDelim {
 
 impl<'a> DateRangePartsIter<'a> {
     fn new(
+        sorting: bool,
         parts: &'a [DatePart],
         selector: Option<DateParts>,
         first: &'a Date,
@@ -484,7 +523,8 @@ impl<'a> DateRangePartsIter<'a> {
         let max_diff = WhichDelim::diff(parts, first, second);
         let matches = |part: &DatePart| {
             if let Some(selector) = selector {
-                dp_matches(part, selector)
+                // Don't filter out if we're sorting -- just render zeroes later
+                sorting || dp_matches(part, selector)
             } else {
                 true
             }
@@ -556,7 +596,7 @@ fn test_range_dp_sequence() {
         month: 3,
         day: 29,
     };
-    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
+    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
@@ -578,7 +618,7 @@ fn test_range_dp_sequence() {
         month: 4,
         day: 29,
     };
-    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
+    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
@@ -659,7 +699,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
 fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<String> {
     let should_return_zeroes = key.is_macro();
     match part.form {
-        DatePartForm::Year(_form) => Some(format!("{:04}", date.year)),
+        DatePartForm::Year(_form) => Some(format!("{:04}_", date.year)),
         DatePartForm::Month(_form, _strip_periods) => {
             // Sort strings do not compare seasons
             if date.month > 0 && date.month <= 12 {

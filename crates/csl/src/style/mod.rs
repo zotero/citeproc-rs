@@ -983,6 +983,15 @@ impl SortKey {
             _ => false,
         }
     }
+    pub fn macro_named(name: impl Into<Atom>) -> Self {
+        SortKey {
+            sort_source: SortSource::Macro(name.into()),
+            names_min: None,
+            names_use_first: None,
+            names_use_last: None,
+            direction: None,
+        }
+    }
 }
 
 /// You must sort on either a variable or a macro
@@ -1211,6 +1220,30 @@ pub enum DatePartForm {
     Day(DayForm),
     Month(MonthForm, StripPeriods),
     Year(YearForm),
+}
+
+impl DatePartForm {
+    // For sorting date parts when rendering a sort string for a date through a macro, i.e. with
+    // filtered parts
+    fn num(&self) -> i32 {
+        match self {
+            DatePartForm::Year(..) => 0,
+            DatePartForm::Month(..) => 1,
+            DatePartForm::Day(_) => 2,
+        }
+    }
+}
+
+use std::cmp::Ordering;
+impl Ord for DatePartForm {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.num().cmp(&other.num())
+    }
+}
+impl PartialOrd for DatePartForm {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Debug, Default, Eq, Clone, PartialEq)]

@@ -145,12 +145,12 @@ fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {
 /// Since there are no 'groups of ambiguous cites', it is not quite simple
 /// to have separate numbering for different such 'groups'.
 ///
-///               `Doe 2007,  Doe 2007,  Smith 2008,  Smith 2008`
-/// should become `Doe 2007a, Doe 2007b, Smith 2008a, Smith 2008b`
+/// .             'Doe 2007,  Doe 2007,  Smith 2008,  Smith 2008'
+/// should become 'Doe 2007a, Doe 2007b, Smith 2008a, Smith 2008b'
 ///
 /// The best way to do this is:
 ///
-/// 1. Store the set of `refs_accepting_cite`
+/// 1. Store the set of 'refs_accepting_cite'
 /// 2. Find the distinct transitive closures of the `A.refs intersects B.refs` relation
 ///    a. Groups = {}
 ///    b. For each cite A with more than its own, find, if any, a Group whose total refs intersects A.refs
@@ -907,27 +907,24 @@ pub fn with_bib_context<T>(
     let cite = Cite::basic(ref_id.clone());
     let refr = db.reference(ref_id)?;
     let (names_delimiter, name_el) = db.name_info_bibliography();
-    if let Some(bib) = &style.bibliography {
-        let ctx = CiteContext {
-            reference: &refr,
-            format: db.get_formatter(),
-            cite_id: None,
-            cite: &cite,
-            position: (Position::First, None),
-            citation_number: 0,
-            disamb_pass: None,
-            style: &style,
-            locale: &locale,
-            bib_number,
-            in_bibliography: true,
-            names_delimiter,
-            name_citation: name_el,
-            sort_key,
-        };
-        Some(f(bib, ctx))
-    } else {
-        None
-    }
+    let bib = style.bibliography.as_ref()?;
+    let ctx = CiteContext {
+        reference: &refr,
+        format: db.get_formatter(),
+        cite_id: None,
+        cite: &cite,
+        position: (Position::First, None),
+        citation_number: 0,
+        disamb_pass: None,
+        style: &style,
+        locale: &locale,
+        bib_number,
+        in_bibliography: true,
+        names_delimiter,
+        name_citation: name_el,
+        sort_key,
+    };
+    Some(f(bib, ctx))
 }
 
 fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
