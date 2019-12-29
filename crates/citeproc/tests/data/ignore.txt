@@ -1,6 +1,4 @@
 position_NearNoteTrue.txt
-bugreports_EnvAndUrb.txt
-bugreports_DemoPageFullCiteCruftOnSubsequent.txt
 nameattr_EtAlSubsequentMinOnCitationInCitation.txt
 nameattr_EtAlSubsequentMinOnStyleInCitation.txt
 nameattr_EtAlSubsequentUseFirstOnCitationInCitation.txt
@@ -11,3 +9,16 @@ disambiguate_BasedOnSubsequentFormWithLocator.txt
 form_ShortTitleOnly.txt
 # only the order of in-text items is different; citeproc-rs outputs them first
 position_IbidInText.txt
+# better to reject this kind of thing, isn't it?
+bugreports_EmptyInput.txt
+# note field parsing should be done higher up
+bugreports_IllustratorInExtra.txt
+# ABBREVIATIONS not implemented or part of CSL
+bugreports_TwoFullStops.txt
+variables_TitleShortOnAbbrevWithTitleGroup.txt
+variables_TitleShortOnAbbrevWithTitleCondition.txt
+number_EditionSort.txt
+variables_TitleShortOnAbbrevWithTitle.txt
+variables_ShortForm.txt
+# citeproc-js feature
+sort_CitationUnsorted.txt
