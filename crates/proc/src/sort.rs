@@ -199,7 +199,7 @@ pub fn bib_ordering<DB: IrDatabase, M: Fn(&DB, Option<CiteId>, Atom, Atom, SortK
                     let x = compare_demoting_none(aa.as_ref(), bb.as_ref());
                     debug!(
                         "cmp ordinary {:?}: {:?} {:?} {:?} {:?} {:?}",
-                        v, a.id, aa, x.0, b.id, bb
+                        v, a.id, aa.as_ref(), x.0, b.id, bb.as_ref()
                     );
                     x
                 }
@@ -283,6 +283,23 @@ fn test_date_as_macro_strip_delims() {
     db.set_references(vec![refr]);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">
+           <macro name="year-date">
+               <date variable="issued">
+                 <date-part name="year" />
+               </date>
+           </macro>
+           <macro name="year-date-choose">
+             <choose>
+                 <if variable="issued">
+                    <date variable="issued">
+                       <date-part name="year"/>
+                    </date>
+                 </if>
+                 <else>
+                    <text term="no date" form="short"/>
+                 </else>
+              </choose>
+           </macro>
            <macro name="local">
                <date variable="issued" date-parts="year" form="numeric"/>
            </macro>
@@ -308,11 +325,18 @@ fn test_date_as_macro_strip_delims() {
 
     assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "local".into(), SortKey::macro_named("local")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
 
+    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "year-date".into(), SortKey::macro_named("year-date")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
+
+    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "year-date-choose".into(), SortKey::macro_named("year-date-choose")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
 }
 
 impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
     type Output = (String, GroupVars);
-    type Checker = GenericContext<'a, PlainText>;
+    type Checker = CiteContext<'a, PlainText, O>;
+
+    fn get_checker(&self) -> Option<&Self::Checker> {
+        Some(&self.ctx)
+    }
 
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         let iter = elements.iter();
