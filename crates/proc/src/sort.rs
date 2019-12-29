@@ -112,12 +112,12 @@ pub fn bib_ordering(
         Right,
     }
     use natural_sort::NaturalCmp;
-    fn compare_demoting_none<T: Ord>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
+    fn compare_demoting_none<T: PartialOrd>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
         match (aa, bb) {
             (None, None) => (Ordering::Equal, None),
             (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
             (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
-            (Some(aaa), Some(bbb)) => (aaa.cmp(&bbb), None),
+            (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
         }
     }
     let mut ord = Ordering::Equal;
@@ -169,7 +169,12 @@ pub fn bib_ordering(
                     );
                     compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
                 }
-                AnyVariable::Date(_v) => (Ordering::Equal, None),
+                // TODO: compare dates, using details from spec for ranges
+                AnyVariable::Date(v) => {
+                    let a_date = a.date.get(&v);
+                    let b_date = b.date.get(&v);
+                    compare_demoting_none(a_date, b_date)
+                }
             },
         };
         ord = match (key.direction.as_ref(), demoted) {
