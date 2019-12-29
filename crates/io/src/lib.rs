@@ -32,6 +32,7 @@ pub(crate) mod unicode;
 pub mod utils;
 
 pub use csl_json::IdOrNumber;
+pub use output::micro_html::micro_html_to_string;
 
 pub use self::cite::*;
 pub use self::date::*;

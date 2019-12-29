@@ -1,3 +1,5 @@
+use unicase::UniCase;
+
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_io::output::plain::PlainText;
@@ -60,7 +62,6 @@ pub fn sort_string_bibliography(
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
-        // info!("{} macro {} produced: {}", ref_id, macro_name, string);
         Arc::new(string)
     })
 }
@@ -180,7 +181,7 @@ pub fn bib_ordering<DB: IrDatabase, M: Fn(&DB, Option<CiteId>, Atom, Atom, SortK
                 let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let x = compare_demoting_none(a_nat, b_nat);
-                info!(
+                debug!(
                     "cmp macro {}: {} {:?} {:?} {} {:?}",
                     macro_name, a.id, a_string, x.0, b.id, b_string
                 );
@@ -191,7 +192,16 @@ pub fn bib_ordering<DB: IrDatabase, M: Fn(&DB, Option<CiteId>, Atom, Atom, SortK
             // will just come back as None from reference.xxx.get() and produce Equal.
             SortSource::Variable(any) => match any {
                 AnyVariable::Ordinary(v) => {
-                    compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
+                    use citeproc_io::micro_html_to_string;
+                    let strip_markup = |s: &String| micro_html_to_string(s.as_ref(), &Default::default());
+                    let aa = a.ordinary.get(&v).map(strip_markup).map(UniCase::new);
+                    let bb = b.ordinary.get(&v).map(strip_markup).map(UniCase::new);
+                    let x = compare_demoting_none(aa.as_ref(), bb.as_ref());
+                    debug!(
+                        "cmp ordinary {:?}: {:?} {:?} {:?} {:?} {:?}",
+                        v, a.id, aa, x.0, b.id, bb
+                    );
+                    x
                 }
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
                     compare_demoting_none(Some(a_cnum), Some(b_cnum))
@@ -212,7 +222,12 @@ pub fn bib_ordering<DB: IrDatabase, M: Fn(&DB, Option<CiteId>, Atom, Atom, SortK
                         key,
                         CiteOrBib::Bibliography,
                     );
-                    compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
+                    let x = compare_demoting_none(a_strings.as_ref(), b_strings.as_ref());
+                    debug!(
+                        "cmp names {:?}: {:?} {:?} {:?} {:?} {:?}",
+                        v, a.id, a_strings, x.0, b.id, b_strings
+                    );
+                    x
                 }
                 // TODO: compare dates, using details from spec for ranges
                 AnyVariable::Date(v) => {
@@ -608,8 +623,9 @@ pub mod natural_sort {
 
     impl<'a> PartialOrd for Token<'a> {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            use unicase::UniCase;
             match (self, other) {
-                (Token::Str(a), Token::Str(b)) => a.partial_cmp(b),
+                (Token::Str(a), Token::Str(b)) => UniCase::new(a).partial_cmp(&UniCase::new(b)),
                 (Token::Date(a), Token::Date(b)) => a.partial_cmp(b),
                 (Token::Num(a), Token::Num(b)) => a.partial_cmp(b),
                 _ => None,
@@ -718,6 +734,9 @@ pub mod natural_sort {
             Ordering::Less,
             "1000 < 2000"
         );
+
+        // Case insensitive
+        assert_eq!(natural_cmp("aaa", "AAA"), Ordering::Equal);
 
     }
 }
