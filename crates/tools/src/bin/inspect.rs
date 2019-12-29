@@ -82,7 +82,7 @@ fn main() -> Result<(), Error> {
     let style = case.processor.style();
     let features = &style.features;
     let cluster = || {
-        for cluster in case.processor.clusters_sorted().iter() {
+        for cluster in case.processor.clusters_cites_sorted().iter() {
             use test_utils::citeproc_proc::built_cluster_before_output;
             let built = built_cluster_before_output(&case.processor, cluster.id);
             println!("ClusterId({:?}): {:#?}", cluster.id, built);
@@ -90,7 +90,7 @@ fn main() -> Result<(), Error> {
     };
     let positions = || {
         let positions = case.processor.cite_positions();
-        for cluster in case.processor.clusters_sorted().iter() {
+        for cluster in case.processor.clusters_cites_sorted().iter() {
             println!("ClusterId({:?})", cluster.id);
             for id in cluster.cites.iter() {
                 println!("- {:?}", positions.get(id).unwrap());

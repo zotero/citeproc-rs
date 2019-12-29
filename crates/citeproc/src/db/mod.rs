@@ -224,7 +224,7 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) {
-        let clusters = self.clusters_sorted();
+        let clusters = self.clusters_cites_sorted();
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;

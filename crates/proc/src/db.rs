@@ -76,7 +76,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     // Sorting
 
     // Includes intra-cluster sorting
-    fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
+    fn clusters_cites_sorted(&self) -> Arc<Vec<ClusterData>>;
     fn cluster_data_sorted(&self, id: ClusterId) -> Option<ClusterData>;
 
     /// Cite positions are mixed in with sorting. You cannot tell the positions of cites within a
@@ -1047,7 +1047,7 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
 fn cite_positions(db: &impl IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
-    let clusters = db.clusters_sorted();
+    let clusters = db.clusters_cites_sorted();
 
     let mut map = FnvHashMap::default();
 
@@ -1275,7 +1275,7 @@ fn cite_position(db: &impl IrDatabase, key: CiteId) -> (Position, Option<u32>) {
     }
 }
 
-fn clusters_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
+fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
@@ -1311,7 +1311,6 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
                         })
                 };
                 neu.sort_by(|a_id, b_id| {
-                    let b_cite = b_id.lookup(db);
                     use std::cmp::Ordering;
                     match (getter(a_id), getter(b_id)) {
                         (Some(_), None) => Ordering::Less,
