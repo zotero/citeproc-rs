@@ -452,7 +452,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
     //     3. Return count as a {:08} padded number
 
     fn names(&mut self, names: &Names) -> Self::Output {
-        let (mut ir, gv) = crate::names::intermediate(names, self.db, &mut self.state, &self.ctx);
+        let (ir, gv) = crate::names::intermediate(names, self.db, &mut self.state, &self.ctx);
         (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
     }
 
@@ -460,7 +460,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
     // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
     //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
-        let (mut ir, gv) = date.intermediate(self.db, &mut self.state, &self.ctx);
+        let (ir, gv) = date.intermediate(self.db, &mut self.state, &self.ctx);
         (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
     }
 

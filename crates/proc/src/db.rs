@@ -13,11 +13,11 @@ use std::sync::Arc;
 use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
-use citeproc_io::output::{markup::Markup, LocalizedQuotes, OutputFormat};
+use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
 use citeproc_db::ClusterData;
-use citeproc_io::{ClusterNumber, IntraNote, Reference};
-use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement, Style};
+use citeproc_io::{ClusterNumber, IntraNote};
+use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
 use std::sync::Mutex;
 use crate::sort::cite_ordering;
 
@@ -180,6 +180,10 @@ fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {
 ///    c. If found G, add A to that group, and G.total_refs = G.total_refs UNION A.refs
 fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     use fnv::FnvHashSet;
+    let style = db.style();
+    if !style.citation.disambiguate_add_year_suffix {
+        return Arc::new(FnvHashMap::default());
+    }
 
     type Group = FnvHashSet<Atom>;
 
@@ -202,11 +206,6 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         } else {
             list.iter().any(|v| set.contains(v))
         }
-    }
-
-    let style = db.style();
-    if !style.citation.disambiguate_add_year_suffix {
-        return Arc::new(FnvHashMap::default());
     }
 
     use std::mem;
@@ -547,7 +546,7 @@ fn disambiguate_add_names(
             dfas.push(dfa);
         }
 
-        let total_ambiguity_number = || -> u16 {
+        let total_ambiguity_number = |ir: &IR<Markup>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
             let edges = ir.to_edge_stream(fmt);
             let count = dfas
@@ -580,12 +579,14 @@ fn disambiguate_add_names(
                     n as u32,
                 );
             }
-            let new_count = total_ambiguity_number();
+            ir.recompute_group_vars();
+            let new_count = total_ambiguity_number(ir);
             nir_arc.lock().unwrap().achieved_count(new_count);
             best = std::cmp::min(best, new_count);
         }
         nir_arc.lock().unwrap().rollback(db, ctx);
-        best = total_ambiguity_number();
+        ir.recompute_group_vars();
+        best = total_ambiguity_number(ir);
     }
     best <= 1
 }
@@ -675,6 +676,7 @@ fn disambiguate_add_givennames(
     for (n, nir_arc) in name_refs.into_iter().enumerate() {
         let mut nir = nir_arc.lock().unwrap();
         expand_one_name_ir(db, ir, ctx, &refs, &mut nir, n as u32);
+        ir.recompute_group_vars();
     }
     if also_add {
         disambiguate_add_names(db, ir, ctx, true);
@@ -683,7 +685,7 @@ fn disambiguate_add_givennames(
 }
 
 fn plain_suffix_element() -> Element {
-    use csl::{StandardVariable, TextCase, TextSource, Variable, VariableForm};
+    use csl::{StandardVariable, TextSource, Variable, VariableForm};
     Element::Text(TextElement {
         source: TextSource::Variable(
             StandardVariable::Ordinary(Variable::YearSuffix),
@@ -733,6 +735,7 @@ fn disambiguate_add_year_suffix(
             _ => false,
         }
     });
+    ir.recompute_group_vars()
 }
 
 fn disambiguate_true(
@@ -755,11 +758,14 @@ fn disambiguate_true(
             info!("successfully disambiguated");
             break;
         }
-        let mut lock = cir_arc.lock().unwrap();
-        let (new_ir, gv) = lock.choose.intermediate(db, state, ctx);
-        lock.done = true;
-        lock.ir = Box::new(new_ir);
-        lock.group_vars = gv;
+        {
+            let mut lock = cir_arc.lock().unwrap();
+            let (new_ir, gv) = lock.choose.intermediate(db, state, ctx);
+            lock.done = true;
+            lock.ir = Box::new(new_ir);
+            lock.group_vars = gv;
+        }
+        ir.recompute_group_vars()
     }
 }
 

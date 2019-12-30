@@ -271,6 +271,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
     let style = db.style();
     let locale = db.locale_by_reference(refr.id.clone());
     let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
+    let ysh_plain_edge = db.edge(EdgeData::YearSuffixPlain);
     let ysh_edge = db.edge(EdgeData::YearSuffix);
     let fcs = db.branch_runs();
     let fmt = db.get_formatter();
@@ -301,7 +302,8 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
                 &mut state,
                 Formatting::default(),
             );
-            ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
+            ir.keep_first_ysh(ysh_explicit_edge, ysh_plain_edge, ysh_edge);
+            debug!("fc: {:?}, ir: \n{}", fc, ir.debug(db));
             (fc, ir)
         })
         .collect();

@@ -128,27 +128,32 @@ impl GroupVars {
 
     #[inline]
     pub fn should_render_tree(self) -> bool {
-        self != Missing
+        self != Missing && self != UnresolvedMissing && self != Unresolved
     }
 
     #[inline]
-    pub fn implicit_conditional<T: Default + PartialEq>(self, ir: T) -> (T, Self) {
+    pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(self, ir: T) -> (T, Self) {
         let default = T::default();
-        if self.should_render_tree() && ir != default {
+        if self != Missing && ir != default {
             // "reset" the group vars so that G(Plain, G(Missing)) will
             // render the Plain part. Groups shouldn't look inside inner
             // groups.
             //
             // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
+            debug!("keeping: \n{:#?}", ir);
             (
                 ir,
-                if self == GroupVars::Unresolved {
-                    self
+                if self == Plain {
+                    Important
                 } else {
-                    GroupVars::Important
-                },
+                    self
+                }
             )
         } else {
+            debug!(
+                "discarding group/macro because of GV being Missing or group being empty: \n{:#?}",
+                ir
+            );
             // Don't render the group! But also don't infect the whole tree with Missing.
             (default, GroupVars::Plain)
         }

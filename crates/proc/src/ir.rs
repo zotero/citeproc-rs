@@ -9,7 +9,7 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
-use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule};
+use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule, DateVariable};
 use csl::{NumberVariable, StandardVariable, Variable};
 
 use std::sync::Arc;
@@ -138,10 +138,11 @@ impl RefIR {
         }
     }
 
-    pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_edge: Edge) {
+    pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_plain_edge: Edge, ysh_edge: Edge) {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
             if !*found {
+                debug!("found first year-suffix == YSH::Explicit");
                 // first time
                 *found = true;
                 *opt_e = Some(ysh_edge);
@@ -151,9 +152,11 @@ impl RefIR {
             }
             false
         });
-        self.visit_ysh(ysh_edge, &mut |opt_e| {
+        self.visit_ysh(ysh_plain_edge, &mut |opt_e| {
             if !*found {
+                debug!("found first year-suffix == YSH::Plain");
                 *found = true;
+                *opt_e = Some(ysh_edge);
             } else {
                 *opt_e = None;
             }
@@ -166,7 +169,7 @@ impl RefIR {
         F: (FnMut(&mut Option<Edge>) -> bool),
     {
         match self {
-            RefIR::Edge(ref mut opt_e) if opt_e == &Some(ysh_edge) => callback(opt_e),
+            RefIR::Edge(ref mut opt_e) if *opt_e == Some(ysh_edge) => callback(opt_e),
             RefIR::Seq(seq) => {
                 for ir in seq.contents.iter_mut() {
                     let done = ir.visit_ysh(ysh_edge, callback);
@@ -192,6 +195,9 @@ pub enum CiteEdgeData<O: OutputFormat = Markup> {
     CitationNumberLabel(O::Build),
     Frnn(O::Build),
     FrnnLabel(O::Build),
+    /// Accessed isn't really part of a reference -- it doesn't help disambiguating one from
+    /// another. So we will ignore it. Works for, e.g., date_YearSuffixImplicitWithNoDate.txt
+    Accessed(O::Build),
 }
 
 impl<O: OutputFormat> CiteEdgeData<O> {
@@ -216,6 +222,12 @@ impl<O: OutputFormat> CiteEdgeData<O> {
         match var {
             StandardVariable::Number(nv) => CiteEdgeData::from_number_variable(nv, label),
             StandardVariable::Ordinary(v) => CiteEdgeData::from_ordinary_variable(v),
+        }
+    }
+    pub fn from_date_variable(var: DateVariable) -> fn(O::Build) -> Self {
+        match var {
+            DateVariable::Accessed => CiteEdgeData::Accessed,
+            _ => CiteEdgeData::Output,
         }
     }
 }
@@ -349,6 +361,7 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
             CiteEdgeData::LocatorLabel(_) => EdgeData::LocatorLabel,
             CiteEdgeData::CitationNumber(_) => EdgeData::CitationNumber,
             CiteEdgeData::CitationNumberLabel(_) => EdgeData::CitationNumberLabel,
+            CiteEdgeData::Accessed(_) => EdgeData::Accessed,
         }
     }
     fn inner(&self) -> O::Build {
@@ -360,6 +373,7 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
             | CiteEdgeData::Locator(x)
             | CiteEdgeData::LocatorLabel(x)
             | CiteEdgeData::CitationNumber(x)
+            | CiteEdgeData::Accessed(x)
             | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
         }
     }
@@ -389,9 +403,7 @@ impl IR<Markup> {
             _ => false,
         }
     }
-}
 
-impl IR<Markup> {
     fn append_edges(
         &self,
         edges: &mut Vec<EdgeData>,
@@ -404,10 +416,16 @@ impl IR<Markup> {
                 edges.push(ed.to_edge_data(fmt, formatting))
             }
             IR::YearSuffix(ys) => {
-                ys.ir.append_edges(edges, fmt, formatting)
+                if !ys.ir.is_empty() {
+                    edges.push(EdgeData::YearSuffix);
+                }
             }
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.append_edges(edges, fmt, formatting),
-            IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
+            IR::Seq(seq) => {
+                if seq.overall_group_vars().map_or(true, |x| x.should_render_tree()) {
+                    seq.append_edges(edges, fmt, formatting)
+                }
+            },
             IR::Name(nir) => nir.lock().unwrap().ir.append_edges(edges, fmt, formatting),
         }
     }
@@ -443,6 +461,8 @@ pub struct IrSeq<O: OutputFormat> {
     pub display: Option<DisplayMode>,
     pub quotes: Option<LocalizedQuotes>,
     pub text_case: TextCase,
+    /// If this is None, this sequence is simply an implicit conditional
+    pub dropped_gv: Option<GroupVars>,
 }
 
 
@@ -456,9 +476,18 @@ impl<O: OutputFormat> IR<O> {
 }
 
 impl<O: OutputFormat> IrSeq<O> {
-    pub(crate) fn overall_group_vars(&self) -> GroupVars {
-        self.contents.iter().fold(GroupVars::new(), |acc, (_, gv)| acc.neighbour(*gv))
-    }
+    pub(crate) fn overall_group_vars(&self) -> Option<GroupVars> {
+        self.dropped_gv
+            .map(|dropped| {
+                let acc = self.contents.iter().fold(dropped, |acc, (_, gv)| acc.neighbour(*gv));
+                // Replicate GroupVars::implicit_conditional
+                if acc != GroupVars::Missing {
+                    GroupVars::Important
+                } else {
+                    GroupVars::Plain
+                }
+            })
+    } 
     /// GVs are stored outside of individual child IRs, so we need a way to update those if the
     /// children have mutated themselves.
     pub(crate) fn recompute_group_vars(&mut self) {
@@ -476,14 +505,14 @@ where
 {
     pub(crate) fn force_gv(&mut self) -> Option<GroupVars> {
         match self {
-            IR::Rendered(x) => None,
+            IR::Rendered(_) => None,
             IR::YearSuffix(ys) => Some(ys.group_vars),
             IR::Seq(seq) => {
                 seq.recompute_group_vars();
-                Some(seq.overall_group_vars())
+                seq.overall_group_vars()
             },
             IR::ConditionalDisamb(c) => Some(c.lock().unwrap().group_vars),
-            IR::Name(nir) => None,
+            IR::Name(_) => None,
         }
     }
 }
@@ -493,7 +522,7 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
     fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
         // Do this where it won't require mut access
         // self.recompute_group_vars();
-        if !self.overall_group_vars().should_render_tree() {
+        if !self.overall_group_vars().map_or(true, |x| x.should_render_tree()) {
             return None;
         }
         let IrSeq {
@@ -504,6 +533,7 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
             display,
             text_case,
             ref contents,
+            dropped_gv: _,
         } = *self;
         let xs: Vec<_> = contents.iter().filter_map(|(ir, gv)| ir.flatten(fmt)).collect();
         if xs.is_empty() {
@@ -541,6 +571,7 @@ impl IrSeq<Markup> {
             formatting,
             display,
             text_case,
+            dropped_gv: _,
         } = *self;
         let affixes = affixes.as_ref();
 

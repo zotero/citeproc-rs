@@ -222,7 +222,6 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
     debug!("move_around_quote {:?} {:?} {:?}", els.get(ix), ix, piq);
     if let Some(mut insertion_point) = find_right_quote(els, ix, piq) {
         // Last element burrowed down to a right quotation mark
-        let mut needs_removal = false;
         let mut has_two_puncs = None;
         let mut outside_char = {
             let suffix = insertion_point.next_string_mut()?;

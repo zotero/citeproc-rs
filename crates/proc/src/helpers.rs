@@ -21,7 +21,7 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
-    sequence(db, state, ctx, els, "".into(), None, None, None, None, TextCase::None)
+    sequence(db, state, ctx, els, "".into(), None, None, None, None, TextCase::None, false)
 }
 
 
@@ -37,39 +37,52 @@ pub fn sequence<'c, O, I>(
     // Only because <text macro="xxx" /> supports quotes.
     quotes: Option<LocalizedQuotes>,
     text_case: TextCase,
+    is_group: bool,
 ) -> IrSum<O>
 where
     O: OutputFormat,
     I: OutputFormat,
 {
-    let _fmt = &ctx.format;
+    let mut contents = Vec::with_capacity(els.len());
+    let mut overall_gv = GroupVars::new();
+    let mut dropped_gv = GroupVars::new();
 
-    let (inner, gv) = els.iter().map(|el| el.intermediate(db, state, ctx)).fold(
-        (Vec::new(), GroupVars::new()),
-        |(mut acc, acc_gv), (ir, gv)| match ir {
-            IR::Rendered(None) => (acc, acc_gv.neighbour(gv)),
-            _ => {
-                acc.push((ir, gv));
-                (acc, acc_gv.neighbour(gv))
+    for el in els {
+        let (ir, gv) = el.intermediate(db, state, ctx);
+        match ir {
+            IR::Rendered(None) => {
+                dropped_gv = dropped_gv.neighbour(gv);
+                overall_gv = overall_gv.neighbour(gv);
             }
-        },
-    );
+            _ => {
+                contents.push((ir, gv));
+                overall_gv = overall_gv.neighbour(gv)
+            }
+        }
+    }
 
-    if inner.is_empty() {
-        (IR::Rendered(None), gv)
+    let ir = if contents.is_empty() {
+        IR::Rendered(None)
     } else {
-        (
-            IR::Seq(IrSeq {
-                contents: inner,
-                formatting,
-                affixes: affixes.cloned(),
-                delimiter,
-                display: if ctx.in_bibliography { display } else { None },
-                quotes,
-                text_case,
-            }),
-            gv,
-        )
+        IR::Seq(IrSeq {
+            contents,
+            formatting,
+            affixes: affixes.cloned(),
+            delimiter,
+            display: if ctx.in_bibliography { display } else { None },
+            quotes,
+            text_case,
+            dropped_gv: if is_group {
+                Some(dropped_gv)
+            } else {
+                None
+            },
+        })
+    };
+    if is_group {
+        overall_gv.implicit_conditional(ir)
+    } else {
+        (ir, overall_gv)
     }
 }
 
@@ -98,35 +111,38 @@ pub fn ref_sequence<'c>(
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 
-    let (inner, gv) = els
-        .iter()
-        .map(|el| {
-            Disambiguation::<Markup>::ref_ir(el, db, ctx, state, formatting.unwrap_or_default())
-        })
-        .fold(
-            (Vec::new(), GroupVars::new()),
-            |(mut acc, acc_gv), (ir, gv)| match ir {
-                RefIR::Edge(None) => (acc, acc_gv.neighbour(gv)),
-                _ => {
-                    acc.push(ir);
-                    (acc, acc_gv.neighbour(gv))
-                }
-            },
-        );
+    let mut contents = Vec::with_capacity(els.len());
+    let mut overall_gv = GroupVars::new();
+    // let mut dropped_gv = GroupVars::new();
 
-    if inner.is_empty() {
-        (RefIR::Edge(None), gv)
+    for el in els {
+        let (ir, gv) = Disambiguation::<Markup>::ref_ir(el, db, ctx, state, formatting.unwrap_or_default());
+        match ir {
+            RefIR::Edge(None) => {
+                // dropped_gv = dropped_gv.neighbour(gv);
+                overall_gv = overall_gv.neighbour(gv);
+            }
+            _ => {
+                contents.push(ir);
+                overall_gv = overall_gv.neighbour(gv)
+            }
+        }
+    }
+
+    if !contents.iter().any(|x| *x != RefIR::Edge(None)) {
+        (RefIR::Edge(None), overall_gv)
     } else {
         (
             RefIR::Seq(RefIrSeq {
-                contents: inner,
+                contents,
                 formatting,
                 affixes: affixes.cloned(),
                 delimiter,
                 quotes,
                 text_case,
+                // dropped_gv,
             }),
-            gv,
+            overall_gv,
         )
     }
 }

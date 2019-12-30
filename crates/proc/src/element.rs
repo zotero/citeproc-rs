@@ -66,7 +66,7 @@ where
                         // already have panicked when it was run the first time! So we're OK.
                         // XXX: that's not quite true
                         state.push_macro(name);
-                        let (seq, group_vars) = sequence(
+                        let ir_sum = sequence(
                             db,
                             state,
                             ctx,
@@ -77,9 +77,10 @@ where
                             text.display,
                             renderer.quotes_if(text.quotes),
                             text.text_case,
+                            true,
                         );
                         state.pop_macro(name);
-                        group_vars.implicit_conditional(seq)
+                        ir_sum
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
@@ -101,9 +102,9 @@ where
                             let hook = YearSuffixHook::Explicit(self.clone());
                             return (IR::YearSuffix(YearSuffix {
                                 hook,
-                                group_vars: GroupVars::UnresolvedMissing,
+                                group_vars: GroupVars::Unresolved,
                                 ir: Box::new(IR::Rendered(None)),
-                            }), GroupVars::UnresolvedMissing);
+                            }), GroupVars::Unresolved);
                         }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
@@ -170,7 +171,7 @@ where
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => {
-                let (seq, group_vars) = sequence(
+                sequence(
                     db,
                     state,
                     ctx,
@@ -181,8 +182,8 @@ where
                     g.display,
                     None,
                     TextCase::None,
-                );
-                group_vars.implicit_conditional(seq)
+                    true,
+                )
             }
             Element::Date(ref dt) => {
                 let var = dt.variable();
@@ -216,7 +217,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcW
         let renderer = Renderer::cite(&self.ctx);
         match fold_type {
             WalkerFoldType::Macro(text) => {
-                let (seq, group_vars) = sequence(
+                sequence(
                     self.db,
                     &mut self.state,
                     self.ctx,
@@ -227,11 +228,11 @@ impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcW
                     text.display,
                     renderer.quotes_if(text.quotes),
                     text.text_case,
-                );
-                group_vars.implicit_conditional(seq)
+                    true,
+                )
             }
             WalkerFoldType::Group(group) => {
-                let (seq, group_vars) = sequence(
+                sequence(
                     self.db,
                     &mut self.state,
                     self.ctx,
@@ -242,8 +243,8 @@ impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcW
                     group.display,
                     None,
                     TextCase::None,
-                );
-                group_vars.implicit_conditional(seq)
+                    true,
+                )
             }
             WalkerFoldType::Layout(layout) => {
                 sequence_basic(self.db, &mut self.state, self.ctx, &layout.elements)
