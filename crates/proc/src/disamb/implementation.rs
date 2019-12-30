@@ -116,9 +116,13 @@ impl Disambiguation<Markup> for Element {
                             return (RefIR::Edge(Some(edge)), GroupVars::Important);
                         }
                     }
-                    if var == StandardVariable::Ordinary(Variable::YearSuffix) && ctx.year_suffix {
-                        let edge = db.edge(EdgeData::YearSuffixExplicit);
-                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                    if var == StandardVariable::Ordinary(Variable::YearSuffix) {
+                        if ctx.year_suffix {
+                            let edge = db.edge(EdgeData::YearSuffixExplicit);
+                            return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                        } else {
+                            return (RefIR::Edge(None), GroupVars::Plain);
+                        }
                     }
                     if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
                         && ctx.position == Position::Subsequent
