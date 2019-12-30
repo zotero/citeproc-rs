@@ -79,12 +79,9 @@ impl Disambiguation<Markup> for Element {
             Element::Choose(c) => c.ref_ir(db, ctx, state, stack),
             Element::Date(dt) => {
                 let var = dt.variable();
-                if state.is_suppressed_date(var) {
-                    (RefIR::Edge(None), GroupVars::OnlyEmpty)
-                } else {
-                    state.maybe_suppress_date(var);
+                state.maybe_suppress_date(var, |state| {
                     dt.ref_ir(db, ctx, state, stack)
-                }
+                })
             }
             Element::Number(number) => {
                 let var = number.variable;
@@ -95,7 +92,7 @@ impl Disambiguation<Markup> for Element {
                     match var {
                         NumberVariable::Locator => {
                             let e = ctx.locator_type.map(|_| db.edge(EdgeData::Locator));
-                            return (RefIR::Edge(e), GroupVars::DidRender);
+                            return (RefIR::Edge(e), GroupVars::Important);
                         }
                         v => ctx
                             .reference
@@ -116,24 +113,24 @@ impl Disambiguation<Markup> for Element {
                     if var == StandardVariable::Number(NumberVariable::Locator) {
                         if let Some(_loctype) = ctx.locator_type {
                             let edge = db.edge(EdgeData::Locator);
-                            return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                            return (RefIR::Edge(Some(edge)), GroupVars::Important);
                         }
                     }
                     if var == StandardVariable::Ordinary(Variable::YearSuffix) && ctx.year_suffix {
                         let edge = db.edge(EdgeData::YearSuffixExplicit);
-                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
                     if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
                         && ctx.position == Position::Subsequent
                     {
                         let edge = db.edge(EdgeData::Frnn);
-                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
                     if var == StandardVariable::Number(NumberVariable::CitationNumber)
                         && ctx.style.bibliography.is_some()
                     {
                         let edge = db.edge(EdgeData::CitationNumber);
-                        return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
                     let content = match var {
                         StandardVariable::Ordinary(v) => {
@@ -225,7 +222,7 @@ impl Disambiguation<Markup> for Element {
                 };
                 if let Some(edge_data) = custom {
                     let edge = db.edge(edge_data);
-                    return (RefIR::Edge(Some(edge)), GroupVars::DidRender);
+                    return (RefIR::Edge(Some(edge)), GroupVars::Important);
                 }
                 let content = ctx
                     .get_number(var)

@@ -191,7 +191,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         );
     }
 
-    let name_irs: Vec<IR<O>> = to_individual_name_irs(
+    let name_irs: Vec<IrSum<O>> = to_individual_name_irs(
         names,
         &names_inheritance,
         db,
@@ -201,15 +201,15 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         true,
     )
     .map(|mut nir| {
-        if let Some((ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+        if let Some((ir, _)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
             *nir.ir = ir;
-            IR::Name(Arc::new(Mutex::new(nir)))
+            (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
         } else {
             // shouldn't happen; intermediate_custom should return Some the first time
             // round in any situation, and only retun None if it's impossible to crank any
             // further for a disamb pass
             error!("nir.intermediate_custom returned None the first time round");
-            IR::Rendered(None)
+            (IR::Rendered(None), GroupVars::Missing)
         }
     })
     .collect();
@@ -218,7 +218,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     state.maybe_suppress_name_vars(&names.variables);
 
     if name_irs.is_empty()
-        || name_irs.iter().all(|ir| match ir {
+        || name_irs.iter().all(|(ir, _gv)| match ir {
             IR::Name(nir) => nir.lock().unwrap().disamb_names.is_empty(),
             _ => true,
         })
@@ -239,7 +239,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                 }
             }
         }
-        return (IR::Rendered(None), GroupVars::OnlyEmpty);
+        return (IR::Rendered(None), GroupVars::Missing);
     }
 
     // TODO: &[editor, translator] => &[editor], and use editortranslator on
@@ -260,7 +260,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
             },
             ..Default::default()
         }),
-        GroupVars::DidRender,
+        GroupVars::Important,
     )
 }
 
@@ -335,7 +335,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
                 }
             })
             .filter(|x| !fmt.is_empty(&x))
-            .map(|x| IR::Rendered(Some(CiteEdgeData::Output(x))));
+            .map(|x| (IR::Rendered(Some(CiteEdgeData::Output(x))), GroupVars::Important));
         let mut seq = IrSeq {
             contents: iter.collect(),
             formatting: None,
@@ -344,17 +344,17 @@ impl<'c, O: OutputFormat> NameIR<O> {
             ..Default::default()
         };
         if seq.contents.is_empty() {
-            Some((IR::Rendered(None), GroupVars::OnlyEmpty))
+            Some((IR::Rendered(None), GroupVars::Missing))
         } else {
             if let Some(label) = names_inheritance.label.as_ref() {
                 let label_ir = render_label(ctx, &label.concrete(), variable);
                 if label.after_name {
-                    seq.contents.push(label_ir);
+                    seq.contents.push((label_ir, GroupVars::Plain));
                 } else {
-                    seq.contents.insert(0, label_ir);
+                    seq.contents.insert(0, (label_ir, GroupVars::Plain));
                 }
             }
-            Some((IR::Seq(seq), GroupVars::DidRender))
+            Some((IR::Seq(seq), GroupVars::Important))
         }
     }
 }

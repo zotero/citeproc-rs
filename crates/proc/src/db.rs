@@ -481,8 +481,8 @@ fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
             }
             IR::Seq(seq) => {
                 // assumes it's the first one that appears
-                for x in &seq.contents {
-                    list_all_name_blocks_inner(x, vec)
+                for (ir, _gv) in &seq.contents {
+                    list_all_name_blocks_inner(ir, vec)
                 }
             }
         }
@@ -505,8 +505,8 @@ fn list_all_cond_disambs(ir: &IR<Markup>) -> Vec<CondDisambRef> {
             }
             IR::Seq(seq) => {
                 // assumes it's the first one that appears
-                for x in &seq.contents {
-                    list_all_cd_inner(x, vec)
+                for (ir, _gv) in &seq.contents {
+                    list_all_cd_inner(ir, vec)
                 }
             }
         }
@@ -706,17 +706,15 @@ fn disambiguate_add_year_suffix(
 ) {
     // First see if we can do it with an explicit one
     let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
-        *piece = match piece {
-            IR::YearSuffix(ref mut hook, ref mut _built) => match hook {
-                YearSuffixHook::Explicit(ref el) => {
-                    let (new_ir, _gv) = el.intermediate(db, state, ctx);
-                    new_ir
-                }
-                _ => return false,
-            },
-            _ => unreachable!(),
-        };
-        true
+        match &piece.hook {
+            YearSuffixHook::Explicit(el) => {
+                let (new_ir, gv) = el.intermediate(db, state, ctx);
+                *piece.ir = new_ir;
+                piece.group_vars = gv;
+                true
+            }
+            _ => false,
+        }
     });
 
     if asuf {
@@ -725,17 +723,15 @@ fn disambiguate_add_year_suffix(
 
     // Then attempt to do it for the ones that are embedded in date output
     ir.visit_year_suffix_hooks(&mut |piece| {
-        *piece = match piece {
-            IR::YearSuffix(ref mut hook, ref mut _built) => match hook {
-                YearSuffixHook::Plain => {
-                    let (new_ir, _gv) = plain_suffix_element().intermediate(db, state, ctx);
-                    new_ir
-                }
-                _ => return false,
-            },
-            _ => unreachable!(),
-        };
-        true
+        match &piece.hook {
+            YearSuffixHook::Plain => {
+                let (new_ir, gv) = plain_suffix_element().intermediate(db, state, ctx);
+                *piece.ir = new_ir;
+                piece.group_vars = gv;
+                true
+            }
+            _ => false,
+        }
     });
 }
 
@@ -760,9 +756,10 @@ fn disambiguate_true(
             break;
         }
         let mut lock = cir_arc.lock().unwrap();
-        let (new_ir, _) = lock.choose.intermediate(db, state, ctx);
+        let (new_ir, gv) = lock.choose.intermediate(db, state, ctx);
         lock.done = true;
         lock.ir = Box::new(new_ir);
+        lock.group_vars = gv;
     }
 }
 

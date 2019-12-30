@@ -49,7 +49,7 @@ where
         |(mut acc, acc_gv), (ir, gv)| match ir {
             IR::Rendered(None) => (acc, acc_gv.neighbour(gv)),
             _ => {
-                acc.push(ir);
+                acc.push((ir, gv));
                 (acc, acc_gv.neighbour(gv))
             }
         },

@@ -9,7 +9,7 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
-use csl::{Affixes, BodyDate, Choose, Element, Formatting, GivenNameDisambiguationRule};
+use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule};
 use csl::{NumberVariable, StandardVariable, Variable};
 
 use std::sync::Arc;
@@ -25,8 +25,15 @@ pub enum DisambPass {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YearSuffix<O: OutputFormat> {
+    // Clone element into here, because we already know it's a <text variable="" />
+    pub(crate) hook: YearSuffixHook,
+    pub(crate) ir: Box<IR<O>>,
+    pub(crate) group_vars: GroupVars,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum YearSuffixHook {
-    Date(Arc<BodyDate>),
     // Clone element into here, because we already know it's a <text variable="" />
     Explicit(Element),
     Plain,
@@ -219,6 +226,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConditionalDisambIR<O: OutputFormat> {
     pub choose: Arc<Choose>,
+    pub group_vars: GroupVars,
     pub done: bool,
     pub ir: Box<IR<O>>,
 }
@@ -235,7 +243,7 @@ pub enum IR<O: OutputFormat = Markup> {
     /// or <choose><if><conditions><condition>
     /// Should also include `if variable="year-suffix"` because that could change.
     ConditionalDisamb(Arc<Mutex<ConditionalDisambIR<O>>>),
-    YearSuffix(YearSuffixHook, Option<O::Build>),
+    YearSuffix(YearSuffix<O>),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -256,9 +264,11 @@ impl<O> IR<O>
 where
     O: OutputFormat,
 {
+    /// Rendered(None), empty YearSuffix or empty seq
     pub fn is_empty(&self) -> bool {
         match self {
-            IR::Rendered(None) | IR::YearSuffix(_, None) => true,
+            IR::Rendered(None) => true,
+            IR::YearSuffix(ys) => ys.ir.is_empty(),
             IR::Seq(seq) if seq.contents.is_empty() => true,
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.is_empty(),
             IR::Name(nir) => nir.lock().unwrap().ir.is_empty(),
@@ -276,7 +286,7 @@ where
         match (self, other) {
             (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
             (IR::Seq(s), IR::Seq(o)) if s == o => true,
-            (IR::YearSuffix(s1, s2), IR::YearSuffix(o1, o2)) if s1 == o1 && s2 == o2 => true,
+            (IR::YearSuffix(s), IR::YearSuffix(o)) if s == o => true,
             (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) => {
                 let aa = a.lock().unwrap();
                 let bb = b.lock().unwrap();
@@ -307,6 +317,8 @@ impl Default for RefIR {
 /// Currently, flattening into EdgeData(String) only works when the Output type is String
 /// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
 impl<O: OutputFormat<Output = String>> IR<O> {
+    /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
+    /// be rendered
     pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
         // must clone
         match self {
@@ -314,40 +326,9 @@ impl<O: OutputFormat<Output = String>> IR<O> {
             IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::Name(nir) => nir.lock().unwrap().ir.flatten(fmt),
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.flatten(fmt),
-            IR::YearSuffix(_, ref x) => x.clone(),
+            IR::YearSuffix(YearSuffix { ir, .. }) => ir.flatten(fmt),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
         }
-    }
-}
-
-impl<O: OutputFormat<Output = String>> IrSeq<O> {
-    // TODO: Groupvars
-    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
-        let IrSeq {
-            formatting,
-            ref delimiter,
-            ref affixes,
-            ref quotes,
-            display,
-            text_case,
-            ref contents,
-        } = *self;
-        let xs: Vec<_> = contents.iter().filter_map(|i| i.flatten(fmt)).collect();
-        if xs.is_empty() {
-            return None;
-        }
-        let grp = fmt.group(xs, delimiter, formatting);
-        let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
-        // TODO: pass in_bibliography from ctx
-        let mut grp = fmt.with_display(grp, display, true);
-        fmt.apply_text_case(
-            &mut grp,
-            &IngestOptions {
-                text_case,
-                ..Default::default()
-            },
-        );
-        Some(grp)
     }
 }
 
@@ -387,17 +368,17 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
 impl IR<Markup> {
     pub(crate) fn visit_year_suffix_hooks<F>(&mut self, callback: &mut F) -> bool
     where
-        F: (FnMut(&mut IR<Markup>) -> bool),
+        F: (FnMut(&mut YearSuffix<Markup>) -> bool),
     {
         match self {
-            IR::YearSuffix(..) => callback(self),
+            IR::YearSuffix(ys) => callback(ys),
             IR::ConditionalDisamb(c) => {
                 // XXX(check this): boxed has already been rendered, so the `if` was with
                 // disambiguate=false, probably. So you can visit it.
                 c.lock().unwrap().ir.visit_year_suffix_hooks(callback)
             }
             IR::Seq(seq) => {
-                for ir in seq.contents.iter_mut() {
+                for (ir, gv) in seq.contents.iter_mut() {
                     let done = ir.visit_year_suffix_hooks(callback);
                     if done {
                         return true;
@@ -408,7 +389,9 @@ impl IR<Markup> {
             _ => false,
         }
     }
+}
 
+impl IR<Markup> {
     fn append_edges(
         &self,
         edges: &mut Vec<EdgeData>,
@@ -420,17 +403,8 @@ impl IR<Markup> {
             IR::Rendered(Some(ed)) => {
                 edges.push(ed.to_edge_data(fmt, formatting))
             }
-            // TODO: reshape year suffixes to contain IR with maybe a CiteEdgeData::YearSuffix
-            // inside
-            IR::YearSuffix(_hook, x) => {
-                let out = x
-                    .as_ref()
-                    .map(|x| fmt.output_in_context(x.clone(), formatting, None));
-                if let Some(o) = out {
-                    if !o.is_empty() {
-                        edges.push(EdgeData::Output(o))
-                    }
-                }
+            IR::YearSuffix(ys) => {
+                ys.ir.append_edges(edges, fmt, formatting)
             }
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.append_edges(edges, fmt, formatting),
             IR::Seq(seq) => seq.append_edges(edges, fmt, formatting),
@@ -457,15 +431,97 @@ impl IR<Markup> {
 //     }
 // }
 
+/// # Disambiguation and group_vars
+///
+/// IrSeq needs to hold things 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct IrSeq<O: OutputFormat> {
-    pub contents: Vec<IR<O>>,
+    pub contents: Vec<IrSum<O>>,
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
     pub delimiter: Atom,
     pub display: Option<DisplayMode>,
     pub quotes: Option<LocalizedQuotes>,
     pub text_case: TextCase,
+}
+
+
+impl<O: OutputFormat> IR<O> {
+    pub(crate) fn recompute_group_vars(&mut self) {
+        match self {
+            IR::Seq(seq) => seq.recompute_group_vars(),
+            _ => {},
+        }
+    }
+}
+
+impl<O: OutputFormat> IrSeq<O> {
+    pub(crate) fn overall_group_vars(&self) -> GroupVars {
+        self.contents.iter().fold(GroupVars::new(), |acc, (_, gv)| acc.neighbour(*gv))
+    }
+    /// GVs are stored outside of individual child IRs, so we need a way to update those if the
+    /// children have mutated themselves.
+    pub(crate) fn recompute_group_vars(&mut self) {
+        for (ir, gv) in self.contents.iter_mut() {
+            if let Some(force_gv) = ir.force_gv() {
+                *gv = force_gv;
+            }
+        }
+    }
+}
+
+impl<O> IR<O>
+where
+    O: OutputFormat,
+{
+    pub(crate) fn force_gv(&mut self) -> Option<GroupVars> {
+        match self {
+            IR::Rendered(x) => None,
+            IR::YearSuffix(ys) => Some(ys.group_vars),
+            IR::Seq(seq) => {
+                seq.recompute_group_vars();
+                Some(seq.overall_group_vars())
+            },
+            IR::ConditionalDisamb(c) => Some(c.lock().unwrap().group_vars),
+            IR::Name(nir) => None,
+        }
+    }
+}
+
+impl<O: OutputFormat<Output = String>> IrSeq<O> {
+    // TODO: Groupvars
+    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
+        // Do this where it won't require mut access
+        // self.recompute_group_vars();
+        if !self.overall_group_vars().should_render_tree() {
+            return None;
+        }
+        let IrSeq {
+            formatting,
+            ref delimiter,
+            ref affixes,
+            ref quotes,
+            display,
+            text_case,
+            ref contents,
+        } = *self;
+        let xs: Vec<_> = contents.iter().filter_map(|(ir, gv)| ir.flatten(fmt)).collect();
+        if xs.is_empty() {
+            return None;
+        }
+        let grp = fmt.group(xs, delimiter, formatting);
+        let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
+        // TODO: pass in_bibliography from ctx
+        let mut grp = fmt.with_display(grp, display, true);
+        fmt.apply_text_case(
+            &mut grp,
+            &IngestOptions {
+                text_case,
+                ..Default::default()
+            },
+        );
+        Some(grp)
+    }
 }
 
 impl IrSeq<Markup> {
@@ -511,7 +567,7 @@ impl IrSeq<Markup> {
         let _len = contents.len();
         let mut seen = false;
         let mut sub = Vec::new();
-        for (_n, ir) in contents.iter().enumerate() {
+        for (_n, (ir, _gv)) in contents.iter().enumerate() {
             ir.append_edges(&mut sub, fmt, sub_formatting);
             if !sub.is_empty() {
                 if seen {

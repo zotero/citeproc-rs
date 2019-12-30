@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use csl::variables::*;
-use csl::{Bibliography, Element, Style, TextSource};
+use csl::*;
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -83,7 +83,7 @@ where
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
-                        (IR::Rendered(content), GroupVars::NoneSeen)
+                        (IR::Rendered(content), GroupVars::Plain)
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
@@ -95,11 +95,15 @@ where
                                             .text_value(text, &base26)
                                             .expect("we made base26 ourselves, it is not empty"),
                                     ))),
-                                    GroupVars::DidRender,
+                                    GroupVars::Important,
                                 );
                             }
-                            let ysh = YearSuffixHook::Explicit(self.clone());
-                            return (IR::YearSuffix(ysh, None), GroupVars::OnlyEmpty);
+                            let hook = YearSuffixHook::Explicit(self.clone());
+                            return (IR::YearSuffix(YearSuffix {
+                                hook,
+                                group_vars: GroupVars::UnresolvedMissing,
+                                ir: Box::new(IR::Rendered(None)),
+                            }), GroupVars::UnresolvedMissing);
                         }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
@@ -182,13 +186,111 @@ where
             }
             Element::Date(ref dt) => {
                 let var = dt.variable();
-                if state.is_suppressed_date(var) {
-                    (IR::Rendered(None), GroupVars::OnlyEmpty)
-                } else {
-                    state.maybe_suppress_date(var);
+                state.maybe_suppress_date(var, |state| {
                     dt.intermediate(db, state, ctx)
-                }
+                })
             }
         }
+    }
+}
+
+struct ProcWalker<'a, DB, O, I>
+where
+    DB: IrDatabase,
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    db: &'a DB,
+    state: IrState,
+    ctx: &'a CiteContext<'a, O, I>,
+}
+
+impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, DB, O, I> {
+    type Output = IrSum<O>;
+    type Checker = CiteContext<'a, O, I>;
+    fn get_checker(&self) -> Option<&Self::Checker> {
+        Some(&self.ctx)
+    }
+
+    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+        let renderer = Renderer::cite(&self.ctx);
+        match fold_type {
+            WalkerFoldType::Macro(text) => {
+                let (seq, group_vars) = sequence(
+                    self.db,
+                    &mut self.state,
+                    self.ctx,
+                    &elements,
+                    "".into(),
+                    text.formatting,
+                    text.affixes.as_ref(),
+                    text.display,
+                    renderer.quotes_if(text.quotes),
+                    text.text_case,
+                );
+                group_vars.implicit_conditional(seq)
+            }
+            WalkerFoldType::Group(group) => {
+                let (seq, group_vars) = sequence(
+                    self.db,
+                    &mut self.state,
+                    self.ctx,
+                    group.elements.as_ref(),
+                    group.delimiter.0.clone(),
+                    group.formatting,
+                    group.affixes.as_ref(),
+                    group.display,
+                    None,
+                    TextCase::None,
+                );
+                group_vars.implicit_conditional(seq)
+            }
+            WalkerFoldType::Layout(layout) => {
+                sequence_basic(self.db, &mut self.state, self.ctx, &layout.elements)
+            }
+            WalkerFoldType::IfThen | WalkerFoldType::Else => {
+                sequence_basic(self.db, &mut self.state, self.ctx, elements)
+            }
+            WalkerFoldType::Substitute => todo!("use fold() to implement name element substitution"),
+        }
+    }
+
+    fn date(&mut self, body_date: &BodyDate) -> Self::Output {
+        let var = body_date.variable();
+        let ProcWalker {
+            db,
+            ctx,
+            ref mut state,
+            ..
+        } = *self;
+        state.maybe_suppress_date(var, |state| {
+            body_date.intermediate(db, state, ctx)
+        })
+    }
+
+    fn names(&mut self, names: &Names) -> Self::Output {
+        names.intermediate(self.db, &mut self.state, self.ctx)
+    }
+
+    fn number(&mut self, number: &NumberElement) -> Self::Output {
+        let var = number.variable;
+        let renderer = Renderer::cite(&self.ctx);
+        let state = &mut self.state;
+        let content = if state.is_suppressed_num(var) {
+            None
+        } else {
+            state.maybe_suppress_num(var);
+            self.ctx.get_number(var)
+                .map(|val| renderer.number(number, &val))
+                .map(CiteEdgeData::Output)
+        };
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
+    }
+
+    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+        let renderer = Renderer::cite(&self.ctx);
+        let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
+        (IR::Rendered(content), GroupVars::Plain)
     }
 }

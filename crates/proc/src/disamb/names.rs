@@ -150,10 +150,10 @@ impl Disambiguation<Markup> for Names {
                     }
                 }
             }
-            return (RefIR::Edge(None), GroupVars::OnlyEmpty);
+            return (RefIR::Edge(None), GroupVars::Missing);
         }
 
-        (RefIR::Seq(seq), GroupVars::DidRender)
+        (RefIR::Seq(seq), GroupVars::Important)
     }
 }
 

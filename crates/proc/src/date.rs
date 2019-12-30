@@ -40,9 +40,9 @@ impl<O: OutputFormat> Either<O> {
             }
             Either::Ir(ir) => {
                 let gv = if let IR::Rendered(None) = &ir {
-                    GroupVars::OnlyEmpty
+                    GroupVars::Missing
                 } else {
-                    GroupVars::DidRender
+                    GroupVars::Important
                 };
                 (ir, gv)
             }
@@ -61,12 +61,12 @@ fn to_ref_ir(
         // EdgeData::YearSuffix edges in RefIR. Because we don't care whether it's been rendered or
         // not -- in RefIR's comparison, it must always be an EdgeData::YearSuffix.
         IR::Rendered(opt_build) => RefIR::Edge(to_edge(opt_build, stack)),
-        IR::YearSuffix(_ysh, _opt_build) => RefIR::Edge(Some(ys_edge)),
+        IR::YearSuffix(_ys) => RefIR::Edge(Some(ys_edge)),
         IR::Seq(ir_seq) => RefIR::Seq(RefIrSeq {
             contents: ir_seq
                 .contents
                 .into_iter()
-                .map(|x| to_ref_ir(x, stack, ys_edge, to_edge))
+                .map(|(ir, _gv)| to_ref_ir(ir, stack, ys_edge, to_edge))
                 .collect(),
             formatting: ir_seq.formatting,
             affixes: ir_seq.affixes,
@@ -103,7 +103,7 @@ impl Either<Markup> {
                 // Rendered(None), at least.
                 (
                     to_ref_ir(ir, stack, ys_edge, &to_edge),
-                    GroupVars::DidRender,
+                    GroupVars::Important,
                 )
             }
         }
@@ -194,7 +194,7 @@ impl<'a, O: OutputFormat> PartBuilder<O> {
                 };
                 for built in vec {
                     seq.contents
-                        .push(IR::Rendered(Some(CiteEdgeData::Output(built))))
+                        .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important))
                 }
                 PartAccumulator::Seq(seq)
             }
@@ -208,7 +208,8 @@ impl<'a, O: OutputFormat> PartBuilder<O> {
                 self.upgrade();
                 match &mut self.acc {
                     PartAccumulator::Seq(ref mut seq) => {
-                        seq.contents.push(ir);
+                        seq.recompute_group_vars();
+                        seq.contents.push((ir, seq.overall_group_vars()));
                     }
                     _ => unreachable!(),
                 }
@@ -219,7 +220,7 @@ impl<'a, O: OutputFormat> PartBuilder<O> {
                 }
                 PartAccumulator::Seq(ref mut seq) => seq
                     .contents
-                    .push(IR::Rendered(Some(CiteEdgeData::Output(built)))),
+                    .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important)),
             },
             Either::Build(None) => {}
         }
@@ -239,7 +240,7 @@ impl<'a, O: OutputFormat> PartBuilder<O> {
                 if bits.overall_text_case != TextCase::None {
                     // apply text casing by surrounding with an IrSeq,
                     Either::Ir(IR::Seq(IrSeq {
-                        contents: vec![IR::Rendered(Some(CiteEdgeData::Output(built)))],
+                        contents: vec![(IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important)],
                         text_case: bits.overall_text_case,
                         ..Default::default()
                     }))
@@ -658,10 +659,17 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                 Either::Ir({
                     let year_part = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(&s))));
                     let mut contents = Vec::with_capacity(2);
-                    contents.push(year_part);
+                    // Important because we got it from a date variable.
+                    // Hence Unresolved below doesn't affect anything
+                    contents.push((year_part, GroupVars::Important));
                     if ctx.should_add_year_suffix_hook() {
-                        let hook = IR::YearSuffix(YearSuffixHook::Plain, None);
-                        contents.push(hook);
+                        let hook = YearSuffixHook::Plain;
+                        let suffix = IR::YearSuffix(YearSuffix {
+                            hook,
+                            group_vars: GroupVars::UnresolvedMissing,
+                            ir: Box::new(IR::Rendered(None))
+                        });
+                        contents.push((suffix, GroupVars::UnresolvedMissing));
                     }
                     let mut affixes = part.affixes.clone();
                     if is_max_diff {

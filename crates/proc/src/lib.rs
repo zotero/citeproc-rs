@@ -273,9 +273,15 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_date(&mut self, var: DateVariable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Date(var));
+    #[inline]
+    pub fn maybe_suppress_date<T: Default>(&mut self, var: DateVariable, f: impl Fn(&mut Self) -> T) -> T {
+        if self.is_suppressed_date(var) {
+            Default::default()
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Date(var));
+            }
+            f(self)
         }
     }
 
