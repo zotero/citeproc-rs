@@ -22,3 +22,8 @@ variables_TitleShortOnAbbrevWithTitle.txt
 variables_ShortForm.txt
 # citeproc-js feature
 sort_CitationUnsorted.txt
+# BIBENTRIES
+api_UpdateItemsDeleteDecrementsByCiteDisambiguation.txt
+sort_CitationEdit.txt
+api_UpdateItemsReshuffle.txt
+api_UpdateItemsDelete.txt
