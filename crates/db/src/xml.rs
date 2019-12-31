@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use csl::{
-    locale::{Lang, Locale, LocaleOptions, LocaleSource},
+    locale::{Lang, Locale, LocaleOptions, LocaleSource, EN_US},
     style::{Delimiter, Name, Style, TextElement, TextSource},
 };
 use fnv::FnvHashSet;
@@ -320,7 +320,7 @@ impl PredefinedLocales {
         let mut m = HashMap::new();
         m.insert(
             Lang::en_us(),
-            include_str!("../../wasm/src/locales-en-US.xml").to_string(),
+            EN_US.to_owned(),
         );
         PredefinedLocales(m)
     }

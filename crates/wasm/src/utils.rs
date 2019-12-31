@@ -6,7 +6,7 @@
 
 use cfg_if::cfg_if;
 use citeproc::prelude::*;
-use csl::{IsoCountry, IsoLang, Lang};
+use csl::{IsoCountry, IsoLang, Lang, EN_US};
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 
@@ -76,9 +76,6 @@ where
 /// A `LocaleFetcher` that statically includes `en-US`, so it never has to be async-fetched, but
 /// otherwise returns `None`.
 pub struct USFetcher;
-
-// ~2kB gzipped, and prevents the same initial fetch every single time.
-const EN_US: &str = include_str!("locales-en-US.xml");
 
 impl LocaleFetcher for USFetcher {
     fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {

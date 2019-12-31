@@ -17,6 +17,8 @@ use std::str::FromStr;
 mod lang;
 pub use self::lang::{IsoCountry, IsoLang, Lang, LocaleSource};
 
+pub const EN_US: &str = include_str!("locales-en-US.xml");
+
 #[derive(Default, Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocaleOptionsNode {
     pub limit_day_ordinals_to_day_1: Option<bool>,
