@@ -395,7 +395,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
             StandardVariable::Ordinary(var) => self
                 .ctx
                 .get_ordinary(var, form)
-                .map(|val| renderer.text_variable(text, svar, val)),
+                .map(|val| renderer.text_variable(text, svar, &val)),
         };
         let gv = GroupVars::rendered_if(res.is_some());
         (res.unwrap_or_default(), gv)

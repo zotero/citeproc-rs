@@ -6,7 +6,7 @@
 
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
+#[derive(Default, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PersonName {
     pub family: Option<String>,

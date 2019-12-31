@@ -143,7 +143,7 @@ impl Disambiguation<Markup> for Element {
                             } else {
                                 state.maybe_suppress_ordinary(v);
                                 ctx.get_ordinary(v, form)
-                                    .map(|val| renderer.text_variable(text, var, val))
+                                    .map(|val| renderer.text_variable(text, var, &val))
                             }
                         }
                         StandardVariable::Number(v) => {

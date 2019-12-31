@@ -15,6 +15,7 @@ use csl::Locale;
 use csl::*;
 use csl::{CslType, Delimiter, Name as NameEl, Position, SortKey, Style, VariableForm};
 use std::sync::Arc;
+use std::borrow::Cow;
 
 #[derive(Clone)]
 pub struct CiteContext<
@@ -68,22 +69,31 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
 }
 
 impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
-    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
+    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
         (match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::TitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::Title)),
+                .or_else(|| self.reference.ordinary.get(&Variable::Title))
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
             (Variable::ContainerTitleShort, _)
             | (Variable::ContainerTitle, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle)),
-            _ => self.reference.ordinary.get(&var),
+                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
+            (Variable::CitationLabel, _) if self.reference.ordinary.get(&var).is_none() => {
+                let tri = crate::citation_label::Trigraph::default();
+                Some(Cow::Owned(tri.make_label(self.reference)))
+            }
+            _ => self.reference.ordinary.get(&var)
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
         })
-        .map(|s| s.as_str())
     }
 
     pub fn has_variable(&self, var: AnyVariable) -> bool {
@@ -99,6 +109,8 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 self.position.1.is_some()
             }
             AnyVariable::Number(NumberVariable::CitationNumber) => self.bib_number.is_some(),
+            // Generated on demand
+            AnyVariable::Ordinary(Variable::CitationLabel) => true,
             _ => ref_has_variable(self.reference, var),
         }
     }

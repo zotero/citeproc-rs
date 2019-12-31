@@ -89,7 +89,6 @@ impl IsIndependent for Variable {
     fn is_independent(&self) -> bool {
         match self {
             Variable::LocatorExtra
-            | Variable::CitationLabel
             | Variable::YearSuffix
             | Variable::Hereinafter => true,
             _ => false,

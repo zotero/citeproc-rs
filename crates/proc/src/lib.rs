@@ -16,6 +16,7 @@ use csl::Atom;
 use std::collections::HashSet;
 
 mod choose;
+mod citation_label;
 mod cite_context;
 mod date;
 pub mod db;
