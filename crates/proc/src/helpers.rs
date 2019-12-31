@@ -151,3 +151,20 @@ use fnv::FnvHashSet;
 pub fn fnv_set_with_cap<T: std::hash::Hash + std::cmp::Eq>(cap: usize) -> FnvHashSet<T> {
     FnvHashSet::with_capacity_and_hasher(cap, fnv::FnvBuildHasher::default())
 }
+
+use csl::{Variable, TextElement, StandardVariable, VariableForm, TextCase, TextSource};
+pub fn plain_text_element(v: Variable) -> TextElement {
+    TextElement {
+        source: TextSource::Variable(
+            StandardVariable::Ordinary(v),
+            VariableForm::Long,
+        ),
+        formatting: None,
+        affixes: None,
+        quotes: false,
+        strip_periods: false,
+        text_case: TextCase::None,
+        display: None,
+    }
+}
+

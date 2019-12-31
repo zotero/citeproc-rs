@@ -684,33 +684,18 @@ fn disambiguate_add_givennames(
     None
 }
 
-fn plain_suffix_element() -> Element {
-    use csl::{StandardVariable, TextSource, Variable, VariableForm};
-    Element::Text(TextElement {
-        source: TextSource::Variable(
-            StandardVariable::Ordinary(Variable::YearSuffix),
-            VariableForm::Long,
-        ),
-        formatting: None,
-        affixes: None,
-        quotes: false,
-        strip_periods: false,
-        text_case: TextCase::None,
-        display: None,
-    })
-}
-
 fn disambiguate_add_year_suffix(
     db: &impl IrDatabase,
     ir: &mut IR<Markup>,
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
+    suffix: u32,
 ) {
     // First see if we can do it with an explicit one
     let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
         match &piece.hook {
-            YearSuffixHook::Explicit(el) => {
-                let (new_ir, gv) = el.intermediate(db, state, ctx);
+            YearSuffixHook::Explicit(_) => {
+                let (new_ir, gv) = piece.hook.render(ctx, suffix);
                 *piece.ir = new_ir;
                 piece.group_vars = gv;
                 true
@@ -727,7 +712,7 @@ fn disambiguate_add_year_suffix(
     ir.visit_year_suffix_hooks(&mut |piece| {
         match &piece.hook {
             YearSuffixHook::Plain => {
-                let (new_ir, gv) = plain_suffix_element().intermediate(db, state, ctx);
+                let (new_ir, gv) = piece.hook.render(ctx, suffix);
                 *piece.ir = new_ir;
                 piece.group_vars = gv;
                 true
@@ -845,7 +830,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
 
-    disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
+    disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx, year_suffix);
     let matching = refs_accepting_cite(db, &ir, &ctx);
     Arc::new(IrGen::new(ir, matching, state))
 }
@@ -1021,7 +1006,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             // versa"
             if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
-                disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx);
+                disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx, suffix);
             }
 
             let matching = refs_accepting_cite(db, &ir, &ctx);

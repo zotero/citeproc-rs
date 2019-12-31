@@ -88,6 +88,8 @@ impl IsIndependent for AnyVariable {
 impl IsIndependent for Variable {
     fn is_independent(&self) -> bool {
         match self {
+            // Variable::CitationLabel is not independent, it just implies a YearSuffix
+            // which is, and that is handled in FreeCondWalker::text_variable()
             Variable::LocatorExtra
             | Variable::YearSuffix
             | Variable::Hereinafter => true,

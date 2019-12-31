@@ -9,7 +9,7 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
-use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule, DateVariable};
+use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule, DateVariable, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
 
 use std::sync::Arc;
@@ -32,10 +32,23 @@ pub struct YearSuffix<O: OutputFormat> {
     pub(crate) group_vars: GroupVars,
 }
 
+impl<O: OutputFormat> IR<O> {
+    pub(crate) fn year_suffix(hook: YearSuffixHook) -> IrSum<O> {
+        (
+            IR::YearSuffix(YearSuffix {
+                hook,
+                group_vars: GroupVars::Unresolved,
+                ir: Box::new(IR::Rendered(None)),
+            }),
+            GroupVars::Unresolved
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum YearSuffixHook {
     // Clone element into here, because we already know it's a <text variable="" />
-    Explicit(Element),
+    Explicit(TextElement),
     Plain,
 }
 

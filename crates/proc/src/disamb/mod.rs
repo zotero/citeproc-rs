@@ -144,14 +144,17 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
         sv: StandardVariable,
         _form: VariableForm,
     ) -> Self::Output {
+        let mut implicit_var_test = FreeCondSets::mult_identity();
         if sv.is_independent() {
-            let mut implicit_var_test = FreeCondSets::mult_identity();
             let cond = Cond::Variable((&sv).into());
             implicit_var_test.scalar_multiply_cond(cond, true);
-            implicit_var_test
-        } else {
-            FreeCondSets::mult_identity()
+        } else if sv == StandardVariable::Ordinary(Variable::CitationLabel) {
+            // citation labels typically have a year on the end, so we add year suffixes
+            // to them
+            let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
+            implicit_var_test.scalar_multiply_cond(cond, true);
         }
+        implicit_var_test
     }
 
     fn date(&mut self, _date: &BodyDate) -> Self::Output {

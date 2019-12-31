@@ -136,6 +136,40 @@ impl Disambiguation<Markup> for Element {
                         let edge = db.edge(EdgeData::CitationNumber);
                         return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
+                    if var == StandardVariable::Ordinary(Variable::CitationLabel) {
+                        let edge = db.edge(EdgeData::CitationNumber);
+                        let v = Variable::CitationLabel;
+                        let vario = if state.is_suppressed_ordinary(v) {
+                            None
+                        } else {
+                            state.maybe_suppress_ordinary(v);
+                            ctx.get_ordinary(v, form)
+                                .map(|val| renderer.text_variable(&crate::helpers::plain_text_element(v), var, &val))
+                        };
+                        return vario
+                            .map(|x| fmt.output_in_context(x, stack, None))
+                            .map(EdgeData::<Markup>::Output)
+                            .map(|label| db.edge(label))
+                            .map(|edge| {
+                                let label = RefIR::Edge(Some(edge));
+                                let suffix_edge = RefIR::Edge(Some(db.edge(EdgeData::YearSuffixPlain)));
+                                let mut contents = Vec::new();
+                                contents.push(label);
+                                if ctx.year_suffix {
+                                    contents.push(suffix_edge);
+                                }
+                                let seq = RefIrSeq {
+                                    contents,
+                                    affixes: text.affixes.clone(),
+                                    formatting: text.formatting,
+                                    delimiter: Atom::from(""),
+                                    text_case: text.text_case,
+                                    quotes: renderer.quotes_if(text.quotes),
+                                };
+                                (RefIR::Seq(seq), GroupVars::Important)
+                            })
+                            .unwrap_or((RefIR::Edge(None), GroupVars::Missing));
+                    }
                     let content = match var {
                         StandardVariable::Ordinary(v) => {
                             if state.is_suppressed_ordinary(v) {

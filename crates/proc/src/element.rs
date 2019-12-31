@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use csl::variables::*;
 use csl::*;
+use crate::helpers::plain_text_element;
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -88,23 +89,39 @@ where
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
+                            let hook = YearSuffixHook::Explicit(text.clone());
                             if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
-                                let base26 = citeproc_io::utils::to_bijective_base_26(i);
-                                return (
-                                    IR::Rendered(Some(CiteEdgeData::YearSuffix(
-                                        renderer
-                                            .text_value(text, &base26)
-                                            .expect("we made base26 ourselves, it is not empty"),
-                                    ))),
-                                    GroupVars::Important,
-                                );
+                                return hook.render(ctx, i);
                             }
-                            let hook = YearSuffixHook::Explicit(self.clone());
-                            return (IR::YearSuffix(YearSuffix {
-                                hook,
-                                group_vars: GroupVars::Unresolved,
-                                ir: Box::new(IR::Rendered(None)),
-                            }), GroupVars::Unresolved);
+                            return IR::year_suffix(hook);
+                        }
+                        if var == StandardVariable::Ordinary(Variable::CitationLabel) {
+                            let hook = IR::year_suffix(YearSuffixHook::Plain);
+                            let v = Variable::CitationLabel;
+                            let vario = if state.is_suppressed_ordinary(v) {
+                                None
+                            } else {
+                                state.maybe_suppress_ordinary(v);
+                                ctx.get_ordinary(v, form)
+                                    .map(|val| renderer.text_variable(&plain_text_element(v), var, &val))
+                            };
+                            return vario.map(|label| {
+                                let seq = IrSeq {
+                                    contents: vec![
+                                        (IR::Rendered(Some(CiteEdgeData::Output(label))), GroupVars::Important),
+                                        hook,
+                                    ],
+                                    formatting: text.formatting,
+                                    affixes: text.affixes.clone(),
+                                    text_case: text.text_case,
+                                    delimiter: Atom::from(""),
+                                    display: text.display,
+                                    quotes: renderer.quotes_if(text.quotes),
+                                    dropped_gv: None,
+                                };
+                                (IR::Seq(seq), GroupVars::Important) // the citation-label is important, so so is the seq
+                            })
+                            .unwrap_or((IR::Rendered(None), GroupVars::Missing));
                         }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
@@ -192,6 +209,24 @@ where
                 })
             }
         }
+    }
+}
+
+impl YearSuffixHook {
+    pub(crate) fn render<'c, O: OutputFormat, I: OutputFormat>(
+        &self,
+        ctx: &CiteContext<'c, O, I>,
+        suffix_num: u32
+    ) -> IrSum<O> {
+        let implicit = plain_text_element(Variable::YearSuffix);
+        let text = match self {
+            YearSuffixHook::Explicit(text) => text,
+            _ => &implicit,
+        };
+        let renderer = Renderer::cite(ctx);
+        let base26 = citeproc_io::utils::to_bijective_base_26(suffix_num);
+        let output = renderer.text_value(text, &base26).expect("base26 is not empty");
+        (IR::Rendered(Some(CiteEdgeData::YearSuffix(output))), GroupVars::Important)
     }
 }
 
