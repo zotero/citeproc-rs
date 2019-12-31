@@ -211,7 +211,17 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
+                                    use crate::names::Name;
+                                    let mut names: Vec<Name> = map.next_value()?;
+                                    for name in names.iter_mut() {
+                                        match name {
+                                            Name::Person(pn) => {
+                                                pn.parse_particles();
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    ve.insert(names);
                                 }
                             }
                         }
