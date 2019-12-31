@@ -940,7 +940,7 @@ pub fn with_cite_context<T>(
         in_bibliography: false,
         names_delimiter,
         name_citation: name_el,
-        sort_key: None,
+        sort_key,
     };
     Some(f(ctx))
 }

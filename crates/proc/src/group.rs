@@ -140,7 +140,6 @@ impl GroupVars {
             // groups.
             //
             // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
-            debug!("keeping: \n{:#?}", ir);
             (
                 ir,
                 if self == Plain {
@@ -150,10 +149,6 @@ impl GroupVars {
                 }
             )
         } else {
-            debug!(
-                "discarding group/macro because of GV being Missing or group being empty: \n{:#?}",
-                ir
-            );
             // Don't render the group! But also don't infect the whole tree with Missing.
             (default, GroupVars::Plain)
         }

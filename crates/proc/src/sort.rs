@@ -587,10 +587,6 @@ pub mod natural_sort {
         FromStr::from_str(s).unwrap()
     }
 
-    fn take_4_digits(inp: &str) -> IResult<&str, &str> {
-        take_while_m_n(4, 4, |c: char| c.is_ascii_digit())(inp)
-    }
-
     fn take_8_digits(inp: &str) -> IResult<&str, &str> {
         take_while_m_n(1, 8, |c: char| c.is_ascii_digit())(inp)
     }
@@ -601,7 +597,7 @@ pub mod natural_sort {
 
     fn year(inp: &str) -> IResult<&str, i32> {
         let (rem1, pref) = opt(year_prefix)(inp)?;
-        let (rem2, y) = take_4_digits(rem1)?;
+        let (rem2, y) = take_while1(|c: char| c.is_ascii_digit())(rem1)?;
         let (rem3, _) = char('_')(rem2)?;
         Ok((
             rem3,
@@ -769,6 +765,12 @@ pub mod natural_sort {
             natural_cmp("a\u{E000}2009_0407/0000_0000\u{E001}", "a\u{E000}2009_0407/2010_0509\u{E001}"),
             Ordering::Less,
             "2009 < 2009/2010"
+        );
+
+        assert_eq!(
+            natural_cmp("\u{e000}-044_0315/0000_00\u{e001}", "\u{e000}-100_0713/0000_00\u{e001}"),
+            Ordering::Greater,
+            "44BC > 100BC"
         );
 
         // Numbers
