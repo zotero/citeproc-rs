@@ -580,7 +580,7 @@ pub mod natural_sort {
     use std::str::FromStr;
 
     fn to_u32(s: &str) -> u32 {
-        FromStr::from_str(s.trim_start_matches('0')).unwrap()
+        FromStr::from_str(s).unwrap()
     }
 
     fn to_i32(s: &str) -> i32 {

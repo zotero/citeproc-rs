@@ -11,6 +11,7 @@ use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, Choose, Element, Formatting, GivenNameDisambiguationRule, DateVariable, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
+use crate::disamb::names::RefNameIR;
 
 use std::sync::Arc;
 
@@ -58,8 +59,6 @@ impl PartialEq for RefIR {
         false
     }
 }
-
-use crate::disamb::names::RefNameIR;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -283,6 +282,58 @@ pub enum IR<O: OutputFormat = Markup> {
     //     Rendered(..)
     // ]
     Seq(IrSeq<O>),
+
+    /// Only exists to aggregate the counts of names
+    NameCounter(IrNameCounter<O>),
+}
+
+#[derive(Debug, Clone)]
+pub struct IrNameCounter<O: OutputFormat> {
+    pub name_irs: Vec<NameIR<O>>,
+    pub ir: Box<IR<O>>,
+    pub group_vars: GroupVars,
+}
+
+#[derive(Debug, Clone)]
+pub struct RefIrNameCounter {
+    name_irs: Vec<RefNameIR>,
+}
+
+impl<O: OutputFormat> IrNameCounter<O> {
+    pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'_, O, I>) -> u32 {
+        self.name_irs
+            .iter()
+            .map(|nir| nir.count(ctx))
+            .sum()
+    }
+    pub fn render_cite<I: OutputFormat>(&self, ctx: &CiteContext<'_, O, I>) -> IrSum<O> {
+        let fmt = &ctx.format;
+        let count = self.count(ctx);
+        let built = if ctx.sort_key.is_some() {
+            fmt.affixed_text(
+                format!("{:08}", count),
+                None,
+                Some(&crate::sort::natural_sort::num_affixes()),
+            )
+        } else {
+            // This isn't sort-mode, you can render NameForm::Count as text.
+            fmt.text_node(format!("{}", count), None)
+        };
+        (IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important)
+    }
+}
+
+impl RefIrNameCounter {
+    fn count(&self) -> u32 {
+        500
+    }
+    pub fn render_ref(&self, db: &impl IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
+        let count = self.count();
+        let fmt = ctx.format;
+        let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);
+        let edge = db.edge(EdgeData::<Markup>::Output(out));
+        (RefIR::Edge(Some(edge)), GroupVars::Important)
+    }
 }
 
 impl<O> IR<O>
@@ -297,6 +348,7 @@ where
             IR::Seq(seq) if seq.contents.is_empty() => true,
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.is_empty(),
             IR::Name(nir) => nir.lock().unwrap().ir.is_empty(),
+            IR::NameCounter(nc) => false,
             _ => false,
         }
     }
@@ -353,6 +405,7 @@ impl<O: OutputFormat<Output = String>> IR<O> {
             IR::ConditionalDisamb(c) => c.lock().unwrap().ir.flatten(fmt),
             IR::YearSuffix(YearSuffix { ir, .. }) => ir.flatten(fmt),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
+            IR::NameCounter(nc) => nc.ir.flatten(fmt),
         }
     }
 }
@@ -440,6 +493,7 @@ impl IR<Markup> {
                 }
             },
             IR::Name(nir) => nir.lock().unwrap().ir.append_edges(edges, fmt, formatting),
+            IR::NameCounter(nc) => nc.ir.append_edges(edges, fmt, formatting),
         }
     }
 
@@ -526,6 +580,7 @@ where
             },
             IR::ConditionalDisamb(c) => Some(c.lock().unwrap().group_vars),
             IR::Name(_) => None,
+            IR::NameCounter(nc) => Some(nc.group_vars),
         }
     }
 }

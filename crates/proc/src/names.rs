@@ -69,7 +69,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
     fmt: &'a O,
     refr: &'a Reference,
     should_start_with_global: bool,
-) -> impl Iterator<Item = NameIR<O>> + 'a {
+) -> impl Iterator<Item = NameIR<O>> + 'a + Clone {
     names
         .variables
         .iter()
@@ -191,7 +191,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         );
     }
 
-    let name_irs: Vec<IrSum<O>> = to_individual_name_irs(
+    let nirs_iterator = to_individual_name_irs(
         names,
         &names_inheritance,
         db,
@@ -199,8 +199,43 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         fmt,
         &ctx.reference,
         true,
-    )
-    .map(|mut nir| {
+    );
+
+    if names_inheritance.name.form == Some(NameForm::Count) {
+        let name_irs = nirs_iterator.collect();
+        // TODO: styling with a surrounding IrSeq
+        let mut nc = IrNameCounter {
+            name_irs,
+            ir: Box::new(IR::Rendered(None)),
+            group_vars: GroupVars::new(),
+        };
+        // Substitute
+        if nc.count(ctx) == 0 {
+            if let Some(subst) = names.substitute.as_ref() {
+                for el in subst.0.iter() {
+                    // Need to clone the state so that any ultimately-non-rendering names blocks do not affect
+                    // substitution later on
+                    let mut new_state = state.clone();
+                    let old = new_state
+                        .name_override
+                        .replace_name_overrides_for_substitute(names_inheritance.clone());
+                    let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
+                    if !ir.is_empty() {
+                        new_state.name_override.restore_name_overrides(old);
+                        *state = new_state;
+                        return (ir, gv);
+                    }
+                }
+            }
+            return (IR::Rendered(None), GroupVars::Missing);
+        }
+        let (new_ir, gv) = nc.render_cite(ctx);
+        *nc.ir = new_ir;
+        nc.group_vars = gv;
+        return (IR::NameCounter(nc), GroupVars::Important);
+    }
+
+    let name_irs: Vec<IrSum<O>> = nirs_iterator.map(|mut nir| {
         if let Some((ir, _)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
             *nir.ir = ir;
             (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
@@ -280,6 +315,36 @@ where
 }
 
 impl<'c, O: OutputFormat> NameIR<O> {
+    pub fn count<I: OutputFormat>(
+        &self,
+        ctx: &CiteContext<'c, O, I>,
+    ) -> u32 {
+        let style = ctx.style;
+        let locale = ctx.locale;
+        let fmt = &ctx.format;
+        let position = ctx.position.0;
+
+        let NameIR { ref names_inheritance, variable, .. } = *self;
+
+        let runner = OneNameVar {
+            name_el: &names_inheritance.name,
+            bump_name_count: self.name_counter.bump,
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+            fmt,
+        };
+
+        let name_tokens = runner.name_tokens(position, &self.disamb_names, ctx.sort_key.is_some(),
+        &names_inheritance.et_al, locale);
+
+        let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
+            NameToken::Name(_) => acc + 1,
+            // etal, delimiter, etc
+            _ => acc,
+        });
+        count
+    }
+
     pub fn intermediate_custom<I: OutputFormat>(
         &mut self,
         _db: &impl IrDatabase,
@@ -322,22 +387,24 @@ impl<'c, O: OutputFormat> NameIR<O> {
         }
         self.name_counter.max_recorded = self.name_counter.current;
 
-        let iter = ntbs
+        let contents = ntbs
             .into_iter()
-            .map(|ntb| match ntb {
-                NameTokenBuilt::Built(b) => b,
-                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => b.clone(),
+            .filter_map(|ntb| match ntb {
+                NameTokenBuilt::Built(b) => Some(b),
+                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => Some(b.clone()),
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
                     runner.name_el = &pn.data.el;
                     let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
                     runner.name_el = &names_inheritance.name;
-                    ret
+                    Some(ret)
                 }
             })
             .filter(|x| !fmt.is_empty(&x))
-            .map(|x| (IR::Rendered(Some(CiteEdgeData::Output(x))), GroupVars::Important));
+            .map(|x| (IR::Rendered(Some(CiteEdgeData::Output(x))), GroupVars::Important))
+            .collect();
+
         let mut seq = IrSeq {
-            contents: iter.collect(),
+            contents,
             formatting: None,
             affixes: None,
             display: None,

@@ -78,7 +78,7 @@ fn to_ref_ir(
             quotes: None,
             text_case: ir_seq.text_case,
         }),
-        IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
+        IR::ConditionalDisamb(..) | IR::Name(_) | IR::NameCounter(_) => unreachable!(),
     }
 }
 

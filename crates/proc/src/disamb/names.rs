@@ -511,6 +511,9 @@ impl RefNameIR {
             disamb_name_ids: vec,
         }
     }
+    pub fn count(&self) -> u32 {
+        500
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

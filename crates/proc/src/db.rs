@@ -470,7 +470,7 @@ type NameRef = Arc<Mutex<NameIR<Markup>>>;
 fn list_all_name_blocks(ir: &IR<Markup>) -> Vec<NameRef> {
     fn list_all_name_blocks_inner(ir: &IR<Markup>, vec: &mut Vec<NameRef>) {
         match ir {
-            IR::YearSuffix(..) | IR::Rendered(_) => {}
+            IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) => {}
             IR::Name(ref nir) => {
                 vec.push(nir.clone());
             }
@@ -496,7 +496,7 @@ type CondDisambRef = Arc<Mutex<ConditionalDisambIR<Markup>>>;
 fn list_all_cond_disambs(ir: &IR<Markup>) -> Vec<CondDisambRef> {
     fn list_all_cd_inner(ir: &IR<Markup>, vec: &mut Vec<CondDisambRef>) {
         match ir {
-            IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
+            IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
             IR::ConditionalDisamb(c) => {
                 vec.push(c.clone());
                 let lock = c.lock().unwrap();
