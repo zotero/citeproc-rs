@@ -251,9 +251,7 @@ pub fn normalise_html(strg: &str) -> String {
         .replace("&#38;", "&amp;")
         // citeproc-js puts successive unicode superscript transforms in their own tags,
         // citeproc-rs joins them.
-        .replace("</sup><sup>", "")
-        .replace("</b> <b>", " ")
-        .replace("</i> <i>", " ");
+        .replace("</sup><sup>", "");
     let newlines = regex!(r"(?m)>\n*\s*<(/?)div");
     newlines.replace_all(&rep, ">\n<${1}div").into_owned()
 }
