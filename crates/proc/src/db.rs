@@ -1009,6 +1009,10 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx, suffix);
             }
 
+            if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
+                ir.split_first_field();
+            }
+
             let matching = refs_accepting_cite(db, &ir, &ctx);
             Arc::new(IrGen::new(ir, matching, state))
         },
