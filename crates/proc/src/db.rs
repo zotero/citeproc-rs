@@ -19,7 +19,6 @@ use citeproc_db::ClusterData;
 use citeproc_io::{ClusterNumber, IntraNote};
 use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
 use std::sync::Mutex;
-use crate::sort::cite_ordering;
 
 pub trait HasFormatter {
     fn get_formatter(&self) -> Markup;
@@ -76,7 +75,9 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     // Sorting
 
     // Includes intra-cluster sorting
+    #[salsa::invoke(crate::sort::clusters_cites_sorted)]
     fn clusters_cites_sorted(&self) -> Arc<Vec<ClusterData>>;
+    #[salsa::invoke(crate::sort::cluster_data_sorted)]
     fn cluster_data_sorted(&self, id: ClusterId) -> Option<ClusterData>;
 
     /// Cite positions are mixed in with sorting. You cannot tell the positions of cites within a
@@ -1114,7 +1115,7 @@ fn cite_positions(db: &impl IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opt
                             // (because prev note wasn't homogenous)
                             clusters_in_last_note
                                 .iter()
-                                .filter_map(|&cluster_id| cluster_data_sorted(db, cluster_id))
+                                .filter_map(|&cluster_id| db.cluster_data_sorted(cluster_id))
                                 .flat_map(|cluster| (*cluster.cites).clone().into_iter())
                                 .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
                         } else {
@@ -1265,61 +1266,5 @@ fn cite_position(db: &impl IrDatabase, key: CiteId) -> (Position, Option<u32>) {
     } else {
         panic!("called cite_position on unknown cite id, {:?}", key);
     }
-}
-
-fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
-    let cluster_ids = db.cluster_ids();
-    let mut clusters: Vec<_> = cluster_ids
-        .iter()
-        // No number? Not considered to be in document, position participant.
-        // Although may be disamb participant.
-        .filter_map(|&id| {
-            cluster_data_sorted(db, id)
-        })
-        .collect();
-    clusters.sort_by_key(|cluster| cluster.number);
-    Arc::new(clusters)
-}
-
-pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<ClusterData> {
-    db.cluster_note_number(id)
-        .map(|number| {
-            // Order of operations: bib gets sorted first, so cites can be sorted by
-            // citation-number.
-            let sorted_refs_arc = db.sorted_refs();
-            let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-            let mut cites = db.cluster_cites(id);
-            let style = db.style();
-            if let Some(sort) = style.citation.sort.as_ref() {
-                let mut neu = (*cites).clone();
-                let getter = |cite_id: &CiteId| {
-                    let cite = cite_id.lookup(db);
-                    db.reference(cite.ref_id.clone())
-                        .map(|refr| {
-                            let cnum = *citation_numbers_by_id
-                                .get(&refr.id)
-                                .expect("sorted_refs should contain a bib_item key");
-                            (refr, cnum)
-                        })
-                };
-                neu.sort_by(|a_id, b_id| {
-                    use std::cmp::Ordering;
-                    match (getter(a_id), getter(b_id)) {
-                        (Some(_), None) => Ordering::Less,
-                        (None, Some(_)) => Ordering::Greater,
-                        (None, None) => Ordering::Equal,
-                        (Some((a_ref, a_cnum)), Some((b_ref, b_cnum))) => {
-                            cite_ordering(db, *a_id, *b_id, &a_ref, &b_ref, a_cnum, b_cnum, sort, &style)
-                        }
-                    }
-                });
-                cites = Arc::new(neu);
-            }
-            ClusterData {
-                id,
-                number,
-                cites,
-            }
-        })
 }
 
