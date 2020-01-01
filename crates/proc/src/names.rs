@@ -693,7 +693,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             let string = initialize(
                                 &given,
                                 self.name_el.initialize.unwrap_or(true),
-                                self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
+                                // name_OnlyGivenname.txt
+                                if pn.family.is_some() {
+                                    self.name_el.initialize_with.as_ref().map(|s| s.as_ref())
+                                } else {
+                                    None
+                                },
                                 self.initialize_with_hyphen,
                             );
                             s.push_str(&string);
@@ -792,7 +797,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         let string = initialize(
                             &given,
                             self.name_el.initialize.unwrap_or(true),
-                            self.name_el.initialize_with.as_ref().map(|s| s.as_ref()),
+                            // name_OnlyGivenname.txt
+                            if pn.family.is_some() {
+                                self.name_el.initialize_with.as_ref().map(|s| s.as_ref())
+                            } else {
+                                None
+                            },
                             self.initialize_with_hyphen,
                         );
                         build.push(self.format_with_part(name_part, &string));
