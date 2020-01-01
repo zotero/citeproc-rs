@@ -16,6 +16,8 @@ pub struct PersonName {
     pub suffix: Option<String>,
     #[serde(default)]
     pub static_particles: bool,
+    #[serde(default)]
+    pub comma_suffix: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
@@ -103,6 +105,30 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
     }
 }
 
+// Maybe {truncates given, returns a suffix}
+fn parse_suffix(given: &mut String, has_dropping_particle: bool) -> Option<(String, bool)> {
+    let comma = regex!(r"\s*,!?\s*");
+    let mut suff = None;
+    let trunc_len = if let Some(mat) = comma.find(given) {
+        let possible_suffix = &given[mat.end()..];
+        let possible_comma = mat.as_str().trim();
+        if (possible_suffix == "et al" || possible_suffix == "et al.") && !has_dropping_particle {
+            warn!("used et-al as a suffix in name, not handled with citeproc-js-style hacks");
+            return None;
+        } else {
+            let force_comma = possible_comma.len() == 2;
+            suff = Some((possible_suffix.to_owned(), force_comma))
+        }
+        Some(mat.start())
+    } else {
+        None
+    };
+    if let Some(trun) = trunc_len {
+        given.truncate(trun);
+    }
+    suff
+}
+
 fn trim_last(string: &mut String) {
     let last_char = string.chars().rev().nth(0);
     string.trim_in_place();
@@ -130,6 +156,7 @@ impl PersonName {
             dropping_particle,
             suffix,
             static_particles,
+            comma_suffix,
         } = self;
         // Don't parse if these are supplied
         if *static_particles || non_dropping_particle.is_some() || dropping_particle.is_some() || suffix.is_some() {
@@ -145,6 +172,10 @@ impl PersonName {
             }
         }
         if let Some(given) = given {
+            if let Some((suff, force_comma)) = parse_suffix(given, dropping_particle.is_some()) {
+                *suffix = Some(suff);
+                *comma_suffix = force_comma;
+            }
             if let Some((drops, remain)) = split_particles(given.as_ref(), true) {
                 *dropping_particle = Some(drops.trim().replace('\'', "\u{2019}"));
                 *given = remain;

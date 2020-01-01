@@ -843,6 +843,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     let fam = pn.family.as_ref().unwrap();
                     let dp = pn.dropping_particle.as_ref().filter(|_| token == NamePartToken::FamilyFull);
                     let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
+                    let suffix = pn.suffix.as_ref().filter(|_| token == NamePartToken::FamilyFull);
                     let mut string = String::with_capacity(fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()));
                     if let Some(dp) = dp {
                         string.push_str(dp);
@@ -857,6 +858,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         }
                     }
                     string.push_str(fam);
+                    if let Some(suffix) = suffix {
+                        if pn.comma_suffix {
+                            string.push_str(", ");
+                        } else {
+                            string.push_str(" ");
+                        }
+                        string.push_str(suffix);
+                    }
                     build.push(self.format_with_part(name_part, &string));
                 }
                 NamePartToken::NonDroppingParticle => {
@@ -1054,8 +1063,6 @@ mod ord {
         Given,
         Space,
         FamilyFull,
-        Space,
-        Suffix,
     ];
     /// [La] [Fontaine], [Jean] [de], [III]
     static LATIN_LONG_NASO: DisplayOrdering = &[
