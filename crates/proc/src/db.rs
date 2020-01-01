@@ -870,7 +870,8 @@ fn built_cluster(
 ) -> Arc<<Markup as OutputFormat>::Output> {
     let fmt = db.get_formatter();
     let build = built_cluster_before_output(db, cluster_id);
-    Arc::new(fmt.output(build, get_piq(db)))
+    let string = fmt.output(build, get_piq(db));
+    Arc::new(string)
 }
 
 pub fn built_cluster_before_output(
@@ -1027,11 +1028,9 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         let layout = &style.bibliography.as_ref().unwrap().layout;
         let ir = &gen0.ir;
         let flat = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
-        let build = fmt.with_format(
-            fmt.affixed(flat, layout.affixes.as_ref()),
-            layout.formatting,
-        );
-        Arc::new(fmt.output(build, get_piq(db)))
+        // in a bibliography, we do the affixes etc inside Layout, so they're not here
+        let string = fmt.output(flat, get_piq(db));
+        Arc::new(string)
     } else {
         // Whatever
         Arc::new(fmt.output(fmt.plain(""), get_piq(db)))

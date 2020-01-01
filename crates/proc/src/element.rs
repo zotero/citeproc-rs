@@ -15,7 +15,6 @@ where
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence_basic(db, state, ctx, &layout.elements)
     }
 }
@@ -31,9 +30,23 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
+        // Unlike cite, we will apply affixes and formatting in the seq, so that they go inside
+        // any second-field-align content.
         let layout = &self.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence_basic(db, state, ctx, &layout.elements)
+        sequence(
+            db,
+            state,
+            ctx,
+            &layout.elements,
+            // no such thing as layout delimiters in a bibliography
+            "".into(),
+            layout.formatting,
+            layout.affixes.as_ref(),
+            None,
+            None,
+            TextCase::None,
+            true,
+        )
     }
 }
 
