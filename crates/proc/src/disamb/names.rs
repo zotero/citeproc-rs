@@ -18,6 +18,7 @@ impl Disambiguation<Markup> for Names {
         state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
+        let child_stack = self.formatting.map_or(stack, |mine| stack.override_with(mine));
         let fmt = ctx.format;
         let style = ctx.style;
         let _locale = ctx.locale;
@@ -86,7 +87,7 @@ impl Disambiguation<Markup> for Names {
                             match ntb {
                                 NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
                                     if !fmt.is_empty(b) {
-                                        let out = fmt.output_in_context(b.clone(), stack, None);
+                                        let out = fmt.output_in_context(b.clone(), child_stack, None);
                                         let e = db.edge(EdgeData::Output(out));
                                         let ir = RefIR::Edge(Some(e));
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
@@ -94,7 +95,7 @@ impl Disambiguation<Markup> for Names {
                                 }
                                 NameTokenBuilt::Built(b) => {
                                     if !fmt.is_empty(&b) {
-                                        let out = fmt.output_in_context(b.to_vec(), stack, None);
+                                        let out = fmt.output_in_context(b.to_vec(), child_stack, None);
                                         let e = db.edge(EdgeData::Output(out));
                                         let ir = RefIR::Edge(Some(e));
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
@@ -102,7 +103,7 @@ impl Disambiguation<Markup> for Names {
                                 }
                                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(ratchet)) => {
                                     let dn = ratchet.data.clone();
-                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot, stack);
+                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot, child_stack);
                                 }
                             }
                         }

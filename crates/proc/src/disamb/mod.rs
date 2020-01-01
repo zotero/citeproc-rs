@@ -330,24 +330,32 @@ pub fn graph_with_stack(
     let mut close_tags = String::new();
     fmt.stack_preorder(&mut open_tags, &stack);
     fmt.stack_postorder(&mut close_tags, &stack);
-    let mkedge = |s: &str| {
+    let mkedge = |s: String| {
+        RefIR::Edge(if !s.is_empty() {
+            Some(db.edge(EdgeData::Output(s)))
+        } else {
+            None
+        })
+    };
+    let mkedge_esc = |s: &str| {
         RefIR::Edge(if !s.is_empty() {
             Some(db.edge(EdgeData::Output(
+                // TODO: fmt.ingest
                 fmt.output_in_context(fmt.plain(s), Default::default(), None),
             )))
         } else {
             None
         })
     };
-    let open_tags = &mkedge(&*open_tags);
-    let close_tags = &mkedge(&*close_tags);
-    if let Some(pre) = affixes.as_ref().map(|a| mkedge(&*a.prefix)) {
+    let open_tags = &mkedge(open_tags);
+    let close_tags = &mkedge(close_tags);
+    if let Some(pre) = affixes.as_ref().map(|a| mkedge_esc(&*a.prefix)) {
         spot = add_to_graph(db, fmt, nfa, &pre, spot);
     }
     spot = add_to_graph(db, fmt, nfa, open_tags, spot);
     spot = f(nfa, spot);
     spot = add_to_graph(db, fmt, nfa, close_tags, spot);
-    if let Some(suf) = affixes.as_ref().map(|a| mkedge(&*a.suffix)) {
+    if let Some(suf) = affixes.as_ref().map(|a| mkedge_esc(&*a.suffix)) {
         spot = add_to_graph(db, fmt, nfa, &suf, spot);
     }
     spot
