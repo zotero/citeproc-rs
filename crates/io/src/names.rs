@@ -46,8 +46,9 @@ macro_rules! regex {
 use std::borrow::Cow;
 
 fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^(?:\\-|\u{02bb}|\u{2019}| |\')?[^ ]+ *");
-    let family_particles_re = regex!("^[^ ]+(?:\u{02bb} |\u{2019} | |\' ) *");
+    let givenn_particles_re = regex!("^(?:\u{02bb} |\u{2019} | |\' )?\\S+ *");
+    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}| |\') *");
+    debug!("split_particles: {:?}", orig_name_str);
     let (splitter, name_str) = if is_given {
         (givenn_particles_re, Cow::Owned(orig_name_str.chars().rev().collect()))
     } else {
@@ -101,7 +102,7 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
         None
     } else {
         use itertools::Itertools;
-        Some((particles.iter().map(|cow| cow.as_ref()).join(""), remain.replace('\'', "\u{2019}")))
+        Some((particles.iter().map(|cow| cow.as_ref()).join(""), replace_apostrophes(remain)))
     }
 }
 
@@ -160,15 +161,19 @@ impl PersonName {
         } = self;
         // Don't parse if these are supplied
         if *static_particles || non_dropping_particle.is_some() || dropping_particle.is_some() || suffix.is_some() {
+            *family = family.as_ref().map(|x| replace_apostrophes(x));
+            *given = given.as_ref().map(|x| replace_apostrophes(x));
+            *non_dropping_particle = non_dropping_particle.as_ref().map(|x| replace_apostrophes(x));
+            *dropping_particle = dropping_particle.as_ref().map(|x| replace_apostrophes(x));
             return;
         }
         if let Some(family) = family {
             if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
                 trim_last(&mut nondrops);
-                *non_dropping_particle = Some(nondrops.replace('\'', "\u{2019}"));
+                *non_dropping_particle = Some(replace_apostrophes(nondrops));
                 *family = remain;
             } else {
-                *family = family.replace('\'', "\u{2019}");
+                *family = replace_apostrophes(&family);
             }
         }
         if let Some(given) = given {
@@ -177,10 +182,10 @@ impl PersonName {
                 *comma_suffix = force_comma;
             }
             if let Some((drops, remain)) = split_particles(given.as_ref(), true) {
-                *dropping_particle = Some(drops.trim().replace('\'', "\u{2019}"));
+                *dropping_particle = Some(replace_apostrophes(drops.trim()));
                 *given = remain;
             } else {
-                *given = given.replace('\'', "\u{2019}");
+                *given = replace_apostrophes(&given);
             }
         }
     }
@@ -259,6 +264,19 @@ fn parse_particles() {
         ..Default::default()
     });
 
+    let mut init = PersonName {
+        family: Some("d’Aubignac".to_owned()),
+        given: Some("François Hédelin".to_owned()),
+        ..Default::default()
+    };
+    init.parse_particles();
+    assert_eq!(init, PersonName {
+        given: Some("François Hédelin".to_owned()),
+        non_dropping_particle: Some("d\u{2019}".to_owned()),
+        family: Some("Aubignac".to_owned()),
+        ..Default::default()
+    });
+
 }
 
 /// https://users.rust-lang.org/t/trim-string-in-place/15809/8
@@ -281,3 +299,6 @@ impl TrimInPlace for String {
     }
 }
 
+fn replace_apostrophes(s: impl AsRef<str>) -> String {
+    s.as_ref().replace("\'", "\u{2019}")
+}

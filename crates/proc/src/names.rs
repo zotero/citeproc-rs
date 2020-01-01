@@ -723,13 +723,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
                             if let Some(dp) = dp {
                                 s.push_str(dp);
-                                if dp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                                if should_append_space(dp) {
                                     s.push_str(" ");
                                 }
                             }
                             if let Some(ndp) = ndp {
                                 s.push_str(ndp);
-                                if ndp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                                if should_append_space(ndp) {
                                     s.push_str(" ");
                                 }
                             }
@@ -865,7 +865,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(dp) = dp {
                         let mut string = dp.clone();
                         parts.push(self.format_with_part(given_part, string));
-                        if dp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                        if should_append_space(dp) {
                             parts.push(fmt.plain(" "));
                         }
                     }
@@ -873,7 +873,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(ndp) = ndp {
                         let mut string = ndp.clone();
                         casing.push(self.format_with_part(family_part, string));
-                        if ndp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                        if should_append_space(ndp) {
                             casing.push(fmt.plain(" "));
                         }
                     }
@@ -1142,4 +1142,8 @@ mod ord {
     static NON_LATIN_SORT_LONG: SortOrdering = &[&[Family], &[Given]];
     /// 毛 [Mao]
     static NON_LATIN_SORT_SHORT: SortOrdering = &[&[Family]];
+}
+
+fn should_append_space(s: &str) -> bool {
+    !s.chars().rev().nth(0).map_or(true, |last| last == '\u{2019}' || last == '-')
 }
