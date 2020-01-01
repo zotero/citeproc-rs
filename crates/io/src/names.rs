@@ -86,15 +86,15 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
                 particles[i].to_mut().remove(0);
             }
         }
-        orig_name_str[..orig_name_str.len() - eaten].to_owned()
+        &orig_name_str[..orig_name_str.len() - eaten]
     } else {
-        orig_name_str[eaten..].to_owned()
+        &orig_name_str[eaten..]
     };
     if particles.is_empty() {
         None
     } else {
         use itertools::Itertools;
-        Some((particles.iter().map(|cow| cow.as_ref()).join(""), remain))
+        Some((particles.iter().map(|cow| cow.as_ref()).join(""), remain.replace('\'', "\u{2019}")))
     }
 }
 
@@ -133,15 +133,19 @@ impl PersonName {
         if let Some(family) = family {
             if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
                 trim_last(&mut nondrops);
-                *non_dropping_particle = Some(nondrops);
+                *non_dropping_particle = Some(nondrops.replace('\'', "\u{2019}"));
                 *family = remain;
+            } else {
+                *family = family.replace('\'', "\u{2019}");
             }
         }
         if let Some(given) = given {
             if let Some((mut drops, remain)) = split_particles(given.as_ref(), true) {
                 drops.trim_in_place();
-                *dropping_particle = Some(drops);
+                *dropping_particle = Some(drops.replace('\'', "\u{2019}"));
                 *given = remain;
+            } else {
+                *given = given.replace('\'', "\u{2019}");
             }
         }
     }
