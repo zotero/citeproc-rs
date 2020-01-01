@@ -515,8 +515,8 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
 
 fn pn_filter_part(pn: &PersonName, token: NamePartToken) -> bool {
     match token {
-        NamePartToken::Given => pn.given.as_ref().map_or(false, |s| !s.is_empty()),
-        NamePartToken::Family => pn.family.as_ref().map_or(false, |s| !s.is_empty()),
+        NamePartToken::Given | NamePartToken::GivenAndDropping => pn.given.as_ref().map_or(false, |s| !s.is_empty()),
+        NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => pn.family.as_ref().map_or(false, |s| !s.is_empty()),
         NamePartToken::NonDroppingParticle => pn
             .non_dropping_particle
             .as_ref()
@@ -687,7 +687,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 .filter(|npt| pn_filter_part(pn, *npt))
             {
                 match token {
-                    NamePartToken::Given => {
+                    NamePartToken::Given | NamePartToken::GivenAndDropping => {
                         if let Some(ref given) = pn.given {
                             // TODO: parametrize for disambiguation
                             let string = initialize(
@@ -702,11 +702,32 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                                 self.initialize_with_hyphen,
                             );
                             s.push_str(&string);
+                            if token == NamePartToken::GivenAndDropping {
+                                if let Some(dp) = pn.dropping_particle.as_ref() {
+                                    s.push_str(" ");
+                                    s.push_str(dp);
+                                }
+                            }
                         }
                     }
-                    NamePartToken::Family => {
-                        if let Some(ref family) = pn.family {
-                            s.push_str(&family);
+                    NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => {
+                        let name_part = &self.name_el.name_part_family;
+                        if let Some(fam) = pn.family.as_ref() {
+                            let dp = pn.dropping_particle.as_ref().filter(|_| token == NamePartToken::FamilyFull);
+                            let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
+                            if let Some(dp) = dp {
+                                s.push_str(dp);
+                                if dp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                                    s.push_str(" ");
+                                }
+                            }
+                            if let Some(ndp) = ndp {
+                                s.push_str(ndp);
+                                if ndp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                                    s.push_str(" ");
+                                }
+                            }
+                            s.push_str(fam);
                         }
                     }
                     NamePartToken::NonDroppingParticle => {
@@ -739,14 +760,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     ref affixes,
                     ..
                 } = *part;
-                let b = fmt.ingest(
-                    s,
-                    &IngestOptions {
-                        text_case: part.text_case,
-                        // TODO: use the correct quotes? They shouldn't be appearing in names anyway.
-                        ..Default::default()
-                    },
-                );
+                // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
+                // want InlineElement::Text but with text-casing applied.
+                let options = IngestOptions {
+                    text_case: part.text_case,
+                    ..Default::default()
+                };
+                let mut b = fmt.plain(s);
+                fmt.apply_text_case(&mut b, &options);
                 let b = fmt.with_format(b, formatting);
                 fmt.affixed(b, affixes.as_ref())
             }
@@ -787,14 +808,16 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         );
 
         let mut build = vec![];
-        for part in pn_filtered_parts(pn, order) {
+        let filtered_tokens = pn_filtered_parts(pn, order);
+        debug!("filtered_tokens {:?}; pn {:?}", filtered_tokens, pn);
+        for token in filtered_tokens {
             // We already tested is_some() for all these Some::unwrap() calls
-            match part {
-                NamePartToken::Given => {
+            match token {
+                NamePartToken::Given | NamePartToken::GivenAndDropping => {
                     if let Some(ref given) = pn.given {
                         let name_part = &self.name_el.name_part_given;
                         // TODO: parametrize for disambiguation
-                        let string = initialize(
+                        let mut string = initialize(
                             &given,
                             self.name_el.initialize.unwrap_or(true),
                             // name_OnlyGivenname.txt
@@ -805,12 +828,35 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             },
                             self.initialize_with_hyphen,
                         );
+                        let mutable = string.to_mut();
+                        if token == NamePartToken::GivenAndDropping {
+                            if let Some(dp) = pn.dropping_particle.as_ref() {
+                                mutable.push_str(" ");
+                                mutable.push_str(dp);
+                            }
+                        }
                         build.push(self.format_with_part(name_part, &string));
                     }
                 }
-                NamePartToken::Family => {
+                NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => {
                     let name_part = &self.name_el.name_part_family;
-                    let string = pn.family.as_ref().unwrap();
+                    let fam = pn.family.as_ref().unwrap();
+                    let dp = pn.dropping_particle.as_ref().filter(|_| token == NamePartToken::FamilyFull);
+                    let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
+                    let mut string = String::with_capacity(fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()));
+                    if let Some(dp) = dp {
+                        string.push_str(dp);
+                        if dp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                            string.push_str(" ");
+                        }
+                    }
+                    if let Some(ndp) = ndp {
+                        string.push_str(ndp);
+                        if ndp.chars().rev().nth(0).map_or(false, |last| last != '\u{2019}') {
+                            string.push_str(" ");
+                        }
+                    }
+                    string.push_str(fam);
                     build.push(self.format_with_part(name_part, &string));
                 }
                 NamePartToken::NonDroppingParticle => {
@@ -938,8 +984,11 @@ mod ord {
     pub enum NamePartToken {
         Given,
         Family,
+        FamilyFull,
+        FamilyDropped,
         NonDroppingParticle,
         DroppingParticle,
+        GivenAndDropping,
         Suffix,
         SortSeparator,
         Space,
@@ -1000,28 +1049,23 @@ mod ord {
         }
     }
 
+    /// [Jean] [de] [La] [Fontaine] [III]
     static LATIN_LONG: DisplayOrdering = &[
         Given,
         Space,
-        DroppingParticle,
-        Space,
-        NonDroppingParticle,
-        Space,
-        Family,
+        FamilyFull,
         Space,
         Suffix,
     ];
+    /// [La] [Fontaine], [Jean] [de], [III]
     static LATIN_LONG_NASO: DisplayOrdering = &[
-        NonDroppingParticle,
-        Space,
-        Family,
+        FamilyDropped,
         SortSeparator,
-        Given,
-        Space,
-        DroppingParticle,
+        GivenAndDropping,
         SortSeparator,
         Suffix,
     ];
+    /// [Fontaine], [Jean] [de] [La], [III]
     static LATIN_LONG_NASO_DEMOTED: DisplayOrdering = &[
         Family,
         SortSeparator,
@@ -1033,14 +1077,17 @@ mod ord {
         SortSeparator,
         Suffix,
     ];
-    static LATIN_SHORT: DisplayOrdering = &[NonDroppingParticle, Space, Family];
+    /// [La] [Fontaine]
+    static LATIN_SHORT: DisplayOrdering = &[FamilyDropped];
 
+    /// [La Fontaine] [de] [Jean] [III]
     static LATIN_SORT_NEVER: SortOrdering = &[
         &[NonDroppingParticle, Family],
         &[DroppingParticle],
         &[Given],
         &[Suffix],
     ];
+    /// [Fontaine] [de La] [Jean] [III]
     static LATIN_SORT: SortOrdering = &[
         &[Family],
         &[DroppingParticle, NonDroppingParticle],
@@ -1048,11 +1095,15 @@ mod ord {
         &[Suffix],
     ];
 
+    /// 毛泽东 [Mao Zedong]
     static NON_LATIN_LONG: DisplayOrdering = &[
         Family, // TODO: how do we determine if spaces are required?
         Given,
     ];
+    /// 毛 [Mao]
     static NON_LATIN_SHORT: DisplayOrdering = &[Family];
+    /// 毛泽东 [Mao Zedong]
     static NON_LATIN_SORT_LONG: SortOrdering = &[&[Family], &[Given]];
+    /// 毛 [Mao]
     static NON_LATIN_SORT_SHORT: SortOrdering = &[&[Family]];
 }

@@ -44,7 +44,7 @@ macro_rules! regex {
 use std::borrow::Cow;
 
 fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^[^ ]+(?:\\-|\u{02bb}|\u{2019}| |\') *");
+    let givenn_particles_re = regex!("^(?:\\-|\u{02bb}|\u{2019}| |\')[^ ]+ *");
     let family_particles_re = regex!("^[^ ]+(?:\u{02bb} |\u{2019} | |\' ) *");
     let (splitter, name_str) = if is_given {
         (givenn_particles_re, Cow::Owned(orig_name_str.chars().rev().collect()))
@@ -64,7 +64,12 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
         };
         debug!("found particle? {:?}", &particle);
         // first sign of an uppercase word -- break out
-        let has_particle = particle.chars().nth(0).map_or(false, |c| c.is_lowercase());
+        let has_particle = particle
+            .chars()
+            // For " d'", etc
+            .filter(|c| !c.is_whitespace() && !['-', '\'', '\u{02bb}', '\u{2019}'].contains(c))
+            .nth(0)
+            .map_or(false, |c| c.is_lowercase());
         if !has_particle {
             break;
         }
@@ -140,9 +145,8 @@ impl PersonName {
             }
         }
         if let Some(given) = given {
-            if let Some((mut drops, remain)) = split_particles(given.as_ref(), true) {
-                drops.trim_in_place();
-                *dropping_particle = Some(drops.replace('\'', "\u{2019}"));
+            if let Some((drops, remain)) = split_particles(given.as_ref(), true) {
+                *dropping_particle = Some(drops.trim().replace('\'', "\u{2019}"));
                 *given = remain;
             } else {
                 *given = given.replace('\'', "\u{2019}");
@@ -198,9 +202,31 @@ fn parse_particles() {
         ..Default::default()
     });
 
+    let mut init = PersonName {
+        given: Some("Givenname d'".to_owned()),
+        family: Some("Familyname".to_owned()),
+        ..Default::default()
+    };
+    init.parse_particles();
+    assert_eq!(init, PersonName {
+        given: Some("Givenname".to_owned()),
+        dropping_particle: Some("d\u{2019}".to_owned()),
+        family: Some("Familyname".to_owned()),
+        ..Default::default()
+    });
 
-
-
+    let mut init = PersonName {
+        family: Some("Aubignac".to_owned()),
+        given: Some("François Hédelin d’".to_owned()),
+        ..Default::default()
+    };
+    init.parse_particles();
+    assert_eq!(init, PersonName {
+        given: Some("François Hédelin".to_owned()),
+        dropping_particle: Some("d\u{2019}".to_owned()),
+        family: Some("Aubignac".to_owned()),
+        ..Default::default()
+    });
 
 }
 
