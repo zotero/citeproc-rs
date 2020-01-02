@@ -292,7 +292,12 @@ pub fn bib_ordering<
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
                     compare_demoting_none(Some(a_cnum), Some(b_cnum))
                 }
-                AnyVariable::Number(v) => compare_demoting_none(a_ref.number.get(&v), b_ref.number.get(&v)),
+                AnyVariable::Number(v) => {
+                    compare_demoting_none(
+                        a_ctx.get_number(v),
+                        b_ctx.get_number(v),
+                    )
+                }
                 AnyVariable::Name(v) => {
                     let a_strings =
                         crate::names::sort_strings_for_names(db, a_ref, v, key, cite_or_bib);
@@ -543,7 +548,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         let content = self
             .ctx
             .get_number(var)
-            .and_then(|val| renderer.numeric_label(label, val));
+            .and_then(|val| renderer.numeric_label(label, &val));
         (content.unwrap_or_default(), GroupVars::new())
     }
 

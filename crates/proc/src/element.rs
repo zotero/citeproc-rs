@@ -175,7 +175,7 @@ where
                     None
                 } else {
                     ctx.get_number(var)
-                        .and_then(|val| renderer.numeric_label(label, val))
+                        .and_then(|val| renderer.numeric_label(label, &val))
                         .map(CiteEdgeData::from_number_variable(var, true))
                 };
                 (IR::Rendered(content), GroupVars::new())

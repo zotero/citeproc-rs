@@ -43,7 +43,7 @@ impl Ord for Date {
 impl PartialOrd for DateOrRange {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (DateOrRange::Literal(a), _) | (_, DateOrRange::Literal(a)) => None,
+            (DateOrRange::Literal(_), _) | (_, DateOrRange::Literal(_)) => None,
             (DateOrRange::Single(a), DateOrRange::Single(b)) => Some(a.cmp(b)),
             (DateOrRange::Range(a1, a2), DateOrRange::Single(b)) => Some(a1.cmp(b).then(a2.cmp(b))),
             (DateOrRange::Single(a), DateOrRange::Range(b1, b2)) => Some(a.cmp(b1).then(a.cmp(b2))),

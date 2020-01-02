@@ -35,6 +35,11 @@ pub fn render_ordinal(
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
             }
+            And => {
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
+                s.push(' ');
+            }
         }
     }
     s
@@ -86,7 +91,7 @@ pub fn arabic_number(
     debug!("{:?}", num);
     match num {
         NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, variable, prf),
-        NumericValue::Str(s) => s.to_owned(),
+        NumericValue::Str(s) => s.as_ref().to_owned(),
     }
 }
 
@@ -139,6 +144,12 @@ fn tokens_to_string(
                 s.push(' ');
                 None
             }
+            And => {
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
+                s.push(' ');
+                None
+            }
         }
     }
     s
@@ -173,6 +184,11 @@ pub fn roman_lower(ts: &[NumericToken], locale: &Locale, variable: NumberVariabl
             Ampersand => {
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
+                s.push(' ');
+            }
+            And => {
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
                 s.push(' ');
             }
         }

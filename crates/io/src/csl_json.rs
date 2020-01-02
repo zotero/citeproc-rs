@@ -27,7 +27,6 @@ use csl::GetAttribute;
 use csl::Lang;
 
 use super::date::{Date, DateOrRange};
-use super::numeric::NumericValue;
 use super::reference::Reference;
 use fnv::FnvHashMap;
 use std::marker::PhantomData;
@@ -90,26 +89,33 @@ enum Field {
     Any(WrapVar),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
-pub enum IdOrNumber {
-    S(String),
-    N(i32),
+pub enum NumberLike {
+    Str(String),
+    Num(u32),
 }
 
-impl IdOrNumber {
+impl NumberLike {
     pub fn into_string(self) -> String {
         match self {
-            IdOrNumber::S(s) => s,
-            IdOrNumber::N(i) => i.to_string(),
+            NumberLike::Str(s) => s,
+            NumberLike::Num(i) => i.to_string(),
         }
     }
-    pub fn to_number(&self) -> Result<i32, std::num::ParseIntError> {
+    pub fn to_number(&self) -> Result<u32, std::num::ParseIntError> {
         match self {
-            IdOrNumber::S(s) => s.parse(),
-            IdOrNumber::N(i) => Ok(*i),
+            NumberLike::Str(s) => s.parse(),
+            NumberLike::Num(i) => Ok(*i),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum NumberLikeSigned {
+    Str(String),
+    Num(i32),
 }
 
 struct WrapType(CslType);
@@ -167,7 +173,7 @@ impl<'de> Deserialize<'de> for Reference {
             where
                 V: MapAccess<'de>,
             {
-                let mut id: Option<IdOrNumber> = None;
+                let mut id: Option<NumberLike> = None;
                 let mut csl_type: Option<WrapType> = None;
                 let mut language = None;
                 let mut ordinary = FnvHashMap::default();
@@ -255,79 +261,6 @@ impl<'de> Deserialize<'de> for Reference {
 
         const FIELDS: &[&str] = &["id", "type", "any variable name"];
         deserializer.deserialize_struct("Reference", FIELDS, ReferenceVisitor)
-    }
-}
-
-impl<'de> Deserialize<'de> for NumericValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct NumericVisitor;
-
-        impl<'de> Visitor<'de> for NumericVisitor {
-            type Value = NumericValue;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("an integer between 0 and 2^32, or a string")
-            }
-
-            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::from(Cow::Owned(value)))
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                self.visit_string(value.to_string())
-            }
-
-            fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::from(Cow::Borrowed(value)))
-            }
-
-            fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(u32::from(value)))
-            }
-
-            fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(u32::from(value)))
-            }
-
-            fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(value))
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                use std::u32;
-                if value >= u64::from(u32::MIN) && value <= u64::from(u32::MAX) {
-                    Ok(NumericValue::num(value as u32))
-                } else {
-                    Err(E::custom(format!("u32 out of range: {}", value)))
-                }
-            }
-        }
-
-        deserializer.deserialize_any(NumericVisitor)
     }
 }
 
@@ -595,8 +528,8 @@ impl<'de> Deserialize<'de> for MaybeDate {
                 V: MapAccess<'de>,
             {
                 let mut found = None;
-                let mut found_season: Option<IdOrNumber> = None;
-                let mut found_circa: Option<IdOrNumber> = None;
+                let mut found_season: Option<NumberLike> = None;
+                let mut found_circa: Option<NumberLikeSigned> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         DateType::Raw => {

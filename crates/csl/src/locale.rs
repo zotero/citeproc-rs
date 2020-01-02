@@ -306,6 +306,12 @@ impl Locale {
         found
     }
 
+    pub fn and_term(&self, form: Option<TermFormExtended>) -> Option<&str> {
+        let form = form.unwrap_or(TermFormExtended::Long);
+        self.get_simple_term(SimpleTermSelector::Misc(MiscTerm::And, form))
+            .map(|term_plurality| term_plurality.singular())
+    }
+
     pub fn get_month_gender(&self, month: MonthTerm) -> Gender {
         let selector = GenderedTermSelector::Month(month, TermForm::Long);
         // Don't use fallback, just the long form

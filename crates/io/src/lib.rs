@@ -31,7 +31,7 @@ mod reference;
 pub(crate) mod unicode;
 pub mod utils;
 
-pub use csl_json::IdOrNumber;
+pub use csl_json::NumberLike;
 pub use output::micro_html::micro_html_to_string;
 
 pub use self::cite::*;
@@ -47,7 +47,7 @@ use std::borrow::Cow;
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use csl::{FontVariant, VerticalAlignment};
-use unic_segment::{GraphemeIndices, Graphemes, WordBoundIndices, WordBounds, Words};
+use unic_segment::{GraphemeIndices, WordBoundIndices, Words};
 
 use phf::phf_set;
 

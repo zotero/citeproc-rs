@@ -91,7 +91,7 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
         }
         .map(|vec| vec.as_slice())
     }
-    fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
         match self {
             Cit(ctx) => ctx.get_number(var),
             Ref(ctx) => ctx.get_number(var),
@@ -241,7 +241,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     }
 
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
-    pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
+    pub fn number(&self, number: &NumberElement, val: &NumericValue<'_>) -> O::Build {
         let locale = self.ctx.locale();
         let style = self.ctx.style();
         debug!("number {:?}", val);
@@ -301,7 +301,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         &self,
         text: &TextElement,
         variable: NumberVariable,
-        val: &NumericValue,
+        val: &NumericValue<'_>,
     ) -> O::Build {
         let style = self.ctx.style();
         let mod_page = style.page_range_format.is_some();
@@ -435,7 +435,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         })
     }
 
-    pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O::Build> {
+    pub fn numeric_label(&self, label: &LabelElement, num_val: &NumericValue<'_>) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector = GenderedTermSelector::from_number_variable(
             self.ctx.locator_type(),
@@ -443,7 +443,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             label.form,
         );
         let plural = match label.plural {
-            Plural::Contextual => num_val.is_multiple(label.variable.is_quantity()),
+            Plural::Contextual => num_val.is_multiple(label.variable),
             Plural::Always => true,
             Plural::Never => false,
         };

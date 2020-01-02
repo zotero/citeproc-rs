@@ -136,7 +136,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
         }
     }
 
-    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
+        // TODO: always use the default locale
+        let and_term = self.locale.and_term(None).unwrap_or("and");
         match var {
             NumberVariable::Locator => self
                 .cite
@@ -146,16 +148,20 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 // For now we'll just ignore any more than the one.
                 .and_then(|ls| ls.single())
                 .map(Locator::value)
-                .map(Clone::clone),
+                .map(NumericValue::parse_localized(and_term)),
             NumberVariable::FirstReferenceNoteNumber => self.position.1.map(NumericValue::num),
             NumberVariable::CitationNumber => self.bib_number.map(NumericValue::num),
             NumberVariable::PageFirst => self
                 .reference
                 .number
                 .get(&NumberVariable::Page)
+                .map(NumericValue::from_localized(and_term))
                 .and_then(|pp| pp.page_first()),
-            _ => self.reference.number.get(&var).cloned(),
-            // TODO: finish this list
+            _ => self
+                .reference
+                .number
+                .get(&var)
+                .map(NumericValue::from_localized(and_term)),
         }
     }
 

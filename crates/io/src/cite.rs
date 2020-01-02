@@ -5,7 +5,6 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::output::OutputFormat;
-use super::NumericValue;
 use csl::Atom;
 use csl::LocatorType;
 
@@ -25,7 +24,7 @@ pub enum Suppression {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub struct Locator {
-    pub locator: NumericValue,
+    pub locator: String,
     #[serde(default, rename = "label")]
     pub loc_type: LocatorType,
 }
@@ -34,7 +33,7 @@ impl Locator {
     pub fn type_of(&self) -> LocatorType {
         self.loc_type
     }
-    pub fn value(&self) -> &NumericValue {
+    pub fn value(&self) -> &str {
         &self.locator
     }
 }
@@ -46,8 +45,8 @@ pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use super::csl_json::IdOrNumber;
-    let s = IdOrNumber::deserialize(d)?;
+    use super::csl_json::NumberLike;
+    let s = NumberLike::deserialize(d)?;
     Ok(Atom::from(s.into_string()))
 }
 

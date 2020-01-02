@@ -95,10 +95,8 @@ impl Disambiguation<Markup> for Element {
                             return (RefIR::Edge(e), GroupVars::Important);
                         }
                         v => ctx
-                            .reference
-                            .number
-                            .get(&v)
-                            .map(|val| renderer.number(number, &val.clone())),
+                            .get_number(v)
+                            .map(|val| renderer.number(number, &val)),
                     }
                 };
                 let content = content
@@ -264,7 +262,7 @@ impl Disambiguation<Markup> for Element {
                 }
                 let content = ctx
                     .get_number(var)
-                    .and_then(|val| renderer.numeric_label(label, val))
+                    .and_then(|val| renderer.numeric_label(label, &val))
                     .map(|x| fmt.output_in_context(x, stack, None))
                     .map(EdgeData::<Markup>::Output)
                     .map(|label| db.edge(label));

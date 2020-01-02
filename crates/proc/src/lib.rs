@@ -47,6 +47,7 @@ pub(crate) mod prelude {
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;
+    pub use citeproc_io::{NumberLike, NumericValue};
     pub use citeproc_io::IngestOptions;
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};

@@ -20,8 +20,8 @@ fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use citeproc_io::IdOrNumber;
-    let s = IdOrNumber::deserialize(d)?;
+    use citeproc_io::NumberLike;
+    let s = NumberLike::deserialize(d)?;
     Ok(s.into_string())
 }
 
