@@ -22,6 +22,7 @@ pub enum NumericToken {
     Hyphen,
     Ampersand,
     And,
+    CommaAnd,
 }
 
 use self::NumericToken::*;
@@ -175,33 +176,41 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, map_res, recognize},
+    combinator::{map, map_res, recognize, opt},
     multi::{many0, many1},
     sequence::{delimited, tuple},
     IResult,
 };
 
-fn sep_from(input: &str) -> NumericToken {
+fn sep_from(input: char) -> NumericToken {
     match input {
-        "," => Comma,
-        "-" => Hyphen,
-        "&" => Ampersand,
-        "and" => And,
-        _ => And,
+        ',' => Comma,
+        '-' => Hyphen,
+        '&' => Ampersand,
+        _ => unreachable!()
+    }
+}
+
+fn sep_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
+    move |inp| {
+        let (inp, comma) = opt(tag(", "))(inp)?;
+        let (inp, and) = alt((tag(and_term), tag("and")))(inp)?;
+        Ok((inp, if comma.is_some() {
+            CommaAnd
+        } else {
+            And
+        }))
+    }
+}
+
+fn sep_or_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
+    move |inp| {
+        alt((sep_and(and_term), map(one_of(",&-"), sep_from)))(inp)
     }
 }
 
 fn sep<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
-    move |inp| map(
-        delimited(many0(char(' ')), sep_or_and(and_term), many0(char(' '))),
-        sep_from,
-    )(inp)
-}
-
-fn sep_or_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, &'a str> + 'a {
-    move |inp| {
-        alt((tag(and_term), tag("and"), recognize(one_of(",&-"))))(inp)
-    }
+    move |inp| delimited(many0(char(' ')), sep_or_and(and_term), many0(char(' '))) (inp)
 }
 
 fn int(inp: &str) -> IResult<&str, u32> {
@@ -289,10 +298,7 @@ impl<'a> NumericValue<'a> {
             NumericValue::Str(input.into())
         }
     }
-    pub fn parse_localized(and_term: &'a str) -> impl Fn(&'a str) -> NumericValue<'a> + 'a {
-        move |input| NumericValue::parse_full(input, and_term)
-    }
-    pub fn parse(input: &'a str) -> Self {
+    fn parse(input: &'a str) -> Self {
         NumericValue::parse_full(input, "and")
     }
     pub fn from_localized(and_term: &'a str) -> impl Fn(&'a NumberLike) -> NumericValue<'a> + 'a {
