@@ -156,7 +156,6 @@ impl RefIR {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
             if !*found {
-                debug!("found first year-suffix == YSH::Explicit");
                 // first time
                 *found = true;
                 *opt_e = Some(ysh_edge);
@@ -168,7 +167,6 @@ impl RefIR {
         });
         self.visit_ysh(ysh_plain_edge, &mut |opt_e| {
             if !*found {
-                debug!("found first year-suffix == YSH::Plain");
                 *found = true;
                 *opt_e = Some(ysh_edge);
             } else {
