@@ -5,6 +5,7 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use super::output::OutputFormat;
+use crate::NumberLike;
 use csl::Atom;
 use csl::LocatorType;
 
@@ -24,7 +25,7 @@ pub enum Suppression {
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub struct Locator {
-    pub locator: String,
+    pub locator: NumberLike,
     #[serde(default, rename = "label")]
     pub loc_type: LocatorType,
 }
@@ -33,7 +34,7 @@ impl Locator {
     pub fn type_of(&self) -> LocatorType {
         self.loc_type
     }
-    pub fn value(&self) -> &str {
+    pub fn value(&self) -> &NumberLike {
         &self.locator
     }
 }

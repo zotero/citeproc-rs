@@ -89,7 +89,7 @@ enum Field {
     Any(WrapVar),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Hash)]
 #[serde(untagged)]
 pub enum NumberLike {
     Str(String),

@@ -148,7 +148,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 // For now we'll just ignore any more than the one.
                 .and_then(|ls| ls.single())
                 .map(Locator::value)
-                .map(NumericValue::parse_localized(and_term)),
+                .map(NumericValue::from_localized(and_term)),
             NumberVariable::FirstReferenceNoteNumber => self.position.1.map(NumericValue::num),
             NumberVariable::CitationNumber => self.bib_number.map(NumericValue::num),
             NumberVariable::PageFirst => self
