@@ -457,6 +457,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
+                .filter(|val| !val.is_empty())
                 .map(|val| {
                     let b = fmt.ingest(val, &options);
                     let b = fmt.with_format(b, label.formatting);
