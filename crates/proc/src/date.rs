@@ -685,7 +685,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                 } else {
                     let mut contents = Vec::with_capacity(2);
                     let b = fmt.plain(&s);
-                    let year_part = IR::Rendered(Some(CiteEdgeData::Output(b)));
+                    let year_part = IR::Rendered(Some(CiteEdgeData::Year(b)));
                     // Important because we got it from a date variable.
                     contents.push((year_part, GroupVars::Important));
                     // Why not move this if branch up and emit Either::Build?
@@ -696,12 +696,8 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                     // specifically when affixes are nonzero. Like: ["(", "1986", ")"] vs
                     // ["(1986)"]
                     if ctx.should_add_year_suffix_hook() {
-                        let suffix = IR::YearSuffix(YearSuffix {
-                            hook: YearSuffixHook::Plain,
-                            group_vars: GroupVars::Unresolved,
-                            ir: Box::new(IR::Rendered(None))
-                        });
-                        contents.push((suffix, GroupVars::Unresolved));
+                        let suffix = IR::year_suffix(YearSuffixHook::Plain);
+                        contents.push(suffix);
                     }
                     Either::Ir(IR::Seq(IrSeq {
                         contents,
