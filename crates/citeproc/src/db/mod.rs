@@ -401,7 +401,10 @@ impl Processor {
             fnv::FnvBuildHasher::default(),
         );
         for key in sorted_refs.0.iter() {
-            m.insert(key.clone(), self.bib_item(key.clone()));
+            let rendered = self.bib_item(key.clone());
+            if !rendered.is_empty() {
+                m.insert(key.clone(), self.bib_item(key.clone()));
+            }
         }
         m
     }
@@ -453,7 +456,9 @@ impl Processor {
         self.sorted_refs()
             .0
             .iter()
-            .map(|k| (*self.bib_item(k.clone())).clone())
+            .map(|k| self.bib_item(k.clone()))
+            .filter(|k| !k.is_empty())
+            .map(|x| (*x).clone())
             .collect()
     }
 
