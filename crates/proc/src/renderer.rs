@@ -1,10 +1,10 @@
+use crate::number::{arabic_number, render_ordinal, roman_lower, roman_representable};
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
-use crate::number::{render_ordinal, roman_lower, roman_representable, arabic_number};
 use csl::{
     GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
-    NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
+    NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural, RoleTermSelector, SortKey,
     StandardVariable, Style, TextCase, TextElement, TextTermSelector, Variable,
 };
 
@@ -184,6 +184,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         self.ctx.format()
     }
 
+    fn page_range_format(&self, var: NumberVariable) -> Option<PageRangeFormat> {
+        let style = self.ctx.style();
+        style.page_range_format.filter(|_| {
+            var == NumberVariable::Page
+                || (var == NumberVariable::Locator
+                    && self
+                        .ctx
+                        .locator_type()
+                        .map_or(false, |l| l == LocatorType::Page))
+        })
+    }
+
     /// The spec is slightly impractical to implement:
     ///
     /// > Number variables rendered within the macro with cs:number and date variables are treated
@@ -202,11 +214,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let locale = self.ctx.locale();
         let style = self.ctx.style();
         let fmt = self.fmt();
-        let prf = if var == NumberVariable::Page && style.page_range_format.is_some() {
-            style.page_range_format
-        } else {
-            None
-        };
+        let prf = self.page_range_format(var);
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
                 let mut s = String::new();
@@ -245,14 +253,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let locale = self.ctx.locale();
         let style = self.ctx.style();
         debug!("number {:?}", val);
-        let prf = if number.variable == NumberVariable::Page && style.page_range_format.is_some() {
-            style.page_range_format
-        } else {
-            None
-        };
+        let prf = self.page_range_format(number.variable);
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, number.variable, prf),
+                NumericForm::Roman if roman_representable(&val) => {
+                    roman_lower(&ts, locale, number.variable, prf)
+                }
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
@@ -295,7 +301,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             None
         }
     }
-
 
     pub fn text_number_variable(
         &self,
@@ -435,7 +440,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         })
     }
 
-    pub fn numeric_label(&self, label: &LabelElement, num_val: &NumericValue<'_>) -> Option<O::Build> {
+    pub fn numeric_label(
+        &self,
+        label: &LabelElement,
+        num_val: &NumericValue<'_>,
+    ) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector = GenderedTermSelector::from_number_variable(
             self.ctx.locator_type(),
