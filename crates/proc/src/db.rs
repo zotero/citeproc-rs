@@ -887,18 +887,74 @@ pub fn built_cluster_before_output(
     let cite_ids = &cluster.cites;
     let style = db.style();
     let layout = &style.citation.layout;
-    let built_cites: Vec<_> = cite_ids
+    let sorted_refs_arc = db.sorted_refs();
+    use crate::ir::transforms::{Unnamed3, RangePiece, group_and_collapse, CnumIx};
+    let mut irs: Vec<_> = cite_ids
         .iter()
-        .filter_map(|&id| {
+        .map(|&id| {
             let gen4 = db.ir_gen4_conditionals(id);
-            let ir = &gen4.ir;
             let cite = id.lookup(db);
+            let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
+            let cnum = citation_numbers_by_id
+                .get(&cite.ref_id)
+                .cloned();
+            Unnamed3::new(cite, cnum, gen4.clone())
+        })
+        .collect();
+    if let Some((cgd, collapse)) = style.citation.group_collapsing() {
+        group_and_collapse(db, &fmt, cgd, collapse, &mut irs);
+    }
+    debug!("group_and_collapse made: {:#?}", irs);
+    let build_cite = |cite: &Cite<Markup>, ir: &IR<Markup>| -> Option<MarkupBuild> {
             let flattened = ir.flatten(&fmt)?;
             let aff = Affixes {
                 prefix: Atom::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
                 suffix: Atom::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or("")),
             };
             Some(fmt.affixed(flattened, Some(&aff)))
+    };
+    let built_cites: Vec<_> = irs
+        .iter()
+        .filter_map(|Unnamed3 { cite, gen4, vanished, collapsed_ranges, .. }| {
+            if *vanished {
+                return None;
+            }
+            if !collapsed_ranges.is_empty() {
+                let comma = style
+                    .citation
+                    .cite_group_delimiter
+                    .as_ref()
+                    .map(|atom| atom.as_ref())
+                    .unwrap_or(style.citation.layout.delimiter.0.as_ref());
+                Some(fmt.group(collapsed_ranges
+                    .iter()
+                    .filter_map(|piece| match *piece {
+                        RangePiece::Single(CnumIx { ix, .. }) => {
+                            irs.get(ix)
+                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir))
+                        }
+                        RangePiece::Range(start, end) => {
+                            let mut delim = "\u{2013}";
+                            if start.cnum == end.cnum - 1 {
+                                delim = comma;
+                            }
+                            let mut group = vec![];
+                            if let Some(start) = irs.get(start.ix)
+                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
+                                group.push(start);
+                            }
+                            if let Some(end) = irs.get(end.ix)
+                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
+                                group.push(end);
+                            }
+
+                            Some(fmt.group(group, delim, None))
+                        }
+                    })
+                    .collect(), comma, None))
+            } else {
+                build_cite(cite, &gen4.ir)
+            }
         })
         .collect();
     fmt.with_format(

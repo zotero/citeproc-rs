@@ -15,7 +15,7 @@ use crate::disamb::names::RefNameIR;
 
 use std::sync::Arc;
 
-mod transforms;
+pub mod transforms;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
 

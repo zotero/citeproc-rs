@@ -194,6 +194,9 @@ impl FromNode for Citation {
                 .map(Atom::from)
                 .map(Delimiter),
             near_note_distance: attribute_option_int(node, "near-note-distance")?.unwrap_or(5),
+            cite_group_delimiter: attribute_option_atom(node, "cite-group-delimiter"),
+            year_suffix_delimiter: attribute_option_atom(node, "year-suffix-delimiter"),
+            collapse: attribute_option(node, "collapse", info)?,
             sort,
         })
     }
