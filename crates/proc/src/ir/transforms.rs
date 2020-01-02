@@ -90,6 +90,12 @@ impl<O: OutputFormat> IR<O> {
             }
         }
     }
+    pub fn suppress_names(&self) {
+        if let Some(fnb) = self.first_name_block() {
+            let mut guard = fnb.lock().unwrap();
+            *guard.ir = IR::Rendered(None);
+        }
+    }
 }
 
 impl<O: OutputFormat<Output = String>> IR<O> {
@@ -140,7 +146,7 @@ impl RangePiece {
             RangePiece::Single(prv) if prv.cnum == nxt.cnum- 1 => {
                 RangePiece::Range(*prv, nxt)
             }
-            RangePiece::Range(start, end) if end.cnum == nxt.cnum - 1 => {
+            RangePiece::Range(_, end) if end.cnum == nxt.cnum - 1 => {
                 *end = nxt;
                 return None;
             }
@@ -181,16 +187,32 @@ fn range_collapse() {
     assert_eq!(collapse_ranges(&[s(1), s(2), CnumIx { cnum: 4, ix: 3 }]), vec![RangePiece::Range(s(1), s(2)), RangePiece::Single(CnumIx { cnum: 4, ix: 3 })]);
 }
 
-#[derive(Debug)]
 pub struct Unnamed3<O: OutputFormat> {
     pub cite: Arc<Cite<O>>,
     pub cnum: Option<u32>,
     pub gen4: Arc<IrGen>, 
     pub is_first: bool,
-    should_collapse: bool,
+    pub should_collapse: bool,
     /// Tagging removed cites is cheaper than memmoving the rest of the Vec
     pub vanished: bool,
     pub collapsed_ranges: Vec<RangePiece>,
+}
+
+use std::fmt::{Debug, Formatter};
+
+impl Debug for Unnamed3<Markup> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let fmt = &Markup::default();
+        f.debug_struct("Unnamed3")
+            .field("cite", &self.cite)
+            .field("cnum", &self.cnum)
+            .field("gen4", &self.gen4.ir.flatten(&fmt).map(|x| fmt.output(x, false)))
+            .field("is_first", &self.is_first)
+            .field("should_collapse", &self.should_collapse)
+            .field("vanished", &self.vanished)
+            .field("collapsed_ranges", &self.collapsed_ranges)
+            .finish()
+    }
 }
 
 impl<O: OutputFormat> Unnamed3<O> {
@@ -208,7 +230,7 @@ impl<O: OutputFormat> Unnamed3<O> {
 }
 
 pub fn group_and_collapse<O: OutputFormat<Output = String>>(db: &impl IrDatabase, fmt: &Markup, delim: &str, collapse: Option<Collapse>, cites: &mut Vec<Unnamed3<O>>) {
-    let mut m: HashMap<String, usize> = HashMap::new();
+    let mut m: HashMap<String, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
@@ -220,7 +242,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(db: &impl IrDatabase
             .map(|flat| fmt.output(flat, false)) {
 
             m.entry(rendered)
-                .and_modify(|oix| {
+                .and_modify(|(oix, seen_once)| {
                     // Keep cites separated by affixes together
                     if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
                         || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
@@ -230,16 +252,17 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(db: &impl IrDatabase
                             return;
                     }
                     if *oix < ix {
-                        cites[*oix].is_first = true;
+                        if !*seen_once {
+                            cites[*oix].is_first = true;
+                        }
+                        *seen_once = true;
                         cites[ix].should_collapse = true;
                         let rotation = &mut cites[*oix+1..ix+1];
                         rotation.rotate_right(1);
                         *oix += 1;
                     }
                 })
-                .or_insert_with(|| {
-                    ix
-                });
+            .or_insert_with(|| (ix, false));
         }
     }
 
@@ -279,11 +302,27 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(db: &impl IrDatabase
                     }
                 }
             }
-            // Something else
-            // for cite in following {
-            //     let gen4 = Arc::make_mut(&mut cite.gen4);
-            //     gen4.ir.suppress_names();
-            // }
+            Collapse::Year | Collapse::YearSuffix => {
+                let mut ix = 0;
+                while ix < cites.len() {
+                    let slice = &mut cites[ix..];
+                    if let Some((u, rest)) = slice.split_first_mut() {
+                        if u.is_first {
+                            let following = rest
+                                .iter_mut()
+                                .take_while(|u| u.should_collapse);
+                            let mut count = 0;
+                            for (nix, cite) in following.enumerate() {
+                                let gen4 = Arc::make_mut(&mut cite.gen4);
+                                gen4.ir.suppress_names();
+                                count += 1;
+                            }
+                            ix += count;
+                        }
+                    }
+                    ix += 1;
+                }
+            }
             _ => {}
         }
     }

@@ -913,50 +913,73 @@ pub fn built_cluster_before_output(
             };
             Some(fmt.affixed(flattened, Some(&aff)))
     };
-    let built_cites: Vec<_> = irs
-        .iter()
-        .filter_map(|Unnamed3 { cite, gen4, vanished, collapsed_ranges, .. }| {
-            if *vanished {
-                return None;
-            }
-            if !collapsed_ranges.is_empty() {
-                let comma = style
-                    .citation
-                    .cite_group_delimiter
-                    .as_ref()
-                    .map(|atom| atom.as_ref())
-                    .unwrap_or(style.citation.layout.delimiter.0.as_ref());
-                Some(fmt.group(collapsed_ranges
-                    .iter()
-                    .filter_map(|piece| match *piece {
-                        RangePiece::Single(CnumIx { ix, .. }) => {
-                            irs.get(ix)
-                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir))
-                        }
-                        RangePiece::Range(start, end) => {
-                            let mut delim = "\u{2013}";
-                            if start.cnum == end.cnum - 1 {
-                                delim = comma;
-                            }
-                            let mut group = vec![];
-                            if let Some(start) = irs.get(start.ix)
-                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
-                                group.push(start);
-                            }
-                            if let Some(end) = irs.get(end.ix)
-                                .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
-                                group.push(end);
-                            }
 
-                            Some(fmt.group(group, delim, None))
+    let cgroup_delim = style
+        .citation
+        .cite_group_delimiter
+        .as_ref()
+        .map(|atom| atom.as_ref())
+        .unwrap_or(", ");
+    let ysuf_delim = style
+        .citation
+        .year_suffix_delimiter
+        .as_ref()
+        .map(|atom| atom.as_ref())
+        .unwrap_or(style.citation.layout.delimiter.0.as_ref());
+
+    let mut built_cites = Vec::with_capacity(irs.len());
+
+    let mut ix = 0;
+    while ix < irs.len() {
+        let Unnamed3 { cite, gen4, vanished, collapsed_ranges, is_first, .. } = &irs[ix];
+        if *vanished {
+            ix += 1;
+            continue;
+        }
+        if !collapsed_ranges.is_empty() {
+            let delimited_by_comma = collapsed_ranges
+                .iter()
+                .filter_map(|piece| match *piece {
+                    RangePiece::Single(CnumIx { ix, .. }) => {
+                        irs.get(ix)
+                            .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir))
+                    }
+                    RangePiece::Range(start, end) => {
+                        let mut delim = "\u{2013}";
+                        if start.cnum == end.cnum - 1 {
+                            // Not represented as a 1-2, just two sequential numbers 1,2
+                            delim = cgroup_delim;
                         }
-                    })
-                    .collect(), comma, None))
-            } else {
-                build_cite(cite, &gen4.ir)
+                        let mut group = vec![];
+                        if let Some(start) = irs.get(start.ix)
+                            .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
+                                group.push(start);
+                        }
+                        if let Some(end) = irs.get(end.ix)
+                            .and_then(|Unnamed3 { cite, gen4, .. }| build_cite(cite, &gen4.ir)) {
+                                group.push(end);
+                        }
+                        Some(fmt.group(group, delim, None))
+                    }
+                })
+                .collect();
+            built_cites.push(fmt.group(delimited_by_comma, cgroup_delim, None));
+        } else if *is_first {
+            let rest = irs[ix + 1..].iter().take_while(|u| !u.is_first && u.should_collapse);
+            let len = rest.clone().count();
+            let mut group = Vec::with_capacity(len + 1);
+            group.extend(build_cite(cite, &gen4.ir).into_iter());
+            for r in rest {
+                group.extend(build_cite(&r.cite, &r.gen4.ir).into_iter());
             }
-        })
-        .collect();
+            built_cites.push(fmt.group(group, cgroup_delim, None));
+            ix += len;
+        } else {
+            built_cites.extend(build_cite(cite, &gen4.ir).into_iter());
+        }
+        ix += 1;
+    }
+
     fmt.with_format(
         fmt.affixed(
             fmt.group(built_cites, &layout.delimiter.0, None),
