@@ -653,7 +653,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
             // because it only has any effect when "and" is set.
-            if self.name_el.and.is_some() {
+            if self.name_el.and.is_some() && !is_sort_key {
                 if let Some(last_delim) = nms.iter().rposition(|t| *t == NameToken::Delimiter) {
                     let dpl = self
                         .name_el
@@ -661,11 +661,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         .unwrap_or(DelimiterPrecedes::Contextual);
                     if should_delimit_after(dpl, self, name_count - 1) {
                         nms.insert(last_delim + 1, NameToken::And);
-                        nms.insert(last_delim + 2, NameToken::Space);
                     } else {
                         nms[last_delim] = NameToken::Space;
                         nms.insert(last_delim + 1, NameToken::And);
-                        nms.insert(last_delim + 2, NameToken::Space);
                     }
                 }
             }
@@ -815,7 +813,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 
         let mut build = vec![];
         let filtered_tokens = pn_filtered_parts(pn, order);
-        debug!("filtered_tokens {:?}; pn {:?}", filtered_tokens, pn);
         for token in filtered_tokens {
             // We already tested is_some() for all these Some::unwrap() calls
             match token {
@@ -966,7 +963,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 
         name_tokens
             .iter()
-            .map(|n| match n {
+            .filter_map(|n| Some(match n {
                 NameToken::Name(ratchet) => {
                     seen_one = true;
                     NameTokenBuilt::Ratchet(ratchet)
@@ -979,6 +976,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     })
                 }
                 NameToken::EtAl(text, formatting) => {
+                    if is_sort_key {
+                        return None;
+                    }
                     NameTokenBuilt::Built(fmt.text_node(text.to_string(), *formatting))
                 }
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
@@ -998,9 +998,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             .get_text_term(select(TermFormExtended::Long), false)
                             .unwrap_or("and"),
                     };
-                    NameTokenBuilt::Built(fmt.plain(form))
+                    let mut string = form.to_owned();
+                    string.push(' ');
+                    NameTokenBuilt::Built(fmt.text_node(string, None))
                 }
-            })
+            }))
             .collect()
     }
 }
