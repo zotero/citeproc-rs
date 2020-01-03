@@ -102,7 +102,8 @@ impl<O: OutputFormat> IR<O> {
                 lock.ir.find_locator()
             }
             IR::Seq(seq) => {
-                seq.contents.iter().find(|(ir, _)| {
+                // Search backwards because it's likely to be near the end
+                seq.contents.iter().rfind(|(ir, _)| {
                     ir.find_locator()
                 }).is_some()
             }
@@ -282,7 +283,7 @@ use std::collections::HashMap;
 pub struct CnumIx {
     pub cnum: u32,
     pub ix: usize,
-    force_single: bool,
+    pub force_single: bool,
 }
 
 impl CnumIx {
@@ -410,6 +411,7 @@ impl Debug for Unnamed3<Markup> {
                 "gen4",
                 &self.gen4.ir.flatten(&fmt).map(|x| fmt.output(x, false)),
             )
+            .field("has_locator", &self.has_locator)
             .field("is_first", &self.is_first)
             .field("should_collapse", &self.should_collapse)
             .field("first_of_ys", &self.first_of_ys)
@@ -426,8 +428,8 @@ impl Debug for Unnamed3<Markup> {
 impl<O: OutputFormat> Unnamed3<O> {
     pub fn new(cite: Arc<Cite<O>>, cnum: Option<u32>, gen4: Arc<IrGen>) -> Self {
         Unnamed3 {
+            has_locator: cite.locators.is_some() && gen4.ir.find_locator(),
             cite,
-            has_locator: gen4.ir.find_locator(),
             gen4,
             cnum,
             is_first: false,
@@ -616,8 +618,10 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                         });
                                     }
                                     cite.vanished = true;
-                                    let gen4 = Arc::make_mut(&mut cite.gen4);
-                                    gen4.ir.suppress_year();
+                                    if !cite.has_locator {
+                                        let gen4 = Arc::make_mut(&mut cite.gen4);
+                                        gen4.ir.suppress_year();
+                                    }
                                 }
                                 u.collapsed_year_suffixes = collapse_ranges(&cnums);
                             } else {
