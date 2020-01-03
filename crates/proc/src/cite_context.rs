@@ -94,6 +94,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
+                .or_else(|| self.reference.ordinary.get(&Variable::JournalAbbreviation))
                 .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
                 .map(|s| s.as_str())
                 .map(Cow::Borrowed),
