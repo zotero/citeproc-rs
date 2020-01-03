@@ -560,7 +560,7 @@ impl<O: OutputFormat> IrSeq<O> {
                     GroupVars::Plain
                 }
             })
-    } 
+    }
     /// GVs are stored outside of individual child IRs, so we need a way to update those if the
     /// children have mutated themselves.
     pub(crate) fn recompute_group_vars(&mut self) {

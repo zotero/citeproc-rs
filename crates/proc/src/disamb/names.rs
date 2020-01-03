@@ -506,6 +506,7 @@ impl RefNameIR {
             if let DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) = dnr {
                 vec.push(*id);
             }
+            // TODO: do it for literals as well
         }
         RefNameIR {
             variable: name_ir.variable,

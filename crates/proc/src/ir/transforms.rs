@@ -113,7 +113,7 @@ impl<O: OutputFormat> IR<O> {
 ////////////////////////////////
 
 impl<O: OutputFormat> IR<O> {
-    fn first_name_block(&self) -> Option<Arc<Mutex<NameIR<O>>>> {
+    pub fn first_name_block(&self) -> Option<Arc<Mutex<NameIR<O>>>> {
         match self {
             IR::Name(ref nir) => Some(nir.clone()),
             IR::ConditionalDisamb(c) => {
@@ -130,18 +130,17 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_locator(&self) -> bool {
         match self {
-            IR::Rendered(Some(CiteEdgeData::Locator(_))) => {
-                true
-            }
+            IR::Rendered(Some(CiteEdgeData::Locator(_))) => true,
             IR::ConditionalDisamb(c) => {
                 let mut lock = c.lock().unwrap();
                 lock.ir.find_locator()
             }
             IR::Seq(seq) => {
                 // Search backwards because it's likely to be near the end
-                seq.contents.iter().rfind(|(ir, _)| {
-                    ir.find_locator()
-                }).is_some()
+                seq.contents
+                    .iter()
+                    .rfind(|(ir, _)| ir.find_locator())
+                    .is_some()
             }
             _ => false,
         }
@@ -149,18 +148,12 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_first_year(&self) -> Option<O::Build> {
         match self {
-            IR::Rendered(Some(CiteEdgeData::Year(b))) => {
-                Some(b.clone())
-            }
+            IR::Rendered(Some(CiteEdgeData::Year(b))) => Some(b.clone()),
             IR::ConditionalDisamb(c) => {
                 let mut lock = c.lock().unwrap();
                 lock.ir.find_first_year()
             }
-            IR::Seq(seq) => {
-                seq.contents.iter().find_map(|(ir, _)| {
-                    ir.find_first_year()
-                })
-            }
+            IR::Seq(seq) => seq.contents.iter().find_map(|(ir, _)| ir.find_first_year()),
             _ => None,
         }
     }
@@ -324,10 +317,18 @@ pub struct CnumIx {
 
 impl CnumIx {
     fn new(c: u32, ix: usize) -> Self {
-        CnumIx { cnum: c, ix, force_single: false, }
+        CnumIx {
+            cnum: c,
+            ix,
+            force_single: false,
+        }
     }
     fn force_single(c: u32, ix: usize) -> Self {
-        CnumIx { cnum: c, ix, force_single: true, }
+        CnumIx {
+            cnum: c,
+            ix,
+            force_single: true,
+        }
     }
 }
 
@@ -487,46 +488,51 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     collapse: Option<Collapse>,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
-    let mut same_names: HashMap<String, (usize, bool)> = HashMap::new();
+    // Neat trick: same_names[None] tracks cites without a cs:names block, which helps with styles
+    // that only include a year. (What kind of style is that?
+    // magic_ImplicitYearSuffixExplicitDelimiter.txt, I guess that's the only possible reason, but
+    // ok.)
+    let mut same_names: HashMap<Option<String>, (usize, bool)> = HashMap::new();
     let mut same_years: HashMap<String, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
-        if let Some(rendered) = cites[ix]
+        let rendered = cites[ix]
             .gen4
             .ir
             .first_name_block()
             .and_then(|fnb| fnb.lock().unwrap().ir.flatten(fmt))
-            .map(|flat| fmt.output(flat, false))
-        {
-            same_names.entry(rendered)
-                .and_modify(|(oix, seen_once)| {
-                    // Keep cites separated by affixes together
-                    if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
-                        || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
-                        || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
-                        || cites.get(ix).map_or(false, |u| u.cite.has_affix())
-                    {
-                        *oix = ix;
-                        *seen_once = false;
-                        return;
+            .map(|flat| fmt.output(flat, false));
+        same_names
+            .entry(rendered)
+            .and_modify(|(oix, seen_once)| {
+                // Keep cites separated by affixes together
+                if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
+                    || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
+                    || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
+                    || cites.get(ix).map_or(false, |u| u.cite.has_affix())
+                {
+                    *oix = ix;
+                    *seen_once = false;
+                    return;
+                }
+                if *oix < ix {
+                    if !*seen_once {
+                        cites[*oix].is_first = true;
                     }
-                    if *oix < ix {
-                        if !*seen_once {
-                            cites[*oix].is_first = true;
-                        }
-                        *seen_once = true;
-                        cites[ix].should_collapse = true;
-                        let rotation = &mut cites[*oix + 1..ix + 1];
-                        rotation.rotate_right(1);
-                        *oix += 1;
-                    }
-                })
-                .or_insert((ix, false));
-        }
+                    *seen_once = true;
+                    cites[ix].should_collapse = true;
+                    let rotation = &mut cites[*oix + 1..ix + 1];
+                    rotation.rotate_right(1);
+                    *oix += 1;
+                }
+            })
+            .or_insert((ix, false));
     }
 
-    if collapse.map_or(false, |c| c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix) {
+    if collapse.map_or(false, |c| {
+        c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
+    }) {
         let mut top_ix = 0;
         while top_ix < cites.len() {
             if cites[top_ix].is_first {
@@ -537,9 +543,15 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                         break;
                     }
                     moved += 1;
-                    if let Some((y, suf)) = cites[ix].gen4.ir.find_first_year_and_suffix().map(|(y, suf)| (fmt.output(y, false), suf)) {
+                    if let Some((y, suf)) = cites[ix]
+                        .gen4
+                        .ir
+                        .find_first_year_and_suffix()
+                        .map(|(y, suf)| (fmt.output(y, false), suf))
+                    {
                         cites[ix].year_suffix = Some(suf);
-                        same_years.entry(y)
+                        same_years
+                            .entry(y)
                             .and_modify(|(oix, seen_once)| {
                                 if *oix == ix - 1 {
                                     if !*seen_once {
@@ -636,8 +648,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 gen4.ir.suppress_names();
                             }
                         }
-                    if u.first_of_ys {
-                        let following = rest.iter_mut().take_while(|u| u.collapse_ys);
+                        if u.first_of_ys {
+                            let following = rest.iter_mut().take_while(|u| u.collapse_ys);
 
                             if collapse == Collapse::YearSuffixRanged {
                                 // Potentially confusing; 'cnums' here are year suffixes in u32 form.
@@ -662,15 +674,18 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 u.collapsed_year_suffixes = collapse_ranges(&cnums);
                             } else {
                                 if let Some(cnum) = u.year_suffix {
-                                    u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx::new(cnum, ix)));
+                                    u.collapsed_year_suffixes
+                                        .push(RangePiece::Single(CnumIx::new(cnum, ix)));
                                 }
                                 for (nix, cite) in following.enumerate() {
                                     if let Some(cnum) = cite.year_suffix {
-                                        u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx {
-                                            cnum,
-                                            ix: ix + nix + 1,
-                                            force_single: cite.has_locator,
-                                        }));
+                                        u.collapsed_year_suffixes.push(RangePiece::Single(
+                                            CnumIx {
+                                                cnum,
+                                                ix: ix + nix + 1,
+                                                force_single: cite.has_locator,
+                                            },
+                                        ));
                                     }
                                     cite.vanished = true;
                                     let gen4 = Arc::make_mut(&mut cite.gen4);
@@ -696,4 +711,50 @@ fn pair_at_mut<T>(mut slice: &mut [T], ix: usize) -> Option<(&mut T, &mut T)> {
     slice
         .split_first_mut()
         .and_then(|(first, rest)| rest.first_mut().map(|second| (first, second)))
+}
+
+////////////////////////////////
+// Cite Grouping & Collapsing //
+////////////////////////////////
+
+use csl::SubsequentAuthorSubstituteRule as SasRule;
+use citeproc_io::PersonName;
+use crate::disamb::names::{DisambNameRatchet, PersonDisambNameRatchet};
+
+pub fn subsequent_author_substitute<O: OutputFormat>(
+    fmt: &O,
+    previous: &Mutex<NameIR<O>>,
+    current: &Mutex<NameIR<O>>,
+    sas: &str,
+    sas_rule: SasRule,
+) -> bool {
+    let mut pre = previous.lock().unwrap();
+    let mut cur = current.lock().unwrap();
+    match sas_rule {
+        SasRule::CompleteAll => {
+            if pre.disamb_names.len() != cur.disamb_names.len() || pre.disamb_names.len() == 0 {
+                return false;
+            }
+            fn mapper<T>(ratchet: &DisambNameRatchet<T>) -> Result<&PersonName, &T> {
+                match ratchet {
+                    // Ok & Err are just an ad-hoc Either type
+                    DisambNameRatchet::Person(p) => Ok(&p.data.value),
+                    DisambNameRatchet::Literal(b) => Err(&b),
+                }
+            };
+            if Iterator::eq(
+                pre.disamb_names.iter().map(mapper),
+                cur.disamb_names.iter().map(mapper),
+            ) {
+                *cur.ir = if sas.is_empty() {
+                    IR::Rendered(None)
+                } else {
+                    IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))))
+                };
+                return true;
+            }
+        }
+        _ => {}
+    }
+    false
 }
