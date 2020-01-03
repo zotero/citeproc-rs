@@ -33,6 +33,7 @@ pub struct YearSuffix<O: OutputFormat> {
     pub(crate) hook: YearSuffixHook,
     pub(crate) ir: Box<IR<O>>,
     pub(crate) group_vars: GroupVars,
+    pub(crate) suffix_num: Option<u32>,
 }
 
 impl<O: OutputFormat> IR<O> {
@@ -41,6 +42,7 @@ impl<O: OutputFormat> IR<O> {
             IR::YearSuffix(YearSuffix {
                 hook,
                 group_vars: GroupVars::Unresolved,
+                suffix_num: None,
                 ir: Box::new(IR::Rendered(None)),
             }),
             GroupVars::Unresolved

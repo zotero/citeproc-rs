@@ -921,6 +921,7 @@ pub struct Citation {
     pub sort: Option<Sort>,
     pub cite_group_delimiter: Option<Atom>,
     pub year_suffix_delimiter: Option<Atom>,
+    pub after_collapse_delimiter: Option<Atom>,
     pub collapse: Option<Collapse>,
 }
 
@@ -938,6 +939,7 @@ impl Default for Citation {
             sort: None,
             cite_group_delimiter: None,
             year_suffix_delimiter: None,
+            after_collapse_delimiter: None,
             collapse: None,
         }
     }

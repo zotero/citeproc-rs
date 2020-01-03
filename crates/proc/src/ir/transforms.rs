@@ -79,7 +79,6 @@ impl<O: OutputFormat> IR<O> {
 impl<O: OutputFormat> IR<O> {
     fn first_name_block(&self) -> Option<Arc<Mutex<NameIR<O>>>> {
         match self {
-            IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) => None,
             IR::Name(ref nir) => Some(nir.clone()),
             IR::ConditionalDisamb(c) => {
                 let lock = c.lock().unwrap();
@@ -89,11 +88,63 @@ impl<O: OutputFormat> IR<O> {
                 // assumes it's the first one that appears
                 seq.contents.iter().find_map(|ir| ir.0.first_name_block())
             }
+            _ => None,
         }
     }
+
+    fn find_locator(&self) -> bool {
+        match self {
+            IR::Rendered(Some(CiteEdgeData::Locator(_))) => {
+                true
+            }
+            IR::ConditionalDisamb(c) => {
+                let mut lock = c.lock().unwrap();
+                lock.ir.find_locator()
+            }
+            IR::Seq(seq) => {
+                seq.contents.iter().find(|(ir, _)| {
+                    ir.find_locator()
+                }).is_some()
+            }
+            _ => false,
+        }
+    }
+
+    fn find_first_year(&self) -> Option<O::Build> {
+        match self {
+            IR::Rendered(Some(CiteEdgeData::Year(b))) => {
+                Some(b.clone())
+            }
+            IR::ConditionalDisamb(c) => {
+                let mut lock = c.lock().unwrap();
+                lock.ir.find_first_year()
+            }
+            IR::Seq(seq) => {
+                seq.contents.iter().find_map(|(ir, _)| {
+                    ir.find_first_year()
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn find_first_year_and_suffix(&self) -> Option<(O::Build, u32)> {
+        if let Some(fy) = self.find_first_year() {
+            debug!("fy, {:?}", fy);
+        }
+        if let Some(ys) = self.find_year_suffix() {
+            debug!("ys, {:?}", ys);
+        }
+        Some((self.find_first_year()?, self.find_year_suffix()?))
+    }
+
     /// Rest of the name: "if it has a year suffix"
     fn suppress_first_year(&mut self, has_explicit: bool) -> bool {
         match self {
+            IR::Rendered(opt @ Some(CiteEdgeData::Year(_))) => {
+                *opt = None;
+                true
+            }
             IR::ConditionalDisamb(c) => {
                 let mut lock = c.lock().unwrap();
                 lock.ir.suppress_first_year(has_explicit);
@@ -104,14 +155,12 @@ impl<O: OutputFormat> IR<O> {
                     if let ((first, _), (second, gv)) = pair_at_mut(&mut seq.contents, 0).unwrap() {
                         match (second, gv) {
                             (IR::YearSuffix(_), GroupVars::Unresolved) if has_explicit => {
-                                *first = IR::Rendered(None);
-                                true
+                                first.suppress_first_year(has_explicit)
                             }
                             (IR::YearSuffix(ys), GroupVars::Important)
                                 if !has_explicit && !ys.ir.is_empty() =>
                             {
-                                *first = IR::Rendered(None);
-                                true
+                                first.suppress_first_year(has_explicit)
                             }
                             _ => false,
                         }
@@ -134,13 +183,42 @@ impl<O: OutputFormat> IR<O> {
             _ => false,
         }
     }
-    fn has_explicit_year_suffix(&self) -> bool {
+
+    pub fn find_year_suffix(&self) -> Option<u32> {
+        self.has_implicit_year_suffix()
+            .or_else(|| self.has_explicit_year_suffix())
+    }
+
+    pub fn has_implicit_year_suffix(&self) -> Option<u32> {
+        match self {
+            IR::YearSuffix(YearSuffix {
+                hook: YearSuffixHook::Plain,
+                ir,
+                suffix_num: Some(n),
+                ..
+            }) if !ir.is_empty() => Some(*n),
+            IR::ConditionalDisamb(c) => {
+                let lock = c.lock().unwrap();
+                lock.ir.has_implicit_year_suffix()
+            }
+            IR::Seq(seq) => {
+                // assumes it's the first one that appears
+                seq.contents
+                    .iter()
+                    .find_map(|ir| ir.0.has_implicit_year_suffix())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn has_explicit_year_suffix(&self) -> Option<u32> {
         match self {
             IR::YearSuffix(YearSuffix {
                 hook: YearSuffixHook::Explicit(_),
                 ir,
+                suffix_num: Some(n),
                 ..
-            }) => !ir.is_empty(),
+            }) if !ir.is_empty() => Some(*n),
             IR::ConditionalDisamb(c) => {
                 let lock = c.lock().unwrap();
                 lock.ir.has_explicit_year_suffix()
@@ -149,11 +227,12 @@ impl<O: OutputFormat> IR<O> {
                 // assumes it's the first one that appears
                 seq.contents
                     .iter()
-                    .any(|ir| ir.0.has_explicit_year_suffix())
+                    .find_map(|ir| ir.0.has_explicit_year_suffix())
             }
-            _ => false,
+            _ => None,
         }
     }
+
     pub fn suppress_names(&self) {
         if let Some(fnb) = self.first_name_block() {
             let mut guard = fnb.lock().unwrap();
@@ -161,7 +240,10 @@ impl<O: OutputFormat> IR<O> {
         }
     }
     pub fn suppress_year(&mut self) {
-        let has_explicit = self.has_explicit_year_suffix();
+        let has_explicit = self.has_explicit_year_suffix().is_some();
+        if !has_explicit && self.has_implicit_year_suffix().is_none() {
+            return;
+        }
         self.suppress_first_year(has_explicit);
     }
 }
@@ -200,6 +282,16 @@ use std::collections::HashMap;
 pub struct CnumIx {
     pub cnum: u32,
     pub ix: usize,
+    force_single: bool,
+}
+
+impl CnumIx {
+    fn new(c: u32, ix: usize) -> Self {
+        CnumIx { cnum: c, ix, force_single: false, }
+    }
+    fn force_single(c: u32, ix: usize) -> Self {
+        CnumIx { cnum: c, ix, force_single: true, }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -213,6 +305,7 @@ impl RangePiece {
     /// Return value is the previous value, to be emitted, if the next it couldn't be appended
     fn attempt_append(&mut self, nxt: CnumIx) -> Option<RangePiece> {
         *self = match self {
+            _ if nxt.force_single => return Some(std::mem::replace(self, RangePiece::Single(nxt))),
             RangePiece::Single(prv) if prv.cnum == nxt.cnum - 1 => RangePiece::Range(*prv, nxt),
             RangePiece::Range(_, end) if end.cnum == nxt.cnum - 1 => {
                 *end = nxt;
@@ -226,22 +319,22 @@ impl RangePiece {
 
 #[test]
 fn range_append() {
-    let mut range = RangePiece::Single(CnumIx { cnum: 1, ix: 1 });
-    let emit = range.attempt_append(CnumIx { cnum: 2, ix: 2 });
+    let mut range = RangePiece::Single(CnumIx::new(1, 1));
+    let emit = range.attempt_append(CnumIx::new(2, 2));
     assert_eq!(
         (range, emit),
         (
-            RangePiece::Range(CnumIx { cnum: 1, ix: 1 }, CnumIx { cnum: 2, ix: 2 }),
+            RangePiece::Range(CnumIx::new(1, 1), CnumIx::new(2, 2)),
             None
         )
     );
-    let mut range = RangePiece::Single(CnumIx { cnum: 1, ix: 1 });
-    let emit = range.attempt_append(CnumIx { cnum: 3, ix: 2 });
+    let mut range = RangePiece::Single(CnumIx::new(1, 1));
+    let emit = range.attempt_append(CnumIx::new(3, 2));
     assert_eq!(
         (range, emit),
         (
-            RangePiece::Single(CnumIx { cnum: 3, ix: 2 }),
-            Some(RangePiece::Single(CnumIx { cnum: 1, ix: 1 }))
+            RangePiece::Single(CnumIx::new(3, 2)),
+            Some(RangePiece::Single(CnumIx::new(1, 1)))
         )
     );
 }
@@ -262,19 +355,16 @@ pub fn collapse_ranges(nums: &[CnumIx]) -> Vec<RangePiece> {
 
 #[test]
 fn range_collapse() {
-    let s = |cnum: u32| CnumIx {
-        cnum,
-        ix: cnum as usize,
-    };
+    let s = |cnum: u32| CnumIx::new(cnum, cnum as usize);
     assert_eq!(
         collapse_ranges(&[s(1), s(2), s(3)]),
         vec![RangePiece::Range(s(1), s(3))]
     );
     assert_eq!(
-        collapse_ranges(&[s(1), s(2), CnumIx { cnum: 4, ix: 3 }]),
+        collapse_ranges(&[s(1), s(2), CnumIx::new(4, 3)]),
         vec![
             RangePiece::Range(s(1), s(2)),
-            RangePiece::Single(CnumIx { cnum: 4, ix: 3 })
+            RangePiece::Single(CnumIx::new(4, 3))
         ]
     );
 }
@@ -294,6 +384,8 @@ pub struct Unnamed3<O: OutputFormat> {
     /// (same name implied)
     pub collapse_ys: bool,
 
+    pub year_suffix: Option<u32>,
+
     /// Ranges of year suffixes (not alphabetic, in its base u32 form)
     pub collapsed_year_suffixes: Vec<RangePiece>,
 
@@ -302,6 +394,8 @@ pub struct Unnamed3<O: OutputFormat> {
 
     /// Tagging removed cites is cheaper than memmoving the rest of the Vec
     pub vanished: bool,
+
+    pub has_locator: bool,
 }
 
 use std::fmt::{Debug, Formatter};
@@ -320,6 +414,7 @@ impl Debug for Unnamed3<Markup> {
             .field("should_collapse", &self.should_collapse)
             .field("first_of_ys", &self.first_of_ys)
             .field("collapse_ys", &self.collapse_ys)
+            .field("year_suffix", &self.year_suffix)
             .field("collapsed_year_suffixes", &self.collapsed_year_suffixes)
             .field("collapsed_ranges", &self.collapsed_ranges)
             .field("vanished", &self.vanished)
@@ -332,12 +427,14 @@ impl<O: OutputFormat> Unnamed3<O> {
     pub fn new(cite: Arc<Cite<O>>, cnum: Option<u32>, gen4: Arc<IrGen>) -> Self {
         Unnamed3 {
             cite,
+            has_locator: gen4.ir.find_locator(),
             gen4,
             cnum,
             is_first: false,
             should_collapse: false,
             first_of_ys: false,
             collapse_ys: false,
+            year_suffix: None,
             collapsed_year_suffixes: Vec::new(),
             collapsed_ranges: Vec::new(),
             vanished: false,
@@ -352,7 +449,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     collapse: Option<Collapse>,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
-    let mut m: HashMap<String, (usize, bool)> = HashMap::new();
+    let mut same_names: HashMap<String, (usize, bool)> = HashMap::new();
+    let mut same_years: HashMap<String, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
@@ -363,7 +461,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
             .and_then(|fnb| fnb.lock().unwrap().ir.flatten(fmt))
             .map(|flat| fmt.output(flat, false))
         {
-            m.entry(rendered)
+            same_names.entry(rendered)
                 .and_modify(|(oix, seen_once)| {
                     // Keep cites separated by affixes together
                     if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
@@ -372,6 +470,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                         || cites.get(ix).map_or(false, |u| u.cite.has_affix())
                     {
                         *oix = ix;
+                        *seen_once = false;
                         return;
                     }
                     if *oix < ix {
@@ -385,7 +484,43 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                         *oix += 1;
                     }
                 })
-                .or_insert_with(|| (ix, false));
+                .or_insert((ix, false));
+        }
+    }
+
+    if collapse.map_or(false, |c| c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix) {
+        let mut top_ix = 0;
+        while top_ix < cites.len() {
+            if cites[top_ix].is_first {
+                let mut moved = 0;
+                let mut ix = top_ix;
+                while ix < cites.len() {
+                    if ix != top_ix && !cites[ix].should_collapse {
+                        break;
+                    }
+                    moved += 1;
+                    if let Some((y, suf)) = cites[ix].gen4.ir.find_first_year_and_suffix().map(|(y, suf)| (fmt.output(y, false), suf)) {
+                        cites[ix].year_suffix = Some(suf);
+                        same_years.entry(y)
+                            .and_modify(|(oix, seen_once)| {
+                                if *oix == ix - 1 {
+                                    if !*seen_once {
+                                        cites[*oix].first_of_ys = true;
+                                    }
+                                    cites[ix].collapse_ys = true;
+                                    *seen_once = true;
+                                } else {
+                                    *seen_once = false;
+                                }
+                                *oix = ix;
+                            })
+                            .or_insert((ix, false));
+                    }
+                    ix += 1;
+                }
+                top_ix += moved;
+            }
+            top_ix += 1;
         }
     }
 
@@ -402,7 +537,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     if let Some(collapse) = collapse {
         match collapse {
             Collapse::CitationNumber => {
-                for ix in 0..cites.len() {
+                let mut ix = 0;
+                while ix < cites.len() {
                     let slice = &mut cites[ix..];
                     if let Some((u, rest)) = slice.split_first_mut() {
                         if u.is_first {
@@ -410,23 +546,28 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
 
                             let mut cnums = Vec::new();
                             if let Some(cnum) = u.cnum {
-                                cnums.push(CnumIx { cnum, ix });
+                                cnums.push(CnumIx::new(cnum, ix));
                             }
+                            let mut count = 0;
                             for (nix, cite) in following.enumerate() {
                                 if let Some(cnum) = cite.cnum {
                                     cnums.push(CnumIx {
-                                        cnum: cnum,
+                                        cnum,
                                         ix: ix + nix + 1,
-                                    });
+                                        force_single: cite.has_locator,
+                                    })
                                 }
                                 cite.vanished = true;
+                                count += 1;
                             }
+                            ix += count;
                             u.collapsed_ranges = collapse_ranges(&cnums);
                         }
                     }
+                    ix += 1;
                 }
             }
-            Collapse::Year | Collapse::YearSuffix | Collapse::YearSuffixRanged => {
+            Collapse::Year => {
                 let mut ix = 0;
                 while ix < cites.len() {
                     let slice = &mut cites[ix..];
@@ -437,12 +578,65 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                             for (nix, cite) in following.enumerate() {
                                 let gen4 = Arc::make_mut(&mut cite.gen4);
                                 gen4.ir.suppress_names();
-                                if collapse != Collapse::Year {
-                                    gen4.ir.suppress_year();
-                                }
                                 count += 1;
                             }
                             ix += count;
+                        }
+                    }
+                    ix += 1;
+                }
+            }
+            Collapse::YearSuffixRanged | Collapse::YearSuffix => {
+                let mut ix = 0;
+                while ix < cites.len() {
+                    let slice = &mut cites[ix..];
+                    if let Some((u, rest)) = slice.split_first_mut() {
+                        if u.is_first {
+                            let following = rest.iter_mut().take_while(|u| u.should_collapse);
+                            for (nix, cite) in following.enumerate() {
+                                let gen4 = Arc::make_mut(&mut cite.gen4);
+                                gen4.ir.suppress_names();
+                            }
+                        }
+                    if u.first_of_ys {
+                        let following = rest.iter_mut().take_while(|u| u.collapse_ys);
+
+                            if collapse == Collapse::YearSuffixRanged {
+                                // Potentially confusing; 'cnums' here are year suffixes in u32 form.
+                                let mut cnums = Vec::new();
+                                if let Some(cnum) = u.year_suffix {
+                                    cnums.push(CnumIx::new(cnum, ix));
+                                }
+                                for (nix, cite) in following.enumerate() {
+                                    if let Some(cnum) = cite.year_suffix {
+                                        cnums.push(CnumIx {
+                                            cnum,
+                                            ix: ix + nix + 1,
+                                            force_single: cite.has_locator,
+                                        });
+                                    }
+                                    cite.vanished = true;
+                                    let gen4 = Arc::make_mut(&mut cite.gen4);
+                                    gen4.ir.suppress_year();
+                                }
+                                u.collapsed_year_suffixes = collapse_ranges(&cnums);
+                            } else {
+                                if let Some(cnum) = u.year_suffix {
+                                    u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx::new(cnum, ix)));
+                                }
+                                for (nix, cite) in following.enumerate() {
+                                    if let Some(cnum) = cite.year_suffix {
+                                        u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx {
+                                            cnum,
+                                            ix: ix + nix + 1,
+                                            force_single: cite.has_locator,
+                                        }));
+                                    }
+                                    cite.vanished = true;
+                                    let gen4 = Arc::make_mut(&mut cite.gen4);
+                                    gen4.ir.suppress_year();
+                                }
+                            }
                         }
                     }
                     ix += 1;
