@@ -281,6 +281,7 @@ fn ref_bib_number(db: &impl IrDatabase, ref_id: &Atom) -> u32 {
             "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
             ref_id
         );
+        // For uncited reference ids, we assign them year-suffixes after the rest.
         std::u32::MAX
     }
 }
@@ -355,6 +356,7 @@ macro_rules! preamble {
             names_delimiter,
             name_citation: name_el,
             sort_key: None,
+            year_suffix: None,
         };
     }};
 }
@@ -1076,6 +1078,7 @@ pub fn with_cite_context<T>(
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     default_position: bool,
+    year_suffix: Option<u32>,
     f: impl Fn(CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -1102,6 +1105,7 @@ pub fn with_cite_context<T>(
         names_delimiter,
         name_citation: name_el,
         sort_key,
+        year_suffix,
     };
     Some(f(ctx))
 }
@@ -1114,6 +1118,7 @@ pub fn with_bib_context<T>(
     ref_id: Atom,
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
+    year_suffix: Option<u32>,
     f: impl Fn(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -1137,6 +1142,7 @@ pub fn with_bib_context<T>(
         names_delimiter,
         name_citation: name_el,
         sort_key,
+        year_suffix,
     };
     Some(f(bib, ctx))
 }
@@ -1152,6 +1158,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         db,
         ref_id.clone(),
         Some(bib_number),
+        None,
         None,
         |bib, mut ctx| {
             let mut state = IrState::new();
