@@ -22,6 +22,8 @@ pub struct Date {
     /// range 1 to 31 inclusive
     /// 0 is "not present"
     pub day: u32,
+
+    pub circa: bool,
 }
 
 impl PartialOrd for Date {
@@ -77,6 +79,7 @@ impl Date {
             year: y,
             month: m,
             day: d,
+            circa: false,
         }
     }
     pub fn from_parts(parts: &[i32]) -> Option<Self> {
@@ -86,6 +89,7 @@ impl Date {
             year: *parts.get(0)?,
             month: if m >= 1 && m <= 16 { m as u32 } else { 0 },
             day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
+            circa: false,
         })
     }
 
@@ -110,7 +114,7 @@ pub enum DateOrRange {
 
 impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
-        DateOrRange::Single(Date { year, month, day })
+        DateOrRange::Single(Date::new(year, month, day))
     }
     pub fn single(&self) -> Option<Date> {
         if let DateOrRange::Single(d) = self {
@@ -417,21 +421,9 @@ fn ymd_date(inp: &[u8]) -> IResult<&[u8], Date> {
     Ok((
         rem2,
         match md {
-            None => Date {
-                year: y,
-                month: 0,
-                day: 0,
-            },
-            Some(MonthDay::MonthDay(m, d)) => Date {
-                year: y,
-                month: m,
-                day: d,
-            },
-            Some(MonthDay::Month(m)) => Date {
-                year: y,
-                month: m,
-                day: 0,
-            },
+            None => Date::new(y, 0, 0),
+            Some(MonthDay::MonthDay(m, d)) => Date::new(y, m, d),
+            Some(MonthDay::Month(m)) => Date::new(y, m, 0),
         },
     ))
 }
