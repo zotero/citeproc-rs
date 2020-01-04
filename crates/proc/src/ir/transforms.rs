@@ -722,7 +722,7 @@ use csl::SubsequentAuthorSubstituteRule as SasRule;
 use citeproc_io::PersonName;
 use crate::disamb::names::{DisambNameRatchet, PersonDisambNameRatchet};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum ReducedNameToken<'a, B> {
     Name(&'a PersonName),
     Literal(&'a B),
@@ -731,6 +731,20 @@ pub enum ReducedNameToken<'a, B> {
     Delimiter,
     And,
     Space,
+}
+
+impl<'a, T: Debug>  Debug for ReducedNameToken<'a, T> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ReducedNameToken::Name(p) => write!(f, "{:?}", p.family),
+            ReducedNameToken::Literal(b) => write!(f, "{:?}", b),
+            ReducedNameToken::EtAl => write!(f, "EtAl"),
+            ReducedNameToken::Ellipsis => write!(f, "Ellipsis"),
+            ReducedNameToken::Delimiter => write!(f, "Delimiter"),
+            ReducedNameToken::And => write!(f, "And"),
+            ReducedNameToken::Space => write!(f, "Space"),
+        }
+    }
 }
 
 impl<'a, T> ReducedNameToken<'a, T> {
@@ -747,6 +761,12 @@ impl<'a, T> ReducedNameToken<'a, T> {
             NameToken::And => ReducedNameToken::And,
         }
     }
+    fn relevant(&self) -> bool {
+        match self {
+            ReducedNameToken::Name(_) | ReducedNameToken::Literal(_) => true,
+            _ => false,
+        }
+    }
 }
 
 pub fn subsequent_author_substitute<O: OutputFormat>(
@@ -761,14 +781,16 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
     let pre_tokens = pre.iter_bib_rendered_names(fmt);
     let pre_reduced = pre_tokens
         .iter()
-        .map(ReducedNameToken::from_token);
+        .map(ReducedNameToken::from_token)
+        .filter(|x| x.relevant());
     let cur_tokens = cur.iter_bib_rendered_names(fmt);
     let cur_reduced = cur_tokens
         .iter()
-        .map(ReducedNameToken::from_token);
+        .map(ReducedNameToken::from_token)
+        .filter(|x| x.relevant());
+    debug!("{:?} vs {:?}", pre_reduced.clone().collect::<Vec<_>>(), cur_reduced.clone().collect::<Vec<_>>());
     match sas_rule {
         SasRule::CompleteAll | SasRule::CompleteEach => {
-            debug!("{:?} vs {:?}", pre_tokens, cur_tokens);
             if Iterator::eq(pre_reduced, cur_reduced) {
                 if sas_rule == SasRule::CompleteEach {
                     // let nir handle it
@@ -782,7 +804,20 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                 return true;
             }
         }
-        _ => {}
+        SasRule::PartialEach => {
+            let count = pre_reduced.zip(cur_reduced)
+                .take_while(|(p, c)| p == c)
+                .count();
+            cur.subsequent_author_substitute(fmt, count as u32, sas);
+        }
+        SasRule::PartialFirst => {
+            let count = pre_reduced.zip(cur_reduced)
+                .take_while(|(p, c)| p == c)
+                .count();
+            if count > 0 {
+                cur.subsequent_author_substitute(fmt, 1, sas);
+            }
+        }
     }
     false
 }

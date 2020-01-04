@@ -1233,7 +1233,6 @@ fn get_bibliography_map(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, Arc<Markup
                     mutated.ir.recompute_group_vars()
                 }
             }
-            debug!("bib ir: {:#?}", gen0.ir);
             let flat = gen0.ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
             let string = fmt.output(flat, get_piq(db));
             if !string.is_empty() {
