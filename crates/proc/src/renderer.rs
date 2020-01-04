@@ -170,7 +170,7 @@ impl<'c, O: OutputFormat> Renderer<'c, O, O> {
 }
 
 impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
-    pub fn sorting(ctx: GenericContext<'c, O, I>) -> Renderer<'c, O, I> {
+    pub fn gen(ctx: GenericContext<'c, O, I>) -> Renderer<'c, O, I> {
         Renderer { ctx }
     }
     pub fn cite(c: &'c CiteContext<'c, O, I>) -> Self {

@@ -16,7 +16,7 @@ use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::{
     Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
-    NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position,
+    NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position, Style, Locale,
 };
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -61,15 +61,18 @@ impl<B> DisambNameRatchet<B> {
 }
 
 /// One NameIR per variable
-pub fn to_individual_name_irs<'a, O: OutputFormat>(
+pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
+    ctx: &'a GenericContext<'a, O, I>,
     names: &'a Names,
     names_inheritance: &'a NamesInheritance,
     db: &'a impl IrDatabase,
     state: &'a IrState,
-    fmt: &'a O,
-    refr: &'a Reference,
     should_start_with_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a + Clone {
+    let fmt = ctx.format();
+    let style = ctx.style();
+    let locale = ctx.locale();
+    let refr = ctx.reference();
     names
         .variables
         .iter()
@@ -99,22 +102,16 @@ pub fn to_individual_name_irs<'a, O: OutputFormat>(
                 })
                 .collect();
             NameIR::new(
+                ctx,
                 names_inheritance.clone(),
                 var,
                 ratchets,
                 Box::new(IR::Rendered(None)),
+                style,
+                locale.et_al_term(names_inheritance.et_al.as_ref()),
+                locale.and_term(None).map(|x| x.to_owned()),
             )
         })
-}
-
-fn render_label<O: OutputFormat, I: OutputFormat>(
-    ctx: &CiteContext<'_, O, I>,
-    label: &NameLabel,
-    var: NameVariable,
-) -> IR<O> {
-    let renderer = Renderer::cite(ctx);
-    let o = renderer.name_label(label, var).map(CiteEdgeData::Output);
-    IR::Rendered(o)
 }
 
 use crate::NameOverrider;
@@ -191,13 +188,13 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         );
     }
 
+    let gen = GenericContext::Cit(ctx);
     let nirs_iterator = to_individual_name_irs(
+        &gen,
         names,
         &names_inheritance,
         db,
         state,
-        fmt,
-        &ctx.reference,
         true,
     );
 
@@ -236,7 +233,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     }
 
     let name_irs: Vec<IrSum<O>> = nirs_iterator.map(|mut nir| {
-        if let Some((ir, _)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+        if let Some((ir, _)) = nir.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), ctx.disamb_pass, None) {
             *nir.ir = ir;
             (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
         } else {
@@ -324,18 +321,14 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
-        let NameIR { ref names_inheritance, variable, .. } = *self;
+        let runner = self.runner(&self.names_inheritance.name, fmt);
 
-        let runner = OneNameVar {
-            name_el: &names_inheritance.name,
-            bump_name_count: self.name_counter.bump,
-            demote_non_dropping_particle: style.demote_non_dropping_particle,
-            initialize_with_hyphen: style.initialize_with_hyphen,
-            fmt,
-        };
-
-        let name_tokens = runner.name_tokens(position, &self.disamb_names, ctx.sort_key.is_some(),
-        &names_inheritance.et_al, locale);
+        let name_tokens = runner.name_tokens(
+            position,
+            &self.disamb_names,
+            ctx.sort_key.is_some(),
+            self.etal_term.as_ref()
+        );
 
         let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
             NameToken::Name(_) => acc + 1,
@@ -345,37 +338,60 @@ impl<'c, O: OutputFormat> NameIR<O> {
         count
     }
 
-    pub fn intermediate_custom<I: OutputFormat>(
-        &mut self,
-        _db: &impl IrDatabase,
-        ctx: &CiteContext<'c, O, I>,
-        pass: Option<DisambPass>,
-    ) -> Option<IrSum<O>> {
-        let style = ctx.style;
-        let locale = ctx.locale;
-        let fmt = &ctx.format;
-        let position = ctx.position.0;
+    // For subsequent-author-substitute
+    pub fn iter_bib_rendered_names<'a>(&'a self, fmt: &'a O) -> Vec<NameToken<'a, O::Build>> {
+        let runner = self.runner(&self.names_inheritance.name, fmt);
+        let name_tokens = runner.name_tokens(
+            Position::First, // All bib entries are First
+            &self.disamb_names,
+            false, // not in sort key, we're transforming bib ir
+            self.etal_term.as_ref()
+        );
+        name_tokens
+    }
 
+    pub fn runner<'a>(&self, name_el: &'a NameEl, fmt: &'a O) -> OneNameVar<'a, O> {
+        OneNameVar {
+            fmt,
+            name_el,
+            bump_name_count: self.name_counter.bump,
+            demote_non_dropping_particle: self.demote_non_dropping_particle,
+            initialize_with_hyphen: self.initialize_with_hyphen,
+        }
+    }
+
+    pub fn intermediate_custom(
+        &mut self,
+        fmt: &O,
+        position: Position,
+        is_sort_key: bool,
+        pass: Option<DisambPass>,
+        substitute: Option<(u32, &str)>,
+    ) -> Option<IrSum<O>> {
         let NameIR {
             ref names_inheritance,
             variable,
             ..
         } = *self;
+        let mut runner = self.runner(&self.names_inheritance.name, fmt);
 
-        let mut runner = OneNameVar {
-            name_el: &names_inheritance.name,
-            bump_name_count: self.name_counter.bump,
-            demote_non_dropping_particle: style.demote_non_dropping_particle,
-            initialize_with_hyphen: style.initialize_with_hyphen,
-            fmt,
+        let (mut subst_count, subst_text) = substitute.unwrap_or((0, ""));
+        let mut maybe_subst = |x: O::Build| -> O::Build {
+            if subst_count > 0 {
+                subst_count -= 1;
+                fmt.plain(subst_text)
+            } else {
+                x
+            }
         };
 
         let ntbs = runner.names_to_builds(
             &self.disamb_names,
             position,
-            locale,
             &names_inheritance.et_al,
-            ctx.sort_key.is_some(),
+            is_sort_key,
+            self.and_term.as_ref(),
+            self.etal_term.as_ref(),
         );
 
         // TODO: refactor into a method on NameCounter
@@ -391,12 +407,14 @@ impl<'c, O: OutputFormat> NameIR<O> {
             .into_iter()
             .filter_map(|ntb| match ntb {
                 NameTokenBuilt::Built(b) => Some(b),
-                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => Some(b.clone()),
+                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
+                    Some(maybe_subst(b.clone()))
+                },
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
                     runner.name_el = &pn.data.el;
-                    let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
+                    let mut ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
                     runner.name_el = &names_inheritance.name;
-                    Some(ret)
+                    Some(maybe_subst(ret))
                 }
             })
             .filter(|x| !fmt.is_empty(&x))
@@ -413,12 +431,14 @@ impl<'c, O: OutputFormat> NameIR<O> {
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::Missing))
         } else {
-            if let Some(label) = names_inheritance.label.as_ref() {
-                let label_ir = render_label(ctx, &label.concrete(), variable);
-                if label.after_name {
-                    seq.contents.push((label_ir, GroupVars::Plain));
-                } else {
-                    seq.contents.insert(0, (label_ir, GroupVars::Plain));
+            if let Some(label_el) = names_inheritance.label.as_ref() {
+                if let Some(label) = self.built_label.as_ref() {
+                    let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                    if label_el.after_name {
+                        seq.contents.push((label_ir, GroupVars::Plain));
+                    } else {
+                        seq.contents.insert(0, (label_ir, GroupVars::Plain));
+                    }
                 }
             }
             Some((IR::Seq(seq), GroupVars::Important))
@@ -546,8 +566,8 @@ fn should_delimit_after<O: OutputFormat>(
     }
 }
 
-#[derive(Eq, PartialEq, Clone)]
-enum NameToken<'a, B> {
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum NameToken<'a, B> {
     Name(&'a DisambNameRatchet<B>),
     EtAl(&'a str, Option<Formatting>),
     Ellipsis,
@@ -604,8 +624,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         position: Position,
         names_slice: &'s [DisambNameRatchet<O::Build>],
         is_sort_key: bool,
-        et_al: &Option<NameEtAl>,
-        locale: &'s csl::locale::Locale,
+        etal_term: Option<&'s (String, Option<Formatting>)>,
     ) -> Vec<NameToken<'s, O::Build>> {
         let name_count = names_slice.len();
         let ea_min = self.ea_min(position);
@@ -630,8 +649,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
                 if !is_sort_key {
-                    let (term_text, formatting) = self.et_al_term(et_al, locale);
-                    if !term_text.is_empty() {
+                    if let Some((term_text, formatting)) = etal_term {
                         let dpea = self
                             .name_el
                             .delimiter_precedes_et_al
@@ -641,7 +659,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         } else {
                             nms.push(NameToken::Space);
                         }
-                        nms.push(NameToken::EtAl(term_text, formatting));
+                        nms.push(NameToken::EtAl(term_text, *formatting));
                     }
                 }
                 nms
@@ -778,29 +796,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    fn et_al_term<'l>(
-        &self,
-        et_al: &Option<NameEtAl>,
-        locale: &'l csl::locale::Locale,
-    ) -> (&'l str, Option<Formatting>) {
-        use csl::*;
-        let mut term = MiscTerm::EtAl;
-        let mut formatting = None;
-        if let Some(ref etal_element) = et_al {
-            if etal_element.term == "and others" {
-                term = MiscTerm::AndOthers;
-            }
-            formatting = etal_element.formatting;
-        }
-        let txt = locale
-            .get_text_term(
-                TextTermSelector::Simple(SimpleTermSelector::Misc(term, TermFormExtended::Long)),
-                false,
-            )
-            .unwrap_or("et al");
-        (txt, formatting)
-    }
-
     pub(crate) fn render_person_name(&self, pn: &PersonName, seen_one: bool) -> O::Build {
         let fmt = self.fmt;
 
@@ -933,13 +928,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         &self,
         names_slice: &'b [DisambNameRatchet<O::Build>],
         position: Position,
-        locale: &'b csl::locale::Locale,
         et_al: &Option<NameEtAl>,
         is_sort_key: bool,
+        and_term: Option<&'b String>,
+        etal_term: Option<&'b (String, Option<Formatting>)>,
     ) -> Vec<NameTokenBuilt<'b, O::Build>> {
         let fmt = self.fmt.clone();
         let mut seen_one = false;
-        let name_tokens = self.name_tokens(position, names_slice, is_sort_key, et_al, locale);
+        let name_tokens = self.name_tokens(position, names_slice, is_sort_key, etal_term);
 
         if self.name_el.form == Some(NameForm::Count) {
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -994,9 +990,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         // locale
                         //     .get_text_term(select(TermFormExtended::Symbol), false)
                         //     .unwrap_or("&"),
-                        _ => locale
-                            .get_text_term(select(TermFormExtended::Long), false)
-                            .unwrap_or("and"),
+                        _ => and_term.map(|x| x.as_ref()).unwrap_or("and"),
                     };
                     let mut string = form.to_owned();
                     string.push(' ');

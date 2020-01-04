@@ -52,6 +52,10 @@ pub struct CiteContext<
     /// independent of the position variable), then it could be possible, by recognising this and
     /// using Position::First for everything, removing the part of the cycle where positions depend
     /// on sorting.
+    ///
+    /// (Would need FreeWalker's conds for Names blocks to mix in Position only when
+    /// et-al-subsequent-* are used. Also, should not be reference-specific, so none of the
+    /// normally-dependent variables can be used.)
     pub year_suffix: Option<u32>,
 }
 

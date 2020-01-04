@@ -312,6 +312,29 @@ impl Locale {
             .map(|term_plurality| term_plurality.singular())
     }
 
+    pub fn et_al_term(&self, element: Option<&crate::NameEtAl>) -> Option<(String, Option<Formatting>)> {
+        let mut term = MiscTerm::EtAl;
+        let mut default = "et al";
+        let mut formatting = None;
+        if let Some(el) = element {
+            if el.term == "and others" {
+                term = MiscTerm::AndOthers;
+                default = "and others";
+            }
+            formatting = el.formatting;
+        }
+        let txt = self
+            .get_text_term(
+                TextTermSelector::Simple(SimpleTermSelector::Misc(term, TermFormExtended::Long)),
+                false,
+            )
+            .unwrap_or(default);
+        if txt.is_empty() {
+            return None;
+        }
+        Some((txt.to_owned(), formatting))
+    }
+
     pub fn get_month_gender(&self, month: MonthTerm) -> Gender {
         let selector = GenderedTermSelector::Month(month, TermForm::Long);
         // Don't use fallback, just the long form

@@ -1,4 +1,5 @@
 use crate::disamb::names::NameIR;
+use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
 use csl::Atom;
@@ -721,6 +722,33 @@ use csl::SubsequentAuthorSubstituteRule as SasRule;
 use citeproc_io::PersonName;
 use crate::disamb::names::{DisambNameRatchet, PersonDisambNameRatchet};
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum ReducedNameToken<'a, B> {
+    Name(&'a PersonName),
+    Literal(&'a B),
+    EtAl,
+    Ellipsis,
+    Delimiter,
+    And,
+    Space,
+}
+
+impl<'a, T> ReducedNameToken<'a, T> {
+    fn from_token(token: &NameToken<'a, T>) -> Self {
+        match token {
+            NameToken::Name(dnr) => match dnr {
+                DisambNameRatchet::Person(p) => ReducedNameToken::Name(&p.data.value),
+                DisambNameRatchet::Literal(b) => ReducedNameToken::Literal(b),
+            }
+            NameToken::Ellipsis => ReducedNameToken::Ellipsis,
+            NameToken::EtAl(..) => ReducedNameToken::EtAl,
+            NameToken::Space => ReducedNameToken::Space,
+            NameToken::Delimiter => ReducedNameToken::Delimiter,
+            NameToken::And => ReducedNameToken::And,
+        }
+    }
+}
+
 pub fn subsequent_author_substitute<O: OutputFormat>(
     fmt: &O,
     previous: &Mutex<NameIR<O>>,
@@ -730,26 +758,26 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
 ) -> bool {
     let mut pre = previous.lock().unwrap();
     let mut cur = current.lock().unwrap();
+    let pre_tokens = pre.iter_bib_rendered_names(fmt);
+    let pre_reduced = pre_tokens
+        .iter()
+        .map(ReducedNameToken::from_token);
+    let cur_tokens = cur.iter_bib_rendered_names(fmt);
+    let cur_reduced = cur_tokens
+        .iter()
+        .map(ReducedNameToken::from_token);
     match sas_rule {
-        SasRule::CompleteAll => {
-            if pre.disamb_names.len() != cur.disamb_names.len() || pre.disamb_names.len() == 0 {
-                return false;
-            }
-            fn mapper<T>(ratchet: &DisambNameRatchet<T>) -> Result<&PersonName, &T> {
-                match ratchet {
-                    // Ok & Err are just an ad-hoc Either type
-                    DisambNameRatchet::Person(p) => Ok(&p.data.value),
-                    DisambNameRatchet::Literal(b) => Err(&b),
-                }
-            };
-            if Iterator::eq(
-                pre.disamb_names.iter().map(mapper),
-                cur.disamb_names.iter().map(mapper),
-            ) {
-                *cur.ir = if sas.is_empty() {
-                    IR::Rendered(None)
+        SasRule::CompleteAll | SasRule::CompleteEach => {
+            debug!("{:?} vs {:?}", pre_tokens, cur_tokens);
+            if Iterator::eq(pre_reduced, cur_reduced) {
+                if sas_rule == SasRule::CompleteEach {
+                    // let nir handle it
+                    // u32::MAX so ALL names get --- treatment
+                    cur.subsequent_author_substitute(fmt, std::u32::MAX, sas);
+                } else if sas.is_empty() {
+                    *cur.ir = IR::Rendered(None)
                 } else {
-                    IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))))
+                    *cur.ir = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))))
                 };
                 return true;
             }

@@ -353,7 +353,7 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
     }
 
     fn renderer(&'a self) -> Renderer<'a, PlainText, I> {
-        Renderer::sorting(GenericContext::Cit(&self.ctx))
+        Renderer::gen(GenericContext::Cit(&self.ctx))
     }
 }
 
