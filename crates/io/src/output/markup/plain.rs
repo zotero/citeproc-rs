@@ -50,6 +50,9 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
             NoCase(inners) => {
                 self.write_micros(inners);
             }
+            NoDecor(inners) => {
+                self.write_micros(inners);
+            }
         }
     }
 

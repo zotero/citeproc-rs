@@ -153,7 +153,7 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
     for inl in slice.iter_mut() {
         match inl {
             MicroNode::Quoted { children, .. }
-            | MicroNode::NoCase(children)
+            | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
             | MicroNode::Formatted(children, _) => normalise_text_elements_micro(children),
             _ => {}
         }
@@ -391,7 +391,7 @@ fn is_punc_space(c: char) -> bool {
 fn find_string_left_micro(m: &mut MicroNode) -> Option<&mut String> {
     match m {
         MicroNode::Text(string) => Some(string),
-        MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+        MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
             nodes.first_mut().and_then(find_string_left_micro)
         }
         _ => None,
@@ -532,7 +532,7 @@ fn find_right_quote_inside_micro<'b>(micro: &'b mut MicroNode, next: &'b mut Str
             Some(RightQuoteInsertionPoint::InsideMicro(children, next))
         }
         // Dive into formatted bits
-        MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+        MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
             nodes.last_mut().and_then(move |x| find_right_quote_inside_micro(x, next))
         }
         _ => None,
@@ -627,7 +627,7 @@ fn last_string(is: &mut [InlineElement]) -> Option<&mut String> {
 fn last_string_micro(ms: &mut [MicroNode]) -> Option<&mut String> {
     ms.last_mut().and_then(|m| match m {
         MicroNode::Quoted { children, .. }
-        | MicroNode::NoCase(children)
+        | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
         | MicroNode::Formatted(children, _) => {
             last_string_micro(children)
         }
