@@ -907,15 +907,42 @@ pub fn built_cluster_before_output(
     if let Some((cgd, collapse)) = style.citation.group_collapsing() {
         group_and_collapse(db, &fmt, cgd, collapse, &mut irs);
     }
-    debug!("group_and_collapse made: {:#?}", irs);
+
+    // Cite capitalization
+    // TODO: allow clients to pass a flag to prevent this when a cluster is in the middle of an
+    // existing footnote, and isn't preceded by a period (or however else a client wants to judge
+    // that).
+    if let Some(Unnamed3 { cite, gen4, .. }) = irs.first_mut() {
+        use unic_segment::Words;
+        if style.class != csl::StyleClass::InText && cite.prefix.as_ref().map_or(true, |pre| {
+            // bugreports_CapsAfterOneWordPrefix
+            let mut words = Words::new(pre, |s| s.chars().any(|c| c.is_alphanumeric()));
+            words.next();
+            let is_single_word = words.next().is_none();
+            (pre.is_empty() || pre.trim_end().ends_with(".")) && !is_single_word
+        }) {
+            let gen_mut = Arc::make_mut(gen4);
+            gen_mut.ir.capitalize_first_term_of_cluster(&fmt);
+        }
+    }
+    // debug!("group_and_collapse made: {:#?}", irs);
 
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
+        use std::borrow::Cow;
         let ir = &gen4.ir;
         let flattened = ir.flatten(&fmt)?;
+        let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
+        let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
+        if pre.ends_with(".") {
+            let pre_mut = pre.to_mut();
+            pre_mut.push(' ');
+        }
+        // TODO: custom procedure for joining user-supplied cite affixes, which should interact
+        // with terminal punctuation by overriding rather than joining in the usual way.
         let aff = Affixes {
-            prefix: Atom::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or("")),
-            suffix: Atom::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or("")),
+            prefix: Atom::from(pre),
+            suffix: Atom::from(suf),
         };
         Some(fmt.affixed(flattened, Some(&aff)))
     };

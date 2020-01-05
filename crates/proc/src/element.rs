@@ -163,7 +163,7 @@ where
                     TextSource::Term(term_selector, plural) => {
                         let content = renderer
                             .text_term(text, term_selector, plural)
-                            .map(CiteEdgeData::Output);
+                            .map(CiteEdgeData::Term);
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }

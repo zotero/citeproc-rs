@@ -213,6 +213,7 @@ pub enum CiteEdgeData<O: OutputFormat = Markup> {
     /// another. So we will ignore it. Works for, e.g., date_YearSuffixImplicitWithNoDate.txt
     Accessed(O::Build),
     Year(O::Build),
+    Term(O::Build),
 }
 
 impl<O: OutputFormat> CiteEdgeData<O> {
@@ -420,7 +421,7 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
         formatting: Formatting,
     ) -> EdgeData {
         match self {
-            CiteEdgeData::Output(x) | CiteEdgeData::Year(x) => {
+            CiteEdgeData::Output(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting, None))
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
@@ -436,6 +437,7 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
     fn inner(&self) -> O::Build {
         match self {
             CiteEdgeData::Output(x)
+            | CiteEdgeData::Term(x)
             | CiteEdgeData::Year(x)
             | CiteEdgeData::YearSuffix(x)
             | CiteEdgeData::Frnn(x)

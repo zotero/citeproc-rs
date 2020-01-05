@@ -5,6 +5,42 @@ use csl::Atom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 
+/////////////////////////////////
+// capitalize start of cluster //
+/////////////////////////////////
+
+impl<O: OutputFormat> IR<O> {
+    pub fn capitalize_first_term_of_cluster(&mut self, fmt: &O) {
+        if let Some(trf) = self.find_term_rendered_first() {
+            fmt.apply_text_case(trf, &IngestOptions {
+                text_case: TextCase::CapitalizeFirst,
+                ..Default::default()
+            });
+        }
+    }
+    // Gotta find a a CiteEdgeData::Term/LocatorLabel/FrnnLabel
+    // (the latter two are also terms, but a different kind for disambiguation).
+    fn find_term_rendered_first(&mut self) -> Option<&mut O::Build> {
+        match self {
+            IR::Rendered(Some(CiteEdgeData::Term(b))) |
+            IR::Rendered(Some(CiteEdgeData::LocatorLabel(b))) |
+            IR::Rendered(Some(CiteEdgeData::FrnnLabel(b))) => Some(b),
+            // IR::ConditionalDisamb(c) => {
+            //     let mut lock = c.lock().unwrap();
+            //     lock.ir.find_term_rendered_first()
+            // }
+            IR::Seq(seq) => {
+                // Search backwards because it's likely to be near the end
+                seq.contents
+                    .first_mut()
+                    .and_then(|(ir, _)| ir.find_term_rendered_first())
+            }
+            _ => None,
+        }
+    }
+
+}
+
 ////////////////////////
 // second-field-align //
 ////////////////////////
