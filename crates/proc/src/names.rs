@@ -121,13 +121,21 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     // moment), but it doesn't need to: that would accept a single list of names, which makes it
     // more convenient to use for people inputting names in a reference manager.
 
-    let is_editor_translator = &names.variables == &[NameVariable::Editor, NameVariable::Translator]
-        || &names.variables == &[NameVariable::Translator, NameVariable::Editor];
-
     let mut var_override = None;
     let mut slice_override = None;
 
-    if is_editor_translator {
+    // Note: won't make editortranslator when you're also rendering a third or even more
+    // variables.
+    let is_editor_translator = &names.variables == &[NameVariable::Editor, NameVariable::Translator]
+        || &names.variables == &[NameVariable::Translator, NameVariable::Editor];
+
+    // name_EditorTranslatorSameEmptyTerm
+    // (Although technically the spec isn't worded that way, it is useful to be able to disable
+    // this behaviour.)
+    let sel = csl::TextTermSelector::Role(csl::RoleTermSelector(csl::RoleTerm::EditorTranslator, csl::TermFormExtended::Long));
+    let editortranslator_term_empty = locale.get_text_term(sel, false) == Some("");
+
+    if is_editor_translator && !editortranslator_term_empty {
         let ed_val = refr.name.get(&NameVariable::Editor);
         let tr_val = refr.name.get(&NameVariable::Translator);
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {

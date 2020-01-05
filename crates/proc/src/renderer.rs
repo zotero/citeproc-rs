@@ -370,7 +370,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         plural: bool,
     ) -> Option<O::Build> {
         let locale = self.ctx.locale();
-        locale.get_text_term(term_selector, plural).map(|val| {
+        locale
+            .get_text_term(term_selector, plural)
+            .filter(|x| !x.is_empty())
+            .map(|val| {
             let options = IngestOptions {
                 text_case: text.text_case,
                 quotes: self.quotes(),
@@ -425,6 +428,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
+                .filter(|x| !x.is_empty())
                 .map(|term_text| {
                     let options = IngestOptions {
                         text_case,
@@ -466,7 +470,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
-                .filter(|val| !val.is_empty())
+                .filter(|x| !x.is_empty())
                 .map(|val| {
                     let b = fmt.ingest(val, &options);
                     let b = fmt.with_format(b, label.formatting);
