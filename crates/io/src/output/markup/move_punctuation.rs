@@ -378,7 +378,7 @@ enum Where {
     Split(char, char),
 }
 
-fn is_punc(c: char) -> bool {
+pub fn is_punc(c: char) -> bool {
     c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':'
 }
 

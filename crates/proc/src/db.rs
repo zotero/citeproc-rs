@@ -937,9 +937,14 @@ pub fn built_cluster_before_output(
         let flattened = ir.flatten(&fmt)?;
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
-        if pre.ends_with(".") {
+        if !pre.is_empty() && !pre.ends_with(' ') {
             let pre_mut = pre.to_mut();
             pre_mut.push(' ');
+        }
+        let suf_first = suf.chars().nth(0);
+        if suf_first.map_or(false, |x| x != ' ' && !citeproc_io::output::markup::is_punc(x)) {
+            let suf_mut = suf.to_mut();
+            suf_mut.insert_str(0, " ");
         }
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
