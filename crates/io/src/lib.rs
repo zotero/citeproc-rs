@@ -25,6 +25,7 @@ mod cite;
 mod csl_json;
 mod date;
 mod names;
+pub use names::TrimInPlace;
 mod numeric;
 pub mod output;
 mod reference;
