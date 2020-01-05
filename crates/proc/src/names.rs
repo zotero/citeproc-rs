@@ -612,7 +612,7 @@ fn should_delimit_after<O: OutputFormat>(
         DelimiterPrecedes::Contextual => count_before_spot >= 2,
         // anticipate whether name_as_sort_order would kick in for the
         // name just before the delimiter would go
-        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
+        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 1),
         DelimiterPrecedes::Always => true,
         DelimiterPrecedes::Never => false,
     }
