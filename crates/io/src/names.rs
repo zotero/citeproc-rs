@@ -46,8 +46,8 @@ macro_rules! regex {
 use std::borrow::Cow;
 
 fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^(?:\u{02bb} |\u{2019} | |\' )?\\S+ *");
-    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}| |\') *");
+    let givenn_particles_re = regex!("^(?:\u{02bb}\\s|\u{2019}\\s|\\s|'\\s)?\\S+\\s*");
+    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
     debug!("split_particles: {:?}", orig_name_str);
     let (splitter, name_str) = if is_given {
         (givenn_particles_re, Cow::Owned(orig_name_str.chars().rev().collect()))

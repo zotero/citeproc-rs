@@ -31,15 +31,17 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
     }
     let base_len = base.len();
     let suff_len = suff.len();
+    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
+    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
+    let width = last_width + first_width;
     base.push_str(suff);
     // Smash across the boundary
     if base_len > 0 && suff_len > 0 {
-        // We know all punctuation characters here are 1 byte long, so we can ignore unicode for the
-        // lookups
-        let start = base_len - 1;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[start..start+2]) {
-            info!("smash_string_push REPLACING {:?} with {:?}", &base[start..start+2], *replacement);
-            base.replace_range(start..start + 2, *replacement);
+        let start = base_len - last_width;
+        let range = start .. start + width;
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+            info!("smash_string_push REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            base.replace_range(range, *replacement);
         }
     }
 }
@@ -748,8 +750,10 @@ static QUOTES_BOTH_PUNC_OUT: phf::Map<&'static [u8], Where> = phf_map! {
 /// From `punctuation_FullMontyPlain.txt` and `punctuation_FullMontyField.txt`,
 /// which have identical output. If None, do nothing.
 static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map! {
-    // Misc
+    // Spaces (a0 is nbsp)
     b"  " => Some(" "),
+    b"\xC2\xA0 " => Some("\u{a0}"),
+    b" \xC2\xA0" => Some("\u{a0}"),
 
     // Colon
     b"::" => Some(":"),
