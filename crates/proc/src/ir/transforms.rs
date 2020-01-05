@@ -799,7 +799,22 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                 } else if sas.is_empty() {
                     *cur.ir = IR::Rendered(None)
                 } else {
-                    *cur.ir = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))))
+                    let sas_ir = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))));
+                    let mut contents = vec![(sas_ir, GroupVars::Important)];
+                    if let Some(label_el) = cur.names_inheritance.label.as_ref() {
+                        if let Some(label) = cur.built_label.as_ref() {
+                            let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                            if label_el.after_name {
+                                contents.push((label_ir, GroupVars::Plain));
+                            } else {
+                                contents.insert(0, (label_ir, GroupVars::Plain));
+                            }
+                        }
+                    }
+                    *cur.ir = IR::Seq(IrSeq {
+                        contents,
+                        ..Default::default()
+                    })
                 };
                 return true;
             }

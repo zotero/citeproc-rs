@@ -477,21 +477,20 @@ impl<'c, O: OutputFormat> NameIR<O> {
 
         let mut seq = IrSeq {
             contents,
-            formatting: None,
-            affixes: None,
-            display: None,
             ..Default::default()
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::Missing))
         } else {
-            if let Some(label_el) = names_inheritance.label.as_ref() {
-                if let Some(label) = self.built_label.as_ref() {
-                    let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
-                    if label_el.after_name {
-                        seq.contents.push((label_ir, GroupVars::Plain));
-                    } else {
-                        seq.contents.insert(0, (label_ir, GroupVars::Plain));
+            if !is_sort_key {
+                if let Some(label_el) = names_inheritance.label.as_ref() {
+                    if let Some(label) = self.built_label.as_ref() {
+                        let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                        if label_el.after_name {
+                            seq.contents.push((label_ir, GroupVars::Plain));
+                        } else {
+                            seq.contents.insert(0, (label_ir, GroupVars::Plain));
+                        }
                     }
                 }
             }
