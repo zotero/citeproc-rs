@@ -91,6 +91,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                         should_start_with_global,
                     ),
                     Name::Literal { literal } => {
+                        warn!("literal names should be normalised");
                         DisambNameRatchet::Literal(fmt.text_node(literal, None))
                     }
                 }
