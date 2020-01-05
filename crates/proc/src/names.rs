@@ -682,6 +682,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
         if self.name_el.enable_et_al() && name_count >= ea_min {
+            // etal_UseZeroFirst
+            if ea_use_first == 0 {
+                return Vec::new();
+            }
             if self.name_el.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
                 let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
