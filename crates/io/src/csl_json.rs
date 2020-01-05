@@ -45,22 +45,29 @@ impl<'de> Visitor<'de> for LanguageVisitor {
     where
         E: de::Error,
     {
-        Lang::from_str(key).map_err(|_e| de::Error::unknown_field(key, &["language"]))
+        match Lang::parse(key) {
+            Ok(lang) => Ok(lang),
+            Err((_garbage, Some(half_parsed))) => Ok(half_parsed),
+            Err((remain, _)) => Err(de::Error::invalid_value(de::Unexpected::Str(key), &self)),
+        }
     }
 }
 
 struct MaybeDate(Option<DateOrRange>);
 
-pub struct WrapLang(Lang);
+pub struct WrapLang(Option<Lang>);
 
 impl<'de> Deserialize<'de> for WrapLang {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        deserializer
+        Ok(deserializer
             .deserialize_identifier(LanguageVisitor)
+            .map(Some)
             .map(WrapLang)
+            // For non-English garbage parses, see locale_TitleCaseGarbageLangEmptyLocale
+            .unwrap_or(WrapLang(Some(Lang::klingon()))))
     }
 }
 
@@ -205,7 +212,8 @@ impl<'de> Deserialize<'de> for Reference {
                             csl_type = Some(map.next_value()?);
                         }
                         Field::Language => {
-                            language = Some(map.next_value()?).map(|WrapLang(l)| l);
+                            let wrap: WrapLang = map.next_value()?;
+                            language = wrap.0;
                         }
                         Field::Any(WrapVar(AnyVariable::Ordinary(v))) => {
                             match ordinary.entry(v) {

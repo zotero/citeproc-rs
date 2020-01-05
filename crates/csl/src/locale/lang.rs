@@ -40,6 +40,9 @@ impl Lang {
     pub fn en_us() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::US))
     }
+    pub fn klingon() -> Self {
+        Lang::Iso(IsoLang::Klingon, None)
+    }
     #[cfg(test)]
     pub fn en_au() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::AU))
@@ -148,6 +151,10 @@ pub enum IsoLang {
     Japanese,
     #[strum(serialize = "ar", serialize = "ara")]
     Arabic,
+
+    // For non-English garbage parses, see locale_TitleCaseGarbageLangEmptyLocale
+    #[strum(serialize = "tlh")]
+    Klingon,
     /// The rest are not part of the fallback relation, so just treat them as strings.
     ///
     /// Also we save allocations for some popular languages!
@@ -166,6 +173,7 @@ impl IsoLang {
             IsoLang::Chinese => "zh",
             IsoLang::Japanese => "ja",
             IsoLang::Arabic => "ar",
+            IsoLang::Klingon => "tlh",
             IsoLang::Other(ref o) => &o,
         };
         String::from(s)
@@ -284,6 +292,21 @@ impl FromStr for Lang {
     }
 }
 
+impl Lang {
+    // Error contains a half-parsed version and any trailing garbage
+    pub fn parse(input: &str) -> Result<Self, (&str, Option<Self>)> {
+        if let Ok((remainder, parsed)) = parse_lang_garbage(&input) {
+            if remainder.is_empty() {
+                Ok(parsed)
+            } else {
+                Err((remainder, Some(parsed)))
+            }
+        } else {
+            Err((input, None))
+        }
+    }
+}
+
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while_m_n},
@@ -328,8 +351,18 @@ fn parse_iso(inp: &str) -> IResult<&str, Lang> {
     })(inp)
 }
 
+fn parse_iso_garbage(inp: &str) -> IResult<&str, Lang> {
+    let (inp, iso) = iso_lang(inp)?;
+    let (inp, _) = tag("-")(inp)?;
+    Ok((inp, Lang::Iso(iso, None)))
+}
+
 fn parse_lang(inp: &str) -> IResult<&str, Lang> {
     alt((parse_unofficial, parse_iana, parse_iso))(inp)
+}
+
+fn parse_lang_garbage(inp: &str) -> IResult<&str, Lang> {
+    alt((parse_unofficial, parse_iana, parse_iso, parse_iso_garbage))(inp)
 }
 
 #[test]
