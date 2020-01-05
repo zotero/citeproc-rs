@@ -173,6 +173,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
 
 use crate::NameOverrider;
 use csl::SortKey;
+use unicase::UniCase;
 
 pub fn sort_strings_for_names(
     db: &impl IrDatabase,
@@ -180,7 +181,7 @@ pub fn sort_strings_for_names(
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<String>> {
+) -> Option<Vec<UniCase<String>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -211,7 +212,7 @@ pub fn sort_strings_for_names(
                 }
                 Name::Literal { literal } => {
                     if !literal.is_empty() {
-                        out.push(literal.clone());
+                        out.push(UniCase::new(literal.clone()));
                     }
                 }
             }
@@ -746,7 +747,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<String>) {
+    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<String>>) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
@@ -823,7 +824,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
-                out.push(s);
+                out.push(UniCase::new(s));
             }
         }
     }
