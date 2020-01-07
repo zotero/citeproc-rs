@@ -26,7 +26,7 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
         suff = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            base.truncate(trimmed.len())
+            base.truncate(trimmed.len());
         }
     }
     let base_len = base.len();
