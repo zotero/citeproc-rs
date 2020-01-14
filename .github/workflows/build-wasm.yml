@@ -22,13 +22,12 @@ jobs:
       - name: Yarn build (prod)
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: cd crates/wasm/js-demo && yarn build -p
-      - name: Build and Deploy
+      - name: Deploy
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: JamesIves/github-pages-deploy-action@master
+        uses: peaceiris/actions-gh-pages@v2
         env:
-          BRANCH: gh-pages
-          ACCESS_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-          FOLDER: crates/wasm/js-demo/dist
-          # only available in beta3: https://github.com/JamesIves/github-pages-deploy-action/issues/21
-          # but beta3 won't initialize properly
-          # GITHUB_REPOSITORY: cormacrelf/citeproc-wasm-demo
+          ACTIONS_DEPLOY_KEY: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_BRANCH: gh-pages
+          PUBLISH_DIR: ./crates/wasm/js-demo/dist
