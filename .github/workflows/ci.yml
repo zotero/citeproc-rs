@@ -15,15 +15,19 @@ jobs:
       - name: Extract branch name
         shell: bash
         run: |
-          echo "##[set-output name=head;]$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')"
+          # transforms refs/pulls/123/merge into pulls-123-merge
+          GITHUB_HEAD=${{ github.head_ref }}
+          GITHUB_HEAD=${GITHUB_HEAD#refs/heads/}
+          GITHUB_HEAD=$(echo ${GITHUB_HEAD#refs/} | tr '/' '-')
+          echo "GITHUB_HEAD = ${GITHUB_HEAD}"
+          echo "##[set-output name=head;]${GITHUB_HEAD}"
+
           GITHUB_BASE=${{ github.base_ref }}
-          if test -z "$GITHUB_BASE"; then
-            # github.base_ref is apparently not available when pushing to a existing pull request branch
-            # this is dumb
-            # let's just guess for now
-            GITHUB_BASE="refs/heads/master"
-          fi
-          echo "##[set-output name=base;]$(echo ${GITHUB_BASE#refs/heads/} | tr '/' '-')"
+          GITHUB_BASE=${GITHUB_BASE#refs/heads/}
+          GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
+          echo "GITHUB_BASE = ${GITHUB_BASE}"
+          echo "##[set-output name=base;]${GITHUB_BASE}"
+
         id: branch
       - name: Download base output
         env:
