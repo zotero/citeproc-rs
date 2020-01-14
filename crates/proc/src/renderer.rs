@@ -400,7 +400,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable, label_var: NameVariable) -> Option<O::Build> {
         let NameLabel {
             form,
             formatting,
@@ -411,7 +411,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             after_name: _,
         } = *label;
         let fmt = self.fmt();
-        let selector = RoleTermSelector::from_name_variable(var, form);
+        let selector = RoleTermSelector::from_name_variable(label_var, form);
         let val = self.ctx.get_name(var);
         let len = val.map(|v| v.len()).unwrap_or(0);
         let plural = match (len, plural) {

@@ -553,7 +553,9 @@ use crate::NamesInheritance;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIR<O: OutputFormat> {
     pub names_inheritance: NamesInheritance,
-    pub variable: NameVariable,
+
+    variable: NameVariable,
+    label_variable: NameVariable,
 
     pub name_counter: NameCounter,
     achieved_at: (u16, NameCounter),
@@ -578,6 +580,7 @@ where
         gen_ctx: &GenericContext<'_, O, I>,
         names_inheritance: NamesInheritance,
         variable: NameVariable,
+        label_variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         ir: Box<IR<O>>,
         style: &Style,
@@ -586,11 +589,12 @@ where
     ) -> Self {
         let built_label = names_inheritance.label.as_ref().and_then(|label| {
             let renderer = Renderer::gen(gen_ctx.clone());
-            renderer.name_label(&label.concrete(), variable)
+            renderer.name_label(&label.concrete(), variable, label_variable)
         });
         NameIR {
             names_inheritance,
             variable,
+            label_variable,
             disamb_names: ratchets,
             ir,
             name_counter: NameCounter::default(),

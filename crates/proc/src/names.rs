@@ -73,45 +73,93 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     let style = ctx.style();
     let locale = ctx.locale();
     let refr = ctx.reference();
-    names
-        .variables
+    let get_name_ir = move |(var, label_var, value): (NameVariable, NameVariable, Vec<Name>)| {
+        let ratchets = value
+            .into_iter()
+            .enumerate()
+            .map(|(n, value)| {
+                // Each variable gets its own 'primary' name.
+                let primary = n == 0;
+                match value {
+                    Name::Person(pn) => DisambNameRatchet::for_person(
+                        db,
+                        var,
+                        pn,
+                        &refr.id,
+                        &names_inheritance.name,
+                        primary,
+                        should_start_with_global,
+                    ),
+                    Name::Literal { literal } => {
+                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
+                    }
+                }
+            })
+            .collect();
+        NameIR::new(
+            ctx,
+            names_inheritance.clone(),
+            var,
+            label_var,
+            ratchets,
+            Box::new(IR::Rendered(None)),
+            style,
+            locale.et_al_term(names_inheritance.et_al.as_ref()),
+            locale.and_term(None).map(|x| x.to_owned()),
+        )
+    };
+
+    // If multiple variables are selected (separated by single spaces, see example below), each
+    // variable is independently rendered in the order specified, with one exception: when the
+    // selection consists of “editor” and “translator”, and when the contents of these two name
+    // variables is identical, then the contents of only one name variable is rendered. In
+    // addition, the “editortranslator” term is used if the cs:names element contains a cs:label
+    // element, replacing the default “editor” and “translator” terms (e.g. resulting in “Doe
+    // (editor & translator)”).
+
+    // Doesn't handle the editortranslator variable used directly (feature-flagged at the
+    // moment), but it doesn't need to: that would accept a single list of names, which makes it
+    // more convenient to use for people inputting names in a reference manager.
+
+    let is_editor_translator = &names.variables == &[NameVariable::Editor, NameVariable::Translator]
+        || &names.variables == &[NameVariable::Translator, NameVariable::Editor];
+
+    let mut var_override = None;
+    let mut slice_override = None;
+
+    if is_editor_translator {
+        let ed_val = refr.name.get(&NameVariable::Editor);
+        let tr_val = refr.name.get(&NameVariable::Translator);
+        if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
+            // identical
+            if ed == tr {
+                let ed_sup = state.is_name_suppressed(NameVariable::Editor);
+                let tran_sup = state.is_name_suppressed(NameVariable::Translator);
+                let to_use = if ed_sup && tran_sup {
+                    slice_override = Some(&[][..]);
+                } else if ed_sup {
+                    var_override = Some(NameVariable::EditorTranslator);
+                    slice_override = Some(&[NameVariable::Translator][..]);
+                } else {
+                    var_override = Some(NameVariable::EditorTranslator);
+                    slice_override = Some(&[NameVariable::Editor][..]);
+                };
+            }
+        }
+    }
+
+    slice_override
+        .unwrap_or(&names.variables[..])
         .iter()
         .filter(move |var| !state.is_name_suppressed(**var))
-        .filter_map(move |var| refr.name.get(var).map(|val| (*var, val.clone())))
-        .map(move |(var, value)| {
-            let ratchets = value
-                .into_iter()
-                .enumerate()
-                .map(|(n, value)| {
-                    // Each variable gets its own 'primary' name.
-                    let primary = n == 0;
-                    match value {
-                        Name::Person(pn) => DisambNameRatchet::for_person(
-                            db,
-                            var,
-                            pn,
-                            &refr.id,
-                            &names_inheritance.name,
-                            primary,
-                            should_start_with_global,
-                        ),
-                        Name::Literal { literal } => {
-                            DisambNameRatchet::Literal(fmt.text_node(literal, None))
-                        }
-                    }
-                })
-                .collect();
-            NameIR::new(
-                ctx,
-                names_inheritance.clone(),
-                var,
-                ratchets,
-                Box::new(IR::Rendered(None)),
-                style,
-                locale.et_al_term(names_inheritance.et_al.as_ref()),
-                locale.and_term(None).map(|x| x.to_owned()),
-            )
+        .filter_map(move |var| {
+            let ovar = var_override.as_ref().unwrap_or(var);
+            refr
+                .name
+                .get(var)
+                .map(|val| (*var, *ovar, val.clone()))
         })
+        .map(get_name_ir)
 }
 
 use crate::NameOverrider;
@@ -368,11 +416,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         pass: Option<DisambPass>,
         substitute: Option<(u32, &str)>,
     ) -> Option<IrSum<O>> {
-        let NameIR {
-            ref names_inheritance,
-            variable,
-            ..
-        } = *self;
+        let NameIR { ref names_inheritance, .. } = *self;
         let mut runner = self.runner(&self.names_inheritance.name, fmt);
 
         let (mut subst_count, subst_text) = substitute.unwrap_or((0, ""));

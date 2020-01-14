@@ -360,6 +360,12 @@ pub enum NameVariable {
     /// translator
     Translator,
 
+    #[strum(
+        serialize = "editortranslator",
+        props(feature = "var_editortranslator")
+    )]
+    EditorTranslator,
+
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     Authority,
