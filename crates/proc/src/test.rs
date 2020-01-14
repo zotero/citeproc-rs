@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Cite, Cluster, IntraNote, Reference};
+use citeproc_io::{output::markup::Markup, Cluster, Reference};
 use csl::Atom;
 
 use csl::Style;
@@ -79,7 +79,6 @@ impl MockProcessor {
     }
 
     pub fn set_style_text(&mut self, style_text: &str) {
-        use csl::Style;
         use std::str::FromStr;
         let style = Style::from_str(style_text).unwrap();
         use salsa::Durability;

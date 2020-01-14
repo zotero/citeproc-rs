@@ -508,8 +508,8 @@ pub enum RoleTerm {
     Director,
     Editor,
     EditorialDirector,
-    // No camel case on the T, that would be "editor-translator", not right
-    Editortranslator,
+    #[strum(serialize = "editortranslator")]
+    EditorTranslator,
     Illustrator,
     Interviewer,
     OriginalAuthor,
@@ -529,6 +529,7 @@ impl RoleTerm {
             NameVariable::Director => RoleTerm::Director,
             NameVariable::Editor => RoleTerm::Editor,
             NameVariable::EditorialDirector => RoleTerm::EditorialDirector,
+            NameVariable::EditorTranslator => RoleTerm::EditorTranslator,
             NameVariable::Illustrator => RoleTerm::Illustrator,
             NameVariable::Interviewer => RoleTerm::Interviewer,
             NameVariable::OriginalAuthor => RoleTerm::OriginalAuthor,

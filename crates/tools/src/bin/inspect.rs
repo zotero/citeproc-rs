@@ -42,7 +42,7 @@ struct Inspect {
 
 fn main() -> Result<(), Error> {
     use env_logger::Env;
-    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug,citeproc_io=debug,citeproc_db=debug")).init();
+    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug,citeproc_io=debug,citeproc_db=debug,citeproc_io::output::markup::move_punctuation=warn")).init();
     let opt = Inspect::from_args();
     let mut path = workspace_root();
     path.push("crates");
@@ -82,7 +82,7 @@ fn main() -> Result<(), Error> {
     let style = case.processor.style();
     let features = &style.features;
     let cluster = || {
-        for cluster in case.processor.clusters_sorted().iter() {
+        for cluster in case.processor.clusters_cites_sorted().iter() {
             use test_utils::citeproc_proc::built_cluster_before_output;
             let built = built_cluster_before_output(&case.processor, cluster.id);
             println!("ClusterId({:?}): {:#?}", cluster.id, built);
@@ -90,7 +90,7 @@ fn main() -> Result<(), Error> {
     };
     let positions = || {
         let positions = case.processor.cite_positions();
-        for cluster in case.processor.clusters_sorted().iter() {
+        for cluster in case.processor.clusters_cites_sorted().iter() {
             println!("ClusterId({:?})", cluster.id);
             for id in cluster.cites.iter() {
                 println!("- {:?}", positions.get(id).unwrap());

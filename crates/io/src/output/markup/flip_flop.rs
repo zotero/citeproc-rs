@@ -103,6 +103,11 @@ fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Option<InlineElem
             })
         }
 
+        InlineElement::Div(dm, ref inlines) => {
+            let subs = state.flip_flop_inlines(inlines);
+            Some(InlineElement::Div(dm, subs))
+        }
+
         InlineElement::Text(ref string) if string.is_empty() => None,
 
         _ => Some(inline.clone()),

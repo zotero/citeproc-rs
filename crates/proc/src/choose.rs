@@ -33,6 +33,7 @@ where
                         choose: self.clone(),
                         done: false,
                         ir: Box::new(content),
+                        group_vars: gv,
                     }))),
                     gv,
                 )

@@ -5,12 +5,13 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use std::borrow::Cow;
+use crate::NumberLike;
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
-pub enum NumericValue {
-    Tokens(String, Vec<NumericToken>),
+pub enum NumericValue<'a> {
+    Tokens(Cow<'a, str>, Vec<NumericToken>),
     /// For values that could not be parsed.
-    Str(String),
+    Str(Cow<'a, str>),
 }
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
@@ -20,6 +21,8 @@ pub enum NumericToken {
     Comma,
     Hyphen,
     Ampersand,
+    And,
+    CommaAnd,
 }
 
 use self::NumericToken::*;
@@ -65,11 +68,11 @@ impl NumericToken {
 /// It's a number, then a { comma|hyphen|ampersand } with any whitespace, then another number, and
 /// so on. All numbers are unsigned.
 
-impl NumericValue {
+impl<'a> NumericValue<'a> {
     pub fn num(i: u32) -> Self {
-        NumericValue::Tokens(format!("{}", i), vec![Num(i)])
+        NumericValue::Tokens(format!("{}", i).into(), vec![Num(i)])
     }
-    pub fn page_first(&self) -> Option<NumericValue> {
+    pub fn page_first(&self) -> Option<Self> {
         self.first_num().map(NumericValue::num)
     }
     fn first_num(&self) -> Option<u32> {
@@ -84,10 +87,15 @@ impl NumericValue {
             NumericValue::Str(_) => false,
         }
     }
-    pub fn is_multiple(&self, var_is_quantity: bool) -> bool {
+    pub fn is_multiple(&self, var: csl::NumberVariable) -> bool {
         match *self {
+            // “contextual” - (default), the term plurality matches that of the variable
+            // content. Content is considered plural when it contains multiple numbers (e.g.
+            // “page 1”, “pages 1-3”, “volume 2”, “volumes 2 & 4”), or, in the case of the
+            // “number-of-pages” and “number-of-volumes” variables, when the number is higher
+            // than 1 (“1 volume” and “3 volumes”).
             NumericValue::Tokens(_, ref ts) => {
-                if var_is_quantity {
+                if var.is_quantity() {
                     match ts.len() {
                         0 => true, // doesn't matter
                         1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
@@ -102,21 +110,13 @@ impl NumericValue {
                 }
             },
 
-            // TODO: fallback interpretation of "multiple" to include unparsed numerics that have
-            // multiple numbers etc
-            //
-            // “contextual” - (default), the term plurality matches that of the variable content.
-            // Content is considered plural when it contains multiple numbers (e.g. “page 1”,
-            // “pages 1-3”, “volume 2”, “volumes 2 & 4”), or, in the case of the “number-of-pages”
-            // and “number-of-volumes” variables, when the number is higher than 1 (“1 volume” and
-            // “3 volumes”).
             NumericValue::Str(_) => false,
         }
     }
     pub fn verbatim(&self) -> &str {
         match self {
-            NumericValue::Tokens(verb, _) => verb.as_str(),
-            NumericValue::Str(s) => s.as_str(),
+            NumericValue::Tokens(verb, _) => verb,
+            NumericValue::Str(s) => s,
         }
     }
 }
@@ -132,12 +132,13 @@ impl Ord for NumericToken {
             (Hyphen, Hyphen) => Ordering::Equal,
             (Comma, Comma) => Ordering::Equal,
             (Ampersand, Ampersand) => Ordering::Equal,
+            (And, And) => Ordering::Equal,
             _ => Ordering::Equal,
         }
     }
 }
 
-impl Ord for NumericValue {
+impl Ord for NumericValue<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         use self::NumericValue::*;
         match (self, other) {
@@ -155,7 +156,7 @@ impl PartialOrd for NumericToken {
     }
 }
 
-impl PartialOrd for NumericValue {
+impl PartialOrd for NumericValue<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -171,24 +172,46 @@ fn to_affixed(input: &str) -> NumericToken {
     NumericToken::Affixed(input.to_string())
 }
 
-fn sep_from(input: char) -> Result<NumericToken, ()> {
-    match input {
-        ',' => Ok(Comma),
-        '-' => Ok(Hyphen),
-        '&' => Ok(Ampersand),
-        _ => Err(()),
-    }
-}
-
 use nom::{
     branch::alt,
-    bytes::complete::is_not,
+    bytes::complete::{is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, map_res, recognize},
+    combinator::{map, map_res, recognize, opt},
     multi::{many0, many1},
     sequence::{delimited, tuple},
     IResult,
 };
+
+fn sep_from(input: char) -> NumericToken {
+    match input {
+        ',' => Comma,
+        '-' => Hyphen,
+        '&' => Ampersand,
+        _ => unreachable!()
+    }
+}
+
+fn sep_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
+    move |inp| {
+        let (inp, comma) = opt(tag(", "))(inp)?;
+        let (inp, and) = alt((tag(and_term), tag("and")))(inp)?;
+        Ok((inp, if comma.is_some() {
+            CommaAnd
+        } else {
+            And
+        }))
+    }
+}
+
+fn sep_or_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
+    move |inp| {
+        alt((sep_and(and_term), map(one_of(",&-"), sep_from)))(inp)
+    }
+}
+
+fn sep<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
+    move |inp| delimited(many0(char(' ')), sep_or_and(and_term), many0(char(' '))) (inp)
+}
 
 fn int(inp: &str) -> IResult<&str, u32> {
     map_res(digit1, from_digits)(inp)
@@ -228,16 +251,9 @@ fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
     alt((prefix1, suffix1, num))(inp)
 }
 
-fn sep(inp: &str) -> IResult<&str, NumericToken> {
-    map_res(
-        delimited(many0(char(' ')), one_of(",&-"), many0(char(' '))),
-        sep_from,
-    )(inp)
-}
-
-fn num_tokens(inp: &str) -> IResult<&str, Vec<NumericToken>> {
-    map(
-        tuple((num_ish, many0(tuple((sep, num_ish))))),
+fn num_tokens<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, Vec<NumericToken>> + 'a {
+    move |inp| map(
+        tuple((num_ish, many0(tuple((sep(and_term), num_ish))))),
         |(n, rest)| {
             let mut new = Vec::with_capacity(rest.len() * 2);
             new.push(n);
@@ -257,29 +273,38 @@ fn test_num_token_parser() {
         num_ish("2b"),
         Ok(("", NumericToken::Affixed("2b".to_string())))
     );
-    assert_eq!(sep("- "), Ok(("", Hyphen)));
-    assert_eq!(sep(", "), Ok(("", Comma)));
-    assert_eq!(num_tokens("2, 3"), Ok(("", vec![Num(2), Comma, Num(3)])));
+    assert_eq!(sep("et")("- "), Ok(("", Hyphen)));
+    assert_eq!(sep("et")(", "), Ok(("", Comma)));
+    assert_eq!(num_tokens("et")("2, 3"), Ok(("", vec![Num(2), Comma, Num(3)])));
     assert_eq!(
-        num_tokens("2 - 5, 9"),
+        num_tokens("et")("2 - 5, 9"),
         Ok(("", vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
     );
     assert_eq!(
-        num_tokens("2 - 5, 9, edition"),
+        num_tokens("et")("2 - 5, 9, edition"),
         Ok((", edition", vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
     );
 }
 
-impl<'r> From<Cow<'r, str>> for NumericValue {
-    fn from(input: Cow<'r, str>) -> Self {
-        if let Ok((remainder, parsed)) = num_tokens(&input) {
+impl<'a> NumericValue<'a> {
+    fn parse_full(input: &'a str, and_term: &'a str) -> Self {
+        if let Ok((remainder, parsed)) = num_tokens(and_term)(input) {
             if remainder.is_empty() {
-                NumericValue::Tokens(input.into_owned(), parsed)
+                NumericValue::Tokens(input.into(), parsed)
             } else {
-                NumericValue::Str(input.into_owned())
+                NumericValue::Str(input.into())
             }
         } else {
-            NumericValue::Str(input.into_owned())
+            NumericValue::Str(input.into())
+        }
+    }
+    fn parse(input: &'a str) -> Self {
+        NumericValue::parse_full(input, "and")
+    }
+    pub fn from_localized(and_term: &'a str) -> impl Fn(&'a NumberLike) -> NumericValue<'a> + 'a {
+        move |like| match like {
+            NumberLike::Str(input) => NumericValue::parse_full(input, and_term),
+            NumberLike::Num(n) => NumericValue::num(*n),
         }
     }
 }
@@ -287,27 +312,27 @@ impl<'r> From<Cow<'r, str>> for NumericValue {
 #[test]
 fn test_numeric_value() {
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2-5, 9")),
+        NumericValue::parse("2-5, 9"),
         NumericValue::Tokens(
-            String::from("2-5, 9"),
+            "2-5, 9".into(),
             vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
         )
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2 - 5, 9, edition")),
+        NumericValue::parse("2 - 5, 9, edition"),
         NumericValue::Str("2 - 5, 9, edition".into())
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("[1.2.3]")),
+        NumericValue::parse("[1.2.3]"),
         NumericValue::Tokens(
-            String::from("[1.2.3]"),
+            "[1.2.3]".into(),
             vec![Affixed("[1.2.3]".to_string())]
         )
     );
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("[3], (5), [17.1.89(4(1))(2)(a)(i)]")),
+        NumericValue::parse("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
         NumericValue::Tokens(
-            String::from("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
+            "[3], (5), [17.1.89(4(1))(2)(a)(i)]".into(),
             vec![
                 Affixed("[3]".to_string()),
                 Comma,
@@ -322,7 +347,7 @@ fn test_numeric_value() {
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::from(Cow::Borrowed("2-5, 9"))
+        NumericValue::parse("2-5, 9")
             .page_first()
             .unwrap(),
         NumericValue::num(2)
