@@ -91,6 +91,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                         should_start_with_global,
                     ),
                     Name::Literal { literal } => {
+                        warn!("literal names should be normalised");
                         DisambNameRatchet::Literal(fmt.text_node(literal, None))
                     }
                 }
@@ -172,6 +173,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
 
 use crate::NameOverrider;
 use csl::SortKey;
+use unicase::UniCase;
 
 pub fn sort_strings_for_names(
     db: &impl IrDatabase,
@@ -179,7 +181,7 @@ pub fn sort_strings_for_names(
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<String>> {
+) -> Option<Vec<UniCase<String>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -210,7 +212,7 @@ pub fn sort_strings_for_names(
                 }
                 Name::Literal { literal } => {
                     if !literal.is_empty() {
-                        out.push(literal.clone());
+                        out.push(UniCase::new(literal.clone()));
                     }
                 }
             }
@@ -475,21 +477,20 @@ impl<'c, O: OutputFormat> NameIR<O> {
 
         let mut seq = IrSeq {
             contents,
-            formatting: None,
-            affixes: None,
-            display: None,
             ..Default::default()
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::Missing))
         } else {
-            if let Some(label_el) = names_inheritance.label.as_ref() {
-                if let Some(label) = self.built_label.as_ref() {
-                    let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
-                    if label_el.after_name {
-                        seq.contents.push((label_ir, GroupVars::Plain));
-                    } else {
-                        seq.contents.insert(0, (label_ir, GroupVars::Plain));
+            if !is_sort_key {
+                if let Some(label_el) = names_inheritance.label.as_ref() {
+                    if let Some(label) = self.built_label.as_ref() {
+                        let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                        if label_el.after_name {
+                            seq.contents.push((label_ir, GroupVars::Plain));
+                        } else {
+                            seq.contents.insert(0, (label_ir, GroupVars::Plain));
+                        }
                     }
                 }
             }
@@ -612,7 +613,7 @@ fn should_delimit_after<O: OutputFormat>(
         DelimiterPrecedes::Contextual => count_before_spot >= 2,
         // anticipate whether name_as_sort_order would kick in for the
         // name just before the delimiter would go
-        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
+        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 1),
         DelimiterPrecedes::Always => true,
         DelimiterPrecedes::Never => false,
     }
@@ -682,6 +683,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
         if self.name_el.enable_et_al() && name_count >= ea_min {
+            // etal_UseZeroFirst
+            if ea_use_first == 0 {
+                return Vec::new();
+            }
             if self.name_el.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
                 let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
@@ -741,7 +746,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<String>) {
+    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<String>>) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
@@ -818,7 +823,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
-                out.push(s);
+                out.push(UniCase::new(s));
             }
         }
     }
