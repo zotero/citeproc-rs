@@ -165,6 +165,15 @@ impl FromNode for Citation {
             );
         }
         let layout_node = layouts[0];
+        let sorts: Vec<_> = node.children().filter(|n| n.has_tag_name("sort")).collect();
+        if sorts.len() > 1 {
+            return Err(InvalidCsl::new(node, "<citation> can only contain one <sort>").into());
+        }
+        let sort = if sorts.is_empty() {
+            None
+        } else {
+            Some(Sort::from_node(&sorts[0], info)?)
+        };
         Ok(Citation {
             disambiguate_add_names: attribute_bool(node, "disambiguate-add-names", false)?,
             disambiguate_add_givenname: attribute_bool(node, "disambiguate-add-givenname", false)?,
@@ -185,6 +194,11 @@ impl FromNode for Citation {
                 .map(Atom::from)
                 .map(Delimiter),
             near_note_distance: attribute_option_int(node, "near-note-distance")?.unwrap_or(5),
+            cite_group_delimiter: attribute_option_atom(node, "cite-group-delimiter"),
+            year_suffix_delimiter: attribute_option_atom(node, "year-suffix-delimiter"),
+            after_collapse_delimiter: attribute_option_atom(node, "after-collapse-delimiter"),
+            collapse: attribute_option(node, "collapse", info)?,
+            sort,
         })
     }
 }

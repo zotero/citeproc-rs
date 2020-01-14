@@ -1,12 +1,33 @@
-use crate::db::with_bib_context;
+use unicase::UniCase;
+
+use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_io::output::plain::PlainText;
-use citeproc_io::Reference;
+use citeproc_io::{Reference, ClusterId};
 use csl::*;
 use fnv::FnvHashMap;
 use std::sync::Arc;
+use citeproc_db::ClusterData;
 
 use std::cmp::Ordering;
+#[derive(Debug)]
+enum Demoted {
+    Left,
+    Right,
+}
+use natural_sort::NaturalCmp;
+
+fn compare_demoting_none<T: PartialOrd>(
+    aa: Option<T>,
+    bb: Option<T>,
+) -> (Ordering, Option<Demoted>) {
+    match (aa, bb) {
+        (None, None) => (Ordering::Equal, None),
+        (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
+        (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
+        (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
+    }
+}
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
     TextElement {
@@ -21,11 +42,18 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
 }
 
 pub fn sort_string_citation(
-    _db: &impl IrDatabase,
-    _ref_id: Atom,
-    _macro_name: Atom,
-) -> Arc<String> {
-    unimplemented!()
+    db: &impl IrDatabase,
+    cite_id: CiteId,
+    macro_name: Atom,
+    key: SortKey,
+) -> Option<Arc<String>> {
+    let cite = cite_id.lookup(db);
+    with_cite_context(db, cite_id, None, Some(key), true, None, |ctx| {
+        let mut walker = SortingWalker::new(db, &ctx);
+        let text = plain_macro_element(macro_name.clone());
+        let (string, _gv) = walker.text_macro(&text, &macro_name);
+        Arc::new(string)
+    })
 }
 
 // Cached by the DB because typically the output needs to be compared more than once
@@ -35,11 +63,10 @@ pub fn sort_string_bibliography(
     macro_name: Atom,
     key: SortKey,
 ) -> Option<Arc<String>> {
-    with_bib_context(db, ref_id.clone(), None, Some(key), |_bib, ctx| {
+    with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
-        // info!("{} macro {} produced: {}", ref_id, macro_name, string);
         Arc::new(string)
     })
 }
@@ -75,7 +102,34 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
             let b_cnum = citation_numbers.get(b).unwrap();
             let ar = db.reference_input(a.clone());
             let br = db.reference_input(b.clone());
-            bib_ordering(db, &ar, &br, *a_cnum, *b_cnum, sort, &style)
+            with_bib_context(
+                db,
+                a.clone(),
+                Some(*a_cnum),
+                None,
+                None,
+                |_, a_ctx| {
+                    with_bib_context(
+                        db,
+                        b.clone(),
+                        Some(*b_cnum),
+                        None,
+                        None,
+                        |_, b_ctx| {
+                            bib_ordering(
+                                db,
+                                |db, ref_id, macro_name, key| {
+                                    db.sort_string_bibliography(ref_id.clone(), macro_name, key)
+                                },
+                                CiteOrBib::Bibliography,
+                                (a, &a_ctx, *a_cnum),
+                                (b, &b_ctx, *b_cnum),
+                                sort,
+                            )
+                        },
+                    )
+                },
+            ).flatten().unwrap_or(Ordering::Equal)
         });
         preordered
     } else {
@@ -89,6 +143,81 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
     Arc::new((refs, citation_numbers))
 }
 
+pub fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
+    let cluster_ids = db.cluster_ids();
+    let mut clusters: Vec<_> = cluster_ids
+        .iter()
+        // No number? Not considered to be in document, position participant.
+        // Although may be disamb participant.
+        .filter_map(|&id| db.cluster_data_sorted(id))
+        .collect();
+    clusters.sort_by_key(|cluster| cluster.number);
+    Arc::new(clusters)
+}
+
+pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<ClusterData> {
+    db.cluster_note_number(id).map(|number| {
+        // Order of operations: bib gets sorted first, so cites can be sorted by
+        // citation-number.
+        let sorted_refs_arc = db.sorted_refs();
+        let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
+        let mut cites = db.cluster_cites(id);
+        let style = db.style();
+        if let Some(sort) = style.citation.sort.as_ref() {
+            let mut neu = (*cites).clone();
+            let getter = |cite_id: &CiteId| -> Option<u32> {
+                let cite = cite_id.lookup(db);
+                let cnum = db.reference(cite.ref_id.clone()).map(|refr| {
+                    *citation_numbers_by_id
+                        .get(&cite.ref_id)
+                        .expect("sorted_refs should contain a bib_item key")
+                });
+                cnum
+            };
+            neu.sort_by(|a_id, b_id| {
+                use std::cmp::Ordering;
+                match (getter(a_id), getter(b_id)) {
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => Ordering::Equal,
+                    (Some(a_cnum), Some(b_cnum)) => with_cite_context(
+                        db,
+                        a_id.clone(),
+                        Some(a_cnum),
+                        None,
+                        true,
+                        None,
+                        |a_ctx| {
+                            with_cite_context(
+                                db,
+                                b_id.clone(),
+                                Some(b_cnum),
+                                None,
+                                true,
+                                None,
+                                |b_ctx| {
+                                    bib_ordering(
+                                        db,
+                                        |db, cite_id, macro_name, key| {
+                                            db.sort_string_citation(cite_id, macro_name, key)
+                                        },
+                                        CiteOrBib::Bibliography,
+                                        (*a_id, &a_ctx, a_cnum),
+                                        (*b_id, &b_ctx, b_cnum),
+                                        sort,
+                                    )
+                                },
+                            )
+                        },
+                    ).flatten().unwrap_or(Ordering::Equal),
+                }
+            });
+            cites = Arc::new(neu);
+        }
+        ClusterData { id, number, cites }
+    })
+}
+
 pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
     let cite = id.lookup(db);
     let arc = db.sorted_refs();
@@ -97,30 +226,25 @@ pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
 }
 
 /// Creates a total ordering of References from a Sort element. (Not a query)
-pub fn bib_ordering(
-    db: &impl IrDatabase,
-    a: &Reference,
-    b: &Reference,
-    a_cnum: u32,
-    b_cnum: u32,
+pub fn bib_ordering<
+    DB: IrDatabase,
+    ID: std::fmt::Debug + Copy,
+    M: Fn(&DB, ID, Atom, SortKey) -> Option<Arc<String>>,
+    O: OutputFormat,
+    I: OutputFormat,
+>(
+    db: &DB,
+    sort_macro: M,
+    cite_or_bib: CiteOrBib,
+    a: (ID, &CiteContext<'_, O, I>, u32),
+    b: (ID, &CiteContext<'_, O, I>, u32),
     sort: &Sort,
-    _style: &Style,
 ) -> Ordering {
-    #[derive(Debug)]
-    enum Demoted {
-        Left,
-        Right,
-    }
-    use natural_sort::NaturalCmp;
-    fn compare_demoting_none<T: PartialOrd>(aa: Option<T>, bb: Option<T>) -> (Ordering, Option<Demoted>) {
-        match (aa, bb) {
-            (None, None) => (Ordering::Equal, None),
-            (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
-            (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
-            (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
-        }
-    }
     let mut ord = Ordering::Equal;
+    let (a_id, a_ctx, a_cnum) = a;
+    let (b_id, b_ctx, b_cnum) = b;
+    let a_ref = a_ctx.reference;
+    let b_ref = b_ctx.reference;
     for key in sort.keys.iter() {
         // If an ordering is found, you don't need to tie-break any further with more sort keys.
         if ord != Ordering::Equal {
@@ -129,15 +253,15 @@ pub fn bib_ordering(
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
                 let a_string =
-                    db.sort_string_bibliography(a.id.clone(), macro_name.clone(), key.clone());
+                    sort_macro(db, a_id, macro_name.clone(), key.clone());
                 let b_string =
-                    db.sort_string_bibliography(b.id.clone(), macro_name.clone(), key.clone());
+                    sort_macro(db, b_id, macro_name.clone(), key.clone());
                 let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let x = compare_demoting_none(a_nat, b_nat);
-                info!(
-                    "cmp macro {}: {} {:?} {:?} {} {:?}",
-                    macro_name, a.id, a_string, x.0, b.id, b_string
+                debug!(
+                    "cmp macro {}: {:?} {:?} {:?} {:?} {:?}",
+                    macro_name, a_id, a_string, x.0, b_id, b_string
                 );
                 x
             }
@@ -146,33 +270,55 @@ pub fn bib_ordering(
             // will just come back as None from reference.xxx.get() and produce Equal.
             SortSource::Variable(any) => match any {
                 AnyVariable::Ordinary(v) => {
-                    compare_demoting_none(a.ordinary.get(&v), b.ordinary.get(&v))
+                    use citeproc_io::micro_html_to_string;
+                    fn strip_markup(s: impl AsRef<str>) -> String {
+                        micro_html_to_string(s.as_ref(), &Default::default())
+                    };
+                    let aa = a_ctx
+                        .get_ordinary(v, VariableForm::default())
+                        .map(strip_markup)
+                        .map(UniCase::new);
+                    let bb = b_ctx
+                        .get_ordinary(v, VariableForm::default())
+                        .map(strip_markup)
+                        .map(UniCase::new);
+                    let x = compare_demoting_none(aa.as_ref(), bb.as_ref());
+                    debug!(
+                        "cmp ordinary {:?}: {:?} {:?} {:?} {:?} {:?}",
+                        v,
+                        a_ref.id,
+                        aa.as_ref(),
+                        x.0,
+                        b_ref.id,
+                        bb.as_ref()
+                    );
+                    x
                 }
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
                     compare_demoting_none(Some(a_cnum), Some(b_cnum))
                 }
-                AnyVariable::Number(v) => compare_demoting_none(a.number.get(&v), b.number.get(&v)),
+                AnyVariable::Number(v) => {
+                    compare_demoting_none(
+                        a_ctx.get_number(v),
+                        b_ctx.get_number(v),
+                    )
+                }
                 AnyVariable::Name(v) => {
-                    let a_strings = crate::names::sort_strings_for_names(
-                        db,
-                        a,
-                        v,
-                        key,
-                        CiteOrBib::Bibliography,
+                    let a_strings =
+                        crate::names::sort_strings_for_names(db, a_ref, v, key, cite_or_bib);
+                    let b_strings =
+                        crate::names::sort_strings_for_names(db, b_ref, v, key, cite_or_bib);
+                    let x = compare_demoting_none(a_strings.as_ref(), b_strings.as_ref());
+                    debug!(
+                        "cmp names {:?}: {:?} {:?} {:?} {:?} {:?}",
+                        v, a_id, a_strings, x.0, b_id, b_strings
                     );
-                    let b_strings = crate::names::sort_strings_for_names(
-                        db,
-                        b,
-                        v,
-                        key,
-                        CiteOrBib::Bibliography,
-                    );
-                    compare_demoting_none(a_strings.as_ref(), b_strings.as_ref())
+                    x
                 }
                 // TODO: compare dates, using details from spec for ranges
                 AnyVariable::Date(v) => {
-                    let a_date = a.date.get(&v);
-                    let b_date = b.date.get(&v);
+                    let a_date = a.1.reference.date.get(&v);
+                    let b_date = b.1.reference.date.get(&v);
                     compare_demoting_none(a_date, b_date)
                 }
             },
@@ -207,7 +353,7 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
     }
 
     fn renderer(&'a self) -> Renderer<'a, PlainText, I> {
-        Renderer::sorting(GenericContext::Cit(&self.ctx))
+        Renderer::gen(GenericContext::Cit(&self.ctx))
     }
 }
 
@@ -216,22 +362,44 @@ fn test_date_as_macro_strip_delims() {
     use crate::test::MockProcessor;
     let mut db = MockProcessor::new();
     let mut refr = Reference::empty("ref_id".into(), CslType::Book);
-    use citeproc_io::{DateOrRange, Date};
+    use citeproc_io::{Date, DateOrRange};
     let mac = "indep";
     refr.ordinary.insert(Variable::Title, String::from("title"));
-    refr.date.insert(DateVariable::Issued, DateOrRange::Single(Date::new(2000, 1, 1)));
+    refr.date.insert(
+        DateVariable::Issued,
+        DateOrRange::Single(Date::new(2000, 1, 1)),
+    );
     db.set_references(vec![refr]);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">
+           <macro name="year-date">
+               <date variable="issued">
+                 <date-part name="year" />
+               </date>
+           </macro>
+           <macro name="year-date-choose">
+             <choose>
+                 <if variable="issued">
+                    <date variable="issued">
+                       <date-part name="year"/>
+                    </date>
+                 </if>
+                 <else>
+                    <text term="no date" form="short"/>
+                 </else>
+              </choose>
+           </macro>
            <macro name="local">
                <date variable="issued" date-parts="year" form="numeric"/>
+           </macro>
+           <macro name="term">
+             <text term="anonymous"/>
            </macro>
            <macro name="indep">
              <text variable="title" />
              <date variable="issued">
                <date-part name="year" form="short" prefix="PREFIX" suffix="SUFFIX" />
                <date-part name="month" form="long" vertical-align="sup" prefix="PREFIX" suffix="SUFFIX" />
-               <!-- day should be 00 -->
              </date>
            </macro>
            <citation><layout></layout></citation>
@@ -244,15 +412,65 @@ fn test_date_as_macro_strip_delims() {
            </bibliography>
         </style>
     "#);
-    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "indep".into(), SortKey::macro_named("indep")), Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".to_owned())));
 
-    assert_eq!(sort_string_bibliography(&db, "ref_id".into(), "local".into(), SortKey::macro_named("local")), Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned())));
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "indep".into(),
+            SortKey::macro_named("indep")
+        ),
+        Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".to_owned()))
+    );
 
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "local".into(),
+            SortKey::macro_named("local")
+        ),
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+    );
+
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "year-date".into(),
+            SortKey::macro_named("year-date")
+        ),
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+    );
+
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "year-date-choose".into(),
+            SortKey::macro_named("year-date-choose")
+        ),
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+    );
+
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "term".into(),
+            SortKey::macro_named("term")
+        ),
+        Some(Arc::new("anonymous".to_owned()))
+    );
 }
 
 impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
     type Output = (String, GroupVars);
-    type Checker = GenericContext<'a, PlainText>;
+    type Checker = CiteContext<'a, PlainText, O>;
+
+    fn get_checker(&self) -> Option<&Self::Checker> {
+        Some(&self.ctx)
+    }
 
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         let iter = elements.iter();
@@ -279,6 +497,17 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         (val.unwrap_or_default(), GroupVars::new())
     }
 
+    fn text_term(
+        &mut self,
+        text: &TextElement,
+        sel: TextTermSelector,
+        plural: bool,
+    ) -> Self::Output {
+        let renderer = self.renderer();
+        let val = renderer.text_term(text, sel, plural);
+        (val.unwrap_or_default(), GroupVars::new())
+    }
+
     // TODO: reinstate variable suppression
     fn text_variable(
         &mut self,
@@ -295,7 +524,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
             StandardVariable::Ordinary(var) => self
                 .ctx
                 .get_ordinary(var, form)
-                .map(|val| renderer.text_variable(text, svar, val)),
+                .map(|val| renderer.text_variable(text, svar, &val)),
         };
         let gv = GroupVars::rendered_if(res.is_some());
         (res.unwrap_or_default(), gv)
@@ -316,6 +545,16 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         });
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)
+    }
+
+    fn label(&mut self, label: &LabelElement) -> Self::Output {
+        let renderer = self.renderer();
+        let var = label.variable;
+        let content = self
+            .ctx
+            .get_number(var)
+            .and_then(|val| renderer.numeric_label(label, &val));
+        (content.unwrap_or_default(), GroupVars::new())
     }
 
     // SPEC:
@@ -472,15 +711,11 @@ pub mod natural_sort {
     use std::str::FromStr;
 
     fn to_u32(s: &str) -> u32 {
-        FromStr::from_str(s.trim_start_matches('0')).unwrap()
+        FromStr::from_str(s).unwrap()
     }
 
     fn to_i32(s: &str) -> i32 {
         FromStr::from_str(s).unwrap()
-    }
-
-    fn take_4_digits(inp: &str) -> IResult<&str, &str> {
-        take_while_m_n(4, 4, |c: char| c.is_ascii_digit())(inp)
     }
 
     fn take_8_digits(inp: &str) -> IResult<&str, &str> {
@@ -493,7 +728,7 @@ pub mod natural_sort {
 
     fn year(inp: &str) -> IResult<&str, i32> {
         let (rem1, pref) = opt(year_prefix)(inp)?;
-        let (rem2, y) = take_4_digits(rem1)?;
+        let (rem2, y) = take_while1(|c: char| c.is_ascii_digit())(rem1)?;
         let (rem3, _) = char('_')(rem2)?;
         Ok((
             rem3,
@@ -563,8 +798,9 @@ pub mod natural_sort {
 
     impl<'a> PartialOrd for Token<'a> {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            use unicase::UniCase;
             match (self, other) {
-                (Token::Str(a), Token::Str(b)) => a.partial_cmp(b),
+                (Token::Str(a), Token::Str(b)) => UniCase::new(a).partial_cmp(&UniCase::new(b)),
                 (Token::Date(a), Token::Date(b)) => a.partial_cmp(b),
                 (Token::Num(a), Token::Num(b)) => a.partial_cmp(b),
                 _ => None,
@@ -657,9 +893,21 @@ pub mod natural_sort {
         );
 
         assert_eq!(
-            natural_cmp("a\u{E000}2009_0407/0000_0000\u{E001}", "a\u{E000}2009_0407/2010_0509\u{E001}"),
+            natural_cmp(
+                "a\u{E000}2009_0407/0000_0000\u{E001}",
+                "a\u{E000}2009_0407/2010_0509\u{E001}"
+            ),
             Ordering::Less,
             "2009 < 2009/2010"
+        );
+
+        assert_eq!(
+            natural_cmp(
+                "\u{e000}-044_0315/0000_00\u{e001}",
+                "\u{e000}-100_0713/0000_00\u{e001}"
+            ),
+            Ordering::Greater,
+            "44BC > 100BC"
         );
 
         // Numbers
@@ -674,5 +922,7 @@ pub mod natural_sort {
             "1000 < 2000"
         );
 
+        // Case insensitive
+        assert_eq!(natural_cmp("aaa", "AAA"), Ordering::Equal);
     }
 }

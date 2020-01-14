@@ -10,7 +10,7 @@ use crate::IngestOptions;
 
 use csl::{DisplayMode, Formatting};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlainText;
 
 impl Default for PlainText {
@@ -29,7 +29,7 @@ impl OutputFormat for PlainText {
 
     #[inline]
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
-        micro_html_to_string(input, options)
+        micro_html_to_string(input, options).replace(|c| c == '\'' || c == '"' || c == ',', "")
     }
 
     #[inline]
@@ -68,8 +68,10 @@ impl OutputFormat for PlainText {
         nodes.join(delimiter)
     }
 
-    fn quoted(&self, b: Self::Build, quotes: LocalizedQuotes) -> Self::Build {
-        quotes.opening(false).to_owned() + &b + quotes.closing(false)
+    fn quoted(&self, b: Self::Build, _quotes: LocalizedQuotes) -> Self::Build {
+        // We don't want quotes because sorting macros should ignore them
+        // quotes.opening(false).to_owned() + &b + quotes.closing(false)
+        b
     }
 
     #[inline]
