@@ -1,4 +1,4 @@
-name: CI
+name: Test
 on:
   pull_request: {}
   push: 
@@ -87,32 +87,3 @@ jobs:
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
 
-  build_wasm:
-    name: Build WebAssembly Package & deploy demo
-    needs: regressions
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@master
-      - uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: nightly
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-      - name: Yarn install
-        run: cd crates/wasm/js-demo && yarn
-      - name: Yarn build (dev)
-        if: github.event_name == 'pull_request'
-        run: cd crates/wasm/js-demo && yarn build -d
-      - name: Yarn build (prod)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: cd crates/wasm/js-demo && yarn build -p
-      - name: Build and Deploy
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: JamesIves/github-pages-deploy-action@master
-        env:
-          BRANCH: gh-pages
-          ACCESS_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-          FOLDER: crates/wasm/js-demo/dist
-          # only available in beta3: https://github.com/JamesIves/github-pages-deploy-action/issues/21
-          # but beta3 won't initialize properly
-          # GITHUB_REPOSITORY: cormacrelf/citeproc-wasm-demo
