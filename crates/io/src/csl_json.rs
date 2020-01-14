@@ -14,6 +14,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::str::FromStr;
+use crate::names::{PersonName, Name};
 
 // You have to know which variant we're using before parsing a reference.
 // Why? Because some variables are numbers in CSL-M, but standard vars in CSL. And other
@@ -232,14 +233,26 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    use crate::names::Name;
                                     let mut names: Vec<Name> = map.next_value()?;
                                     for name in names.iter_mut() {
-                                        match name {
+                                        *name = match name {
                                             Name::Person(pn) => {
                                                 pn.parse_particles();
+                                                continue;
                                             }
-                                            _ => {}
+                                            Name::Literal { literal } => {
+                                                // Normalise literal names into lone family names.
+                                                // 
+                                                // There is no special case for literal names in
+                                                // CSL, so this just helps do the formatting
+                                                // uniformly. They can still be created by using
+                                                // the Rust API directly, so this has to be
+                                                // removed at some point.
+                                                Name::Person(PersonName {
+                                                    family: Some(std::mem::take(literal)),
+                                                    ..Default::default()
+                                                })
+                                            }
                                         }
                                     }
                                     ve.insert(names);
