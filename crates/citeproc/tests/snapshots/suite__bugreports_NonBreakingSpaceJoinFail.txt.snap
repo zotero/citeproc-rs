@@ -1,0 +1,6 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+[0] {\scaps Smith} J., {\i Book One}\uc0\u160 ; {\scaps Jackson} J., {\i Book Two}.
+

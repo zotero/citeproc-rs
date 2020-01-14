@@ -306,7 +306,6 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
                 Formatting::default(),
             );
             ir.keep_first_ysh(ysh_explicit_edge, ysh_plain_edge, ysh_edge);
-            debug!("fc: {:?}, ir: \n{}", fc, ir.debug(db));
             (fc, ir)
         })
         .collect();

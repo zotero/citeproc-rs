@@ -1,10 +1,10 @@
+use crate::number::{arabic_number, render_ordinal, roman_lower, roman_representable};
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
 use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
-use crate::number::{render_ordinal, roman_lower, roman_representable, arabic_number};
 use csl::{
     GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
-    NumberElement, NumberVariable, NumericForm, Plural, RoleTermSelector, SortKey,
+    NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural, RoleTermSelector, SortKey,
     StandardVariable, Style, TextCase, TextElement, TextTermSelector, Variable,
 };
 
@@ -91,7 +91,7 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
         }
         .map(|vec| vec.as_slice())
     }
-    fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
         match self {
             Cit(ctx) => ctx.get_number(var),
             Ref(ctx) => ctx.get_number(var),
@@ -170,7 +170,7 @@ impl<'c, O: OutputFormat> Renderer<'c, O, O> {
 }
 
 impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
-    pub fn sorting(ctx: GenericContext<'c, O, I>) -> Renderer<'c, O, I> {
+    pub fn gen(ctx: GenericContext<'c, O, I>) -> Renderer<'c, O, I> {
         Renderer { ctx }
     }
     pub fn cite(c: &'c CiteContext<'c, O, I>) -> Self {
@@ -182,6 +182,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     #[inline]
     fn fmt(&self) -> &O {
         self.ctx.format()
+    }
+
+    fn page_range_format(&self, var: NumberVariable) -> Option<PageRangeFormat> {
+        let style = self.ctx.style();
+        style.page_range_format.filter(|_| {
+            var == NumberVariable::Page
+                || (var == NumberVariable::Locator
+                    && self
+                        .ctx
+                        .locator_type()
+                        .map_or(false, |l| l == LocatorType::Page))
+        })
     }
 
     /// The spec is slightly impractical to implement:
@@ -202,11 +214,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let locale = self.ctx.locale();
         let style = self.ctx.style();
         let fmt = self.fmt();
-        let prf = if var == NumberVariable::Page && style.page_range_format.is_some() {
-            style.page_range_format
-        } else {
-            None
-        };
+        let prf = self.page_range_format(var);
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
                 let mut s = String::new();
@@ -241,18 +249,16 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     }
 
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
-    pub fn number(&self, number: &NumberElement, val: &NumericValue) -> O::Build {
+    pub fn number(&self, number: &NumberElement, val: &NumericValue<'_>) -> O::Build {
         let locale = self.ctx.locale();
         let style = self.ctx.style();
         debug!("number {:?}", val);
-        let prf = if number.variable == NumberVariable::Page && style.page_range_format.is_some() {
-            style.page_range_format
-        } else {
-            None
-        };
+        let prf = self.page_range_format(number.variable);
         let string = if let NumericValue::Tokens(_, ts) = val {
             match number.form {
-                NumericForm::Roman if roman_representable(&val) => roman_lower(&ts, locale, number.variable, prf),
+                NumericForm::Roman if roman_representable(&val) => {
+                    roman_lower(&ts, locale, number.variable, prf)
+                }
                 NumericForm::Ordinal | NumericForm::LongOrdinal => {
                     let loc_type = if number.variable == NumberVariable::Locator {
                         self.ctx
@@ -296,12 +302,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         }
     }
 
-
     pub fn text_number_variable(
         &self,
         text: &TextElement,
         variable: NumberVariable,
-        val: &NumericValue,
+        val: &NumericValue<'_>,
     ) -> O::Build {
         let style = self.ctx.style();
         let mod_page = style.page_range_format.is_some();
@@ -365,7 +370,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         plural: bool,
     ) -> Option<O::Build> {
         let locale = self.ctx.locale();
-        locale.get_text_term(term_selector, plural).map(|val| {
+        locale
+            .get_text_term(term_selector, plural)
+            .filter(|x| !x.is_empty())
+            .map(|val| {
             let options = IngestOptions {
                 text_case: text.text_case,
                 quotes: self.quotes(),
@@ -395,7 +403,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable, label_var: NameVariable) -> Option<O::Build> {
         let NameLabel {
             form,
             formatting,
@@ -406,7 +414,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             after_name: _,
         } = *label;
         let fmt = self.fmt();
-        let selector = RoleTermSelector::from_name_variable(var, form);
+        let selector = RoleTermSelector::from_name_variable(label_var, form);
         let val = self.ctx.get_name(var);
         let len = val.map(|v| v.len()).unwrap_or(0);
         let plural = match (len, plural) {
@@ -420,6 +428,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
+                .filter(|x| !x.is_empty())
                 .map(|term_text| {
                     let options = IngestOptions {
                         text_case,
@@ -435,7 +444,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         })
     }
 
-    pub fn numeric_label(&self, label: &LabelElement, num_val: NumericValue) -> Option<O::Build> {
+    pub fn numeric_label(
+        &self,
+        label: &LabelElement,
+        num_val: &NumericValue<'_>,
+    ) -> Option<O::Build> {
         let fmt = self.fmt();
         let selector = GenderedTermSelector::from_number_variable(
             self.ctx.locator_type(),
@@ -443,7 +456,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             label.form,
         );
         let plural = match label.plural {
-            Plural::Contextual => num_val.is_multiple(label.variable.is_quantity()),
+            Plural::Contextual => num_val.is_multiple(label.variable),
             Plural::Always => true,
             Plural::Never => false,
         };
@@ -457,7 +470,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
-                .filter(|val| !val.is_empty())
+                .filter(|x| !x.is_empty())
                 .map(|val| {
                     let b = fmt.ingest(val, &options);
                     let b = fmt.with_format(b, label.formatting);

@@ -112,15 +112,13 @@ impl TestCase {
             }
             self.processor.set_references(self.input.clone());
             let mut executor = JsExecutor::new(&mut self.processor);
-            for instruction in instructions.iter() {
-                executor.execute(instruction);
-            }
+            executor.execute(instructions);
+            let actual = executor.get_results();
             use std::str::FromStr;
             match self.mode {
                 Mode::Citation => {
                     let desired = Results::from_str(&self.result).unwrap();
                     self.result = desired.output_independent();
-                    let actual = executor.get_results();
                     Some(actual.output_independent())
                 }
                 Mode::Bibliography => Some(get_bib_string(&self.processor)),

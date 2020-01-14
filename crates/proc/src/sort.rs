@@ -47,7 +47,8 @@ pub fn sort_string_citation(
     macro_name: Atom,
     key: SortKey,
 ) -> Option<Arc<String>> {
-    with_cite_context(db, cite_id, None, Some(key), true, |ctx| {
+    let cite = cite_id.lookup(db);
+    with_cite_context(db, cite_id, None, Some(key), true, None, |ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
@@ -62,7 +63,7 @@ pub fn sort_string_bibliography(
     macro_name: Atom,
     key: SortKey,
 ) -> Option<Arc<String>> {
-    with_bib_context(db, ref_id.clone(), None, Some(key), |_bib, ctx| {
+    with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
@@ -106,11 +107,13 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
                 a.clone(),
                 Some(*a_cnum),
                 None,
+                None,
                 |_, a_ctx| {
                     with_bib_context(
                         db,
                         b.clone(),
                         Some(*b_cnum),
+                        None,
                         None,
                         |_, b_ctx| {
                             bib_ordering(
@@ -183,6 +186,7 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
                         Some(a_cnum),
                         None,
                         true,
+                        None,
                         |a_ctx| {
                             with_cite_context(
                                 db,
@@ -190,6 +194,7 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
                                 Some(b_cnum),
                                 None,
                                 true,
+                                None,
                                 |b_ctx| {
                                     bib_ordering(
                                         db,
@@ -292,7 +297,12 @@ pub fn bib_ordering<
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
                     compare_demoting_none(Some(a_cnum), Some(b_cnum))
                 }
-                AnyVariable::Number(v) => compare_demoting_none(a_ref.number.get(&v), b_ref.number.get(&v)),
+                AnyVariable::Number(v) => {
+                    compare_demoting_none(
+                        a_ctx.get_number(v),
+                        b_ctx.get_number(v),
+                    )
+                }
                 AnyVariable::Name(v) => {
                     let a_strings =
                         crate::names::sort_strings_for_names(db, a_ref, v, key, cite_or_bib);
@@ -343,7 +353,7 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
     }
 
     fn renderer(&'a self) -> Renderer<'a, PlainText, I> {
-        Renderer::sorting(GenericContext::Cit(&self.ctx))
+        Renderer::gen(GenericContext::Cit(&self.ctx))
     }
 }
 
@@ -543,7 +553,7 @@ impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, 
         let content = self
             .ctx
             .get_number(var)
-            .and_then(|val| renderer.numeric_label(label, val));
+            .and_then(|val| renderer.numeric_label(label, &val));
         (content.unwrap_or_default(), GroupVars::new())
     }
 

@@ -15,7 +15,7 @@ use crate::disamb::names::RefNameIR;
 
 use std::sync::Arc;
 
-mod transforms;
+pub mod transforms;
 
 pub type IrSum<O> = (IR<O>, GroupVars);
 
@@ -33,6 +33,7 @@ pub struct YearSuffix<O: OutputFormat> {
     pub(crate) hook: YearSuffixHook,
     pub(crate) ir: Box<IR<O>>,
     pub(crate) group_vars: GroupVars,
+    pub(crate) suffix_num: Option<u32>,
 }
 
 impl<O: OutputFormat> IR<O> {
@@ -41,6 +42,7 @@ impl<O: OutputFormat> IR<O> {
             IR::YearSuffix(YearSuffix {
                 hook,
                 group_vars: GroupVars::Unresolved,
+                suffix_num: None,
                 ir: Box::new(IR::Rendered(None)),
             }),
             GroupVars::Unresolved
@@ -156,7 +158,6 @@ impl RefIR {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
             if !*found {
-                debug!("found first year-suffix == YSH::Explicit");
                 // first time
                 *found = true;
                 *opt_e = Some(ysh_edge);
@@ -168,7 +169,6 @@ impl RefIR {
         });
         self.visit_ysh(ysh_plain_edge, &mut |opt_e| {
             if !*found {
-                debug!("found first year-suffix == YSH::Plain");
                 *found = true;
                 *opt_e = Some(ysh_edge);
             } else {
@@ -212,6 +212,8 @@ pub enum CiteEdgeData<O: OutputFormat = Markup> {
     /// Accessed isn't really part of a reference -- it doesn't help disambiguating one from
     /// another. So we will ignore it. Works for, e.g., date_YearSuffixImplicitWithNoDate.txt
     Accessed(O::Build),
+    Year(O::Build),
+    Term(O::Build),
 }
 
 impl<O: OutputFormat> CiteEdgeData<O> {
@@ -419,7 +421,7 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
         formatting: Formatting,
     ) -> EdgeData {
         match self {
-            CiteEdgeData::Output(x) => {
+            CiteEdgeData::Output(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting, None))
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
@@ -435,6 +437,8 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
     fn inner(&self) -> O::Build {
         match self {
             CiteEdgeData::Output(x)
+            | CiteEdgeData::Term(x)
+            | CiteEdgeData::Year(x)
             | CiteEdgeData::YearSuffix(x)
             | CiteEdgeData::Frnn(x)
             | CiteEdgeData::FrnnLabel(x)
@@ -556,7 +560,7 @@ impl<O: OutputFormat> IrSeq<O> {
                     GroupVars::Plain
                 }
             })
-    } 
+    }
     /// GVs are stored outside of individual child IRs, so we need a way to update those if the
     /// children have mutated themselves.
     pub(crate) fn recompute_group_vars(&mut self) {

@@ -123,6 +123,7 @@ where
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
+                .or_else(|| self.reference.ordinary.get(&Variable::JournalAbbreviation))
                 .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
                 .map(|s| s.as_str())
                 .map(Cow::Borrowed),
@@ -136,14 +137,20 @@ where
         })
     }
 
-    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
+        let and_term = self.locale.and_term(None).unwrap_or("and");
         match var {
             NumberVariable::PageFirst => self
                 .reference
                 .number
                 .get(&NumberVariable::Page)
+                .map(NumericValue::from_localized(and_term))
                 .and_then(|pp| pp.page_first()),
-            _ => self.reference.number.get(&var).cloned(),
+            _ => self
+                .reference
+                .number
+                .get(&var)
+                .map(NumericValue::from_localized(and_term)),
         }
     }
 
@@ -181,11 +188,8 @@ where
     fn is_numeric(&self, var: AnyVariable) -> bool {
         match &var {
             AnyVariable::Number(num) => self
-                .reference
-                .number
-                .get(num)
-                .map(|r| r.is_numeric())
-                .unwrap_or(false),
+                .get_number(*num)
+                .map_or(false, |r| r.is_numeric()),
             _ => false,
             // TODO: not very useful; implement for non-number variables (see CiteContext)
         }

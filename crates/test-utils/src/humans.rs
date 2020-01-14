@@ -8,7 +8,7 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression,
+    Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression, ClusterPosition,
 };
 
 use lazy_static::lazy_static;
@@ -20,8 +20,8 @@ fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use citeproc_io::IdOrNumber;
-    let s = IdOrNumber::deserialize(d)?;
+    use citeproc_io::NumberLike;
+    let s = NumberLike::deserialize(d)?;
     Ok(s.into_string())
 }
 
@@ -282,61 +282,56 @@ impl JsExecutor<'_> {
                 text: crate::normalise_html(&text),
             })
         }
-        for &id in self.current_note_numbers.keys() {
-            if mod_clusters.contains_key(&id) {
-                continue;
-            }
-            let &note = self.current_note_numbers.get(&id).unwrap();
-            if let Some(text) = self.proc.get_cluster(id) {
-                results.push(CiteResult {
-                    kind: ResultKind::Dots,
-                    id,
-                    note,
-                    text: crate::normalise_html(&text),
-                })
-            }
-        }
+        // for &id in self.current_note_numbers.keys() {
+        //     if mod_clusters.contains_key(&id) {
+        //         continue;
+        //     }
+        //     let &note = self.current_note_numbers.get(&id).unwrap();
+        //     if let Some(text) = self.proc.get_cluster(id) {
+        //         results.push(CiteResult {
+        //             kind: ResultKind::Dots,
+        //             id,
+        //             note,
+        //             text: crate::normalise_html(&text),
+        //         })
+        //     }
+        // }
         results.sort_by_key(|x| x.note);
         Results(results)
     }
 
-    fn to_renumbering(&mut self, renum: &mut Vec<(ClusterId, ClusterNumber)>, prepost: &[PrePost]) {
+    fn to_renumbering(&mut self, renum: &mut Vec<ClusterPosition>, prepost: &[PrePost]) {
         for &PrePost(ref string, note_number) in prepost.iter() {
             let id = self.get_id(&string);
-            let count = renum
-                .iter()
-                .filter_map(|(_, n)| match n {
-                    ClusterNumber::Note(IntraNote::Multi(x, x2)) if *x == note_number => Some(x2),
-                    _ => None,
-                })
-                .count() as u32;
-            let nn = ClusterNumber::Note(IntraNote::Multi(note_number, count));
-            renum.push((id, nn))
+            let note = if note_number == 0 { None } else { Some(note_number) };
+            renum.push(ClusterPosition { id, note })
         }
     }
 
-    /// Note: this does not work very well. The way citeproc-js runs its own cannot easily be
-    /// deciphered.
-    pub fn execute(&mut self, instruction: &CiteprocJsInstruction) {
+    pub fn execute(&mut self, instructions: &[CiteprocJsInstruction]) {
         self.proc.drain();
-
-        let CiteprocJsInstruction { cluster, pre, post } = instruction;
-        let id = self.get_id(&*cluster.cluster_id);
-        let note = cluster.properties.note_index;
-
-        let mut cites = Vec::new();
-        for cite_item in cluster.citation_items.iter() {
-            cites.push(cite_item.to_cite());
-        }
-
         let mut renum = Vec::new();
-        self.to_renumbering(&mut renum, pre);
-        self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
-        self.to_renumbering(&mut renum, post);
-        self.proc.insert_cluster(Cluster { id, cites });
-        self.proc.renumber_clusters(&renum);
-        for (i, nn) in renum {
-            self.current_note_numbers.insert(i, nn);
+        for CiteprocJsInstruction { cluster, pre, post } in instructions {
+            let id = self.get_id(&*cluster.cluster_id);
+            let note = cluster.properties.note_index;
+
+            let mut cites = Vec::new();
+            for cite_item in cluster.citation_items.iter() {
+                cites.push(cite_item.to_cite());
+            }
+
+            renum.clear();
+            self.to_renumbering(&mut renum, pre);
+            self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
+            self.to_renumbering(&mut renum, post);
+            self.proc.insert_cluster(Cluster { id, cites });
+            self.proc.set_cluster_order(&renum).unwrap();
+            for ClusterPosition { id, .. } in &renum {
+                let id = id.clone();
+                if let Some(actual_note) = self.proc.cluster_note_number(id) {
+                    self.current_note_numbers.insert(id, actual_note);
+                }
+            }
         }
     }
 }
