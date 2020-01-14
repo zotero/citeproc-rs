@@ -33,6 +33,7 @@ where
                         choose: self.clone(),
                         done: false,
                         ir: Box::new(content),
+                        group_vars: gv,
                     }))),
                     gv,
                 )
@@ -197,7 +198,8 @@ where
             Cond::IsNumeric(var) => checker.is_numeric(*var),
             Cond::Disambiguate(d) => *d == checker.is_disambiguate(current_count),
             Cond::Type(typ) => checker.csl_type() == *typ,
-            Cond::Position(pos) => checker.position().matches(*pos),
+            // None in a bibliography
+            Cond::Position(pos) => checker.position().map_or(false, |p| p.matches(*pos)),
             Cond::Locator(typ) => checker.locator_type() == Some(*typ),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
@@ -239,8 +241,8 @@ impl CondChecker for UselessCondChecker {
     fn get_date(&self, _dvar: DateVariable) -> Option<&DateOrRange> {
         None
     }
-    fn position(&self) -> Position {
-        Position::First
+    fn position(&self) -> Option<Position> {
+        None
     }
     fn features(&self) -> &csl::version::Features {
         lazy_static::lazy_static! {
@@ -262,7 +264,7 @@ pub trait CondChecker {
     fn csl_type(&self) -> CslType;
     fn locator_type(&self) -> Option<LocatorType>;
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;
-    fn position(&self) -> Position;
+    fn position(&self) -> Option<Position>;
     fn features(&self) -> &Features;
     fn has_year_only(&self, dvar: DateVariable) -> bool {
         self.get_date(dvar)

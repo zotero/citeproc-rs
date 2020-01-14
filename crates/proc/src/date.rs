@@ -22,6 +22,7 @@ use pretty_assertions::assert_eq;
 use std::fmt::Write;
 use std::mem;
 
+#[derive(Debug)]
 enum Either<O: OutputFormat> {
     Build(Option<O::Build>),
     /// We will convert this to RefIR as necessary. It will only contain Outputs and
@@ -31,18 +32,21 @@ enum Either<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> Either<O> {
-    fn into_cite_ir(self) -> IrSum<O> {
+    fn into_cite_ir(self, var: DateVariable) -> IrSum<O> {
         match self {
             Either::Build(opt) => {
-                let content = opt.map(CiteEdgeData::Output);
+                // Get CiteEdgeData::Accessed if it's DateVariable::Accessed
+                // We guarantee below in dp_render_either that Accessed will not produce Either::Ir
+                let mapper = CiteEdgeData::from_date_variable(var);
+                let content = opt.map(mapper);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
             }
             Either::Ir(ir) => {
                 let gv = if let IR::Rendered(None) = &ir {
-                    GroupVars::OnlyEmpty
+                    GroupVars::Missing
                 } else {
-                    GroupVars::DidRender
+                    GroupVars::Important
                 };
                 (ir, gv)
             }
@@ -58,15 +62,15 @@ fn to_ref_ir(
 ) -> RefIR {
     match ir {
         // Either Rendered(Some(CiteEdgeData::YearSuffix)) or explicit year suffixes can end up as
-        // EdgeData::YearSuffix edges in RefIR. Because we don't care whether it's been rendered or
+        // EdgeData::YearSuffixPlain edges in RefIR. Because we don't care whether it's been rendered or
         // not -- in RefIR's comparison, it must always be an EdgeData::YearSuffix.
         IR::Rendered(opt_build) => RefIR::Edge(to_edge(opt_build, stack)),
-        IR::YearSuffix(_ysh, _opt_build) => RefIR::Edge(Some(ys_edge)),
+        IR::YearSuffix(_ys) => RefIR::Edge(Some(ys_edge)),
         IR::Seq(ir_seq) => RefIR::Seq(RefIrSeq {
             contents: ir_seq
                 .contents
                 .into_iter()
-                .map(|x| to_ref_ir(x, stack, ys_edge, to_edge))
+                .map(|(ir, _gv)| to_ref_ir(ir, stack, ys_edge, to_edge))
                 .collect(),
             formatting: ir_seq.formatting,
             affixes: ir_seq.affixes,
@@ -74,7 +78,7 @@ fn to_ref_ir(
             quotes: None,
             text_case: ir_seq.text_case,
         }),
-        IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
+        IR::ConditionalDisamb(..) | IR::Name(_) | IR::NameCounter(_) => unreachable!(),
     }
 }
 
@@ -90,7 +94,7 @@ impl Either<Markup> {
             |opt_cite_edge: Option<CiteEdgeData<Markup>>, stack: Formatting| -> Option<Edge> {
                 opt_cite_edge.map(|cite_edge| db.edge(cite_edge.to_edge_data(fmt, stack)))
             };
-        let ys_edge = db.edge(EdgeData::YearSuffix);
+        let ys_edge = db.edge(EdgeData::YearSuffixPlain);
         match self {
             Either::Build(opt) => {
                 let content = opt.map(CiteEdgeData::Output);
@@ -103,7 +107,7 @@ impl Either<Markup> {
                 // Rendered(None), at least.
                 (
                     to_ref_ir(ir, stack, ys_edge, &to_edge),
-                    GroupVars::DidRender,
+                    GroupVars::Important,
                 )
             }
         }
@@ -121,12 +125,19 @@ where
         _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
-        match self {
-            BodyDate::Indep(idate) => intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
-            BodyDate::Local(ldate) => intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
-        }
-        .map(Either::into_cite_ir)
-        .unwrap_or((IR::Rendered(None), GroupVars::rendered_if(false)))
+        let (either, var) = match self {
+            BodyDate::Indep(idate) => (
+                intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
+                idate.variable
+            ),
+            BodyDate::Local(ldate) => (
+                intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
+                ldate.variable
+            ),
+        };
+        either
+            .map(|e| e.into_cite_ir(var))
+            .unwrap_or((IR::Rendered(None), GroupVars::rendered_if(false)))
     }
 }
 
@@ -139,24 +150,36 @@ impl Disambiguation<Markup> for BodyDate {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let _fmt = ctx.format;
-        match self {
-            BodyDate::Indep(idate) => {
-                intermediate_generic_indep::<Markup, Markup>(idate, GenericContext::Ref(ctx))
-            }
-            BodyDate::Local(ldate) => {
-                intermediate_generic_local::<Markup, Markup>(ldate, GenericContext::Ref(ctx))
-            }
+        let (either, var) = match self {
+            BodyDate::Indep(idate) => (
+                intermediate_generic_indep::<Markup, Markup>(idate, GenericContext::Ref(ctx)),
+                idate.variable,
+            ),
+            BodyDate::Local(ldate) => (
+                intermediate_generic_local::<Markup, Markup>(ldate, GenericContext::Ref(ctx)),
+                ldate.variable,
+            ),
+        };
+        if var == DateVariable::Accessed {
+            either
+                .map(|_| (RefIR::Edge(Some(db.edge(EdgeData::Accessed))), GroupVars::Important))
+        } else {
+            either
+                .map(|e| e.into_ref_ir(db, ctx, stack))
         }
-        .map(|e| e.into_ref_ir(db, ctx, stack))
-        .unwrap_or((RefIR::Edge(None), GroupVars::rendered_if(false)))
+        .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }
 }
 
+#[derive(Clone)]
 struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
-    overall_affixes: Option<&'a Affixes>,
-    overall_delimiter: &'a Atom,
+    overall_affixes: Option<Affixes>,
+    overall_delimiter: Atom,
+    overall_text_case: TextCase,
     display: Option<DisplayMode>,
+    sorting: bool,
+    locale: &'a Locale,
 }
 
 struct PartBuilder<'a, O: OutputFormat> {
@@ -178,23 +201,21 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
     }
 
     fn upgrade(&mut self) {
-        let PartBuilder {
-            ref mut acc,
-            ref mut bits,
-        } = self;
+        let PartBuilder { ref mut acc, ref mut bits } = self;
         *acc = match acc {
             PartAccumulator::Builds(ref mut vec) => {
                 let vec = mem::replace(vec, Vec::new());
                 let mut seq = IrSeq {
                     contents: Vec::with_capacity(vec.capacity()),
                     formatting: bits.overall_formatting,
-                    affixes: bits.overall_affixes.cloned(),
+                    affixes: bits.overall_affixes.clone(),
+                    text_case: bits.overall_text_case,
                     display: bits.display,
                     ..Default::default()
                 };
                 for built in vec {
                     seq.contents
-                        .push(IR::Rendered(Some(CiteEdgeData::Output(built))))
+                        .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important))
                 }
                 PartAccumulator::Seq(seq)
             }
@@ -208,7 +229,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 self.upgrade();
                 match &mut self.acc {
                     PartAccumulator::Seq(ref mut seq) => {
-                        seq.contents.push(ir);
+                        seq.contents.push((ir, GroupVars::Important));
                     }
                     _ => unreachable!(),
                 }
@@ -219,7 +240,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 }
                 PartAccumulator::Seq(ref mut seq) => seq
                     .contents
-                    .push(IR::Rendered(Some(CiteEdgeData::Output(built)))),
+                    .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important)),
             },
             Either::Build(None) => {}
         }
@@ -232,13 +253,34 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 if each.is_empty() {
                     return Either::Build(None);
                 }
-                let built = fmt.affixed(
+                let mut built = fmt.affixed(
                     fmt.group(each, "", bits.overall_formatting),
-                    bits.overall_affixes,
+                    bits.overall_affixes.as_ref(),
                 );
+                let options = IngestOptions {
+                    text_case: bits.overall_text_case,
+                    ..Default::default()
+                };
+                if bits.overall_text_case != TextCase::None {
+                    fmt.apply_text_case(&mut built, &options);
+                }
                 Either::Build(Some(built))
             }
             PartAccumulator::Seq(seq) => Either::Ir(IR::Seq(seq)),
+        }
+    }
+}
+
+impl<'a> GenericDateBits<'a> {
+    fn sorting(locale: &'a Locale) -> Self {
+        GenericDateBits {
+            overall_delimiter: Atom::from(""),
+            overall_formatting: None,
+            overall_affixes: Some(crate::sort::natural_sort::date_affixes()),
+            overall_text_case: TextCase::None,
+            display: None,
+            sorting: true,
+            locale,
         }
     }
 }
@@ -255,24 +297,21 @@ where
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
-    let empty = GenericDateBits {
-        overall_delimiter: &Atom::from(""),
-        overall_formatting: None,
-        overall_affixes: natural_affix.as_ref(),
-        display: None,
-    };
     let gen_date = if ctx.sort_key().is_some() {
-        empty
+        GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
-            overall_delimiter: &locale_date.delimiter.0,
+            overall_delimiter: locale_date.delimiter.0.clone(),
             overall_formatting: local.formatting,
-            overall_affixes: local.affixes.as_ref(),
+            overall_affixes: local.affixes.clone(),
+            overall_text_case: local.text_case,
             display: if ctx.in_bibliography() {
                 local.display
             } else {
                 None
             },
+            sorting: false,
+            locale,
         }
     };
     let mut parts = Vec::with_capacity(locale_date.date_parts.len());
@@ -280,18 +319,21 @@ where
         let form = WhichDelim::from_form(&part.form);
         if let Some(localized) = local.date_parts.iter().find(|p| form.matches_form(&p.form)) {
             let merged = DatePart {
-                form: part.form,
+                form: localized.form,
                 // Attributes for affixes are allowed, unless cs:date calls a localized date format.
                 // So localized.affixes should be ignored.
                 affixes: part.affixes.clone(),
                 formatting: localized.formatting.or(part.formatting),
                 text_case: localized.text_case.or(part.text_case),
-                range_delimiter: part.range_delimiter.clone(),
+                range_delimiter: localized.range_delimiter.clone(),
             };
             parts.push(merged);
         } else {
             parts.push(part.clone());
         }
+    }
+    if gen_date.sorting {
+        parts.sort_by_key(|part| part.form)
     }
     build_parts(
         &ctx,
@@ -310,27 +352,34 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
+    let locale = ctx.locale();
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
-    let empty = GenericDateBits {
-        overall_delimiter: &Atom::from(""),
-        overall_formatting: None,
-        overall_affixes: natural_affix.as_ref(),
-        display: None,
-    };
     let gen_date = if ctx.sort_key().is_some() {
-        empty
+        GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
-            overall_delimiter: &indep.delimiter.0,
+            overall_delimiter: indep.delimiter.0.clone(),
             overall_formatting: indep.formatting,
-            overall_affixes: indep.affixes.as_ref(),
+            overall_affixes: indep.affixes.clone(),
+            overall_text_case: indep.text_case,
             display: if ctx.in_bibliography() {
                 indep.display
             } else {
                 None
             },
+            sorting: false,
+            locale,
         }
     };
+    let mut parts_slice = indep.date_parts.as_slice();
+    let mut parts = Vec::new();
+    if gen_date.sorting {
+        parts = indep.date_parts.clone();
+        // The parts are filtered, but we're not going to be able to parse out the year if they are
+        // not in order YYYY-MM-DD.
+        parts.sort_by_key(|part| part.form);
+        parts_slice = parts.as_slice();
+    }
     build_parts(&ctx, indep.variable, gen_date, &indep.date_parts, None)
 }
 
@@ -344,39 +393,69 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     // TODO: text-case
     let fmt = ctx.format();
     let len_hint = parts.len();
-    ctx.reference().date.get(&var).map(|val| match val {
-        DateOrRange::Single(single) => {
-            let each = parts
-                .iter()
-                .filter(|dp| {
-                    if let Some(selector) = selector {
-                        dp_matches(dp, selector)
-                    } else {
-                        true
-                    }
-                })
-                .filter_map(|dp| dp_render_either(dp, ctx.clone(), single, false));
-            let delim = gen_date.overall_delimiter;
-            let mut builder = PartBuilder::new(gen_date, len_hint);
-            let mut seen_one = false;
-            for (_form, either) in each {
-                if seen_one && !delim.is_empty() {
-                    builder.push_either(Either::Build(Some(fmt.plain(&delim))))
+    let mut val = ctx.reference().date.get(&var)?.clone();
+    if gen_date.sorting {
+        // force range with zeroes on the end date if single
+        val = match val {
+            DateOrRange::Single(single) => DateOrRange::Range(single, Date::new(0, 0, 0)),
+            _ => val,
+        };
+    }
+    let cloned_gen = gen_date.clone();
+    let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
+        let each = parts
+            .iter()
+            .filter(|dp| {
+                if let Some(selector) = selector {
+                    dp_matches(dp, selector)
+                } else {
+                    true
                 }
-                seen_one = true;
-                builder.push_either(either);
+            })
+            .filter_map(|dp| dp_render_either(var, dp, ctx.clone(), single, false));
+        if single.circa {
+            let circa = cloned_gen.locale.get_simple_term(csl::SimpleTermSelector::Misc(MiscTerm::Circa, TermFormExtended::default()));
+            if let Some(circa) = circa {
+                builder.push_either(Either::Build(Some(fmt.plain(circa.singular()))));
+                builder.push_either(Either::Build(Some(fmt.plain(" "))));
             }
-            builder.into_either(fmt)
+        }
+        let mut seen_one = false;
+        for (_form, either) in each {
+            if seen_one && !delim.is_empty() {
+                builder.push_either(Either::Build(Some(fmt.plain(delim))))
+            }
+            seen_one = true;
+            builder.push_either(either);
+        }
+    };
+    match &val {
+        DateOrRange::Single(single) => {
+            let delim = gen_date.overall_delimiter.clone();
+            let mut builder = PartBuilder::new(gen_date, len_hint);
+            do_single(&mut builder, single, &delim);
+            Some(builder.into_either(fmt))
         }
         DateOrRange::Range(first, second) => {
-            let tokens = DateRangePartsIter::new(parts, selector, first, second);
-            let delim = gen_date.overall_delimiter;
+            let sorting = gen_date.sorting;
+            let delim = gen_date.overall_delimiter.clone();
+            if sorting {
+                let mut builder = PartBuilder::new(gen_date, len_hint);
+                do_single(&mut builder, first, &delim);
+                builder.push_either(Either::Build(Some(fmt.plain("/"))));
+                do_single(&mut builder, second, &delim);
+                return Some(builder.into_either(fmt));
+            }
+            let tokens = DateRangePartsIter::new(gen_date.sorting, parts, selector, first, second);
             let mut builder = PartBuilder::new(gen_date, len_hint);
             let mut seen_one = false;
             let mut last_rdel = false;
             for token in tokens {
                 match token {
-                    DateToken::RangeDelim(range_delim) => {
+                    DateToken::RangeDelim(mut range_delim) => {
+                        if sorting {
+                            range_delim = "/";
+                        }
                         builder.push_either(Either::Build(Some(fmt.plain(range_delim))));
                         last_rdel = true;
                     }
@@ -386,7 +465,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                         }
                         last_rdel = false;
                         if let Some((_form, either)) =
-                            dp_render_either(part, ctx.clone(), date, is_max_diff)
+                            dp_render_either(var, part, ctx.clone(), date, is_max_diff)
                         {
                             builder.push_either(either);
                         }
@@ -394,10 +473,19 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                 }
                 seen_one = true;
             }
-            builder.into_either(fmt)
+            Some(builder.into_either(fmt))
         }
-        DateOrRange::Literal(string) => Either::Build(Some(fmt.plain(string))),
-    })
+        DateOrRange::Literal(string) => {
+            let options = IngestOptions {
+                text_case: gen_date.overall_text_case,
+                ..Default::default()
+            };
+            let b = fmt.ingest(&string, &options);
+            let b = fmt.with_format(b, gen_date.overall_formatting);
+            let b = fmt.affixed(b, gen_date.overall_affixes.as_ref());
+            Some(Either::Build(Some(b)))
+        }
+    }
 }
 
 type IsMaxDiff = bool;
@@ -455,6 +543,7 @@ impl WhichDelim {
 
 impl<'a> DateRangePartsIter<'a> {
     fn new(
+        sorting: bool,
         parts: &'a [DatePart],
         selector: Option<DateParts>,
         first: &'a Date,
@@ -465,7 +554,8 @@ impl<'a> DateRangePartsIter<'a> {
         let max_diff = WhichDelim::diff(parts, first, second);
         let matches = |part: &DatePart| {
             if let Some(selector) = selector {
-                dp_matches(part, selector)
+                // Don't filter out if we're sorting -- just render zeroes later
+                sorting || dp_matches(part, selector)
             } else {
                 true
             }
@@ -527,17 +617,9 @@ fn test_range_dp_sequence() {
     let month = &parts[1];
     let year = &parts[2];
 
-    let first = Date {
-        year: 1998,
-        month: 3,
-        day: 27,
-    };
-    let second = Date {
-        year: 1998,
-        month: 3,
-        day: 29,
-    };
-    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
+    let first = Date::new(1998, 3, 27);
+    let second = Date::new(1998, 3, 29);
+    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
@@ -549,22 +631,14 @@ fn test_range_dp_sequence() {
         ]
     );
 
-    let first = Date {
-        year: 1998,
-        month: 3,
-        day: 27,
-    };
-    let second = Date {
-        year: 1998,
-        month: 4,
-        day: 29,
-    };
-    let iter = DateRangePartsIter::new(&parts, None, &first, &second);
+    let first = Date::new(1998, 3, 27);
+    let second = Date::new(1998, 4, 29);
+    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
             DateToken::Part(&first, day, false),
-            DateToken::Part(&first, month, false),
+            DateToken::Part(&first, month, true),
             DateToken::RangeDelim("-"),
             DateToken::Part(&second, day, false),
             DateToken::Part(&second, month, false),
@@ -582,6 +656,7 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
 }
 
 fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
+    var: DateVariable,
     part: &DatePart,
     ctx: GenericContext<'c, O, I>,
     date: &Date,
@@ -595,36 +670,49 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     let string = dp_render_string(part, &ctx, date);
     string
         .map(|s| {
+            let mut affixes = part.affixes.clone();
+            if is_max_diff {
+                if let Some(ref mut aff) = affixes {
+                    aff.suffix = Atom::from("");
+                }
+            }
             if let DatePartForm::Year(_) = part.form {
-                Either::Ir({
-                    let year_part = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(&s))));
+                if var == DateVariable::Accessed {
+                    let b = fmt.affixed_text(s, part.formatting, affixes.as_ref());
+                    Either::Build(Some(b))
+                } else {
                     let mut contents = Vec::with_capacity(2);
-                    contents.push(year_part);
+                    let b = fmt.plain(&s);
+                    let year_part = IR::Rendered(Some(CiteEdgeData::Year(b)));
+                    // Important because we got it from a date variable.
+                    contents.push((year_part, GroupVars::Important));
+                    // Why not move this if branch up and emit Either::Build?
+                    //
+                    // We don't emit Either::Build for normal date vars with
+                    // ctx.should_add_year_suffix_hook, because otherwise there is a mismatch
+                    // between the edges produced by {cite with year-suffix not filled} and RefIR,
+                    // specifically when affixes are nonzero. Like: ["(", "1986", ")"] vs
+                    // ["(1986)"]
                     if ctx.should_add_year_suffix_hook() {
-                        let hook = IR::YearSuffix(YearSuffixHook::Plain, None);
-                        contents.push(hook);
+                        let suffix = IR::year_suffix(YearSuffixHook::Plain);
+                        contents.push(suffix);
                     }
-                    let mut affixes = part.affixes.clone();
-                    if is_max_diff {
-                        if let Some(ref mut aff) = affixes {
-                            aff.suffix = Atom::from("");
-                        }
-                    }
-                    IR::Seq(IrSeq {
+                    Either::Ir(IR::Seq(IrSeq {
                         contents,
                         affixes,
                         formatting: part.formatting,
                         ..Default::default()
-                    })
-                })
-            } else {
-                let mut affixes = part.affixes.clone();
-                if is_max_diff {
-                    if let Some(ref mut aff) = affixes {
-                        aff.suffix = Atom::from("");
-                    }
+                    }))
                 }
-                Either::Build(Some(fmt.affixed_text(s, part.formatting, affixes.as_ref())))
+            } else {
+                let options = IngestOptions {
+                    text_case: part.text_case.unwrap_or_default(),
+                    ..Default::default()
+                };
+                let b = fmt.ingest(&s, &options);
+                let b = fmt.with_format(b, part.formatting);
+                let b = fmt.affixed(b, affixes.as_ref());
+                Either::Build(Some(b))
             }
         })
         .map(|x| (part.form, x))
@@ -633,7 +721,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
 fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<String> {
     let should_return_zeroes = key.is_macro();
     match part.form {
-        DatePartForm::Year(_form) => Some(format!("{:04}", date.year)),
+        DatePartForm::Year(_form) => Some(format!("{:04}_", date.year)),
         DatePartForm::Month(_form, _strip_periods) => {
             // Sort strings do not compare seasons
             if date.month > 0 && date.month <= 12 {
@@ -693,7 +781,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     let locale = ctx.locale();
     match part.form {
         DatePartForm::Year(form) => Some(render_year(date.year, form, ctx.locale())),
-        DatePartForm::Month(form, _strip_periods) => match form {
+        DatePartForm::Month(form, strip_periods) => match form {
             MonthForm::Numeric => {
                 if date.month == 0 || date.month > 12 {
                     None
@@ -710,20 +798,23 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             }
             _ => {
                 let sel = GenderedTermSelector::from_month_u32(date.month, form)?;
-                Some(
-                    locale
-                        .gendered_terms
-                        .get(&sel)
-                        .map(|gt| gt.0.singular().to_string())
-                        .unwrap_or_else(|| {
-                            let fallback = if form == MonthForm::Short {
-                                MONTHS_SHORT
-                            } else {
-                                MONTHS_LONG
-                            };
-                            fallback[date.month as usize].to_string()
-                        }),
-                )
+                let string = locale
+                    .gendered_terms
+                    .get(&sel)
+                    .map(|gt| gt.0.singular().to_string())
+                    .unwrap_or_else(|| {
+                        let fallback = if form == MonthForm::Short {
+                            MONTHS_SHORT
+                        } else {
+                            MONTHS_LONG
+                        };
+                        fallback[date.month as usize].to_string()
+                    });
+                Some(if strip_periods {
+                    string.replace('.', "")
+                } else {
+                    string
+                })
             }
         },
         DatePartForm::Day(form) => match form {

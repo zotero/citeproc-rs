@@ -252,8 +252,11 @@ impl FreeCond {
             if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
                 self |= FreeCond::IBID;
             }
-            if self & FreeCond::IBID_WITH_LOCATOR != FreeCond::empty() {
-                self |= FreeCond::IBID;
+            if self & FreeCond::NEAR_NOTE != FreeCond::empty() {
+                self |= FreeCond::SUBSEQUENT;
+            }
+            if self & FreeCond::FAR_NOTE != FreeCond::empty() {
+                self |= FreeCond::SUBSEQUENT;
             }
             if self & FreeCond::IBID != FreeCond::empty() {
                 self |= FreeCond::SUBSEQUENT;
@@ -283,6 +286,14 @@ fn cond_to_frees(c: &Cond) -> Option<(FreeCond, FreeCond)> {
         Cond::Disambiguate(_b) => (FreeCond::DISAMBIGUATE, FreeCond::DISAMBIGUATE_FALSE),
         Cond::Position(p) => match p {
             Position::Ibid => (FreeCond::IBID, FreeCond::IBID_FALSE),
+            Position::IbidNear => (
+                FreeCond::IBID | FreeCond::NEAR_NOTE,
+                FreeCond::IBID_FALSE | FreeCond::NEAR_NOTE_FALSE,
+            ),
+            Position::IbidWithLocatorNear => (
+                FreeCond::IBID_WITH_LOCATOR | FreeCond::NEAR_NOTE,
+                FreeCond::IBID_WITH_LOCATOR_FALSE | FreeCond::NEAR_NOTE_FALSE,
+            ),
             Position::IbidWithLocator => (
                 FreeCond::IBID_WITH_LOCATOR,
                 FreeCond::IBID_WITH_LOCATOR_FALSE,

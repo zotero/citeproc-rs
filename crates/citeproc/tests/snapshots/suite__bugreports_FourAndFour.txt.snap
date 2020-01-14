@@ -1,0 +1,6 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+Anne Tyler, George Smith, John Brown, and Cat Garfield, <i>Ladder of his' Years</i>, vol. 2003 (New York: Ivy Books, 1997).
+Anne Tyler, George Smith, John Brown, and Cat Felix, <i>Ladder of his' Years</i>, vol. 2003 (New York: Ivy Books, 1997).

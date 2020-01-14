@@ -34,7 +34,7 @@ impl From<YamlTestCase> for TestCase {
             yaml.format,
             yaml.csl,
             yaml.input,
-            yaml.result,
+            crate::normalise_html(&yaml.result),
             yaml.clusters.map(|cls| {
                 cls.into_iter()
                     .enumerate()

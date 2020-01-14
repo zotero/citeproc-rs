@@ -4,6 +4,7 @@ use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::{Name as NameEl, *};
 use std::sync::Arc;
+use std::borrow::Cow;
 
 use crate::disamb::FreeCond;
 
@@ -108,32 +109,48 @@ where
         self.disamb_count = count;
     }
 
-    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<&str> {
+    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
         (match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::TitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::Title)),
+                .or_else(|| self.reference.ordinary.get(&Variable::Title))
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
             (Variable::ContainerTitleShort, _)
             | (Variable::ContainerTitle, VariableForm::Short) => self
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle)),
-            _ => self.reference.ordinary.get(&var),
+                .or_else(|| self.reference.ordinary.get(&Variable::JournalAbbreviation))
+                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
+            (Variable::CitationLabel, _) if self.reference.ordinary.get(&var).is_none() => {
+                let tri = crate::citation_label::Trigraph::default();
+                Some(Cow::Owned(tri.make_label(self.reference)))
+            }
+            _ => self.reference.ordinary.get(&var)
+                .map(|s| s.as_str())
+                .map(Cow::Borrowed),
         })
-        .map(|s| s.as_str())
     }
 
-    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue> {
+    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
+        let and_term = self.locale.and_term(None).unwrap_or("and");
         match var {
             NumberVariable::PageFirst => self
                 .reference
                 .number
                 .get(&NumberVariable::Page)
+                .map(NumericValue::from_localized(and_term))
                 .and_then(|pp| pp.page_first()),
-            _ => self.reference.number.get(&var).cloned(),
+            _ => self
+                .reference
+                .number
+                .get(&var)
+                .map(NumericValue::from_localized(and_term)),
         }
     }
 
@@ -147,14 +164,14 @@ where
                 NumberVariable::CitationNumber => self.style.bibliography.is_some(),
                 _ => self.get_number(v).is_some(),
             },
-            AnyVariable::Ordinary(v) => {
-                match v {
-                    // TODO: make Hereinafter a FreeCond
-                    Variable::Hereinafter => unimplemented!("Hereinafter as a FreeCond"),
-                    Variable::YearSuffix => self.year_suffix,
-                    _ => self.get_ordinary(v, VariableForm::Long).is_some(),
-                }
-            }
+            AnyVariable::Ordinary(v) => match v {
+                // Generated on demand
+                Variable::CitationLabel => true,
+                // TODO: make Hereinafter a FreeCond
+                Variable::Hereinafter => unimplemented!("Hereinafter as a FreeCond"),
+                Variable::YearSuffix => self.year_suffix,
+                _ => self.get_ordinary(v, VariableForm::Long).is_some(),
+            },
             AnyVariable::Date(v) => self.reference.date.contains_key(&v),
             AnyVariable::Name(v) => self.reference.name.contains_key(&v),
         }
@@ -171,11 +188,8 @@ where
     fn is_numeric(&self, var: AnyVariable) -> bool {
         match &var {
             AnyVariable::Number(num) => self
-                .reference
-                .number
-                .get(num)
-                .map(|r| r.is_numeric())
-                .unwrap_or(false),
+                .get_number(*num)
+                .map_or(false, |r| r.is_numeric()),
             _ => false,
             // TODO: not very useful; implement for non-number variables (see CiteContext)
         }
@@ -189,8 +203,8 @@ where
     fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
         self.reference.date.get(&dvar)
     }
-    fn position(&self) -> Position {
-        self.position
+    fn position(&self) -> Option<Position> {
+        Some(self.position)
     }
     fn is_disambiguate(&self, current_count: u32) -> bool {
         // See docs on is_disambiguate

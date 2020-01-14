@@ -25,7 +25,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
-use citeproc::{ClusterPosition, Processor};
 use csl::Lang;
 
 #[wasm_bindgen]

@@ -1,4 +1,4 @@
-name: CI
+name: Test
 on:
   pull_request: {}
   push: 
@@ -15,15 +15,19 @@ jobs:
       - name: Extract branch name
         shell: bash
         run: |
-          echo "##[set-output name=head;]$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-')"
+          # transforms refs/pulls/123/merge into pulls-123-merge
+          GITHUB_HEAD=${{ github.head_ref }}
+          GITHUB_HEAD=${GITHUB_HEAD#refs/heads/}
+          GITHUB_HEAD=$(echo ${GITHUB_HEAD#refs/} | tr '/' '-')
+          echo "GITHUB_HEAD = ${GITHUB_HEAD}"
+          echo "##[set-output name=head;]${GITHUB_HEAD}"
+
           GITHUB_BASE=${{ github.base_ref }}
-          if test -z "$GITHUB_BASE"; then
-            # github.base_ref is apparently not available when pushing to a existing pull request branch
-            # this is dumb
-            # let's just guess for now
-            GITHUB_BASE="refs/heads/master"
-          fi
-          echo "##[set-output name=base;]$(echo ${GITHUB_BASE#refs/heads/} | tr '/' '-')"
+          GITHUB_BASE=${GITHUB_BASE#refs/heads/}
+          GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
+          echo "GITHUB_BASE = ${GITHUB_BASE}"
+          echo "##[set-output name=base;]${GITHUB_BASE}"
+
         id: branch
       - name: Download base output
         env:
@@ -31,6 +35,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-southeast-2
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
+          GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           mkdir -p .snapshots/branches
           aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_BASE .snapshots/branches/$GITHUB_BASE
@@ -65,6 +70,7 @@ jobs:
         run: cargo test-suite store
       - name: "Compare test suite results for regressions"
         env:
+          GITHUB_BASE: ${{ steps.branch.outputs.base }}
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
@@ -81,32 +87,3 @@ jobs:
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
 
-  build_wasm:
-    name: Build WebAssembly Package & deploy demo
-    needs: regressions
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@master
-      - uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: nightly
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-      - name: Yarn install
-        run: cd crates/wasm/js-demo && yarn
-      - name: Yarn build (dev)
-        if: github.event_name == 'pull_request'
-        run: cd crates/wasm/js-demo && yarn build -d
-      - name: Yarn build (prod)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: cd crates/wasm/js-demo && yarn build -p
-      - name: Build and Deploy
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: JamesIves/github-pages-deploy-action@master
-        env:
-          BRANCH: gh-pages
-          ACCESS_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-          FOLDER: crates/wasm/js-demo/dist
-          # only available in beta3: https://github.com/JamesIves/github-pages-deploy-action/issues/21
-          # but beta3 won't initialize properly
-          # GITHUB_REPOSITORY: cormacrelf/citeproc-wasm-demo

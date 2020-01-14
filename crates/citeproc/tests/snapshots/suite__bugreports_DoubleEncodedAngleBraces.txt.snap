@@ -1,0 +1,5 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+<span style="font-variant:small-caps;">Center for History and New Media</span>, « Zotero Quick Start Guide », s.d., [En ligne]. &lt;http://zotero.org/support/quick_start_guide&gt;.

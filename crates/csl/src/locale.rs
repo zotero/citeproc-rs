@@ -251,6 +251,9 @@ impl FromNode for LocaleOptionsNode {
 }
 
 impl Locale {
+    /// May return Some("") if the term is defined but empty. Not all code renders None in that
+    /// case, so each call site should decide whether to slap .filter(|x| !x.is_empty()) after
+    /// .get_text_term().
     pub fn get_text_term(&self, sel: TextTermSelector, plural: bool) -> Option<&str> {
         use crate::terms::TextTermSelector::*;
         match sel {
@@ -306,6 +309,35 @@ impl Locale {
             }
         }
         found
+    }
+
+    pub fn and_term(&self, form: Option<TermFormExtended>) -> Option<&str> {
+        let form = form.unwrap_or(TermFormExtended::Long);
+        self.get_simple_term(SimpleTermSelector::Misc(MiscTerm::And, form))
+            .map(|term_plurality| term_plurality.singular())
+    }
+
+    pub fn et_al_term(&self, element: Option<&crate::NameEtAl>) -> Option<(String, Option<Formatting>)> {
+        let mut term = MiscTerm::EtAl;
+        let mut default = "et al";
+        let mut formatting = None;
+        if let Some(el) = element {
+            if el.term == "and others" {
+                term = MiscTerm::AndOthers;
+                default = "and others";
+            }
+            formatting = el.formatting;
+        }
+        let txt = self
+            .get_text_term(
+                TextTermSelector::Simple(SimpleTermSelector::Misc(term, TermFormExtended::Long)),
+                false,
+            )
+            .unwrap_or(default);
+        if txt.is_empty() {
+            return None;
+        }
+        Some((txt.to_owned(), formatting))
     }
 
     pub fn get_month_gender(&self, month: MonthTerm) -> Gender {

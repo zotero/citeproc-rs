@@ -899,6 +899,15 @@ impl Default for GivenNameDisambiguationRule {
     }
 }
 
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Collapse {
+    CitationNumber,
+    Year,
+    YearSuffix,
+    YearSuffixRanged,
+}
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Citation {
     pub disambiguate_add_names: bool,
@@ -908,6 +917,12 @@ pub struct Citation {
     pub layout: Layout,
     pub name_inheritance: Name,
     pub names_delimiter: Option<Delimiter>,
+    pub near_note_distance: u32,
+    pub sort: Option<Sort>,
+    pub cite_group_delimiter: Option<Atom>,
+    pub year_suffix_delimiter: Option<Atom>,
+    pub after_collapse_delimiter: Option<Atom>,
+    pub collapse: Option<Collapse>,
 }
 
 impl Default for Citation {
@@ -920,6 +935,22 @@ impl Default for Citation {
             layout: Default::default(),
             name_inheritance: Default::default(),
             names_delimiter: None,
+            near_note_distance: 5,
+            sort: None,
+            cite_group_delimiter: None,
+            year_suffix_delimiter: None,
+            after_collapse_delimiter: None,
+            collapse: None,
+        }
+    }
+}
+
+impl Citation {
+    pub fn group_collapsing(&self) -> Option<(&str, Option<Collapse>)> {
+        let col = self.collapse;
+        match self.cite_group_delimiter.as_ref() {
+            Some(cgd) => Some((cgd.as_ref(), col)),
+            None => col.map(|c| (", ", col)),
         }
     }
 }
@@ -934,29 +965,29 @@ pub struct Bibliography {
     pub entry_spacing: u32, // >= 0. default is 1
     pub name_inheritance: Name,
     pub subsequent_author_substitute: Option<Atom>,
-    pub subsequent_author_substitute_rule: SubstituteAuthorSubstituteRule,
+    pub subsequent_author_substitute_rule: SubsequentAuthorSubstituteRule,
     pub names_delimiter: Option<Delimiter>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SecondFieldAlign {
     Flush,
     Margin,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
-pub enum SubstituteAuthorSubstituteRule {
+pub enum SubsequentAuthorSubstituteRule {
     CompleteAll,
     CompleteEach,
     PartialEach,
     PartialFirst,
 }
 
-impl Default for SubstituteAuthorSubstituteRule {
+impl Default for SubsequentAuthorSubstituteRule {
     fn default() -> Self {
-        SubstituteAuthorSubstituteRule::CompleteAll
+        SubsequentAuthorSubstituteRule::CompleteAll
     }
 }
 
@@ -979,6 +1010,15 @@ impl SortKey {
         match self.sort_source {
             SortSource::Macro(_) => true,
             _ => false,
+        }
+    }
+    pub fn macro_named(name: impl Into<Atom>) -> Self {
+        SortKey {
+            sort_source: SortSource::Macro(name.into()),
+            names_min: None,
+            names_use_first: None,
+            names_use_last: None,
+            direction: None,
         }
     }
 }
@@ -1211,6 +1251,30 @@ pub enum DatePartForm {
     Year(YearForm),
 }
 
+impl DatePartForm {
+    // For sorting date parts when rendering a sort string for a date through a macro, i.e. with
+    // filtered parts
+    fn num(&self) -> i32 {
+        match self {
+            DatePartForm::Year(..) => 0,
+            DatePartForm::Month(..) => 1,
+            DatePartForm::Day(_) => 2,
+        }
+    }
+}
+
+use std::cmp::Ordering;
+impl Ord for DatePartForm {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.num().cmp(&other.num())
+    }
+}
+impl PartialOrd for DatePartForm {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct DatePart {
     pub form: DatePartForm,
@@ -1263,6 +1327,13 @@ pub enum Position {
     Subsequent,
     NearNote,
 
+    // Not supported as a condition check, but this means both ibid and near, which is usually the
+    // case for an ibid, except when near-note-distance="0" and the ibid refers to a previous cluster.
+    #[strum(props(csl = "0", cslM = "0"))]
+    IbidNear,
+    #[strum(props(csl = "0", cslM = "0"))]
+    IbidWithLocatorNear,
+
     /// CSL-M only
     ///
     /// It [would
@@ -1281,6 +1352,13 @@ impl Position {
     pub fn matches(self, in_cond: Self) -> bool {
         use self::Position::*;
         match (self, in_cond) {
+            (IbidNear, Ibid) => true,
+            (IbidNear, NearNote) => true,
+            (IbidNear, Subsequent) => true,
+            (IbidWithLocatorNear, IbidWithLocator) => true,
+            (IbidWithLocatorNear, Ibid) => true,
+            (IbidWithLocatorNear, NearNote) => true,
+            (IbidWithLocatorNear, Subsequent) => true,
             (IbidWithLocator, Ibid) => true,
             (IbidWithLocator, Subsequent) => true,
             (Ibid, Subsequent) => true,

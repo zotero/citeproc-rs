@@ -35,6 +35,14 @@ pub fn render_ordinal(
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
             }
+            And | CommaAnd => {
+                if *token == CommaAnd {
+                    s.push(',');
+                }
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
+                s.push(' ');
+            }
         }
     }
     s
@@ -86,7 +94,7 @@ pub fn arabic_number(
     debug!("{:?}", num);
     match num {
         NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, variable, prf),
-        NumericValue::Str(s) => s.to_owned(),
+        NumericValue::Str(s) => s.as_ref().to_owned(),
     }
 }
 
@@ -139,6 +147,15 @@ fn tokens_to_string(
                 s.push(' ');
                 None
             }
+            And | CommaAnd => {
+                if *t == CommaAnd {
+                    s.push(',');
+                }
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
+                s.push(' ');
+                None
+            }
         }
     }
     s
@@ -175,6 +192,14 @@ pub fn roman_lower(ts: &[NumericToken], locale: &Locale, variable: NumberVariabl
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
             }
+            And | CommaAnd => {
+                if *t == CommaAnd {
+                    s.push(',');
+                }
+                s.push(' ');
+                s.push_str(locale.and_term(None).unwrap_or("and"));
+                s.push(' ');
+            }
         }
     }
     s
@@ -190,7 +215,7 @@ fn test_roman_lower() {
         NumericToken::Affixed("2E".into()),
     ];
     assert_eq!(
-        &roman_lower(&ts[..], &Locale::default(), None),
+        &roman_lower(&ts[..], &Locale::default(), NumberVariable::Locator, None),
         "iii\u{2013}xi, 2E"
     );
 }

@@ -22,6 +22,15 @@ pub enum MicroNode {
     NoCase(Vec<MicroNode>),
 }
 
+impl MicroNode {
+    pub(crate) fn take_text(&mut self) -> Option<String> {
+        match self {
+            MicroNode::Text(ref mut text) => Some(std::mem::replace(text, String::new())),
+            _ => None,
+        }
+    }
+}
+
 use crate::output::markup::parse_quotes;
 
 impl MicroNode {

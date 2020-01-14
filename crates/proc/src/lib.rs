@@ -16,6 +16,7 @@ use csl::Atom;
 use std::collections::HashSet;
 
 mod choose;
+mod citation_label;
 mod cite_context;
 mod date;
 pub mod db;
@@ -32,6 +33,8 @@ mod sort;
 mod unicode;
 mod walker;
 
+pub use crate::db::built_cluster_before_output;
+
 pub(crate) mod prelude {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub enum CiteOrBib {
@@ -44,6 +47,7 @@ pub(crate) mod prelude {
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;
+    pub use citeproc_io::{NumberLike, NumericValue};
     pub use citeproc_io::IngestOptions;
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
@@ -271,9 +275,15 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_date(&mut self, var: DateVariable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Date(var));
+    #[inline]
+    pub fn maybe_suppress_date<T: Default>(&mut self, var: DateVariable, f: impl Fn(&mut Self) -> T) -> T {
+        if self.is_suppressed_date(var) {
+            Default::default()
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Date(var));
+            }
+            f(self)
         }
     }
 

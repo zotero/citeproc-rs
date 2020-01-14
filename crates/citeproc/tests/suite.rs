@@ -32,25 +32,41 @@ impl<'a> fmt::Debug for PrettyString<'a> {
     }
 }
 
+fn ignore_file(file: &str) -> HashSet<String> {
+    let mut m = HashSet::new();
+    for name in file.lines() {
+        // Comments
+        if name.trim_start().starts_with("#") || name.trim().is_empty() {
+            continue;
+        }
+        m.insert(name.to_string());
+    }
+    m
+}
+
 lazy_static! {
     static ref IGNORES: HashSet<String> = {
-        let mut m = HashSet::new();
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
         let ignores = include_str!("./data/ignore.txt");
-        for name in ignores.lines() {
-            // Comments
-            if name.trim_start().starts_with("#") {
-                continue;
-            }
-            m.insert(name.to_string());
-        }
-        m
+        ignore_file(ignores)
+    };
+}
+
+lazy_static! {
+    static ref SNAPSHOTS: HashSet<String> = {
+        let snapshot = include_str!("./data/snapshot.txt");
+        ignore_file(snapshot)
     };
 }
 
 fn is_ignore(path: &Path) -> bool {
     let fname = path.file_name().unwrap().to_string_lossy();
     IGNORES.contains(&fname.into_owned())
+}
+
+fn is_snapshot(path: &Path) -> bool {
+    let fname = path.file_name().unwrap().to_string_lossy();
+    SNAPSHOTS.contains(&fname.into_owned())
 }
 
 use std::sync::Once;
@@ -70,7 +86,13 @@ fn csl_test_suite(path: &Path) {
     let input = read_to_string(path).unwrap();
     let mut test_case = parse_human_test(&input);
     if let Some(res) = test_case.execute() {
-        assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+        let pass = res == test_case.result;
+        let fname = path.file_name().unwrap().to_string_lossy();
+        if !pass && is_snapshot(path) {
+            insta::assert_snapshot!(res);
+        } else {
+            assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+        }
     }
 }
 
