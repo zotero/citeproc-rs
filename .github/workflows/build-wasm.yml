@@ -6,7 +6,6 @@ on:
 jobs:
   build_wasm:
     name: Build WebAssembly Package & deploy demo
-    needs: regressions
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@master
