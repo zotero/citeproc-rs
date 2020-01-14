@@ -14,6 +14,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::str::FromStr;
+use crate::names::{PersonName, Name};
 
 // You have to know which variant we're using before parsing a reference.
 // Why? Because some variables are numbers in CSL-M, but standard vars in CSL. And other
@@ -27,7 +28,6 @@ use csl::GetAttribute;
 use csl::Lang;
 
 use super::date::{Date, DateOrRange};
-use super::numeric::NumericValue;
 use super::reference::Reference;
 use fnv::FnvHashMap;
 use std::marker::PhantomData;
@@ -48,6 +48,8 @@ impl<'de> Visitor<'de> for LanguageVisitor {
         Lang::from_str(key).map_err(|_e| de::Error::unknown_field(key, &["language"]))
     }
 }
+
+struct MaybeDate(Option<DateOrRange>);
 
 pub struct WrapLang(Lang);
 
@@ -88,24 +90,46 @@ enum Field {
     Any(WrapVar),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Hash)]
 #[serde(untagged)]
-pub enum IdOrNumber {
-    S(String),
-    N(i32),
+pub enum NumberLike {
+    Str(String),
+    Num(u32),
 }
 
-impl IdOrNumber {
+impl NumberLike {
     pub fn into_string(self) -> String {
         match self {
-            IdOrNumber::S(s) => s,
-            IdOrNumber::N(i) => i.to_string(),
+            NumberLike::Str(s) => s,
+            NumberLike::Num(i) => i.to_string(),
+        }
+    }
+    pub fn to_number(&self) -> Result<u32, std::num::ParseIntError> {
+        match self {
+            NumberLike::Str(s) => s.parse(),
+            NumberLike::Num(i) => Ok(*i),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum NumberLikeSigned {
+    Str(String),
+    Num(i32),
+}
+
+impl NumberLikeSigned {
+    pub fn into_string(self) -> String {
+        match self {
+            NumberLikeSigned::Str(s) => s,
+            NumberLikeSigned::Num(i) => i.to_string(),
         }
     }
     pub fn to_number(&self) -> Result<i32, std::num::ParseIntError> {
         match self {
-            IdOrNumber::S(s) => s.parse(),
-            IdOrNumber::N(i) => Ok(*i),
+            NumberLikeSigned::Str(s) => s.parse(),
+            NumberLikeSigned::Num(i) => Ok(*i),
         }
     }
 }
@@ -165,7 +189,7 @@ impl<'de> Deserialize<'de> for Reference {
             where
                 V: MapAccess<'de>,
             {
-                let mut id: Option<IdOrNumber> = None;
+                let mut id: Option<NumberLike> = None;
                 let mut csl_type: Option<WrapType> = None;
                 let mut language = None;
                 let mut ordinary = FnvHashMap::default();
@@ -209,7 +233,29 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
+                                    let mut names: Vec<Name> = map.next_value()?;
+                                    for name in names.iter_mut() {
+                                        *name = match name {
+                                            Name::Person(pn) => {
+                                                pn.parse_particles();
+                                                continue;
+                                            }
+                                            Name::Literal { literal } => {
+                                                // Normalise literal names into lone family names.
+                                                // 
+                                                // There is no special case for literal names in
+                                                // CSL, so this just helps do the formatting
+                                                // uniformly. They can still be created by using
+                                                // the Rust API directly, so this has to be
+                                                // removed at some point.
+                                                Name::Person(PersonName {
+                                                    family: Some(std::mem::take(literal)),
+                                                    ..Default::default()
+                                                })
+                                            }
+                                        }
+                                    }
+                                    ve.insert(names);
                                 }
                             }
                         }
@@ -219,7 +265,9 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
+                                    if let MaybeDate(Some(d)) = map.next_value()? {
+                                        ve.insert(d);
+                                    }
                                 }
                             }
                         }
@@ -229,7 +277,7 @@ impl<'de> Deserialize<'de> for Reference {
                     id: id
                         .map(|i| csl::Atom::from(i.into_string()))
                         .ok_or_else(|| de::Error::missing_field("id"))?,
-                    csl_type: csl_type.ok_or_else(|| de::Error::missing_field("type"))?.0,
+                    csl_type: csl_type.unwrap_or(WrapType(CslType::Article)).0,
                     language,
                     ordinary,
                     number,
@@ -244,83 +292,10 @@ impl<'de> Deserialize<'de> for Reference {
     }
 }
 
-impl<'de> Deserialize<'de> for NumericValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct NumericVisitor;
-
-        impl<'de> Visitor<'de> for NumericVisitor {
-            type Value = NumericValue;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("an integer between 0 and 2^32, or a string")
-            }
-
-            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::from(Cow::Owned(value)))
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                self.visit_string(value.to_string())
-            }
-
-            fn visit_borrowed_str<E>(self, value: &'de str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::from(Cow::Borrowed(value)))
-            }
-
-            fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(u32::from(value)))
-            }
-
-            fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(u32::from(value)))
-            }
-
-            fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(NumericValue::num(value))
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                use std::u32;
-                if value >= u64::from(u32::MIN) && value <= u64::from(u32::MAX) {
-                    Ok(NumericValue::num(value as u32))
-                } else {
-                    Err(E::custom(format!("u32 out of range: {}", value)))
-                }
-            }
-        }
-
-        deserializer.deserialize_any(NumericVisitor)
-    }
-}
-
 // newtype these so we can have a different implementation
-struct DateParts(DateOrRange);
+struct DateParts(Option<DateOrRange>);
 
-struct DateInt(i32);
+struct DateInt(Option<i32>);
 
 impl<'de> Deserialize<'de> for DateInt {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -335,13 +310,24 @@ impl<'de> Deserialize<'de> for DateInt {
                 formatter.write_str("an integer or a string that's actually just an integer")
             }
 
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                self.visit_str(&value)
+            }
+
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
+                if value.is_empty() {
+                    return Ok(DateInt(None));
+                }
                 value
                     .parse::<i32>()
                     .map_err(|_| de::Error::invalid_value(de::Unexpected::Str(value), &self))
+                    .map(Some)
                     .map(DateInt)
             }
 
@@ -349,21 +335,21 @@ impl<'de> Deserialize<'de> for DateInt {
             where
                 E: de::Error,
             {
-                Ok(DateInt(i32::from(value)))
+                Ok(DateInt(Some(i32::from(value))))
             }
 
             fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                Ok(DateInt(i32::from(value)))
+                Ok(DateInt(Some(i32::from(value))))
             }
 
             fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                Ok(DateInt(value))
+                Ok(DateInt(Some(value)))
             }
 
             fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
@@ -372,7 +358,7 @@ impl<'de> Deserialize<'de> for DateInt {
             {
                 use std::i32;
                 if value >= i64::from(i32::MIN) && value <= i64::from(i32::MAX) {
-                    Ok(DateInt(value as i32))
+                    Ok(DateInt(Some(value as i32)))
                 } else {
                     Err(E::custom(format!("i32 out of range: {}", value)))
                 }
@@ -384,7 +370,7 @@ impl<'de> Deserialize<'de> for DateInt {
             {
                 use std::u16;
                 if value >= u64::from(u16::MIN) && value <= u64::from(u16::MAX - 1) {
-                    Ok(DateInt(value as i32))
+                    Ok(DateInt(Some(value as i32)))
                 } else {
                     Err(E::custom(format!("i32 out of range: {}", value)))
                 }
@@ -394,71 +380,9 @@ impl<'de> Deserialize<'de> for DateInt {
     }
 }
 
-struct DateUInt(u32);
+struct OptDate(Option<Date>);
 
-impl<'de> Deserialize<'de> for DateUInt {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ParseIntVisitor;
-        impl<'de> Visitor<'de> for ParseIntVisitor {
-            type Value = DateUInt;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str(
-                    "an unsigned integer or a string that's actually just an unsigned integer",
-                )
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                value
-                    .parse::<u32>()
-                    .map_err(|_| de::Error::invalid_value(de::Unexpected::Str(value), &self))
-                    .map(DateUInt)
-            }
-
-            fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(DateUInt(u32::from(value)))
-            }
-
-            fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(DateUInt(u32::from(value)))
-            }
-
-            fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(DateUInt(value))
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                use std::u32;
-                if value <= u64::from(u32::MAX - 1) {
-                    Ok(DateUInt(value as u32))
-                } else {
-                    Err(E::custom(format!("u32 out of range: {}", value)))
-                }
-            }
-        }
-        deserializer.deserialize_any(ParseIntVisitor)
-    }
-}
-
-impl<'de> Deserialize<'de> for Date {
+impl<'de> Deserialize<'de> for OptDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -466,30 +390,31 @@ impl<'de> Deserialize<'de> for Date {
         struct SingleDatePartVisitor;
 
         impl<'de> Visitor<'de> for SingleDatePartVisitor {
-            type Value = Date;
+            type Value = OptDate;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a date-part, e.g. [2004, 8, 19]")
+                formatter.write_str("a date-part as a number or string-number, e.g. 2004, \"8\"")
             }
 
             fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
             where
                 V: SeqAccess<'de>,
             {
-                let year: DateInt = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let month = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let day = seq.next_element()?.unwrap_or(DateUInt(0)).0;
-                let month = if month >= 1 && month <= 16 {
-                    month
-                } else if month >= 21 && month <= 24 {
-                    month - 8
+                if let Some(DateInt(Some(year))) = seq.next_element::<DateInt>()? {
+                    let month = seq.next_element::<DateInt>()?.unwrap_or(DateInt(None)).0.unwrap_or(0);
+                    let day = seq.next_element::<DateInt>()?.unwrap_or(DateInt(None)).0.unwrap_or(0);
+                    let month = if month >= 1 && month <= 16 {
+                        month
+                    } else if month >= 21 && month <= 24 {
+                        month - 8
+                    } else {
+                        0
+                    };
+                    let day = if day >= 1 && day <= 31 { day } else { 0 };
+                    Ok(OptDate(Some(Date::new(year, month as u32, day as u32))))
                 } else {
-                    0
-                };
-                let day = if day >= 1 && day <= 31 { day } else { 0 };
-                Ok(Date::new(year.0, month, day))
+                    Ok(OptDate(None))
+                }
             }
 
             // citeproc-rs may wish to parse its own pandoc Meta blocks without forking out
@@ -520,12 +445,13 @@ impl<'de> Deserialize<'de> for DateParts {
             where
                 V: SeqAccess<'de>,
             {
-                let from = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                match seq.next_element()? {
-                    Some(to) => Ok(DateParts(DateOrRange::Range(from, to))),
-                    None => Ok(DateParts(DateOrRange::Single(from))),
+                if let Some(OptDate(Some(from))) = seq.next_element()? {
+                    match seq.next_element()? {
+                        Some(OptDate(Some(to))) => Ok(DateParts(Some(DateOrRange::Range(from, to)))),
+                        _ => Ok(DateParts(Some(DateOrRange::Single(from)))),
+                    }
+                } else {
+                    Ok(DateParts(None))
                 }
             }
         }
@@ -534,7 +460,7 @@ impl<'de> Deserialize<'de> for DateParts {
 }
 
 /// TODO:implement seasons
-impl<'de> Deserialize<'de> for DateOrRange {
+impl<'de> Deserialize<'de> for MaybeDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -552,7 +478,7 @@ impl<'de> Deserialize<'de> for DateOrRange {
         struct DateVisitor;
 
         impl<'de> Visitor<'de> for DateVisitor {
-            type Value = DateOrRange;
+            type Value = MaybeDate;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("a date")
@@ -562,14 +488,14 @@ impl<'de> Deserialize<'de> for DateOrRange {
             where
                 E: de::Error,
             {
-                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string())))
+                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string()))).map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value)))
+                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value))).map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
@@ -577,8 +503,8 @@ impl<'de> Deserialize<'de> for DateOrRange {
                 V: MapAccess<'de>,
             {
                 let mut found = None;
-                let mut found_season: Option<IdOrNumber> = None;
-                let mut found_circa: Option<IdOrNumber> = None;
+                let mut found_season: Option<NumberLike> = None;
+                let mut found_circa: Option<NumberLikeSigned> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         DateType::Raw => {
@@ -593,14 +519,17 @@ impl<'de> Deserialize<'de> for DateOrRange {
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
                         DateType::DateParts => {
                             let dp: DateParts = map.next_value()?;
-                            found = Some(dp.0);
+                            if dp.0.is_some() {
+                                found = dp.0;
+                            }
                         }
                         DateType::Season => found_season = Some(map.next_value()?),
                         DateType::Circa => found_circa = Some(map.next_value()?),
                     }
                 }
-                found
-                    .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
+                Ok(found
+                    .ok_or(())
+                    // .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
                     .and_then(|mut found| {
                         if let Some(season) = found_season {
                             if let DateOrRange::Single(ref mut date) = found {
@@ -623,20 +552,33 @@ impl<'de> Deserialize<'de> for DateOrRange {
                                                 Ok(unsigned as u32)
                                             }
                                         });
-                                    let mut season = season?;
-                                    if season > 20 {
-                                        // handle 21, 22, 23, 24
-                                        season -= 20;
+                                    if let Ok(mut season) = season {
+                                        if season > 20 {
+                                            // handle 21, 22, 23, 24
+                                            season -= 20;
+                                        }
+                                        date.month = season + 12;
                                     }
-                                    date.month = season + 12;
                                 }
                             }
                         }
-                        if let Some(_circa) = found_circa {
+                        if let Some(circa) = found_circa {
+                            if circa.to_number() == Ok(1) {
+                                match &mut found {
+                                    DateOrRange::Single(d) => d.circa = true,
+                                    DateOrRange::Range(d, d2) => {
+                                        d.circa = true;
+                                        d2.circa = true;
+                                    }
+                                    _ => {}
+                                }
+                            }
                             // Do something?
                         }
-                        Ok(found)
+                        Ok(MaybeDate(Some(found)))
                     })
+                    .ok()
+                    .unwrap_or(MaybeDate(None)))
             }
         }
 

@@ -107,18 +107,18 @@ impl TestCase {
     pub fn execute(&mut self) -> Option<String> {
         let mut res = String::new();
         if let Some(ref instructions) = &self.process_citation_clusters {
-            self.result.push_str("\n");
+            if self.mode == Mode::Citation {
+                self.result.push_str("\n");
+            }
             self.processor.set_references(self.input.clone());
             let mut executor = JsExecutor::new(&mut self.processor);
-            for instruction in instructions.iter() {
-                executor.execute(instruction);
-            }
+            executor.execute(instructions);
+            let actual = executor.get_results();
             use std::str::FromStr;
             match self.mode {
                 Mode::Citation => {
                     let desired = Results::from_str(&self.result).unwrap();
                     self.result = desired.output_independent();
-                    let actual = executor.get_results();
                     Some(actual.output_independent())
                 }
                 Mode::Bibliography => Some(get_bib_string(&self.processor)),
@@ -194,7 +194,7 @@ fn get_bib_string(proc: &Processor) -> String {
             }
         }
     }
-    string.push_str("\n</div>");
+    string.push_str("\n</div>\n");
     normalise_html(&string)
 }
 
@@ -234,8 +234,15 @@ impl LocaleFetcher for Filesystem {
     }
 }
 
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+
 pub fn normalise_html(strg: &str) -> String {
-    strg.replace("&#x2f;", "/")
+    let rep = strg.replace("&#x2f;", "/")
         .replace("&#x27;", "'")
         .replace("&#60;", "&lt;")
         .replace("&#62;", "&gt;")
@@ -244,5 +251,14 @@ pub fn normalise_html(strg: &str) -> String {
         .replace("&#38;", "&amp;")
         // citeproc-js puts successive unicode superscript transforms in their own tags,
         // citeproc-rs joins them.
-        .replace("</sup><sup>", "")
+        .replace("</sup><sup>", "");
+    let newlines = regex!(r"(?m)>\n*\s*<(/?)div");
+    let mut rep = newlines.replace_all(&rep, ">\n<${1}div").into_owned();
+    rep.truncate(rep.trim_end().trim_end_matches('\n').len());
+    rep
+}
+
+#[test]
+fn test_normalise() {
+    assert_eq!(normalise_html("<div>\n  <div>"), "<div><div>".to_owned());
 }

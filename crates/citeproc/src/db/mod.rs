@@ -45,14 +45,14 @@ use fnv::FnvHashMap;
 
 struct SavedBib {
     sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>,
-    bib_entries: FnvHashMap<Atom, Arc<MarkupOutput>>,
+    bib_entries: Arc<FnvHashMap<Atom, Arc<MarkupOutput>>>,
 }
 
 impl SavedBib {
     fn new() -> Self {
         SavedBib {
             sorted_refs: Arc::new(Default::default()),
-            bib_entries: Default::default(),
+            bib_entries: Arc::new(Default::default()),
         }
     }
 }
@@ -224,7 +224,7 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) {
-        let clusters = self.clusters_sorted();
+        let clusters = self.clusters_cites_sorted();
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
@@ -394,18 +394,6 @@ impl Processor {
         self.bib_item(ref_id)
     }
 
-    fn get_bibliography_map(&self) -> FnvHashMap<Atom, Arc<MarkupOutput>> {
-        let sorted_refs = self.sorted_refs();
-        let mut m = FnvHashMap::with_capacity_and_hasher(
-            sorted_refs.0.len(),
-            fnv::FnvBuildHasher::default(),
-        );
-        for key in sorted_refs.0.iter() {
-            m.insert(key.clone(), self.bib_item(key.clone()));
-        }
-        m
-    }
-
     pub fn get_bibliography_meta(&self) -> Option<BibliographyMeta> {
         let style = self.get_style();
         style.bibliography.as_ref().map(|bib| {
@@ -450,10 +438,13 @@ impl Processor {
     }
 
     pub fn get_bibliography(&self) -> Vec<MarkupOutput> {
+        let bib_map = self.get_bibliography_map();
         self.sorted_refs()
             .0
             .iter()
-            .map(|k| (*self.bib_item(k.clone())).clone())
+            .filter_map(|k| bib_map.get(&k))
+            .filter(|k| !k.is_empty())
+            .map(|x| (**x).clone())
             .collect()
     }
 

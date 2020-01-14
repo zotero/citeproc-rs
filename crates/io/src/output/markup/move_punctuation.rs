@@ -222,7 +222,6 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
     debug!("move_around_quote {:?} {:?} {:?}", els.get(ix), ix, piq);
     if let Some(mut insertion_point) = find_right_quote(els, ix, piq) {
         // Last element burrowed down to a right quotation mark
-        let mut needs_removal = false;
         let mut has_two_puncs = None;
         let mut outside_char = {
             let suffix = insertion_point.next_string_mut()?;
@@ -749,6 +748,9 @@ static QUOTES_BOTH_PUNC_OUT: phf::Map<&'static [u8], Where> = phf_map! {
 /// From `punctuation_FullMontyPlain.txt` and `punctuation_FullMontyField.txt`,
 /// which have identical output. If None, do nothing.
 static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map! {
+    // Misc
+    b"  " => Some(" "),
+
     // Colon
     b"::" => Some(":"),
     b".:" => None,

@@ -4,6 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use std::cmp::Ordering;
+
 /// TODO: parse 2018-3-17 as if it were '03'
 
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
@@ -20,6 +22,47 @@ pub struct Date {
     /// range 1 to 31 inclusive
     /// 0 is "not present"
     pub day: u32,
+
+    pub circa: bool,
+}
+
+impl PartialOrd for Date {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Date {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let mut cmp = self.year.cmp(&other.year);
+        if self.month < 13 && other.month < 13 {
+            // less specific comes first, so zeroes (absent) can just be compared directly
+            cmp = cmp.then(self.month.cmp(&other.month))
+        }
+        cmp.then(self.day.cmp(&other.day))
+    }
+}
+
+impl PartialOrd for DateOrRange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (DateOrRange::Literal(_), _) | (_, DateOrRange::Literal(_)) => None,
+            (DateOrRange::Single(a), DateOrRange::Single(b)) => Some(a.cmp(b)),
+            (DateOrRange::Range(a1, a2), DateOrRange::Single(b)) => Some(a1.cmp(b).then(a2.cmp(b))),
+            (DateOrRange::Single(a), DateOrRange::Range(b1, b2)) => Some(a.cmp(b1).then(a.cmp(b2))),
+            (DateOrRange::Range(a1, a2), DateOrRange::Range(b1, b2)) => Some(a1.cmp(b1).then(a2.cmp(b2))),
+        }
+    }
+}
+
+#[test]
+fn test_date_ord() {
+    // years only
+    assert!(Date::new(2000, 0, 0) < Date::new(2001, 0, 0));
+    // Less specific comes first (2000 < May 2000 < 1 May 2000)
+    assert!(Date::new(2000, 0, 0) < Date::new(2000, 5, 0));
+    assert!(Date::new(2000, 5, 0) < Date::new(2000, 5, 1));
+
+    assert!(Date::new(2000, 0, 0) < Date::new(2001, 0, 0));
 }
 
 // TODO: implement PartialOrd?
@@ -36,6 +79,7 @@ impl Date {
             year: y,
             month: m,
             day: d,
+            circa: false,
         }
     }
     pub fn from_parts(parts: &[i32]) -> Option<Self> {
@@ -45,6 +89,7 @@ impl Date {
             year: *parts.get(0)?,
             month: if m >= 1 && m <= 16 { m as u32 } else { 0 },
             day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
+            circa: false,
         })
     }
 
@@ -69,7 +114,7 @@ pub enum DateOrRange {
 
 impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
-        DateOrRange::Single(Date { year, month, day })
+        DateOrRange::Single(Date::new(year, month, day))
     }
     pub fn single(&self) -> Option<Date> {
         if let DateOrRange::Single(d) = self {
@@ -376,21 +421,9 @@ fn ymd_date(inp: &[u8]) -> IResult<&[u8], Date> {
     Ok((
         rem2,
         match md {
-            None => Date {
-                year: y,
-                month: 0,
-                day: 0,
-            },
-            Some(MonthDay::MonthDay(m, d)) => Date {
-                year: y,
-                month: m,
-                day: d,
-            },
-            Some(MonthDay::Month(m)) => Date {
-                year: y,
-                month: m,
-                day: 0,
-            },
+            None => Date::new(y, 0, 0),
+            Some(MonthDay::MonthDay(m, d)) => Date::new(y, m, d),
+            Some(MonthDay::Month(m)) => Date::new(y, m, 0),
         },
     ))
 }

@@ -111,6 +111,9 @@ impl OutputFormat for Markup {
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
         let mut nodes = MicroNode::parse(input, options);
         options.apply_text_case_micro(&mut nodes);
+        if nodes.is_empty() {
+            return Vec::new();
+        }
         vec![InlineElement::Micro(nodes)]
     }
 
@@ -335,16 +338,16 @@ fn tag_stack(formatting: Formatting, display: Option<DisplayMode>) -> Vec<Format
         Some(DisplayMode::RightInline) => stack.push(DisplayRightInline),
         _ => {}
     }
-    match formatting.font_style {
-        Some(FontStyle::Italic) => stack.push(FontStyleItalic),
-        Some(FontStyle::Oblique) => stack.push(FontStyleOblique),
-        Some(FontStyle::Normal) => stack.push(FontStyleNormal),
-        _ => {}
-    }
     match formatting.font_weight {
         Some(FontWeight::Bold) => stack.push(FontWeightBold),
         Some(FontWeight::Light) => stack.push(FontWeightLight),
         Some(FontWeight::Normal) => stack.push(FontWeightNormal),
+        _ => {}
+    }
+    match formatting.font_style {
+        Some(FontStyle::Italic) => stack.push(FontStyleItalic),
+        Some(FontStyle::Oblique) => stack.push(FontStyleOblique),
+        Some(FontStyle::Normal) => stack.push(FontStyleNormal),
         _ => {}
     }
     match formatting.font_variant {

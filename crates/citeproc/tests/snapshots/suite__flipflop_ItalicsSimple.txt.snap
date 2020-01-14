@@ -1,0 +1,10 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+One TwoA <i>Three Four</i> Five!
+<i>One TwoB</i> Three Four Five!
+One TwoC Three <i>Four Five!</i>
+<i>One TwoD</i> Three <i>Four Five!</i>
+<i>One TwoE <span style="font-style:normal;">Three</span> Four Five!</i>
+One TwoF Three Four Five!
