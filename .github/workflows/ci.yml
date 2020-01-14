@@ -31,6 +31,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-southeast-2
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
+          GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           mkdir -p .snapshots/branches
           aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_BASE .snapshots/branches/$GITHUB_BASE
@@ -65,6 +66,7 @@ jobs:
         run: cargo test-suite store
       - name: "Compare test suite results for regressions"
         env:
+          GITHUB_BASE: ${{ steps.branch.outputs.base }}
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
