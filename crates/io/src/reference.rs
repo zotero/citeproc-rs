@@ -14,6 +14,7 @@ use super::date::DateOrRange;
 use super::names::Name;
 use super::numeric::NumericValue;
 use csl::{Atom, CslType, DateVariable, Lang, NameVariable, NumberVariable, Variable};
+use crate::NumberLike;
 
 // We're saving copies and allocations by not using String here.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub struct Reference {
     // whereas these hashes are essentially O(1) for our purposes
     pub ordinary: FnvHashMap<Variable, String>,
     // we do the conversion on the input side, so is-numeric is just Result::ok
-    pub number: FnvHashMap<NumberVariable, NumericValue>,
+    pub number: FnvHashMap<NumberVariable, NumberLike>,
     pub name: FnvHashMap<NameVariable, Vec<Name>>,
     pub date: FnvHashMap<DateVariable, DateOrRange>,
 }

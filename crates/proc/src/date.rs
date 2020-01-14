@@ -78,7 +78,7 @@ fn to_ref_ir(
             quotes: None,
             text_case: ir_seq.text_case,
         }),
-        IR::ConditionalDisamb(..) | IR::Name(_) => unreachable!(),
+        IR::ConditionalDisamb(..) | IR::Name(_) | IR::NameCounter(_) => unreachable!(),
     }
 }
 
@@ -171,17 +171,19 @@ impl Disambiguation<Markup> for BodyDate {
     }
 }
 
-struct GenericDateBits {
+#[derive(Clone)]
+struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
     overall_affixes: Option<Affixes>,
     overall_delimiter: Atom,
     overall_text_case: TextCase,
     display: Option<DisplayMode>,
     sorting: bool,
+    locale: &'a Locale,
 }
 
-struct PartBuilder<O: OutputFormat> {
-    bits: GenericDateBits,
+struct PartBuilder<'a, O: OutputFormat> {
+    bits: GenericDateBits<'a>,
     acc: PartAccumulator<O>,
 }
 
@@ -190,8 +192,8 @@ enum PartAccumulator<O: OutputFormat> {
     Seq(IrSeq<O>),
 }
 
-impl<'a, O: OutputFormat> PartBuilder<O> {
-    fn new(bits: GenericDateBits, len_hint: usize) -> Self {
+impl<'a, O: OutputFormat> PartBuilder<'a, O> {
+    fn new(bits: GenericDateBits<'a>, len_hint: usize) -> Self {
         PartBuilder {
             bits,
             acc: PartAccumulator::Builds(Vec::with_capacity(len_hint)),
@@ -269,8 +271,8 @@ impl<'a, O: OutputFormat> PartBuilder<O> {
     }
 }
 
-impl GenericDateBits {
-    fn sorting() -> Self {
+impl<'a> GenericDateBits<'a> {
+    fn sorting(locale: &'a Locale) -> Self {
         GenericDateBits {
             overall_delimiter: Atom::from(""),
             overall_formatting: None,
@@ -278,6 +280,7 @@ impl GenericDateBits {
             overall_text_case: TextCase::None,
             display: None,
             sorting: true,
+            locale,
         }
     }
 }
@@ -295,7 +298,7 @@ where
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
-        GenericDateBits::sorting()
+        GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
             overall_delimiter: locale_date.delimiter.0.clone(),
@@ -308,6 +311,7 @@ where
                 None
             },
             sorting: false,
+            locale,
         }
     };
     let mut parts = Vec::with_capacity(locale_date.date_parts.len());
@@ -348,9 +352,10 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
+    let locale = ctx.locale();
     let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
-        GenericDateBits::sorting()
+        GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
             overall_delimiter: indep.delimiter.0.clone(),
@@ -363,6 +368,7 @@ where
                 None
             },
             sorting: false,
+            locale,
         }
     };
     let mut parts_slice = indep.date_parts.as_slice();
@@ -395,6 +401,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             _ => val,
         };
     }
+    let cloned_gen = gen_date.clone();
     let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
         let each = parts
             .iter()
@@ -406,6 +413,13 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                 }
             })
             .filter_map(|dp| dp_render_either(var, dp, ctx.clone(), single, false));
+        if single.circa {
+            let circa = cloned_gen.locale.get_simple_term(csl::SimpleTermSelector::Misc(MiscTerm::Circa, TermFormExtended::default()));
+            if let Some(circa) = circa {
+                builder.push_either(Either::Build(Some(fmt.plain(circa.singular()))));
+                builder.push_either(Either::Build(Some(fmt.plain(" "))));
+            }
+        }
         let mut seen_one = false;
         for (_form, either) in each {
             if seen_one && !delim.is_empty() {
@@ -603,16 +617,8 @@ fn test_range_dp_sequence() {
     let month = &parts[1];
     let year = &parts[2];
 
-    let first = Date {
-        year: 1998,
-        month: 3,
-        day: 27,
-    };
-    let second = Date {
-        year: 1998,
-        month: 3,
-        day: 29,
-    };
+    let first = Date::new(1998, 3, 27);
+    let second = Date::new(1998, 3, 29);
     let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
@@ -625,16 +631,8 @@ fn test_range_dp_sequence() {
         ]
     );
 
-    let first = Date {
-        year: 1998,
-        month: 3,
-        day: 27,
-    };
-    let second = Date {
-        year: 1998,
-        month: 4,
-        day: 29,
-    };
+    let first = Date::new(1998, 3, 27);
+    let second = Date::new(1998, 4, 29);
     let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
@@ -685,7 +683,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                 } else {
                     let mut contents = Vec::with_capacity(2);
                     let b = fmt.plain(&s);
-                    let year_part = IR::Rendered(Some(CiteEdgeData::Output(b)));
+                    let year_part = IR::Rendered(Some(CiteEdgeData::Year(b)));
                     // Important because we got it from a date variable.
                     contents.push((year_part, GroupVars::Important));
                     // Why not move this if branch up and emit Either::Build?
@@ -696,12 +694,8 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                     // specifically when affixes are nonzero. Like: ["(", "1986", ")"] vs
                     // ["(1986)"]
                     if ctx.should_add_year_suffix_hook() {
-                        let suffix = IR::YearSuffix(YearSuffix {
-                            hook: YearSuffixHook::Plain,
-                            group_vars: GroupVars::Unresolved,
-                            ir: Box::new(IR::Rendered(None))
-                        });
-                        contents.push((suffix, GroupVars::Unresolved));
+                        let suffix = IR::year_suffix(YearSuffixHook::Plain);
+                        contents.push(suffix);
                     }
                     Either::Ir(IR::Seq(IrSeq {
                         contents,

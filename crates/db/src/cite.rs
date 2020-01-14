@@ -179,7 +179,6 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     for cluster in clusters.iter() {
         ids.extend(cluster.cites.iter().cloned());
     }
-    debug!("all_cite_ids: {:?}", ids.iter().map(|x| x.lookup(db)).collect::<Vec<_>>());
     Arc::new(ids)
 }
 

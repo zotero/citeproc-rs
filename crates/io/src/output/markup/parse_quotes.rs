@@ -4,6 +4,7 @@ use crate::IngestOptions;
 use crate::LocalizedQuotes;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
+use crate::output::FormatCmd;
 
 pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Vec<MicroNode> {
     let matcher = QuoteMatcher {
@@ -26,6 +27,22 @@ fn test_parse_quotes() {
             localized: LocalizedQuotes::simple(),
             children: vec![MicroNode::Text("hello".to_owned()),]
         }]
+    );
+    let options = Default::default();
+    assert_eq!(
+        parse_quotes(MicroNode::parse("<i>'quotes in italics'</i>", &options), &options),
+        vec![
+            MicroNode::Formatted(
+                vec![
+                    MicroNode::Quoted {
+                        is_inner: false,
+                        localized: LocalizedQuotes::simple(),
+                        children: vec![MicroNode::Text("quotes in italics".to_owned()),]
+                    }
+                ],
+                FormatCmd::FontStyleItalic
+            )
+        ]
     );
 }
 
@@ -96,11 +113,11 @@ fn stamp<'a>(
 ) -> Vec<MicroNode> {
     let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
-    let mut drain = |start: usize, end: usize, stack: &mut QuotedStack| {
+    let drain = |start: usize, end: usize, drained: &mut usize, orig: &mut Vec<MicroNode>, stack: &mut QuotedStack| {
         stack
             .mut_ref()
-            .extend(orig.drain(start - drained..end - drained));
-        drained += end - start;
+            .extend(orig.drain(start - *drained..end - *drained));
+        *drained += end - start;
     };
     let mut range_wip: Option<(usize, usize)> = None;
     for inter in intermediates {
@@ -110,7 +127,7 @@ fn stamp<'a>(
         match inter {
             Intermediate::Event(ev) => {
                 if let Some(range) = range_wip {
-                    drain(range.0, range.1, &mut stack);
+                    drain(range.0, range.1, &mut drained, orig, &mut stack);
                     range_wip = None;
                 }
                 match ev {
@@ -150,11 +167,20 @@ fn stamp<'a>(
             }
             // Move sequential index references out of the array together where possible
             Intermediate::Index(ix) => {
+                let node = orig.get_mut(ix - drained).unwrap();
+                match node {
+                    MicroNode::Quoted { children, .. } | MicroNode::NoCase(children) | MicroNode::Formatted(children, _) => {
+                        let to_parse_owned = mem::replace(children, Vec::new());
+                        let parsed = parse_quotes(to_parse_owned, options);
+                        *children = parsed;
+                    },
+                    _ => {},
+                };
                 if let Some(ref mut range) = range_wip {
                     if range.1 == ix {
                         range.1 = ix + 1;
                     } else {
-                        drain(range.0, range.1, &mut stack);
+                        drain(range.0, range.1, &mut drained, orig, &mut stack);
                         range_wip = Some((ix, ix + 1));
                     }
                 } else {
@@ -164,7 +190,7 @@ fn stamp<'a>(
         }
     }
     if let Some(ref mut range) = range_wip {
-        drain(range.0, range.1, &mut stack);
+        drain(range.0, range.1, &mut drained, orig, &mut stack);
     }
     stack.collapse_hanging()
 }
@@ -347,8 +373,12 @@ fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
         (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen,
         (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose,
         (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma,
+        (SmartQuoteKind::Midword, '\u{2019}') => Event::SmartMidwordInvertedComma,
         // Don't parse this as a quote at all
-        _ => return None,
+        _ => {
+            debug!("quote_event doesn't want a quote: {:?}", ch);
+            return None;
+        },
     };
     Some(ev)
 }
@@ -513,10 +543,6 @@ use super::puncttable::is_punctuation;
 
 /// Determines what kind a smart quote should open at this point
 fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteKind> {
-    let curly = SmartQuoteKind::from_curly(character);
-    if curly.is_some() {
-        return curly;
-    }
     let not_italic_ish = |c: &char| *c != '*' && *c != '~' && *c != '_' && *c != '\'' && *c != '"';
 
     // Beginning and end of line == whitespace.
@@ -534,7 +560,15 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
     let not_term_punc = |c: char| is_punctuation(c) && c != '.' && c != ',';
     let wordy = |c: char| !is_punctuation(c) && !c.is_whitespace() && !c.is_control();
 
-    if prev_white && next_white {
+    let curly = SmartQuoteKind::from_curly(character);
+    if let Some(curly) = curly {
+        if let SmartQuoteKind::CloseSingle = curly {
+            if wordy(prev_char) && wordy(next_char) {
+                return Some(SmartQuoteKind::Midword);
+            }
+        }
+        return Some(curly);
+    } else if prev_white && next_white {
         None
     } else if prev_white && next_char.is_numeric() && character == '\'' {
         // '09 -- force a close quote

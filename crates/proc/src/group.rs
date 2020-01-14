@@ -134,13 +134,16 @@ impl GroupVars {
     #[inline]
     pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(self, ir: T) -> (T, Self) {
         let default = T::default();
-        if self != Missing && ir != default {
+        if self == Missing {
+            (default, GroupVars::Missing)
+        } else if ir == default {
+            (default, GroupVars::Plain)
+        } else {
             // "reset" the group vars so that G(Plain, G(Missing)) will
             // render the Plain part. Groups shouldn't look inside inner
             // groups.
             //
             // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
-            debug!("keeping: \n{:#?}", ir);
             (
                 ir,
                 if self == Plain {
@@ -149,13 +152,6 @@ impl GroupVars {
                     self
                 }
             )
-        } else {
-            debug!(
-                "discarding group/macro because of GV being Missing or group being empty: \n{:#?}",
-                ir
-            );
-            // Don't render the group! But also don't infect the whole tree with Missing.
-            (default, GroupVars::Plain)
         }
     }
 }

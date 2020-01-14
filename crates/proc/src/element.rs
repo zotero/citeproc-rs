@@ -15,7 +15,6 @@ where
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence_basic(db, state, ctx, &layout.elements)
     }
 }
@@ -31,9 +30,23 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
+        // Unlike cite, we will apply affixes and formatting in the seq, so that they go inside
+        // any second-field-align content.
         let layout = &self.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence_basic(db, state, ctx, &layout.elements)
+        sequence(
+            db,
+            state,
+            ctx,
+            &layout.elements,
+            // no such thing as layout delimiters in a bibliography
+            "".into(),
+            layout.formatting,
+            layout.affixes.as_ref(),
+            None,
+            None,
+            TextCase::None,
+            true,
+        )
     }
 }
 
@@ -90,7 +103,8 @@ where
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             let hook = YearSuffixHook::Explicit(text.clone());
-                            if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
+                            // Only available when sorting, and ir_gen3 and later
+                            if let Some(i) = ctx.year_suffix {
                                 return hook.render(ctx, i);
                             }
                             return IR::year_suffix(hook);
@@ -150,7 +164,7 @@ where
                     TextSource::Term(term_selector, plural) => {
                         let content = renderer
                             .text_term(text, term_selector, plural)
-                            .map(CiteEdgeData::Output);
+                            .map(CiteEdgeData::Term);
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }
@@ -162,7 +176,7 @@ where
                     None
                 } else {
                     ctx.get_number(var)
-                        .and_then(|val| renderer.numeric_label(label, val))
+                        .and_then(|val| renderer.numeric_label(label, &val))
                         .map(CiteEdgeData::from_number_variable(var, true))
                 };
                 (IR::Rendered(content), GroupVars::new())
