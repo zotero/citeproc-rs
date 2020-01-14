@@ -73,49 +73,107 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     let style = ctx.style();
     let locale = ctx.locale();
     let refr = ctx.reference();
-    names
-        .variables
+    let get_name_ir = move |(var, label_var, value): (NameVariable, NameVariable, Vec<Name>)| {
+        let ratchets = value
+            .into_iter()
+            .enumerate()
+            .map(|(n, value)| {
+                // Each variable gets its own 'primary' name.
+                let primary = n == 0;
+                match value {
+                    Name::Person(pn) => DisambNameRatchet::for_person(
+                        db,
+                        var,
+                        pn,
+                        &refr.id,
+                        &names_inheritance.name,
+                        primary,
+                        should_start_with_global,
+                    ),
+                    Name::Literal { literal } => {
+                        warn!("literal names should be normalised");
+                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
+                    }
+                }
+            })
+            .collect();
+        NameIR::new(
+            ctx,
+            names_inheritance.clone(),
+            var,
+            label_var,
+            ratchets,
+            Box::new(IR::Rendered(None)),
+            style,
+            locale.et_al_term(names_inheritance.et_al.as_ref()),
+            locale.and_term(None).map(|x| x.to_owned()),
+        )
+    };
+
+    // If multiple variables are selected (separated by single spaces, see example below), each
+    // variable is independently rendered in the order specified, with one exception: when the
+    // selection consists of “editor” and “translator”, and when the contents of these two name
+    // variables is identical, then the contents of only one name variable is rendered. In
+    // addition, the “editortranslator” term is used if the cs:names element contains a cs:label
+    // element, replacing the default “editor” and “translator” terms (e.g. resulting in “Doe
+    // (editor & translator)”).
+
+    // Doesn't handle the editortranslator variable used directly (feature-flagged at the
+    // moment), but it doesn't need to: that would accept a single list of names, which makes it
+    // more convenient to use for people inputting names in a reference manager.
+
+    let mut var_override = None;
+    let mut slice_override = None;
+
+    // Note: won't make editortranslator when you're also rendering a third or even more
+    // variables.
+    let is_editor_translator = &names.variables == &[NameVariable::Editor, NameVariable::Translator]
+        || &names.variables == &[NameVariable::Translator, NameVariable::Editor];
+
+    // name_EditorTranslatorSameEmptyTerm
+    // (Although technically the spec isn't worded that way, it is useful to be able to disable
+    // this behaviour.)
+    let sel = csl::TextTermSelector::Role(csl::RoleTermSelector(csl::RoleTerm::EditorTranslator, csl::TermFormExtended::Long));
+    let editortranslator_term_empty = locale.get_text_term(sel, false) == Some("");
+
+    if is_editor_translator && !editortranslator_term_empty {
+        let ed_val = refr.name.get(&NameVariable::Editor);
+        let tr_val = refr.name.get(&NameVariable::Translator);
+        if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
+            // identical
+            if ed == tr {
+                let ed_sup = state.is_name_suppressed(NameVariable::Editor);
+                let tran_sup = state.is_name_suppressed(NameVariable::Translator);
+                let to_use = if ed_sup && tran_sup {
+                    slice_override = Some(&[][..]);
+                } else if ed_sup {
+                    var_override = Some(NameVariable::EditorTranslator);
+                    slice_override = Some(&[NameVariable::Translator][..]);
+                } else {
+                    var_override = Some(NameVariable::EditorTranslator);
+                    slice_override = Some(&[NameVariable::Editor][..]);
+                };
+            }
+        }
+    }
+
+    slice_override
+        .unwrap_or(&names.variables[..])
         .iter()
         .filter(move |var| !state.is_name_suppressed(**var))
-        .filter_map(move |var| refr.name.get(var).map(|val| (*var, val.clone())))
-        .map(move |(var, value)| {
-            let ratchets = value
-                .into_iter()
-                .enumerate()
-                .map(|(n, value)| {
-                    // Each variable gets its own 'primary' name.
-                    let primary = n == 0;
-                    match value {
-                        Name::Person(pn) => DisambNameRatchet::for_person(
-                            db,
-                            var,
-                            pn,
-                            &refr.id,
-                            &names_inheritance.name,
-                            primary,
-                            should_start_with_global,
-                        ),
-                        Name::Literal { literal } => {
-                            DisambNameRatchet::Literal(fmt.text_node(literal, None))
-                        }
-                    }
-                })
-                .collect();
-            NameIR::new(
-                ctx,
-                names_inheritance.clone(),
-                var,
-                ratchets,
-                Box::new(IR::Rendered(None)),
-                style,
-                locale.et_al_term(names_inheritance.et_al.as_ref()),
-                locale.and_term(None).map(|x| x.to_owned()),
-            )
+        .filter_map(move |var| {
+            let ovar = var_override.as_ref().unwrap_or(var);
+            refr
+                .name
+                .get(var)
+                .map(|val| (*var, *ovar, val.clone()))
         })
+        .map(get_name_ir)
 }
 
 use crate::NameOverrider;
 use csl::SortKey;
+use unicase::UniCase;
 
 pub fn sort_strings_for_names(
     db: &impl IrDatabase,
@@ -123,7 +181,7 @@ pub fn sort_strings_for_names(
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<String>> {
+) -> Option<Vec<UniCase<String>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -154,7 +212,7 @@ pub fn sort_strings_for_names(
                 }
                 Name::Literal { literal } => {
                     if !literal.is_empty() {
-                        out.push(literal.clone());
+                        out.push(UniCase::new(literal.clone()));
                     }
                 }
             }
@@ -368,11 +426,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         pass: Option<DisambPass>,
         substitute: Option<(u32, &str)>,
     ) -> Option<IrSum<O>> {
-        let NameIR {
-            ref names_inheritance,
-            variable,
-            ..
-        } = *self;
+        let NameIR { ref names_inheritance, .. } = *self;
         let mut runner = self.runner(&self.names_inheritance.name, fmt);
 
         let (mut subst_count, subst_text) = substitute.unwrap_or((0, ""));
@@ -423,21 +477,20 @@ impl<'c, O: OutputFormat> NameIR<O> {
 
         let mut seq = IrSeq {
             contents,
-            formatting: None,
-            affixes: None,
-            display: None,
             ..Default::default()
         };
         if seq.contents.is_empty() {
             Some((IR::Rendered(None), GroupVars::Missing))
         } else {
-            if let Some(label_el) = names_inheritance.label.as_ref() {
-                if let Some(label) = self.built_label.as_ref() {
-                    let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
-                    if label_el.after_name {
-                        seq.contents.push((label_ir, GroupVars::Plain));
-                    } else {
-                        seq.contents.insert(0, (label_ir, GroupVars::Plain));
+            if !is_sort_key {
+                if let Some(label_el) = names_inheritance.label.as_ref() {
+                    if let Some(label) = self.built_label.as_ref() {
+                        let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                        if label_el.after_name {
+                            seq.contents.push((label_ir, GroupVars::Plain));
+                        } else {
+                            seq.contents.insert(0, (label_ir, GroupVars::Plain));
+                        }
                     }
                 }
             }
@@ -560,7 +613,7 @@ fn should_delimit_after<O: OutputFormat>(
         DelimiterPrecedes::Contextual => count_before_spot >= 2,
         // anticipate whether name_as_sort_order would kick in for the
         // name just before the delimiter would go
-        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 0),
+        DelimiterPrecedes::AfterInvertedName => name.naso(count_before_spot > 1),
         DelimiterPrecedes::Always => true,
         DelimiterPrecedes::Never => false,
     }
@@ -630,6 +683,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
         if self.name_el.enable_et_al() && name_count >= ea_min {
+            // etal_UseZeroFirst
+            if ea_use_first == 0 {
+                return Vec::new();
+            }
             if self.name_el.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
                 let last = &names_slice[name_count - 1];
                 let mut nms = names_slice
@@ -689,7 +746,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<String>) {
+    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<String>>) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
@@ -766,7 +823,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
-                out.push(s);
+                out.push(UniCase::new(s));
             }
         }
     }

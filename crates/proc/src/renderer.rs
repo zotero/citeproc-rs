@@ -370,7 +370,10 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         plural: bool,
     ) -> Option<O::Build> {
         let locale = self.ctx.locale();
-        locale.get_text_term(term_selector, plural).map(|val| {
+        locale
+            .get_text_term(term_selector, plural)
+            .filter(|x| !x.is_empty())
+            .map(|val| {
             let options = IngestOptions {
                 text_case: text.text_case,
                 quotes: self.quotes(),
@@ -400,7 +403,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable) -> Option<O::Build> {
+    pub fn name_label(&self, label: &NameLabel, var: NameVariable, label_var: NameVariable) -> Option<O::Build> {
         let NameLabel {
             form,
             formatting,
@@ -411,7 +414,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             after_name: _,
         } = *label;
         let fmt = self.fmt();
-        let selector = RoleTermSelector::from_name_variable(var, form);
+        let selector = RoleTermSelector::from_name_variable(label_var, form);
         let val = self.ctx.get_name(var);
         let len = val.map(|v| v.len()).unwrap_or(0);
         let plural = match (len, plural) {
@@ -425,6 +428,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Role(sel), plural)
+                .filter(|x| !x.is_empty())
                 .map(|term_text| {
                     let options = IngestOptions {
                         text_case,
@@ -466,7 +470,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             self.ctx
                 .locale()
                 .get_text_term(TextTermSelector::Gendered(sel), plural)
-                .filter(|val| !val.is_empty())
+                .filter(|x| !x.is_empty())
                 .map(|val| {
                     let b = fmt.ingest(val, &options);
                     let b = fmt.with_format(b, label.formatting);
