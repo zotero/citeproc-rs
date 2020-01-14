@@ -1,0 +1,8 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+<div class="csl-bib-body">
+<div class="csl-entry">ecs. (n.d.).</div>
+<div class="csl-entry">Family01, G. (n.d.). XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.</div>
+</div>
