@@ -473,11 +473,14 @@ impl IngestOptions {
         let mut mine = false;
         let len = inlines.len();
         for (ix, inline) in inlines.iter_mut().enumerate() {
+            if seen_one && self.text_case == TextCase::CapitalizeFirst {
+                break;
+            }
             let is_last = ix == len - 1;
             // order or short-circuits matters
             match inline {
                 InlineElement::Text(txt) => {
-                    let text = std::mem::replace(txt, String::new());
+                    let text = std::mem::take(txt);
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }
@@ -526,12 +529,15 @@ impl IngestOptions {
         let mut mine = false;
         let len = micros.len();
         for (ix, micro) in micros.iter_mut().enumerate() {
+            if seen_one && self.text_case == TextCase::CapitalizeFirst {
+                break;
+            }
             let is_last = ix == len - 1;
             use crate::output::FormatCmd;
             // order or short-circuits matters
             match micro {
                 MicroNode::Text(ref mut txt) => {
-                    let text = std::mem::replace(txt, String::new());
+                    let text = std::mem::take(txt);
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }

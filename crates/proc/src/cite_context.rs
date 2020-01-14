@@ -42,7 +42,21 @@ pub struct CiteContext<
 
     pub in_bibliography: bool,
     pub sort_key: Option<SortKey>,
-    // TODO: keep track of which variables have so far been substituted
+
+
+    /// It isn't easy to sort by year-suffix. Year-suffix disambiguation requires a representation
+    /// of the style's output (Called ir_gen2 in citeproc-rs). This requires knowing a cite's
+    /// position, not only for position="X" testing, but for the et-al-subsequent-min, etc. Cite
+    /// positions depend on cite sorting. If the sort depends on the year-suffix, the computation
+    /// is cyclical. Technically, if none of the style used any position testing (i.e. the style is
+    /// independent of the position variable), then it could be possible, by recognising this and
+    /// using Position::First for everything, removing the part of the cycle where positions depend
+    /// on sorting.
+    ///
+    /// (Would need FreeWalker's conds for Names blocks to mix in Position only when
+    /// et-al-subsequent-* are used. Also, should not be reference-specific, so none of the
+    /// normally-dependent variables can be used.)
+    pub year_suffix: Option<u32>,
 }
 
 // helper methods to access both cite and reference properties via Variables
@@ -64,6 +78,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
             bib_number: self.bib_number,
             in_bibliography: self.in_bibliography,
             sort_key: self.sort_key.clone(),
+            year_suffix: self.year_suffix,
         }
     }
 }
@@ -83,6 +98,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 .reference
                 .ordinary
                 .get(&Variable::ContainerTitleShort)
+                .or_else(|| self.reference.ordinary.get(&Variable::JournalAbbreviation))
                 .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
                 .map(|s| s.as_str())
                 .map(Cow::Borrowed),

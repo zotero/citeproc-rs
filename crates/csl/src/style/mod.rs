@@ -899,6 +899,15 @@ impl Default for GivenNameDisambiguationRule {
     }
 }
 
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[strum(serialize_all = "kebab_case")]
+pub enum Collapse {
+    CitationNumber,
+    Year,
+    YearSuffix,
+    YearSuffixRanged,
+}
+
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Citation {
     pub disambiguate_add_names: bool,
@@ -910,6 +919,10 @@ pub struct Citation {
     pub names_delimiter: Option<Delimiter>,
     pub near_note_distance: u32,
     pub sort: Option<Sort>,
+    pub cite_group_delimiter: Option<Atom>,
+    pub year_suffix_delimiter: Option<Atom>,
+    pub after_collapse_delimiter: Option<Atom>,
+    pub collapse: Option<Collapse>,
 }
 
 impl Default for Citation {
@@ -924,6 +937,20 @@ impl Default for Citation {
             names_delimiter: None,
             near_note_distance: 5,
             sort: None,
+            cite_group_delimiter: None,
+            year_suffix_delimiter: None,
+            after_collapse_delimiter: None,
+            collapse: None,
+        }
+    }
+}
+
+impl Citation {
+    pub fn group_collapsing(&self) -> Option<(&str, Option<Collapse>)> {
+        let col = self.collapse;
+        match self.cite_group_delimiter.as_ref() {
+            Some(cgd) => Some((cgd.as_ref(), col)),
+            None => col.map(|c| (", ", col)),
         }
     }
 }
@@ -938,29 +965,29 @@ pub struct Bibliography {
     pub entry_spacing: u32, // >= 0. default is 1
     pub name_inheritance: Name,
     pub subsequent_author_substitute: Option<Atom>,
-    pub subsequent_author_substitute_rule: SubstituteAuthorSubstituteRule,
+    pub subsequent_author_substitute_rule: SubsequentAuthorSubstituteRule,
     pub names_delimiter: Option<Delimiter>,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SecondFieldAlign {
     Flush,
     Margin,
 }
 
-#[derive(AsRefStr, EnumProperty, EnumString, Debug, Clone, PartialEq, Eq)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
-pub enum SubstituteAuthorSubstituteRule {
+pub enum SubsequentAuthorSubstituteRule {
     CompleteAll,
     CompleteEach,
     PartialEach,
     PartialFirst,
 }
 
-impl Default for SubstituteAuthorSubstituteRule {
+impl Default for SubsequentAuthorSubstituteRule {
     fn default() -> Self {
-        SubstituteAuthorSubstituteRule::CompleteAll
+        SubsequentAuthorSubstituteRule::CompleteAll
     }
 }
 

@@ -1,0 +1,5 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+[Cite with a composer ; O A. “hello” <i>Book Title</i>]

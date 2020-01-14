@@ -149,6 +149,15 @@ impl<O: OutputFormat> Cite<O> {
             locators: None,
         }
     }
+    pub fn has_affix(&self) -> bool {
+        self.has_prefix() || self.has_suffix()
+    }
+    pub fn has_prefix(&self) -> bool {
+        self.prefix.is_some()
+    }
+    pub fn has_suffix(&self) -> bool {
+        self.suffix.is_some()
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord)]

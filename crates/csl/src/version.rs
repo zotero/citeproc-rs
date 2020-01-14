@@ -201,6 +201,12 @@ declare_features!(
     (active, term_every_type, "1.0.1", None, None),
     (active, term_unpublished, "1.0.1", None, None),
     (active, term_legal_locators, "1.0.1", None, None),
+
+    // Enables using editortranslator as a CSL-JSON and CSL variable directly, avoiding
+    // the need for "editor translator"
+    //
+    // https://discourse.citationstyles.org/t/more-flexible-editortranslator-behavior/1498/7
+    (active, var_editortranslator, "1.0.1", None, None),
 );
 
 // status, name, first added version, tracking issue, None, reason(str)
