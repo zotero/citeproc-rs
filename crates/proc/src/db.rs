@@ -50,6 +50,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     fn bib_item_gen0(&self, ref_id: Atom) -> Option<Arc<IrGen>>;
     fn bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput>;
+    fn get_bibliography_map(&self) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>>;
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
@@ -281,6 +282,7 @@ fn ref_bib_number(db: &impl IrDatabase, ref_id: &Atom) -> u32 {
             "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
             ref_id
         );
+        // For uncited reference ids, we assign them year-suffixes after the rest.
         std::u32::MAX
     }
 }
@@ -355,6 +357,7 @@ macro_rules! preamble {
             names_delimiter,
             name_citation: name_el,
             sort_key: None,
+            year_suffix: None,
         };
     }};
 }
@@ -660,7 +663,7 @@ fn expand_one_name_ir(
             n += 1;
         }
     }
-    if let Some((new_ir, _gv)) = nir.intermediate_custom(db, ctx, ctx.disamb_pass) {
+    if let Some((new_ir, _gv)) = nir.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), ctx.disamb_pass, None) {
         *nir.ir = new_ir;
     }
 }
@@ -1076,6 +1079,7 @@ pub fn with_cite_context<T>(
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     default_position: bool,
+    year_suffix: Option<u32>,
     f: impl Fn(CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -1102,6 +1106,7 @@ pub fn with_cite_context<T>(
         names_delimiter,
         name_citation: name_el,
         sort_key,
+        year_suffix,
     };
     Some(f(ctx))
 }
@@ -1114,6 +1119,7 @@ pub fn with_bib_context<T>(
     ref_id: Atom,
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
+    year_suffix: Option<u32>,
     f: impl Fn(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
@@ -1137,6 +1143,7 @@ pub fn with_bib_context<T>(
         names_delimiter,
         name_citation: name_el,
         sort_key,
+        year_suffix,
     };
     Some(f(bib, ctx))
 }
@@ -1152,6 +1159,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         db,
         ref_id.clone(),
         Some(bib_number),
+        None,
         None,
         |bib, mut ctx| {
             let mut state = IrState::new();
@@ -1194,6 +1202,46 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
         // Whatever
         Arc::new(fmt.output(fmt.plain(""), get_piq(db)))
     }
+}
+
+fn get_bibliography_map(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>> {
+    let fmt = db.get_formatter();
+    let style = db.style();
+    let sorted_refs = db.sorted_refs();
+    let mut m = FnvHashMap::with_capacity_and_hasher(
+        sorted_refs.0.len(),
+        fnv::FnvBuildHasher::default(),
+    );
+    let mut prev: Option<Arc<Mutex<NameIR<Markup>>>> = None;
+    for key in sorted_refs.0.iter() {
+        // TODO: put Nones in there so they can be updated
+        if let Some(mut gen0) = db.bib_item_gen0(key.clone()) {
+            let layout = &style.bibliography.as_ref().unwrap().layout;
+            // in a bibliography, we do the affixes etc inside Layout, so they're not here
+            let current = gen0.ir.first_name_block();
+            let sas = style
+                .bibliography
+                .as_ref()
+                .and_then(|bib| bib
+                    .subsequent_author_substitute
+                    .as_ref()
+                    .map(|x| (x.as_ref(), bib.subsequent_author_substitute_rule)));
+            if let (Some(prev), Some(current), Some((sas, sas_rule))) = (prev.as_ref(), current.as_ref(), sas) {
+                let did = crate::transforms::subsequent_author_substitute(&fmt, prev, current, sas, sas_rule);
+                if did {
+                    let mutated = Arc::make_mut(&mut gen0);
+                    mutated.ir.recompute_group_vars()
+                }
+            }
+            let flat = gen0.ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
+            let string = fmt.output(flat, get_piq(db));
+            if !string.is_empty() {
+                m.insert(key.clone(), Arc::new(string));
+            }
+            prev = current;
+        }
+    }
+    Arc::new(m)
 }
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910

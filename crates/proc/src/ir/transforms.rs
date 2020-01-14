@@ -1,4 +1,5 @@
 use crate::disamb::names::NameIR;
+use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
 use csl::Atom;
@@ -113,7 +114,7 @@ impl<O: OutputFormat> IR<O> {
 ////////////////////////////////
 
 impl<O: OutputFormat> IR<O> {
-    fn first_name_block(&self) -> Option<Arc<Mutex<NameIR<O>>>> {
+    pub fn first_name_block(&self) -> Option<Arc<Mutex<NameIR<O>>>> {
         match self {
             IR::Name(ref nir) => Some(nir.clone()),
             IR::ConditionalDisamb(c) => {
@@ -130,18 +131,17 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_locator(&self) -> bool {
         match self {
-            IR::Rendered(Some(CiteEdgeData::Locator(_))) => {
-                true
-            }
+            IR::Rendered(Some(CiteEdgeData::Locator(_))) => true,
             IR::ConditionalDisamb(c) => {
                 let mut lock = c.lock().unwrap();
                 lock.ir.find_locator()
             }
             IR::Seq(seq) => {
                 // Search backwards because it's likely to be near the end
-                seq.contents.iter().rfind(|(ir, _)| {
-                    ir.find_locator()
-                }).is_some()
+                seq.contents
+                    .iter()
+                    .rfind(|(ir, _)| ir.find_locator())
+                    .is_some()
             }
             _ => false,
         }
@@ -149,18 +149,12 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_first_year(&self) -> Option<O::Build> {
         match self {
-            IR::Rendered(Some(CiteEdgeData::Year(b))) => {
-                Some(b.clone())
-            }
+            IR::Rendered(Some(CiteEdgeData::Year(b))) => Some(b.clone()),
             IR::ConditionalDisamb(c) => {
                 let mut lock = c.lock().unwrap();
                 lock.ir.find_first_year()
             }
-            IR::Seq(seq) => {
-                seq.contents.iter().find_map(|(ir, _)| {
-                    ir.find_first_year()
-                })
-            }
+            IR::Seq(seq) => seq.contents.iter().find_map(|(ir, _)| ir.find_first_year()),
             _ => None,
         }
     }
@@ -324,10 +318,18 @@ pub struct CnumIx {
 
 impl CnumIx {
     fn new(c: u32, ix: usize) -> Self {
-        CnumIx { cnum: c, ix, force_single: false, }
+        CnumIx {
+            cnum: c,
+            ix,
+            force_single: false,
+        }
     }
     fn force_single(c: u32, ix: usize) -> Self {
-        CnumIx { cnum: c, ix, force_single: true, }
+        CnumIx {
+            cnum: c,
+            ix,
+            force_single: true,
+        }
     }
 }
 
@@ -487,46 +489,51 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     collapse: Option<Collapse>,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
-    let mut same_names: HashMap<String, (usize, bool)> = HashMap::new();
+    // Neat trick: same_names[None] tracks cites without a cs:names block, which helps with styles
+    // that only include a year. (What kind of style is that?
+    // magic_ImplicitYearSuffixExplicitDelimiter.txt, I guess that's the only possible reason, but
+    // ok.)
+    let mut same_names: HashMap<Option<String>, (usize, bool)> = HashMap::new();
     let mut same_years: HashMap<String, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
-        if let Some(rendered) = cites[ix]
+        let rendered = cites[ix]
             .gen4
             .ir
             .first_name_block()
             .and_then(|fnb| fnb.lock().unwrap().ir.flatten(fmt))
-            .map(|flat| fmt.output(flat, false))
-        {
-            same_names.entry(rendered)
-                .and_modify(|(oix, seen_once)| {
-                    // Keep cites separated by affixes together
-                    if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
-                        || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
-                        || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
-                        || cites.get(ix).map_or(false, |u| u.cite.has_affix())
-                    {
-                        *oix = ix;
-                        *seen_once = false;
-                        return;
+            .map(|flat| fmt.output(flat, false));
+        same_names
+            .entry(rendered)
+            .and_modify(|(oix, seen_once)| {
+                // Keep cites separated by affixes together
+                if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
+                    || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
+                    || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
+                    || cites.get(ix).map_or(false, |u| u.cite.has_affix())
+                {
+                    *oix = ix;
+                    *seen_once = false;
+                    return;
+                }
+                if *oix < ix {
+                    if !*seen_once {
+                        cites[*oix].is_first = true;
                     }
-                    if *oix < ix {
-                        if !*seen_once {
-                            cites[*oix].is_first = true;
-                        }
-                        *seen_once = true;
-                        cites[ix].should_collapse = true;
-                        let rotation = &mut cites[*oix + 1..ix + 1];
-                        rotation.rotate_right(1);
-                        *oix += 1;
-                    }
-                })
-                .or_insert((ix, false));
-        }
+                    *seen_once = true;
+                    cites[ix].should_collapse = true;
+                    let rotation = &mut cites[*oix + 1..ix + 1];
+                    rotation.rotate_right(1);
+                    *oix += 1;
+                }
+            })
+            .or_insert((ix, false));
     }
 
-    if collapse.map_or(false, |c| c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix) {
+    if collapse.map_or(false, |c| {
+        c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
+    }) {
         let mut top_ix = 0;
         while top_ix < cites.len() {
             if cites[top_ix].is_first {
@@ -537,9 +544,15 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                         break;
                     }
                     moved += 1;
-                    if let Some((y, suf)) = cites[ix].gen4.ir.find_first_year_and_suffix().map(|(y, suf)| (fmt.output(y, false), suf)) {
+                    if let Some((y, suf)) = cites[ix]
+                        .gen4
+                        .ir
+                        .find_first_year_and_suffix()
+                        .map(|(y, suf)| (fmt.output(y, false), suf))
+                    {
                         cites[ix].year_suffix = Some(suf);
-                        same_years.entry(y)
+                        same_years
+                            .entry(y)
                             .and_modify(|(oix, seen_once)| {
                                 if *oix == ix - 1 {
                                     if !*seen_once {
@@ -636,8 +649,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 gen4.ir.suppress_names();
                             }
                         }
-                    if u.first_of_ys {
-                        let following = rest.iter_mut().take_while(|u| u.collapse_ys);
+                        if u.first_of_ys {
+                            let following = rest.iter_mut().take_while(|u| u.collapse_ys);
 
                             if collapse == Collapse::YearSuffixRanged {
                                 // Potentially confusing; 'cnums' here are year suffixes in u32 form.
@@ -662,15 +675,18 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 u.collapsed_year_suffixes = collapse_ranges(&cnums);
                             } else {
                                 if let Some(cnum) = u.year_suffix {
-                                    u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx::new(cnum, ix)));
+                                    u.collapsed_year_suffixes
+                                        .push(RangePiece::Single(CnumIx::new(cnum, ix)));
                                 }
                                 for (nix, cite) in following.enumerate() {
                                     if let Some(cnum) = cite.year_suffix {
-                                        u.collapsed_year_suffixes.push(RangePiece::Single(CnumIx {
-                                            cnum,
-                                            ix: ix + nix + 1,
-                                            force_single: cite.has_locator,
-                                        }));
+                                        u.collapsed_year_suffixes.push(RangePiece::Single(
+                                            CnumIx {
+                                                cnum,
+                                                ix: ix + nix + 1,
+                                                force_single: cite.has_locator,
+                                            },
+                                        ));
                                     }
                                     cite.vanished = true;
                                     let gen4 = Arc::make_mut(&mut cite.gen4);
@@ -696,4 +712,127 @@ fn pair_at_mut<T>(mut slice: &mut [T], ix: usize) -> Option<(&mut T, &mut T)> {
     slice
         .split_first_mut()
         .and_then(|(first, rest)| rest.first_mut().map(|second| (first, second)))
+}
+
+////////////////////////////////
+// Cite Grouping & Collapsing //
+////////////////////////////////
+
+use csl::SubsequentAuthorSubstituteRule as SasRule;
+use citeproc_io::PersonName;
+use crate::disamb::names::{DisambNameRatchet, PersonDisambNameRatchet};
+
+#[derive(Eq, PartialEq, Clone)]
+pub enum ReducedNameToken<'a, B> {
+    Name(&'a PersonName),
+    Literal(&'a B),
+    EtAl,
+    Ellipsis,
+    Delimiter,
+    And,
+    Space,
+}
+
+impl<'a, T: Debug>  Debug for ReducedNameToken<'a, T> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ReducedNameToken::Name(p) => write!(f, "{:?}", p.family),
+            ReducedNameToken::Literal(b) => write!(f, "{:?}", b),
+            ReducedNameToken::EtAl => write!(f, "EtAl"),
+            ReducedNameToken::Ellipsis => write!(f, "Ellipsis"),
+            ReducedNameToken::Delimiter => write!(f, "Delimiter"),
+            ReducedNameToken::And => write!(f, "And"),
+            ReducedNameToken::Space => write!(f, "Space"),
+        }
+    }
+}
+
+impl<'a, T> ReducedNameToken<'a, T> {
+    fn from_token(token: &NameToken<'a, T>) -> Self {
+        match token {
+            NameToken::Name(dnr) => match dnr {
+                DisambNameRatchet::Person(p) => ReducedNameToken::Name(&p.data.value),
+                DisambNameRatchet::Literal(b) => ReducedNameToken::Literal(b),
+            }
+            NameToken::Ellipsis => ReducedNameToken::Ellipsis,
+            NameToken::EtAl(..) => ReducedNameToken::EtAl,
+            NameToken::Space => ReducedNameToken::Space,
+            NameToken::Delimiter => ReducedNameToken::Delimiter,
+            NameToken::And => ReducedNameToken::And,
+        }
+    }
+    fn relevant(&self) -> bool {
+        match self {
+            ReducedNameToken::Name(_) | ReducedNameToken::Literal(_) => true,
+            _ => false,
+        }
+    }
+}
+
+pub fn subsequent_author_substitute<O: OutputFormat>(
+    fmt: &O,
+    previous: &Mutex<NameIR<O>>,
+    current: &Mutex<NameIR<O>>,
+    sas: &str,
+    sas_rule: SasRule,
+) -> bool {
+    let mut pre = previous.lock().unwrap();
+    let mut cur = current.lock().unwrap();
+    let pre_tokens = pre.iter_bib_rendered_names(fmt);
+    let pre_reduced = pre_tokens
+        .iter()
+        .map(ReducedNameToken::from_token)
+        .filter(|x| x.relevant());
+    let cur_tokens = cur.iter_bib_rendered_names(fmt);
+    let cur_reduced = cur_tokens
+        .iter()
+        .map(ReducedNameToken::from_token)
+        .filter(|x| x.relevant());
+    debug!("{:?} vs {:?}", pre_reduced.clone().collect::<Vec<_>>(), cur_reduced.clone().collect::<Vec<_>>());
+    match sas_rule {
+        SasRule::CompleteAll | SasRule::CompleteEach => {
+            if Iterator::eq(pre_reduced, cur_reduced) {
+                if sas_rule == SasRule::CompleteEach {
+                    // let nir handle it
+                    // u32::MAX so ALL names get --- treatment
+                    cur.subsequent_author_substitute(fmt, std::u32::MAX, sas);
+                } else if sas.is_empty() {
+                    *cur.ir = IR::Rendered(None)
+                } else {
+                    let sas_ir = IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas))));
+                    let mut contents = vec![(sas_ir, GroupVars::Important)];
+                    if let Some(label_el) = cur.names_inheritance.label.as_ref() {
+                        if let Some(label) = cur.built_label.as_ref() {
+                            let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                            if label_el.after_name {
+                                contents.push((label_ir, GroupVars::Plain));
+                            } else {
+                                contents.insert(0, (label_ir, GroupVars::Plain));
+                            }
+                        }
+                    }
+                    *cur.ir = IR::Seq(IrSeq {
+                        contents,
+                        ..Default::default()
+                    })
+                };
+                return true;
+            }
+        }
+        SasRule::PartialEach => {
+            let count = pre_reduced.zip(cur_reduced)
+                .take_while(|(p, c)| p == c)
+                .count();
+            cur.subsequent_author_substitute(fmt, count as u32, sas);
+        }
+        SasRule::PartialFirst => {
+            let count = pre_reduced.zip(cur_reduced)
+                .take_while(|(p, c)| p == c)
+                .count();
+            if count > 0 {
+                cur.subsequent_author_substitute(fmt, 1, sas);
+            }
+        }
+    }
+    false
 }

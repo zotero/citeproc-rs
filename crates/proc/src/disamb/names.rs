@@ -5,7 +5,7 @@ use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
 use citeproc_io::PersonName;
 use csl::variables::*;
-use csl::{Atom, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style};
+use csl::{Atom, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names, Style, DemoteNonDroppingParticle, Position};
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
 use std::sync::Arc;
@@ -21,7 +21,7 @@ impl Disambiguation<Markup> for Names {
         let child_stack = self.formatting.map_or(stack, |mine| stack.override_with(mine));
         let fmt = ctx.format;
         let style = ctx.style;
-        let _locale = ctx.locale;
+        let locale = ctx.locale;
         let names_inheritance =
             state
                 .name_override
@@ -30,12 +30,14 @@ impl Disambiguation<Markup> for Names {
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
 
+        let and_term = locale.and_term(None).map(|x| x.to_owned());
+        let etal_term = locale.et_al_term(names_inheritance.et_al.as_ref());
         let mut runner = OneNameVar {
             name_el: &names_inheritance.name,
             bump_name_count: 0,
+            fmt,
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
-            fmt,
         };
 
         let mut seq = RefIrSeq {
@@ -49,13 +51,13 @@ impl Disambiguation<Markup> for Names {
             ..Default::default()
         };
 
+        let gen = GenericContext::<Markup, Markup>::Ref(ctx);
         let name_irs = crate::names::to_individual_name_irs(
+            &gen,
             self,
             &names_inheritance,
             db,
             state,
-            fmt,
-            ctx.reference,
             false,
         );
         for nir in name_irs {
@@ -67,9 +69,10 @@ impl Disambiguation<Markup> for Names {
             let mut ntbs = runner.names_to_builds(
                 &nir.disamb_names,
                 ctx.position,
-                ctx.locale,
                 &self.et_al,
                 false,
+                and_term.as_ref(),
+                etal_term.as_ref(),
             );
             let mut max_counted_tokens = 0u16;
             let mut counted_tokens = ntb_len(&ntbs);
@@ -119,9 +122,10 @@ impl Disambiguation<Markup> for Names {
                 ntbs = runner.names_to_builds(
                     &nir.disamb_names,
                     ctx.position,
-                    ctx.locale,
                     &self.et_al,
                     false,
+                    and_term.as_ref(),
+                    etal_term.as_ref(),
                 );
                 max_counted_tokens = counted_tokens;
                 counted_tokens = ntb_len(&ntbs);
@@ -182,11 +186,10 @@ impl DisambNameData {
         }
     }
 
-    pub(crate) fn single_name(
-        &self,
-        fmt: &Markup,
-        style: &Style,
-    ) -> <Markup as OutputFormat>::Build {
+    /// This is used directly for *global name disambiguation*
+    pub(crate) fn single_name_edge(&self, db: &impl IrDatabase, stack: Formatting) -> Edge {
+        let fmt = &db.get_formatter();
+        let style = db.style();
         let builder = OneNameVar {
             fmt,
             name_el: &self.el,
@@ -194,14 +197,7 @@ impl DisambNameData {
             demote_non_dropping_particle: style.demote_non_dropping_particle,
             initialize_with_hyphen: style.initialize_with_hyphen,
         };
-        builder.render_person_name(&self.value, !self.primary)
-    }
-
-    /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_edge(&self, db: &impl IrDatabase, stack: Formatting) -> Edge {
-        let fmt = &db.get_formatter();
-        let style = db.style();
-        let built = self.single_name(fmt, &style);
+        let built = builder.render_person_name(&self.value, !self.primary);
         let o = fmt.output_in_context(built, stack, None);
         db.edge(EdgeData::Output(o))
     }
@@ -506,6 +502,7 @@ impl RefNameIR {
             if let DisambNameRatchet::Person(PersonDisambNameRatchet { id, .. }) = dnr {
                 vec.push(*id);
             }
+            // TODO: do it for literals as well
         }
         RefNameIR {
             variable: name_ir.variable,
@@ -556,34 +553,60 @@ use crate::NamesInheritance;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIR<O: OutputFormat> {
     pub names_inheritance: NamesInheritance,
-    pub variable: NameVariable,
+
+    variable: NameVariable,
+    label_variable: NameVariable,
 
     pub name_counter: NameCounter,
     achieved_at: (u16, NameCounter),
 
     pub disamb_names: Vec<DisambNameRatchet<O::Build>>,
     pub ir: Box<IR<O>>,
+    pub built_label: Option<O::Build>,
+
+    // These three avoid having to pass in style & locale every time you want to recompute the IR
+    // or make name tokens.
+    pub demote_non_dropping_particle: DemoteNonDroppingParticle,
+    pub initialize_with_hyphen: bool,
+    pub etal_term: Option<(String, Option<Formatting>)>,
+    pub and_term: Option<String>,
 }
 
 impl<O> NameIR<O>
 where
     O: OutputFormat,
 {
-    pub fn new(
+    pub fn new<I: OutputFormat>(
+        gen_ctx: &GenericContext<'_, O, I>,
         names_inheritance: NamesInheritance,
         variable: NameVariable,
+        label_variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         ir: Box<IR<O>>,
+        style: &Style,
+        etal_term: Option<(String, Option<Formatting>)>,
+        and_term: Option<String>,
     ) -> Self {
+        let built_label = names_inheritance.label.as_ref().and_then(|label| {
+            let renderer = Renderer::gen(gen_ctx.clone());
+            renderer.name_label(&label.concrete(), variable, label_variable)
+        });
         NameIR {
             names_inheritance,
             variable,
+            label_variable,
             disamb_names: ratchets,
             ir,
             name_counter: NameCounter::default(),
             achieved_at: (std::u16::MAX, NameCounter::default()),
+            demote_non_dropping_particle: style.demote_non_dropping_particle,
+            initialize_with_hyphen: style.initialize_with_hyphen,
+            etal_term,
+            and_term,
+            built_label,
         }
     }
+
     pub fn achieved_count(&mut self, count: u16) {
         let (prev_best, _at) = self.achieved_at;
         if count < prev_best {
@@ -596,7 +619,7 @@ where
             info!("{:?} rolling back to {:?} names", ctx.cite_id, at);
         }
         self.name_counter = at;
-        if let Some((ir, _gv)) = self.intermediate_custom(db, ctx, None) {
+        if let Some((ir, _gv)) = self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), None, None) {
             *self.ir = ir;
         }
     }
@@ -604,12 +627,21 @@ where
     // returns false if couldn't add any more names
     pub fn add_name(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
         self.name_counter.bump += 1;
-        match self.intermediate_custom(db, ctx, Some(DisambPass::AddNames)) {
+        match self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), Some(DisambPass::AddNames), None) {
             Some((new_ir, _)) => {
                 *self.ir = new_ir;
                 true
             }
             None => false,
+        }
+    }
+
+    pub fn subsequent_author_substitute(&mut self, fmt: &O,  subst_count: u32, replace_with: &str) {
+        match self.intermediate_custom(fmt, Position::First, false, None, Some((subst_count, replace_with))) {
+            Some((new_ir, _)) => {
+                *self.ir = new_ir;
+            }
+            None => {},
         }
     }
 }

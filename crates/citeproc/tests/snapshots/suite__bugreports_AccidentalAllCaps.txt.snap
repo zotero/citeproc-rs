@@ -1,0 +1,5 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+J. Doe, <i>His Anonymous Life</i>, 1965.

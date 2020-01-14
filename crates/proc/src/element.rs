@@ -103,7 +103,8 @@ where
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             let hook = YearSuffixHook::Explicit(text.clone());
-                            if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
+                            // Only available when sorting, and ir_gen3 and later
+                            if let Some(i) = ctx.year_suffix {
                                 return hook.render(ctx, i);
                             }
                             return IR::year_suffix(hook);
