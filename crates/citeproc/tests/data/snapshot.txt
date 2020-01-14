@@ -49,3 +49,8 @@ magic_SuperscriptChars.txt
 
 # The order of in-text items is different; citeproc-rs outputs them first.
 position_IbidInText.txt
+
+# This style appears to depend on implicit suppression of title-short when
+# title has already been rendered. citeproc-rs gets the editortranslator label
+# right though.
+label_EditorTranslator1.txt

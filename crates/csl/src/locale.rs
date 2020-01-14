@@ -249,6 +249,9 @@ impl FromNode for LocaleOptionsNode {
 }
 
 impl Locale {
+    /// May return Some("") if the term is defined but empty. Not all code renders None in that
+    /// case, so each call site should decide whether to slap .filter(|x| !x.is_empty()) after
+    /// .get_text_term().
     pub fn get_text_term(&self, sel: TextTermSelector, plural: bool) -> Option<&str> {
         use crate::terms::TextTermSelector::*;
         match sel {
