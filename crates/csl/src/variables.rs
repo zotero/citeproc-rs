@@ -88,8 +88,9 @@ impl IsIndependent for AnyVariable {
 impl IsIndependent for Variable {
     fn is_independent(&self) -> bool {
         match self {
+            // Variable::CitationLabel is not independent, it just implies a YearSuffix
+            // which is, and that is handled in FreeCondWalker::text_variable()
             Variable::LocatorExtra
-            | Variable::CitationLabel
             | Variable::YearSuffix
             | Variable::Hereinafter => true,
             _ => false,
@@ -101,7 +102,7 @@ impl IsIndependent for Variable {
 #[strum(serialize_all = "kebab_case")]
 pub enum Variable {
     /// Not sure where this is from, but it appears sometimes.
-    #[strum(serialize = "journalAbbreviation")]
+    #[strum(serialize = "journalAbbreviation", serialize = "journal-abbreviation")]
     JournalAbbreviation,
     /// abstract of the item (e.g. the abstract of a journal article)
     Abstract,
@@ -132,7 +133,7 @@ pub enum Variable {
     /// physical (e.g. size) or temporal (e.g. running time) dimensions of the item
     Dimensions,
     /// Digital Object Identifier (e.g. “10.1128/AEM.02591-07”)
-    #[strum(serialize = "DOI")]
+    #[strum(serialize = "DOI", serialize = "doi")]
     DOI,
     /// name of the related event (e.g. the conference name when citing a conference paper)
     Event,
@@ -142,10 +143,10 @@ pub enum Variable {
     /// class, type or genre of the item (e.g. “adventure” for an adventure movie, “PhD dissertation” for a PhD thesis)
     Genre,
     /// International Standard Book Number
-    #[strum(serialize = "ISBN")]
+    #[strum(serialize = "ISBN", serialize = "isbn")]
     ISBN,
     /// International Standard Serial Number
-    #[strum(serialize = "ISSN")]
+    #[strum(serialize = "ISSN", serialize = "issn")]
     ISSN,
     /// geographic scope of relevance (e.g. “US” for a US patent)
     Jurisdiction,
@@ -162,10 +163,10 @@ pub enum Variable {
     /// title of the original version (e.g. “Война и мир”, the untranslated Russian title of “War and Peace”)
     OriginalTitle,
     /// PubMed Central reference number
-    #[strum(serialize = "PMCID")]
+    #[strum(serialize = "PMCID", serialize = "pmcid")]
     PMCID,
     /// PubMed reference number
-    #[strum(serialize = "PMID")]
+    #[strum(serialize = "PMID", serialize = "pmid")]
     PMID,
     /// publisher
     Publisher,
@@ -189,7 +190,7 @@ pub enum Variable {
     /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
     TitleShort,
     ///  URL (e.g. “https://aem.asm.org/cgi/content/full/74/9/2766”)
-    #[strum(serialize = "URL")]
+    #[strum(serialize = "URL", serialize = "url")]
     URL,
     /// version of the item (e.g. “2.0.9” for a software program)
     Version,
@@ -358,6 +359,12 @@ pub enum NameVariable {
     ReviewedAuthor,
     /// translator
     Translator,
+
+    #[strum(
+        serialize = "editortranslator",
+        props(feature = "var_editortranslator")
+    )]
+    EditorTranslator,
 
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]

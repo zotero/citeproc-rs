@@ -7,13 +7,11 @@
 use super::xml::{LocaleDatabase, StyleDatabase};
 
 use csl::Locale;
-use csl::Position;
-use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Cite, ClusterId, ClusterNumber, IntraNote, Reference};
+use citeproc_io::{Cite, ClusterId, ClusterNumber, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -181,7 +179,6 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     for cluster in clusters.iter() {
         ids.extend(cluster.cites.iter().cloned());
     }
-    debug!("all_cite_ids: {:?}", ids.iter().map(|x| x.lookup(db)).collect::<Vec<_>>());
     Arc::new(ids)
 }
 

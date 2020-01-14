@@ -42,7 +42,7 @@ struct Inspect {
 
 fn main() -> Result<(), Error> {
     use env_logger::Env;
-    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug,citeproc_io=debug,citeproc_db=debug")).init();
+    env_logger::from_env(Env::default().default_filter_or("citeproc_proc=debug,citeproc_io=debug,citeproc_db=debug,citeproc_io::output::markup::move_punctuation=warn")).init();
     let opt = Inspect::from_args();
     let mut path = workspace_root();
     path.push("crates");

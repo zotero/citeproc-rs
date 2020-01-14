@@ -1,18 +1,28 @@
+# vim: set ft=sh :
+# that's for comments
+
+# relies on the "near-note": true, or "position": INTEGER, forcing options in
+# citeproc-js, # whereas in citeproc-rs cite positions only work automatically.
 position_NearNoteTrue.txt
 nameattr_EtAlSubsequentMinOnCitationInCitation.txt
 nameattr_EtAlSubsequentMinOnStyleInCitation.txt
 nameattr_EtAlSubsequentUseFirstOnCitationInCitation.txt
 nameattr_EtAlSubsequentUseFirstOnStyleInCitation.txt
-disambiguate_BasedOnSubsequentFormWithBackref.txt
-disambiguate_BasedOnSubsequentFormWithLocator.txt
+
+# these also use that, but the cites / clusters are in the correct order such that
+# the forcing options reflect the actual positions.
+# disambiguate_BasedOnSubsequentFormWithBackref.txt
+# disambiguate_BasedOnSubsequentFormWithLocator.txt
+
 # uses a whole lot of citeproc-js options
 form_ShortTitleOnly.txt
-# only the order of in-text items is different; citeproc-rs outputs them first
-position_IbidInText.txt
+
 # better to reject this kind of thing, isn't it?
 bugreports_EmptyInput.txt
+
 # note field parsing should be done higher up
 bugreports_IllustratorInExtra.txt
+
 # ABBREVIATIONS not implemented or part of CSL
 bugreports_TwoFullStops.txt
 variables_TitleShortOnAbbrevWithTitleGroup.txt
@@ -20,5 +30,19 @@ variables_TitleShortOnAbbrevWithTitleCondition.txt
 number_EditionSort.txt
 variables_TitleShortOnAbbrevWithTitle.txt
 variables_ShortForm.txt
+
 # citeproc-js feature
 sort_CitationUnsorted.txt
+
+# BIBENTRIES
+api_UpdateItemsDeleteDecrementsByCiteDisambiguation.txt
+sort_CitationEdit.txt
+api_UpdateItemsReshuffle.txt
+api_UpdateItemsDelete.txt
+
+# bibliography-header mode
+bibheader_EntryspacingDefaultValueOne.txt
+bibheader_EntryspacingExplicitValueZero.txt
+bibheader_SecondFieldAlign.txt
+bibheader_SecondFieldAlignWithAuthor.txt
+bibheader_SecondFieldAlignWithNumber.txt

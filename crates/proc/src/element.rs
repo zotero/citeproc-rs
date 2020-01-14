@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use csl::variables::*;
-use csl::{Bibliography, Element, Style, TextSource};
+use csl::*;
+use crate::helpers::plain_text_element;
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -14,7 +15,6 @@ where
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
         let layout = &self.citation.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
         sequence_basic(db, state, ctx, &layout.elements)
     }
 }
@@ -30,9 +30,23 @@ where
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
+        // Unlike cite, we will apply affixes and formatting in the seq, so that they go inside
+        // any second-field-align content.
         let layout = &self.layout;
-        // Layout's delimiter and affixes are going to be applied later, when we join a cluster.
-        sequence_basic(db, state, ctx, &layout.elements)
+        sequence(
+            db,
+            state,
+            ctx,
+            &layout.elements,
+            // no such thing as layout delimiters in a bibliography
+            "".into(),
+            layout.formatting,
+            layout.affixes.as_ref(),
+            None,
+            None,
+            TextCase::None,
+            true,
+        )
     }
 }
 
@@ -66,7 +80,7 @@ where
                         // already have panicked when it was run the first time! So we're OK.
                         // XXX: that's not quite true
                         state.push_macro(name);
-                        let (seq, group_vars) = sequence(
+                        let ir_sum = sequence(
                             db,
                             state,
                             ctx,
@@ -77,29 +91,51 @@ where
                             text.display,
                             renderer.quotes_if(text.quotes),
                             text.text_case,
+                            true,
                         );
                         state.pop_macro(name);
-                        group_vars.implicit_conditional(seq)
+                        ir_sum
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
-                        (IR::Rendered(content), GroupVars::NoneSeen)
+                        (IR::Rendered(content), GroupVars::Plain)
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
-                            if let Some(DisambPass::AddYearSuffix(i)) = ctx.disamb_pass {
-                                let base26 = citeproc_io::utils::to_bijective_base_26(i);
-                                return (
-                                    IR::Rendered(Some(CiteEdgeData::YearSuffix(
-                                        renderer
-                                            .text_value(text, &base26)
-                                            .expect("we made base26 ourselves, it is not empty"),
-                                    ))),
-                                    GroupVars::DidRender,
-                                );
+                            let hook = YearSuffixHook::Explicit(text.clone());
+                            // Only available when sorting, and ir_gen3 and later
+                            if let Some(i) = ctx.year_suffix {
+                                return hook.render(ctx, i);
                             }
-                            let ysh = YearSuffixHook::Explicit(self.clone());
-                            return (IR::YearSuffix(ysh, None), GroupVars::OnlyEmpty);
+                            return IR::year_suffix(hook);
+                        }
+                        if var == StandardVariable::Ordinary(Variable::CitationLabel) {
+                            let hook = IR::year_suffix(YearSuffixHook::Plain);
+                            let v = Variable::CitationLabel;
+                            let vario = if state.is_suppressed_ordinary(v) {
+                                None
+                            } else {
+                                state.maybe_suppress_ordinary(v);
+                                ctx.get_ordinary(v, form)
+                                    .map(|val| renderer.text_variable(&plain_text_element(v), var, &val))
+                            };
+                            return vario.map(|label| {
+                                let seq = IrSeq {
+                                    contents: vec![
+                                        (IR::Rendered(Some(CiteEdgeData::Output(label))), GroupVars::Important),
+                                        hook,
+                                    ],
+                                    formatting: text.formatting,
+                                    affixes: text.affixes.clone(),
+                                    text_case: text.text_case,
+                                    delimiter: Atom::from(""),
+                                    display: text.display,
+                                    quotes: renderer.quotes_if(text.quotes),
+                                    dropped_gv: None,
+                                };
+                                (IR::Seq(seq), GroupVars::Important) // the citation-label is important, so so is the seq
+                            })
+                            .unwrap_or((IR::Rendered(None), GroupVars::Missing));
                         }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
@@ -108,7 +144,7 @@ where
                                 } else {
                                     state.maybe_suppress_ordinary(v);
                                     ctx.get_ordinary(v, form)
-                                        .map(|val| renderer.text_variable(text, var, val))
+                                        .map(|val| renderer.text_variable(text, var, &val))
                                 }
                             }
                             StandardVariable::Number(v) => {
@@ -128,7 +164,7 @@ where
                     TextSource::Term(term_selector, plural) => {
                         let content = renderer
                             .text_term(text, term_selector, plural)
-                            .map(CiteEdgeData::Output);
+                            .map(CiteEdgeData::Term);
                         (IR::Rendered(content), GroupVars::new())
                     }
                 }
@@ -140,7 +176,7 @@ where
                     None
                 } else {
                     ctx.get_number(var)
-                        .and_then(|val| renderer.numeric_label(label, val))
+                        .and_then(|val| renderer.numeric_label(label, &val))
                         .map(CiteEdgeData::from_number_variable(var, true))
                 };
                 (IR::Rendered(content), GroupVars::new())
@@ -166,7 +202,7 @@ where
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => {
-                let (seq, group_vars) = sequence(
+                sequence(
                     db,
                     state,
                     ctx,
@@ -177,18 +213,134 @@ where
                     g.display,
                     None,
                     TextCase::None,
-                );
-                group_vars.implicit_conditional(seq)
+                    true,
+                )
             }
             Element::Date(ref dt) => {
                 let var = dt.variable();
-                if state.is_suppressed_date(var) {
-                    (IR::Rendered(None), GroupVars::OnlyEmpty)
-                } else {
-                    state.maybe_suppress_date(var);
+                state.maybe_suppress_date(var, |state| {
                     dt.intermediate(db, state, ctx)
-                }
+                })
             }
         }
+    }
+}
+
+impl YearSuffixHook {
+    pub(crate) fn render<'c, O: OutputFormat, I: OutputFormat>(
+        &self,
+        ctx: &CiteContext<'c, O, I>,
+        suffix_num: u32
+    ) -> IrSum<O> {
+        let implicit = plain_text_element(Variable::YearSuffix);
+        let text = match self {
+            YearSuffixHook::Explicit(text) => text,
+            _ => &implicit,
+        };
+        let renderer = Renderer::cite(ctx);
+        let base26 = citeproc_io::utils::to_bijective_base_26(suffix_num);
+        let output = renderer.text_value(text, &base26).expect("base26 is not empty");
+        (IR::Rendered(Some(CiteEdgeData::YearSuffix(output))), GroupVars::Important)
+    }
+}
+
+struct ProcWalker<'a, DB, O, I>
+where
+    DB: IrDatabase,
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    db: &'a DB,
+    state: IrState,
+    ctx: &'a CiteContext<'a, O, I>,
+}
+
+impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, DB, O, I> {
+    type Output = IrSum<O>;
+    type Checker = CiteContext<'a, O, I>;
+    fn get_checker(&self) -> Option<&Self::Checker> {
+        Some(&self.ctx)
+    }
+
+    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+        let renderer = Renderer::cite(&self.ctx);
+        match fold_type {
+            WalkerFoldType::Macro(text) => {
+                sequence(
+                    self.db,
+                    &mut self.state,
+                    self.ctx,
+                    &elements,
+                    "".into(),
+                    text.formatting,
+                    text.affixes.as_ref(),
+                    text.display,
+                    renderer.quotes_if(text.quotes),
+                    text.text_case,
+                    true,
+                )
+            }
+            WalkerFoldType::Group(group) => {
+                sequence(
+                    self.db,
+                    &mut self.state,
+                    self.ctx,
+                    group.elements.as_ref(),
+                    group.delimiter.0.clone(),
+                    group.formatting,
+                    group.affixes.as_ref(),
+                    group.display,
+                    None,
+                    TextCase::None,
+                    true,
+                )
+            }
+            WalkerFoldType::Layout(layout) => {
+                sequence_basic(self.db, &mut self.state, self.ctx, &layout.elements)
+            }
+            WalkerFoldType::IfThen | WalkerFoldType::Else => {
+                sequence_basic(self.db, &mut self.state, self.ctx, elements)
+            }
+            WalkerFoldType::Substitute => todo!("use fold() to implement name element substitution"),
+        }
+    }
+
+    fn date(&mut self, body_date: &BodyDate) -> Self::Output {
+        let var = body_date.variable();
+        let ProcWalker {
+            db,
+            ctx,
+            ref mut state,
+            ..
+        } = *self;
+        state.maybe_suppress_date(var, |state| {
+            body_date.intermediate(db, state, ctx)
+        })
+    }
+
+    fn names(&mut self, names: &Names) -> Self::Output {
+        names.intermediate(self.db, &mut self.state, self.ctx)
+    }
+
+    fn number(&mut self, number: &NumberElement) -> Self::Output {
+        let var = number.variable;
+        let renderer = Renderer::cite(&self.ctx);
+        let state = &mut self.state;
+        let content = if state.is_suppressed_num(var) {
+            None
+        } else {
+            state.maybe_suppress_num(var);
+            self.ctx.get_number(var)
+                .map(|val| renderer.number(number, &val))
+                .map(CiteEdgeData::Output)
+        };
+        let gv = GroupVars::rendered_if(content.is_some());
+        (IR::Rendered(content), gv)
+    }
+
+    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+        let renderer = Renderer::cite(&self.ctx);
+        let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
+        (IR::Rendered(content), GroupVars::Plain)
     }
 }

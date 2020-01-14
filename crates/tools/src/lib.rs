@@ -251,7 +251,7 @@ impl TestSummary {
                         output_changed.push((orig, mine));
                     }
                 }
-                (EventKind::Ok, EventKind::Failed) => {
+                (EventKind::Ignored, EventKind::Failed) | (EventKind::Ok, EventKind::Failed) => {
                     regressions.push(self.failed.get(key).unwrap());
                 }
                 (EventKind::Ignored, EventKind::Ok) | (EventKind::Failed, EventKind::Ok) => {
