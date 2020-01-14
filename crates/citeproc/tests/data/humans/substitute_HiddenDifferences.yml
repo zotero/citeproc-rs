@@ -1,0 +1,148 @@
+mode: bibliography
+
+# We compare the entire name, including any parts that weren't rendered. If
+# it's a different Doe, it's a different Doe. (ITEM-2 has a different given
+# name, otherwise the same as substitute_PartialEach.)
+
+result: |
+  <div class="csl-bib-body">
+    <div class="csl-entry">Doe. 1999.</div>
+    <div class="csl-entry">Doe. 2000.</div>
+    <div class="csl-entry">Doe, Johnson &amp; Williams. 2001.</div>
+    <div class="csl-entry">--- &amp; Smith. 2002.</div>
+    <div class="csl-entry">---, Stevens &amp; Miller. 2003.</div>
+    <div class="csl-entry">---, --- &amp; ---. 2004.</div>
+    <div class="csl-entry">---, Williams et al. 2005.</div>
+    <div class="csl-entry">---, --- et al. 2006.</div>
+  </div>
+
+input:
+  - author:
+      - family: Doe
+        given: John
+    issued:
+      date-parts:
+        - - 1999
+    id: ITEM-1
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: Leticia
+    issued:
+      date-parts:
+        - - 2000
+    id: ITEM-2
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Johnson
+        given: Moody
+      - family: Williams
+        given: Judith
+    issued:
+      date-parts:
+        - - 2001
+    id: ITEM-3
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Smith
+        given: Ellen
+    issued:
+      date-parts:
+        - - 2002
+    id: ITEM-4
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Stevens
+        given: Moody
+      - family: Miller
+        given: Judith
+    issued:
+      date-parts:
+        - - 2003
+    id: ITEM-5
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Stevens
+        given: Moody
+      - family: Miller
+        given: Judith
+    issued:
+      date-parts:
+        - - 2004
+    id: ITEM-6
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Williams
+        given: Moody
+      - family: Miller
+        given: Judith
+      - family: Wright
+        given: Memelord
+    issued:
+      date-parts:
+        - - 2005
+    id: ITEM-7
+    title: Book One
+    type: book
+  - author:
+      - family: Doe
+        given: John
+      - family: Williams
+        given: Moody
+      - family: Miller
+        given: Judith
+      - family: Wright
+        given: Memelord
+    issued:
+      date-parts:
+        - - 2006
+    id: ITEM-8
+    title: Book One
+    type: book
+csl: |-
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="note" >
+    <info>
+      <id>id</id>
+      <title>title</title>
+      <updated>2009-08-10T04:49:00+09:00</updated>
+    </info>
+    <citation>
+    <layout></layout>
+    </citation>
+    <bibliography subsequent-author-substitute="---" subsequent-author-substitute-rule="partial-each">
+      <layout>
+        <group delimiter=". " suffix=".">
+          <names variable="author" delimiter=",">
+            <name
+              form="short"
+              and="symbol"
+              et-al-min="4"
+              et-al-use-first="2"
+              delimiter-precedes-et-al="never"
+              delimiter-precedes-last="never"/>
+          </names>
+          <date variable="issued">
+            <date-part name="year" />
+          </date>
+        </group>
+      </layout>
+    </bibliography>
+  </style>
+

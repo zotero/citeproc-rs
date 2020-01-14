@@ -1,0 +1,7 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+<div class="csl-bib-body">
+<div class="csl-entry">COLE, S. J.; MOORE, R. Hydrological modelling using raingauge- and radar-based estimators of areal rainfall. <b>Journal of Hydrology</b>, v. 358, n. 3-4, p. 159–181, 2008. </div>
+</div>
