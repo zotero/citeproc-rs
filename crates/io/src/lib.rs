@@ -31,7 +31,8 @@ mod reference;
 pub(crate) mod unicode;
 pub mod utils;
 
-pub use csl_json::IdOrNumber;
+pub use csl_json::NumberLike;
+pub use output::micro_html::micro_html_to_string;
 
 pub use self::cite::*;
 pub use self::date::*;
@@ -46,7 +47,7 @@ use std::borrow::Cow;
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use csl::{FontVariant, VerticalAlignment};
-use unic_segment::{GraphemeIndices, Graphemes, WordBoundIndices, WordBounds, Words};
+use unic_segment::{GraphemeIndices, WordBoundIndices, Words};
 
 use phf::phf_set;
 
@@ -472,11 +473,14 @@ impl IngestOptions {
         let mut mine = false;
         let len = inlines.len();
         for (ix, inline) in inlines.iter_mut().enumerate() {
+            if seen_one && self.text_case == TextCase::CapitalizeFirst {
+                break;
+            }
             let is_last = ix == len - 1;
             // order or short-circuits matters
             match inline {
                 InlineElement::Text(txt) => {
-                    let text = std::mem::replace(txt, String::new());
+                    let text = std::mem::take(txt);
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }
@@ -525,12 +529,15 @@ impl IngestOptions {
         let mut mine = false;
         let len = micros.len();
         for (ix, micro) in micros.iter_mut().enumerate() {
+            if seen_one && self.text_case == TextCase::CapitalizeFirst {
+                break;
+            }
             let is_last = ix == len - 1;
             use crate::output::FormatCmd;
             // order or short-circuits matters
             match micro {
                 MicroNode::Text(ref mut txt) => {
-                    let text = std::mem::replace(txt, String::new());
+                    let text = std::mem::take(txt);
                     *txt = self.transform_case(text, seen_one, is_last, is_uppercase);
                     seen_one = string_contains_word(txt.as_ref()) || seen_one;
                 }

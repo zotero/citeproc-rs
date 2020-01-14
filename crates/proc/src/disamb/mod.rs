@@ -144,14 +144,17 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
         sv: StandardVariable,
         _form: VariableForm,
     ) -> Self::Output {
+        let mut implicit_var_test = FreeCondSets::mult_identity();
         if sv.is_independent() {
-            let mut implicit_var_test = FreeCondSets::mult_identity();
             let cond = Cond::Variable((&sv).into());
             implicit_var_test.scalar_multiply_cond(cond, true);
-            implicit_var_test
-        } else {
-            FreeCondSets::mult_identity()
+        } else if sv == StandardVariable::Ordinary(Variable::CitationLabel) {
+            // citation labels typically have a year on the end, so we add year suffixes
+            // to them
+            let cond = Cond::Variable(AnyVariable::Ordinary(Variable::YearSuffix));
+            implicit_var_test.scalar_multiply_cond(cond, true);
         }
+        implicit_var_test
     }
 
     fn date(&mut self, _date: &BodyDate) -> Self::Output {
@@ -271,6 +274,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
     let style = db.style();
     let locale = db.locale_by_reference(refr.id.clone());
     let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
+    let ysh_plain_edge = db.edge(EdgeData::YearSuffixPlain);
     let ysh_edge = db.edge(EdgeData::YearSuffix);
     let fcs = db.branch_runs();
     let fmt = db.get_formatter();
@@ -301,7 +305,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
                 &mut state,
                 Formatting::default(),
             );
-            ir.keep_first_ysh(ysh_explicit_edge, ysh_edge);
+            ir.keep_first_ysh(ysh_explicit_edge, ysh_plain_edge, ysh_edge);
             (fc, ir)
         })
         .collect();
@@ -325,24 +329,32 @@ pub fn graph_with_stack(
     let mut close_tags = String::new();
     fmt.stack_preorder(&mut open_tags, &stack);
     fmt.stack_postorder(&mut close_tags, &stack);
-    let mkedge = |s: &str| {
+    let mkedge = |s: String| {
+        RefIR::Edge(if !s.is_empty() {
+            Some(db.edge(EdgeData::Output(s)))
+        } else {
+            None
+        })
+    };
+    let mkedge_esc = |s: &str| {
         RefIR::Edge(if !s.is_empty() {
             Some(db.edge(EdgeData::Output(
+                // TODO: fmt.ingest
                 fmt.output_in_context(fmt.plain(s), Default::default(), None),
             )))
         } else {
             None
         })
     };
-    let open_tags = &mkedge(&*open_tags);
-    let close_tags = &mkedge(&*close_tags);
-    if let Some(pre) = affixes.as_ref().map(|a| mkedge(&*a.prefix)) {
+    let open_tags = &mkedge(open_tags);
+    let close_tags = &mkedge(close_tags);
+    if let Some(pre) = affixes.as_ref().map(|a| mkedge_esc(&*a.prefix)) {
         spot = add_to_graph(db, fmt, nfa, &pre, spot);
     }
     spot = add_to_graph(db, fmt, nfa, open_tags, spot);
     spot = f(nfa, spot);
     spot = add_to_graph(db, fmt, nfa, close_tags, spot);
-    if let Some(suf) = affixes.as_ref().map(|a| mkedge(&*a.suffix)) {
+    if let Some(suf) = affixes.as_ref().map(|a| mkedge_esc(&*a.suffix)) {
         spot = add_to_graph(db, fmt, nfa, &suf, spot);
     }
     spot

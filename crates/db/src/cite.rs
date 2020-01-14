@@ -7,8 +7,6 @@
 use super::xml::{LocaleDatabase, StyleDatabase};
 
 use csl::Locale;
-use csl::Position;
-use fnv::FnvHashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -46,16 +44,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
 
-    // All cite ids, in the order they appear in the document
+    // All cite ids, in the order they are cited in the document
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
-
-    fn cite_positions(&self) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>>;
-
-    /// The first element is a [`Position`]; first, ibid, subsequent, etc
-    ///
-    /// The second is the 'First Reference Note Number' -- the number of the footnote containing the first cite
-    /// referring to this cite's reference. This is None for a [`Position::First`].
-    fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
     fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
@@ -64,6 +54,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn cite(&self, cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>>) -> CiteId;
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
+
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
 }
 
@@ -92,7 +83,7 @@ impl CiteId {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ClusterData {
     pub id: ClusterId,
     pub number: ClusterNumber,
@@ -168,6 +159,20 @@ fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
     Arc::new(v)
 }
 
+fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
+    let cluster_ids = db.cluster_ids();
+    let mut clusters: Vec<_> = cluster_ids
+        .iter()
+        // No number? Not considered to be in document, position participant.
+        // Although may be disamb participant.
+        .filter_map(|&id| {
+            get_cluster_data(db, id)
+        })
+        .collect();
+    clusters.sort_by_key(|cluster| cluster.number);
+    Arc::new(clusters)
+}
+
 fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     let mut ids = Vec::new();
     let clusters = db.clusters_sorted();
@@ -177,149 +182,12 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     Arc::new(ids)
 }
 
-fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
-    let cluster_ids = db.cluster_ids();
-    let mut clusters: Vec<_> = cluster_ids
-        .iter()
-        // No number? Not considered to be in document, position participant.
-        // Although may be disamb participant.
-        .filter_map(|&id| db.cluster_note_number(id).map(|n| (id, n)))
-        .map(|(id, number)| ClusterData {
+pub fn get_cluster_data(db: &impl CiteDatabase, id: ClusterId) -> Option<ClusterData> {
+    db.cluster_note_number(id)
+        .map(|number| ClusterData {
             id,
             number,
             cites: db.cluster_cites(id),
         })
-        .collect();
-    clusters.sort_by_key(|cluster| cluster.number);
-    Arc::new(clusters)
 }
 
-// See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
-fn cite_positions(db: &impl CiteDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
-    let clusters = db.clusters_sorted();
-
-    let mut map = FnvHashMap::default();
-
-    // TODO: configure
-    let near_note_distance = 5;
-
-    // Backref table for FRNN
-    // No entries for first ref == an in-text reference, only first time it appeared in a
-    // footnote. This makes sense because note styles usually have a near-bibliography level of
-    // detail, but in-text styles are often just author-date or a bibligraphy item number.
-    let mut first_seen: FnvHashMap<Atom, ClusterNumber> = FnvHashMap::default();
-
-    for (i, cluster) in clusters.iter().enumerate() {
-        let in_text = match cluster.number {
-            ClusterNumber::InText(n) => Some(n),
-            _ => None,
-        };
-        for (j, &cite_id) in cluster.cites.iter().enumerate() {
-            let cite = cite_id.lookup(db);
-            let prev_cite = cluster
-                .cites
-                // 0 - 1 == usize::MAX is never going to come up with anything
-                .get(j.wrapping_sub(1))
-                .map(|&prev_id| prev_id.lookup(db));
-            let matching_prev = prev_cite
-                .filter(|p| p.ref_id == cite.ref_id)
-                .or_else(|| {
-                    if let Some(prev_cluster) = clusters.get(i.wrapping_sub(1)) {
-                        // Clusters are sorted, with in-text all going first.
-                        // So, i-1 == "the previous cluster of the same (kind == intext|note)" in every
-                        // case except "the first note cluster after in-text". So we have to check.
-                        let prev_in_text = match prev_cluster.number {
-                            ClusterNumber::InText(_) => true,
-                            _ => false,
-                        };
-                        if prev_in_text == in_text.is_some()
-                            && prev_cluster.cites.len() > 0
-                            && prev_cluster
-                                .cites
-                                .iter()
-                                .all(|&pid| pid.lookup(db).ref_id == cite.ref_id)
-                        {
-                            // Pick the last one to match locators against
-                            prev_cluster.cites.last().map(|&pid| pid.lookup(db))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .map(
-                    |prev| match (prev.locators.as_ref(), cite.locators.as_ref()) {
-                        (None, None) => Position::Ibid,
-                        (None, Some(_cur)) => Position::IbidWithLocator,
-                        // XXX: should this be Position::NearNote, and also subsequent by
-                        // implication? Probably, despite "position can only be subsequent".
-                        (Some(_pre), None) => Position::Subsequent,
-                        (Some(pre), Some(cur)) if pre == cur => Position::Ibid,
-                        _ => Position::IbidWithLocator,
-                    },
-                );
-            let seen = first_seen.get(&cite.ref_id).cloned();
-            match seen {
-                Some(ClusterNumber::Note(first_note_number)) => {
-                    let first_number = ClusterNumber::Note(first_note_number);
-                    assert!(
-                        cluster.number >= first_number,
-                        "note numbers not monotonic: {:?} came after but was less than {:?}",
-                        cluster.number,
-                        first_note_number,
-                    );
-                    let unsigned = first_note_number.note_number();
-                    let diff = cluster.number.sub_note(first_note_number);
-                    if let Some(pos) = matching_prev {
-                        map.insert(cite_id, (pos, Some(unsigned)));
-                    } else if cluster.number == first_number
-                        || diff.map(|d| d < near_note_distance).unwrap_or(false)
-                    {
-                        // XXX: not sure about this one
-                        // unimplemented!("cite position for same number, but different cluster");
-                        map.insert(cite_id, (Position::NearNote, Some(unsigned)));
-                    } else {
-                        map.insert(cite_id, (Position::FarNote, Some(unsigned)));
-                    }
-                }
-                Some(ClusterNumber::InText(seen_in_text_num)) => {
-                    // First seen was an in-text reference. Can be overwritten with a note cluster.
-                    match cluster.number {
-                        ClusterNumber::Note(_) => {
-                            // Overwrite
-                            first_seen.insert(cite.ref_id.clone(), cluster.number);
-                            // First 'full' cite.
-                            map.insert(cite_id, (Position::First, None));
-                        }
-                        ClusterNumber::InText(itnum) => {
-                            let diff = itnum.wrapping_sub(seen_in_text_num);
-                            let pos = if let Some(pos) = matching_prev {
-                                pos
-                            } else if diff < near_note_distance {
-                                Position::NearNote
-                            } else {
-                                Position::FarNote
-                            };
-                            map.insert(cite_id, (pos, None));
-                        }
-                    }
-                }
-                None => {
-                    map.insert(cite_id, (Position::First, None));
-                    first_seen.insert(cite.ref_id.clone(), cluster.number);
-                }
-            }
-        }
-    }
-
-    Arc::new(map)
-}
-
-fn cite_position(db: &impl CiteDatabase, key: CiteId) -> (Position, Option<u32>) {
-    if let Some(x) = db.cite_positions().get(&key) {
-        *x
-    } else {
-        panic!("called cite_position on unknown cite id, {:?}", key);
-    }
-}

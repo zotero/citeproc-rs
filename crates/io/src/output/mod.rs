@@ -106,7 +106,7 @@ pub enum FormatCmd {
 
 use std::hash::Hash;
 
-pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
+pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::Debug {
     type Input: std::fmt::Debug + DeserializeOwned + Default + Clone + Send + Sync + Eq + Hash;
     type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;
     type Output: Default + Clone + Send + Sync + Eq + Serialize;
@@ -190,6 +190,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + std::fmt::Debug {
         };
         let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_ref()) {
             if !prefix.is_empty() {
+                // TODO: use the localized quotes.
                 self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
             } else {
                 b

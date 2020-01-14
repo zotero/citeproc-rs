@@ -31,6 +31,8 @@ pub enum EdgeData<O: OutputFormat = Markup> {
 
     /// Not for DFA matching, must be turned into YearSuffix via `RefIR::keep_first_ysh` before DFA construction
     YearSuffixExplicit,
+    /// Not for DFA matching, must be turned into YearSuffix via `RefIR::keep_first_ysh` before DFA construction
+    YearSuffixPlain,
 
     CitationNumber,
     CitationNumberLabel,
@@ -38,6 +40,9 @@ pub enum EdgeData<O: OutputFormat = Markup> {
     // TODO: treat this specially? Does it help you disambiguate back-referencing cites?
     Frnn,
     FrnnLabel,
+
+    /// The accessed date, which should not help disambiguate cites.
+    Accessed,
 }
 
 use std::hash::{Hash, Hasher};

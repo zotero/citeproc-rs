@@ -1,0 +1,8 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+[0] Appleton “Tom Swift and His Electric Runabout” (1910).
+[1] Ibid.
+[2] Bloggs “A Very Short Book Indeed” (2012).
+

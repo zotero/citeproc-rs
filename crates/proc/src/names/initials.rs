@@ -27,7 +27,7 @@ pub fn initialize<'n>(
     initialize_with_hyphens: bool,
 ) -> Cow<'n, str> {
     if let Some(with) = with {
-        #[derive(PartialEq)]
+        #[derive(Copy, Clone, PartialEq)]
         enum State {
             Start,
             AfterInitial,
@@ -69,7 +69,9 @@ pub fn initialize<'n>(
                     State::AfterInitial
                 }
                 HyphenSegment(ref n) => {
-                    if initialize {
+                    if n.chars().nth(0).map_or(true, |c| c.is_lowercase()) {
+                        state
+                    } else if initialize {
                         if initialize_with_hyphens {
                             // Trim trailing whitespace from the previous with, as you don't want
                             // J. -L., you want J.-L.
