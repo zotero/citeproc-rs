@@ -969,6 +969,14 @@ pub fn built_cluster_before_output(
             let suf_mut = suf.to_mut();
             suf_mut.insert_str(0, " ");
         }
+        let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
+            x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
+        });
+        let cite_is_last = ix == cites.len() - 1;
+        if suf_last_punc && !cite_is_last {
+            let suf_mut = suf.to_mut();
+            suf_mut.push(' ');
+        }
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
         let aff = Affixes {
