@@ -930,6 +930,29 @@ pub fn built_cluster_before_output(
     }
     // debug!("group_and_collapse made: {:#?}", irs);
 
+    // csl_test_suite::affix_WithCommas.txt
+    let suppress_delimiter = |cites: &[Unnamed3<Markup>], ix: usize| -> bool {
+        let this_suffix = match cites.get(ix) {
+            Some(x) => x.cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""),
+            None => "",
+        };
+        let next_prefix = match cites.get(ix + 1) {
+            Some(x) => x.cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""),
+            None => "",
+        };
+        let ends_punc = |string: &str| string.chars()
+            .rev()
+            .nth(0)
+            .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!');
+        let starts_punc = |string: &str| string.chars()
+            .nth(0)
+            .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!');
+
+        // "2000 is one source,; David Jones" => "2000 is one source, David Jones"
+        // "2000;, and David Jones" => "2000, and David Jones"
+        ends_punc(this_suffix) || starts_punc(next_prefix)
+    };
+
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
@@ -978,18 +1001,21 @@ pub fn built_cluster_before_output(
     // returned usize is advance len
     let render_range = |ranges: &[RangePiece], group_delim: &str, outer_delim: &str| -> (MarkupBuild, usize) {
         let mut advance_to = 0usize;
-        let mut group = Vec::with_capacity(ranges.len());
-        for piece in ranges {
+        let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
+        for (ix, piece) in ranges.iter().enumerate() {
+            let is_last = ix == ranges.len() - 1;
             match *piece {
                 RangePiece::Single(CnumIx { ix, force_single, .. }) => {
                     advance_to = ix;
                     if let Some(one) = build_cite(&irs, ix) {
                         group.push(one);
-                        group.push(fmt.plain(if force_single {
-                            outer_delim
-                        } else {
-                            group_delim
-                        }));
+                        if !is_last && !suppress_delimiter(&irs, ix) {
+                            group.push(fmt.plain(if force_single {
+                                outer_delim
+                            } else {
+                                group_delim
+                            }));
+                        }
                     }
                 }
                 RangePiece::Range(start, end) => {
@@ -1006,12 +1032,15 @@ pub fn built_cluster_before_output(
                     if let Some(end) = build_cite(&irs, end.ix) {
                         g.push(end);
                     }
+                    // Delimiters here are never suppressed by build_cite, as they wouldn't be part
+                    // of the range if they had affixes on the inside
                     group.push(fmt.group(g, delim, None));
-                    group.push(fmt.plain(group_delim));
+                    if !is_last && !suppress_delimiter(&irs, end.ix) {
+                        group.push(fmt.plain(group_delim));
+                    }
                 }
             }
         }
-        group.pop();
         (fmt.group(group, "", None), advance_to)
     };
 
@@ -1027,7 +1056,11 @@ pub fn built_cluster_before_output(
         if !collapsed_ranges.is_empty() {
             let (built, advance_to) = render_range(collapsed_ranges, layout_delim, acol_delim);
             built_cites.push(built);
-            built_cites.push(fmt.plain(acol_delim));
+            if !suppress_delimiter(&irs, ix) {
+                built_cites.push(fmt.plain(acol_delim));
+            } else {
+                built_cites.push(fmt.plain(""));
+            }
             ix = advance_to + 1;
         } else if *is_first {
             let mut group = Vec::with_capacity(4);
@@ -1040,28 +1073,44 @@ pub fn built_cluster_before_output(
                 if !r.collapsed_year_suffixes.is_empty() {
                     let (built, advance_to) = render_range(&r.collapsed_year_suffixes, ysuf_delim, acol_delim);
                     group.push(built);
-                    group.push(fmt.plain(cgroup_delim));
+                    if !suppress_delimiter(&irs, ix) {
+                        group.push(fmt.plain(cgroup_delim));
+                    } else {
+                        group.push(fmt.plain(""));
+                    }
                     rix = advance_to;
                 } else {
                     if let Some(b) = build_cite(&irs, rix) {
                         group.push(b);
-                        group.push(fmt.plain(if irs[rix].has_locator {
-                            acol_delim
+                        if !suppress_delimiter(&irs, ix) {
+                            group.push(fmt.plain(if irs[rix].has_locator {
+                                acol_delim
+                            } else {
+                                cgroup_delim
+                            }));
                         } else {
-                            cgroup_delim
-                        }));
+                            group.push(fmt.plain(""));
+                        }
                     }
                 }
                 rix += 1;
             }
             group.pop();
             built_cites.push(fmt.group(group, "", None));
-            built_cites.push(fmt.plain(acol_delim));
+            if !suppress_delimiter(&irs, ix) {
+                built_cites.push(fmt.plain(acol_delim));
+            } else {
+                built_cites.push(fmt.plain(""));
+            }
             ix = rix;
         } else {
             if let Some(built) = build_cite(&irs, ix) {
                 built_cites.push(built);
-                built_cites.push(fmt.plain(layout_delim));
+                if !suppress_delimiter(&irs, ix) {
+                    built_cites.push(fmt.plain(layout_delim));
+                } else {
+                    built_cites.push(fmt.plain(""));
+                }
             }
             ix += 1;
         }
