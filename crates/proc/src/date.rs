@@ -394,6 +394,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     let fmt = ctx.format();
     let len_hint = parts.len();
     let mut val = ctx.reference().date.get(&var)?.clone();
+    let sorting = gen_date.sorting;
     if gen_date.sorting {
         // force range with zeroes on the end date if single
         val = match val {
@@ -405,14 +406,14 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
         let each = parts
             .iter()
-            .filter(|dp| {
-                if let Some(selector) = selector {
-                    dp_matches(dp, selector)
-                } else {
-                    true
+            .filter_map(|dp| {
+                let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
+                if sorting || matches {
+                    let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
+                    return dp_render_either(var, dp, ctx.clone(), single, false, is_filtered)
                 }
-            })
-            .filter_map(|dp| dp_render_either(var, dp, ctx.clone(), single, false));
+                None
+            });
         if single.circa {
             let circa = cloned_gen.locale.get_simple_term(csl::SimpleTermSelector::Misc(MiscTerm::Circa, TermFormExtended::default()));
             if let Some(circa) = circa {
@@ -465,7 +466,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                         }
                         last_rdel = false;
                         if let Some((_form, either)) =
-                            dp_render_either(var, part, ctx.clone(), date, is_max_diff)
+                            dp_render_either(var, part, ctx.clone(), date, is_max_diff, false)
                         {
                             builder.push_either(either);
                         }
@@ -661,10 +662,11 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     ctx: GenericContext<'c, O, I>,
     date: &Date,
     is_max_diff: bool,
+    is_filtered: bool,
 ) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
     if let Some(key) = ctx.sort_key() {
-        let string = dp_render_sort_string(part, date, key);
+        let string = dp_render_sort_string(part, date, key, is_filtered);
         return string.map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))));
     }
     let string = dp_render_string(part, &ctx, date);
@@ -718,25 +720,22 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
         .map(|x| (part.form, x))
 }
 
-fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey) -> Option<String> {
-    let should_return_zeroes = key.is_macro();
+fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey, is_filtered: bool) -> Option<String> {
     match part.form {
         DatePartForm::Year(_form) => Some(format!("{:04}_", date.year)),
         DatePartForm::Month(_form, _strip_periods) => {
             // Sort strings do not compare seasons
-            if date.month > 0 && date.month <= 12 {
+            if !is_filtered && date.month > 0 && date.month <= 12 {
                 Some(format!("{:02}", date.month))
-            } else if date.month == 0 && should_return_zeroes {
-                Some("00".to_owned())
             } else {
-                None
+                Some("00".to_owned())
             }
         }
         DatePartForm::Day(_form) => {
-            if date.day == 0 && should_return_zeroes {
-                None
-            } else {
+            if !is_filtered && date.day > 0 {
                 Some(format!("{:02}", date.day))
+            } else {
+                Some("00".to_owned())
             }
         }
     }

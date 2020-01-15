@@ -26,20 +26,55 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
         suff = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
+            base.truncate(trimmed.len());
+        }
+    }
+    let base_len = base.len();
+    let suff_len = suff.len();
+    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
+    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
+    let width = last_width + first_width;
+    base.push_str(suff);
+    // Smash across the boundary
+    if base_len > 0 && suff_len > 0 {
+        let start = base_len - last_width;
+        let range = start .. start + width;
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+            info!("smash_string_push REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            base.replace_range(range, *replacement);
+        }
+    }
+}
+
+fn smash_just_punc(base: &mut String, suff: &mut String) {
+    info!("smash_just_punc {:?} <- {:?}", base, suff);
+    let mut suff_append: &str = suff.as_ref();
+    let suff_trimmed = suff_append.trim_start();
+    if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
+        && suff_trimmed.chars().nth(0).map_or(false, is_punc)
+    {
+        suff_append = suff_trimmed;
+        let trimmed = base.trim_end();
+        if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
             base.truncate(trimmed.len())
         }
     }
     let base_len = base.len();
     let suff_len = suff.len();
-    base.push_str(suff);
+    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
+    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
+    let width = last_width + first_width;
+    base.push_str(&suff[..first_width]);
     // Smash across the boundary
     if base_len > 0 && suff_len > 0 {
-        // We know all punctuation characters here are 1 byte long, so we can ignore unicode for the
-        // lookups
-        let start = base_len - 1;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[start..start+2]) {
-            info!("smash_string_push REPLACING {:?} with {:?}", &base[start..start+2], *replacement);
-            base.replace_range(start..start + 2, *replacement);
+        let start = base_len - last_width;
+        let range = start .. start + width;
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+            info!("smash_just_punc REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            base.replace_range(range, *replacement);
+            suff.replace_range(..first_width, "");
+        } else {
+            base.truncate(base_len);
         }
     }
 }
@@ -72,6 +107,12 @@ impl InlineElement {
 
 pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
+    for inl in slice.iter_mut() {
+        match inl {
+            | InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
+            _ => {}
+        }
+    }
     while ix < slice.len().saturating_sub(1) {
         let mut pop_tail = false;
         if let Some(head) = slice.get_mut(ix) {
@@ -94,6 +135,22 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
                     (InlineElement::Text(ref mut s), InlineElement::Text(s2)) => {
                         smash_string_push(s, &s2);
                         pop_tail = true;
+                    }
+                    (InlineElement::Formatted(children, _), InlineElement::Text(s2)) => {
+                        match children.last_mut().and_then(find_string_right_f) {
+                            Some(s1) => smash_just_punc(s1, s2),
+                            None => {}
+                        }
+                    }
+                    (InlineElement::Formatted(children, _), InlineElement::Micro(ms2)) => {
+                        info!("formatted, micro");
+                        match children.last_mut().and_then(find_string_right_f) {
+                            Some(s1) => match ms2.first_mut().and_then(find_string_left_micro) {
+                                Some(s2) => smash_just_punc(s1, s2),
+                                None => {}
+                            }
+                            None => {}
+                        }
                     }
                     (InlineElement::Micro(ref mut ms), InlineElement::Micro(ref mut ms2)) => {
                         // Only join if it doesn't end with a quoted
@@ -151,7 +208,7 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
     for inl in slice.iter_mut() {
         match inl {
             MicroNode::Quoted { children, .. }
-            | MicroNode::NoCase(children)
+            | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
             | MicroNode::Formatted(children, _) => normalise_text_elements_micro(children),
             _ => {}
         }
@@ -378,7 +435,7 @@ enum Where {
     Split(char, char),
 }
 
-fn is_punc(c: char) -> bool {
+pub fn is_punc(c: char) -> bool {
     c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':'
 }
 
@@ -389,7 +446,7 @@ fn is_punc_space(c: char) -> bool {
 fn find_string_left_micro(m: &mut MicroNode) -> Option<&mut String> {
     match m {
         MicroNode::Text(string) => Some(string),
-        MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+        MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
             nodes.first_mut().and_then(find_string_left_micro)
         }
         _ => None,
@@ -401,6 +458,27 @@ fn find_string_left(next: &mut InlineElement) -> Option<&mut String> {
         InlineElement::Text(ref mut string) => Some(string),
         InlineElement::Micro(ref mut micros) => micros.first_mut().and_then(find_string_left_micro),
         InlineElement::Quoted {..} => None,
+        _ => None,
+    }
+}
+
+/// Allows finding formatting?
+fn find_string_right_f(next: &mut InlineElement) -> Option<&mut String> {
+    match next {
+        InlineElement::Text(ref mut string) => Some(string),
+        InlineElement::Micro(ref mut micros) => micros.last_mut().and_then(find_string_right_f_micro),
+        InlineElement::Formatted(children, _) => children.last_mut().and_then(find_string_right_f),
+        InlineElement::Quoted {..} => None,
+        _ => None,
+    }
+}
+
+fn find_string_right_f_micro(m: &mut MicroNode) -> Option<&mut String> {
+    match m {
+        MicroNode::Text(string) => Some(string),
+        MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+            nodes.last_mut().and_then(find_string_right_f_micro)
+        }
         _ => None,
     }
 }
@@ -530,7 +608,7 @@ fn find_right_quote_inside_micro<'b>(micro: &'b mut MicroNode, next: &'b mut Str
             Some(RightQuoteInsertionPoint::InsideMicro(children, next))
         }
         // Dive into formatted bits
-        MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
+        MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
             nodes.last_mut().and_then(move |x| find_right_quote_inside_micro(x, next))
         }
         _ => None,
@@ -625,7 +703,7 @@ fn last_string(is: &mut [InlineElement]) -> Option<&mut String> {
 fn last_string_micro(ms: &mut [MicroNode]) -> Option<&mut String> {
     ms.last_mut().and_then(|m| match m {
         MicroNode::Quoted { children, .. }
-        | MicroNode::NoCase(children)
+        | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
         | MicroNode::Formatted(children, _) => {
             last_string_micro(children)
         }
@@ -748,8 +826,10 @@ static QUOTES_BOTH_PUNC_OUT: phf::Map<&'static [u8], Where> = phf_map! {
 /// From `punctuation_FullMontyPlain.txt` and `punctuation_FullMontyField.txt`,
 /// which have identical output. If None, do nothing.
 static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map! {
-    // Misc
+    // Spaces (a0 is nbsp)
     b"  " => Some(" "),
+    b"\xC2\xA0 " => Some("\u{a0}"),
+    b" \xC2\xA0" => Some("\u{a0}"),
 
     // Colon
     b"::" => Some(":"),

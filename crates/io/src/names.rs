@@ -46,8 +46,8 @@ macro_rules! regex {
 use std::borrow::Cow;
 
 fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^(?:\u{02bb} |\u{2019} | |\' )?\\S+ *");
-    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}| |\') *");
+    let givenn_particles_re = regex!("^(?:\u{02bb}\\s|\u{2019}\\s|\\s|'\\s)?\\S+\\s*");
+    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
     debug!("split_particles: {:?}", orig_name_str);
     let (splitter, name_str) = if is_given {
         (givenn_particles_re, Cow::Owned(orig_name_str.chars().rev().collect()))
@@ -280,7 +280,11 @@ fn parse_particles() {
 }
 
 /// https://users.rust-lang.org/t/trim-string-in-place/15809/8
-trait TrimInPlace { fn trim_in_place (self: &'_ mut Self); }
+pub trait TrimInPlace {
+    fn trim_in_place (self: &'_ mut Self);
+    fn trim_start_in_place (self: &'_ mut Self);
+    fn trim_end_in_place (self: &'_ mut Self);
+}
 impl TrimInPlace for String {
     fn trim_in_place (self: &'_ mut Self)
     {
@@ -296,6 +300,25 @@ impl TrimInPlace for String {
             );
         }
         self.truncate(len); // no String::set_len() in std ...
+    }
+    fn trim_start_in_place (self: &'_ mut Self)
+    {
+        let (start, len): (*const u8, usize) = {
+            let self_trimmed: &str = self.trim_start();
+            (self_trimmed.as_ptr(), self_trimmed.len())
+        };
+        unsafe {
+            core::ptr::copy(
+                start,
+                self.as_bytes_mut().as_mut_ptr(), // no str::as_mut_ptr() in std ...
+                len,
+            );
+        }
+        self.truncate(len); // no String::set_len() in std ...
+    }
+    fn trim_end_in_place (self: &'_ mut Self)
+    {
+        self.truncate(self.trim_end().len());
     }
 }
 

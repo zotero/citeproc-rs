@@ -25,6 +25,7 @@ mod cite;
 mod csl_json;
 mod date;
 mod names;
+pub use names::TrimInPlace;
 mod numeric;
 pub mod output;
 mod reference;
@@ -544,6 +545,7 @@ impl IngestOptions {
                 MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSuperscript)
                 | MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
                 | MicroNode::Formatted(children, FormatCmd::VerticalAlignmentSubscript)
+                | MicroNode::NoDecor(children)
                 | MicroNode::NoCase(children) => {
                     seen_one = seen_one || self.contains_word_micro(children.as_ref());
                 }
@@ -622,6 +624,7 @@ fn any_micros<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, micros: &[MicroNod
         MicroNode::Text(txt) => f(txt.as_ref()),
         MicroNode::Formatted(children, _)
         | MicroNode::Quoted { children, .. }
+        | MicroNode::NoDecor(children)
         | MicroNode::NoCase(children) => any_micros(f, invert, children) ^ invert,
     }) ^ invert
 }

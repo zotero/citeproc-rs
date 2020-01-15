@@ -303,7 +303,8 @@ impl<'a> NumericValue<'a> {
     }
     pub fn from_localized(and_term: &'a str) -> impl Fn(&'a NumberLike) -> NumericValue<'a> + 'a {
         move |like| match like {
-            NumberLike::Str(input) => NumericValue::parse_full(input, and_term),
+            // locator_WithLeadingSpace
+            NumberLike::Str(input) => NumericValue::parse_full(input.trim(), and_term),
             NumberLike::Num(n) => NumericValue::num(*n),
         }
     }

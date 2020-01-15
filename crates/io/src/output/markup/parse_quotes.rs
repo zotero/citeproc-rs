@@ -169,7 +169,7 @@ fn stamp<'a>(
             Intermediate::Index(ix) => {
                 let node = orig.get_mut(ix - drained).unwrap();
                 match node {
-                    MicroNode::Quoted { children, .. } | MicroNode::NoCase(children) | MicroNode::Formatted(children, _) => {
+                    MicroNode::Quoted { children, .. } | MicroNode::NoDecor(children)| MicroNode::NoCase(children) | MicroNode::Formatted(children, _) => {
                         let to_parse_owned = mem::replace(children, Vec::new());
                         let parsed = parse_quotes(to_parse_owned, options);
                         *children = parsed;
@@ -246,6 +246,7 @@ struct QuoteMatcher<'a> {
 fn leaning_text(node: &MicroNode, rightmost: bool) -> Option<&str> {
     match node {
         MicroNode::Quoted { ref children, .. }
+        | MicroNode::NoDecor(ref children)
         | MicroNode::NoCase(ref children)
         | MicroNode::Formatted(ref children, _) => if rightmost {
             children.last()
@@ -307,6 +308,7 @@ impl<'a> QuoteMatcher<'a> {
             .enumerate()
             .flat_map(move |(ix, node)| match node {
                 MicroNode::Quoted { .. }
+                | MicroNode::NoDecor(_)
                 | MicroNode::NoCase(_)
                 | MicroNode::Formatted(..) => EachSplitter::Index(Some(ix)),
                 MicroNode::Text(ref string) => {

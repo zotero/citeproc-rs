@@ -64,6 +64,9 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
             NoCase(inners) => {
                 self.write_micros(inners);
             }
+            NoDecor(inners) => {
+                self.write_micros(inners);
+            }
         }
     }
 

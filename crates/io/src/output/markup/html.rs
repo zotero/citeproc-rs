@@ -95,6 +95,9 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
             NoCase(inners) => {
                 self.write_micros(inners);
             }
+            NoDecor(inners) => {
+                self.write_micros(inners);
+            }
         }
     }
 

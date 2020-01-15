@@ -27,6 +27,8 @@ use self::flip_flop::FlipFlopState;
 mod move_punctuation;
 mod parse_quotes;
 use self::move_punctuation::move_punctuation;
+
+pub use self::move_punctuation::is_punc;
 pub use self::parse_quotes::parse_quotes;
 pub(self) mod puncttable;
 

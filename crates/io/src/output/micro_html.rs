@@ -18,8 +18,9 @@ pub enum MicroNode {
         children: Vec<MicroNode>,
     },
 
-    /// TODO: text-casing during ingestion
     NoCase(Vec<MicroNode>),
+
+    NoDecor(Vec<MicroNode>),
 }
 
 impl MicroNode {
@@ -95,6 +96,7 @@ impl HtmlReader<String> for PlainHtmlReader {
                 [("style", "font-variant:small-caps;")]
                 | [("style", "font-variant: small-caps;")] => children,
                 [("class", "nocase")] => children,
+                [("class", "nodecor")] => children,
                 _ => return vec![],
             },
             _ => return vec![],
@@ -125,6 +127,7 @@ impl HtmlReader<MicroNode> for MicroHtmlReader<'_> {
                     MicroNode::Formatted(children, FormatCmd::FontVariantSmallCaps)
                 }
                 [("class", "nocase")] => MicroNode::NoCase(children),
+                [("class", "nodecor")] => MicroNode::NoDecor(children),
                 _ => return vec![],
             },
             _ => return vec![],

@@ -54,3 +54,13 @@ position_IbidInText.txt
 # title has already been rendered. citeproc-rs gets the editortranslator label
 # right though.
 label_EditorTranslator1.txt
+
+# citeproc-js chooses to parse rich text in numeric fields. The test hasn't #
+# decided this is wrong.
+flipflop_NumericField.txt
+
+# Test implies i.e. month = 17 means Spring, implying 17-20 are also valid seasons,
+# i.e. if month > 12 && month < 25 { season = (month - 12) % 4 }
+# There is no reason for this to be the case. There's CSL-JSON's 13..=16 range,
+# and also EDTF's 21..=24 range, but no usage of the range in between.
+date_VariousInvalidDates.txt
