@@ -18,6 +18,8 @@ default-members = [
 
 [profile.bench]
 lto = "thin"
+# flamegraph with cargo test --release
+debug = true
 
 [profile.release]
 lto = "thin"

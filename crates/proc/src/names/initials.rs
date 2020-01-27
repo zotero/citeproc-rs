@@ -35,7 +35,7 @@ pub fn initialize<'n>(
         }
 
         let mut state = State::Start;
-        let mut build = String::new();
+        let mut build = String::with_capacity(given_name.len());
 
         let mut process_token = |token: GivenNameToken| {
             state = match token {

@@ -79,6 +79,20 @@ fn unreach() -> Processor {
     unreachable!()
 }
 
+impl Clone for TestCase {
+    fn clone(&self) -> Self {
+        TestCase::new(
+            self.mode.clone(),
+            self.format.clone(),
+            self.csl.clone(),
+            self.input.clone(),
+            self.result.clone(),
+            self.clusters.clone(),
+            self.process_citation_clusters.clone(),
+        )
+    }
+}
+
 impl TestCase {
     pub fn new(
         mode: Mode,
@@ -89,10 +103,12 @@ impl TestCase {
         clusters: Option<Vec<Cluster<Markup>>>,
         process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     ) -> Self {
-        let processor = {
+        let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
             Processor::new(&csl, fet, true, format.0).expect("could not construct processor")
         };
+        processor.set_references(input.clone());
+        Warmup::maximum().execute(&mut processor);
         TestCase {
             mode,
             format,
@@ -110,7 +126,6 @@ impl TestCase {
             if self.mode == Mode::Citation {
                 self.result.push_str("\n");
             }
-            self.processor.set_references(self.input.clone());
             let mut executor = JsExecutor::new(&mut self.processor);
             executor.execute(instructions);
             let actual = executor.get_results();
@@ -138,7 +153,6 @@ impl TestCase {
                 &clusters_auto
             };
 
-            self.processor.set_references(self.input.clone());
             self.processor.init_clusters(clusters.clone());
             let positions: Vec<_> = clusters
                 .iter()
@@ -230,6 +244,35 @@ impl LocaleFetcher for Filesystem {
                 io::ErrorKind::NotFound => Ok(None),
                 _ => Err(LocaleFetchError::Io(e)),
             },
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Warmup {
+    default_locale: bool,
+    _other_locales: Vec<Lang>,
+    ref_dfa: bool,
+}
+
+impl Warmup {
+    pub fn maximum() -> Self {
+        Warmup {
+            default_locale: true,
+            _other_locales: vec![],
+            ref_dfa: true
+        }
+    }
+    pub fn execute(&self, proc: &mut Processor) {
+        if self.default_locale {
+            proc.default_locale();
+        }
+        if self.ref_dfa {
+            // Precompute dfas
+            // We don't know what 'cited_keys()' is yet, so just do all of them
+            for k in proc.all_keys().iter() {
+                let _dfa = proc.ref_dfa(k.clone()).expect("cited_keys should all exist");
+            }
         }
     }
 }

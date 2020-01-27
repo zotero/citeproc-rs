@@ -115,11 +115,23 @@ fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Nfa {
     pub graph: NfaGraph,
     pub accepting: BTreeSet<NodeIndex>,
     pub start: BTreeSet<NodeIndex>,
+}
+
+const NFA_INITIAL_CAPACITY: usize = 40;
+
+impl Default for Nfa {
+    fn default() -> Self {
+        Nfa {
+            graph: NfaGraph::with_capacity(NFA_INITIAL_CAPACITY, NFA_INITIAL_CAPACITY),
+            accepting: Default::default(),
+            start: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -237,10 +249,8 @@ impl Debug for Dfa {
     }
 }
 
-// TODO: find the quotient automaton of the resulting DFA?
-// Use Brzozowski's double-reversal algorithm
 pub fn to_dfa(nfa: &Nfa) -> Dfa {
-    let mut dfa = DfaGraph::new();
+    let mut dfa = DfaGraph::with_capacity(nfa.graph.node_count(), nfa.graph.edge_count());
 
     let mut work = Vec::new();
     let mut start_set = nfa.start.clone();
