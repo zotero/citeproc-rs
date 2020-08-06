@@ -9,6 +9,10 @@ enum SupSub {
 
 use super::micro_html::MicroNode;
 
+/// Takes a string slice with unicode superscript or subscript characters in it, and turns each subslice of them
+/// into an superscript or subscript tag, with the contents being the decomposed characters without the sup/sub
+/// property. So you can take input like '1ʳᵉ' and get `["1", "<sup>re</sup>"]` as a list of
+/// `MicroNode`.
 pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
     let mut stack = Vec::new();
     #[derive(Debug, Clone)]
