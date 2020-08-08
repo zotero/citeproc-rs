@@ -1,4 +1,4 @@
-const { Driver } = require('../pkg');
+const { Driver } = require('../dist');
 
 class Fetcher {
   async fetchLocale(lang) {
@@ -11,23 +11,20 @@ const initialClusters = [
   {
     id: 1,
     cites: [
-      { id: 1, ref_id: "foreign" },
+      { id: "citekey" },
     ],
-    note_number: 1,
   },
   {
     id: 2,
     cites: [
-      { id: 2, ref_id: "citekey" }
+      { id: "citekey" }
     ],
-    note_number: 2,
   },
   {
     id: 3,
     cites: [
-      { id: 3, prefix: [{"t": "Str", "c": "Yeah, "}], ref_id: "foreign" }
+      { id: "foreign", prefix: "Yeah" }
     ],
-    note_number: 3,
   },
 ];
 
@@ -37,7 +34,7 @@ let style = '<?xml version="1.0" encoding="utf-8"?>\n<style xmlns="http://purl.o
 let prom = async () => {
   try {
     let fetcher = new Fetcher();
-    let driver = Driver.new(style, fetcher);
+    let driver = Driver.new(style, fetcher, "html");
     driver.setReferences([
       {
         id: 'citekey',
@@ -55,6 +52,7 @@ let prom = async () => {
       }
     ]);
     driver.initClusters(initialClusters);
+    driver.setClusterOrder([ {id: 1, note: 1}, {id: 2, note: 2}, {id: 3, note: 3} ])
     console.log(driver.toFetch());
     await driver.fetchAll();
     let result = driver.builtCluster(3);
