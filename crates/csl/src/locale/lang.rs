@@ -158,7 +158,7 @@ pub enum IsoLang {
     /// The rest are not part of the fallback relation, so just treat them as strings.
     ///
     /// Also we save allocations for some popular languages!
-    #[strum(default = "true")]
+    #[strum(default)]
     Other(Atom),
 }
 
@@ -221,7 +221,7 @@ pub enum IsoCountry {
     FR,
     /// Canada
     CA,
-    #[strum(default = "true")]
+    #[strum(default)]
     Other(Atom),
 }
 

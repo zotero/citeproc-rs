@@ -18,7 +18,7 @@ repository = "https://github.com/cormacrelf/citeproc-rs"
 roxmltree = "0.7.0"
 fnv = "1.0.6"
 strum = "0.15.0"
-strum_macros = "0.15.0"
+strum_macros = "0.19"
 # don't need lexical as it is only used to parse floats
 nom = { version = "5.0.1", default-features = false, features = ["std"] }
 serde = { version = "1.0.100", features = ["rc"] }

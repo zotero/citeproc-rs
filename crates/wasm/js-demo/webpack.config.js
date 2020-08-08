@@ -39,7 +39,7 @@ module.exports = {
 
     new WasmPackPlugin({
       crateDirectory: path.resolve(__dirname, "../"),
-      extraArgs: "-- --features console,dot -Z config-profile"
+      extraArgs: "-- --features console,dot"
     }),
   ]
 };

@@ -35,14 +35,14 @@ fern = { version = "0.5.8", optional = true }
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.6", optional = true }
 
-wasm-bindgen-futures = "0.4.3"
-js-sys = "0.3.27"
+wasm-bindgen-futures = "0.4.17"
+js-sys = "0.3.44"
 serde = "1.0.100"
 serde_derive = "1.0.100"
 serde_json = "1.0.40"
 
 [dependencies.wasm-bindgen]
-version = "0.2.50"
+version = "0.2.67"
 features = ["serde-serialize"]
 
 [dependencies.log]
@@ -52,7 +52,7 @@ features = ["release_max_level_error"]
 # [target.'cfg(not(feature="console"))'.dependencies.log]
 
 [dev-dependencies]
-wasm-bindgen-test = "0.2.50"
+wasm-bindgen-test = "0.3.17"
 
 # TODO: Set the opt level on new wasm-pack 0.6.0 config
 # when it's released, so as not to interfere with the
