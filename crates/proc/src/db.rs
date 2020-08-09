@@ -1164,7 +1164,7 @@ pub fn with_cite_context<T>(
         disamb_pass: None,
         style: &style,
         locale: &locale,
-        bib_number: db.bib_number(id),
+        bib_number,
         in_bibliography: false,
         names_delimiter,
         name_citation: name_el,

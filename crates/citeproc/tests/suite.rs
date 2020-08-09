@@ -100,7 +100,6 @@ fn csl_test_suite(path: &Path) {
     let mut test_case = parse_human_test(&input);
     if let Some(res) = test_case.execute() {
         let pass = res == test_case.result;
-        let fname = path.file_name().unwrap().to_string_lossy();
         if !pass && is_snapshot(path) {
             insta::assert_snapshot!(res);
         } else {
