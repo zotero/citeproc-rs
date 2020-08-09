@@ -35,12 +35,12 @@ pub trait StyleDatabase {
     fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
 }
 
-fn name_info_citation(db: &impl StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_citation(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
     let style = db.style();
     style.name_info_citation()
 }
 
-fn name_info_bibliography(db: &impl StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_bibliography(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
     let style = db.style();
     style.name_info_bibliography()
 }
@@ -130,7 +130,7 @@ fn name_configurations_middle(style: &Style) -> Vec<(NameVariable, Name)> {
     vec
 }
 
-fn name_configurations(db: &impl StyleDatabase) -> Arc<Vec<(NameVariable, Name)>> {
+fn name_configurations(db: &dyn StyleDatabase) -> Arc<Vec<(NameVariable, Name)>> {
     let style = db.style();
     Arc::new(name_configurations_middle(&style))
 }
@@ -173,7 +173,7 @@ fn test_name_configurations() {
 
 /// Salsa interface to locales, including merging.
 #[salsa::query_group(LocaleDatabaseStorage)]
-pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
+pub trait LocaleDatabase: StyleDatabase + HasFetcher {
     #[salsa::input]
     fn locale_input_xml(&self, key: Lang) -> Arc<String>;
     #[salsa::input]
@@ -199,11 +199,11 @@ pub trait LocaleDatabase: salsa::Database + StyleDatabase + HasFetcher {
     fn default_locale(&self) -> Arc<Locale>;
 }
 
-fn default_locale(db: &impl LocaleDatabase) -> Arc<Locale> {
+fn default_locale(db: &dyn LocaleDatabase) -> Arc<Locale> {
     db.merged_locale(db.style().default_locale.clone())
 }
 
-fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
+fn locale_xml(db: &dyn LocaleDatabase, key: Lang) -> Option<Arc<String>> {
     let stored = db.locale_input_langs();
     if stored.contains(&key) {
         return Some(db.locale_input_xml(key));
@@ -219,11 +219,11 @@ fn locale_xml(db: &impl LocaleDatabase, key: Lang) -> Option<Arc<String>> {
     }
 }
 
-fn inline_locale(db: &impl LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
+fn inline_locale(db: &dyn LocaleDatabase, key: Option<Lang>) -> Option<Arc<Locale>> {
     db.style().locale_overrides.get(&key).cloned().map(Arc::new)
 }
 
-fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
+fn locale(db: &dyn LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
     match key {
         LocaleSource::File(ref lang) => {
             let string = db.locale_xml(lang.clone());
@@ -241,7 +241,7 @@ fn locale(db: &impl LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
     }
 }
 
-fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
+fn merged_locale(db: &dyn LocaleDatabase, key: Lang) -> Arc<Locale> {
     debug!("requested locale {:?}", key);
     let locales = key
         .iter()
@@ -266,7 +266,7 @@ fn merged_locale(db: &impl LocaleDatabase, key: Lang) -> Arc<Locale> {
     )
 }
 
-fn locale_options(db: &impl LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
+fn locale_options(db: &dyn LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
     let merged = &db.merged_locale(key).options_node;
     Arc::new(LocaleOptions::from_merged(merged))
 }

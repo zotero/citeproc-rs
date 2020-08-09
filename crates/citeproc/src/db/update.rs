@@ -75,7 +75,7 @@ pub struct UpdateSummary<O: OutputFormat = Markup> {
 }
 
 impl UpdateSummary {
-    pub fn summarize(db: &impl IrDatabase, updates: &[DocUpdate]) -> Self {
+    pub fn summarize(db: &dyn IrDatabase, updates: &[DocUpdate]) -> Self {
         let ids = updates.iter().map(|&u| match u {
             DocUpdate::Cluster(x) => x,
         });

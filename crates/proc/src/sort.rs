@@ -42,7 +42,7 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
 }
 
 pub fn sort_string_citation(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     cite_id: CiteId,
     macro_name: Atom,
     key: SortKey,
@@ -58,7 +58,7 @@ pub fn sort_string_citation(
 
 // Cached by the DB because typically the output needs to be compared more than once
 pub fn sort_string_bibliography(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ref_id: Atom,
     macro_name: Atom,
     key: SortKey,
@@ -71,7 +71,7 @@ pub fn sort_string_bibliography(
     })
 }
 
-pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
+pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
     let style = db.style();
     let bib = match style.bibliography {
         None => None,
@@ -143,7 +143,7 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
     Arc::new((refs, citation_numbers))
 }
 
-pub fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
+pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
@@ -155,7 +155,7 @@ pub fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
     Arc::new(clusters)
 }
 
-pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<ClusterData> {
+pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<ClusterData> {
     db.cluster_note_number(id).map(|number| {
         // Order of operations: bib gets sorted first, so cites can be sorted by
         // citation-number.
@@ -218,7 +218,7 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
     })
 }
 
-pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
+pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
     let cite = id.lookup(db);
     let arc = db.sorted_refs();
     let (_, ref lookup_ref_ids) = &*arc;
@@ -227,13 +227,12 @@ pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
 
 /// Creates a total ordering of References from a Sort element. (Not a query)
 pub fn bib_ordering<
-    DB: IrDatabase,
     ID: std::fmt::Debug + Copy,
-    M: Fn(&DB, ID, Atom, SortKey) -> Option<Arc<String>>,
+    M: Fn(&dyn IrDatabase, ID, Atom, SortKey) -> Option<Arc<String>>,
     O: OutputFormat,
     I: OutputFormat,
 >(
-    db: &DB,
+    db: &dyn IrDatabase,
     sort_macro: M,
     cite_or_bib: CiteOrBib,
     a: (ID, &CiteContext<'_, O, I>, u32),
@@ -335,15 +334,15 @@ pub fn bib_ordering<
 }
 
 /// Currently only works where
-struct SortingWalker<'a, DB: IrDatabase, I: OutputFormat> {
-    db: &'a DB,
+struct SortingWalker<'a, I: OutputFormat> {
+    db: &'a dyn IrDatabase,
     /// the cite is in its original format, but the formatter is PlainText
     ctx: CiteContext<'a, PlainText, I>,
     state: IrState,
 }
 
-impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
-    pub fn new<O: OutputFormat>(db: &'a DB, ctx: &'a CiteContext<'a, O, I>) -> Self {
+impl<'a, I: OutputFormat> SortingWalker<'a, I> {
+    pub fn new<O: OutputFormat>(db: &'a dyn IrDatabase, ctx: &'a CiteContext<'a, O, I>) -> Self {
         let plain_ctx = ctx.change_format(PlainText);
         SortingWalker {
             db,
@@ -464,7 +463,7 @@ fn test_date_as_macro_strip_delims() {
     );
 }
 
-impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
+impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     type Output = (String, GroupVars);
     type Checker = CiteContext<'a, PlainText, O>;
 

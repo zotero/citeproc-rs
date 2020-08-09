@@ -13,7 +13,7 @@ use std::sync::Arc;
 impl Disambiguation<Markup> for Names {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         state: &mut IrState,
         stack: Formatting,
@@ -164,7 +164,7 @@ impl Disambiguation<Markup> for Names {
 
 citeproc_db::intern_key!(pub DisambName);
 impl DisambName {
-    pub fn lookup(self, db: &impl IrDatabase) -> DisambNameData {
+    pub fn lookup(self, db: &dyn IrDatabase) -> DisambNameData {
         db.lookup_disamb_name(self)
     }
 }
@@ -187,7 +187,7 @@ impl DisambNameData {
     }
 
     /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_edge(&self, db: &impl IrDatabase, stack: Formatting) -> Edge {
+    pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> Edge {
         let fmt = &db.get_formatter();
         let style = db.style();
         let builder = OneNameVar {
@@ -384,7 +384,7 @@ fn test_name_disamb_iter() {
 
 /// Original + expansions
 fn add_expanded_name_to_graph(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     nfa: &mut Nfa,
     mut dn: DisambNameData,
     spot: NodeIndex,
@@ -416,7 +416,7 @@ impl NameVariantMatcher {
         self.0.contains(&edge)
     }
 
-    pub fn from_disamb_name(db: &impl IrDatabase, dn: DisambName) -> Self {
+    pub fn from_disamb_name(db: &dyn IrDatabase, dn: DisambName) -> Self {
         let style = db.style();
         let _fmt = &db.get_formatter();
         let rule = style.citation.givenname_disambiguation_rule;
@@ -437,7 +437,7 @@ impl NameVariantMatcher {
 
 /// Performs 'global name disambiguation'
 pub fn disambiguated_person_names(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
 ) -> Arc<FnvHashMap<DisambName, DisambNameData>> {
     let style = db.style();
     let rule = style.citation.givenname_disambiguation_rule;
@@ -613,7 +613,7 @@ where
             self.achieved_at = (count, self.name_counter);
         }
     }
-    pub fn rollback(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) {
+    pub fn rollback(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) {
         let (_prev_best, at) = self.achieved_at;
         if self.name_counter.bump > at.bump {
             info!("{:?} rolling back to {:?} names", ctx.cite_id, at);
@@ -625,7 +625,7 @@ where
     }
 
     // returns false if couldn't add any more names
-    pub fn add_name(&mut self, db: &impl IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
+    pub fn add_name(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
         self.name_counter.bump += 1;
         match self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), Some(DisambPass::AddNames), None) {
             Some((new_ir, _)) => {

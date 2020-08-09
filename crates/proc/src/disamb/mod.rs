@@ -87,18 +87,18 @@ use csl::{
     Position, TextElement, VariableForm,
 };
 
-pub fn get_free_conds(db: &impl IrDatabase) -> FreeCondSets {
+pub fn get_free_conds(db: &dyn IrDatabase) -> FreeCondSets {
     let mut walker = FreeCondWalker::new(db);
     walker.walk_citation(&db.style())
 }
 
-struct FreeCondWalker<'a, DB: IrDatabase> {
-    db: &'a DB,
+struct FreeCondWalker<'a> {
+    db: &'a dyn IrDatabase,
     state: IrState,
 }
 
-impl<'a, DB: IrDatabase> FreeCondWalker<'a, DB> {
-    fn new(db: &'a DB) -> Self {
+impl<'a> FreeCondWalker<'a> {
+    fn new(db: &'a dyn IrDatabase) -> Self {
         FreeCondWalker {
             db,
             state: IrState::new(),
@@ -106,7 +106,7 @@ impl<'a, DB: IrDatabase> FreeCondWalker<'a, DB> {
     }
 }
 
-impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
+impl<'a> StyleWalker for FreeCondWalker<'a> {
     type Output = FreeCondSets;
     type Checker = crate::choose::UselessCondChecker;
 
@@ -233,7 +233,7 @@ impl<'a, DB: IrDatabase> StyleWalker for FreeCondWalker<'a, DB> {
 pub trait Disambiguation<O: OutputFormat = Markup> {
     fn ref_ir(
         &self,
-        _db: &impl IrDatabase,
+        _db: &dyn IrDatabase,
         _ctx: &RefContext<O>,
         _state: &mut IrState,
         _stack: Formatting,
@@ -244,8 +244,8 @@ pub trait Disambiguation<O: OutputFormat = Markup> {
 
 /// Creates a Dfa that will match any cite that could have been made by a particular reference.
 /// A cite's output matching more than one reference's Dfa is our definition of "ambiguous".
-pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) -> Dfa {
-    let runs = create_ref_ir::<Markup, DB>(db, refr);
+pub fn create_dfa<O: OutputFormat>(db: &dyn IrDatabase, refr: &Reference) -> Dfa {
+    let runs = create_ref_ir::<Markup>(db, refr);
     let mut nfa = Nfa::new();
     let fmt = db.get_formatter();
     for (_fc, ir) in runs {
@@ -257,7 +257,7 @@ pub fn create_dfa<O: OutputFormat, DB: IrDatabase>(db: &DB, refr: &Reference) ->
     nfa.brzozowski_minimise()
 }
 
-pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefContext) -> RefIR {
+pub fn create_single_ref_ir<O: OutputFormat>(db: &dyn IrDatabase, ctx: &RefContext) -> RefIR {
     let style = ctx.style;
     let mut state = IrState::new();
     let (ir, _gv) =
@@ -267,8 +267,8 @@ pub fn create_single_ref_ir<O: OutputFormat, DB: IrDatabase>(db: &DB, ctx: &RefC
 
 /// Sorts the list so that it can be determined not to have changed by Salsa. Also emits a FreeCond
 /// so we don't have to re-allocate/collect the list after sorting to exclude it.
-pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
-    db: &DB,
+pub fn create_ref_ir<O: OutputFormat>(
+    db: &dyn IrDatabase,
     refr: &Reference,
 ) -> Vec<(FreeCond, RefIR)> {
     let style = db.style();
@@ -316,7 +316,7 @@ pub fn create_ref_ir<O: OutputFormat, DB: IrDatabase>(
 use petgraph::graph::NodeIndex;
 
 pub fn graph_with_stack(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     formatting: Option<Formatting>,
@@ -361,7 +361,7 @@ pub fn graph_with_stack(
 }
 
 pub fn add_to_graph(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,

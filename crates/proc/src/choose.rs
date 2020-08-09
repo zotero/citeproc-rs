@@ -22,7 +22,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -85,7 +85,7 @@ where
 impl Disambiguation<Markup> for Choose {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         state: &mut IrState,
         stack: Formatting,
@@ -110,7 +110,7 @@ struct BranchEval<O: OutputFormat> {
 }
 
 fn eval_ifthen<'c, O, I>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     branch: &'c IfThen,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,

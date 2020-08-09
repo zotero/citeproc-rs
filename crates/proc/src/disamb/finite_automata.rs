@@ -65,7 +65,7 @@ impl Hash for EdgeData {
 impl Edge {
     // Adding this method is often convenient, since you can then
     // write `path.lookup(db)` to access the data, which reads a bit better.
-    pub fn lookup(self, db: &impl IrDatabase) -> EdgeData {
+    pub fn lookup(self, db: &dyn IrDatabase) -> EdgeData {
         IrDatabase::lookup_edge(db, self)
     }
 }
@@ -159,7 +159,7 @@ enum DebugNode {
 }
 
 impl Dfa {
-    pub fn debug_graph(&self, db: &impl IrDatabase) -> String {
+    pub fn debug_graph(&self, db: &dyn IrDatabase) -> String {
         let g = self.graph.map(
             |node, _| {
                 let cont = self.accepting.contains(&node);
@@ -316,7 +316,7 @@ pub fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    pub fn accepts_data(&self, db: &impl IrDatabase, data: &[EdgeData]) -> bool {
+    pub fn accepts_data(&self, db: &dyn IrDatabase, data: &[EdgeData]) -> bool {
         let mut cursors = Vec::new();
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {

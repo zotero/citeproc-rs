@@ -85,7 +85,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O>;

@@ -483,7 +483,7 @@ impl<O: OutputFormat> Unnamed3<O> {
 }
 
 pub fn group_and_collapse<O: OutputFormat<Output = String>>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     fmt: &Markup,
     delim: &str,
     collapse: Option<Collapse>,

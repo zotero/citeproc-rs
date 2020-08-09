@@ -77,7 +77,7 @@ macro_rules! intern_key {
 intern_key!(pub CiteId);
 
 impl CiteId {
-    pub fn lookup(self, db: &impl CiteDatabase) -> Arc<Cite<Markup>> {
+    pub fn lookup<DB: CiteDatabase + ?Sized>(self, db: &DB) -> Arc<Cite<Markup>> {
         let (_cluster_id, _index, cite) = db.lookup_cite(self);
         cite
     }
@@ -90,7 +90,7 @@ pub struct ClusterData {
     pub cites: Arc<Vec<CiteId>>,
 }
 
-fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
+fn reference(db: &dyn CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     if db.all_keys().contains(&key) {
         Some(db.reference_input(key))
     } else {
@@ -98,12 +98,12 @@ fn reference(db: &impl CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     }
 }
 
-fn locale_by_cite(db: &impl CiteDatabase, id: CiteId) -> Arc<Locale> {
+fn locale_by_cite(db: &dyn CiteDatabase, id: CiteId) -> Arc<Locale> {
     let cite = id.lookup(db);
     db.locale_by_reference(cite.ref_id.clone())
 }
 
-fn locale_by_reference(db: &impl CiteDatabase, ref_id: Atom) -> Arc<Locale> {
+fn locale_by_reference(db: &dyn CiteDatabase, ref_id: Atom) -> Arc<Locale> {
     let refr = db.reference(ref_id);
     refr.and_then(|r| r.language.clone())
         .map(|l| db.merged_locale(l))
@@ -111,14 +111,14 @@ fn locale_by_reference(db: &impl CiteDatabase, ref_id: Atom) -> Arc<Locale> {
 }
 
 // make sure there are no keys we wouldn't recognise
-fn uncited(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+fn uncited(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let all = db.all_keys();
     let uncited = db.all_uncited();
     let merged = all.intersection(&uncited).cloned().collect();
     Arc::new(merged)
 }
 
-fn cited_keys(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+fn cited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let all = db.all_keys();
     let mut keys = HashSet::new();
     let all_cite_ids = db.all_cite_ids();
@@ -130,7 +130,7 @@ fn cited_keys(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
     Arc::new(merged)
 }
 
-fn disamb_participants(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
+fn disamb_participants(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let cited = db.cited_keys();
     let uncited = db.uncited();
     // make sure there are no keys we wouldn't recognise
@@ -140,7 +140,7 @@ fn disamb_participants(db: &impl CiteDatabase) -> Arc<HashSet<Atom>> {
 
 use citeproc_io::Name;
 use csl::GivenNameDisambiguationRule;
-fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
+fn names_to_disambiguate(db: &dyn CiteDatabase) -> Arc<Vec<Name>> {
     let style = db.style();
     if GivenNameDisambiguationRule::ByCite == style.citation.givenname_disambiguation_rule {
         return Arc::new(Vec::new());
@@ -159,7 +159,7 @@ fn names_to_disambiguate(db: &impl CiteDatabase) -> Arc<Vec<Name>> {
     Arc::new(v)
 }
 
-fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
+fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
@@ -173,7 +173,7 @@ fn clusters_sorted(db: &impl CiteDatabase) -> Arc<Vec<ClusterData>> {
     Arc::new(clusters)
 }
 
-fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
+fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
     let mut ids = Vec::new();
     let clusters = db.clusters_sorted();
     for cluster in clusters.iter() {
@@ -182,7 +182,7 @@ fn all_cite_ids(db: &impl CiteDatabase) -> Arc<Vec<CiteId>> {
     Arc::new(ids)
 }
 
-pub fn get_cluster_data(db: &impl CiteDatabase, id: ClusterId) -> Option<ClusterData> {
+pub fn get_cluster_data(db: &dyn CiteDatabase, id: ClusterId) -> Option<ClusterData> {
     db.cluster_note_number(id)
         .map(|number| ClusterData {
             id,

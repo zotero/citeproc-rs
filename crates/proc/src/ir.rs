@@ -123,7 +123,7 @@ pub struct RefIrSeq {
 }
 
 impl RefIR {
-    pub fn debug(&self, db: &impl IrDatabase) -> String {
+    pub fn debug(&self, db: &dyn IrDatabase) -> String {
         match self {
             RefIR::Edge(Some(e)) => format!("{:?}", db.lookup_edge(*e)),
             RefIR::Edge(None) => "None".into(),
@@ -331,7 +331,7 @@ impl RefIrNameCounter {
     fn count(&self) -> u32 {
         500
     }
-    pub fn render_ref(&self, db: &impl IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
+    pub fn render_ref(&self, db: &dyn IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
         let count = self.count();
         let fmt = ctx.format;
         let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);

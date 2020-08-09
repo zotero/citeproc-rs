@@ -94,6 +94,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
 
     #[salsa::invoke(crate::sort::sorted_refs)]
     fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
+
     #[salsa::invoke(crate::sort::sort_string_citation)]
     fn sort_string_citation(
         &self,
@@ -112,7 +113,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
 
-fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
+fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {
     let _style = db.style();
     let name_configurations = db.name_configurations();
     let refs = db.disamb_participants();
@@ -147,20 +148,20 @@ fn all_person_names(db: &impl IrDatabase) -> Arc<Vec<DisambName>> {
 
 use crate::disamb::create_dfa;
 
-fn ref_dfa<DB: IrDatabase>(db: &DB, key: Atom) -> Option<Arc<Dfa>> {
+fn ref_dfa(db: &dyn IrDatabase, key: Atom) -> Option<Arc<Dfa>> {
     if let Some(refr) = db.reference(key) {
-        Some(Arc::new(create_dfa::<Markup, DB>(db, &refr)))
+        Some(Arc::new(create_dfa::<Markup>(db, &refr)))
     } else {
         None
     }
 }
 
-fn branch_runs(db: &impl IrDatabase) -> Arc<FreeCondSets> {
+fn branch_runs(db: &dyn IrDatabase) -> Arc<FreeCondSets> {
     use crate::disamb::get_free_conds;
     Arc::new(get_free_conds(db))
 }
 
-fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {
+fn year_suffix_for(db: &dyn IrDatabase, ref_id: Atom) -> Option<u32> {
     let ys = db.year_suffixes();
     ys.get(&ref_id).cloned()
 }
@@ -180,7 +181,7 @@ fn year_suffix_for(db: &impl IrDatabase, ref_id: Atom) -> Option<u32> {
 ///    a. Groups = {}
 ///    b. For each cite A with more than its own, find, if any, a Group whose total refs intersects A.refs
 ///    c. If found G, add A to that group, and G.total_refs = G.total_refs UNION A.refs
-fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
+fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     use fnv::FnvHashSet;
     let style = db.style();
     if !style.citation.disambiguate_add_year_suffix {
@@ -271,7 +272,7 @@ fn year_suffixes(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 }
 
 // Not cached
-fn ref_bib_number(db: &impl IrDatabase, ref_id: &Atom) -> u32 {
+fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
     let srs = db.sorted_refs();
     let (_, ref lookup_ref_ids) = &*srs;
     let ret = lookup_ref_ids.get(ref_id).cloned();
@@ -321,7 +322,7 @@ impl PartialEq<IrGen> for IrGen {
     }
 }
 
-fn ref_not_found(db: &impl IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
+fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
     if log {
         eprintln!("citeproc-rs: reference {} not found", ref_id);
     }
@@ -363,7 +364,7 @@ macro_rules! preamble {
 }
 
 fn is_unambiguous(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     _pass: Option<DisambPass>,
     ir: &IR<Markup>,
     _cite_id: Option<CiteId>,
@@ -386,7 +387,7 @@ fn is_unambiguous(
 
 /// Returns the set of Reference IDs that could have produced a cite's IR
 fn refs_accepting_cite<O: OutputFormat>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ir: &IR<Markup>,
     ctx: &CiteContext<'_, O>,
 ) -> Vec<Atom> {
@@ -434,8 +435,8 @@ fn refs_accepting_cite<O: OutputFormat>(
 /// 3. We can then use this narrowed-down matcher to test, locally, whether name expansions are narrowing
 ///    down the cite's ambiguity, without having to zip in and out or use a mutex.
 
-fn make_identical_name_formatter<'a, DB: IrDatabase>(
-    db: &DB,
+fn make_identical_name_formatter<'a>(
+    db: &dyn IrDatabase,
     ref_id: Atom,
     cite_ctx: &'a CiteContext<'a, Markup>,
     index: u32,
@@ -443,7 +444,7 @@ fn make_identical_name_formatter<'a, DB: IrDatabase>(
     use crate::disamb::create_single_ref_ir;
     let refr = db.reference(ref_id)?;
     let ref_ctx = RefContext::from_cite_context(&refr, cite_ctx);
-    let ref_ir = create_single_ref_ir::<Markup, DB>(db, &ref_ctx);
+    let ref_ir = create_single_ref_ir::<Markup>(db, &ref_ctx);
     fn find_name_block<'a>(ref_ir: &'a RefIR, nth: &mut u32) -> Option<&'a RefNameIR> {
         match ref_ir {
             RefIR::Edge(_) => None,
@@ -522,7 +523,7 @@ fn list_all_cond_disambs(ir: &IR<Markup>) -> Vec<CondDisambRef> {
 use crate::disamb::names::{DisambNameRatchet, NameIR, NameVariantMatcher, RefNameIR};
 
 fn disambiguate_add_names(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ir: &mut IR<Markup>,
     ctx: &CiteContext<'_, Markup>,
     also_expand: bool,
@@ -596,7 +597,7 @@ fn disambiguate_add_names(
 }
 
 fn expand_one_name_ir(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     _ir: &IR<Markup>,
     ctx: &CiteContext<'_, Markup>,
     refs_accepting: &[Atom],
@@ -669,7 +670,7 @@ fn expand_one_name_ir(
 }
 
 fn disambiguate_add_givennames(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ir: &mut IR<Markup>,
     ctx: &CiteContext<'_, Markup>,
     also_add: bool,
@@ -689,7 +690,7 @@ fn disambiguate_add_givennames(
 }
 
 fn disambiguate_add_year_suffix(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ir: &mut IR<Markup>,
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
@@ -730,7 +731,7 @@ fn disambiguate_add_year_suffix(
 }
 
 fn disambiguate_true(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ir: &mut IR<Markup>,
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
@@ -760,7 +761,7 @@ fn disambiguate_true(
     }
 }
 
-fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -774,7 +775,7 @@ fn ir_gen0(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_gen1_add_names(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -795,7 +796,7 @@ fn ir_gen1_add_names(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -817,7 +818,7 @@ fn ir_gen2_add_given_name(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_gen3_add_year_suffix(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -841,7 +842,7 @@ fn ir_gen3_add_year_suffix(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_gen4_conditionals(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
@@ -862,7 +863,7 @@ fn ir_gen4_conditionals(db: &impl IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn get_piq(db: &impl IrDatabase) -> bool {
+fn get_piq(db: &dyn IrDatabase) -> bool {
     // We pant PIQ to be global in a document, not change within a cluster because one cite
     // decided to use a different language. Use the default locale to get it.
     let default_locale = db.default_locale();
@@ -870,7 +871,7 @@ fn get_piq(db: &impl IrDatabase) -> bool {
 }
 
 fn built_cluster(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     cluster_id: ClusterId,
 ) -> Arc<<Markup as OutputFormat>::Output> {
     let fmt = db.get_formatter();
@@ -880,7 +881,7 @@ fn built_cluster(
 }
 
 pub fn built_cluster_before_output(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     cluster_id: ClusterId,
 ) -> <Markup as OutputFormat>::Build {
     let fmt = db.get_formatter();
@@ -1136,7 +1137,7 @@ pub fn built_cluster_before_output(
 
 /// None if the reference being cited does not exist
 pub fn with_cite_context<T>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     id: CiteId,
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
@@ -1177,7 +1178,7 @@ pub fn with_cite_context<T>(
 // mutate.
 
 pub fn with_bib_context<T>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ref_id: Atom,
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
@@ -1210,7 +1211,7 @@ pub fn with_bib_context<T>(
     Some(f(bib, ctx))
 }
 
-fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
+fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let sorted_refs_arc = db.sorted_refs();
     let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
     let bib_number = *citation_numbers_by_id
@@ -1250,7 +1251,7 @@ fn bib_item_gen0(db: &impl IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     )
 }
 
-fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
+fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
     let style = db.style();
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
@@ -1266,7 +1267,7 @@ fn bib_item(db: &impl IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     }
 }
 
-fn get_bibliography_map(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>> {
+fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>> {
     let fmt = db.get_formatter();
     let style = db.style();
     let sorted_refs = db.sorted_refs();
@@ -1307,7 +1308,7 @@ fn get_bibliography_map(db: &impl IrDatabase) -> Arc<FnvHashMap<Atom, Arc<Markup
 }
 
 // See https://github.com/jgm/pandoc-citeproc/blob/e36c73ac45c54dec381920e92b199787601713d1/src/Text/CSL/Reference.hs#L910
-fn cite_positions(db: &impl IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
+fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Option<u32>)>> {
     let clusters = db.clusters_cites_sorted();
 
     let mut map = FnvHashMap::default();
@@ -1527,7 +1528,7 @@ fn cite_positions(db: &impl IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opt
     Arc::new(map)
 }
 
-fn cite_position(db: &impl IrDatabase, key: CiteId) -> (Position, Option<u32>) {
+fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
     if let Some(x) = db.cite_positions().get(&key) {
         *x
     } else {

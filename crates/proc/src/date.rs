@@ -85,7 +85,7 @@ fn to_ref_ir(
 impl Either<Markup> {
     fn into_ref_ir(
         self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
@@ -121,7 +121,7 @@ where
 {
     fn intermediate(
         &self,
-        _db: &impl IrDatabase,
+        _db: &dyn IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -144,7 +144,7 @@ where
 impl Disambiguation<Markup> for BodyDate {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         _state: &mut IrState,
         stack: Formatting,

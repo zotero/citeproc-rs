@@ -13,7 +13,7 @@ use csl::*;
 impl Disambiguation<Markup> for Style {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         state: &mut IrState,
         stack: Formatting,
@@ -37,7 +37,7 @@ impl Disambiguation<Markup> for Style {
 impl Disambiguation<Markup> for Group {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         state: &mut IrState,
         stack: Formatting,
@@ -64,7 +64,7 @@ impl Disambiguation<Markup> for Group {
 impl Disambiguation<Markup> for Element {
     fn ref_ir(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         state: &mut IrState,
         stack: Formatting,

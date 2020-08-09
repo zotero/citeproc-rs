@@ -57,6 +57,9 @@ impl SavedBib {
     }
 }
 
+// Need to keep this index in sync with the order in which the group storage structs appear below
+const IR_GROUP_INDEX: u16 = 3;
+
 #[salsa::database(
     StyleDatabaseStorage,
     LocaleDatabaseStorage,
@@ -64,7 +67,7 @@ impl SavedBib {
     IrDatabaseStorage
 )]
 pub struct Processor {
-    runtime: salsa::Runtime<Self>,
+    storage: salsa::Storage<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
     pub formatter: Markup,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
@@ -74,26 +77,29 @@ pub struct Processor {
 
 /// This impl tells salsa where to find the salsa runtime.
 impl salsa::Database for Processor {
-    fn salsa_runtime(&self) -> &salsa::Runtime<Processor> {
-        &self.runtime
-    }
 
     /// A way to extract imperative update sequences from a "here's the entire world" API. An
     /// editor might require simple instructions to update a document; modify this footnote,
     /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
     /// things were recomputed, and assume a recomputation means re-rendering is necessary.
-    fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
+    fn salsa_event(&self, event: salsa::Event) {
         if !self.save_updates {
             return;
         }
-        use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
-        use citeproc_proc::db::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
-        let kind = event_fn().kind;
-        if let WillExecute { database_key } = kind {
-            if let RDS(GroupKey::built_cluster(key)) = database_key.kind {
+        if let WillExecute { database_key: db_key } = event.kind {
+            use citeproc_proc::db::BuiltClusterQuery;
+            if db_key.group_index() == IR_GROUP_INDEX
+                && db_key.query_index() == <BuiltClusterQuery as salsa::Query>::QUERY_INDEX {
+
+                // TODO: this is a massive hack. Get a key index lookup function into Salsa.
+                let formatted = format!("{:?}", db_key.debug(self));
+                // The format is "built_cluster(123)".
+                // log::error!("{:?}", db_key.debug(self));
+                let id: u32 = formatted.strip_prefix("built_cluster(").unwrap().trim_end_matches(')').parse().unwrap();
+
                 let mut q = self.queue.lock().unwrap();
-                let upd = DocUpdate::Cluster(key);
+                let upd = DocUpdate::Cluster(id);
                 // info!("produced update, {:?}", upd);
                 q.push(upd);
             }
@@ -105,7 +111,7 @@ impl salsa::Database for Processor {
 impl ParallelDatabase for Processor {
     fn snapshot(&self) -> Snapshot<Self> {
         Snapshot::new(Processor {
-            runtime: self.runtime.snapshot(self),
+            storage: self.storage.snapshot(),
             fetcher: self.fetcher.clone(),
             queue: self.queue.clone(),
             save_updates: self.save_updates,
@@ -173,7 +179,7 @@ impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut db = Processor {
-            runtime: Default::default(),
+            storage: Default::default(),
             fetcher,
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,

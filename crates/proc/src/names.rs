@@ -15,8 +15,8 @@ use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::{
-    Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
-    NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position, Style, Locale,
+    Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Locale, Name as NameEl, NameAnd,
+    NameAsSortOrder, NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position, Style,
 };
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -24,7 +24,7 @@ use std::sync::Mutex;
 mod initials;
 
 impl DisambNameData {
-    fn lookup_id(&mut self, db: &impl IrDatabase, advance_to_global: bool) -> DisambName {
+    fn lookup_id(&mut self, db: &dyn IrDatabase, advance_to_global: bool) -> DisambName {
         let id = db.disamb_name(self.clone());
         // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
         if advance_to_global {
@@ -39,7 +39,7 @@ impl DisambNameData {
 
 impl<B> DisambNameRatchet<B> {
     fn for_person(
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         var: NameVariable,
         value: PersonName,
         ref_id: &Atom,
@@ -65,7 +65,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     ctx: &'a GenericContext<'a, O, I>,
     names: &'a Names,
     names_inheritance: &'a NamesInheritance,
-    db: &'a impl IrDatabase,
+    db: &'a dyn IrDatabase,
     state: &'a IrState,
     should_start_with_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a + Clone {
@@ -127,13 +127,17 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
 
     // Note: won't make editortranslator when you're also rendering a third or even more
     // variables.
-    let is_editor_translator = &names.variables == &[NameVariable::Editor, NameVariable::Translator]
+    let is_editor_translator = &names.variables
+        == &[NameVariable::Editor, NameVariable::Translator]
         || &names.variables == &[NameVariable::Translator, NameVariable::Editor];
 
     // name_EditorTranslatorSameEmptyTerm
     // (Although technically the spec isn't worded that way, it is useful to be able to disable
     // this behaviour.)
-    let sel = csl::TextTermSelector::Role(csl::RoleTermSelector(csl::RoleTerm::EditorTranslator, csl::TermFormExtended::Long));
+    let sel = csl::TextTermSelector::Role(csl::RoleTermSelector(
+        csl::RoleTerm::EditorTranslator,
+        csl::TermFormExtended::Long,
+    ));
     let editortranslator_term_empty = locale.get_text_term(sel, false) == Some("");
 
     if is_editor_translator && !editortranslator_term_empty {
@@ -163,10 +167,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         .filter(move |var| !state.is_name_suppressed(**var))
         .filter_map(move |var| {
             let ovar = var_override.as_ref().unwrap_or(var);
-            refr
-                .name
-                .get(var)
-                .map(|val| (*var, *ovar, val.clone()))
+            refr.name.get(var).map(|val| (*var, *ovar, val.clone()))
         })
         .map(get_name_ir)
 }
@@ -176,7 +177,7 @@ use csl::SortKey;
 use unicase::UniCase;
 
 pub fn sort_strings_for_names(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     refr: &Reference,
     var: NameVariable,
     sort_key: &SortKey,
@@ -227,7 +228,7 @@ pub fn sort_strings_for_names(
 
 pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     names: &Names,
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
 ) -> IrSum<O> {
@@ -247,14 +248,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     }
 
     let gen = GenericContext::Cit(ctx);
-    let nirs_iterator = to_individual_name_irs(
-        &gen,
-        names,
-        &names_inheritance,
-        db,
-        state,
-        true,
-    );
+    let nirs_iterator = to_individual_name_irs(&gen, names, &names_inheritance, db, state, true);
 
     if names_inheritance.name.form == Some(NameForm::Count) {
         let name_irs = nirs_iterator.collect();
@@ -290,19 +284,26 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         return (IR::NameCounter(nc), GroupVars::Important);
     }
 
-    let name_irs: Vec<IrSum<O>> = nirs_iterator.map(|mut nir| {
-        if let Some((ir, _)) = nir.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), ctx.disamb_pass, None) {
-            *nir.ir = ir;
-            (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
-        } else {
-            // shouldn't happen; intermediate_custom should return Some the first time
-            // round in any situation, and only retun None if it's impossible to crank any
-            // further for a disamb pass
-            error!("nir.intermediate_custom returned None the first time round");
-            (IR::Rendered(None), GroupVars::Missing)
-        }
-    })
-    .collect();
+    let name_irs: Vec<IrSum<O>> = nirs_iterator
+        .map(|mut nir| {
+            if let Some((ir, _)) = nir.intermediate_custom(
+                &ctx.format,
+                ctx.position.0,
+                ctx.sort_key.is_some(),
+                ctx.disamb_pass,
+                None,
+            ) {
+                *nir.ir = ir;
+                (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
+            } else {
+                // shouldn't happen; intermediate_custom should return Some the first time
+                // round in any situation, and only retun None if it's impossible to crank any
+                // further for a disamb pass
+                error!("nir.intermediate_custom returned None the first time round");
+                (IR::Rendered(None), GroupVars::Missing)
+            }
+        })
+        .collect();
 
     // Wait until iteration is done to collect
     state.maybe_suppress_name_vars(&names.variables);
@@ -361,7 +362,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -370,10 +371,7 @@ where
 }
 
 impl<'c, O: OutputFormat> NameIR<O> {
-    pub fn count<I: OutputFormat>(
-        &self,
-        ctx: &CiteContext<'c, O, I>,
-    ) -> u32 {
+    pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'c, O, I>) -> u32 {
         let style = ctx.style;
         let locale = ctx.locale;
         let fmt = &ctx.format;
@@ -385,7 +383,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             position,
             &self.disamb_names,
             ctx.sort_key.is_some(),
-            self.etal_term.as_ref()
+            self.etal_term.as_ref(),
         );
 
         let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
@@ -403,7 +401,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             Position::First, // All bib entries are First
             &self.disamb_names,
             false, // not in sort key, we're transforming bib ir
-            self.etal_term.as_ref()
+            self.etal_term.as_ref(),
         );
         name_tokens
     }
@@ -426,7 +424,10 @@ impl<'c, O: OutputFormat> NameIR<O> {
         pass: Option<DisambPass>,
         substitute: Option<(u32, &str)>,
     ) -> Option<IrSum<O>> {
-        let NameIR { ref names_inheritance, .. } = *self;
+        let NameIR {
+            ref names_inheritance,
+            ..
+        } = *self;
         let mut runner = self.runner(&self.names_inheritance.name, fmt);
 
         let (mut subst_count, subst_text) = substitute.unwrap_or((0, ""));
@@ -463,7 +464,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
                 NameTokenBuilt::Built(b) => Some(b),
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
                     Some(maybe_subst(b.clone()))
-                },
+                }
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
                     runner.name_el = &pn.data.el;
                     let mut ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
@@ -472,7 +473,12 @@ impl<'c, O: OutputFormat> NameIR<O> {
                 }
             })
             .filter(|x| !fmt.is_empty(&x))
-            .map(|x| (IR::Rendered(Some(CiteEdgeData::Output(x))), GroupVars::Important))
+            .map(|x| {
+                (
+                    IR::Rendered(Some(CiteEdgeData::Output(x))),
+                    GroupVars::Important,
+                )
+            })
             .collect();
 
         let mut seq = IrSeq {
@@ -588,8 +594,12 @@ pub fn pn_filtered_parts(pn: &PersonName, order: DisplayOrdering) -> Vec<NamePar
 
 fn pn_filter_part(pn: &PersonName, token: NamePartToken) -> bool {
     match token {
-        NamePartToken::Given | NamePartToken::GivenAndDropping | NamePartToken::GivenAndBoth => pn.given.as_ref().map_or(false, |s| !s.is_empty()),
-        NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => pn.family.as_ref().map_or(false, |s| !s.is_empty()),
+        NamePartToken::Given | NamePartToken::GivenAndDropping | NamePartToken::GivenAndBoth => {
+            pn.given.as_ref().map_or(false, |s| !s.is_empty())
+        }
+        NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => {
+            pn.family.as_ref().map_or(false, |s| !s.is_empty())
+        }
         NamePartToken::NonDroppingParticle => pn
             .non_dropping_particle
             .as_ref()
@@ -760,7 +770,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 .filter(|npt| pn_filter_part(pn, *npt))
             {
                 match token {
-                    NamePartToken::Given | NamePartToken::GivenAndDropping | NamePartToken::GivenAndBoth => {
+                    NamePartToken::Given
+                    | NamePartToken::GivenAndDropping
+                    | NamePartToken::GivenAndBoth => {
                         if let Some(ref given) = pn.given {
                             // TODO: parametrize for disambiguation
                             let string = initialize(
@@ -789,11 +801,19 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             }
                         }
                     }
-                    NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => {
+                    NamePartToken::Family
+                    | NamePartToken::FamilyDropped
+                    | NamePartToken::FamilyFull => {
                         let name_part = &self.name_el.name_part_family;
                         if let Some(fam) = pn.family.as_ref() {
-                            let dp = pn.dropping_particle.as_ref().filter(|_| token == NamePartToken::FamilyFull);
-                            let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
+                            let dp = pn
+                                .dropping_particle
+                                .as_ref()
+                                .filter(|_| token == NamePartToken::FamilyFull);
+                            let ndp = pn
+                                .non_dropping_particle
+                                .as_ref()
+                                .filter(|_| token != NamePartToken::Family);
                             if let Some(dp) = dp {
                                 s.push_str(dp);
                                 if should_append_space(dp) {
@@ -868,7 +888,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         for token in filtered_tokens {
             // We already tested is_some() for all these Some::unwrap() calls
             match token {
-                NamePartToken::Given | NamePartToken::GivenAndDropping | NamePartToken::GivenAndBoth => {
+                NamePartToken::Given
+                | NamePartToken::GivenAndDropping
+                | NamePartToken::GivenAndBoth => {
                     if let Some(ref given) = pn.given {
                         let name_part = &self.name_el.name_part_given;
                         let family_part = &self.name_el.name_part_family;
@@ -899,17 +921,32 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             }
                         }
                         let b = fmt.group(parts, "", None);
-                        build.push(fmt.affixed(b, name_part.as_ref().map_or(None, |p| p.affixes.as_ref())));
+                        build.push(
+                            fmt.affixed(b, name_part.as_ref().map_or(None, |p| p.affixes.as_ref())),
+                        );
                     }
                 }
-                NamePartToken::Family | NamePartToken::FamilyDropped | NamePartToken::FamilyFull => {
+                NamePartToken::Family
+                | NamePartToken::FamilyDropped
+                | NamePartToken::FamilyFull => {
                     let family_part = &self.name_el.name_part_family;
                     let given_part = &self.name_el.name_part_family;
                     let fam = pn.family.as_ref().unwrap();
-                    let dp = pn.dropping_particle.as_ref().filter(|_| token == NamePartToken::FamilyFull);
-                    let ndp = pn.non_dropping_particle.as_ref().filter(|_| token != NamePartToken::Family);
-                    let suffix = pn.suffix.as_ref().filter(|_| token == NamePartToken::FamilyFull);
-                    let mut string = String::with_capacity(fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()));
+                    let dp = pn
+                        .dropping_particle
+                        .as_ref()
+                        .filter(|_| token == NamePartToken::FamilyFull);
+                    let ndp = pn
+                        .non_dropping_particle
+                        .as_ref()
+                        .filter(|_| token != NamePartToken::Family);
+                    let suffix = pn
+                        .suffix
+                        .as_ref()
+                        .filter(|_| token == NamePartToken::FamilyFull);
+                    let mut string = String::with_capacity(
+                        fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()),
+                    );
                     let mut parts = Vec::new();
                     if let Some(dp) = dp {
                         let mut string = dp.clone();
@@ -945,15 +982,24 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         parts.push(fmt.text_node(string, None));
                     }
                     let b = fmt.group(parts, "", None);
-                    build.push(fmt.affixed(b, family_part.as_ref().map_or(None, |p| p.affixes.as_ref())));
+                    build.push(
+                        fmt.affixed(b, family_part.as_ref().map_or(None, |p| p.affixes.as_ref())),
+                    );
                 }
                 NamePartToken::NonDroppingParticle => {
                     let family_part = &self.name_el.name_part_family;
-                    build.push(self.format_with_part(family_part, pn.non_dropping_particle.as_ref().unwrap()));
+                    build.push(
+                        self.format_with_part(
+                            family_part,
+                            pn.non_dropping_particle.as_ref().unwrap(),
+                        ),
+                    );
                 }
                 NamePartToken::DroppingParticle => {
                     let given_part = &self.name_el.name_part_given;
-                    build.push(self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap()));
+                    build.push(
+                        self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap()),
+                    );
                 }
                 NamePartToken::Suffix => {
                     build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
@@ -972,10 +1018,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
 
         fmt.affixed(
-            fmt.with_format(
-                fmt.seq(build.into_iter()),
-                self.name_el.formatting
-            ),
+            fmt.with_format(fmt.seq(build.into_iter()), self.name_el.formatting),
             self.name_el.affixes.as_ref(),
         )
     }
@@ -1016,44 +1059,46 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 
         name_tokens
             .iter()
-            .filter_map(|n| Some(match n {
-                NameToken::Name(ratchet) => {
-                    seen_one = true;
-                    NameTokenBuilt::Ratchet(ratchet)
-                }
-                NameToken::Delimiter => {
-                    NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
-                        fmt.plain(&delim.0)
-                    } else {
-                        fmt.plain(", ")
-                    })
-                }
-                NameToken::EtAl(text, formatting) => {
-                    if is_sort_key {
-                        return None;
+            .filter_map(|n| {
+                Some(match n {
+                    NameToken::Name(ratchet) => {
+                        seen_one = true;
+                        NameTokenBuilt::Ratchet(ratchet)
                     }
-                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), *formatting))
-                }
-                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
-                NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
-                NameToken::And => {
-                    use csl::terms::*;
-                    let select = |form: TermFormExtended| {
-                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
-                    };
-                    // If an And token shows up, we already know self.name_el.and is Some.
-                    let form = match self.name_el.and {
-                        Some(NameAnd::Symbol) => "&",
-                        // locale
-                        //     .get_text_term(select(TermFormExtended::Symbol), false)
-                        //     .unwrap_or("&"),
-                        _ => and_term.map(|x| x.as_ref()).unwrap_or("and"),
-                    };
-                    let mut string = form.to_owned();
-                    string.push(' ');
-                    NameTokenBuilt::Built(fmt.text_node(string, None))
-                }
-            }))
+                    NameToken::Delimiter => {
+                        NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
+                            fmt.plain(&delim.0)
+                        } else {
+                            fmt.plain(", ")
+                        })
+                    }
+                    NameToken::EtAl(text, formatting) => {
+                        if is_sort_key {
+                            return None;
+                        }
+                        NameTokenBuilt::Built(fmt.text_node(text.to_string(), *formatting))
+                    }
+                    NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
+                    NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
+                    NameToken::And => {
+                        use csl::terms::*;
+                        let select = |form: TermFormExtended| {
+                            TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
+                        };
+                        // If an And token shows up, we already know self.name_el.and is Some.
+                        let form = match self.name_el.and {
+                            Some(NameAnd::Symbol) => "&",
+                            // locale
+                            //     .get_text_term(select(TermFormExtended::Symbol), false)
+                            //     .unwrap_or("&"),
+                            _ => and_term.map(|x| x.as_ref()).unwrap_or("and"),
+                        };
+                        let mut string = form.to_owned();
+                        string.push(' ');
+                        NameTokenBuilt::Built(fmt.text_node(string, None))
+                    }
+                })
+            })
             .collect()
     }
 }
@@ -1145,11 +1190,7 @@ mod ord {
     }
 
     /// [Jean] [de] [La] [Fontaine] [III]
-    static LATIN_LONG: DisplayOrdering = &[
-        Given,
-        Space,
-        FamilyFull,
-    ];
+    static LATIN_LONG: DisplayOrdering = &[Given, Space, FamilyFull];
     /// [La] [Fontaine], [Jean] [de], [III]
     static LATIN_LONG_NASO: DisplayOrdering = &[
         FamilyDropped,
@@ -1159,13 +1200,8 @@ mod ord {
         Suffix,
     ];
     /// [Fontaine], [Jean] [de] [La], [III]
-    static LATIN_LONG_NASO_DEMOTED: DisplayOrdering = &[
-        Family,
-        SortSeparator,
-        GivenAndBoth,
-        SortSeparator,
-        Suffix,
-    ];
+    static LATIN_LONG_NASO_DEMOTED: DisplayOrdering =
+        &[Family, SortSeparator, GivenAndBoth, SortSeparator, Suffix];
     /// [La] [Fontaine]
     static LATIN_SHORT: DisplayOrdering = &[FamilyDropped];
 
@@ -1198,5 +1234,8 @@ mod ord {
 }
 
 fn should_append_space(s: &str) -> bool {
-    !s.chars().rev().nth(0).map_or(true, |last| last == '\u{2019}' || last == '-')
+    !s.chars()
+        .rev()
+        .nth(0)
+        .map_or(true, |last| last == '\u{2019}' || last == '-')
 }
