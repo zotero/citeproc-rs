@@ -15,7 +15,7 @@ ucd-trie = "0.1.2"
 petgraph = "0.4.13"
 generational-arena = "0.2.2"
 cfg-if = "0.1.9"
-salsa = "0.13.0"
+salsa = "0.15.2"
 citeproc-db = { path = "../db" }
 strum = "0.15.0"
 log = "0.4.8"
