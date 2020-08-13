@@ -854,6 +854,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             None => fmt.text_node(s.into(), None),
             Some(ref part) => {
                 let NamePart {
+                    // TODO: need to set text case on name parts.
                     text_case,
                     formatting,
                     // Don't apply affixes here; that has to be done separately for the weirdo
@@ -862,12 +863,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 } = *part;
                 // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
                 // want InlineElement::Text but with text-casing applied.
-                // let options = IngestOptions {
-                //     text_case: part.text_case,
-                //     ..Default::default()
-                // };
+                let options = IngestOptions {
+                    text_case,
+                    ..Default::default()
+                };
                 let mut b = fmt.text_node(s.into(), None);
-                // fmt.apply_text_case(&mut b, &options);
+                fmt.apply_text_case(&mut b, &options);
                 fmt.with_format(b, formatting)
             }
         }
@@ -892,7 +893,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 | NamePartToken::GivenAndDropping
                 | NamePartToken::GivenAndBoth => {
                     if let Some(ref given) = pn.given {
-                        let name_part = &self.name_el.name_part_given;
+                        let given_part = &self.name_el.name_part_given;
                         let family_part = &self.name_el.name_part_family;
                         let mut parts = Vec::new();
                         // TODO: parametrize for disambiguation
@@ -907,11 +908,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             },
                             self.initialize_with_hyphen,
                         );
-                        parts.push(self.format_with_part(name_part, initialized));
+                        parts.push(self.format_with_part(given_part, initialized));
                         if token != NamePartToken::Given {
                             if let Some(dp) = pn.dropping_particle.as_ref() {
                                 parts.push(fmt.plain(" "));
-                                parts.push(self.format_with_part(name_part, dp));
+                                parts.push(self.format_with_part(given_part, dp));
                             }
                         }
                         if token == NamePartToken::GivenAndBoth {
@@ -922,7 +923,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         }
                         let b = fmt.group(parts, "", None);
                         build.push(
-                            fmt.affixed(b, name_part.as_ref().map_or(None, |p| p.affixes.as_ref())),
+                            fmt.affixed(b, given_part.as_ref().map_or(None, |p| p.affixes.as_ref())),
                         );
                     }
                 }
@@ -930,7 +931,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 | NamePartToken::FamilyDropped
                 | NamePartToken::FamilyFull => {
                     let family_part = &self.name_el.name_part_family;
-                    let given_part = &self.name_el.name_part_family;
+                    let given_part = &self.name_el.name_part_given;
                     let fam = pn.family.as_ref().unwrap();
                     let dp = pn
                         .dropping_particle
@@ -944,12 +945,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         .suffix
                         .as_ref()
                         .filter(|_| token == NamePartToken::FamilyFull);
-                    let mut string = String::with_capacity(
+                    let string = String::with_capacity(
                         fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()),
                     );
                     let mut parts = Vec::new();
                     if let Some(dp) = dp {
-                        let mut string = dp.clone();
+                        let string = dp.clone();
                         parts.push(self.format_with_part(given_part, string));
                         if should_append_space(dp) {
                             parts.push(fmt.plain(" "));
@@ -957,7 +958,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     }
                     let mut casing = Vec::new();
                     if let Some(ndp) = ndp {
-                        let mut string = ndp.clone();
+                        let string = ndp.clone();
                         casing.push(self.format_with_part(family_part, string));
                         if should_append_space(ndp) {
                             casing.push(fmt.plain(" "));
