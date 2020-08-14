@@ -298,11 +298,6 @@ pub struct IrNameCounter<O: OutputFormat> {
     pub group_vars: GroupVars,
 }
 
-#[derive(Debug, Clone)]
-pub struct RefIrNameCounter {
-    name_irs: Vec<RefNameIR>,
-}
-
 impl<O: OutputFormat> IrNameCounter<O> {
     pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'_, O, I>) -> u32 {
         self.name_irs
@@ -327,18 +322,22 @@ impl<O: OutputFormat> IrNameCounter<O> {
     }
 }
 
-impl RefIrNameCounter {
-    fn count(&self) -> u32 {
-        500
-    }
-    pub fn render_ref(&self, db: &dyn IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
-        let count = self.count();
-        let fmt = ctx.format;
-        let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);
-        let edge = db.edge(EdgeData::<Markup>::Output(out));
-        (RefIR::Edge(Some(edge)), GroupVars::Important)
-    }
-}
+// #[derive(Debug, Clone)]
+// pub struct RefIrNameCounter {
+//     name_irs: Vec<RefNameIR>,
+// }
+// impl RefIrNameCounter {
+//     fn count(&self) -> u32 {
+//         500
+//     }
+//     pub fn render_ref(&self, db: &dyn IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
+//         let count = self.count();
+//         let fmt = ctx.format;
+//         let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);
+//         let edge = db.edge(EdgeData::<Markup>::Output(out));
+//         (RefIR::Edge(Some(edge)), GroupVars::Important)
+//     }
+// }
 
 impl<O> IR<O>
 where

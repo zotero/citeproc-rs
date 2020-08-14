@@ -143,6 +143,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     if is_editor_translator && !editortranslator_term_empty {
         let ed_val = refr.name.get(&NameVariable::Editor);
         let tr_val = refr.name.get(&NameVariable::Translator);
+        let _x = 5;
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
             // identical
             if ed == tr {
@@ -467,7 +468,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
                 }
                 NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
                     runner.name_el = &pn.data.el;
-                    let mut ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
+                    let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
                     runner.name_el = &names_inheritance.name;
                     Some(maybe_subst(ret))
                 }
@@ -945,9 +946,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         .suffix
                         .as_ref()
                         .filter(|_| token == NamePartToken::FamilyFull);
-                    let string = String::with_capacity(
-                        fam.len() + 2 + dp.map_or(0, |x| x.len()) + ndp.map_or(0, |x| x.len()),
-                    );
                     let mut parts = Vec::new();
                     if let Some(dp) = dp {
                         let string = dp.clone();

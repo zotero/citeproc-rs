@@ -771,7 +771,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
     sas: &str,
     sas_rule: SasRule,
 ) -> bool {
-    let mut pre = previous.lock().unwrap();
+    let pre = previous.lock().unwrap();
     let mut cur = current.lock().unwrap();
     let pre_tokens = pre.iter_bib_rendered_names(fmt);
     let pre_reduced = pre_tokens
