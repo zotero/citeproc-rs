@@ -95,6 +95,18 @@ impl Driver {
         Ok(())
     }
 
+    /// Sets the references to be included in the bibliography despite not being directly cited.
+    ///
+    /// * `refr` is a
+    #[wasm_bindgen(js_name = "includeUncited")]
+    pub fn include_uncited(&mut self, uncited: TIncludeUncited) -> Result<(), JsValue> {
+        let uncited = uncited
+            .into_serde()
+            .map_err(|_| ErrorPlaceholder::throw("could not parse IncludeUncited from host"))?;
+        self.engine.borrow_mut().include_uncited(uncited);
+        Ok(())
+    }
+
     fn serde_result<T>(&self, f: impl Fn(&Processor) -> T) -> Result<JsValue, JsValue>
     where
         T: Serialize,
@@ -243,10 +255,10 @@ impl Driver {
     ///
     /// * returns an `UpdateSummary`
     #[wasm_bindgen(js_name = "batchedUpdates")]
-    pub fn batched_updates(&self) -> JsValue {
+    pub fn batched_updates(&self) -> TUpdateSummary {
         let eng = self.engine.borrow();
         let summary = eng.batched_updates();
-        JsValue::from_serde(&summary).unwrap()
+        TUpdateSummary::from(JsValue::from_serde(&summary).unwrap())
     }
 
     /// Drains the `batchedUpdates` queue manually. Use it to avoid serializing an unneeded
@@ -401,8 +413,16 @@ type Invalid = {
 };
 type StyleError = Partial<ParseError & Invalid>;
 
-
+type IncludeUncited = "None" | "All" | { Specific: string[] };
 "#;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "UpdateSummary")]
+    pub type TUpdateSummary;
+    #[wasm_bindgen(typescript_type = "IncludeUncited")]
+    pub type TIncludeUncited;
+}
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
 async fn fetch_all(inner: &Lifecycle, langs: Vec<Lang>) -> Vec<(Lang, String)> {
