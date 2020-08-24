@@ -80,12 +80,18 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
 
     let mut citation_numbers = FnvHashMap::default();
 
-    // only the references that exist go in the bibliography
+    // Construct preordered, which will then be stably sorted. It contains:
+    // - All refs from all cites, in the order they appear (excluding non-existent)
+    // - Then, all of the uncited reference ids.
+    // 
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
     let all_cite_ids = db.all_cite_ids();
+    let uncited_ordered = db.uncited_ordered();
     let mut preordered = Vec::with_capacity(all.len());
+
+    // Put all the cited refs in
     let mut i = 1;
     for &id in all_cite_ids.iter() {
         let ref_id = &id.lookup(db).ref_id;
@@ -95,8 +101,19 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
             i += 1;
         }
     }
+    // Then all the uncited ones
+    for id in uncited_ordered.iter() {
+        // guaranteed to be a valid reference id already.
+        // but may have duplicated an actual cite.
+        preordered.push(id.clone());
+        citation_numbers.insert(id.clone(), i as u32);
+        i += 1;
+    }
+
     let refs = if let Some(ref sort) = bib {
         // dbg!(sort);
+        // TODO: explore the sort_by_cached_key, but reimplement to have a closure sort function
+        // rather than Ord.
         preordered.sort_by(|a, b| {
             let a_cnum = citation_numbers.get(a).unwrap();
             let b_cnum = citation_numbers.get(b).unwrap();
@@ -120,7 +137,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         preordered
     } else {
         // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
-        // they are cited.
+        // they are cited. The uncited ones come last.
         preordered
     };
     for (i, ref_id) in refs.iter().enumerate() {

@@ -26,7 +26,8 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn all_uncited(&self) -> Arc<Uncited>;
     /// Filters out keys not in the library
-    fn uncited(&self) -> Arc<HashSet<Atom>>;
+    fn uncited_keys(&self) -> Arc<HashSet<Atom>>;
+    fn uncited_ordered(&self) -> Arc<Vec<Atom>>;
 
     /// Filters out keys not in the library
     fn cited_keys(&self) -> Arc<HashSet<Atom>>;
@@ -118,24 +119,51 @@ pub enum Uncited {
     All,
     /// A set of reference IDs, merged with the known references, to appear in the bibliography no
     /// matter what.
-    Enumerated(HashSet<Atom>),
+    Enumerated(Vec<Atom>),
 }
 
 /// Default is to have no uncited references present in bibliography.
 impl Default for Uncited {
     fn default() -> Self {
-        Uncited::Enumerated(HashSet::new())
+        Uncited::Enumerated(Vec::new())
     }
 }
 
 // make sure there are no keys we wouldn't recognise
-fn uncited(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
+fn uncited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let all = db.all_keys();
     let uncited = db.all_uncited();
     match &*uncited {
         Uncited::All => all.clone(),
         Uncited::Enumerated(specific) => {
-            Arc::new(all.intersection(&specific).cloned().collect())
+            let mut all = (*all).clone();
+            for id in specific.iter() {
+                all.insert(id.clone());
+            }
+            Arc::new(all)
+        }
+    }
+}
+
+fn uncited_ordered(db: &dyn CiteDatabase) -> Arc<Vec<Atom>> {
+    let all = db.all_keys();
+    let cited = db.cited_keys();
+    let uncited = db.all_uncited();
+    match &*uncited {
+        Uncited::All => {
+            // Determinism for year suffixes: sort by key id.
+            let remainder = all.difference(&cited).cloned();
+            let mut list: Vec<_> = remainder.collect();
+            list.sort();
+            Arc::new(list)
+        }
+        Uncited::Enumerated(list) => {
+            let list = list
+                .iter()
+                .filter(|&x| !cited.contains(x) && all.contains(x))
+                .cloned()
+                .collect();
+            Arc::new(list)
         }
     }
 }
@@ -154,7 +182,7 @@ fn cited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
 
 fn disamb_participants(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let cited = db.cited_keys();
-    let uncited = db.uncited();
+    let uncited = db.uncited_keys();
     // make sure there are no keys we wouldn't recognise
     let merged = cited.union(&uncited).cloned().collect();
     Arc::new(merged)
@@ -187,9 +215,7 @@ fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
         .iter()
         // No number? Not considered to be in document, position participant.
         // Although may be disamb participant.
-        .filter_map(|&id| {
-            get_cluster_data(db, id)
-        })
+        .filter_map(|&id| get_cluster_data(db, id))
         .collect();
     clusters.sort_by_key(|cluster| cluster.number);
     Arc::new(clusters)
@@ -205,11 +231,9 @@ fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
 }
 
 pub fn get_cluster_data(db: &dyn CiteDatabase, id: ClusterId) -> Option<ClusterData> {
-    db.cluster_note_number(id)
-        .map(|number| ClusterData {
-            id,
-            number,
-            cites: db.cluster_cites(id),
-        })
+    db.cluster_note_number(id).map(|number| ClusterData {
+        id,
+        number,
+        cites: db.cluster_cites(id),
+    })
 }
-

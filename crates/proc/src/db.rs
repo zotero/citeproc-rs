@@ -283,7 +283,7 @@ fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
             "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
             ref_id
         );
-        // For uncited reference ids, we assign them year-suffixes after the rest.
+        // Let's not fail, just give it one after the rest.
         std::u32::MAX
     }
 }
