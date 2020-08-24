@@ -24,7 +24,7 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn all_keys(&self) -> Arc<HashSet<Atom>>;
 
     #[salsa::input]
-    fn all_uncited(&self) -> Arc<HashSet<Atom>>;
+    fn all_uncited(&self) -> Arc<Uncited>;
     /// Filters out keys not in the library
     fn uncited(&self) -> Arc<HashSet<Atom>>;
 
@@ -110,12 +110,34 @@ fn locale_by_reference(db: &dyn CiteDatabase, ref_id: Atom) -> Arc<Locale> {
         .unwrap_or_else(|| db.default_locale())
 }
 
+/// Type to represent which references should appear in a bibiliography even if they are not cited
+/// in the document. The default is that references only appear if they are cited.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Uncited {
+    /// Every single reference known to citeproc-rs will appear in the bibliography.
+    All,
+    /// A set of reference IDs, merged with the known references, to appear in the bibliography no
+    /// matter what.
+    Enumerated(HashSet<Atom>),
+}
+
+/// Default is to have no uncited references present in bibliography.
+impl Default for Uncited {
+    fn default() -> Self {
+        Uncited::Enumerated(HashSet::new())
+    }
+}
+
 // make sure there are no keys we wouldn't recognise
 fn uncited(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let all = db.all_keys();
     let uncited = db.all_uncited();
-    let merged = all.intersection(&uncited).cloned().collect();
-    Arc::new(merged)
+    match &*uncited {
+        Uncited::All => all.clone(),
+        Uncited::Enumerated(specific) => {
+            Arc::new(all.intersection(&specific).cloned().collect())
+        }
+    }
 }
 
 fn cited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {

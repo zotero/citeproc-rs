@@ -8,17 +8,15 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::enum_variant_names)]
 
-pub mod update;
-
-#[cfg(test)]
-mod test;
-
 use crate::prelude::*;
 
-use self::update::{
-    BibliographyMeta, BibliographyUpdate, DocUpdate, SecondFieldAlign, UpdateSummary,
+use crate::api::{
+    BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
+    UpdateSummary,
 };
-use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
+use citeproc_db::{
+    CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
+};
 use citeproc_proc::db::IrDatabaseStorage;
 
 use salsa::Durability;
@@ -77,7 +75,6 @@ pub struct Processor {
 
 /// This impl tells salsa where to find the salsa runtime.
 impl salsa::Database for Processor {
-
     /// A way to extract imperative update sequences from a "here's the entire world" API. An
     /// editor might require simple instructions to update a document; modify this footnote,
     /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
@@ -87,16 +84,24 @@ impl salsa::Database for Processor {
             return;
         }
         use salsa::EventKind::*;
-        if let WillExecute { database_key: db_key } = event.kind {
+        if let WillExecute {
+            database_key: db_key,
+        } = event.kind
+        {
             use citeproc_proc::db::BuiltClusterQuery;
             if db_key.group_index() == IR_GROUP_INDEX
-                && db_key.query_index() == <BuiltClusterQuery as salsa::Query>::QUERY_INDEX {
-
+                && db_key.query_index() == <BuiltClusterQuery as salsa::Query>::QUERY_INDEX
+            {
                 // TODO: this is a massive hack. Get a key index lookup function into Salsa.
                 let formatted = format!("{:?}", db_key.debug(self));
                 // The format is "built_cluster(123)".
                 // log::error!("{:?}", db_key.debug(self));
-                let id: u32 = formatted.strip_prefix("built_cluster(").unwrap().trim_end_matches(')').parse().unwrap();
+                let id: u32 = formatted
+                    .strip_prefix("built_cluster(")
+                    .unwrap()
+                    .trim_end_matches(')')
+                    .parse()
+                    .unwrap();
 
                 let mut q = self.queue.lock().unwrap();
                 let upd = DocUpdate::Cluster(id);
@@ -141,38 +146,6 @@ struct Snap(pub salsa::Snapshot<Processor>);
 impl Clone for Snap {
     fn clone(&self) -> Self {
         Snap(self.0.snapshot())
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum SupportedFormat {
-    Html,
-    Rtf,
-    Plain,
-    TestHtml,
-}
-
-impl FromStr for SupportedFormat {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "html" => Ok(SupportedFormat::Html),
-            "rtf" => Ok(SupportedFormat::Rtf),
-            "plain" => Ok(SupportedFormat::Plain),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        use serde::de::Error as DeError;
-        SupportedFormat::from_str(s.as_str())
-            .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
     }
 }
 
@@ -316,6 +289,17 @@ impl Processor {
 
     pub fn insert_reference(&mut self, refr: Reference) {
         self.set_references(vec![refr])
+    }
+
+    pub fn include_uncited(&mut self, uncited: IncludeUncited) {
+        let db_uncited = match uncited {
+            IncludeUncited::All => Uncited::All,
+            IncludeUncited::None => Uncited::default(),
+            IncludeUncited::Specific(list) => {
+                Uncited::Enumerated(list.iter().map(String::as_str).map(Atom::from).collect())
+            }
+        };
+        self.set_all_uncited(Arc::new(db_uncited));
     }
 
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {

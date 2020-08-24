@@ -10,6 +10,7 @@ use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
 use citeproc_proc::db::IrDatabase;
 use std::sync::Arc;
+use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum DocUpdate {
@@ -93,3 +94,52 @@ impl UpdateSummary {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, Ord, PartialOrd, PartialEq)]
+pub enum IncludeUncited {
+    /// The default
+    None,
+    /// All references, cited or not, are included in the bibliography.
+    All,
+    /// Specifically these references are included in the bibliography whether cited or not.
+    Specific(Vec<String>),
+}
+
+impl Default for IncludeUncited {
+    fn default() -> Self {
+        IncludeUncited::None
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum SupportedFormat {
+    Html,
+    Rtf,
+    Plain,
+    TestHtml,
+}
+
+impl FromStr for SupportedFormat {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "html" => Ok(SupportedFormat::Html),
+            "rtf" => Ok(SupportedFormat::Rtf),
+            "plain" => Ok(SupportedFormat::Plain),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        use serde::de::Error as DeError;
+        SupportedFormat::from_str(s.as_str())
+            .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
+    }
+}
+

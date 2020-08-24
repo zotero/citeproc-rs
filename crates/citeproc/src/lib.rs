@@ -9,13 +9,18 @@ extern crate serde_derive;
 // #[macro_use]
 // extern crate log;
 
-pub(crate) mod db;
-pub use self::db::update::{DocUpdate, UpdateSummary};
-pub use self::db::{ErrorKind, Processor};
+pub(crate) mod processor;
+pub(crate) mod api;
+
+#[cfg(test)]
+mod test;
+
+pub use self::api::{DocUpdate, UpdateSummary, IncludeUncited, SupportedFormat};
+pub use self::processor::{ErrorKind, Processor};
 
 pub mod prelude {
-    pub use crate::db::update::{DocUpdate, UpdateSummary};
-    pub use crate::db::{Processor, SupportedFormat};
+    pub use crate::api::{DocUpdate, UpdateSummary, IncludeUncited, SupportedFormat};
+    pub use crate::processor::Processor;
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };
