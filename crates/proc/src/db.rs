@@ -15,7 +15,7 @@ use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
-use citeproc_db::ClusterData;
+use citeproc_db::{ClusterData, CiteData};
 use citeproc_io::{ClusterNumber, IntraNote};
 use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
 use std::sync::Mutex;
@@ -215,10 +215,16 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 
     // TODO: sort based on the bibliography's sort mechanism, not just document order
     let all_cites_ordered = db.all_cite_ids();
+    let uncited_ordered = db.uncited_ordered();
     all_cites_ordered
         .iter()
         .map(|id| (*id, id.lookup(db)))
         .map(|(id, cite)| (cite.ref_id.clone(), db.ir_gen2_add_given_name(id)))
+        .chain(uncited_ordered.iter().map(|id| {
+            let cite = db.ghost_cite(id.clone());
+            let cite_id = db.cite(CiteData::BibliographyGhost { cite });
+            (id.clone(), db.ir_gen2_add_given_name(cite_id))
+        }))
         .for_each(|(ref_id, ir2)| {
             if ir2.unambiguous() {
                 // no need to check if own id is in a group, it will receive a suffix already
@@ -372,8 +378,8 @@ fn is_unambiguous(
 ) -> bool {
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut n = 0;
-    for k in db.cited_keys().iter() {
-        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+    for k in db.disamb_participants().iter() {
+        let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
         let acc = dfa.accepts_data(db, &edges);
         if acc {
             n += 1;
@@ -394,8 +400,8 @@ fn refs_accepting_cite<O: OutputFormat>(
     use log::Level::{Info, Warn};
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut v = Vec::with_capacity(1);
-    for k in db.cited_keys().iter() {
-        let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+    for k in db.disamb_participants().iter() {
+        let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
         let acc = dfa.accepts_data(db, &edges);
         if acc {
             v.push(k.clone());
@@ -547,7 +553,7 @@ fn disambiguate_add_names(
         }
         let mut dfas = Vec::with_capacity(best as usize);
         for k in &initial_refs {
-            let dfa = db.ref_dfa(k.clone()).expect("cited_keys should all exist");
+            let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
             dfas.push(dfa);
         }
 
@@ -730,6 +736,7 @@ fn disambiguate_add_year_suffix(
     ir.recompute_group_vars()
 }
 
+#[inline(never)]
 fn disambiguate_true(
     db: &dyn IrDatabase,
     ir: &mut IR<Markup>,
@@ -1532,7 +1539,8 @@ fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
     if let Some(x) = db.cite_positions().get(&key) {
         *x
     } else {
-        panic!("called cite_position on unknown cite id, {:?}", key);
+        // Assume this cite is a ghost cite.
+        (Position::First, None)
     }
 }
 

@@ -51,8 +51,13 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
     fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
 
+    /// Create ghost cites for disambiguation only as needed.
+    /// These are subsequently interned into CiteIds.
+    fn ghost_cite(&self, ref_id: Atom) -> Arc<Cite<Markup>>;
+
     #[salsa::interned]
-    fn cite(&self, cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>>) -> CiteId;
+    fn cite(&self, data: CiteData) -> CiteId;
+
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
 
@@ -79,9 +84,25 @@ intern_key!(pub CiteId);
 
 impl CiteId {
     pub fn lookup<DB: CiteDatabase + ?Sized>(self, db: &DB) -> Arc<Cite<Markup>> {
-        let (_cluster_id, _index, cite) = db.lookup_cite(self);
-        cite
+        match db.lookup_cite(self) {
+            CiteData::RealCite { cite, .. } => cite,
+            CiteData::BibliographyGhost { cite, .. } => cite,
+        }
     }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub enum CiteData {
+    /// This represents an actual cite in an actual cluster in the document.
+    RealCite { cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>> },
+    /// These are created as necessary when uncited items need to be rendered for disambiguation.
+    /// The Arc<Cite> is the null object pattern, used merely to hold a reference id but keep the
+    /// cite IR rendering identical for ghost and real cites.
+    BibliographyGhost { cite: Arc<Cite<Markup>>, },
+}
+
+fn ghost_cite(_db: &dyn CiteDatabase, ref_id: Atom) -> Arc<Cite<Markup>> {
+    Arc::new(Cite::basic(ref_id))
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -136,11 +157,13 @@ fn uncited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     match &*uncited {
         Uncited::All => all.clone(),
         Uncited::Enumerated(specific) => {
-            let mut all = (*all).clone();
-            for id in specific.iter() {
-                all.insert(id.clone());
+            let mut set = HashSet::with_capacity(specific.len());
+            for key in specific {
+                if all.contains(key) {
+                    set.insert(key.clone());
+                }
             }
-            Arc::new(all)
+            Arc::new(set)
         }
     }
 }

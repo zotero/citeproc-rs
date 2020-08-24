@@ -16,6 +16,7 @@ use crate::api::{
 };
 use citeproc_db::{
     CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
+    CiteData,
 };
 use citeproc_proc::db::IrDatabaseStorage;
 
@@ -311,7 +312,11 @@ impl Processor {
             } = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
+                let cite_id = self.cite(CiteData::RealCite {
+                    cluster: cluster_id,
+                    index: index as u32,
+                    cite: Arc::new(cite),
+                });
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
@@ -350,7 +355,11 @@ impl Processor {
 
         let mut ids = Vec::new();
         for (index, cite) in cites.iter().enumerate() {
-            let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
+            let cite_id = self.cite(CiteData::RealCite {
+                cluster: cluster_id,
+                index: index as u32,
+                cite: Arc::new(cite.clone()),
+            });
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
