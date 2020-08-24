@@ -359,7 +359,7 @@ export type Cite<Affix = string> = {
     prefix?: Affix;
     suffix?: Affix;
     suppression?: "InText" | "Rest" | null;
-} & CiteLocator;
+} & Partial<CiteLocator>;
 
 export type ClusterNumber = {
     note: number | [number, number]

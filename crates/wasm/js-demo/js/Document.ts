@@ -1,5 +1,5 @@
-import { Reference, Cite, Cluster, ClusterPosition, Driver, UpdateSummary, Lifecycle } from '../../pkg';
-import { produce, immerable, Draft, IProduce } from 'immer';
+import { Reference, Cite, Cluster, ClusterPosition, Driver, UpdateSummary, IncludeUncited } from '../../pkg';
+import { produce, immerable, Draft } from 'immer';
 
 export type ClusterId = number;
 export type CiteId = number;
@@ -95,13 +95,13 @@ export class Document {
 
     /** The internal document model */
     public clusters: Cluster[];
+    public includeUncited: IncludeUncited = "None";
 
     public rendered: RenderedDocument;
 
     private refCounts: RefCounter;
 
     private nextClusterId = 100;
-    private nextCiteId = 100;
 
     constructor(clusters: Cluster[], driver?: Driver) {
         this.refCounts = new RefCounter(
@@ -130,6 +130,7 @@ export class Document {
         this.driver = driver;
         driver.initClusters(this.clusters);
         driver.setClusterOrder(this.clusterPositions());
+        driver.includeUncited(this.includeUncited);
         this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
         // Drain the update queue, because we know we're up to date
         this.driver.drain();
@@ -159,6 +160,16 @@ export class Document {
     clusterPositions(): Array<ClusterPosition> {
         // Simple but good for a demo: one note number per cluster.
         return this.clusters.map((c, i) => ({ id: c.id, note: i + 1 }));
+    }
+
+    ///////////////////
+    // Uncited items //
+    ///////////////////
+
+
+    setIncludeUncited(uncited: IncludeUncited) {
+        this.includeUncited = uncited;
+        this.driver.includeUncited(this.includeUncited);
     }
 
     //////////////
