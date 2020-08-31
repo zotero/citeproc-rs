@@ -25,8 +25,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     #[salsa::input]
     fn all_uncited(&self) -> Arc<Uncited>;
-    /// Filters out keys not in the library
-    fn uncited_keys(&self) -> Arc<HashSet<Atom>>;
     fn uncited_ordered(&self) -> Arc<Vec<Atom>>;
 
     /// Filters out keys not in the library
@@ -150,24 +148,6 @@ impl Default for Uncited {
     }
 }
 
-// make sure there are no keys we wouldn't recognise
-fn uncited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
-    let all = db.all_keys();
-    let uncited = db.all_uncited();
-    match &*uncited {
-        Uncited::All => all.clone(),
-        Uncited::Enumerated(specific) => {
-            let mut set = HashSet::with_capacity(specific.len());
-            for key in specific {
-                if all.contains(key) {
-                    set.insert(key.clone());
-                }
-            }
-            Arc::new(set)
-        }
-    }
-}
-
 fn uncited_ordered(db: &dyn CiteDatabase) -> Arc<Vec<Atom>> {
     let all = db.all_keys();
     let cited = db.cited_keys();
@@ -205,10 +185,22 @@ fn cited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
 
 fn disamb_participants(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
     let cited = db.cited_keys();
-    let uncited = db.uncited_keys();
-    // make sure there are no keys we wouldn't recognise
-    let merged = cited.union(&uncited).cloned().collect();
-    Arc::new(merged)
+    let all = db.all_keys();
+    let uncited = db.all_uncited();
+    match &*uncited {
+        Uncited::All => all.clone(),
+        Uncited::Enumerated(specific) => {
+            let mut merged = HashSet::with_capacity(cited.len() + specific.len());
+            merged.extend(cited.iter().cloned());
+            for key in specific {
+                // make sure there are no keys we wouldn't recognise
+                if all.contains(key) {
+                    merged.insert(key.clone());
+                }
+            }
+            Arc::new(merged)
+        }
+    }
 }
 
 use citeproc_io::Name;

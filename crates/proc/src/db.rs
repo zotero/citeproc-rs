@@ -188,9 +188,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         return Arc::new(FnvHashMap::default());
     }
 
-    type Group = FnvHashSet<Atom>;
-
-    let mut groups: Vec<_> = db
+    let mut groups: Vec<FnvHashSet<Atom>> = db
         .all_keys()
         .iter()
         .cloned()
@@ -213,25 +211,26 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 
     use std::mem;
 
-    // TODO: sort based on the bibliography's sort mechanism, not just document order
-    let all_cites_ordered = db.all_cite_ids();
-    let uncited_ordered = db.uncited_ordered();
-    all_cites_ordered
+    // This gives us year allocations in the order they appear in the bibliography. This is how
+    // the spec wants, and conveniently it is also a deterministic ordering of
+    // disamb_participants that by default reflects the order they were cited and the uncited
+    // ones last.
+    let sorted_refs = db.sorted_refs();
+    let (refs, _citation_numbers) = &*sorted_refs;
+    refs
         .iter()
-        .map(|id| (*id, id.lookup(db)))
-        .map(|(id, cite)| (cite.ref_id.clone(), db.ir_gen2_add_given_name(id)))
-        .chain(uncited_ordered.iter().map(|id| {
+        .map(|id| {
             let cite = db.ghost_cite(id.clone());
             let cite_id = db.cite(CiteData::BibliographyGhost { cite });
             (id.clone(), db.ir_gen2_add_given_name(cite_id))
-        }))
+        })
         .for_each(|(ref_id, ir2)| {
             if ir2.unambiguous() {
                 // no need to check if own id is in a group, it will receive a suffix already
             } else {
                 // we make sure ref_id is included, even if there was a bug with RefIR and a
                 // cite didn't match its own reference
-                let mut coalesce: Option<(usize, Group)> = None;
+                let mut coalesce: Option<(usize, FnvHashSet<Atom>)> = None;
                 for (n, group) in groups.iter_mut().enumerate() {
                     if group.contains(&ref_id) || intersects(group, &ir2.matching_refs) {
                         group.insert(ref_id.clone());
