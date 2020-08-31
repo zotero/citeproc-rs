@@ -368,14 +368,22 @@ where
             (IR::Seq(s), IR::Seq(o)) if s == o => true,
             (IR::YearSuffix(s), IR::YearSuffix(o)) if s == o => true,
             (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) => {
-                let aa = a.lock().unwrap();
-                let bb = b.lock().unwrap();
-                *aa == *bb
+                if Arc::ptr_eq(a, b) {
+                    true
+                } else {
+                    let aa = a.lock().unwrap();
+                    let bb = b.lock().unwrap();
+                    *aa == *bb
+                }
             }
             (IR::Name(self_nir), IR::Name(other_nir)) => {
-                let s = self_nir.lock().unwrap();
-                let o = other_nir.lock().unwrap();
-                *s == *o
+                if Arc::ptr_eq(self_nir, other_nir) {
+                    true
+                } else {
+                    let s = self_nir.lock().unwrap();
+                    let o = other_nir.lock().unwrap();
+                    *s == *o
+                }
             }
             _ => false,
         }
