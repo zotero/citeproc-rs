@@ -39,7 +39,7 @@ impl CitationItem {
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster { id: index, cites }
+        Cluster { id: index + 1, cites }
     }
 }
 
@@ -252,7 +252,7 @@ impl JsExecutor<'_> {
             cluster_ids_mapping: HashMap::new(),
             current_note_numbers: HashMap::new(),
             proc,
-            next_id: 0,
+            next_id: 1,
         }
     }
     fn get_id(&mut self, string_id: &str) -> ClusterId {
