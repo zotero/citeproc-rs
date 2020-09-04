@@ -149,6 +149,15 @@ impl Clone for Snap {
     }
 }
 
+fn markup_supported(format: SupportedFormat) -> Markup {
+    match format {
+        SupportedFormat::Html => Markup::html(),
+        SupportedFormat::Rtf => Markup::rtf(),
+        SupportedFormat::Plain => Markup::plain(),
+        SupportedFormat::TestHtml => Markup::test_html(),
+    }
+}
+
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut db = Processor {
@@ -171,12 +180,7 @@ impl Processor {
     ) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
         db.save_updates = save_updates;
-        db.formatter = match format {
-            SupportedFormat::Html => Markup::html(),
-            SupportedFormat::Rtf => Markup::rtf(),
-            SupportedFormat::Plain => Markup::plain(),
-            SupportedFormat::TestHtml => Markup::test_html(),
-        };
+        db.formatter = markup_supported(format);
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style_with_durability(style, Durability::MEDIUM);
         Ok(db)
@@ -579,11 +583,24 @@ impl Processor {
         self.set_cluster_ids(cluster_ids);
     }
 
-    /// `position` determines where the cluster is previewed.
+    /// Previews a citation as if it was inserted and positioned in the document.
+    ///
+    /// The position must be to either replace a single cluster, or to supply a complete document
+    /// re-ordering with exactly one id set to 0. If you supply a PreviewPosition::MarkWithZero
+    /// with only one position total, then it is as if the document only has one cluster. Prefer
+    /// generating a complete reordering, with one position edited or inserted.
+    ///
+    /// Format defaults (if None) to the processor's native format, but may be set to another
+    /// format. Note this is output only, so any disambiguation specialisation for a particular
+    /// format's limitations/features is kept even though the output format is different. For
+    /// example, a native HTML processor (set with `Processor::new`) can disambiguate with italics,
+    /// but a native plain text processor cannot, and this will show up in whatever output format
+    /// is chosen here.
     pub fn preview_citation_cluster<'a>(
         &mut self,
         cites: Vec<Cite<Markup>>,
         position: PreviewPosition<'a>,
+        format: Option<SupportedFormat>,
     ) -> Result<Arc<MarkupOutput>, ErrorKind> {
         let (id, state) = match position {
             PreviewPosition::ReplaceCluster(cluster_id) => {
@@ -607,9 +624,10 @@ impl Processor {
             }
         };
         self.insert_cluster(Cluster { id, cites });
-        let markup = self.get_cluster(id);
+        let formatter = format.map(markup_supported).unwrap_or_else(|| self.formatter.clone());
+        let markup = citeproc_proc::db::built_cluster_preview(self, id, &formatter);
         self.restore_cluster_state(state);
-        markup.ok_or(ErrorKind::DidNotSupplyZeroPosition)
+        Ok(markup)
     }
 }
 
