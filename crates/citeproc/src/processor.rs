@@ -515,7 +515,6 @@ struct ClusterState {
     cluster_ids: Arc<Vec<ClusterId>>,
     relevant_one: Option<OneClusterState>,
     /// Unrelated to clusters but still has to be restored
-    save_updates: bool,
     old_positions: Option<Vec<(ClusterId, Option<ClusterNumber>)>>,
 }
 #[derive(Debug)]
@@ -553,7 +552,6 @@ impl Processor {
         ClusterState {
             cluster_ids,
             relevant_one,
-            save_updates: self.save_updates,
             old_positions: None,
         }
     }
@@ -562,7 +560,6 @@ impl Processor {
         let ClusterState {
             cluster_ids,
             relevant_one,
-            save_updates,
             old_positions,
         } = state;
         if let Some(OneClusterState {
@@ -580,7 +577,6 @@ impl Processor {
             }
         }
         self.set_cluster_ids(cluster_ids);
-        self.save_updates = save_updates;
     }
 
     /// `position` determines where the cluster is previewed.
@@ -598,10 +594,14 @@ impl Processor {
                 (cluster_id, self.save_cluster_state(Some(cluster_id)))
             }
             PreviewPosition::MarkWithZero(positions) => {
+                if positions.iter().filter(|pos| pos.id == 0).count() != 1 {
+                    return Err(ErrorKind::DidNotSupplyZeroPosition)
+                }
                 let mut vec = Vec::new();
                 // Save state first so we don't clobber its cluster_ids store
                 let mut state = self.save_cluster_state(None);
                 self.set_cluster_order_inner(positions, |id, num| vec.push((id, num)))?;
+                vec.push((0, None));
                 state.old_positions = Some(vec);
                 (0, state)
             }
@@ -609,7 +609,7 @@ impl Processor {
         self.insert_cluster(Cluster { id, cites });
         let markup = self.get_cluster(id);
         self.restore_cluster_state(state);
-        markup.ok_or(ErrorKind::NonMonotonicNoteNumber(12345))
+        markup.ok_or(ErrorKind::DidNotSupplyZeroPosition)
     }
 }
 
@@ -620,7 +620,7 @@ pub enum ErrorKind {
     )]
     NonMonotonicNoteNumber(u32),
     #[error(
-        "call to preview_citation_cluster did not provide an id=0 position"
+        "call to preview_citation_cluster must provide exactly one id=0 position"
     )]
     DidNotSupplyZeroPosition,
 }
@@ -630,13 +630,13 @@ impl Processor {
     /// order. You may insert as many clusters as you like, but the ones provided here are the only
     /// ones used.
     ///
-    /// If a piece does not provide a note, it is an in-text reference. Generally, this is what you
+    /// If a position does not provide a note, it is an in-text reference. Generally, this is what you
     /// should be providing for note styles, such that first-reference-note-number does not gain a
     /// value, but some users put in-text references inside footnotes, and it is unclear what the
     /// processor should do in this situation so you could try providing note numbers there as
     /// well.
     ///
-    /// If a piece provides a { note: N } field, then that N must be monotically increasing
+    /// If a position provides a { note: N } field, then that N must be monotically increasing
     /// throughout the document. Two same-N-in-a-row clusters means they occupy the same footnote,
     /// e.g. this would be two clusters:
     ///
@@ -649,21 +649,21 @@ impl Processor {
     /// them will all have the same first-reference-note-number if FRNN is used in later cites.
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
-    pub fn set_cluster_order(&mut self, pieces: &[ClusterPosition]) -> Result<(), ErrorKind> {
-        self.set_cluster_order_inner(pieces, |_, _| {})
+    pub fn set_cluster_order(&mut self, positions: &[ClusterPosition]) -> Result<(), ErrorKind> {
+        self.set_cluster_order_inner(positions, |_, _| {})
     }
     /// Variant of the above that allows logging the changes.
     pub fn set_cluster_order_inner(
         &mut self,
-        pieces: &[ClusterPosition],
+        positions: &[ClusterPosition],
         mut mods: impl FnMut(ClusterId, Option<ClusterNumber>),
     ) -> Result<(), ErrorKind> {
         let old_cluster_ids = self.cluster_ids();
-        let mut cluster_ids = Vec::with_capacity(pieces.len());
+        let mut cluster_ids = Vec::with_capacity(positions.len());
         let mut intext_number = 1u32;
         // (note number, next index)
         let mut this_note: Option<(u32, u32)> = None;
-        for piece in pieces {
+        for piece in positions {
             if let Some(nn) = piece.note {
                 if let Some(ref mut note) = this_note {
                     if nn < note.0 {

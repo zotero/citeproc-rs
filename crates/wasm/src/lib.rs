@@ -197,24 +197,30 @@ impl Driver {
             .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(e.description())))?)
     }
 
-    /// Returns the formatted citation cluster for `cluster_id`.
+    /// Previews a formatted citation cluster, in a particular position.
     ///
-    /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
-    /// still useful for initialization.
+    /// - `cites`: The cites to go in the cluster
+    /// - `positions`: An array of `ClusterPosition`s as in set_cluster_order, but with a single
+    ///   cluster's id set to zero. The cluster with id=0 is the position to preview the cite. It
+    ///   can replace another cluster, or be inserted before/after/between existing clusters, in
+    ///   any location you can think of.
+    ///
     #[wasm_bindgen(js_name = "previewCitationCluster")]
-    pub fn preview_citation_cluster(&mut self, cites: Box<[JsValue]>, pieces: Box<[JsValue]>) -> Result<JsValue, JsValue> {
+    pub fn preview_citation_cluster(
+        &mut self,
+        cites: Box<[JsValue]>,
+        positions: Box<[JsValue]>,
+    ) -> Result<JsValue, JsValue> {
         let cites: Vec<Cite<Markup>> = utils::read_js_array(cites)?;
-        let positions: Vec<ClusterPosition> = utils::read_js_array(pieces)?;
+        let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
-        let preview = eng.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(&positions));
+        let preview =
+            eng.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(&positions));
         preview
-            .map_err(|e| {
-                JsError::new(&e.to_string())
-            })
+            .map_err(|e| JsError::new(&e.to_string()))
             .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(&e.to_string())))
             .map_err(|e| e.into())
     }
-
 
     #[wasm_bindgen(js_name = "makeBibliography")]
     pub fn full_bibliography(&self) -> Result<JsValue, JsValue> {
@@ -278,10 +284,10 @@ impl Driver {
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     #[wasm_bindgen(js_name = "setClusterOrder")]
-    pub fn set_cluster_order(&mut self, pieces: Box<[JsValue]>) -> Result<(), JsValue> {
-        let pieces: Vec<ClusterPosition> = utils::read_js_array(pieces)?;
+    pub fn set_cluster_order(&mut self, positions: Box<[JsValue]>) -> Result<(), JsValue> {
+        let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
-        eng.set_cluster_order(&pieces)
+        eng.set_cluster_order(&positions)
             .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
         Ok(())
     }

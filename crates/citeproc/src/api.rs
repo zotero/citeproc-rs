@@ -8,6 +8,7 @@
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
+use super::Processor;
 use citeproc_proc::db::IrDatabase;
 use std::sync::Arc;
 use std::str::FromStr;
@@ -76,7 +77,7 @@ pub struct UpdateSummary<O: OutputFormat = Markup> {
 }
 
 impl UpdateSummary {
-    pub fn summarize(db: &dyn IrDatabase, updates: &[DocUpdate]) -> Self {
+    pub fn summarize(db: &Processor, updates: &[DocUpdate]) -> Self {
         let ids = updates.iter().map(|&u| match u {
             DocUpdate::Cluster(x) => x,
         });
@@ -86,7 +87,13 @@ impl UpdateSummary {
         }
         let mut clusters = Vec::with_capacity(set.len());
         for id in set {
-            clusters.push((id, db.built_cluster(id)));
+            if id == 0 {
+                // It's a dummy value for preview_citation_cluster.
+                continue;
+            }
+            if let Some(output) = db.get_cluster(id) {
+                clusters.push((id, output));
+            }
         }
         UpdateSummary {
             clusters,
