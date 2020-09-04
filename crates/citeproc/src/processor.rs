@@ -15,8 +15,7 @@ use crate::api::{
     UpdateSummary,
 };
 use citeproc_db::{
-    CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
-    CiteData,
+    CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
 use citeproc_proc::db::IrDatabaseStorage;
 
@@ -99,7 +98,7 @@ impl salsa::Database for Processor {
                 // log::error!("{:?}", db_key.debug(self));
                 let id: u32 = formatted
                     .strip_prefix("built_cluster(")
-                    .unwrap()
+                    .expect("Format of debug string for salsa events could not be parsed")
                     .trim_end_matches(')')
                     .parse()
                     .unwrap();
@@ -192,7 +191,9 @@ impl Processor {
     #[cfg(test)]
     pub fn test_db() -> Self {
         use citeproc_db::PredefinedLocales;
-        Processor::safe_default(Arc::new(PredefinedLocales(Default::default())))
+        let mut db = Processor::safe_default(Arc::new(PredefinedLocales::bundled_en_us()));
+        db.formatter = Markup::plain();
+        db
     }
 
     #[cfg(feature = "rayon")]
@@ -280,7 +281,11 @@ impl Processor {
     //         .unwrap_or(<Markup as OutputFormat>::Output::default())
     // }
 
-    pub fn set_references(&mut self, refs: Vec<Reference>) {
+    pub fn clear_references(&mut self) {
+        self.set_all_keys(Arc::new(HashSet::new()));
+    }
+
+    pub fn reset_references(&mut self, refs: Vec<Reference>) {
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
             self.set_reference_input(r.id.clone(), Arc::new(r));
@@ -288,8 +293,29 @@ impl Processor {
         self.set_all_keys(Arc::new(keys));
     }
 
+    pub fn extend_references(&mut self, refs: Vec<Reference>) {
+        let keys = self.all_keys();
+        let mut keys = HashSet::clone(&keys);
+        for r in refs {
+            keys.insert(r.id.clone());
+            self.set_reference_input(r.id.clone(), Arc::new(r));
+        }
+        self.set_all_keys(Arc::new(keys));
+    }
+
     pub fn insert_reference(&mut self, refr: Reference) {
-        self.set_references(vec![refr])
+        let keys = self.all_keys();
+        let mut keys = HashSet::clone(&keys);
+        keys.insert(refr.id.clone());
+        self.set_reference_input(refr.id.clone(), Arc::new(refr));
+        self.set_all_keys(Arc::new(keys));
+    }
+
+    pub fn remove_reference(&mut self, id: Atom) {
+        let keys = self.all_keys();
+        let mut keys = HashSet::clone(&keys);
+        keys.remove(&id);
+        self.set_all_keys(Arc::new(keys));
     }
 
     pub fn include_uncited(&mut self, uncited: IncludeUncited) {
@@ -351,6 +377,7 @@ impl Processor {
             let mut new_cluster_ids = (*cluster_ids).clone();
             new_cluster_ids.push(cluster_id);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
+            self.set_cluster_note_number(cluster_id, None);
         }
 
         let mut ids = Vec::new();
@@ -363,7 +390,6 @@ impl Processor {
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));
-        self.set_cluster_note_number(cluster_id, None);
     }
 
     pub fn renumber_clusters(&mut self, mappings: &[(u32, ClusterNumber)]) {
@@ -482,12 +508,121 @@ impl Processor {
     }
 }
 
+/// Stores all the relevant #[salsa::input] entries from CiteDatabase.
+/// They are all Arcs, so this is cheap.
+#[derive(Debug)]
+struct ClusterState {
+    cluster_ids: Arc<Vec<ClusterId>>,
+    relevant_one: Option<OneClusterState>,
+    /// Unrelated to clusters but still has to be restored
+    save_updates: bool,
+    old_positions: Option<Vec<(ClusterId, Option<ClusterNumber>)>>,
+}
+#[derive(Debug)]
+struct OneClusterState {
+    my_id: ClusterId,
+    /// The entry for my_id
+    cluster_note_number: Option<ClusterNumber>,
+    /// The entry for my_id
+    cluster_cites: Arc<Vec<CiteId>>,
+}
+
+pub enum PreviewPosition<'a> {
+    /// Convenience, if your user is merely editing a cluster.
+    ReplaceCluster(ClusterId),
+    /// Full power method, temporarily renumbers the entire document. You specify where the preview
+    /// goes by setting the id to 0 in one of the `ClusterPosition`s. Thus, you can replace a
+    /// cluster (by omitting the original), but also insert one at any position, including in a new
+    /// note or in-text position, or even between existing clusters in an existing note.
+    MarkWithZero(&'a [ClusterPosition]),
+}
+
+impl Processor {
+    fn save_cluster_state(
+        &self,
+        relevant_cluster: Option<ClusterId>,
+    ) -> ClusterState {
+        let cluster_ids = self.cluster_ids();
+        let relevant_one = relevant_cluster
+            .filter(|rc| cluster_ids.contains(rc))
+            .map(|rc| OneClusterState {
+                my_id: rc,
+                cluster_note_number: self.cluster_note_number(rc),
+                cluster_cites: self.cluster_cites(rc),
+            });
+        ClusterState {
+            cluster_ids,
+            relevant_one,
+            save_updates: self.save_updates,
+            old_positions: None,
+        }
+    }
+
+    fn restore_cluster_state(&mut self, state: ClusterState) {
+        let ClusterState {
+            cluster_ids,
+            relevant_one,
+            save_updates,
+            old_positions,
+        } = state;
+        if let Some(OneClusterState {
+            my_id,
+            cluster_note_number,
+            cluster_cites,
+        }) = relevant_one
+        {
+            self.set_cluster_note_number(my_id, cluster_note_number);
+            self.set_cluster_cites(my_id, cluster_cites);
+        }
+        if let Some(old_pos) = old_positions {
+            for (id, num) in old_pos {
+                self.set_cluster_note_number(id, num);
+            }
+        }
+        self.set_cluster_ids(cluster_ids);
+        self.save_updates = save_updates;
+    }
+
+    /// `position` determines where the cluster is previewed.
+    pub fn preview_citation_cluster<'a>(
+        &mut self,
+        cites: Vec<Cite<Markup>>,
+        position: PreviewPosition<'a>,
+    ) -> Result<Arc<MarkupOutput>, ErrorKind> {
+        let (id, state) = match position {
+            PreviewPosition::ReplaceCluster(cluster_id) => {
+                let ids = self.cluster_ids();
+                if !ids.contains(&cluster_id) {
+                    return Err(ErrorKind::NonMonotonicNoteNumber(cluster_id));
+                }
+                (cluster_id, self.save_cluster_state(Some(cluster_id)))
+            }
+            PreviewPosition::MarkWithZero(positions) => {
+                let mut vec = Vec::new();
+                // Save state first so we don't clobber its cluster_ids store
+                let mut state = self.save_cluster_state(None);
+                self.set_cluster_order_inner(positions, |id, num| vec.push((id, num)))?;
+                state.old_positions = Some(vec);
+                (0, state)
+            }
+        };
+        self.insert_cluster(Cluster { id, cites });
+        let markup = self.get_cluster(id);
+        self.restore_cluster_state(state);
+        markup.ok_or(ErrorKind::NonMonotonicNoteNumber(12345))
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
     #[error(
         "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
     )]
     NonMonotonicNoteNumber(u32),
+    #[error(
+        "call to preview_citation_cluster did not provide an id=0 position"
+    )]
+    DidNotSupplyZeroPosition,
 }
 
 impl Processor {
@@ -515,6 +650,15 @@ impl Processor {
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     pub fn set_cluster_order(&mut self, pieces: &[ClusterPosition]) -> Result<(), ErrorKind> {
+        self.set_cluster_order_inner(pieces, |_, _| {})
+    }
+    /// Variant of the above that allows logging the changes.
+    pub fn set_cluster_order_inner(
+        &mut self,
+        pieces: &[ClusterPosition],
+        mut mods: impl FnMut(ClusterId, Option<ClusterNumber>),
+    ) -> Result<(), ErrorKind> {
+        let old_cluster_ids = self.cluster_ids();
         let mut cluster_ids = Vec::with_capacity(pieces.len());
         let mut intext_number = 1u32;
         // (note number, next index)
@@ -524,7 +668,11 @@ impl Processor {
                 if let Some(ref mut note) = this_note {
                     if nn < note.0 {
                         return Err(ErrorKind::NonMonotonicNoteNumber(nn));
-                    } else if nn == note.0 {
+                    }
+                    if old_cluster_ids.contains(&piece.id) {
+                        mods(piece.id, self.cluster_note_number(piece.id));
+                    }
+                    if nn == note.0 {
                         // This note number ended up having more than one index in it;
                         let (num, ref mut index) = *note;
                         let i = *index;

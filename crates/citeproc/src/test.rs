@@ -10,28 +10,44 @@ use std::sync::Arc;
 use csl::*;
 use crate::prelude::*;
 
+macro_rules! assert_cluster {
+    ($arcstring:expr, $optstr:expr) => {
+        let built = $arcstring;
+        assert_eq!(built.as_deref().map(|string_ref| string_ref.as_str()), $optstr);
+    };
+}
+
+fn insert_basic_refs(db: &mut Processor, ref_ids: &[&str]) {
+    for &id in ref_ids {
+        let mut refr = Reference::empty(Atom::from(id), CslType::Book);
+        let title = "Book ".to_string() + id;
+        refr.ordinary.insert(Variable::Title, title);
+        db.insert_reference(refr);
+    }
+}
+
+fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
+    let len = ref_ids.len();
+    let mut clusters = Vec::with_capacity(len);
+    let mut order = Vec::with_capacity(len);
+    for i in 1..=len {
+        clusters.push(Cluster {
+            id: i as u32,
+            cites: vec![Cite::basic(ref_ids[i - 1])],
+        });
+        order.push(ClusterPosition {
+            id: i as u32,
+            note: Some(i as u32),
+        });
+    }
+    db.init_clusters(clusters);
+    db.set_cluster_order(&order).unwrap();
+}
+
 mod position {
     use super::*;
     use crate::prelude::*;
     use csl::Position;
-
-    fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
-        let len = ref_ids.len();
-        let mut clusters = Vec::with_capacity(len);
-        let mut order = Vec::with_capacity(len);
-        for i in 1..=len {
-            clusters.push(Cluster {
-                id: i as u32,
-                cites: vec![Cite::basic(ref_ids[i - 1])],
-            });
-            order.push(ClusterPosition {
-                id: i as u32,
-                note: Some(i as u32),
-            });
-        }
-        db.init_clusters(clusters);
-        db.set_cluster_order(&order).unwrap();
-    }
 
     fn test_ibid_1_2(
         ordering: &[ClusterPosition],
@@ -73,7 +89,7 @@ mod position {
                 },
             ],
             (Position::First, None),
-            (Position::Ibid, Some(1)),
+            (Position::IbidNear, Some(1)),
         )
     }
 
@@ -137,9 +153,102 @@ mod position {
     }
 }
 
-mod terms {
+mod preview {
     use super::*;
     use crate::prelude::*;
+
+    const STYLE: &'static str = r##"
+    <style class="note" version="1.0.1">
+        <citation>
+            <layout delimiter="; ">
+                <group delimiter=", ">
+                    <text variable="title" />
+                    <choose>
+                        <if position="ibid"><text value="ibid" /></if>
+                        <else-if position="subsequent"><text value="subsequent" /></else-if>
+                    </choose>
+                </group>
+            </layout>
+        </citation>
+    </style>
+"##;
+
+    fn mk_db() -> Processor {
+        let mut db = Processor::test_db();
+        db.set_style_text(STYLE).unwrap();
+        insert_basic_refs(&mut db, &["one", "two", "three"]);
+        insert_ascending_notes(&mut db, &["one", "two"]);
+        db
+    }
+
+    #[test]
+    fn preview_cluster_replace() {
+        let mut db = mk_db();
+        assert_cluster!(db.get_cluster(1), Some("Book one"));
+        let cites = vec![Cite::basic("two")];
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(1));
+        assert_cluster!(db.get_cluster(1), Some("Book one"));
+        assert_cluster!(preview.ok(), Some("Book two"));
+    }
+
+    #[test]
+    fn preview_cluster_replace_ibid() {
+        let mut db = mk_db();
+        assert_cluster!(db.get_cluster(2), Some("Book two"));
+        let cites = vec![Cite::basic("one")];
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(2));
+        assert_cluster!(db.get_cluster(2), Some("Book two"));
+        assert_cluster!(preview.ok(), Some("Book one, ibid"));
+    }
+
+    #[test]
+    fn preview_cluster_reorder_append() {
+        let mut db = mk_db();
+        let cites = vec![Cite::basic("one")];
+        let positions = &[
+            ClusterPosition { id: 1, note: Some(1) },
+            ClusterPosition { id: 2, note: Some(2) },
+            ClusterPosition { id: 0, note: Some(3) }, // Append at the end
+        ];
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        assert_cluster!(preview.ok(), Some("Book one, subsequent"));
+        assert_cluster!(db.get_cluster(1), Some("Book one"));
+        assert_cluster!(db.get_cluster(2), Some("Book two"));
+    }
+
+    #[test]
+    fn preview_cluster_reorder_insert() {
+        let mut db = mk_db();
+        let cites = vec![Cite::basic("one"), Cite::basic("three")];
+        let positions = &[
+            ClusterPosition { id: 0, note: Some(1) }, // Insert into the first note, at the start.
+            ClusterPosition { id: 1, note: Some(1) },
+            ClusterPosition { id: 2, note: Some(2) },
+        ];
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        assert_cluster!(preview.ok(), Some("Book one; Book three"));
+        assert_cluster!(db.get_cluster(1), Some("Book one"));
+        assert_cluster!(db.get_cluster(2), Some("Book two"));
+    }
+
+    #[test]
+    fn preview_cluster_reorder_replace() {
+        let mut db = mk_db();
+        let cites = vec![Cite::basic("three")];
+        let positions = &[
+            ClusterPosition { id: 0, note: Some(1) }, // Replace cluster #1
+            ClusterPosition { id: 2, note: Some(2) },
+        ];
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        assert_cluster!(preview.ok(), Some("Book three"));
+        assert_cluster!(db.get_cluster(1), Some("Book one"));
+        assert_cluster!(db.get_cluster(2), Some("Book two"));
+    }
+
+}
+
+mod terms {
+    use super::*;
 
     fn en_au() -> Lang {
         Lang::Iso(IsoLang::English, Some(IsoCountry::AU))

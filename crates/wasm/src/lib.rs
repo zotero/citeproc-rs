@@ -74,24 +74,44 @@ impl Driver {
             .unwrap_or(JsValue::UNDEFINED)
     }
 
+    /// Completely overwrites the references library.
+    /// This **will** delete references that are not in the provided list.
+    #[wasm_bindgen(js_name = "resetReferences")]
+    pub fn reset_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
+        let refs = utils::read_js_array(refs)?;
+        let mut engine = self.engine.borrow_mut();
+        engine.reset_references(refs);
+        Ok(())
+    }
+
     /// Inserts or overwrites references as a batch operation.
+    /// This **will not** delete references that are not in the provided list.
     #[wasm_bindgen(js_name = "setReferences")]
     pub fn set_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
-        self.engine.borrow_mut().set_references(refs);
+        self.engine.borrow_mut().extend_references(refs);
         Ok(())
     }
 
     /// Inserts or overwrites a reference.
     ///
-    /// * `refr` is a
+    /// * `refr` is a Reference object.
     #[wasm_bindgen(js_name = "insertReference")]
-    pub fn insert_reference(&mut self, refr: JsValue) -> Result<(), JsValue> {
+    pub fn insert_reference(&mut self, refr: TReference) -> Result<(), JsValue> {
         let refr = refr
             .into_serde()
             .map_err(|_| ErrorPlaceholder::throw("could not parse Reference from host"))?;
         // inserting & replacing are the same
         self.engine.borrow_mut().insert_reference(refr);
+        Ok(())
+    }
+
+    /// Removes a reference by id. If it is cited, any cites will be dangling. It will also
+    /// disappear from the bibliography.
+    #[wasm_bindgen(js_name = "removeReference")]
+    pub fn remove_reference(&mut self, id: &str) -> Result<(), JsValue> {
+        let id = Atom::from(id);
+        self.engine.borrow_mut().remove_reference(id);
         Ok(())
     }
 
@@ -176,6 +196,25 @@ impl Driver {
             })
             .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(e.description())))?)
     }
+
+    /// Returns the formatted citation cluster for `cluster_id`.
+    ///
+    /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
+    /// still useful for initialization.
+    #[wasm_bindgen(js_name = "previewCitationCluster")]
+    pub fn preview_citation_cluster(&mut self, cites: Box<[JsValue]>, pieces: Box<[JsValue]>) -> Result<JsValue, JsValue> {
+        let cites: Vec<Cite<Markup>> = utils::read_js_array(cites)?;
+        let positions: Vec<ClusterPosition> = utils::read_js_array(pieces)?;
+        let mut eng = self.engine.borrow_mut();
+        let preview = eng.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(&positions));
+        preview
+            .map_err(|e| {
+                JsError::new(&e.to_string())
+            })
+            .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(&e.to_string())))
+            .map_err(|e| e.into())
+    }
+
 
     #[wasm_bindgen(js_name = "makeBibliography")]
     pub fn full_bibliography(&self) -> Result<JsValue, JsValue> {
@@ -422,6 +461,8 @@ extern "C" {
     pub type TUpdateSummary;
     #[wasm_bindgen(typescript_type = "IncludeUncited")]
     pub type TIncludeUncited;
+    #[wasm_bindgen(typescript_type = "Reference")]
+    pub type TReference;
 }
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
