@@ -25,6 +25,7 @@ mod element;
 mod group;
 mod helpers;
 mod ir;
+mod ref_ir;
 mod names;
 mod number;
 mod page_range;
@@ -55,6 +56,7 @@ pub(crate) mod prelude {
     pub use crate::cite_context::CiteContext;
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
+    pub use crate::ref_ir::*;
 
     pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
