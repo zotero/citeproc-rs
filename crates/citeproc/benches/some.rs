@@ -5,7 +5,6 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use cfg_if::cfg_if;
-
 cfg_if! {
     if #[cfg(feature="jemalloc")] {
         use jemallocator::Jemalloc;
@@ -21,17 +20,16 @@ cfg_if! {
 #[macro_use]
 extern crate criterion;
 
-use criterion::{Bencher, BenchmarkGroup, Criterion, measurement::WallTime};
+use criterion::{Bencher, Criterion};
 use std::sync::Arc;
 
 use citeproc::prelude::*;
 use citeproc_io::{DateOrRange, NumberLike};
 use csl::variables::*;
 use csl::CslType;
-use test_utils::{TestCase, humans::parse_human_test, yaml::parse_yaml_test};
+// use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
 
 use std::str::FromStr;
-use std::path::{Path, PathBuf};
 
 // fn bench_build_tree(c: &mut Criterion) {
 //     let formatter = PlainText::new();
@@ -61,8 +59,6 @@ fn fetcher() -> Arc<dyn LocaleFetcher> {
     Arc::new(citeproc_db::PredefinedLocales::bundled_en_us())
 }
 
-use salsa::Database;
-
 static AGLC: &'static str = include_str!("./data/australian-guide-to-legal-citation.csl");
 static APA: &'static str = include_str!("./data/apa.csl");
 
@@ -78,12 +74,10 @@ fn basic_cluster_get_cite_id(proc: &mut Processor, cluster_id: u32, id: &str) ->
 
 fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) -> Arc<String> {
     use citeproc_proc::db;
-    proc.query_mut(db::IrGen0Query).invalidate(&cite_id);
-    proc.query_mut(db::IrGen1AddNamesQuery).invalidate(&cite_id);
-    proc.query_mut(db::IrGen2AddGivenNameQuery).invalidate(&cite_id);
-    proc.query_mut(db::IrGen3AddYearSuffixQuery).invalidate(&cite_id);
-    proc.query_mut(db::IrGen4ConditionalsQuery).invalidate(&cite_id);
-    proc.query_mut(db::BuiltClusterQuery).invalidate(&id);
+    db::IrGen0Query.in_db_mut(proc).invalidate(&cite_id);
+    db::IrGen2AddGivenNameQuery.in_db_mut(proc).invalidate(&cite_id);
+    db::IrFullyDisambiguatedQuery.in_db_mut(proc).invalidate(&cite_id);
+    db::BuiltClusterQuery.in_db_mut(proc).invalidate(&id);
     proc.built_cluster(id)
 }
 
@@ -97,35 +91,10 @@ fn bench_build_cluster(b: &mut Bencher, style: &str) {
 }
 
 fn bench_clusters(c: &mut Criterion) {
-    // env_logger::init();
+    env_logger::init();
     c.bench_function("Processor::built_cluster(AGLC)", |b| bench_build_cluster(b, AGLC));
     c.bench_function("Processor::built_cluster(APA)", |b| bench_build_cluster(b, APA));
 }
 
-fn test_case(b: &mut Bencher, case: &TestCase) {
-    b.iter_batched(move || case.clone(), |mut case| case.execute(), criterion::BatchSize::SmallInput);
-}
-
-fn test_case_txt(g: &mut BenchmarkGroup<'_, WallTime>, name: &str) {
-    let mut path = PathBuf::new();
-    path.push("tests");
-    path.push("data");
-    path.push("test-suite");
-    path.push("processor-tests");
-    path.push("humans");
-    path.push(name);
-    let input = std::fs::read_to_string(path).unwrap();
-    let case = parse_human_test(&input);
-    g.bench_function(name, |b| test_case(b, &case));
-}
-
-fn bench_test_cases(c: &mut Criterion) {
-    let mut grp = c.benchmark_group("test_cases");
-    test_case_txt(&mut grp, "disambiguate_BasedOnSubsequentFormWithBackref.txt");
-    test_case_txt(&mut grp, "disambiguate_AndreaEg2.txt");
-    grp.finish();
-}
-
 criterion_group!(clusters, bench_clusters);
-criterion_group!(test_cases, bench_test_cases);
-criterion_main!(clusters, test_cases);
+criterion_main!(clusters);

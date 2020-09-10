@@ -13,11 +13,11 @@ use std::sync::Arc;
 use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
+use citeproc_db::{CiteData, ClusterData};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
-use citeproc_db::{ClusterData, CiteData};
 use citeproc_io::{ClusterNumber, IntraNote};
-use csl::{Atom, Bibliography, Element, Position, SortKey, TextElement};
+use csl::{Atom, Bibliography, Position, SortKey};
 use std::sync::Mutex;
 
 pub trait HasFormatter {
@@ -40,12 +40,10 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> Arc<IrGen>;
-    fn ir_gen1_add_names(&self, key: CiteId) -> Arc<IrGen>;
     fn ir_gen2_add_given_name(&self, key: CiteId) -> Arc<IrGen>;
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
     fn year_suffix_for(&self, ref_id: Atom) -> Option<u32>;
-    fn ir_gen3_add_year_suffix(&self, key: CiteId) -> Arc<IrGen>;
-    fn ir_gen4_conditionals(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_fully_disambiguated(&self, key: CiteId) -> Arc<IrGen>;
     fn built_cluster(&self, key: ClusterId) -> Arc<MarkupOutput>;
 
     fn bib_item_gen0(&self, ref_id: Atom) -> Option<Arc<IrGen>>;
@@ -217,8 +215,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     // ones last.
     let sorted_refs = db.sorted_refs();
     let (refs, _citation_numbers) = &*sorted_refs;
-    refs
-        .iter()
+    refs.iter()
         .map(|id| {
             let cite = db.ghost_cite(id.clone());
             let cite_id = db.cite(CiteData::BibliographyGhost { cite });
@@ -378,7 +375,9 @@ fn is_unambiguous(
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut n = 0;
     for k in db.disamb_participants().iter() {
-        let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
+        let dfa = db
+            .ref_dfa(k.clone())
+            .expect("disamb_participants should all exist");
         let acc = dfa.accepts_data(db, &edges);
         if acc {
             n += 1;
@@ -400,7 +399,9 @@ fn refs_accepting_cite<O: OutputFormat>(
     let edges = ir.to_edge_stream(&db.get_formatter());
     let mut v = Vec::with_capacity(1);
     for k in db.disamb_participants().iter() {
-        let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
+        let dfa = db
+            .ref_dfa(k.clone())
+            .expect("disamb_participants should all exist");
         let acc = dfa.accepts_data(db, &edges);
         if acc {
             v.push(k.clone());
@@ -552,7 +553,9 @@ fn disambiguate_add_names(
         }
         let mut dfas = Vec::with_capacity(best as usize);
         for k in &initial_refs {
-            let dfa = db.ref_dfa(k.clone()).expect("disamb_participants should all exist");
+            let dfa = db
+                .ref_dfa(k.clone())
+                .expect("disamb_participants should all exist");
             dfas.push(dfa);
         }
 
@@ -669,7 +672,13 @@ fn expand_one_name_ir(
             n += 1;
         }
     }
-    if let Some((new_ir, _gv)) = nir.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), ctx.disamb_pass, None) {
+    if let Some((new_ir, _gv)) = nir.intermediate_custom(
+        &ctx.format,
+        ctx.position.0,
+        ctx.sort_key.is_some(),
+        ctx.disamb_pass,
+        None,
+    ) {
         *nir.ir = new_ir;
     }
 }
@@ -702,17 +711,15 @@ fn disambiguate_add_year_suffix(
     suffix: u32,
 ) {
     // First see if we can do it with an explicit one
-    let asuf = ir.visit_year_suffix_hooks(&mut |piece| {
-        match &piece.hook {
-            YearSuffixHook::Explicit(_) => {
-                let (new_ir, gv) = piece.hook.render(ctx, suffix);
-                *piece.ir = new_ir;
-                piece.group_vars = gv;
-                piece.suffix_num = Some(suffix);
-                true
-            }
-            _ => false,
+    let asuf = ir.visit_year_suffix_hooks(&mut |piece| match &piece.hook {
+        YearSuffixHook::Explicit(_) => {
+            let (new_ir, gv) = piece.hook.render(ctx, suffix);
+            *piece.ir = new_ir;
+            piece.group_vars = gv;
+            piece.suffix_num = Some(suffix);
+            true
         }
+        _ => false,
     });
 
     if asuf {
@@ -720,17 +727,15 @@ fn disambiguate_add_year_suffix(
     }
 
     // Then attempt to do it for the ones that are embedded in date output
-    ir.visit_year_suffix_hooks(&mut |piece| {
-        match &piece.hook {
-            YearSuffixHook::Plain => {
-                let (new_ir, gv) = piece.hook.render(ctx, suffix);
-                *piece.ir = new_ir;
-                piece.group_vars = gv;
-                piece.suffix_num = Some(suffix);
-                true
-            }
-            _ => false,
+    ir.visit_year_suffix_hooks(&mut |piece| match &piece.hook {
+        YearSuffixHook::Plain => {
+            let (new_ir, gv) = piece.hook.render(ctx, suffix);
+            *piece.ir = new_ir;
+            piece.group_vars = gv;
+            piece.suffix_num = Some(suffix);
+            true
         }
+        _ => false,
     });
     ir.recompute_group_vars()
 }
@@ -781,27 +786,88 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     Arc::new(IrGen::new(ir, matching, state))
 }
 
-fn ir_gen1_add_names(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
-    let style;
-    let locale;
-    let cite;
-    let refr;
-    let mut ctx;
-    preamble!(style, locale, cite, refr, ctx, db, id, None);
-    ctx.disamb_pass = Some(DisambPass::AddNames);
-
-    let ir0 = db.ir_gen0(id);
-    // XXX: keep going if there is global name disambig to perform?
-    if ir0.unambiguous() || !style.citation.disambiguate_add_names {
-        return ir0;
-    }
-    let (mut ir, state) = ir0.fresh_copy();
-
-    disambiguate_add_names(db, &mut ir, &ctx, false);
-    let matching = refs_accepting_cite(db, &ir, &ctx);
-    Arc::new(IrGen::new(ir, matching, state))
+enum IrGenCow {
+    Arc(Arc<IrGen>),
+    Cloned(IrGen),
 }
 
+impl IrGenCow {
+    fn to_mut(&mut self) -> &mut IrGen {
+        *self = match self {
+            IrGenCow::Arc(arc) => {
+                let (ir, state) = arc.as_ref().fresh_copy();
+                IrGenCow::Cloned(IrGen {
+                    ir,
+                    state,
+                    matching_refs: Default::default(),
+                })
+            }
+            IrGenCow::Cloned(gen) => return gen,
+        };
+        // takes Cloned branch next time
+        self.to_mut()
+    }
+    fn into_arc(self) -> Arc<IrGen> {
+        match self {
+            IrGenCow::Arc(arc) => arc,
+            IrGenCow::Cloned(gen) => Arc::new(gen),
+        }
+    }
+}
+
+impl std::ops::Deref for IrGenCow {
+    type Target = IrGen;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            IrGenCow::Arc(arc) => arc.as_ref(),
+            IrGenCow::Cloned(gen) => gen,
+        }
+    }
+}
+
+impl IrGenCow {
+    fn disambiguate_add_names(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if ctx.style.citation.disambiguate_add_names {
+            ctx.disamb_pass = Some(DisambPass::AddNames);
+            // Clone ir0; disambiguate by adding names
+            let mut cloned = self.to_mut();
+            disambiguate_add_names(db, &mut cloned.ir, &ctx, false);
+            cloned.matching_refs = refs_accepting_cite(db, &cloned.ir, &ctx);
+        }
+    }
+
+    fn disambiguate_add_given_name(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if ctx.style.citation.disambiguate_add_givenname {
+            let mut cloned = self.to_mut();
+            let gndr = ctx.style.citation.givenname_disambiguation_rule;
+            ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
+            let also_add_names = ctx.style.citation.disambiguate_add_names;
+            disambiguate_add_givennames(db, &mut cloned.ir, &ctx, also_add_names);
+            cloned.matching_refs = refs_accepting_cite(db, &cloned.ir, &ctx);
+        }
+    }
+    fn disambiguate_add_year_suffix(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if ctx.style.citation.disambiguate_add_year_suffix {
+            let year_suffix = match db.year_suffix_for(ctx.cite.ref_id.clone()) {
+                Some(y) => y,
+                _ => return,
+            };
+            let mut cloned = self.to_mut();
+            ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
+            disambiguate_add_year_suffix(db, &mut cloned.ir, &mut cloned.state, &ctx, year_suffix);
+            cloned.matching_refs = refs_accepting_cite(db, &cloned.ir, &ctx);
+        }
+    }
+    fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        let mut cloned = self.to_mut();
+        ctx.disamb_pass = Some(DisambPass::Conditionals);
+        disambiguate_true(db, &mut cloned.ir, &mut cloned.state, &ctx);
+        // No point recomputing when nothing more can be done.
+        cloned.matching_refs = Vec::new();
+    }
+}
+
+/// Starts with ir_gen0, and disambiguates through add_names and add_givenname
 fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
@@ -809,71 +875,48 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let refr;
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
-    let gndr = style.citation.givenname_disambiguation_rule;
-    ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
 
-    let ir1 = db.ir_gen1_add_names(id);
-    if ir1.unambiguous() || !style.citation.disambiguate_add_givenname {
-        return ir1;
+    let mut irgen = IrGenCow::Arc(db.ir_gen0(id));
+    if irgen.unambiguous() {
+        return irgen.into_arc();
     }
-    let (mut ir, state) = ir1.fresh_copy();
-
-    let also_add_names = style.citation.disambiguate_add_names;
-    disambiguate_add_givennames(db, &mut ir, &ctx, also_add_names);
-    let matching = refs_accepting_cite(db, &ir, &ctx);
-    Arc::new(IrGen::new(ir, matching, state))
+    irgen.disambiguate_add_names(db, &mut ctx);
+    if irgen.unambiguous() {
+        return irgen.into_arc();
+    }
+    irgen.disambiguate_add_given_name(db, &mut ctx);
+    irgen.into_arc()
 }
 
-fn ir_gen3_add_year_suffix(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
+fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let style;
     let locale;
     let cite;
     let refr;
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
-    let ir2 = db.ir_gen2_add_given_name(id);
-    if !style.citation.disambiguate_add_year_suffix {
-        return ir2;
+
+    // Start with the given names done.
+    let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
+    if irgen.unambiguous() {
+        return irgen.into_arc();
     }
-    let year_suffix = match db.year_suffix_for(cite.ref_id.clone()) {
-        Some(y) => y,
-        _ => return ir2,
-    };
-    let (mut ir, mut state) = ir2.fresh_copy();
-
-    ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
-
-    disambiguate_add_year_suffix(db, &mut ir, &mut state, &ctx, year_suffix);
-    let matching = refs_accepting_cite(db, &ir, &ctx);
-    Arc::new(IrGen::new(ir, matching, state))
-}
-
-fn ir_gen4_conditionals(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
-    let style;
-    let locale;
-    let cite;
-    let refr;
-    let mut ctx;
-    preamble!(style, locale, cite, refr, ctx, db, id, None);
-    ctx.disamb_pass = Some(DisambPass::Conditionals);
-
-    let ir3 = db.ir_gen3_add_year_suffix(id);
-    if ir3.unambiguous() {
-        return ir3;
+    irgen.disambiguate_add_year_suffix(db, &mut ctx);
+    if irgen.unambiguous() {
+        return irgen.into_arc();
     }
-    let (mut ir, mut state) = ir3.fresh_copy();
-
-    disambiguate_true(db, &mut ir, &mut state, &ctx);
-    // No point recomputing when nothing more can be done.
-    let matching = Vec::new();
-    Arc::new(IrGen::new(ir, matching, state))
+    irgen.disambiguate_conditionals(db, &mut ctx);
+    irgen.into_arc()
 }
 
 fn get_piq(db: &dyn IrDatabase) -> bool {
     // We pant PIQ to be global in a document, not change within a cluster because one cite
     // decided to use a different language. Use the default locale to get it.
     let default_locale = db.default_locale();
-    default_locale.options_node.punctuation_in_quote.unwrap_or(false)
+    default_locale
+        .options_node
+        .punctuation_in_quote
+        .unwrap_or(false)
 }
 
 fn built_cluster(
@@ -910,16 +953,14 @@ pub fn built_cluster_before_output(
     let style = db.style();
     let layout = &style.citation.layout;
     let sorted_refs_arc = db.sorted_refs();
-    use crate::ir::transforms::{Unnamed3, RangePiece, group_and_collapse, CnumIx};
+    use crate::ir::transforms::{group_and_collapse, CnumIx, RangePiece, Unnamed3};
     let mut irs: Vec<_> = cite_ids
         .iter()
         .map(|&id| {
-            let gen4 = db.ir_gen4_conditionals(id);
+            let gen4 = db.ir_fully_disambiguated(id);
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-            let cnum = citation_numbers_by_id
-                .get(&cite.ref_id)
-                .cloned();
+            let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
             Unnamed3::new(cite, cnum, gen4.clone())
         })
         .collect();
@@ -934,13 +975,15 @@ pub fn built_cluster_before_output(
     // that).
     if let Some(Unnamed3 { cite, gen4, .. }) = irs.first_mut() {
         use unic_segment::Words;
-        if style.class != csl::StyleClass::InText && cite.prefix.as_ref().map_or(true, |pre| {
-            // bugreports_CapsAfterOneWordPrefix
-            let mut words = Words::new(pre, |s| s.chars().any(|c| c.is_alphanumeric()));
-            words.next();
-            let is_single_word = words.next().is_none();
-            (pre.is_empty() || pre.trim_end().ends_with(".")) && !is_single_word
-        }) {
+        if style.class != csl::StyleClass::InText
+            && cite.prefix.as_ref().map_or(true, |pre| {
+                // bugreports_CapsAfterOneWordPrefix
+                let mut words = Words::new(pre, |s| s.chars().any(|c| c.is_alphanumeric()));
+                words.next();
+                let is_single_word = words.next().is_none();
+                (pre.is_empty() || pre.trim_end().ends_with(".")) && !is_single_word
+            })
+        {
             let gen_mut = Arc::make_mut(gen4);
             gen_mut.ir.capitalize_first_term_of_cluster(&fmt);
         }
@@ -957,13 +1000,19 @@ pub fn built_cluster_before_output(
             Some(x) => x.cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""),
             None => "",
         };
-        let ends_punc = |string: &str| string.chars()
-            .rev()
-            .nth(0)
-            .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!');
-        let starts_punc = |string: &str| string.chars()
-            .nth(0)
-            .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!');
+        let ends_punc = |string: &str| {
+            string
+                .chars()
+                .rev()
+                .nth(0)
+                .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!')
+        };
+        let starts_punc = |string: &str| {
+            string
+                .chars()
+                .nth(0)
+                .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!')
+        };
 
         // "2000 is one source,; David Jones" => "2000 is one source, David Jones"
         // "2000;, and David Jones" => "2000, and David Jones"
@@ -982,7 +1031,9 @@ pub fn built_cluster_before_output(
             pre_mut.push(' ');
         }
         let suf_first = suf.chars().nth(0);
-        if suf_first.map_or(false, |x| x != ' ' && !citeproc_io::output::markup::is_punc(x)) {
+        if suf_first.map_or(false, |x| {
+            x != ' ' && !citeproc_io::output::markup::is_punc(x)
+        }) {
             let suf_mut = suf.to_mut();
             suf_mut.insert_str(0, " ");
         }
@@ -1003,7 +1054,7 @@ pub fn built_cluster_before_output(
         Some(fmt.affixed(flattened, Some(&aff)))
     };
 
-    let mut cgroup_delim = style
+    let cgroup_delim = style
         .citation
         .cite_group_delimiter
         .as_ref()
@@ -1024,56 +1075,67 @@ pub fn built_cluster_before_output(
     let layout_delim = style.citation.layout.delimiter.0.as_ref();
 
     // returned usize is advance len
-    let render_range = |ranges: &[RangePiece], group_delim: &str, outer_delim: &str| -> (MarkupBuild, usize) {
-        let mut advance_to = 0usize;
-        let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
-        for (ix, piece) in ranges.iter().enumerate() {
-            let is_last = ix == ranges.len() - 1;
-            match *piece {
-                RangePiece::Single(CnumIx { ix, force_single, .. }) => {
-                    advance_to = ix;
-                    if let Some(one) = build_cite(&irs, ix) {
-                        group.push(one);
-                        if !is_last && !suppress_delimiter(&irs, ix) {
-                            group.push(fmt.plain(if force_single {
-                                outer_delim
-                            } else {
-                                group_delim
-                            }));
+    let render_range =
+        |ranges: &[RangePiece], group_delim: &str, outer_delim: &str| -> (MarkupBuild, usize) {
+            let mut advance_to = 0usize;
+            let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
+            for (ix, piece) in ranges.iter().enumerate() {
+                let is_last = ix == ranges.len() - 1;
+                match *piece {
+                    RangePiece::Single(CnumIx {
+                        ix, force_single, ..
+                    }) => {
+                        advance_to = ix;
+                        if let Some(one) = build_cite(&irs, ix) {
+                            group.push(one);
+                            if !is_last && !suppress_delimiter(&irs, ix) {
+                                group.push(fmt.plain(if force_single {
+                                    outer_delim
+                                } else {
+                                    group_delim
+                                }));
+                            }
+                        }
+                    }
+                    RangePiece::Range(start, end) => {
+                        advance_to = end.ix;
+                        let mut delim = "\u{2013}";
+                        if start.cnum == end.cnum - 1 {
+                            // Not represented as a 1-2, just two sequential numbers 1,2
+                            delim = group_delim;
+                        }
+                        let mut g = vec![];
+                        if let Some(start) = build_cite(&irs, start.ix) {
+                            g.push(start);
+                        }
+                        if let Some(end) = build_cite(&irs, end.ix) {
+                            g.push(end);
+                        }
+                        // Delimiters here are never suppressed by build_cite, as they wouldn't be part
+                        // of the range if they had affixes on the inside
+                        group.push(fmt.group(g, delim, None));
+                        if !is_last && !suppress_delimiter(&irs, end.ix) {
+                            group.push(fmt.plain(group_delim));
                         }
                     }
                 }
-                RangePiece::Range(start, end) => {
-                    advance_to = end.ix;
-                    let mut delim = "\u{2013}";
-                    if start.cnum == end.cnum - 1 {
-                        // Not represented as a 1-2, just two sequential numbers 1,2
-                        delim = group_delim;
-                    }
-                    let mut g = vec![];
-                    if let Some(start) = build_cite(&irs, start.ix) {
-                        g.push(start);
-                    }
-                    if let Some(end) = build_cite(&irs, end.ix) {
-                        g.push(end);
-                    }
-                    // Delimiters here are never suppressed by build_cite, as they wouldn't be part
-                    // of the range if they had affixes on the inside
-                    group.push(fmt.group(g, delim, None));
-                    if !is_last && !suppress_delimiter(&irs, end.ix) {
-                        group.push(fmt.plain(group_delim));
-                    }
-                }
             }
-        }
-        (fmt.group(group, "", None), advance_to)
-    };
+            (fmt.group(group, "", None), advance_to)
+        };
 
     let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
     let mut ix = 0;
     while ix < irs.len() {
-        let Unnamed3 { cite, gen4, vanished, collapsed_ranges, collapsed_year_suffixes, is_first, .. } = &irs[ix];
+        let Unnamed3 {
+            cite,
+            gen4,
+            vanished,
+            collapsed_ranges,
+            collapsed_year_suffixes,
+            is_first,
+            ..
+        } = &irs[ix];
         if *vanished {
             ix += 1;
             continue;
@@ -1096,7 +1158,8 @@ pub fn built_cluster_before_output(
                     break;
                 }
                 if !r.collapsed_year_suffixes.is_empty() {
-                    let (built, advance_to) = render_range(&r.collapsed_year_suffixes, ysuf_delim, acol_delim);
+                    let (built, advance_to) =
+                        render_range(&r.collapsed_year_suffixes, ysuf_delim, acol_delim);
                     group.push(built);
                     if !suppress_delimiter(&irs, ix) {
                         group.push(fmt.plain(cgroup_delim));
@@ -1143,10 +1206,7 @@ pub fn built_cluster_before_output(
     built_cites.pop();
 
     fmt.with_format(
-        fmt.affixed(
-            fmt.group(built_cites, "", None),
-            layout.affixes.as_ref(),
-        ),
+        fmt.affixed(fmt.group(built_cites, "", None), layout.affixes.as_ref()),
         layout.formatting,
     )
 }
@@ -1287,10 +1347,8 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
     let fmt = db.get_formatter();
     let style = db.style();
     let sorted_refs = db.sorted_refs();
-    let mut m = FnvHashMap::with_capacity_and_hasher(
-        sorted_refs.0.len(),
-        fnv::FnvBuildHasher::default(),
-    );
+    let mut m =
+        FnvHashMap::with_capacity_and_hasher(sorted_refs.0.len(), fnv::FnvBuildHasher::default());
     let mut prev: Option<Arc<Mutex<NameIR<Markup>>>> = None;
     for key in sorted_refs.0.iter() {
         // TODO: put Nones in there so they can be updated
@@ -1298,15 +1356,17 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
             let layout = &style.bibliography.as_ref().unwrap().layout;
             // in a bibliography, we do the affixes etc inside Layout, so they're not here
             let current = gen0.ir.first_name_block();
-            let sas = style
-                .bibliography
-                .as_ref()
-                .and_then(|bib| bib
-                    .subsequent_author_substitute
+            let sas = style.bibliography.as_ref().and_then(|bib| {
+                bib.subsequent_author_substitute
                     .as_ref()
-                    .map(|x| (x.as_ref(), bib.subsequent_author_substitute_rule)));
-            if let (Some(prev), Some(current), Some((sas, sas_rule))) = (prev.as_ref(), current.as_ref(), sas) {
-                let did = crate::transforms::subsequent_author_substitute(&fmt, prev, current, sas, sas_rule);
+                    .map(|x| (x.as_ref(), bib.subsequent_author_substitute_rule))
+            });
+            if let (Some(prev), Some(current), Some((sas, sas_rule))) =
+                (prev.as_ref(), current.as_ref(), sas)
+            {
+                let did = crate::transforms::subsequent_author_substitute(
+                    &fmt, prev, current, sas, sas_rule,
+                );
                 if did {
                     let mutated = Arc::make_mut(&mut gen0);
                     mutated.ir.recompute_group_vars()
@@ -1344,7 +1404,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
     let mut prev_in_text: Option<&ClusterData> = None;
     let mut prev_note: Option<&ClusterData> = None;
 
-    for (i, cluster) in clusters.iter().enumerate() {
+    for cluster in clusters.iter() {
         let prev_in_group = if let ClusterNumber::Note(_) = cluster.number {
             !clusters_in_last_note.is_empty()
         } else {
@@ -1552,4 +1612,3 @@ fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
         (Position::First, None)
     }
 }
-
