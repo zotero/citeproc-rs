@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 impl<O: OutputFormat> IR<O> {
     pub fn capitalize_first_term_of_cluster(root: NodeId, arena: &mut IrArena<O>, fmt: &O) {
-        if let Some(trf) = self.find_term_rendered_first() {
+        if let Some(trf) = IR::find_term_rendered_first(root, arena) {
             fmt.apply_text_case(
                 trf,
                 &IngestOptions {
@@ -101,7 +101,7 @@ impl<O: OutputFormat> IR<O> {
             // Replace the configuration for rest/right-hand-side with right_config.
             // This is because we want to move all of the rest node's children to the right hand
             // side, so the node is the thing that has to move.
-            *arena.get(right)?.get_mut() = right_content;
+            *arena.get(right)?.get_mut() = right_config;
             top_seq.0 = IR::Seq(IrSeq {
                 display: None,
                 affixes: None,
@@ -763,16 +763,40 @@ impl<'a> ReducedNameToken<'a, T> {
 }
 
 impl<O: OutputFormat> IR<O> {
-    fn unwrap_name_ir(&self) -> &mut NameIR<O> {
+    pub(crate) fn unwrap_name_ir(&self) -> &NameIR<O> {
         match self {
             IR::Name(nir) => nir,
             _ => panic!("Called unwrap_name_ir on a {:?}", self),
         }
     }
-    fn unwrap_name_ir_mut(&mut self) -> &mut NameIR<O> {
+    pub(crate) fn unwrap_name_ir_mut(&mut self) -> &mut NameIR<O> {
         match self {
             IR::Name(nir) => nir,
             _ => panic!("Called unwrap_name_ir_mut on a {:?}", self),
+        }
+    }
+    pub(crate) fn unwrap_year_suffix(&self) -> &YearSuffix {
+        match self {
+            IR::YearSuffix(ys) => ys,
+            _ => panic!("Called unwrap_year_suffix on a {:?}", self),
+        }
+    }
+    pub(crate) fn unwrap_year_suffix_mut(&mut self) -> &mut YearSuffix {
+        match self {
+            IR::YearSuffix(ys) => ys,
+            _ => panic!("Called unwrap_year_suffix_mut on a {:?}", self),
+        }
+    }
+    pub(crate) fn unwrap_cond_disamb(&self) -> &ConditionalDisambIR {
+        match self {
+            IR::ConditionalDisamb(cond) => cond,
+            _ => panic!("Called unwrap_cond_disamb on a {:?}", self),
+        }
+    }
+    pub(crate) fn unwrap_cond_disamb_mut(&mut self) -> &mut ConditionalDisambIR {
+        match self {
+            IR::ConditionalDisamb(cond) => cond,
+            _ => panic!("Called unwrap_cond_disamb_mut on a {:?}", self),
         }
     }
 }

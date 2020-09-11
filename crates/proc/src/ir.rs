@@ -310,6 +310,21 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
 }
 
 impl IR<Markup> {
+    pub(crate) fn list_year_suffix_hooks<F>(root: NodeId, arena: &IrArena<O>) -> Vec<NodeId> {
+        fn list_ysh_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
+            let me = match arena.get(node) { Some(x) => x.get(), None => return };
+            match me.0 {
+                IR::YearSuffix(..) => vec.push(node),
+                IR::NameCounter(_) | IR::Rendered(_) | IR::Name(_) => {}
+                IR::ConditionalDisamb(c) | IR::Seq(seq) => {
+                    node.children(arena).for_each(|child| list_ysh_inner(child, arena, vec));
+                }
+            }
+        }
+        let mut vec = Vec::new();
+        list_ysh_inner(root, arena, &mut vec);
+        vec
+    }
     pub(crate) fn visit_year_suffix_hooks<F>(node: NodeId, arena: &mut IrArena<O>, callback: &mut F) -> bool
     where
         F: (FnMut(&mut YearSuffix) -> bool),

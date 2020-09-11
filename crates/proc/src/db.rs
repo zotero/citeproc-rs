@@ -314,8 +314,8 @@ impl PartialEq<IrGen> for IrGen {
 impl IrGen {
     fn new(root: NodeId, arena: IrArena<Markup>, matching_refs: Vec<Atom>, state: IrState) -> Self {
         IrGen {
-            arena,
             root,
+            arena,
             state,
             matching_refs,
         }
@@ -486,7 +486,7 @@ fn make_identical_name_formatter<'a>(
     find_name_block(&ref_ir, &mut nth).cloned()
 }
 
-fn list_all_name_blocks(root: NodeID, arena: &IrArena<Markup>) -> Vec<NodeId> {
+fn list_all_name_blocks(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
     fn list_all_name_blocks_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
         let me = match arena.get(node) { Some(x) => x.get(), None => return };
         match me.0 {
@@ -494,44 +494,51 @@ fn list_all_name_blocks(root: NodeID, arena: &IrArena<Markup>) -> Vec<NodeId> {
             IR::Name(_) => {
                 vec.push(node);
             }
-            IR::ConditionalDisamb(_) | IR::Seq(seq) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // assumes it's the first one that appears
                 for child in node.children(arena) {
-                    list_all_name_blocks_inner(child, arena);
+                    list_all_name_blocks_inner(child, arena, vec);
                 }
             }
         }
     }
     let mut vec = Vec::new();
-    list_all_name_blocks_inner(arena, &mut vec);
+    list_all_name_blocks_inner(root, arena, &mut vec);
     vec
 }
 
 type CondDisambRef = Arc<Mutex<ConditionalDisambIR>>;
 
-fn list_all_cond_disambs(ir: &IR<Markup>) -> Vec<NodeId> {
-    fn list_all_cd_inner(ir: &IR<Markup>, vec: &mut Vec<NodeId>) {
-        match ir {
+fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
+    fn list_all_cd_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
+        let me = match arena.get(node) { Some(x) => x.get(), None => return };
+        match me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
             IR::ConditionalDisamb(c) => {
-                vec.push(c.clone());
-                let lock = c.lock().unwrap();
-                list_all_cd_inner(&*lock.ir, vec);
+                vec.push(node);
+                node.children(arena).for_each(|child| list_all_cd_inner(child, arena, vec));
             }
             IR::Seq(seq) => {
-                // assumes it's the first one that appears
-                for (ir, _gv) in &seq.contents {
-                    list_all_cd_inner(ir, vec)
-                }
+                node.children(arena).for_each(|child| list_all_cd_inner(child, arena, vec));
             }
         }
     }
     let mut vec = Vec::new();
-    list_all_cd_inner(ir, &mut vec);
+    list_all_cd_inner(root, arena, &mut vec);
     vec
 }
 
 use crate::disamb::names::{DisambNameRatchet, NameIR, NameVariantMatcher, RefNameIR};
+
+fn get_nir_mut(nid: NodeId, arena: &mut IrArena<Markup>) -> &mut NameIR<Markup> {
+    arena.get_mut(nid).unwrap().get_mut().0.unwrap_name_ir_mut()
+}
+fn get_ys_mut(yid: NodeId, arena: &mut IrArena<Markup>) -> &mut YearSuffix {
+    arena.get_mut(yid).unwrap().get_mut().0.unwrap_year_suffix_mut()
+}
+fn get_cond_mut(cid: NodeId, arena: &mut IrArena) -> &mut ConditionalDisambIR {
+    arena.get_mut(cid).unwrap().get_mut().0.unwrap_cond_disamb_mut()
+}
 
 fn disambiguate_add_names(
     db: &dyn IrDatabase,
@@ -543,13 +550,9 @@ fn disambiguate_add_names(
     let fmt = &db.get_formatter();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
-    let initial_refs = refs_accepting_cite(db, arena, ctx);
+    let initial_refs = refs_accepting_cite(db, root, arena, ctx);
     let mut best = initial_refs.len() as u16;
     let name_refs = list_all_name_blocks(root, arena);
-
-    fn get_nir_mut(nid: NodeId, arena: &mut IrArena<Markup>) -> &mut NameIR<Markup> {
-        arena.get_mut(nid).unwrap().get_mut().0.unwrap_name_ir()
-    }
 
     info!(
         "attempting to disambiguate {:?} ({}) with {:?}",
@@ -570,8 +573,7 @@ fn disambiguate_add_names(
 
         let total_ambiguity_number = |arena: &IrArena<Markup>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
-            let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
-            let edges = ir.to_edge_stream(fmt);
+            let edges = IR::to_edge_stream(root, arena, fmt);
             let count = dfas
                 .iter()
                 .filter(|dfa| dfa.accepts_data(db, &edges))
@@ -716,8 +718,8 @@ fn disambiguate_add_givennames(
     let refs = refs_accepting_cite(db, root, arena, ctx);
     let name_refs = list_all_name_blocks(root, arena);
     for (n, nid) in name_refs.into_iter().enumerate() {
-        let mut nir = arena.get_mut(nid).unwrap().get_mut();
-        expand_one_name_ir(db, ctx, &refs, &mut nir, n as u32);
+        let nir = get_nir_mut(nid, arena);
+        expand_one_name_ir(db, ctx, &refs, nir, n as u32);
         IR::recompute_group_vars(root, arena);
     }
     if also_add {
@@ -735,39 +737,49 @@ fn disambiguate_add_year_suffix(
     suffix: u32,
 ) {
     // First see if we can do it with an explicit one
-    let asuf = IR::visit_year_suffix_hooks(root, arena, &mut |piece| match &piece.hook {
-        YearSuffixHook::Explicit(_) => {
-            let (new_ir, gv) = piece.hook.render(ctx, suffix);
-            *piece.ir = new_ir;
-            piece.group_vars = gv;
-            piece.suffix_num = Some(suffix);
-            true
-        }
-        _ => false,
-    });
-
-    if asuf {
+    let hooks = IR::list_year_suffix_hooks(root, arena);
+    let mut added_suffix = false;
+    for yid in hooks {
+        let ys = get_ys_mut(yid, arena);
+        let sum: IrSum<Markup> = match &ysh.hook {
+            YearSuffixHook::Explicit(_) => ysh.hook.render(ctx, suffix),
+            _ => continue,
+        };
+        let gv = sum.1;
+        let node = arena.new_node(sum);
+        let ys = get_ys_mut(yid, arena);
+        ys.group_vars = gv;
+        ys.suffix_num = Some(suffix);
+        added_suffix = true;
+        break;
+    }
+    if added_suffix {
         return;
     }
 
     // Then attempt to do it for the ones that are embedded in date output
-    arena.visit_year_suffix_hooks(root, arena, &mut |piece| match &piece.hook {
-        YearSuffixHook::Plain => {
-            let (new_ir, gv) = piece.hook.render(ctx, suffix);
-            *piece.ir = new_ir;
-            piece.group_vars = gv;
-            piece.suffix_num = Some(suffix);
-            true
-        }
-        _ => false,
-    });
-    arena.recompute_group_vars()
+    for yid in hooks {
+        let ys = get_ys_mut(yid, arena);
+        let sum: IrSum<Markup> = match &ysh.hook {
+            YearSuffixHook::Plain => ysh.hook.render(ctx, suffix),
+            _ => continue,
+        };
+        let gv = sum.1;
+        let node = arena.new_node(sum);
+        let ys = get_ys_mut(yid, arena);
+        ys.group_vars = gv;
+        ys.suffix_num = Some(suffix);
+        break;
+    }
+
+    IR::recompute_group_vars(root, arena);
 }
 
 #[inline(never)]
 fn disambiguate_true(
     db: &dyn IrDatabase,
-    ir: &mut IrArena<Markup>,
+    root: NodeId,
+    arena: &mut IrArena<Markup>,
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
@@ -775,24 +787,27 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let un = is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id);
+    let un = is_unambiguous(db, ctx.disamb_pass, root, arena, ctx.cite_id, &ctx.reference.id);
     if un {
         return;
     }
-    let cond_refs = list_all_cond_disambs(ir);
-    for (_n, cir_arc) in cond_refs.into_iter().enumerate() {
-        if is_unambiguous(db, ctx.disamb_pass, ir, ctx.cite_id, &ctx.reference.id) {
-            info!("successfully disambiguated");
+    let cond_refs = list_all_cond_disambs(root, arena);
+    for cid in cond_refs.into_iter() {
+        if is_unambiguous(db, ctx.disamb_pass, root, arena, ctx.cite_id, &ctx.reference.id) {
+            debug!("successfully disambiguated with Cond");
             break;
         }
         {
-            let mut lock = cir_arc.lock().unwrap();
-            let (new_ir, gv) = lock.choose.intermediate(db, state, ctx);
-            lock.done = true;
-            lock.ir = Box::new(new_ir);
-            lock.group_vars = gv;
+            let cond = get_cond_mut(cid, arena);
+            let choose = cond.choose.clone();
+            let new_node = choose.intermediate(db, state, ctx, arena);
+            let gv = arena.get(new_node).unwrap().get().1;
+            replace_single_child(cid, new_node, arena);
+            let cond = get_cond_mut(cid, arena);
+            cond.done = true;
+            cond.group_vars = gv;
         }
-        ir.recompute_group_vars()
+        IR::recompute_group_vars(root, arena);
     }
 }
 
@@ -805,7 +820,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
     let mut arena = IrArena::new();
-    let root = style.intermediate(db, &mut state, &ctx, &mut arena).0;
+    let root = style.intermediate(db, &mut state, &ctx, &mut arena);
     let _fmt = db.get_formatter();
     let matching = refs_accepting_cite(db, root, &arena, &ctx);
     Arc::new(IrGen::new(root, arena, matching, state))
@@ -820,7 +835,7 @@ impl IrGenCow {
     fn to_mut(&mut self) -> &mut IrGen {
         *self = match self {
             IrGenCow::Arc(arc) => {
-                let (root, ir, state) = arc.as_ref().fresh_copy();
+                let (root, arena, state) = arc.as_ref().fresh_copy();
                 IrGenCow::Cloned(IrGen {
                     root,
                     arena,
@@ -894,7 +909,7 @@ impl IrGenCow {
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         let mut cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
-        disambiguate_true(db, &mut cloned.arena, &mut cloned.state, &ctx);
+        disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
         // No point recomputing when nothing more can be done.
         cloned.matching_refs = Vec::new();
     }
@@ -1018,7 +1033,7 @@ pub fn built_cluster_before_output(
             })
         {
             let gen_mut = Arc::make_mut(gen4);
-            gen_mut.ir.capitalize_first_term_of_cluster(&fmt);
+            IR::capitalize_first_term_of_cluster(gen_mut.root, &mut gen_mut.arena, &fmt);
         }
     }
     // debug!("group_and_collapse made: {:#?}", irs);
@@ -1055,8 +1070,7 @@ pub fn built_cluster_before_output(
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
-        let ir = &gen4.ir;
-        let flattened = ir.flatten(&fmt)?;
+        let flattened = IR::flatten(gen4.root, &gen4.arena, &fmt)?;
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         if !pre.is_empty() && !pre.ends_with(' ') {
@@ -1352,13 +1366,13 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             }
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
-                if let Some(new_root) = ir.split_first_field() {
+                if let Some(new_root) = IR::split_first_field(root, &mut arena) {
                     root = new_root;
                 }
             }
 
-            let matching = refs_accepting_cite(db, root, &ir, &ctx);
-            Arc::new(IrGen::new(ir, matching, state))
+            let matching = refs_accepting_cite(db, root, &arena, &ctx);
+            Arc::new(IrGen::new(root, arena, matching, state))
         },
     )
 }
@@ -1369,7 +1383,7 @@ fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
         let layout = &style.bibliography.as_ref().unwrap().layout;
         let ir = &gen0.arena;
-        let flat = ir.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
+        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
         // in a bibliography, we do the affixes etc inside Layout, so they're not here
         let string = fmt.output(flat, get_piq(db));
         Arc::new(string)
@@ -1415,7 +1429,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     IR::recompute_group_vars(mutated.root, &mut mutated.arena);
                 }
             }
-            let flat = gen0.arena.flatten(&fmt).unwrap_or_else(|| fmt.plain(""));
+            let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
             let string = fmt.output(flat, get_piq(db));
             if !string.is_empty() {
                 m.insert(key.clone(), Arc::new(string));
