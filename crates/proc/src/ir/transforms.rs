@@ -99,6 +99,7 @@ impl<O: OutputFormat> IR<O> {
             }),
             left_gv,
         ));
+        left.append(first, arena);
 
         let right_config = (
             IR::Seq(IrSeq {
