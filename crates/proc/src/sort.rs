@@ -323,6 +323,8 @@ struct SortingWalker<'a, I: OutputFormat> {
     /// the cite is in its original format, but the formatter is PlainText
     ctx: CiteContext<'a, PlainText, I>,
     state: IrState,
+    /// Use this for generating names and dates, and not creating a new one each time
+    arena: IrArena<PlainText>,
 }
 
 impl<'a, I: OutputFormat> SortingWalker<'a, I> {
@@ -332,6 +334,7 @@ impl<'a, I: OutputFormat> SortingWalker<'a, I> {
             db,
             ctx: plain_ctx,
             state: Default::default(),
+            arena: Default::default(),
         }
     }
 
@@ -572,11 +575,11 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     //     3. Return count as a {:08} padded number
 
     fn names(&mut self, names: &Names) -> Self::Output {
-        let mut arena = IrArena::new();
         let node =
-            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut arena);
+            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
         (
-            IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(),
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
             gv,
         )
     }
@@ -585,10 +588,10 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
     //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
-        let mut arena = IrArena::new();
-        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut arena);
+        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
         (
-            IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(),
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
             gv,
         )
     }

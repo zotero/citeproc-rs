@@ -24,23 +24,24 @@ where
         ctx: &CiteContext<'c, O, I>,
         arena: &mut IrArena<O>,
     ) -> NodeId {
-        let maybe_leave_unresolved = |unresolved: bool, sub_node: NodeId, arena: &mut IrArena<O>| {
-            if unresolved {
-                let gv = arena.get(sub_node).unwrap().get().1;
-                let cond = arena.new_node((
-                    IR::ConditionalDisamb(ConditionalDisambIR {
-                        choose: self.clone(),
-                        done: false,
-                        group_vars: gv,
-                    }),
-                    gv,
-                ));
-                cond.append(sub_node, arena);
-                cond
-            } else {
-                sub_node
-            }
-        };
+        let maybe_leave_unresolved =
+            |unresolved: bool, sub_node: NodeId, arena: &mut IrArena<O>| {
+                if unresolved {
+                    let gv = arena.get(sub_node).unwrap().get().1;
+                    let cond = arena.new_node((
+                        IR::ConditionalDisamb(ConditionalDisambIR {
+                            choose: self.clone(),
+                            done: false,
+                            group_vars: gv,
+                        }),
+                        gv,
+                    ));
+                    cond.append(sub_node, arena);
+                    cond
+                } else {
+                    sub_node
+                }
+            };
         // XXX: should you treat conditional evaluations as a "variable test"?
         let Choose(ref head, ref rest, ref last) = **self;
         let mut disamb = false;
