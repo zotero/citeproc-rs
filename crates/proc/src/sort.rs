@@ -453,7 +453,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     type Output = (String, GroupVars);
     type Checker = CiteContext<'a, PlainText, O>;
 
-    fn default(&self) -> Self::Output {
+    fn default(&mut self) -> Self::Output {
         Default::default()
     }
     fn get_checker(&self) -> Option<&Self::Checker> {

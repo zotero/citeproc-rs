@@ -240,7 +240,7 @@ use csl::Choose;
 impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
     type Output = u32;
     type Checker = RefContext<'a, O>;
-    fn default(&self) -> Self::Output {
+    fn default(&mut self) -> Self::Output {
         0
     }
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {

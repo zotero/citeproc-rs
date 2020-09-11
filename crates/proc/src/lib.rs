@@ -285,7 +285,7 @@ impl IrState {
     pub fn maybe_suppress_date<T: Default>(
         &mut self,
         var: DateVariable,
-        f: impl Fn(&mut Self) -> T,
+        mut f: impl FnMut(&mut Self) -> T,
     ) -> T {
         if self.is_suppressed_date(var) {
             Default::default()

@@ -277,7 +277,7 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
     }
 
     // Compare with Output = Option<NodeId>, where you wouldn't know the GroupVars of the child.
-    fn default(&self) -> Self::Output {
+    fn default(&mut self) -> Self::Output {
         self.arena.new_node((IR::Rendered(None), GroupVars::Plain))
     }
     fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
@@ -333,10 +333,11 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
             db,
             ctx,
             ref mut state,
+            ref mut arena,
             ..
         } = *self;
         let o: Option<NodeId> = state.maybe_suppress_date(var, |state| {
-            Some(body_date.intermediate(db, state, ctx, self.arena))
+            Some(body_date.intermediate(db, state, ctx, arena))
         });
         o.unwrap_or_else(|| {
             self.arena

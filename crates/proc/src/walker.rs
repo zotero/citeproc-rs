@@ -19,7 +19,7 @@ pub enum WalkerFoldType<'a> {
 pub trait StyleWalker {
     type Output;
     type Checker: CondChecker;
-    fn default(&self) -> Self::Output;
+    fn default(&mut self) -> Self::Output;
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         for el in elements {
             let _ = self.element(el);

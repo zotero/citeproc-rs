@@ -516,7 +516,7 @@ fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
             Some(x) => x.get(),
             None => return,
         };
-        match me.0 {
+        match &me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
             IR::ConditionalDisamb(c) => {
                 vec.push(node);
@@ -597,7 +597,11 @@ fn disambiguate_add_names(
         nir.achieved_count(best);
 
         let is_sort_key = ctx.sort_key.is_some();
-        let label_after_name = nir.names_inheritance.label.map_or(false, |x| x.after_name);
+        let label_after_name = nir
+            .names_inheritance
+            .label
+            .as_ref()
+            .map_or(false, |x| x.after_name);
         // Probably use an Atom for this buddy
         let built_label = nir.built_label.clone();
 
@@ -754,7 +758,7 @@ fn disambiguate_add_year_suffix(
     // First see if we can do it with an explicit one
     let hooks = IR::list_year_suffix_hooks(root, arena);
     let mut added_suffix = false;
-    for yid in hooks {
+    for &yid in &hooks {
         let (ys, _) = get_ys_mut(yid, arena);
         let sum: IrSum<Markup> = match &ys.hook {
             YearSuffixHook::Explicit(_) => ys.hook.render(ctx, suffix),
@@ -765,6 +769,7 @@ fn disambiguate_add_year_suffix(
         let (ys, ys_gv) = get_ys_mut(yid, arena);
         *ys_gv = gv;
         ys.suffix_num = Some(suffix);
+        added_suffix = true;
         break;
     }
     if added_suffix {

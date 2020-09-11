@@ -110,7 +110,7 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
     type Output = FreeCondSets;
     type Checker = crate::choose::UselessCondChecker;
 
-    fn default(&self) -> Self::Output {
+    fn default(&mut self) -> Self::Output {
         FreeCondSets::default()
     }
     /// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
