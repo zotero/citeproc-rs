@@ -1,4 +1,4 @@
-use citeproc_io::{Date, DateOrRange, Name, PersonName, Reference};
+use citeproc_io::{Name, PersonName, Reference};
 use csl::{DateVariable, NameVariable};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -154,9 +154,9 @@ mod parser {
     use super::*;
     use nom::{
         branch::alt,
-        bytes::complete::{take_while, take_while1, take_while_m_n},
+        bytes::complete::{take_while, take_while1},
         character::complete::char,
-        combinator::{map, opt, recognize},
+        combinator::recognize,
         multi::{many1, separated_nonempty_list},
         IResult,
     };

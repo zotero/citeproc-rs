@@ -40,23 +40,23 @@ impl<O: OutputFormat> Either<O> {
                 let mapper = CiteEdgeData::from_date_variable(var);
                 let content = opt.map(mapper);
                 let gv = GroupVars::rendered_if(content.is_some());
-                (IR::Rendered(content), gv)
+                arena.new_node((IR::Rendered(content), gv))
             }
             Either::Ir(id) => {
                 let node = arena.get(id).unwrap().get();
-                let gv = if let IR::Rendered(None) = &ir {
+                let gv = if let IR::Rendered(None) = node.0 {
                     GroupVars::Missing
                 } else {
                     GroupVars::Important
                 };
-                (ir, gv)
+                arena.new_node((ir, gv))
             }
         }
     }
 }
 
 fn to_ref_ir<F, O: OutputFormat>(
-    id: NodeId,
+    root: NodeId,
     arena: &IrArena<O>,
     stack: Formatting,
     ys_edge: Edge,
@@ -77,16 +77,17 @@ where
         to_edge,
         arena,
     };
-    fn walk(id: NodeId, scope: Scope<'_>) -> (RefIR, GroupVars) {
+    fn walk(node: NodeId, scope: &Scope<'_>) -> (RefIR, GroupVars) {
         arena
-            .get(id)
-            .map(|node| match node {
-                IR::Rendered(opt_build) => RefIR::Edge(scope.to_edge(opt_build, scope.stack)),
+            .get(node)
+            .map(|n| n.get())
+            .map(|n| match n {
+                IR::Rendered(opt_build) => RefIR::Edge(scope.to_edge.call(opt_build, scope.stack)),
                 IR::YearSuffix(_ys) => RefIR::Edge(Some(scope.ys_edge)),
                 IR::Seq(ir_seq) => {
-                    let contents = id
+                    let contents = node
                         .children(scope.arena)
-                        .map(|child_id| walk(child_id, arena))
+                        .map(|child_id| walk(child_id, arena).0)
                         .collect();
                     let ref_seq = RefIrSeq {
                         contents,
@@ -106,7 +107,8 @@ where
                 ),
             })
             .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
-    };
+    }
+    walk(root, &scope)
 }
 
 impl Either<Markup> {
@@ -162,8 +164,8 @@ where
             ),
         };
         either
-            .map(|e| e.into_cite_ir(var))
-            .unwrap_or((IR::Rendered(None), GroupVars::rendered_if(false)))
+            .map(|e| e.into_cite_ir(var, arena))
+            .unwrap_or_else(|| arena.new_node((IR::Rendered(None), GroupVars::rendered_if(false))))
     }
 }
 
@@ -247,20 +249,21 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
             PartAccumulator::Builds(ref mut vec) => {
                 let vec = mem::replace(vec, Vec::new());
                 let seq_node = arena.new_node((
-                    IrSeq {
+                    IR::Seq(IrSeq {
                         formatting: bits.overall_formatting,
                         affixes: bits.overall_affixes.clone(),
                         text_case: bits.overall_text_case,
                         display: bits.display,
                         ..Default::default()
-                    },
+                    }),
                     GroupVars::Important,
                 ));
                 for built in vec {
-                    seq_node.append(arena.new_node((
+                    let node = arena.new_node((
                         IR::Rendered(Some(CiteEdgeData::Output(built))),
                         GroupVars::Important,
-                    )));
+                    ));
+                    seq_node.append(node, arena);
                 }
                 PartAccumulator::Seq(seq_node)
             }
