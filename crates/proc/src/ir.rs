@@ -360,7 +360,7 @@ impl IR<Markup> {
                 edges.push(ed.to_edge_data(fmt, formatting))
             }
             IR::YearSuffix(ys) => {
-                if IR::is_empty(node, arena) {
+                if !IR::is_empty(node, arena) {
                     edges.push(EdgeData::YearSuffix);
                 }
             }
