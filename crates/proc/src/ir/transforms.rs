@@ -1,4 +1,4 @@
-use crate::disamb::names::{NameIr, replace_single_child};
+use crate::disamb::names::{replace_single_child, NameIr};
 use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
@@ -27,8 +27,8 @@ impl<O: OutputFormat> IR<O> {
     fn find_term_rendered_first(node: NodeId, arena: &mut IrArena<O>) -> Option<&mut O::Build> {
         match arena.get_mut(node)?.get_mut().0 {
             IR::Rendered(Some(CiteEdgeData::Term(b)))
-                | IR::Rendered(Some(CiteEdgeData::LocatorLabel(b)))
-                | IR::Rendered(Some(CiteEdgeData::FrnnLabel(b))) => Some(&mut b),
+            | IR::Rendered(Some(CiteEdgeData::LocatorLabel(b)))
+            | IR::Rendered(Some(CiteEdgeData::FrnnLabel(b))) => Some(&mut b),
             IR::ConditionalDisamb(_) | IR::Seq(_) => node
                 .children(arena)
                 .next()
@@ -75,17 +75,17 @@ impl<O: OutputFormat> IR<O> {
                             }),
                         )
                     })
-                .unwrap_or((None, None))
+                    .unwrap_or((None, None))
             };
 
             let left_gv = arena.get(first)?.get().1;
             let left = arena.new_node((
-                    IR::Seq(IrSeq {
-                        display: Some(DisplayMode::LeftMargin),
-                        affixes: afpre,
-                        ..Default::default()
-                    }),
-                    left_gv,
+                IR::Seq(IrSeq {
+                    display: Some(DisplayMode::LeftMargin),
+                    affixes: afpre,
+                    ..Default::default()
+                }),
+                left_gv,
             ));
 
             let right_config = (
@@ -173,13 +173,17 @@ impl<O: OutputFormat> IR<O> {
         //     debug!("ys, {:?}", ys);
         // }
         Some((
-                IR::find_first_year(node, arena)?,
-                IR::find_year_suffix(node, arena)?,
+            IR::find_first_year(node, arena)?,
+            IR::find_year_suffix(node, arena)?,
         ))
     }
 
     /// Rest of the name: "if it has a year suffix"
-    fn suppress_first_year(node: NodeId, arena: &mut IrArena<O>, has_explicit: bool) -> Option<NodeId> {
+    fn suppress_first_year(
+        node: NodeId,
+        arena: &mut IrArena<O>,
+        has_explicit: bool,
+    ) -> Option<NodeId> {
         match arena.get(node)?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Year(_))) => {
                 arena.get_mut(node)?.get_mut().0 = IR::Rendered(None);
@@ -204,9 +208,9 @@ impl<O: OutputFormat> IR<O> {
                         }
                         (IR::YearSuffix(_), GroupVars::Important)
                             if !has_explicit && second.children(arena).next().is_some() =>
-                            {
-                                IR::suppress_first_year(first, arena, has_explicit)
-                            }
+                        {
+                            IR::suppress_first_year(first, arena, has_explicit)
+                        }
                         _ => None,
                     }
                 } else {
@@ -287,9 +291,9 @@ impl<O: OutputFormat<Output = String>> IR<O> {
                 // TODO: just get it from the database
                 fmt.output(build.clone(), false).parse().ok()
             }
-            IR::ConditionalDisamb(_) => {
-                node.children(arena).find_map(|child| IR::collapse_to_cnum(child, arena, fmt))
-            }
+            IR::ConditionalDisamb(_) => node
+                .children(arena)
+                .find_map(|child| IR::collapse_to_cnum(child, arena, fmt)),
             IR::Seq(_) => {
                 // assumes it's the first one that appears
                 if node.children(arena).count() != 1 {
@@ -395,8 +399,8 @@ fn range_collapse() {
     assert_eq!(
         collapse_ranges(&[s(1), s(2), CnumIx::new(4, 3)]),
         vec![
-        RangePiece::Range(s(1), s(2)),
-        RangePiece::Single(CnumIx::new(4, 3))
+            RangePiece::Range(s(1), s(2)),
+            RangePiece::Single(CnumIx::new(4, 3))
         ]
     );
 }
@@ -440,8 +444,7 @@ impl Debug for Unnamed3<Markup> {
             .field("cnum", &self.cnum)
             .field(
                 "gen4",
-                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt)
-                    .map(|x| fmt.output(x, false)),
+                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt).map(|x| fmt.output(x, false)),
             )
             .field("has_locator", &self.has_locator)
             .field("is_first", &self.is_first)
@@ -502,8 +505,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                 // Keep cites separated by affixes together
                 if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
                     || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
-                        || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
-                        || cites.get(ix).map_or(false, |u| u.cite.has_affix())
+                    || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
+                    || cites.get(ix).map_or(false, |u| u.cite.has_affix())
                 {
                     *oix = ix;
                     *seen_once = false;
@@ -520,8 +523,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                     *oix += 1;
                 }
             })
-        .or_insert((ix, false));
-        }
+            .or_insert((ix, false));
+    }
 
     if collapse.map_or(false, |c| {
         c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
@@ -538,10 +541,10 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                     moved += 1;
                     let year_and_suf =
                         IR::find_first_year_and_suffix(cites[ix].gen4.root, &cites[ix].gen4.arena)
-                        .and_then(|(ys_node, suf)| {
-                            let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt)?;
-                            Some((fmt.output(flat, false), suf))
-                        });
+                            .and_then(|(ys_node, suf)| {
+                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt)?;
+                                Some((fmt.output(flat, false), suf))
+                            });
                     if let Some((y, suf)) = year_and_suf {
                         cites[ix].year_suffix = Some(suf);
                         same_years
@@ -558,8 +561,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 }
                                 *oix = ix;
                             })
-                        .or_insert((ix, false));
-                        }
+                            .or_insert((ix, false));
+                    }
                     ix += 1;
                 }
                 top_ix += moved;
@@ -674,11 +677,11 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                                 for (nix, cite) in following.enumerate() {
                                     if let Some(cnum) = cite.year_suffix {
                                         u.collapsed_year_suffixes.push(RangePiece::Single(
-                                                CnumIx {
-                                                    cnum,
-                                                    ix: ix + nix + 1,
-                                                    force_single: cite.has_locator,
-                                                },
+                                            CnumIx {
+                                                cnum,
+                                                ix: ix + nix + 1,
+                                                force_single: cite.has_locator,
+                                            },
                                         ));
                                     }
                                     cite.vanished = true;
@@ -833,7 +836,9 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                     let current_nir = current_ir.unwrap_name_ir_mut();
                     // let nir handle it
                     // u32::MAX so ALL names get --- treatment
-                    if let Some(subbed) = current_nir.subsequent_author_substitute(fmt, std::u32::MAX, sas) {
+                    if let Some(subbed) =
+                        current_nir.subsequent_author_substitute(fmt, std::u32::MAX, sas)
+                    {
                         replace_single_child(current_id, arena.new_node(subbed), arena);
                     }
                 } else if sas.is_empty() {
@@ -849,7 +854,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                     // Add the sas ---
                     let sas_ir = arena.new_node((
                         IR::Rendered(Some(CiteEdgeData::Output(fmt.plain(sas)))),
-                        GroupVars::Important
+                        GroupVars::Important,
                     ));
                     current_id.append(sas_ir, arena);
 
@@ -858,7 +863,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                         if let Some(label) = current.built_label.as_ref() {
                             let label_node = arena.new_node((
                                 IR::Rendered(Some(CiteEdgeData::Output(label.clone()))),
-                                GroupVars::Plain
+                                GroupVars::Plain,
                             ));
                             if label_el.after_name {
                                 current_id.append(label_node, arena)

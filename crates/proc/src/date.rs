@@ -71,7 +71,12 @@ where
         to_edge: &'a F,
         arena: &'a IrArena<O>,
     }
-    let scope = Scope { stack, ys_edge, to_edge, arena };
+    let scope = Scope {
+        stack,
+        ys_edge,
+        to_edge,
+        arena,
+    };
     fn walk(id: NodeId, scope: Scope<'_>) -> (RefIR, GroupVars) {
         arena
             .get(id)
@@ -249,7 +254,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                         display: bits.display,
                         ..Default::default()
                     },
-                    GroupVars::Important
+                    GroupVars::Important,
                 ));
                 for built in vec {
                     seq_node.append(arena.new_node((
@@ -278,10 +283,13 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 PartAccumulator::Builds(ref mut vec) => {
                     vec.push(built);
                 }
-                PartAccumulator::Seq(ref mut seq) => seq.contents.push((
-                    IR::Rendered(Some(CiteEdgeData::Output(built))),
-                    GroupVars::Important,
-                )),
+                PartAccumulator::Seq(seq_node) => seq_node.append(
+                    arena.new_node((
+                        IR::Rendered(Some(CiteEdgeData::Output(built))),
+                        GroupVars::Important,
+                    )),
+                    arena,
+                ),
             },
             Either::Build(None) => {}
         }
@@ -460,7 +468,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
             if sorting || matches {
                 let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
-                return dp_render_either(var, dp, ctx.clone(), single, false, is_filtered);
+                return dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered);
             }
             None
         });
@@ -745,7 +753,6 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                     let b = fmt.affixed_text(s, part.formatting, affixes.as_ref());
                     Either::Build(Some(b))
                 } else {
-                    let mut contents = Vec::with_capacity(2);
                     let b = fmt.plain(&s);
                     let seq = arena.new_node((
                         IR::Seq(IrSeq {

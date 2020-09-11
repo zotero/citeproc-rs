@@ -4,11 +4,11 @@
 //
 // Copyright © 2020 Corporation for Digital Scholarship
 
-use crate::prelude::*;
-use crate::disamb::Nfa;
-use csl::Atom;
 use crate::disamb::names::RefNameIR;
+use crate::disamb::Nfa;
+use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
+use csl::Atom;
 use csl::{Affixes, Formatting};
 
 #[allow(dead_code)]
@@ -113,7 +113,12 @@ impl RefIR {
         }
     }
 
-    pub(crate) fn keep_first_ysh(&mut self, ysh_explicit_edge: Edge, ysh_plain_edge: Edge, ysh_edge: Edge) {
+    pub(crate) fn keep_first_ysh(
+        &mut self,
+        ysh_explicit_edge: Edge,
+        ysh_plain_edge: Edge,
+        ysh_edge: Edge,
+    ) {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
             if !*found {
@@ -173,4 +178,3 @@ impl RefIR {
 //         (RefIR::Edge(Some(edge)), GroupVars::Important)
 //     }
 // }
-

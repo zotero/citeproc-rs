@@ -15,22 +15,16 @@ pub fn truncate_prf(prf: PageRangeFormat, first: u32, mut second: u32) -> u32 {
                 let chopped = truncate_diff(first, second, 2);
                 if closest_smaller_power_of_10(chopped) == 100 {
                     // force 4 digits if 3 are different
-                    return truncate_diff(first, second, 4)
+                    return truncate_diff(first, second, 4);
                 }
                 chopped
             } else {
                 truncate_diff(first, second, 2)
             }
         }
-        PageRangeFormat::Minimal => {
-            truncate_diff(first, second, 1)
-        }
-        PageRangeFormat::MinimalTwo => {
-            truncate_diff(first, second, 2)
-        }
-        PageRangeFormat::Expanded => {
-            second
-        }
+        PageRangeFormat::Minimal => truncate_diff(first, second, 1),
+        PageRangeFormat::MinimalTwo => truncate_diff(first, second, 2),
+        PageRangeFormat::Expanded => second,
     }
 }
 
@@ -165,5 +159,3 @@ impl DigitsBase10 {
         DigitsBase10 { mask, num }
     }
 }
-
-

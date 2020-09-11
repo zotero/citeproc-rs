@@ -390,9 +390,11 @@ pub fn add_to_graph(
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
-                    Some(db.edge(EdgeData::Output(
-                        fmt.output_in_context(fmt.plain(s), Default::default(), None),
-                    )))
+                    Some(db.edge(EdgeData::Output(fmt.output_in_context(
+                        fmt.plain(s),
+                        Default::default(),
+                        None,
+                    ))))
                 } else {
                     None
                 })

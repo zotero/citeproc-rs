@@ -298,7 +298,13 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                 ctx.disamb_pass,
                 None,
             ) {
-                let names_seq = NameIR::rendered_ntbs_to_node(result, arena, is_sort_key, label_after_name, built_label.as_ref());
+                let names_seq = NameIR::rendered_ntbs_to_node(
+                    result,
+                    arena,
+                    is_sort_key,
+                    label_after_name,
+                    built_label.as_ref(),
+                );
                 let nir_node = arena.new_node((IR::Name(nir), GroupVars::Important));
                 nir_node.append(names_seq, arena);
                 nir_node

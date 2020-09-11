@@ -83,7 +83,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
     // Construct preordered, which will then be stably sorted. It contains:
     // - All refs from all cites, in the order they appear (excluding non-existent)
     // - Then, all of the uncited reference ids.
-    // 
+    //
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
@@ -475,9 +475,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         }
         let out = output.unwrap_or_default();
         match fold_type {
-            WalkerFoldType::Group(g) => {
-                gv_acc.implicit_conditional(out)
-            }
+            WalkerFoldType::Group(g) => gv_acc.implicit_conditional(out),
             _ => (out, gv_acc),
         }
     }
@@ -575,8 +573,12 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
 
     fn names(&mut self, names: &Names) -> Self::Output {
         let mut arena = IrArena::new();
-        let node = crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut arena);
-        (IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(), gv)
+        let node =
+            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut arena);
+        (
+            IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
     }
 
     // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
@@ -585,7 +587,10 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn date(&mut self, date: &BodyDate) -> Self::Output {
         let mut arena = IrArena::new();
         let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut arena);
-        (IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(), gv)
+        (
+            IR::flatten(id, &arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {

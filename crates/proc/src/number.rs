@@ -1,8 +1,8 @@
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
 use csl::{
-    Gender, Locale, MiscTerm, OrdinalTerm, OrdinalTermSelector, PageRangeFormat,
-    SimpleTermSelector, TermFormExtended, NumberVariable,
+    Gender, Locale, MiscTerm, NumberVariable, OrdinalTerm, OrdinalTermSelector, PageRangeFormat,
+    SimpleTermSelector, TermFormExtended,
 };
 use std::fmt::Write;
 
@@ -63,7 +63,8 @@ pub fn get_hyphen(locale: &Locale, variable: NumberVariable) -> &str {
     // https://github.com/Juris-M/citeproc-js/blob/1aa49dd2ab9a1c85d3060073780d65c86754a438/src/util_number.js#L584
     let get = |term: MiscTerm| {
         let sel = SimpleTermSelector::Misc(term, TermFormExtended::Symbol);
-        locale.get_simple_term(sel)
+        locale
+            .get_simple_term(sel)
             .map(|amp| amp.singular().trim())
             .unwrap_or("\u{2013}")
     };
@@ -172,7 +173,12 @@ pub fn roman_representable(val: &NumericValue) -> bool {
     }
 }
 
-pub fn roman_lower(ts: &[NumericToken], locale: &Locale, variable: NumberVariable, prf: Option<PageRangeFormat>) -> String {
+pub fn roman_lower(
+    ts: &[NumericToken],
+    locale: &Locale,
+    variable: NumberVariable,
+    prf: Option<PageRangeFormat>,
+) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;
     for t in ts {

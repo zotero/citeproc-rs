@@ -79,9 +79,7 @@ impl Disambiguation<Markup> for Element {
             Element::Choose(c) => c.ref_ir(db, ctx, state, stack),
             Element::Date(dt) => {
                 let var = dt.variable();
-                state.maybe_suppress_date(var, |state| {
-                    dt.ref_ir(db, ctx, state, stack)
-                })
+                state.maybe_suppress_date(var, |state| dt.ref_ir(db, ctx, state, stack))
             }
             Element::Number(number) => {
                 let var = number.variable;
@@ -94,9 +92,7 @@ impl Disambiguation<Markup> for Element {
                             let e = ctx.locator_type.map(|_| db.edge(EdgeData::Locator));
                             return (RefIR::Edge(e), GroupVars::Important);
                         }
-                        v => ctx
-                            .get_number(v)
-                            .map(|val| renderer.number(number, &val)),
+                        v => ctx.get_number(v).map(|val| renderer.number(number, &val)),
                     }
                 };
                 let content = content
@@ -141,8 +137,13 @@ impl Disambiguation<Markup> for Element {
                             None
                         } else {
                             state.maybe_suppress_ordinary(v);
-                            ctx.get_ordinary(v, form)
-                                .map(|val| renderer.text_variable(&crate::helpers::plain_text_element(v), var, &val))
+                            ctx.get_ordinary(v, form).map(|val| {
+                                renderer.text_variable(
+                                    &crate::helpers::plain_text_element(v),
+                                    var,
+                                    &val,
+                                )
+                            })
                         };
                         return vario
                             .map(|x| fmt.output_in_context(x, stack, None))
@@ -150,7 +151,8 @@ impl Disambiguation<Markup> for Element {
                             .map(|label| db.edge(label))
                             .map(|edge| {
                                 let label = RefIR::Edge(Some(edge));
-                                let suffix_edge = RefIR::Edge(Some(db.edge(EdgeData::YearSuffixPlain)));
+                                let suffix_edge =
+                                    RefIR::Edge(Some(db.edge(EdgeData::YearSuffixPlain)));
                                 let mut contents = Vec::new();
                                 contents.push(label);
                                 if ctx.year_suffix {

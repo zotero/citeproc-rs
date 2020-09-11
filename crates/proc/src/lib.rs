@@ -25,10 +25,10 @@ mod element;
 mod group;
 mod helpers;
 mod ir;
-mod ref_ir;
 mod names;
 mod number;
 mod page_range;
+mod ref_ir;
 mod renderer;
 mod sort;
 mod unicode;
@@ -39,7 +39,7 @@ pub use crate::db::built_cluster_before_output;
 pub(crate) mod prelude {
     pub use crate::ir::IrSum;
     pub type IrArena<O = Markup> = indextree::Arena<IrSum<O>>;
-    pub use indextree::{NodeId, Node};
+    pub use indextree::{Node, NodeId};
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub enum CiteOrBib {
         Citation,
@@ -51,8 +51,8 @@ pub(crate) mod prelude {
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
     pub use citeproc_io::output::OutputFormat;
-    pub use citeproc_io::{NumberLike, NumericValue};
     pub use citeproc_io::IngestOptions;
+    pub use citeproc_io::{NumberLike, NumericValue};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 
@@ -282,7 +282,11 @@ impl IrState {
     }
 
     #[inline]
-    pub fn maybe_suppress_date<T: Default>(&mut self, var: DateVariable, f: impl Fn(&mut Self) -> T) -> T {
+    pub fn maybe_suppress_date<T: Default>(
+        &mut self,
+        var: DateVariable,
+        f: impl Fn(&mut Self) -> T,
+    ) -> T {
         if self.is_suppressed_date(var) {
             Default::default()
         } else {

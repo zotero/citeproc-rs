@@ -1,7 +1,7 @@
+use crate::helpers::plain_text_element;
 use crate::prelude::*;
 use csl::variables::*;
 use csl::*;
-use crate::helpers::plain_text_element;
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -120,28 +120,33 @@ where
                                 None
                             } else {
                                 state.maybe_suppress_ordinary(v);
-                                ctx.get_ordinary(v, form)
-                                    .map(|val| renderer.text_variable(&plain_text_element(v), var, &val))
+                                ctx.get_ordinary(v, form).map(|val| {
+                                    renderer.text_variable(&plain_text_element(v), var, &val)
+                                })
                             };
-                            return vario.map(|label| {
-                                let label_node = arena.new_node(
-                                    (IR::Rendered(Some(CiteEdgeData::Output(label))), GroupVars::Important)
-                                );
-                                let hook_node = arena.new_node(hook);
-                                let seq = IrSeq {
-                                    formatting: text.formatting,
-                                    affixes: text.affixes.clone(),
-                                    text_case: text.text_case,
-                                    delimiter: Atom::from(""),
-                                    display: text.display,
-                                    quotes: renderer.quotes_if(text.quotes),
-                                    dropped_gv: None,
-                                };
-                                // the citation-label is important, so so is the seq
-                                arena.new_node((IR::Seq(seq), GroupVars::Important))
-                            })
-                            .unwrap_or_else(|| arena.new_node((IR::Rendered(None), GroupVars::Missing)));
-                            }
+                            return vario
+                                .map(|label| {
+                                    let label_node = arena.new_node((
+                                        IR::Rendered(Some(CiteEdgeData::Output(label))),
+                                        GroupVars::Important,
+                                    ));
+                                    let hook_node = arena.new_node(hook);
+                                    let seq = IrSeq {
+                                        formatting: text.formatting,
+                                        affixes: text.affixes.clone(),
+                                        text_case: text.text_case,
+                                        delimiter: Atom::from(""),
+                                        display: text.display,
+                                        quotes: renderer.quotes_if(text.quotes),
+                                        dropped_gv: None,
+                                    };
+                                    // the citation-label is important, so so is the seq
+                                    arena.new_node((IR::Seq(seq), GroupVars::Important))
+                                })
+                                .unwrap_or_else(|| {
+                                    arena.new_node((IR::Rendered(None), GroupVars::Missing))
+                                });
+                        }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
                                 if state.is_suppressed_ordinary(v) {
@@ -206,27 +211,24 @@ where
             //
             // You're going to have to replace sequence() with something more complicated.
             // And pass up information about .any(|v| used variables).
-            Element::Group(ref g) => {
-                sequence(
-                    db,
-                    state,
-                    ctx,
-                    arena,
-                    g.elements.as_ref(),
-                    g.delimiter.0.clone(),
-                    g.formatting,
-                    g.affixes.as_ref(),
-                    g.display,
-                    None,
-                    TextCase::None,
-                    true,
-                )
-            }
+            Element::Group(ref g) => sequence(
+                db,
+                state,
+                ctx,
+                arena,
+                g.elements.as_ref(),
+                g.delimiter.0.clone(),
+                g.formatting,
+                g.affixes.as_ref(),
+                g.display,
+                None,
+                TextCase::None,
+                true,
+            ),
             Element::Date(ref dt) => {
                 let var = dt.variable();
-                let o: Option<NodeId> = state.maybe_suppress_date(var, |state| {
-                    Some(dt.intermediate(db, state, ctx, arena))
-                });
+                let o: Option<NodeId> = state
+                    .maybe_suppress_date(var, |state| Some(dt.intermediate(db, state, ctx, arena)));
                 o.unwrap_or_else(|| arena.new_node((IR::Rendered(None), GroupVars::Missing)))
             }
         }
@@ -237,7 +239,7 @@ impl YearSuffixHook {
     pub(crate) fn render<'c, O: OutputFormat, I: OutputFormat>(
         &self,
         ctx: &CiteContext<'c, O, I>,
-        suffix_num: u32
+        suffix_num: u32,
     ) -> IrSum<O> {
         let implicit = plain_text_element(Variable::YearSuffix);
         let text = match self {
@@ -246,8 +248,13 @@ impl YearSuffixHook {
         };
         let renderer = Renderer::cite(ctx);
         let base26 = citeproc_io::utils::to_bijective_base_26(suffix_num);
-        let output = renderer.text_value(text, &base26).expect("base26 is not empty");
-        (IR::Rendered(Some(CiteEdgeData::YearSuffix(output))), GroupVars::Important)
+        let output = renderer
+            .text_value(text, &base26)
+            .expect("base26 is not empty");
+        (
+            IR::Rendered(Some(CiteEdgeData::YearSuffix(output))),
+            GroupVars::Important,
+        )
     }
 }
 
@@ -276,45 +283,47 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
     fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         match fold_type {
-            WalkerFoldType::Macro(text) => {
-                sequence(
-                    self.db,
-                    &mut self.state,
-                    self.ctx,
-                    self.arena,
-                    &elements,
-                    "".into(),
-                    text.formatting,
-                    text.affixes.as_ref(),
-                    text.display,
-                    renderer.quotes_if(text.quotes),
-                    text.text_case,
-                    true,
-                )
-            }
-            WalkerFoldType::Group(group) => {
-                sequence(
-                    self.db,
-                    &mut self.state,
-                    self.ctx,
-                    self.arena,
-                    group.elements.as_ref(),
-                    group.delimiter.0.clone(),
-                    group.formatting,
-                    group.affixes.as_ref(),
-                    group.display,
-                    None,
-                    TextCase::None,
-                    true,
-                )
-            }
-            WalkerFoldType::Layout(layout) => {
-                sequence_basic(self.db, &mut self.state, self.ctx, self.arena, &layout.elements)
-            }
+            WalkerFoldType::Macro(text) => sequence(
+                self.db,
+                &mut self.state,
+                self.ctx,
+                self.arena,
+                &elements,
+                "".into(),
+                text.formatting,
+                text.affixes.as_ref(),
+                text.display,
+                renderer.quotes_if(text.quotes),
+                text.text_case,
+                true,
+            ),
+            WalkerFoldType::Group(group) => sequence(
+                self.db,
+                &mut self.state,
+                self.ctx,
+                self.arena,
+                group.elements.as_ref(),
+                group.delimiter.0.clone(),
+                group.formatting,
+                group.affixes.as_ref(),
+                group.display,
+                None,
+                TextCase::None,
+                true,
+            ),
+            WalkerFoldType::Layout(layout) => sequence_basic(
+                self.db,
+                &mut self.state,
+                self.ctx,
+                self.arena,
+                &layout.elements,
+            ),
             WalkerFoldType::IfThen | WalkerFoldType::Else => {
                 sequence_basic(self.db, &mut self.state, self.ctx, self.arena, elements)
             }
-            WalkerFoldType::Substitute => todo!("use fold() to implement name element substitution"),
+            WalkerFoldType::Substitute => {
+                todo!("use fold() to implement name element substitution")
+            }
         }
     }
 
@@ -329,7 +338,10 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
         let o: Option<NodeId> = state.maybe_suppress_date(var, |state| {
             Some(body_date.intermediate(db, state, ctx, self.arena))
         });
-        o.unwrap_or_else(|| self.arena.new_node((IR::Rendered(None), GroupVars::Missing)))
+        o.unwrap_or_else(|| {
+            self.arena
+                .new_node((IR::Rendered(None), GroupVars::Missing))
+        })
     }
 
     fn names(&mut self, names: &Names) -> Self::Output {
@@ -344,7 +356,8 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
             None
         } else {
             state.maybe_suppress_num(var);
-            self.ctx.get_number(var)
+            self.ctx
+                .get_number(var)
                 .map(|val| renderer.number(number, &val))
                 .map(CiteEdgeData::Output)
         };
@@ -355,6 +368,7 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
     fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
-        self.arena.new_node((IR::Rendered(content), GroupVars::Plain))
+        self.arena
+            .new_node((IR::Rendered(content), GroupVars::Plain))
     }
 }

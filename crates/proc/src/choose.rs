@@ -8,10 +8,8 @@ use crate::prelude::*;
 
 use crate::ir::ConditionalDisambIR;
 use citeproc_io::DateOrRange;
-use csl::{
-    Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
-};
 use csl::{AnyVariable, DateVariable};
+use csl::{Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position};
 
 use std::sync::{Arc, Mutex};
 

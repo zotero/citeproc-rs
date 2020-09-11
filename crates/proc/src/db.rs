@@ -10,8 +10,8 @@
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
-use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
 use crate::disamb::names::replace_single_child;
+use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData};
@@ -488,7 +488,10 @@ fn make_identical_name_formatter<'a>(
 
 fn list_all_name_blocks(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
     fn list_all_name_blocks_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
-        let me = match arena.get(node) { Some(x) => x.get(), None => return };
+        let me = match arena.get(node) {
+            Some(x) => x.get(),
+            None => return,
+        };
         match me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) => {}
             IR::Name(_) => {
@@ -511,15 +514,20 @@ type CondDisambRef = Arc<Mutex<ConditionalDisambIR>>;
 
 fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
     fn list_all_cd_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
-        let me = match arena.get(node) { Some(x) => x.get(), None => return };
+        let me = match arena.get(node) {
+            Some(x) => x.get(),
+            None => return,
+        };
         match me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
             IR::ConditionalDisamb(c) => {
                 vec.push(node);
-                node.children(arena).for_each(|child| list_all_cd_inner(child, arena, vec));
+                node.children(arena)
+                    .for_each(|child| list_all_cd_inner(child, arena, vec));
             }
             IR::Seq(seq) => {
-                node.children(arena).for_each(|child| list_all_cd_inner(child, arena, vec));
+                node.children(arena)
+                    .for_each(|child| list_all_cd_inner(child, arena, vec));
             }
         }
     }
@@ -534,10 +542,20 @@ fn get_nir_mut(nid: NodeId, arena: &mut IrArena<Markup>) -> &mut NameIR<Markup> 
     arena.get_mut(nid).unwrap().get_mut().0.unwrap_name_ir_mut()
 }
 fn get_ys_mut(yid: NodeId, arena: &mut IrArena<Markup>) -> &mut YearSuffix {
-    arena.get_mut(yid).unwrap().get_mut().0.unwrap_year_suffix_mut()
+    arena
+        .get_mut(yid)
+        .unwrap()
+        .get_mut()
+        .0
+        .unwrap_year_suffix_mut()
 }
 fn get_cond_mut(cid: NodeId, arena: &mut IrArena) -> &mut ConditionalDisambIR {
-    arena.get_mut(cid).unwrap().get_mut().0.unwrap_cond_disamb_mut()
+    arena
+        .get_mut(cid)
+        .unwrap()
+        .get_mut()
+        .0
+        .unwrap_cond_disamb_mut()
 }
 
 fn disambiguate_add_names(
@@ -598,20 +616,21 @@ fn disambiguate_add_names(
             nir.achieved_count(best);
             // TODO: reuse backing storage when doing this, with a scratch Vec<O::Build>.
             if let Some(built_names) = nir.add_name(db, ctx) {
-                let seq = NameIR::rendered_ntbs_to_node(built_names, arena, is_sort_key, label_after_name, built_label.as_ref());
+                let seq = NameIR::rendered_ntbs_to_node(
+                    built_names,
+                    arena,
+                    is_sort_key,
+                    label_after_name,
+                    built_label.as_ref(),
+                );
                 replace_single_child(nid, seq, arena);
             } else {
                 break;
             }
             if also_expand {
-                if let Some(expanded) = expand_one_name_ir(
-                    db,
-                    ctx,
-                    &initial_refs,
-                    get_nir_mut(nid, arena),
-                    n as u32,
-                ) {
-
+                if let Some(expanded) =
+                    expand_one_name_ir(db, ctx, &initial_refs, get_nir_mut(nid, arena), n as u32)
+                {
                 }
             }
             IR::recompute_group_vars(root, arena);
@@ -622,7 +641,13 @@ fn disambiguate_add_names(
         // TODO: simply save the node id of the rolled-back nir, and restore it to position.
         let nir = get_nir_mut(nid, arena);
         if let Some(rolled_back) = get_nir_mut(nid, arena).rollback(db, ctx) {
-            let new_seq = NameIR::rendered_ntbs_to_node(rolled_back, arena, is_sort_key, label_after_name, built_label.as_ref());
+            let new_seq = NameIR::rendered_ntbs_to_node(
+                rolled_back,
+                arena,
+                is_sort_key,
+                label_after_name,
+                built_label.as_ref(),
+            );
             replace_single_child(nid, new_seq, arena);
         }
         IR::recompute_group_vars(root, arena);
@@ -787,13 +812,27 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let un = is_unambiguous(db, ctx.disamb_pass, root, arena, ctx.cite_id, &ctx.reference.id);
+    let un = is_unambiguous(
+        db,
+        ctx.disamb_pass,
+        root,
+        arena,
+        ctx.cite_id,
+        &ctx.reference.id,
+    );
     if un {
         return;
     }
     let cond_refs = list_all_cond_disambs(root, arena);
     for cid in cond_refs.into_iter() {
-        if is_unambiguous(db, ctx.disamb_pass, root, arena, ctx.cite_id, &ctx.reference.id) {
+        if is_unambiguous(
+            db,
+            ctx.disamb_pass,
+            root,
+            arena,
+            ctx.cite_id,
+            &ctx.reference.id,
+        ) {
             debug!("successfully disambiguated with Cond");
             break;
         }
