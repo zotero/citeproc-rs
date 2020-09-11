@@ -18,18 +18,18 @@ pub mod transforms;
 pub type IrSum<O> = (IR<O>, GroupVars);
 
 // Intermediate Representation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IR<O: OutputFormat = Markup> {
     // no (further) disambiguation possible
     Rendered(Option<CiteEdgeData<O>>),
     // the name block,
-    Name(Arc<Mutex<NameIR<O>>>),
+    Name(NameIR<O>),
 
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
     /// Should also include `if variable="year-suffix"` because that could change.
-    ConditionalDisamb(Arc<Mutex<ConditionalDisambIR<O>>>),
-    YearSuffix(YearSuffix<O>),
+    ConditionalDisamb(ConditionalDisambIR),
+    YearSuffix(YearSuffix),
 
     // Think:
     // <if disambiguate="true" ...>
@@ -43,7 +43,7 @@ pub enum IR<O: OutputFormat = Markup> {
     //     YearSuffix(Explicit(Text(Variable::YearSuffix), T)),
     //     Rendered(..)
     // ]
-    Seq(IrSeq<O>),
+    Seq(IrSeq),
 
     /// Only exists to aggregate the counts of names
     NameCounter(IrNameCounter<O>),
@@ -53,8 +53,7 @@ pub enum IR<O: OutputFormat = Markup> {
 ///
 /// IrSeq needs to hold things 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
-pub struct IrSeq<O: OutputFormat> {
-    pub contents: Vec<IrSum<O>>,
+pub struct IrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
     pub delimiter: Atom,
@@ -74,10 +73,11 @@ pub enum DisambPass {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct YearSuffix<O: OutputFormat> {
+pub struct YearSuffix {
+    // Has IR child.
+
     // Clone element into here, because we already know it's a <text variable="" />
     pub(crate) hook: YearSuffixHook,
-    pub(crate) ir: Box<IR<O>>,
     pub(crate) group_vars: GroupVars,
     pub(crate) suffix_num: Option<u32>,
 }
@@ -89,7 +89,6 @@ impl<O: OutputFormat> IR<O> {
                 hook,
                 group_vars: GroupVars::Unresolved,
                 suffix_num: None,
-                ir: Box::new(IR::Rendered(None)),
             }),
             GroupVars::Unresolved
         )
@@ -154,20 +153,18 @@ impl<O: OutputFormat> CiteEdgeData<O> {
 }
 
 use crate::disamb::names::NameIR;
-use std::sync::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConditionalDisambIR<O: OutputFormat> {
+pub struct ConditionalDisambIR {
+    // Has IR children
     pub choose: Arc<Choose>,
     pub group_vars: GroupVars,
     pub done: bool,
-    pub ir: Box<IR<O>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrNameCounter<O: OutputFormat> {
     pub name_irs: Vec<NameIR<O>>,
-    pub ir: Box<IR<O>>,
     pub group_vars: GroupVars,
 }
 
@@ -200,49 +197,42 @@ where
     O: OutputFormat,
 {
     /// Rendered(None), empty YearSuffix or empty seq
-    pub fn is_empty(&self) -> bool {
-        match self {
+    pub fn is_empty(self_id: NodeId, arena: &IrArena<O>) -> bool {
+        let me = match arena.get(node) { Some(x) => x.get(), None => return false, };
+        match me.0 {
             IR::Rendered(None) => true,
-            IR::YearSuffix(ys) => ys.ir.is_empty(),
-            IR::Seq(seq) if seq.contents.is_empty() => true,
-            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.is_empty(),
-            IR::Name(nir) => nir.lock().unwrap().ir.is_empty(),
+            IR::Seq(seq) |
+            IR::Name(nir) |
+            IR::ConditionalDisamb(c) |
+            IR::YearSuffix(_ys) => self_id.children(arena).next().is_some(),
             IR::NameCounter(nc) => false,
             _ => false,
         }
     }
 }
 
-impl<O> Eq for IR<O> where O: OutputFormat + PartialEq + Eq {}
-impl<O> PartialEq for IR<O>
+// impl<O> Eq for IR<O> where O: OutputFormat + PartialEq + Eq {}
+impl<O> IR<O>
 where
     O: OutputFormat + PartialEq,
 {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IR::Rendered(s), IR::Rendered(o)) if s == o => true,
-            (IR::Seq(s), IR::Seq(o)) if s == o => true,
-            (IR::YearSuffix(s), IR::YearSuffix(o)) if s == o => true,
-            (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) => {
-                if Arc::ptr_eq(a, b) {
-                    true
-                } else {
-                    let aa = a.lock().unwrap();
-                    let bb = b.lock().unwrap();
-                    *aa == *bb
-                }
-            }
-            (IR::Name(self_nir), IR::Name(other_nir)) => {
-                if Arc::ptr_eq(self_nir, other_nir) {
-                    true
-                } else {
-                    let s = self_nir.lock().unwrap();
-                    let o = other_nir.lock().unwrap();
-                    *s == *o
-                }
-            }
-            _ => false,
-        }
+    fn deep_equals(&self, self_gv: GroupVars, self_id: NodeId, self_arena: &IrArena<O>, other: &Self, other_gv: GroupVars, other_id: NodeId, other_arena: &IrArena<O>) -> bool {
+        let strategy = match (self, other) {
+            (IR::Rendered(a), IR::Rendered(b)) if a == b => return true,
+            (IR::Seq(a), IR::Seq(b)) if a == b => {}
+            (IR::YearSuffix(a), IR::YearSuffix(b)) if a == b => {}
+            (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) if a == b => {}
+            (IR::Name(a), IR::Name(b)) if a == b => {}
+            _ => return false,
+        };
+        self_id
+            .children(self_arena)
+            .zip(other_id.children(other_arena))
+            .all(|(a, b)| {
+                let (ai, ag) = self_arena.get(a).unwrap().get();
+                let (bi, bg) = other_arena.get(b).unwrap().get();
+                ai.deep_equals(*ag, a, self_arena, bi, *bg, b, other_arena)
+            })
     }
 }
 
@@ -257,17 +247,28 @@ impl<O: OutputFormat> Default for IR<O> {
 impl<O: OutputFormat<Output = String>> IR<O> {
     /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
     /// be rendered
-    pub fn flatten(&self, fmt: &O) -> Option<O::Build> {
+    pub fn flatten(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<O::Build> {
         // must clone
-        match self {
+        match arena.get(node)?.get().0 {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::Name(nir) => nir.lock().unwrap().ir.flatten(fmt),
-            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.flatten(fmt),
-            IR::YearSuffix(YearSuffix { ir, .. }) => ir.flatten(fmt),
+            IR::YearSuffix(_) |
+            IR::ConditionalDisamb(_) |
+            IR::NameCounter(_) |
+            IR::Name(_) => IR::flatten_children(node, arena, fmt),
             IR::Seq(ref seq) => seq.flatten_seq(fmt),
-            IR::NameCounter(nc) => nc.ir.flatten(fmt),
         }
+    }
+
+    pub fn flatten_children(self_id: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<O::Build> {
+        let mut group = Vec::new();
+        for child in self_id.children(arena).filter_map(|child| IR::flatten(child, arena, fmt)) {
+            group.push(child)
+        }
+        if group.is_empty() {
+            return None;
+        }
+        Some(fmt.group(group, "", None))
     }
 }
 
@@ -309,20 +310,18 @@ impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
 }
 
 impl IR<Markup> {
-    pub(crate) fn visit_year_suffix_hooks<F>(&mut self, callback: &mut F) -> bool
+    pub(crate) fn visit_year_suffix_hooks<F>(node: NodeId, arena: &mut IrArena<O>, callback: &mut F) -> bool
     where
-        F: (FnMut(&mut YearSuffix<Markup>) -> bool),
+        F: (FnMut(&mut YearSuffix) -> bool),
     {
-        match self {
-            IR::YearSuffix(ys) => callback(ys),
-            IR::ConditionalDisamb(c) => {
-                // XXX(check this): boxed has already been rendered, so the `if` was with
-                // disambiguate=false, probably. So you can visit it.
-                c.lock().unwrap().ir.visit_year_suffix_hooks(callback)
-            }
-            IR::Seq(seq) => {
-                for (ir, gv) in seq.contents.iter_mut() {
-                    let done = ir.visit_year_suffix_hooks(callback);
+        let me = match arena.get(node) { Some(x) => x.get(), None => return false, };
+        match me.0 {
+            IR::YearSuffix(ref mut ys) => callback(ys),
+            // XXX(check this): for cond, boxed has already been rendered, so the `if` was with
+            // disambiguate=false, probably. So you can visit it.
+            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+                for child in node.children(arena) {
+                    let done = IR::visit_year_suffix_hooks(child, arena, callback);
                     if done {
                         return true;
                     }
@@ -334,35 +333,44 @@ impl IR<Markup> {
     }
 
     fn append_edges(
-        &self,
+        node: NodeId,
+        arena: &IrArena<Markup>,
         edges: &mut Vec<EdgeData>,
         fmt: &Markup,
         formatting: Formatting,
     ) {
-        match self {
+        let me = match arena.get(node) { Some(x) => x.get(), None => return };
+        match me.0 {
             IR::Rendered(None) => {}
             IR::Rendered(Some(ed)) => {
                 edges.push(ed.to_edge_data(fmt, formatting))
             }
             IR::YearSuffix(ys) => {
-                if !ys.ir.is_empty() {
+                if IR::is_empty(node, arena) {
                     edges.push(EdgeData::YearSuffix);
                 }
             }
-            IR::ConditionalDisamb(c) => c.lock().unwrap().ir.append_edges(edges, fmt, formatting),
+            IR::Name(nir) |
+            IR::NameCounter(nc) |
+            // TODO: choose inheriting parent group delimiters here as well
+            IR::ConditionalDisamb(_) => IR::append_child_edges(node, arena, edges, fmt, formatting),
             IR::Seq(seq) => {
-                if seq.overall_group_vars().map_or(true, |x| x.should_render_tree()) {
-                    seq.append_edges(edges, fmt, formatting)
+                if IrSeq::overall_group_vars(seq.dropped_gv, node, arena).map_or(true, |x| x.should_render_tree()) {
+                    seq.append_edges(node, arena, edges, fmt, formatting)
                 }
             },
-            IR::Name(nir) => nir.lock().unwrap().ir.append_edges(edges, fmt, formatting),
-            IR::NameCounter(nc) => nc.ir.append_edges(edges, fmt, formatting),
         }
     }
 
-    pub fn to_edge_stream(&self, fmt: &Markup) -> Vec<EdgeData> {
+    fn append_child_edges(node: NodeId, arena: &IrArena<Markup>, edges: &mut Vec<EdgeData>, fmt: &Markup, formatting: Formatting) {
+        for child in node.children(arena) {
+            IR::append_edges(child, arena, edges, fmt, formatting);
+        }
+    }
+
+    pub fn to_edge_stream(root: NodeId, arena: &IrArena<Markup>, fmt: &Markup) -> Vec<EdgeData> {
         let mut edges = Vec::new();
-        self.append_edges(&mut edges, fmt, Formatting::default());
+        IR::append_edges(root, arena, &mut edges, fmt, Formatting::default());
         edges
     }
 }
@@ -380,19 +388,23 @@ impl IR<Markup> {
 // }
 
 impl<O: OutputFormat> IR<O> {
-    pub(crate) fn recompute_group_vars(&mut self) {
-        match self {
-            IR::Seq(seq) => seq.recompute_group_vars(),
+    pub(crate) fn recompute_group_vars(node: NodeId, arena: &mut IrArena<O>) {
+        let me = match arena.get(node) { Some(x) => x.get(), None => return };
+        match me.0 {
+            IR::Seq(seq) => IRSeq::recompute_group_vars(node, arena),
             _ => {},
         }
     }
 }
 
-impl<O: OutputFormat> IrSeq<O> {
-    pub(crate) fn overall_group_vars(&self) -> Option<GroupVars> {
-        self.dropped_gv
+impl IrSeq {
+    pub(crate) fn overall_group_vars(dropped_gv: Option<GroupVars>, self_id: NodeId, arena: &IrArena<O>) -> Option<GroupVars> {
+        dropped_gv
             .map(|dropped| {
-                let acc = self.contents.iter().fold(dropped, |acc, (_, gv)| acc.neighbour(*gv));
+                let acc = self_id.children(arena).fold(dropped, |acc, child| {
+                    let (_, gv) = arena.get(child).unwrap().get();
+                    acc.neighbour(*gv)
+                });
                 // Replicate GroupVars::implicit_conditional
                 if acc != GroupVars::Missing {
                     GroupVars::Important
@@ -403,10 +415,11 @@ impl<O: OutputFormat> IrSeq<O> {
     }
     /// GVs are stored outside of individual child IRs, so we need a way to update those if the
     /// children have mutated themselves.
-    pub(crate) fn recompute_group_vars(&mut self) {
-        for (ir, gv) in self.contents.iter_mut() {
-            if let Some(force_gv) = ir.force_gv() {
-                *gv = force_gv;
+    pub(crate) fn recompute_group_vars<O: OutputFormat>(self_id: NodeId, arena: &mut IrArena<O>) {
+        // Assume self_id points to an IrSeq.
+        for child_id in self_id.children(arena) {
+            if let Some(force) = IR::force_gv(child_id, arena) {
+                arena.get_mut(child_id).unwrap().get_mut().1 = force;
             }
         }
     }
@@ -416,27 +429,27 @@ impl<O> IR<O>
 where
     O: OutputFormat,
 {
-    pub(crate) fn force_gv(&mut self) -> Option<GroupVars> {
-        match self {
+    pub(crate) fn force_gv(self_id: NodeId, arena: &mut IrArena<O>) -> Option<GroupVars> {
+        match arena.get(self_id)?.get().0 {
             IR::Rendered(_) => None,
-            IR::YearSuffix(ys) => Some(ys.group_vars),
             IR::Seq(seq) => {
-                seq.recompute_group_vars();
-                seq.overall_group_vars()
+                IrSeq::recompute_group_vars(self_id, arena);
+                IrSeq::overall_group_vars(seq.dropped_gv, self_id, arena)
             },
-            IR::ConditionalDisamb(c) => Some(c.lock().unwrap().group_vars),
+            IR::YearSuffix(ys) => Some(ys.group_vars),
+            IR::ConditionalDisamb(c) => Some(c.group_vars),
             IR::Name(_) => None,
             IR::NameCounter(nc) => Some(nc.group_vars),
         }
     }
 }
 
-impl<O: OutputFormat<Output = String>> IrSeq<O> {
+impl IrSeq {
     // TODO: Groupvars
-    fn flatten_seq(&self, fmt: &O) -> Option<O::Build> {
+    fn flatten_seq(&self, id: NodeId, arena: &mut IrArena<O>, fmt: &O) -> Option<O::Build> {
         // Do this where it won't require mut access
         // self.recompute_group_vars();
-        if !self.overall_group_vars().map_or(true, |x| x.should_render_tree()) {
+        if !IrSeq::overall_group_vars(self.dropped_gv, id, arena).map_or(true, |x| x.should_render_tree()) {
             return None;
         }
         let IrSeq {
@@ -446,10 +459,13 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
             ref quotes,
             display,
             text_case,
-            ref contents,
             dropped_gv: _,
         } = *self;
-        let xs: Vec<_> = contents.iter().filter_map(|(ir, gv)| ir.flatten(fmt)).collect();
+        let xs: Vec<_> = id.children(arena)
+            .filter_map(|child| arena.get(child))
+            .filter_map(|child| child.get())
+            .filter_map(|(ir, gv)| ir.flatten(fmt))
+            .collect();
         if xs.is_empty() {
             return None;
         }
@@ -468,16 +484,15 @@ impl<O: OutputFormat<Output = String>> IrSeq<O> {
     }
 }
 
-impl IrSeq<Markup> {
-    fn append_edges(&self, edges: &mut Vec<EdgeData>, fmt: &Markup, format_context: Formatting) {
+impl IrSeq {
+    fn append_edges(&self, node: NodeId, arena: &IrArena<Markup>, edges: &mut Vec<EdgeData>, fmt: &Markup, format_context: Formatting) {
         // Currently recreates the whole markup-formatting infrastructure, but keeps the same
         // granularity of edges that RefIR will produce.
 
-        if self.contents.is_empty() {
+        if node.children(arena).next().is_none() {
             return;
         }
         let IrSeq {
-            ref contents,
             ref affixes,
             ref delimiter,
             // TODO: use these
@@ -509,11 +524,10 @@ impl IrSeq<Markup> {
         }
 
         // push the innards
-        let _len = contents.len();
         let mut seen = false;
         let mut sub = Vec::new();
-        for (_n, (ir, _gv)) in contents.iter().enumerate() {
-            ir.append_edges(&mut sub, fmt, sub_formatting);
+        for child in node.children(arena) {
+            IR::append_edges(child, arena, &mut sub, fmt, sub_formatting);
             if !sub.is_empty() {
                 if seen {
                     if !delimiter.is_empty() {

@@ -90,9 +90,7 @@ impl IsIndependent for Variable {
         match self {
             // Variable::CitationLabel is not independent, it just implies a YearSuffix
             // which is, and that is handled in FreeCondWalker::text_variable()
-            Variable::LocatorExtra
-            | Variable::YearSuffix
-            | Variable::Hereinafter => true,
+            Variable::LocatorExtra | Variable::YearSuffix | Variable::Hereinafter => true,
             _ => false,
         }
     }

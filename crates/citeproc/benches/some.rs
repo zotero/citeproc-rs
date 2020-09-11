@@ -68,15 +68,24 @@ fn basic_cluster_get_cite_id(proc: &mut Processor, cluster_id: u32, id: &str) ->
         cites: vec![Cite::basic(id)],
     };
     proc.insert_cluster(cluster);
-    let id = proc.cluster_cites(cluster_id).iter().cloned().nth(0).unwrap();
+    let id = proc
+        .cluster_cites(cluster_id)
+        .iter()
+        .cloned()
+        .nth(0)
+        .unwrap();
     id
 }
 
 fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) -> Arc<String> {
     use citeproc_proc::db;
     db::IrGen0Query.in_db_mut(proc).invalidate(&cite_id);
-    db::IrGen2AddGivenNameQuery.in_db_mut(proc).invalidate(&cite_id);
-    db::IrFullyDisambiguatedQuery.in_db_mut(proc).invalidate(&cite_id);
+    db::IrGen2AddGivenNameQuery
+        .in_db_mut(proc)
+        .invalidate(&cite_id);
+    db::IrFullyDisambiguatedQuery
+        .in_db_mut(proc)
+        .invalidate(&cite_id);
     db::BuiltClusterQuery.in_db_mut(proc).invalidate(&id);
     proc.built_cluster(id)
 }
@@ -85,15 +94,23 @@ fn bench_build_cluster(b: &mut Bencher, style: &str) {
     let mut proc = Processor::new(style, fetcher(), false, SupportedFormat::Html).unwrap();
     proc.insert_reference(common_reference(1));
     let cite_id = basic_cluster_get_cite_id(&mut proc, 1, "id_1");
-    proc.set_cluster_order(&[ClusterPosition { id: 1, note: Some(1) }]).unwrap();
+    proc.set_cluster_order(&[ClusterPosition {
+        id: 1,
+        note: Some(1),
+    }])
+    .unwrap();
     b.iter(move || invalidate_rebuild_cluster(&mut proc, 1, cite_id));
     // b.iter_batched_ref(make, |proc| proc.built_cluster(1), BatchSize::SmallInput)
 }
 
 fn bench_clusters(c: &mut Criterion) {
     env_logger::init();
-    c.bench_function("Processor::built_cluster(AGLC)", |b| bench_build_cluster(b, AGLC));
-    c.bench_function("Processor::built_cluster(APA)", |b| bench_build_cluster(b, APA));
+    c.bench_function("Processor::built_cluster(AGLC)", |b| {
+        bench_build_cluster(b, AGLC)
+    });
+    c.bench_function("Processor::built_cluster(APA)", |b| {
+        bench_build_cluster(b, APA)
+    });
 }
 
 criterion_group!(clusters, bench_clusters);

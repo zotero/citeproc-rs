@@ -61,12 +61,10 @@ impl Disambiguation<Markup> for Names {
             false,
         );
         for nir in name_irs {
-            use crate::names::ntb_len;
-
             let mut nfa = Nfa::new();
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
-            let mut ntbs = runner.names_to_builds(
+            let (ntbs, mut ntb_len) = runner.names_to_builds(
                 &nir.disamb_names,
                 ctx.position,
                 &self.et_al,
@@ -74,8 +72,10 @@ impl Disambiguation<Markup> for Names {
                 and_term.as_ref(),
                 etal_term.as_ref(),
             );
+            // We need to use this a couple of times.
+            let ntbs = ntbs.collect::<Vec<_>>();
             let mut max_counted_tokens = 0u16;
-            let mut counted_tokens = ntb_len(&ntbs);
+            let mut counted_tokens = ntb_len;
 
             while counted_tokens > max_counted_tokens {
                 let one_run = graph_with_stack(
@@ -88,14 +88,6 @@ impl Disambiguation<Markup> for Names {
                     |nfa, mut spot| {
                         for ntb in &ntbs {
                             match ntb {
-                                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
-                                    if !fmt.is_empty(b) {
-                                        let out = fmt.output_in_context(b.clone(), child_stack, None);
-                                        let e = db.edge(EdgeData::Output(out));
-                                        let ir = RefIR::Edge(Some(e));
-                                        spot = add_to_graph(db, fmt, nfa, &ir, spot);
-                                    }
-                                }
                                 NameTokenBuilt::Built(b) => {
                                     if !fmt.is_empty(&b) {
                                         let out = fmt.output_in_context(b.to_vec(), child_stack, None);
@@ -104,9 +96,19 @@ impl Disambiguation<Markup> for Names {
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                     }
                                 }
-                                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(ratchet)) => {
-                                    let dn = ratchet.data.clone();
-                                    spot = add_expanded_name_to_graph(db, nfa, dn, spot, child_stack);
+                                NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[*index] {
+                                    DisambNameRatchet::Literal(b) => {
+                                        if !fmt.is_empty(b) {
+                                            let out = fmt.output_in_context(b.clone(), child_stack, None);
+                                            let e = db.edge(EdgeData::Output(out));
+                                            let ir = RefIR::Edge(Some(e));
+                                            spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                        }
+                                    }
+                                    DisambNameRatchet::Person(ratchet) => {
+                                        let dn = ratchet.data.clone();
+                                        spot = add_expanded_name_to_graph(db, nfa, dn, spot, child_stack);
+                                    }
                                 }
                             }
                         }
@@ -119,7 +121,7 @@ impl Disambiguation<Markup> for Names {
                 }
                 nfa.accepting.insert(one_run);
                 runner.bump_name_count += 1;
-                ntbs = runner.names_to_builds(
+                let (ntbs, ntb_len) = runner.names_to_builds(
                     &nir.disamb_names,
                     ctx.position,
                     &self.et_al,
@@ -128,7 +130,7 @@ impl Disambiguation<Markup> for Names {
                     etal_term.as_ref(),
                 );
                 max_counted_tokens = counted_tokens;
-                counted_tokens = ntb_len(&ntbs);
+                counted_tokens = ntb_len;
             }
             if !nfa.accepting.is_empty() {
                 seq.contents
@@ -549,9 +551,15 @@ pub struct NameCounter {
 
 use crate::NamesInheritance;
 
-// TODO: make most fields private
+/// The full Names block has-many NameIRs when it is rendered. Each NameIR represents one variable
+/// to be rendered in a Names block. So each NameIR can have multiple actual people's names in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameIR<O: OutputFormat> {
+    // has IR children
+
+
+    // TODO: make most fields private
+
     pub names_inheritance: NamesInheritance,
 
     variable: NameVariable,
@@ -561,7 +569,6 @@ pub struct NameIR<O: OutputFormat> {
     achieved_at: (u16, NameCounter),
 
     pub disamb_names: Vec<DisambNameRatchet<O::Build>>,
-    pub ir: Box<IR<O>>,
     pub built_label: Option<O::Build>,
 
     // These three avoid having to pass in style & locale every time you want to recompute the IR
@@ -582,7 +589,6 @@ where
         variable: NameVariable,
         label_variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
-        ir: Box<IR<O>>,
         style: &Style,
         etal_term: Option<(String, Option<Formatting>)>,
         and_term: Option<String>,
@@ -596,7 +602,6 @@ where
             variable,
             label_variable,
             disamb_names: ratchets,
-            ir,
             name_counter: NameCounter::default(),
             achieved_at: (std::u16::MAX, NameCounter::default()),
             demote_non_dropping_particle: style.demote_non_dropping_particle,
@@ -613,35 +618,33 @@ where
             self.achieved_at = (count, self.name_counter);
         }
     }
-    pub fn rollback(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) {
+    pub fn rollback(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) -> Option<Vec<O::Build>> {
         let (_prev_best, at) = self.achieved_at;
         if self.name_counter.bump > at.bump {
             info!("{:?} rolling back to {:?} names", ctx.cite_id, at);
         }
         self.name_counter = at;
-        if let Some((ir, _gv)) = self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), None, None) {
-            *self.ir = ir;
-        }
+        self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), None, None)
     }
 
     // returns false if couldn't add any more names
-    pub fn add_name(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) -> bool {
+    pub fn add_name(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<'_, O>) -> Option<Vec<O::Build>> {
         self.name_counter.bump += 1;
-        match self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), Some(DisambPass::AddNames), None) {
-            Some((new_ir, _)) => {
-                *self.ir = new_ir;
-                true
-            }
-            None => false,
-        }
+        self.intermediate_custom(&ctx.format, ctx.position.0, ctx.sort_key.is_some(), Some(DisambPass::AddNames), None)
     }
 
-    pub fn subsequent_author_substitute(&mut self, fmt: &O,  subst_count: u32, replace_with: &str) {
-        match self.intermediate_custom(fmt, Position::First, false, None, Some((subst_count, replace_with))) {
-            Some((new_ir, _)) => {
-                *self.ir = new_ir;
-            }
-            None => {},
-        }
+    pub fn subsequent_author_substitute(&mut self, fmt: &O,  subst_count: u32, replace_with: &str) -> Option<Vec<O::Build>> {
+        // We will only need to replace the first element, since names only ever get one child.
+        // But keep the arena separate from this.
+        self.intermediate_custom(fmt, Position::First, false, None, Some((subst_count, replace_with)))
     }
+}
+
+/// Useful since names blocks only ever have an IrSeq under them.
+/// (Except when doing subsequent-author-substitute, but that's after suppression.)
+pub fn replace_single_child<O: OutputFormat>(of_node: NodeId, with: NodeId, arena: &mut IrArena<O>) {
+    if let Some(existing) = of_node.children(arena).next() {
+        existing.remove_subtree(arena);
+    }
+    of_node.append(with, arena);
 }

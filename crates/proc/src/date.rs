@@ -28,11 +28,11 @@ enum Either<O: OutputFormat> {
     /// We will convert this to RefIR as necessary. It will only contain Outputs and
     /// YearSuffixHooks It will only contain Outputs and YearSuffixHooks.
     /// It will not be Rendered(None).
-    Ir(IR<O>),
+    Ir(NodeId),
 }
 
 impl<O: OutputFormat> Either<O> {
-    fn into_cite_ir(self, var: DateVariable) -> IrSum<O> {
+    fn into_cite_ir(self, var: DateVariable, arena: &mut IrArena<O>) -> NodeId {
         match self {
             Either::Build(opt) => {
                 // Get CiteEdgeData::Accessed if it's DateVariable::Accessed
@@ -42,7 +42,8 @@ impl<O: OutputFormat> Either<O> {
                 let gv = GroupVars::rendered_if(content.is_some());
                 (IR::Rendered(content), gv)
             }
-            Either::Ir(ir) => {
+            Either::Ir(id) => {
+                let node = arena.get(id).unwrap().get();
                 let gv = if let IR::Rendered(None) = &ir {
                     GroupVars::Missing
                 } else {
@@ -54,32 +55,53 @@ impl<O: OutputFormat> Either<O> {
     }
 }
 
-fn to_ref_ir(
-    ir: IR<Markup>,
+fn to_ref_ir<F, O: OutputFormat>(
+    id: NodeId,
+    arena: &IrArena<O>,
     stack: Formatting,
     ys_edge: Edge,
-    to_edge: &impl Fn(Option<CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
-) -> RefIR {
-    match ir {
-        // Either Rendered(Some(CiteEdgeData::YearSuffix)) or explicit year suffixes can end up as
-        // EdgeData::YearSuffixPlain edges in RefIR. Because we don't care whether it's been rendered or
-        // not -- in RefIR's comparison, it must always be an EdgeData::YearSuffix.
-        IR::Rendered(opt_build) => RefIR::Edge(to_edge(opt_build, stack)),
-        IR::YearSuffix(_ys) => RefIR::Edge(Some(ys_edge)),
-        IR::Seq(ir_seq) => RefIR::Seq(RefIrSeq {
-            contents: ir_seq
-                .contents
-                .into_iter()
-                .map(|(ir, _gv)| to_ref_ir(ir, stack, ys_edge, to_edge))
-                .collect(),
-            formatting: ir_seq.formatting,
-            affixes: ir_seq.affixes,
-            delimiter: ir_seq.delimiter,
-            quotes: None,
-            text_case: ir_seq.text_case,
-        }),
-        IR::ConditionalDisamb(..) | IR::Name(_) | IR::NameCounter(_) => unreachable!(),
+    to_edge: &F,
+) -> (RefIR, GroupVars)
+where
+    F: Fn(Option<CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+{
+    struct Scope<'a> {
+        stack: Formatting,
+        ys_edge: Edge,
+        to_edge: &'a F,
+        arena: &'a IrArena<O>,
     }
+    let scope = Scope { stack, ys_edge, to_edge, arena };
+    fn walk(id: NodeId, scope: Scope<'_>) -> (RefIR, GroupVars) {
+        arena
+            .get(id)
+            .map(|node| match node {
+                IR::Rendered(opt_build) => RefIR::Edge(scope.to_edge(opt_build, scope.stack)),
+                IR::YearSuffix(_ys) => RefIR::Edge(Some(scope.ys_edge)),
+                IR::Seq(ir_seq) => {
+                    let contents = id
+                        .children(scope.arena)
+                        .map(|child_id| walk(child_id, arena))
+                        .collect();
+                    let ref_seq = RefIrSeq {
+                        contents,
+                        formatting: ir_seq.formatting,
+                        affixes: ir_seq.affixes,
+                        delimiter: ir_seq.delimiter,
+                        quotes: None,
+                        text_case: ir_seq.text_case,
+                    };
+                    (
+                        RefIR::Seq(ref_seq),
+                        GroupVars::rendered_if(!contents.is_empty()),
+                    )
+                }
+                _ => unreachable!(
+                    "The date processing code only creates Rendered, YearSuffix and Seq."
+                ),
+            })
+            .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
+    };
 }
 
 impl Either<Markup> {
@@ -87,6 +109,7 @@ impl Either<Markup> {
         self,
         db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
+        arena: &mut IrArena<O>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
@@ -102,13 +125,10 @@ impl Either<Markup> {
                 let gv = GroupVars::rendered_if(edge.is_some());
                 (RefIR::Edge(edge), gv)
             }
-            Either::Ir(ir) => {
+            Either::Ir(id) => {
                 // If it's Ir we'll assume there is a year suffix hook in there -- so not
                 // Rendered(None), at least.
-                (
-                    to_ref_ir(ir, stack, ys_edge, &to_edge),
-                    GroupVars::Important,
-                )
+                to_ref_ir(id, arena, stack, ys_edge, &to_edge)
             }
         }
     }
@@ -124,15 +144,16 @@ where
         _db: &dyn IrDatabase,
         _state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
         let (either, var) = match self {
             BodyDate::Indep(idate) => (
-                intermediate_generic_indep(idate, GenericContext::Cit(ctx)),
-                idate.variable
+                intermediate_generic_indep(idate, GenericContext::Cit(ctx), arena),
+                idate.variable,
             ),
             BodyDate::Local(ldate) => (
-                intermediate_generic_local(ldate, GenericContext::Cit(ctx)),
-                ldate.variable
+                intermediate_generic_local(ldate, GenericContext::Cit(ctx), arena),
+                ldate.variable,
             ),
         };
         either
@@ -150,22 +171,34 @@ impl Disambiguation<Markup> for BodyDate {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let _fmt = ctx.format;
+        let arena = IrArena::new();
         let (either, var) = match self {
             BodyDate::Indep(idate) => (
-                intermediate_generic_indep::<Markup, Markup>(idate, GenericContext::Ref(ctx)),
+                intermediate_generic_indep::<Markup, Markup>(
+                    idate,
+                    GenericContext::Ref(ctx),
+                    &mut arena,
+                ),
                 idate.variable,
             ),
             BodyDate::Local(ldate) => (
-                intermediate_generic_local::<Markup, Markup>(ldate, GenericContext::Ref(ctx)),
+                intermediate_generic_local::<Markup, Markup>(
+                    ldate,
+                    GenericContext::Ref(ctx),
+                    &mut arena,
+                ),
                 ldate.variable,
             ),
         };
         if var == DateVariable::Accessed {
-            either
-                .map(|_| (RefIR::Edge(Some(db.edge(EdgeData::Accessed))), GroupVars::Important))
+            either.map(|_| {
+                (
+                    RefIR::Edge(Some(db.edge(EdgeData::Accessed))),
+                    GroupVars::Important,
+                )
+            })
         } else {
-            either
-                .map(|e| e.into_ref_ir(db, ctx, stack))
+            either.map(|e| e.into_ref_ir(db, ctx, arena, stack))
         }
         .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }
@@ -189,7 +222,7 @@ struct PartBuilder<'a, O: OutputFormat> {
 
 enum PartAccumulator<O: OutputFormat> {
     Builds(Vec<O::Build>),
-    Seq(IrSeq<O>),
+    Seq(NodeId),
 }
 
 impl<'a, O: OutputFormat> PartBuilder<'a, O> {
@@ -200,36 +233,43 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
         }
     }
 
-    fn upgrade(&mut self) {
-        let PartBuilder { ref mut acc, ref mut bits } = self;
+    fn upgrade(&mut self, arena: &mut IrArena<O>) {
+        let PartBuilder {
+            ref mut acc,
+            ref mut bits,
+        } = self;
         *acc = match acc {
             PartAccumulator::Builds(ref mut vec) => {
                 let vec = mem::replace(vec, Vec::new());
-                let mut seq = IrSeq {
-                    contents: Vec::with_capacity(vec.capacity()),
-                    formatting: bits.overall_formatting,
-                    affixes: bits.overall_affixes.clone(),
-                    text_case: bits.overall_text_case,
-                    display: bits.display,
-                    ..Default::default()
-                };
+                let seq_node = arena.new_node((
+                    IrSeq {
+                        formatting: bits.overall_formatting,
+                        affixes: bits.overall_affixes.clone(),
+                        text_case: bits.overall_text_case,
+                        display: bits.display,
+                        ..Default::default()
+                    },
+                    GroupVars::Important
+                ));
                 for built in vec {
-                    seq.contents
-                        .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important))
+                    seq_node.append(arena.new_node((
+                        IR::Rendered(Some(CiteEdgeData::Output(built))),
+                        GroupVars::Important,
+                    )));
                 }
-                PartAccumulator::Seq(seq)
+                PartAccumulator::Seq(seq_node)
             }
             _ => return,
         }
     }
 
-    fn push_either(&mut self, either: Either<O>) {
+    fn push_either(&mut self, arena: &mut IrArena<O>, either: Either<O>) {
         match either {
             Either::Ir(ir) => {
-                self.upgrade();
+                self.upgrade(arena);
                 match &mut self.acc {
                     PartAccumulator::Seq(ref mut seq) => {
-                        seq.contents.push((ir, GroupVars::Important));
+                        seq.append(ir, arena);
                     }
                     _ => unreachable!(),
                 }
@@ -238,9 +278,10 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 PartAccumulator::Builds(ref mut vec) => {
                     vec.push(built);
                 }
-                PartAccumulator::Seq(ref mut seq) => seq
-                    .contents
-                    .push((IR::Rendered(Some(CiteEdgeData::Output(built))), GroupVars::Important)),
+                PartAccumulator::Seq(ref mut seq) => seq.contents.push((
+                    IR::Rendered(Some(CiteEdgeData::Output(built))),
+                    GroupVars::Important,
+                )),
             },
             Either::Build(None) => {}
         }
@@ -266,7 +307,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
                 }
                 Either::Build(Some(built))
             }
-            PartAccumulator::Seq(seq) => Either::Ir(IR::Seq(seq)),
+            PartAccumulator::Seq(seq) => Either::Ir(seq),
         }
     }
 }
@@ -288,6 +329,7 @@ impl<'a> GenericDateBits<'a> {
 fn intermediate_generic_local<'c, O, I>(
     local: &LocalizedDate,
     ctx: GenericContext<'c, O, I>,
+    arena: &mut IrArena<O>,
 ) -> Option<Either<O>>
 where
     O: OutputFormat,
@@ -337,6 +379,7 @@ where
     }
     build_parts(
         &ctx,
+        arena,
         local.variable,
         gen_date,
         &parts,
@@ -347,6 +390,7 @@ where
 fn intermediate_generic_indep<'c, O, I>(
     indep: &IndependentDate,
     ctx: GenericContext<'c, O, I>,
+    arena: &mut IrArena<O>,
 ) -> Option<Either<O>>
 where
     O: OutputFormat,
@@ -380,11 +424,19 @@ where
         parts.sort_by_key(|part| part.form);
         parts_slice = parts.as_slice();
     }
-    build_parts(&ctx, indep.variable, gen_date, &indep.date_parts, None)
+    build_parts(
+        &ctx,
+        arena,
+        indep.variable,
+        gen_date,
+        &indep.date_parts,
+        None,
+    )
 }
 
 fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     ctx: &GenericContext<'c, O, I>,
+    arena: &mut IrArena<O>,
     var: DateVariable,
     gen_date: GenericDateBits,
     parts: &[DatePart],
@@ -404,30 +456,33 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     }
     let cloned_gen = gen_date.clone();
     let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
-        let each = parts
-            .iter()
-            .filter_map(|dp| {
-                let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
-                if sorting || matches {
-                    let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
-                    return dp_render_either(var, dp, ctx.clone(), single, false, is_filtered)
-                }
-                None
-            });
+        let each = parts.iter().filter_map(|dp| {
+            let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
+            if sorting || matches {
+                let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
+                return dp_render_either(var, dp, ctx.clone(), single, false, is_filtered);
+            }
+            None
+        });
         if single.circa {
-            let circa = cloned_gen.locale.get_simple_term(csl::SimpleTermSelector::Misc(MiscTerm::Circa, TermFormExtended::default()));
+            let circa = cloned_gen
+                .locale
+                .get_simple_term(csl::SimpleTermSelector::Misc(
+                    MiscTerm::Circa,
+                    TermFormExtended::default(),
+                ));
             if let Some(circa) = circa {
-                builder.push_either(Either::Build(Some(fmt.plain(circa.singular()))));
-                builder.push_either(Either::Build(Some(fmt.plain(" "))));
+                builder.push_either(arena, Either::Build(Some(fmt.plain(circa.singular()))));
+                builder.push_either(arena, Either::Build(Some(fmt.plain(" "))));
             }
         }
         let mut seen_one = false;
         for (_form, either) in each {
             if seen_one && !delim.is_empty() {
-                builder.push_either(Either::Build(Some(fmt.plain(delim))))
+                builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
             }
             seen_one = true;
-            builder.push_either(either);
+            builder.push_either(arena, either);
         }
     };
     match &val {
@@ -443,7 +498,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             if sorting {
                 let mut builder = PartBuilder::new(gen_date, len_hint);
                 do_single(&mut builder, first, &delim);
-                builder.push_either(Either::Build(Some(fmt.plain("/"))));
+                builder.push_either(arena, Either::Build(Some(fmt.plain("/"))));
                 do_single(&mut builder, second, &delim);
                 return Some(builder.into_either(fmt));
             }
@@ -457,18 +512,24 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                         if sorting {
                             range_delim = "/";
                         }
-                        builder.push_either(Either::Build(Some(fmt.plain(range_delim))));
+                        builder.push_either(arena, Either::Build(Some(fmt.plain(range_delim))));
                         last_rdel = true;
                     }
                     DateToken::Part(date, part, is_max_diff) => {
                         if !last_rdel && seen_one && !delim.is_empty() {
-                            builder.push_either(Either::Build(Some(fmt.plain(&delim))))
+                            builder.push_either(arena, Either::Build(Some(fmt.plain(&delim))))
                         }
                         last_rdel = false;
-                        if let Some((_form, either)) =
-                            dp_render_either(var, part, ctx.clone(), date, is_max_diff, false)
-                        {
-                            builder.push_either(either);
+                        if let Some((_form, either)) = dp_render_either(
+                            var,
+                            part,
+                            ctx.clone(),
+                            arena,
+                            date,
+                            is_max_diff,
+                            false,
+                        ) {
+                            builder.push_either(arena, either);
                         }
                     }
                 }
@@ -660,6 +721,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     var: DateVariable,
     part: &DatePart,
     ctx: GenericContext<'c, O, I>,
+    arena: &mut IrArena<O>,
     date: &Date,
     is_max_diff: bool,
     is_filtered: bool,
@@ -685,9 +747,18 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                 } else {
                     let mut contents = Vec::with_capacity(2);
                     let b = fmt.plain(&s);
+                    let seq = arena.new_node((
+                        IR::Seq(IrSeq {
+                            affixes,
+                            formatting: part.formatting,
+                            ..Default::default()
+                        }),
+                        GroupVars::Important,
+                    ));
                     let year_part = IR::Rendered(Some(CiteEdgeData::Year(b)));
                     // Important because we got it from a date variable.
-                    contents.push((year_part, GroupVars::Important));
+                    let year_node = arena.new_node((year_part, GroupVars::Important));
+                    seq.append(year_node, arena);
                     // Why not move this if branch up and emit Either::Build?
                     //
                     // We don't emit Either::Build for normal date vars with
@@ -696,15 +767,10 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                     // specifically when affixes are nonzero. Like: ["(", "1986", ")"] vs
                     // ["(1986)"]
                     if ctx.should_add_year_suffix_hook() {
-                        let suffix = IR::year_suffix(YearSuffixHook::Plain);
-                        contents.push(suffix);
+                        let suffix = arena.new_node(IR::year_suffix(YearSuffixHook::Plain));
+                        seq.append(suffix, arena);
                     }
-                    Either::Ir(IR::Seq(IrSeq {
-                        contents,
-                        affixes,
-                        formatting: part.formatting,
-                        ..Default::default()
-                    }))
+                    Either::Ir(seq)
                 }
             } else {
                 let options = IngestOptions {
@@ -720,7 +786,12 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
         .map(|x| (part.form, x))
 }
 
-fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey, is_filtered: bool) -> Option<String> {
+fn dp_render_sort_string(
+    part: &DatePart,
+    date: &Date,
+    key: &SortKey,
+    is_filtered: bool,
+) -> Option<String> {
     match part.form {
         DatePartForm::Year(_) => Some(format!("{:04}_", date.year)),
         DatePartForm::Month(..) => {

@@ -15,11 +15,9 @@ use crate::NamesInheritance;
 use citeproc_io::utils::Intercalate;
 use citeproc_io::{Name, PersonName, Reference};
 use csl::{
-    Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Locale, Name as NameEl, NameAnd,
-    NameAsSortOrder, NameEtAl, NameForm, NameLabel, NamePart, NameVariable, Names, Position, Style,
+    Atom, DelimiterPrecedes, DemoteNonDroppingParticle, Name as NameEl, NameAnd, NameAsSortOrder,
+    NameEtAl, NameForm, NamePart, NameVariable, Names, Position,
 };
-use std::sync::Arc;
-use std::sync::Mutex;
 
 mod initials;
 
@@ -103,7 +101,6 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
             var,
             label_var,
             ratchets,
-            Box::new(IR::Rendered(None)),
             style,
             locale.et_al_term(names_inheritance.et_al.as_ref()),
             locale.and_term(None).map(|x| x.to_owned()),
@@ -232,7 +229,8 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
-) -> IrSum<O> {
+    arena: &mut IrArena<O>,
+) -> NodeId {
     let fmt = &ctx.format;
     let mut names_inheritance = state.name_override.inherited_names_options(
         &ctx.name_citation,
@@ -256,7 +254,6 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         // TODO: styling with a surrounding IrSeq
         let mut nc = IrNameCounter {
             name_irs,
-            ir: Box::new(IR::Rendered(None)),
             group_vars: GroupVars::new(),
         };
         // Substitute
@@ -269,51 +266,64 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                     let old = new_state
                         .name_override
                         .replace_name_overrides_for_substitute(names_inheritance.clone());
-                    let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
-                    if !ir.is_empty() {
+                    let node = el.intermediate(db, &mut new_state, ctx, arena);
+                    if !IR::is_empty(node, arena) {
                         new_state.name_override.restore_name_overrides(old);
                         *state = new_state;
-                        return (ir, gv);
+                        return node;
                     }
                 }
             }
-            return (IR::Rendered(None), GroupVars::Missing);
+            return arena.new_node((IR::Rendered(None), GroupVars::Missing));
         }
         let (new_ir, gv) = nc.render_cite(ctx);
-        *nc.ir = new_ir;
         nc.group_vars = gv;
-        return (IR::NameCounter(nc), GroupVars::Important);
+        let nc_node = arena.new_node((IR::NameCounter(nc), GroupVars::Important));
+        let sub_node = arena.new_node((new_ir, gv));
+        nc_node.append(sub_node, arena);
+        return nc_node;
     }
 
-    let name_irs: Vec<IrSum<O>> = nirs_iterator
+    let seq_node = arena.new_node((IR::Rendered(None), GroupVars::Missing));
+
+    nirs_iterator
         .map(|mut nir| {
-            if let Some((ir, _)) = nir.intermediate_custom(
+            let is_sort_key = ctx.sort_key.is_some();
+            let label_after_name = nir.names_inheritance.label.map_or(false, |x| x.after_name);
+            let built_label = nir.built_label.clone();
+            if let Some(result) = nir.intermediate_custom(
                 &ctx.format,
                 ctx.position.0,
-                ctx.sort_key.is_some(),
+                is_sort_key,
                 ctx.disamb_pass,
                 None,
             ) {
-                *nir.ir = ir;
-                (IR::Name(Arc::new(Mutex::new(nir))), GroupVars::Important)
+                let names_seq = NameIR::rendered_ntbs_to_node(result, arena, is_sort_key, label_after_name, built_label.as_ref());
+                let nir_node = arena.new_node((IR::Name(nir), GroupVars::Important));
+                nir_node.append(names_seq, arena);
+                nir_node
             } else {
                 // shouldn't happen; intermediate_custom should return Some the first time
                 // round in any situation, and only retun None if it's impossible to crank any
                 // further for a disamb pass
                 error!("nir.intermediate_custom returned None the first time round");
-                (IR::Rendered(None), GroupVars::Missing)
+                arena.new_node((IR::Rendered(None), GroupVars::Important))
             }
         })
-        .collect();
+        .for_each(|node| seq_node.append(node, arena));
 
     // Wait until iteration is done to collect
     state.maybe_suppress_name_vars(&names.variables);
 
-    if name_irs.is_empty()
-        || name_irs.iter().all(|(ir, _gv)| match ir {
-            IR::Name(nir) => nir.lock().unwrap().disamb_names.is_empty(),
-            _ => true,
-        })
+    if seq_node.children(arena).next().is_none()
+        || seq_node
+            .children(arena)
+            .filter_map(|id| arena.get(id))
+            .map(Node::get)
+            .all(|(ir, _)| match ir {
+                IR::Name(nir) => nir.disamb_names.is_empty(),
+                _ => true,
+            })
     {
         if let Some(subst) = names.substitute.as_ref() {
             for el in subst.0.iter() {
@@ -323,37 +333,35 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                 let old = new_state
                     .name_override
                     .replace_name_overrides_for_substitute(names_inheritance.clone());
-                let (ir, gv) = el.intermediate(db, &mut new_state, ctx);
-                if !ir.is_empty() {
+                let node = el.intermediate(db, &mut new_state, ctx, arena);
+                if !IR::is_empty(node, arena) {
                     new_state.name_override.restore_name_overrides(old);
                     *state = new_state;
-                    return (ir, gv);
+                    return node;
                 }
             }
         }
-        return (IR::Rendered(None), GroupVars::Missing);
+        seq_node.remove_subtree(arena);
+        return arena.new_node((IR::Rendered(None), GroupVars::Missing));
     }
 
     // TODO: &[editor, translator] => &[editor], and use editortranslator on
     // the label
 
-    (
-        IR::Seq(IrSeq {
-            contents: name_irs,
-            formatting: names_inheritance.formatting,
-            affixes: names_inheritance.affixes.clone(),
-            delimiter: names_inheritance
-                .delimiter
-                .unwrap_or_else(|| Atom::from("")),
-            display: if ctx.in_bibliography {
-                names.display
-            } else {
-                None
-            },
-            ..Default::default()
-        }),
-        GroupVars::Important,
-    )
+    let seq = IrSeq {
+        formatting: names_inheritance.formatting,
+        affixes: names_inheritance.affixes.clone(),
+        delimiter: names_inheritance
+            .delimiter
+            .unwrap_or_else(|| Atom::from("")),
+        display: if ctx.in_bibliography {
+            names.display
+        } else {
+            None
+        },
+        ..Default::default()
+    };
+    arena.new_node((IR::Seq(seq), GroupVars::Important))
 }
 
 impl<'c, O, I> Proc<'c, O, I> for Names
@@ -366,8 +374,9 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
-        intermediate(self, db, state, ctx)
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
+        intermediate(self, db, state, ctx, arena)
     }
 }
 
@@ -378,11 +387,11 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
-        let runner = self.runner(&self.names_inheritance.name, fmt);
+        let runner = self.one_name_var(&self.names_inheritance.name, fmt);
 
         let name_tokens = runner.name_tokens(
             position,
-            &self.disamb_names,
+            self.disamb_names.len(),
             ctx.sort_key.is_some(),
             self.etal_term.as_ref(),
         );
@@ -396,18 +405,18 @@ impl<'c, O: OutputFormat> NameIR<O> {
     }
 
     // For subsequent-author-substitute
-    pub fn iter_bib_rendered_names<'a>(&'a self, fmt: &'a O) -> Vec<NameToken<'a, O::Build>> {
-        let runner = self.runner(&self.names_inheritance.name, fmt);
+    pub fn iter_bib_rendered_names<'a>(&'a self, fmt: &'a O) -> Vec<NameToken> {
+        let runner = self.one_name_var(&self.names_inheritance.name, fmt);
         let name_tokens = runner.name_tokens(
             Position::First, // All bib entries are First
-            &self.disamb_names,
+            self.disamb_names.len(),
             false, // not in sort key, we're transforming bib ir
             self.etal_term.as_ref(),
         );
         name_tokens
     }
 
-    pub fn runner<'a>(&self, name_el: &'a NameEl, fmt: &'a O) -> OneNameVar<'a, O> {
+    pub fn one_name_var<'a>(&self, name_el: &'a NameEl, fmt: &'a O) -> OneNameVar<'a, O> {
         OneNameVar {
             fmt,
             name_el,
@@ -417,6 +426,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         }
     }
 
+    /// Render each of the people's names for this NameIR (i.e. for this one variable)
     pub fn intermediate_custom(
         &mut self,
         fmt: &O,
@@ -424,13 +434,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
         is_sort_key: bool,
         pass: Option<DisambPass>,
         substitute: Option<(u32, &str)>,
-    ) -> Option<IrSum<O>> {
-        let NameIR {
-            ref names_inheritance,
-            ..
-        } = *self;
-        let mut runner = self.runner(&self.names_inheritance.name, fmt);
-
+    ) -> Option<Vec<O::Build>> {
         let (mut subst_count, subst_text) = substitute.unwrap_or((0, ""));
         let mut maybe_subst = |x: O::Build| -> O::Build {
             if subst_count > 0 {
@@ -441,17 +445,28 @@ impl<'c, O: OutputFormat> NameIR<O> {
             }
         };
 
-        let ntbs = runner.names_to_builds(
+        let mut runner = self.one_name_var(&self.names_inheritance.name, fmt);
+        let count_instead = runner.ntb_count_instead(
             &self.disamb_names,
             position,
-            &names_inheritance.et_al,
+            is_sort_key,
+            self.etal_term.as_ref(),
+        );
+        if count_instead.is_some() {
+            // Don't care about disambiguation with count. It's for sorting.
+            return count_instead;
+        }
+        let (ntbs, ntb_len) = runner.names_to_builds(
+            &self.disamb_names,
+            position,
+            &self.names_inheritance.et_al,
             is_sort_key,
             self.and_term.as_ref(),
             self.etal_term.as_ref(),
         );
 
         // TODO: refactor into a method on NameCounter
-        self.name_counter.current = ntb_len(&ntbs);
+        self.name_counter.current = ntb_len;
         if pass == Some(DisambPass::AddNames)
             && self.name_counter.current <= self.name_counter.max_recorded
         {
@@ -459,60 +474,64 @@ impl<'c, O: OutputFormat> NameIR<O> {
         }
         self.name_counter.max_recorded = self.name_counter.current;
 
-        let contents = ntbs
-            .into_iter()
+        let rendered = ntbs
             .filter_map(|ntb| match ntb {
                 NameTokenBuilt::Built(b) => Some(b),
-                NameTokenBuilt::Ratchet(DisambNameRatchet::Literal(b)) => {
-                    Some(maybe_subst(b.clone()))
-                }
-                NameTokenBuilt::Ratchet(DisambNameRatchet::Person(pn)) => {
-                    runner.name_el = &pn.data.el;
-                    let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
-                    runner.name_el = &names_inheritance.name;
-                    Some(maybe_subst(ret))
-                }
+                NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
+                    DisambNameRatchet::Literal(b) => Some(maybe_subst(b.clone())),
+                    DisambNameRatchet::Person(pn) => {
+                        runner.name_el = &pn.data.el;
+                        let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
+                        runner.name_el = &self.names_inheritance.name;
+                        Some(maybe_subst(ret))
+                    }
+                },
             })
             .filter(|x| !fmt.is_empty(&x))
+            .collect();
+        Some(rendered)
+    }
+
+    pub(crate) fn rendered_ntbs_to_node(
+        rendered_ntbs: Vec<O::Build>,
+        arena: &mut IrArena<O>,
+        is_sort_key: bool,
+        label_after_name: bool,
+        built_label: Option<&O::Build>,
+    ) -> NodeId {
+        // Edit this later if we add anything
+        let seq_node = arena.new_node((IR::Rendered(None), GroupVars::Missing));
+
+        rendered_ntbs
+            .into_iter()
             .map(|x| {
-                (
+                arena.new_node((
                     IR::Rendered(Some(CiteEdgeData::Output(x))),
                     GroupVars::Important,
-                )
+                ))
             })
-            .collect();
+            .for_each(|n| seq_node.append(n, arena));
 
-        let mut seq = IrSeq {
-            contents,
-            ..Default::default()
-        };
-        if seq.contents.is_empty() {
-            Some((IR::Rendered(None), GroupVars::Missing))
+        if seq_node.children(arena).next().is_none() {
+            // this is Missing, unchanged from node creation
+            seq_node
         } else {
+            *arena.get_mut(seq_node).unwrap().get_mut() =
+                (IR::Seq(IrSeq::default()), GroupVars::Important);
             if !is_sort_key {
-                if let Some(label_el) = names_inheritance.label.as_ref() {
-                    if let Some(label) = self.built_label.as_ref() {
-                        let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
-                        if label_el.after_name {
-                            seq.contents.push((label_ir, GroupVars::Plain));
-                        } else {
-                            seq.contents.insert(0, (label_ir, GroupVars::Plain));
-                        }
+                if let Some(label) = built_label {
+                    let label_ir = IR::Rendered(Some(CiteEdgeData::Output(label.clone())));
+                    let label = arena.new_node((label_ir, GroupVars::Plain));
+                    if label_after_name {
+                        seq_node.append(label, arena);
+                    } else {
+                        seq_node.prepend(label, arena);
                     }
                 }
             }
-            Some((IR::Seq(seq), GroupVars::Important))
+            seq_node
         }
     }
-}
-
-pub fn ntb_len<B>(v: &[NameTokenBuilt<'_, B>]) -> u16 {
-    v.iter()
-        .filter(|x| match x {
-            NameTokenBuilt::Ratchet(_) => true,
-            _ => false,
-        })
-        .count() as u16
 }
 
 fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
@@ -631,9 +650,11 @@ fn should_delimit_after<O: OutputFormat>(
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum NameToken<'a, B> {
-    Name(&'a DisambNameRatchet<B>),
-    EtAl(&'a str, Option<Formatting>),
+pub enum NameToken {
+    /// Index of a DisambNameRatchet in the disamb_names array
+    Name(usize),
+    // Name(&'a DisambNameRatchet<B>),
+    EtAl(String, Option<Formatting>),
     Ellipsis,
     Delimiter,
     And,
@@ -683,14 +704,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         use_first + self.bump_name_count as usize
     }
 
-    fn name_tokens<'s>(
+    /// Any returned NameToken::Name(ix) will index into the names_slice.
+    fn name_tokens(
         &self,
         position: Position,
-        names_slice: &'s [DisambNameRatchet<O::Build>],
+        name_count: usize,
         is_sort_key: bool,
-        etal_term: Option<&'s (String, Option<Formatting>)>,
-    ) -> Vec<NameToken<'s, O::Build>> {
-        let name_count = names_slice.len();
+        etal_term: Option<&(String, Option<Formatting>)>,
+    ) -> Vec<NameToken> {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
         if self.name_el.enable_et_al() && name_count >= ea_min {
@@ -699,9 +720,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 return Vec::new();
             }
             if self.name_el.et_al_use_last == Some(true) && ea_use_first + 2 <= name_count {
-                let last = &names_slice[name_count - 1];
-                let mut nms = names_slice
-                    .iter()
+                let last = name_count - 1;
+                let mut nms = (0..name_count)
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
@@ -711,8 +731,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 nms.push(NameToken::Name(last));
                 nms
             } else {
-                let mut nms = names_slice
-                    .iter()
+                let mut nms = (0..name_count)
                     .map(NameToken::Name)
                     .take(ea_use_first)
                     .intercalate(&NameToken::Delimiter);
@@ -727,14 +746,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         } else {
                             nms.push(NameToken::Space);
                         }
-                        nms.push(NameToken::EtAl(term_text, *formatting));
+                        nms.push(NameToken::EtAl(term_text.clone(), *formatting));
                     }
                 }
                 nms
             }
         } else {
-            let mut nms = names_slice
-                .iter()
+            let mut nms = (0..name_count)
                 .map(NameToken::Name)
                 .intercalate(&NameToken::Delimiter);
             // "delimiter-precedes-last" would be better named as "delimiter-precedes-and",
@@ -923,7 +941,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         }
                         let b = fmt.group(parts, "", None);
                         build.push(
-                            fmt.affixed(b, given_part.as_ref().map_or(None, |p| p.affixes.as_ref())),
+                            fmt.affixed(
+                                b,
+                                given_part.as_ref().map_or(None, |p| p.affixes.as_ref()),
+                            ),
                         );
                     }
                 }
@@ -1021,88 +1042,102 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         )
     }
 
-    /// without the <name /> formatting and affixes applied
-    pub(crate) fn names_to_builds<'b: 'a>(
+    fn ntb_count_instead(
         &self,
-        names_slice: &'b [DisambNameRatchet<O::Build>],
+        names_slice: &[DisambNameRatchet<O::Build>],
         position: Position,
-        et_al: &Option<NameEtAl>,
         is_sort_key: bool,
-        and_term: Option<&'b String>,
-        etal_term: Option<&'b (String, Option<Formatting>)>,
-    ) -> Vec<NameTokenBuilt<'b, O::Build>> {
-        let fmt = self.fmt.clone();
-        let mut seen_one = false;
-        let name_tokens = self.name_tokens(position, names_slice, is_sort_key, etal_term);
-
+        etal_term: Option<&(String, Option<Formatting>)>,
+    ) -> Option<Vec<O::Build>> {
         if self.name_el.form == Some(NameForm::Count) {
+            let name_tokens = self.name_tokens(position, names_slice.len(), is_sort_key, etal_term);
             let count: u32 = name_tokens.iter().fold(0, |acc, name| match name {
                 NameToken::Name(_) => acc + 1,
                 _ => acc,
             });
             if is_sort_key {
-                let b = fmt.affixed_text(
+                let b = self.fmt.affixed_text(
                     format!("{:08}", count),
                     None,
                     Some(&crate::sort::natural_sort::num_affixes()),
                 );
-                return vec![NameTokenBuilt::Built(b)];
+                return Some(vec![b]);
             } else {
                 // This isn't sort-mode, you can render NameForm::Count as text.
-                return vec![NameTokenBuilt::Built(
-                    fmt.text_node(format!("{}", count), None),
-                )];
+                return Some(vec![self.fmt.text_node(format!("{}", count), None)]);
             }
         }
+        None
+    }
 
-        name_tokens
-            .iter()
-            .filter_map(|n| {
-                Some(match n {
-                    NameToken::Name(ratchet) => {
-                        seen_one = true;
-                        NameTokenBuilt::Ratchet(ratchet)
+    /// without the <name /> formatting and affixes applied
+    pub(crate) fn names_to_builds(
+        &'a self,
+        names_slice: &[DisambNameRatchet<O::Build>],
+        position: Position,
+        et_al: &Option<NameEtAl>,
+        is_sort_key: bool,
+        and_term: Option<&String>,
+        etal_term: Option<&(String, Option<Formatting>)>,
+    ) -> (impl Iterator<Item = NameTokenBuilt<O::Build>> + 'a, u16) {
+        let fmt = self.fmt.clone();
+        let mut seen_one = false;
+        let name_tokens = self.name_tokens(position, names_slice.len(), is_sort_key, etal_term);
+
+        let ntb_len = name_tokens.iter().fold(0, |acc, n| match n {
+            NameToken::Name(_ratchet) => acc + 1,
+            _ => acc,
+        });
+
+        let and_term = and_term.cloned();
+        let etal_term = etal_term.cloned();
+
+        let iterator = name_tokens.into_iter().filter_map(move |n| {
+            Some(match n {
+                NameToken::Name(ratchet) => {
+                    seen_one = true;
+                    NameTokenBuilt::Ratchet(ratchet)
+                }
+                NameToken::Delimiter => {
+                    NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
+                        fmt.plain(&delim.0)
+                    } else {
+                        fmt.plain(", ")
+                    })
+                }
+                NameToken::EtAl(text, formatting) => {
+                    if is_sort_key {
+                        return None;
                     }
-                    NameToken::Delimiter => {
-                        NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
-                            fmt.plain(&delim.0)
-                        } else {
-                            fmt.plain(", ")
-                        })
-                    }
-                    NameToken::EtAl(text, formatting) => {
-                        if is_sort_key {
-                            return None;
-                        }
-                        NameTokenBuilt::Built(fmt.text_node(text.to_string(), *formatting))
-                    }
-                    NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
-                    NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
-                    NameToken::And => {
-                        use csl::terms::*;
-                        let select = |form: TermFormExtended| {
-                            TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
-                        };
-                        // If an And token shows up, we already know self.name_el.and is Some.
-                        let form = match self.name_el.and {
-                            Some(NameAnd::Symbol) => "&",
-                            // locale
-                            //     .get_text_term(select(TermFormExtended::Symbol), false)
-                            //     .unwrap_or("&"),
-                            _ => and_term.map(|x| x.as_ref()).unwrap_or("and"),
-                        };
-                        let mut string = form.to_owned();
-                        string.push(' ');
-                        NameTokenBuilt::Built(fmt.text_node(string, None))
-                    }
-                })
+                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), formatting))
+                }
+                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
+                NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
+                NameToken::And => {
+                    use csl::terms::*;
+                    let select = |form: TermFormExtended| {
+                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
+                    };
+                    // If an And token shows up, we already know self.name_el.and is Some.
+                    let form = match self.name_el.and {
+                        Some(NameAnd::Symbol) => "&",
+                        // locale
+                        //     .get_text_term(select(TermFormExtended::Symbol), false)
+                        //     .unwrap_or("&"),
+                        _ => and_term.as_ref().map(|x| x.as_ref()).unwrap_or("and"),
+                    };
+                    let mut string = form.to_owned();
+                    string.push(' ');
+                    NameTokenBuilt::Built(fmt.text_node(string, None))
+                }
             })
-            .collect()
+        });
+        (iterator, ntb_len)
     }
 }
 
-pub enum NameTokenBuilt<'a, B> {
-    Ratchet(&'a DisambNameRatchet<B>),
+pub enum NameTokenBuilt<B> {
+    Ratchet(usize),
     Built(B),
 }
 

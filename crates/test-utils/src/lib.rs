@@ -260,7 +260,7 @@ impl Warmup {
         Warmup {
             default_locale: true,
             _other_locales: vec![],
-            ref_dfa: true
+            ref_dfa: true,
         }
     }
     pub fn execute(&self, proc: &mut Processor) {
@@ -271,7 +271,9 @@ impl Warmup {
             // Precompute dfas
             // We don't know what 'cited_keys()' is yet, so just do all of them
             for k in proc.all_keys().iter() {
-                let _dfa = proc.ref_dfa(k.clone()).expect("cited_keys should all exist");
+                let _dfa = proc
+                    .ref_dfa(k.clone())
+                    .expect("cited_keys should all exist");
             }
         }
     }
@@ -285,7 +287,8 @@ macro_rules! regex {
 }
 
 pub fn normalise_html(strg: &str) -> String {
-    let rep = strg.replace("&#x2f;", "/")
+    let rep = strg
+        .replace("&#x2f;", "/")
         .replace("&#x27;", "'")
         .replace("&#60;", "&lt;")
         .replace("&#62;", "&gt;")

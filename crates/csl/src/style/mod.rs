@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::terms::{TermForm, TermFormExtended, TextTermSelector, Category};
+use super::terms::{Category, TermForm, TermFormExtended, TextTermSelector};
 use super::IsIndependent;
 use crate::error::*;
 use crate::locale::{Lang, Locale};

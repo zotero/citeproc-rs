@@ -8,13 +8,13 @@
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
 
+use crate::names::{Name, PersonName};
 use serde::de::Error;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::str::FromStr;
-use crate::names::{PersonName, Name};
 
 // You have to know which variant we're using before parsing a reference.
 // Why? Because some variables are numbers in CSL-M, but standard vars in CSL. And other
@@ -215,26 +215,22 @@ impl<'de> Deserialize<'de> for Reference {
                             let wrap: WrapLang = map.next_value()?;
                             language = wrap.0;
                         }
-                        Field::Any(WrapVar(AnyVariable::Ordinary(v))) => {
-                            match ordinary.entry(v) {
-                                Entry::Occupied(_) => {
-                                    return Err(de::Error::duplicate_field("dunno"));
-                                }
-                                Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
-                                }
+                        Field::Any(WrapVar(AnyVariable::Ordinary(v))) => match ordinary.entry(v) {
+                            Entry::Occupied(_) => {
+                                return Err(de::Error::duplicate_field("dunno"));
                             }
-                        }
-                        Field::Any(WrapVar(AnyVariable::Number(v))) => {
-                            match number.entry(v) {
-                                Entry::Occupied(_) => {
-                                    return Err(de::Error::duplicate_field("dunno"));
-                                }
-                                Entry::Vacant(ve) => {
-                                    ve.insert(map.next_value()?);
-                                }
+                            Entry::Vacant(ve) => {
+                                ve.insert(map.next_value()?);
                             }
-                        }
+                        },
+                        Field::Any(WrapVar(AnyVariable::Number(v))) => match number.entry(v) {
+                            Entry::Occupied(_) => {
+                                return Err(de::Error::duplicate_field("dunno"));
+                            }
+                            Entry::Vacant(ve) => {
+                                ve.insert(map.next_value()?);
+                            }
+                        },
                         Field::Any(WrapVar(AnyVariable::Name(v))) => {
                             match name.entry(v) {
                                 Entry::Occupied(_) => {
@@ -250,7 +246,7 @@ impl<'de> Deserialize<'de> for Reference {
                                             }
                                             Name::Literal { literal } => {
                                                 // Normalise literal names into lone family names.
-                                                // 
+                                                //
                                                 // There is no special case for literal names in
                                                 // CSL, so this just helps do the formatting
                                                 // uniformly. They can still be created by using
@@ -267,18 +263,16 @@ impl<'de> Deserialize<'de> for Reference {
                                 }
                             }
                         }
-                        Field::Any(WrapVar(AnyVariable::Date(v))) => {
-                            match date.entry(v) {
-                                Entry::Occupied(_) => {
-                                    return Err(de::Error::duplicate_field("dunno"));
-                                }
-                                Entry::Vacant(ve) => {
-                                    if let MaybeDate(Some(d)) = map.next_value()? {
-                                        ve.insert(d);
-                                    }
+                        Field::Any(WrapVar(AnyVariable::Date(v))) => match date.entry(v) {
+                            Entry::Occupied(_) => {
+                                return Err(de::Error::duplicate_field("dunno"));
+                            }
+                            Entry::Vacant(ve) => {
+                                if let MaybeDate(Some(d)) = map.next_value()? {
+                                    ve.insert(d);
                                 }
                             }
-                        }
+                        },
                     }
                 }
                 Ok(Reference {
@@ -409,8 +403,16 @@ impl<'de> Deserialize<'de> for OptDate {
                 V: SeqAccess<'de>,
             {
                 if let Some(DateInt(Some(year))) = seq.next_element::<DateInt>()? {
-                    let month = seq.next_element::<DateInt>()?.unwrap_or(DateInt(None)).0.unwrap_or(0);
-                    let day = seq.next_element::<DateInt>()?.unwrap_or(DateInt(None)).0.unwrap_or(0);
+                    let month = seq
+                        .next_element::<DateInt>()?
+                        .unwrap_or(DateInt(None))
+                        .0
+                        .unwrap_or(0);
+                    let day = seq
+                        .next_element::<DateInt>()?
+                        .unwrap_or(DateInt(None))
+                        .0
+                        .unwrap_or(0);
                     let month = if month >= 1 && month <= 16 {
                         month
                     } else if month >= 21 && month <= 24 {
@@ -455,7 +457,9 @@ impl<'de> Deserialize<'de> for DateParts {
             {
                 if let Some(OptDate(Some(from))) = seq.next_element()? {
                     match seq.next_element()? {
-                        Some(OptDate(Some(to))) => Ok(DateParts(Some(DateOrRange::Range(from, to)))),
+                        Some(OptDate(Some(to))) => {
+                            Ok(DateParts(Some(DateOrRange::Range(from, to))))
+                        }
                         _ => Ok(DateParts(Some(DateOrRange::Single(from)))),
                     }
                 } else {
@@ -496,14 +500,18 @@ impl<'de> Deserialize<'de> for MaybeDate {
             where
                 E: de::Error,
             {
-                FromStr::from_str(value).or_else(|_| Ok(DateOrRange::Literal(value.to_string()))).map(|x| MaybeDate(Some(x)))
+                FromStr::from_str(value)
+                    .or_else(|_| Ok(DateOrRange::Literal(value.to_string())))
+                    .map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                FromStr::from_str(&value).or_else(|_| Ok(DateOrRange::Literal(value))).map(|x| MaybeDate(Some(x)))
+                FromStr::from_str(&value)
+                    .or_else(|_| Ok(DateOrRange::Literal(value)))
+                    .map(|x| MaybeDate(Some(x)))
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>

@@ -110,6 +110,9 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
     type Output = FreeCondSets;
     type Checker = crate::choose::UselessCondChecker;
 
+    fn default(&self) -> Self::Output {
+        FreeCondSets::default()
+    }
     /// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         // TODO: keep track of which empty variables caused GroupVars to not render, if

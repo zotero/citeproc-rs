@@ -6,12 +6,12 @@
 
 #![allow(dead_code)]
 
+use super::Processor;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
-use super::Processor;
 use citeproc_proc::db::IrDatabase;
-use std::sync::Arc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum DocUpdate {
@@ -149,4 +149,3 @@ impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
             .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
     }
 }
-

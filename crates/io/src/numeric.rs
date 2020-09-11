@@ -4,8 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use std::borrow::Cow;
 use crate::NumberLike;
+use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Hash, Eq, Clone)]
 pub enum NumericValue<'a> {
@@ -98,17 +98,19 @@ impl<'a> NumericValue<'a> {
                 if var.is_quantity() {
                     match ts.len() {
                         0 => true, // doesn't matter
-                        1 => if let Some(NumericToken::Num(i)) = ts.get(0) {
-                            *i != 1
-                        } else {
-                            false
+                        1 => {
+                            if let Some(NumericToken::Num(i)) = ts.get(0) {
+                                *i != 1
+                            } else {
+                                false
+                            }
                         }
-                        _ => true
+                        _ => true,
                     }
                 } else {
                     ts.len() > 1
                 }
-            },
+            }
 
             NumericValue::Str(_) => false,
         }
@@ -176,7 +178,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, map_res, recognize, opt},
+    combinator::{map, map_res, opt, recognize},
     multi::{many0, many1},
     sequence::{delimited, tuple},
     IResult,
@@ -187,7 +189,7 @@ fn sep_from(input: char) -> NumericToken {
         ',' => Comma,
         '-' => Hyphen,
         '&' => Ampersand,
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 }
 
@@ -195,22 +197,16 @@ fn sep_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, Numeri
     move |inp| {
         let (inp, comma) = opt(tag(", "))(inp)?;
         let (inp, and) = alt((tag(and_term), tag("and")))(inp)?;
-        Ok((inp, if comma.is_some() {
-            CommaAnd
-        } else {
-            And
-        }))
+        Ok((inp, if comma.is_some() { CommaAnd } else { And }))
     }
 }
 
 fn sep_or_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
-    move |inp| {
-        alt((sep_and(and_term), map(one_of(",&-"), sep_from)))(inp)
-    }
+    move |inp| alt((sep_and(and_term), map(one_of(",&-"), sep_from)))(inp)
 }
 
 fn sep<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
-    move |inp| delimited(many0(char(' ')), sep_or_and(and_term), many0(char(' '))) (inp)
+    move |inp| delimited(many0(char(' ')), sep_or_and(and_term), many0(char(' ')))(inp)
 }
 
 fn int(inp: &str) -> IResult<&str, u32> {
@@ -251,19 +247,23 @@ fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
     alt((prefix1, suffix1, num))(inp)
 }
 
-fn num_tokens<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, Vec<NumericToken>> + 'a {
-    move |inp| map(
-        tuple((num_ish, many0(tuple((sep(and_term), num_ish))))),
-        |(n, rest)| {
-            let mut new = Vec::with_capacity(rest.len() * 2);
-            new.push(n);
-            rest.into_iter().fold(new, |mut acc, p| {
-                acc.push(p.0);
-                acc.push(p.1);
-                acc
-            })
-        },
-    )(inp)
+fn num_tokens<'a>(
+    and_term: &'a str,
+) -> impl Fn(&'a str) -> IResult<&'a str, Vec<NumericToken>> + 'a {
+    move |inp| {
+        map(
+            tuple((num_ish, many0(tuple((sep(and_term), num_ish))))),
+            |(n, rest)| {
+                let mut new = Vec::with_capacity(rest.len() * 2);
+                new.push(n);
+                rest.into_iter().fold(new, |mut acc, p| {
+                    acc.push(p.0);
+                    acc.push(p.1);
+                    acc
+                })
+            },
+        )(inp)
+    }
 }
 
 #[test]
@@ -275,7 +275,10 @@ fn test_num_token_parser() {
     );
     assert_eq!(sep("et")("- "), Ok(("", Hyphen)));
     assert_eq!(sep("et")(", "), Ok(("", Comma)));
-    assert_eq!(num_tokens("et")("2, 3"), Ok(("", vec![Num(2), Comma, Num(3)])));
+    assert_eq!(
+        num_tokens("et")("2, 3"),
+        Ok(("", vec![Num(2), Comma, Num(3)]))
+    );
     assert_eq!(
         num_tokens("et")("2 - 5, 9"),
         Ok(("", vec![Num(2), Hyphen, Num(5), Comma, Num(9)]))
@@ -314,10 +317,7 @@ impl<'a> NumericValue<'a> {
 fn test_numeric_value() {
     assert_eq!(
         NumericValue::parse("2-5, 9"),
-        NumericValue::Tokens(
-            "2-5, 9".into(),
-            vec![Num(2), Hyphen, Num(5), Comma, Num(9)]
-        )
+        NumericValue::Tokens("2-5, 9".into(), vec![Num(2), Hyphen, Num(5), Comma, Num(9)])
     );
     assert_eq!(
         NumericValue::parse("2 - 5, 9, edition"),
@@ -325,10 +325,7 @@ fn test_numeric_value() {
     );
     assert_eq!(
         NumericValue::parse("[1.2.3]"),
-        NumericValue::Tokens(
-            "[1.2.3]".into(),
-            vec![Affixed("[1.2.3]".to_string())]
-        )
+        NumericValue::Tokens("[1.2.3]".into(), vec![Affixed("[1.2.3]".to_string())])
     );
     assert_eq!(
         NumericValue::parse("[3], (5), [17.1.89(4(1))(2)(a)(i)]"),
@@ -348,9 +345,7 @@ fn test_numeric_value() {
 #[test]
 fn test_page_first() {
     assert_eq!(
-        NumericValue::parse("2-5, 9")
-            .page_first()
-            .unwrap(),
+        NumericValue::parse("2-5, 9").page_first().unwrap(),
         NumericValue::num(2)
     );
 }

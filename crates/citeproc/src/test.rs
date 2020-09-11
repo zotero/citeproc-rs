@@ -7,13 +7,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use csl::*;
 use crate::prelude::*;
+use csl::*;
 
 macro_rules! assert_cluster {
     ($arcstring:expr, $optstr:expr) => {
         let built = $arcstring;
-        assert_eq!(built.as_deref().map(|string_ref| string_ref.as_str()), $optstr);
+        assert_eq!(
+            built.as_deref().map(|string_ref| string_ref.as_str()),
+            $optstr
+        );
     };
 }
 
@@ -206,9 +209,18 @@ mod preview {
         let mut db = mk_db();
         let cites = vec![Cite::basic("one")];
         let positions = &[
-            ClusterPosition { id: 1, note: Some(1) },
-            ClusterPosition { id: 2, note: Some(2) },
-            ClusterPosition { id: 0, note: Some(3) }, // Append at the end
+            ClusterPosition {
+                id: 1,
+                note: Some(1),
+            },
+            ClusterPosition {
+                id: 2,
+                note: Some(2),
+            },
+            ClusterPosition {
+                id: 0,
+                note: Some(3),
+            }, // Append at the end
         ];
         let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one, subsequent"));
@@ -221,9 +233,18 @@ mod preview {
         let mut db = mk_db();
         let cites = vec![Cite::basic("one"), Cite::basic("three")];
         let positions = &[
-            ClusterPosition { id: 0, note: Some(1) }, // Insert into the first note, at the start.
-            ClusterPosition { id: 1, note: Some(1) },
-            ClusterPosition { id: 2, note: Some(2) },
+            ClusterPosition {
+                id: 0,
+                note: Some(1),
+            }, // Insert into the first note, at the start.
+            ClusterPosition {
+                id: 1,
+                note: Some(1),
+            },
+            ClusterPosition {
+                id: 2,
+                note: Some(2),
+            },
         ];
         let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one; Book three"));
@@ -236,15 +257,20 @@ mod preview {
         let mut db = mk_db();
         let cites = vec![Cite::basic("three")];
         let positions = &[
-            ClusterPosition { id: 0, note: Some(1) }, // Replace cluster #1
-            ClusterPosition { id: 2, note: Some(2) },
+            ClusterPosition {
+                id: 0,
+                note: Some(1),
+            }, // Replace cluster #1
+            ClusterPosition {
+                id: 2,
+                note: Some(2),
+            },
         ];
         let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book three"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));
     }
-
 }
 
 mod terms {

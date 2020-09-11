@@ -13,9 +13,10 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
         let layout = &self.citation.layout;
-        sequence_basic(db, state, ctx, &layout.elements)
+        sequence_basic(db, state, ctx, arena, &layout.elements)
     }
 }
 
@@ -29,7 +30,8 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
         // Unlike cite, we will apply affixes and formatting in the seq, so that they go inside
         // any second-field-align content.
         let layout = &self.layout;
@@ -37,6 +39,7 @@ where
             db,
             state,
             ctx,
+            arena,
             &layout.elements,
             // no such thing as layout delimiters in a bibliography
             "".into(),
@@ -60,11 +63,11 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
-        let _fmt = &ctx.format;
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
         let renderer = Renderer::cite(ctx);
         match *self {
-            Element::Choose(ref ch) => ch.intermediate(db, state, ctx),
+            Element::Choose(ref ch) => ch.intermediate(db, state, ctx, arena),
 
             Element::Text(ref text) => {
                 match text.source {
@@ -84,6 +87,7 @@ where
                             db,
                             state,
                             ctx,
+                            arena,
                             &macro_unsafe,
                             "".into(),
                             text.formatting,
@@ -98,16 +102,16 @@ where
                     }
                     TextSource::Value(ref value) => {
                         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
-                        (IR::Rendered(content), GroupVars::Plain)
+                        arena.new_node((IR::Rendered(content), GroupVars::Plain))
                     }
                     TextSource::Variable(var, form) => {
                         if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                             let hook = YearSuffixHook::Explicit(text.clone());
                             // Only available when sorting, and ir_gen3 and later
                             if let Some(i) = ctx.year_suffix {
-                                return hook.render(ctx, i);
+                                return arena.new_node(hook.render(ctx, i));
                             }
-                            return IR::year_suffix(hook);
+                            return arena.new_node(IR::year_suffix(hook));
                         }
                         if var == StandardVariable::Ordinary(Variable::CitationLabel) {
                             let hook = IR::year_suffix(YearSuffixHook::Plain);
@@ -120,11 +124,11 @@ where
                                     .map(|val| renderer.text_variable(&plain_text_element(v), var, &val))
                             };
                             return vario.map(|label| {
+                                let label_node = arena.new_node(
+                                    (IR::Rendered(Some(CiteEdgeData::Output(label))), GroupVars::Important)
+                                );
+                                let hook_node = arena.new_node(hook);
                                 let seq = IrSeq {
-                                    contents: vec![
-                                        (IR::Rendered(Some(CiteEdgeData::Output(label))), GroupVars::Important),
-                                        hook,
-                                    ],
                                     formatting: text.formatting,
                                     affixes: text.affixes.clone(),
                                     text_case: text.text_case,
@@ -133,10 +137,11 @@ where
                                     quotes: renderer.quotes_if(text.quotes),
                                     dropped_gv: None,
                                 };
-                                (IR::Seq(seq), GroupVars::Important) // the citation-label is important, so so is the seq
+                                // the citation-label is important, so so is the seq
+                                arena.new_node((IR::Seq(seq), GroupVars::Important))
                             })
-                            .unwrap_or((IR::Rendered(None), GroupVars::Missing));
-                        }
+                            .unwrap_or_else(|| arena.new_node((IR::Rendered(None), GroupVars::Missing)));
+                            }
                         let content = match var {
                             StandardVariable::Ordinary(v) => {
                                 if state.is_suppressed_ordinary(v) {
@@ -159,13 +164,13 @@ where
                         };
                         let content = content.map(CiteEdgeData::from_standard_variable(var, false));
                         let gv = GroupVars::rendered_if(content.is_some());
-                        (IR::Rendered(content), gv)
+                        arena.new_node((IR::Rendered(content), gv))
                     }
                     TextSource::Term(term_selector, plural) => {
                         let content = renderer
                             .text_term(text, term_selector, plural)
                             .map(CiteEdgeData::Term);
-                        (IR::Rendered(content), GroupVars::new())
+                        arena.new_node((IR::Rendered(content), GroupVars::new()))
                     }
                 }
             }
@@ -179,7 +184,7 @@ where
                         .and_then(|val| renderer.numeric_label(label, &val))
                         .map(CiteEdgeData::from_number_variable(var, true))
                 };
-                (IR::Rendered(content), GroupVars::new())
+                arena.new_node((IR::Rendered(content), GroupVars::new()))
             }
 
             Element::Number(ref number) => {
@@ -193,10 +198,10 @@ where
                         .map(CiteEdgeData::Output)
                 };
                 let gv = GroupVars::rendered_if(content.is_some());
-                (IR::Rendered(content), gv)
+                arena.new_node((IR::Rendered(content), gv))
             }
 
-            Element::Names(ref ns) => ns.intermediate(db, state, ctx),
+            Element::Names(ref ns) => ns.intermediate(db, state, ctx, arena),
 
             //
             // You're going to have to replace sequence() with something more complicated.
@@ -206,6 +211,7 @@ where
                     db,
                     state,
                     ctx,
+                    arena,
                     g.elements.as_ref(),
                     g.delimiter.0.clone(),
                     g.formatting,
@@ -218,9 +224,10 @@ where
             }
             Element::Date(ref dt) => {
                 let var = dt.variable();
-                state.maybe_suppress_date(var, |state| {
-                    dt.intermediate(db, state, ctx)
-                })
+                let o: Option<NodeId> = state.maybe_suppress_date(var, |state| {
+                    Some(dt.intermediate(db, state, ctx, arena))
+                });
+                o.unwrap_or_else(|| arena.new_node((IR::Rendered(None), GroupVars::Missing)))
             }
         }
     }
@@ -252,15 +259,20 @@ where
     db: &'a dyn IrDatabase,
     state: IrState,
     ctx: &'a CiteContext<'a, O, I>,
+    arena: &'a mut IrArena<O>,
 }
 
 impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> {
-    type Output = IrSum<O>;
+    type Output = NodeId;
     type Checker = CiteContext<'a, O, I>;
     fn get_checker(&self) -> Option<&Self::Checker> {
         Some(&self.ctx)
     }
 
+    // Compare with Output = Option<NodeId>, where you wouldn't know the GroupVars of the child.
+    fn default(&self) -> Self::Output {
+        self.arena.new_node((IR::Rendered(None), GroupVars::Plain))
+    }
     fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         match fold_type {
@@ -269,6 +281,7 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                     self.db,
                     &mut self.state,
                     self.ctx,
+                    self.arena,
                     &elements,
                     "".into(),
                     text.formatting,
@@ -284,6 +297,7 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                     self.db,
                     &mut self.state,
                     self.ctx,
+                    self.arena,
                     group.elements.as_ref(),
                     group.delimiter.0.clone(),
                     group.formatting,
@@ -295,10 +309,10 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 )
             }
             WalkerFoldType::Layout(layout) => {
-                sequence_basic(self.db, &mut self.state, self.ctx, &layout.elements)
+                sequence_basic(self.db, &mut self.state, self.ctx, self.arena, &layout.elements)
             }
             WalkerFoldType::IfThen | WalkerFoldType::Else => {
-                sequence_basic(self.db, &mut self.state, self.ctx, elements)
+                sequence_basic(self.db, &mut self.state, self.ctx, self.arena, elements)
             }
             WalkerFoldType::Substitute => todo!("use fold() to implement name element substitution"),
         }
@@ -312,13 +326,14 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
             ref mut state,
             ..
         } = *self;
-        state.maybe_suppress_date(var, |state| {
-            body_date.intermediate(db, state, ctx)
-        })
+        let o: Option<NodeId> = state.maybe_suppress_date(var, |state| {
+            Some(body_date.intermediate(db, state, ctx, self.arena))
+        });
+        o.unwrap_or_else(|| self.arena.new_node((IR::Rendered(None), GroupVars::Missing)))
     }
 
     fn names(&mut self, names: &Names) -> Self::Output {
-        names.intermediate(self.db, &mut self.state, self.ctx)
+        names.intermediate(self.db, &mut self.state, self.ctx, self.arena)
     }
 
     fn number(&mut self, number: &NumberElement) -> Self::Output {
@@ -334,12 +349,12 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 .map(CiteEdgeData::Output)
         };
         let gv = GroupVars::rendered_if(content.is_some());
-        (IR::Rendered(content), gv)
+        self.arena.new_node((IR::Rendered(content), gv))
     }
 
     fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
-        (IR::Rendered(content), GroupVars::Plain)
+        self.arena.new_node((IR::Rendered(content), GroupVars::Plain))
     }
 }

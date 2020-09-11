@@ -17,13 +17,14 @@ pub enum WalkerFoldType<'a> {
 }
 
 pub trait StyleWalker {
-    type Output: Default;
+    type Output;
     type Checker: CondChecker;
+    fn default(&self) -> Self::Output;
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         for el in elements {
             let _ = self.element(el);
         }
-        Self::Output::default()
+        self.default()
     }
     /// Default returns None, but if you implement & return Some, you get condition checking for
     /// free
@@ -73,13 +74,13 @@ pub trait StyleWalker {
         _svar: StandardVariable,
         _form: VariableForm,
     ) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn text_value(&mut self, _text: &TextElement, _value: &Atom) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn text_macro(&mut self, _source: &TextElement, _name: &Atom) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn text_term(
         &mut self,
@@ -87,19 +88,19 @@ pub trait StyleWalker {
         _sel: TextTermSelector,
         _plural: bool,
     ) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn label(&mut self, _label: &LabelElement) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn number(&mut self, _source: &NumberElement) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn names(&mut self, _name: &Names) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn date(&mut self, _date: &BodyDate) -> Self::Output {
-        Self::Output::default()
+        self.default()
     }
     fn group(&mut self, group: &Group) -> Self::Output {
         self.fold(&group.elements, WalkerFoldType::Group(group))

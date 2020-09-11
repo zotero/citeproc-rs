@@ -3,8 +3,8 @@ use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
 use csl::{Name as NameEl, *};
-use std::sync::Arc;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::disamb::FreeCond;
 
@@ -110,7 +110,7 @@ where
     }
 
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
-        (match (var, form) {
+        match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
                 .reference
                 .ordinary
@@ -131,10 +131,13 @@ where
                 let tri = crate::citation_label::Trigraph::default();
                 Some(Cow::Owned(tri.make_label(self.reference)))
             }
-            _ => self.reference.ordinary.get(&var)
+            _ => self
+                .reference
+                .ordinary
+                .get(&var)
                 .map(|s| s.as_str())
                 .map(Cow::Borrowed),
-        })
+        }
     }
 
     pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
@@ -187,9 +190,7 @@ where
     }
     fn is_numeric(&self, var: AnyVariable) -> bool {
         match &var {
-            AnyVariable::Number(num) => self
-                .get_number(*num)
-                .map_or(false, |r| r.is_numeric()),
+            AnyVariable::Number(num) => self.get_number(*num).map_or(false, |r| r.is_numeric()),
             _ => false,
             // TODO: not very useful; implement for non-number variables (see CiteContext)
         }
@@ -239,6 +240,9 @@ use csl::Choose;
 impl<'a, O: OutputFormat> StyleWalker for DisambCounter<'a, O> {
     type Output = u32;
     type Checker = RefContext<'a, O>;
+    fn default(&self) -> Self::Output {
+        0
+    }
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         elements.iter().fold(0, |_acc, el| self.element(el))
     }

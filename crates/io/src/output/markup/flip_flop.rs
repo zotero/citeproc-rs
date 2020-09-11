@@ -32,12 +32,10 @@ impl FlipFlopState {
     }
     pub fn flip_flop_inlines(&self, inlines: &[InlineElement]) -> Vec<InlineElement> {
         let mut new = Vec::with_capacity(inlines.len());
-        inlines
-            .iter()
-            .for_each(|inl| match flip_flop(inl, self) {
-                Ok(x) => new.push(x),
-                Err(vec) => new.extend(vec.into_iter()),
-            });
+        inlines.iter().for_each(|inl| match flip_flop(inl, self) {
+            Ok(x) => new.push(x),
+            Err(vec) => new.extend(vec.into_iter()),
+        });
         new
     }
     /// Retval is whether any change resulted
@@ -51,12 +49,18 @@ impl FlipFlopState {
             FormatCmd::FontWeightNormal => self.font_weight = FontWeight::Normal,
             FormatCmd::FontWeightLight => self.font_weight = FontWeight::Light,
             FormatCmd::FontVariantSmallCaps => self.font_variant = FontVariant::SmallCaps,
-            FormatCmd::FontVariantNormal => self.font_variant  = FontVariant::Normal,
+            FormatCmd::FontVariantNormal => self.font_variant = FontVariant::Normal,
             FormatCmd::TextDecorationUnderline => self.text_decoration = TextDecoration::Underline,
             FormatCmd::TextDecorationNone => self.text_decoration = TextDecoration::None,
-            FormatCmd::VerticalAlignmentSuperscript => self.vertical_alignment = VerticalAlignment::Superscript,
-            FormatCmd::VerticalAlignmentSubscript => self.vertical_alignment = VerticalAlignment::Subscript,
-            FormatCmd::VerticalAlignmentBaseline => self.vertical_alignment = VerticalAlignment::Baseline,
+            FormatCmd::VerticalAlignmentSuperscript => {
+                self.vertical_alignment = VerticalAlignment::Superscript
+            }
+            FormatCmd::VerticalAlignmentSubscript => {
+                self.vertical_alignment = VerticalAlignment::Subscript
+            }
+            FormatCmd::VerticalAlignmentBaseline => {
+                self.vertical_alignment = VerticalAlignment::Baseline
+            }
             _ => return false,
             // FormatCmd::DisplayBlock,
             // FormatCmd::DisplayIndent,
@@ -67,7 +71,10 @@ impl FlipFlopState {
     }
 }
 
-fn flip_flop(inline: &InlineElement, state: &FlipFlopState) -> Result<InlineElement, Vec<InlineElement>> {
+fn flip_flop(
+    inline: &InlineElement,
+    state: &FlipFlopState,
+) -> Result<InlineElement, Vec<InlineElement>> {
     match *inline {
         InlineElement::Micro(ref nodes) => {
             let nodes = flip_flop_nodes(nodes, state);
@@ -168,7 +175,9 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Result<MicroNode, 
         MicroNode::Formatted(ref nodes, cmd) => {
             let mut flop = state.clone();
             match cmd {
-                FormatCmd::FontStyleItalic | FormatCmd::FontStyleNormal | FormatCmd::FontStyleOblique => {
+                FormatCmd::FontStyleItalic
+                | FormatCmd::FontStyleNormal
+                | FormatCmd::FontStyleOblique => {
                     let is_italic = |x| x != FontStyle::Normal;
                     let outer = state.font_style;
                     flop.push_cmd(*cmd);
@@ -185,7 +194,9 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Result<MicroNode, 
                         Ok(MicroNode::Formatted(nodes, *cmd))
                     }
                 }
-                FormatCmd::FontWeightBold | FormatCmd::FontWeightLight | FormatCmd::FontWeightNormal => {
+                FormatCmd::FontWeightBold
+                | FormatCmd::FontWeightLight
+                | FormatCmd::FontWeightNormal => {
                     let outer = state.font_weight;
                     flop.push_cmd(*cmd);
                     let inner = flop.font_weight;
@@ -258,6 +269,6 @@ fn flip_flop_node(node: &MicroNode, state: &FlipFlopState) -> Result<MicroNode, 
                 }
                 Err(out)
             }
-        },
+        }
     }
 }

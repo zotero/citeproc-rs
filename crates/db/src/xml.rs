@@ -318,10 +318,7 @@ pub struct PredefinedLocales(pub HashMap<Lang, String>);
 impl PredefinedLocales {
     pub fn bundled_en_us() -> Self {
         let mut m = HashMap::new();
-        m.insert(
-            Lang::en_us(),
-            EN_US.to_owned(),
-        );
+        m.insert(Lang::en_us(), EN_US.to_owned());
         PredefinedLocales(m)
     }
 }

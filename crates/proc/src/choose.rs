@@ -25,20 +25,23 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
-        let make_mutex = |d: bool, content: IR<O>, gv: GroupVars| {
-            if d {
-                (
-                    IR::ConditionalDisamb(Arc::new(Mutex::new(ConditionalDisambIR {
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
+        let make_mutex = |unresolved: bool, content: IR<O>, gv: GroupVars| {
+            let sub_node = arena.new_node((content, gv));
+            if unresolved {
+                let cond = arena.new_node((
+                    IR::ConditionalDisamb(ConditionalDisambIR {
                         choose: self.clone(),
                         done: false,
-                        ir: Box::new(content),
                         group_vars: gv,
-                    }))),
+                    }),
                     gv,
-                )
+                ));
+                cond.append(sub_node);
+                cond
             } else {
-                (content, gv)
+                sub_node
             }
         };
         // XXX: should you treat conditional evaluations as a "variable test"?

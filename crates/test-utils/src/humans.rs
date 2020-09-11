@@ -8,7 +8,8 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Locators, Reference, Suppression, ClusterPosition,
+    Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Locators, Reference,
+    Suppression,
 };
 
 use lazy_static::lazy_static;
@@ -39,7 +40,10 @@ impl CitationItem {
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster { id: index + 1, cites }
+        Cluster {
+            id: index + 1,
+            cites,
+        }
     }
 }
 
@@ -303,7 +307,11 @@ impl JsExecutor<'_> {
     fn to_renumbering(&mut self, renum: &mut Vec<ClusterPosition>, prepost: &[PrePost]) {
         for &PrePost(ref string, note_number) in prepost.iter() {
             let id = self.get_id(&string);
-            let note = if note_number == 0 { None } else { Some(note_number) };
+            let note = if note_number == 0 {
+                None
+            } else {
+                Some(note_number)
+            };
             renum.push(ClusterPosition { id, note })
         }
     }

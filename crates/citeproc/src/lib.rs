@@ -9,23 +9,25 @@ extern crate serde_derive;
 // #[macro_use]
 // extern crate log;
 
-pub(crate) mod processor;
 pub(crate) mod api;
+pub(crate) mod processor;
 
 #[cfg(test)]
 mod test;
 
-pub use self::api::{DocUpdate, UpdateSummary, IncludeUncited, SupportedFormat};
-pub use self::processor::{ErrorKind, Processor, PreviewPosition};
+pub use self::api::{DocUpdate, IncludeUncited, SupportedFormat, UpdateSummary};
+pub use self::processor::{ErrorKind, PreviewPosition, Processor};
 
 pub mod prelude {
-    pub use crate::api::{DocUpdate, UpdateSummary, IncludeUncited, SupportedFormat};
-    pub use crate::processor::{Processor, PreviewPosition};
+    pub use crate::api::{DocUpdate, IncludeUncited, SupportedFormat, UpdateSummary};
+    pub use crate::processor::{PreviewPosition, Processor};
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
     };
     pub use citeproc_io::output::{markup::Markup, OutputFormat};
-    pub use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, IntraNote, Reference, ClusterPosition};
+    pub use citeproc_io::{
+        Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Reference,
+    };
     pub use citeproc_proc::db::{HasFormatter, IrDatabase};
     pub use csl::Atom;
 }

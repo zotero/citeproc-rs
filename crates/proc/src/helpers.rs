@@ -15,13 +15,14 @@ pub fn sequence_basic<'c, O, I>(
     db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
+    arena: &mut IrArena<O>,
     els: &[Element],
-) -> IrSum<O>
+) -> NodeId
 where
     O: OutputFormat,
     I: OutputFormat,
 {
-    sequence(db, state, ctx, els, "".into(), None, None, None, None, TextCase::None, false)
+    sequence(db, state, ctx, arena, els, "".into(), None, None, None, None, TextCase::None, false)
 }
 
 
@@ -29,6 +30,7 @@ pub fn sequence<'c, O, I>(
     db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
+    arena: &mut IrArena<O>,
     els: &[Element],
     delimiter: Atom,
     formatting: Option<Formatting>,
@@ -38,7 +40,7 @@ pub fn sequence<'c, O, I>(
     quotes: Option<LocalizedQuotes>,
     text_case: TextCase,
     is_group: bool,
-) -> IrSum<O>
+) -> NodeId
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -47,15 +49,22 @@ where
     let mut overall_gv = GroupVars::new();
     let mut dropped_gv = GroupVars::new();
 
+    // We will edit this later if it turns out it has content & isn't discarded
+    let self_node = arena.new_node((IR::Rendered(None), GroupVars::Plain));
+    if els.is_empty() {
+        return self_node;
+    }
+
     for el in els {
-        let (ir, gv) = el.intermediate(db, state, ctx);
-        match ir {
+        let child = el.intermediate(db, state, ctx, arena);
+        let ch = arena.get(child).unwrap().get();
+        match ch.0 {
             IR::Rendered(None) => {
                 dropped_gv = dropped_gv.neighbour(gv);
                 overall_gv = overall_gv.neighbour(gv);
             }
             _ => {
-                contents.push((ir, gv));
+                self_node.append(child, arena);
                 overall_gv = overall_gv.neighbour(gv)
             }
         }
@@ -65,7 +74,6 @@ where
         IR::Rendered(None)
     } else {
         IR::Seq(IrSeq {
-            contents,
             formatting,
             affixes: affixes.cloned(),
             delimiter,
@@ -79,11 +87,17 @@ where
             },
         })
     };
-    if is_group {
+
+    let (set_ir, set_gv) = if is_group {
         overall_gv.implicit_conditional(ir)
     } else {
         (ir, overall_gv)
-    }
+    };
+
+    let (self_ir, self_gv) = arena.get_mut(self_node).unwrap().get_mut();
+    *self_ir = set_ir;
+    *self_gv = set_gv;
+    self_node
 }
 
 pub fn ref_sequence_basic<'c>(

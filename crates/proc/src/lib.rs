@@ -37,6 +37,9 @@ mod walker;
 pub use crate::db::built_cluster_before_output;
 
 pub(crate) mod prelude {
+    pub use crate::ir::IrSum;
+    pub type IrArena<O = Markup> = indextree::Arena<IrSum<O>>;
+    pub use indextree::{NodeId, Node};
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub enum CiteOrBib {
         Citation,
@@ -90,7 +93,8 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O>;
+        arena: &mut IrArena<O>,
+    ) -> NodeId;
 }
 
 use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
