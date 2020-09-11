@@ -286,37 +286,40 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
 
     let seq_node = arena.new_node((IR::Rendered(None), GroupVars::Missing));
 
-    nirs_iterator
-        .map(|mut nir| {
-            let is_sort_key = ctx.sort_key.is_some();
-            let label_after_name = nir.names_inheritance.label.map_or(false, |x| x.after_name);
-            let built_label = nir.built_label.clone();
-            if let Some(result) = nir.intermediate_custom(
-                &ctx.format,
-                ctx.position.0,
+    for mut nir in nirs_iterator {
+        let is_sort_key = ctx.sort_key.is_some();
+        let label_after_name = nir
+            .names_inheritance
+            .label
+            .as_ref()
+            .map_or(false, |x| x.after_name);
+        let built_label = nir.built_label.clone();
+        let node = if let Some(result) = nir.intermediate_custom(
+            &ctx.format,
+            ctx.position.0,
+            is_sort_key,
+            ctx.disamb_pass,
+            None,
+        ) {
+            let names_seq = NameIR::rendered_ntbs_to_node(
+                result,
+                arena,
                 is_sort_key,
-                ctx.disamb_pass,
-                None,
-            ) {
-                let names_seq = NameIR::rendered_ntbs_to_node(
-                    result,
-                    arena,
-                    is_sort_key,
-                    label_after_name,
-                    built_label.as_ref(),
-                );
-                let nir_node = arena.new_node((IR::Name(nir), GroupVars::Important));
-                nir_node.append(names_seq, arena);
-                nir_node
-            } else {
-                // shouldn't happen; intermediate_custom should return Some the first time
-                // round in any situation, and only retun None if it's impossible to crank any
-                // further for a disamb pass
-                error!("nir.intermediate_custom returned None the first time round");
-                arena.new_node((IR::Rendered(None), GroupVars::Important))
-            }
-        })
-        .for_each(|node| seq_node.append(node, arena));
+                label_after_name,
+                built_label.as_ref(),
+            );
+            let nir_node = arena.new_node((IR::Name(nir), GroupVars::Important));
+            nir_node.append(names_seq, arena);
+            nir_node
+        } else {
+            // shouldn't happen; intermediate_custom should return Some the first time
+            // round in any situation, and only retun None if it's impossible to crank any
+            // further for a disamb pass
+            error!("nir.intermediate_custom returned None the first time round");
+            arena.new_node((IR::Rendered(None), GroupVars::Important))
+        };
+        seq_node.append(node, arena);
+    }
 
     // Wait until iteration is done to collect
     state.maybe_suppress_name_vars(&names.variables);
@@ -451,7 +454,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
             }
         };
 
-        let mut runner = self.one_name_var(&self.names_inheritance.name, fmt);
+        let runner = self.one_name_var(&self.names_inheritance.name, fmt);
         let count_instead = runner.ntb_count_instead(
             &self.disamb_names,
             position,
@@ -480,15 +483,17 @@ impl<'c, O: OutputFormat> NameIR<O> {
         }
         self.name_counter.max_recorded = self.name_counter.current;
 
+        let mut cloned_runner = runner.clone();
         let rendered = ntbs
             .filter_map(|ntb| match ntb {
                 NameTokenBuilt::Built(b) => Some(b),
                 NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
                     DisambNameRatchet::Literal(b) => Some(maybe_subst(b.clone())),
                     DisambNameRatchet::Person(pn) => {
-                        runner.name_el = &pn.data.el;
-                        let ret = runner.render_person_name(&pn.data.value, !pn.data.primary);
-                        runner.name_el = &self.names_inheritance.name;
+                        cloned_runner.name_el = &pn.data.el;
+                        let ret =
+                            cloned_runner.render_person_name(&pn.data.value, !pn.data.primary);
+                        cloned_runner.name_el = &self.names_inheritance.name;
                         Some(maybe_subst(ret))
                     }
                 },
@@ -508,15 +513,13 @@ impl<'c, O: OutputFormat> NameIR<O> {
         // Edit this later if we add anything
         let seq_node = arena.new_node((IR::Rendered(None), GroupVars::Missing));
 
-        rendered_ntbs
-            .into_iter()
-            .map(|x| {
-                arena.new_node((
-                    IR::Rendered(Some(CiteEdgeData::Output(x))),
-                    GroupVars::Important,
-                ))
-            })
-            .for_each(|n| seq_node.append(n, arena));
+        for built in rendered_ntbs {
+            let node = arena.new_node((
+                IR::Rendered(Some(CiteEdgeData::Output(built))),
+                GroupVars::Important,
+            ));
+            seq_node.append(node, arena);
+        }
 
         if seq_node.children(arena).next().is_none() {
             // this is Missing, unchanged from node creation
