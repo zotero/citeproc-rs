@@ -202,7 +202,7 @@ where
             Some(x) => x.get(),
             None => return false,
         };
-        match me.0 {
+        match &me.0 {
             IR::Rendered(None) => true,
             IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
                 node.children(arena).next().is_some()
@@ -329,7 +329,7 @@ impl<O: OutputFormat> IR<O> {
                 Some(x) => x.get(),
                 None => return,
             };
-            match me.0 {
+            match &me.0 {
                 IR::YearSuffix(..) => vec.push(node),
                 IR::NameCounter(_) | IR::Rendered(_) | IR::Name(_) => {}
                 IR::ConditionalDisamb(_) | IR::Seq(_) => {
@@ -356,7 +356,7 @@ impl IR<Markup> {
             Some(x) => x.get(),
             None => return,
         };
-        match me.0 {
+        match &me.0 {
             IR::Rendered(None) => {}
             IR::Rendered(Some(ed)) => {
                 edges.push(ed.to_edge_data(fmt, formatting))
@@ -415,7 +415,9 @@ impl<O: OutputFormat> IR<O> {
             Some(x) => x.get(),
             None => return,
         };
-        match me.0 {
+        for node in arena.iter() {
+        }
+        match &me.0 {
             IR::Seq(seq) => IrSeq::recompute_group_vars(node, arena),
             _ => {}
         }
@@ -445,10 +447,14 @@ impl IrSeq {
     /// children have mutated themselves.
     pub(crate) fn recompute_group_vars<O: OutputFormat>(self_id: NodeId, arena: &mut IrArena<O>) {
         // Assume self_id points to an IrSeq.
+        let children = Vec::new();
         for child_id in self_id.children(arena) {
             if let Some(force) = IR::force_gv(child_id, arena) {
-                arena.get_mut(child_id).unwrap().get_mut().1 = force;
+                children.push((child_id, force));
             }
+        }
+        for (child_id, force) in children {
+            arena.get_mut(child_id).unwrap().get_mut().1 = force;
         }
     }
 }
@@ -457,7 +463,7 @@ impl<O> IR<O>
 where
     O: OutputFormat,
 {
-    pub(crate) fn force_gv(self_id: NodeId, arena: &mut IrArena<O>) -> Option<GroupVars> {
+    pub(crate) fn force_gv(self_id: NodeId, arena: &IrArena<O>) -> Option<GroupVars> {
         match arena.get(self_id)?.get().0 {
             IR::Rendered(_) => None,
             IR::Seq(seq) => {

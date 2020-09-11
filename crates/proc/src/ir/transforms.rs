@@ -12,7 +12,13 @@ use std::sync::Arc;
 
 impl<O: OutputFormat> IR<O> {
     pub fn capitalize_first_term_of_cluster(root: NodeId, arena: &mut IrArena<O>, fmt: &O) {
-        if let Some(trf) = IR::find_term_rendered_first(root, arena) {
+        if let Some(node) = IR::find_term_rendered_first(root, arena) {
+            let trf = match arena.get_mut(node).unwrap().get_mut().0 {
+                IR::Rendered(Some(CiteEdgeData::Term(ref mut b)))
+                | IR::Rendered(Some(CiteEdgeData::LocatorLabel(ref mut b)))
+                | IR::Rendered(Some(CiteEdgeData::FrnnLabel(ref mut b))) => b,
+                _ => return,
+            };
             fmt.apply_text_case(
                 trf,
                 &IngestOptions {
@@ -24,11 +30,11 @@ impl<O: OutputFormat> IR<O> {
     }
     // Gotta find a a CiteEdgeData::Term/LocatorLabel/FrnnLabel
     // (the latter two are also terms, but a different kind for disambiguation).
-    fn find_term_rendered_first(node: NodeId, arena: &mut IrArena<O>) -> Option<&mut O::Build> {
-        match arena.get_mut(node)?.get_mut().0 {
-            IR::Rendered(Some(CiteEdgeData::Term(b)))
-            | IR::Rendered(Some(CiteEdgeData::LocatorLabel(b)))
-            | IR::Rendered(Some(CiteEdgeData::FrnnLabel(b))) => Some(&mut b),
+    fn find_term_rendered_first(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
+        match arena.get(node)?.get().0 {
+            IR::Rendered(Some(CiteEdgeData::Term(_)))
+            | IR::Rendered(Some(CiteEdgeData::LocatorLabel(_)))
+            | IR::Rendered(Some(CiteEdgeData::FrnnLabel(_))) => Some(node),
             IR::ConditionalDisamb(_) | IR::Seq(_) => node
                 .children(arena)
                 .next()
@@ -46,81 +52,85 @@ impl<O: OutputFormat> IR<O> {
     // If returns Some(id), that ID is the new root node of the whole tree.
     pub fn split_first_field(node: NodeId, arena: &mut IrArena<O>) -> Option<NodeId> {
         // Pull off the first field of self -> [first, ...rest]
-        if let Some((first, orig_top_seq, orig_top_seq_gv)) = match arena.get_mut(node)?.get_mut() {
-            // I.e. if there are at least two child nodes
-            (IR::Seq(ref mut seq), gv) if node.children(arena).take(2).count() == 2 => {
-                node.children(arena).next().and_then(|f| {
-                    f.detach(arena);
-                    Some((f, mem::take(seq), *gv))
-                })
-            }
-            _ => None,
-        } {
-            // First is now detached. Node has the remaining children.
-            let right = node;
-            let (afpre, afsuf) = {
-                // Keep this mutable ref inside {}
-                // Split the affixes into two sets with empty inside.
-                orig_top_seq
-                    .affixes
-                    .map(|mine| {
-                        (
-                            Some(Affixes {
-                                prefix: mine.prefix,
-                                suffix: Atom::from(""),
-                            }),
-                            Some(Affixes {
-                                prefix: Atom::from(""),
-                                suffix: mine.suffix,
-                            }),
-                        )
-                    })
-                    .unwrap_or((None, None))
-            };
 
-            let left_gv = arena.get(first)?.get().1;
-            let left = arena.new_node((
-                IR::Seq(IrSeq {
-                    display: Some(DisplayMode::LeftMargin),
-                    affixes: afpre,
-                    ..Default::default()
-                }),
-                left_gv,
-            ));
-
-            let right_config = (
-                IR::Seq(IrSeq {
-                    display: Some(DisplayMode::RightInline),
-                    affixes: afsuf,
-                    ..Default::default()
-                }),
-                GroupVars::Important,
-            );
-
-            // Take the IrSeq that configured the original top-level.
-            // Replace the configuration for rest/right-hand-side with right_config.
-            // This is because we want to move all of the rest node's children to the right hand
-            // side, so the node is the thing that has to move.
-            *arena.get(right)?.get_mut() = right_config;
-            let top_seq = (
-                IR::Seq(IrSeq {
-                    display: None,
-                    affixes: None,
-                    dropped_gv: None,
-                    ..orig_top_seq
-                }),
-                orig_top_seq_gv,
-            );
-
-            // Twist it all into place.
-            // We make sure right is detached, even though ATM it's definitely a detached node.
-            let new_toplevel = arena.new_node(top_seq);
-            right.detach(arena);
-            new_toplevel.append(left, arena);
-            new_toplevel.append(right, arena);
-            return Some(new_toplevel);
+        if node.children(arena).take(2).count() != 2 {
+            return None;
         }
-        return None;
+
+        // Steal the top seq's IrSeq configuration
+        let orig_top = if let (IR::Seq(s), gv) = arena.get_mut(node)?.get_mut() {
+            (mem::take(s), *gv)
+        } else {
+            return None;
+        };
+
+        // Detach the first child
+        let first = node.children(arena).next().unwrap();
+        first.detach(arena);
+        let rest = node;
+
+        let (afpre, afsuf) = {
+            // Keep this mutable ref inside {}
+            // Split the affixes into two sets with empty inside.
+            orig_top
+                .0
+                .affixes
+                .map(|mine| {
+                    (
+                        Some(Affixes {
+                            prefix: mine.prefix,
+                            suffix: Atom::from(""),
+                        }),
+                        Some(Affixes {
+                            prefix: Atom::from(""),
+                            suffix: mine.suffix,
+                        }),
+                    )
+                })
+                .unwrap_or((None, None))
+        };
+
+        let left_gv = arena.get(first)?.get().1;
+        let left = arena.new_node((
+            IR::Seq(IrSeq {
+                display: Some(DisplayMode::LeftMargin),
+                affixes: afpre,
+                ..Default::default()
+            }),
+            left_gv,
+        ));
+
+        let right_config = (
+            IR::Seq(IrSeq {
+                display: Some(DisplayMode::RightInline),
+                affixes: afsuf,
+                ..Default::default()
+            }),
+            GroupVars::Important,
+        );
+
+        // Take the IrSeq that configured the original top-level.
+        // Replace the configuration for rest with right_config.
+        // This is because we want to move all of the rest node's children to the right
+        // half, so the node is the thing that has to move.
+        *arena.get_mut(rest)?.get_mut() = right_config;
+        let top_seq = (
+            IR::Seq(IrSeq {
+                display: None,
+                affixes: None,
+                dropped_gv: None,
+                ..orig_top.0
+            }),
+            orig_top.1,
+        );
+
+        // Twist it all into place.
+        // We make sure rest is detached, even though ATM it's definitely a detached node.
+        let new_toplevel = arena.new_node(top_seq);
+        rest.detach(arena);
+        new_toplevel.append(left, arena);
+        new_toplevel.append(rest, arena);
+        return Some(new_toplevel);
     }
 }
 
@@ -154,7 +164,7 @@ impl<O: OutputFormat> IR<O> {
     }
 
     fn find_first_year(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
-        match arena.get(node)?.get().0 {
+        match &arena.get(node)?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Year(b))) => Some(node),
             IR::Seq(_) | IR::ConditionalDisamb(_) => node
                 .children(arena)
@@ -289,7 +299,7 @@ impl<O: OutputFormat> IR<O> {
 
 impl<O: OutputFormat<Output = String>> IR<O> {
     pub fn collapse_to_cnum(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<u32> {
-        match arena.get(node)?.get().0 {
+        match &arena.get(node)?.get().0 {
             IR::Rendered(Some(CiteEdgeData::CitationNumber(build))) => {
                 // TODO: just get it from the database
                 fmt.output(build.clone(), false).parse().ok()
@@ -499,7 +509,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
-        let gen4 = cites[ix].gen4;
+        let gen4 = &cites[ix].gen4;
         let rendered = IR::first_name_block(gen4.root, &gen4.arena)
             .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt))
             .map(|flat| fmt.output(flat, false));
@@ -823,7 +833,11 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
         .filter(|x| x.relevant());
 
     let cur = arena.get(current_id).unwrap().get().0.unwrap_name_ir();
-    let label_after_name = cur.names_inheritance.label.map_or(false, |l| l.after_name);
+    let label_after_name = cur
+        .names_inheritance
+        .label
+        .as_ref()
+        .map_or(false, |l| l.after_name);
     let built_label = cur.built_label.clone();
 
     let cur_tokens = cur.iter_bib_rendered_names(fmt);
