@@ -79,29 +79,27 @@ where
         arena
             .get(node)
             .map(|n| n.get())
-            .map(|n| match n.0 {
+            .map(|n| match &n.0 {
                 IR::Rendered(opt_build) => (
                     RefIR::Edge((scope.to_edge)(opt_build.as_ref(), scope.stack)),
                     GroupVars::Important,
                 ),
                 IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge)), GroupVars::Important),
                 IR::Seq(ir_seq) => {
-                    let contents = node
+                    let contents: Vec<RefIR> = node
                         .children(scope.arena)
                         .map(|child_id| walk(child_id, arena, scope).0)
                         .collect();
+                    let gv = GroupVars::rendered_if(!contents.is_empty());
                     let ref_seq = RefIrSeq {
                         contents,
                         formatting: ir_seq.formatting,
-                        affixes: ir_seq.affixes,
-                        delimiter: ir_seq.delimiter,
+                        affixes: ir_seq.affixes.clone(),
+                        delimiter: ir_seq.delimiter.clone(),
                         quotes: None,
                         text_case: ir_seq.text_case,
                     };
-                    (
-                        RefIR::Seq(ref_seq),
-                        GroupVars::rendered_if(!contents.is_empty()),
-                    )
+                    (RefIR::Seq(ref_seq), gv)
                 }
                 _ => unreachable!(
                     "The date processing code only creates Rendered, YearSuffix and Seq."
@@ -179,7 +177,7 @@ impl Disambiguation<Markup> for BodyDate {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let _fmt = ctx.format;
-        let arena = IrArena::new();
+        let mut arena = IrArena::new();
         let (either, var) = match self {
             BodyDate::Indep(idate) => (
                 intermediate_generic_indep::<Markup, Markup>(
@@ -467,41 +465,45 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
         };
     }
     let cloned_gen = gen_date.clone();
-    let do_single = |builder: &mut PartBuilder<O>, single: &Date, delim: &str| {
-        let each = parts.iter().filter_map(|dp| {
-            let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
-            if sorting || matches {
-                let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
-                return dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered);
+    let mut do_single =
+        |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
+            if single.circa {
+                let circa = cloned_gen
+                    .locale
+                    .get_simple_term(csl::SimpleTermSelector::Misc(
+                        MiscTerm::Circa,
+                        TermFormExtended::default(),
+                    ));
+                if let Some(circa) = circa {
+                    builder.push_either(arena, Either::Build(Some(fmt.plain(circa.singular()))));
+                    builder.push_either(arena, Either::Build(Some(fmt.plain(" "))));
+                }
             }
-            None
-        });
-        if single.circa {
-            let circa = cloned_gen
-                .locale
-                .get_simple_term(csl::SimpleTermSelector::Misc(
-                    MiscTerm::Circa,
-                    TermFormExtended::default(),
-                ));
-            if let Some(circa) = circa {
-                builder.push_either(arena, Either::Build(Some(fmt.plain(circa.singular()))));
-                builder.push_either(arena, Either::Build(Some(fmt.plain(" "))));
+            let mut seen_one = false;
+            for dp in parts.iter() {
+                if let Some((_form, either)) = {
+                    let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
+                    if sorting || matches {
+                        let is_filtered =
+                            !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
+                        dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered)
+                    } else {
+                        None
+                    }
+                } {
+                    if seen_one && !delim.is_empty() {
+                        builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
+                    }
+                    seen_one = true;
+                    builder.push_either(arena, either);
+                }
             }
-        }
-        let mut seen_one = false;
-        for (_form, either) in each {
-            if seen_one && !delim.is_empty() {
-                builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
-            }
-            seen_one = true;
-            builder.push_either(arena, either);
-        }
-    };
+        };
     match &val {
         DateOrRange::Single(single) => {
             let delim = gen_date.overall_delimiter.clone();
             let mut builder = PartBuilder::new(gen_date, len_hint);
-            do_single(&mut builder, single, &delim);
+            do_single(&mut builder, single, &delim, arena);
             Some(builder.into_either(fmt))
         }
         DateOrRange::Range(first, second) => {
@@ -509,9 +511,9 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             let delim = gen_date.overall_delimiter.clone();
             if sorting {
                 let mut builder = PartBuilder::new(gen_date, len_hint);
-                do_single(&mut builder, first, &delim);
+                do_single(&mut builder, first, &delim, arena);
                 builder.push_either(arena, Either::Build(Some(fmt.plain("/"))));
-                do_single(&mut builder, second, &delim);
+                do_single(&mut builder, second, &delim, arena);
                 return Some(builder.into_either(fmt));
             }
             let tokens = DateRangePartsIter::new(gen_date.sorting, parts, selector, first, second);
