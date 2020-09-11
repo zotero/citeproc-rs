@@ -414,27 +414,20 @@ impl<O: OutputFormat> IR<O> {
             None => return,
         };
         let mut queue = Vec::new();
-        for node in arena.iter().filter(|n| !n.is_removed()) {
-            match &node.get().0 {
-                IR::Seq(_) => {
-                    if let Some(id) = arena.get_node_id(node) {
-                        queue.push(id);
-                    }
+        for node in node.descendants(arena) {
+            match &arena.get(node).unwrap().get().0 {
+                IR::Seq(seq) => {
+                    queue.push((node, seq.dropped_gv));
                 }
                 _ => {}
             }
         }
-        // Sort such that descendants are recalculated first
-        queue.sort_by(|a, b| {
-            if a.ancestors(arena).find(|id| b == id).is_some() {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        });
-        for node in queue {
+        // Reverse, such that descendants are recalculated first
+        for (seq_node, dropped_gv) in queue.into_iter().rev() {
             // let data = arena.get_mut(node).unwrap().get_mut();
-            IrSeq::recompute_group_vars(node, arena);
+            if let Some(force) = IrSeq::overall_group_vars(dropped_gv, seq_node, arena) {
+                arena.get_mut(seq_node).unwrap().get_mut().1 = force;
+            }
         }
     }
 }
@@ -447,8 +440,8 @@ impl IrSeq {
     ) -> Option<GroupVars> {
         dropped_gv.map(|dropped| {
             let acc = self_id.children(arena).fold(dropped, |acc, child| {
-                let (_, gv) = arena.get(child).unwrap().get();
-                acc.neighbour(*gv)
+                let gv = arena.get(child).unwrap().get().1;
+                acc.neighbour(gv)
             });
             // Replicate GroupVars::implicit_conditional
             if acc != GroupVars::Missing {
@@ -457,17 +450,6 @@ impl IrSeq {
                 GroupVars::Plain
             }
         })
-    }
-    /// GVs are stored outside of individual child IRs, so we need a way to update those if the
-    /// children have mutated themselves.
-    pub(crate) fn recompute_group_vars<O: OutputFormat>(node: NodeId, arena: &mut IrArena<O>) {
-        // Assume node points to an IrSeq.
-        let mut total_gv = GroupVars::new();
-        for child_id in node.children(arena) {
-            let gv = arena.get(child_id).unwrap().get().1;
-            total_gv = total_gv.neighbour(gv);
-        }
-        arena.get_mut(node).unwrap().get_mut().1 = total_gv;
     }
 }
 
