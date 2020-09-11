@@ -1,4 +1,4 @@
-use crate::disamb::names::{replace_single_child, NameIr};
+use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
@@ -46,12 +46,12 @@ impl<O: OutputFormat> IR<O> {
     // If returns Some(id), that ID is the new root node of the whole tree.
     pub fn split_first_field(node: NodeId, arena: &mut IrArena<O>) -> Option<NodeId> {
         // Pull off the first field of self -> [first, ...rest]
-        if let Some((first, orig_top_seq)) = match arena.get_mut(node)?.get_mut().0 {
+        if let Some((first, orig_top_seq, orig_top_seq_gv)) = match arena.get_mut(node)?.get_mut() {
             // I.e. if there are at least two child nodes
-            IR::Seq(ref mut seq) if node.children(arena).take(2).count() == 2 => {
+            (IR::Seq(ref mut seq), gv) if node.children(arena).take(2).count() == 2 => {
                 node.children(arena).next().and_then(|f| {
                     f.detach(arena);
-                    Some((f, mem::take(seq)))
+                    Some((f, mem::take(seq), *gv))
                 })
             }
             _ => None,
@@ -102,12 +102,15 @@ impl<O: OutputFormat> IR<O> {
             // This is because we want to move all of the rest node's children to the right hand
             // side, so the node is the thing that has to move.
             *arena.get(right)?.get_mut() = right_config;
-            top_seq.0 = IR::Seq(IrSeq {
-                display: None,
-                affixes: None,
-                dropped_gv: None,
-                ..orig_top_seq
-            });
+            let top_seq = (
+                IR::Seq(IrSeq {
+                    display: None,
+                    affixes: None,
+                    dropped_gv: None,
+                    ..orig_top_seq
+                }),
+                orig_top_seq_gv,
+            );
 
             // Twist it all into place.
             // We make sure right is detached, even though ATM it's definitely a detached node.
@@ -496,8 +499,9 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
-        let rendered = IR::first_name_block(cites[ix].gen4.root, &cites[ix].gen4.arena)
-            .and_then(|fnb| IR::flatten(fnb, arena, fmt))
+        let gen4 = cites[ix].gen4;
+        let rendered = IR::first_name_block(gen4.root, &gen4.arena)
+            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt))
             .map(|flat| fmt.output(flat, false));
         same_names
             .entry(rendered)
@@ -743,10 +747,10 @@ impl<'a, T: Debug> Debug for ReducedNameToken<'a, T> {
     }
 }
 
-impl<'a> ReducedNameToken<'a, T> {
+impl<'a, T> ReducedNameToken<'a, T> {
     fn from_token(token: &NameToken, names: &'a [DisambNameRatchet<T>]) -> Self {
         match token {
-            NameToken::Name(dnr_index) => match &names[dnr_index] {
+            NameToken::Name(dnr_index) => match &names[*dnr_index] {
                 DisambNameRatchet::Person(p) => ReducedNameToken::Name(&p.data.value),
                 DisambNameRatchet::Literal(b) => ReducedNameToken::Literal(b),
             },
@@ -817,7 +821,11 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
         .iter()
         .map(|tok| ReducedNameToken::from_token(tok, &previous.disamb_names))
         .filter(|x| x.relevant());
+
     let cur = arena.get(current_id).unwrap().get().0.unwrap_name_ir();
+    let label_after_name = cur.names_inheritance.label.map_or(false, |l| l.after_name);
+    let built_label = cur.built_label.clone();
+
     let cur_tokens = cur.iter_bib_rendered_names(fmt);
     let cur_reduced = cur_tokens
         .iter()
@@ -828,23 +836,31 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
         pre_reduced.clone().collect::<Vec<_>>(),
         cur_reduced.clone().collect::<Vec<_>>()
     );
+
     match sas_rule {
         SasRule::CompleteAll | SasRule::CompleteEach => {
             if Iterator::eq(pre_reduced, cur_reduced) {
                 let (current_ir, current_gv) = arena.get_mut(current_id).unwrap().get_mut();
+                let current_nir = current_ir.unwrap_name_ir_mut();
                 if sas_rule == SasRule::CompleteEach {
                     let current_nir = current_ir.unwrap_name_ir_mut();
                     // let nir handle it
                     // u32::MAX so ALL names get --- treatment
-                    if let Some(subbed) =
+                    if let Some(rebuilt) =
                         current_nir.subsequent_author_substitute(fmt, std::u32::MAX, sas)
                     {
-                        replace_single_child(current_id, arena.new_node(subbed), arena);
+                        let node = NameIR::rendered_ntbs_to_node(
+                            rebuilt,
+                            arena,
+                            false,
+                            label_after_name,
+                            built_label.as_ref(),
+                        );
+                        replace_single_child(current_id, node, arena);
                     }
                 } else if sas.is_empty() {
                     *current_ir = IR::Rendered(None);
                 } else {
-                    let mut contents = vec![(sas_ir, GroupVars::Important)];
                     *current_ir = IR::Seq(IrSeq::default());
 
                     // Remove all children
@@ -859,17 +875,15 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                     current_id.append(sas_ir, arena);
 
                     // Add a name label
-                    if let Some(label_el) = current.names_inheritance.label.as_ref() {
-                        if let Some(label) = current.built_label.as_ref() {
-                            let label_node = arena.new_node((
-                                IR::Rendered(Some(CiteEdgeData::Output(label.clone()))),
-                                GroupVars::Plain,
-                            ));
-                            if label_el.after_name {
-                                current_id.append(label_node, arena)
-                            } else {
-                                current_id.prepend(label_node, arena)
-                            }
+                    if let Some(label) = built_label.as_ref() {
+                        let label_node = arena.new_node((
+                            IR::Rendered(Some(CiteEdgeData::Output(label.clone()))),
+                            GroupVars::Plain,
+                        ));
+                        if label_after_name {
+                            current_id.append(label_node, arena)
+                        } else {
+                            current_id.prepend(label_node, arena)
                         }
                     }
                 };
@@ -883,8 +897,16 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                 .count();
             let current = arena.get_mut(current_id).unwrap().get_mut();
             let current_nir = current.0.unwrap_name_ir_mut();
-            if let Some(subbed) = current_nir.subsequent_author_substitute(fmt, count as u32, sas) {
-                replace_single_child(current_id, arena.new_node(subbed), arena);
+            if let Some(rebuilt) = current_nir.subsequent_author_substitute(fmt, count as u32, sas)
+            {
+                let node = NameIR::rendered_ntbs_to_node(
+                    rebuilt,
+                    arena,
+                    false,
+                    label_after_name,
+                    built_label.as_ref(),
+                );
+                replace_single_child(current_id, node, arena);
             }
         }
         SasRule::PartialFirst => {
@@ -895,8 +917,15 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
             if count > 0 {
                 let current = arena.get_mut(current_id).unwrap().get_mut();
                 let current_nir = current.0.unwrap_name_ir_mut();
-                if let Some(subbed) = current_nir.subsequent_author_substitute(fmt, 1, sas) {
-                    replace_single_child(current_id, arena.new_node(subbed), arena);
+                if let Some(rebuilt) = current_nir.subsequent_author_substitute(fmt, 1, sas) {
+                    let node = NameIR::rendered_ntbs_to_node(
+                        rebuilt,
+                        arena,
+                        false,
+                        label_after_name,
+                        built_label.as_ref(),
+                    );
+                    replace_single_child(current_id, node, arena);
                 }
             }
         }

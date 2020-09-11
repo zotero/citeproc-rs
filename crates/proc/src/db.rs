@@ -766,8 +766,8 @@ fn disambiguate_add_year_suffix(
     let mut added_suffix = false;
     for yid in hooks {
         let ys = get_ys_mut(yid, arena);
-        let sum: IrSum<Markup> = match &ysh.hook {
-            YearSuffixHook::Explicit(_) => ysh.hook.render(ctx, suffix),
+        let sum: IrSum<Markup> = match &ys.hook {
+            YearSuffixHook::Explicit(_) => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
@@ -785,8 +785,8 @@ fn disambiguate_add_year_suffix(
     // Then attempt to do it for the ones that are embedded in date output
     for yid in hooks {
         let ys = get_ys_mut(yid, arena);
-        let sum: IrSum<Markup> = match &ysh.hook {
-            YearSuffixHook::Plain => ysh.hook.render(ctx, suffix),
+        let sum: IrSum<Markup> = match &ys.hook {
+            YearSuffixHook::Plain => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
@@ -1458,7 +1458,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                 let mutated = Arc::make_mut(&mut gen0);
                 let did = crate::transforms::subsequent_author_substitute(
                     &fmt,
-                    prev_name_block,
+                    prev_name_block.get().0.unwrap_name_ir(),
                     current_name_block,
                     &mut mutated.arena,
                     sas,

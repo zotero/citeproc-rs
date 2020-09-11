@@ -57,7 +57,6 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
-    let mut contents = Vec::with_capacity(els.len());
     let mut overall_gv = GroupVars::new();
     let mut dropped_gv = GroupVars::new();
 
@@ -70,6 +69,7 @@ where
     for el in els {
         let child = el.intermediate(db, state, ctx, arena);
         let ch = arena.get(child).unwrap().get();
+        let gv = ch.1;
         match ch.0 {
             IR::Rendered(None) => {
                 dropped_gv = dropped_gv.neighbour(gv);
@@ -82,7 +82,7 @@ where
         }
     }
 
-    let ir = if contents.is_empty() {
+    let ir = if self_node.children(arena).next().is_none() {
         IR::Rendered(None)
     } else {
         IR::Seq(IrSeq {

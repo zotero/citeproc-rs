@@ -42,34 +42,29 @@ impl<O: OutputFormat> Either<O> {
                 let gv = GroupVars::rendered_if(content.is_some());
                 arena.new_node((IR::Rendered(content), gv))
             }
-            Either::Ir(id) => {
-                let node = arena.get(id).unwrap().get();
-                let gv = if let IR::Rendered(None) = node.0 {
-                    GroupVars::Missing
-                } else {
-                    GroupVars::Important
-                };
-                arena.new_node((ir, gv))
-            }
+            Either::Ir(node) => node,
         }
     }
 }
 
-fn to_ref_ir<F, O: OutputFormat>(
+fn to_ref_ir<F>(
     root: NodeId,
-    arena: &IrArena<O>,
+    arena: &IrArena<Markup>,
     stack: Formatting,
     ys_edge: Edge,
     to_edge: &F,
 ) -> (RefIR, GroupVars)
 where
-    F: Fn(Option<CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+    F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
 {
-    struct Scope<'a> {
+    struct Scope<'a, F>
+    where
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+    {
         stack: Formatting,
         ys_edge: Edge,
         to_edge: &'a F,
-        arena: &'a IrArena<O>,
+        arena: &'a IrArena<Markup>,
     }
     let scope = Scope {
         stack,
@@ -77,17 +72,23 @@ where
         to_edge,
         arena,
     };
-    fn walk(node: NodeId, scope: &Scope<'_>) -> (RefIR, GroupVars) {
+    fn walk<F>(node: NodeId, arena: &IrArena<Markup>, scope: &Scope<'_, F>) -> (RefIR, GroupVars)
+    where
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+    {
         arena
             .get(node)
             .map(|n| n.get())
-            .map(|n| match n {
-                IR::Rendered(opt_build) => RefIR::Edge(scope.to_edge.call(opt_build, scope.stack)),
-                IR::YearSuffix(_ys) => RefIR::Edge(Some(scope.ys_edge)),
+            .map(|n| match n.0 {
+                IR::Rendered(opt_build) => (
+                    RefIR::Edge((scope.to_edge)(opt_build.as_ref(), scope.stack)),
+                    GroupVars::Important,
+                ),
+                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge)), GroupVars::Important),
                 IR::Seq(ir_seq) => {
                     let contents = node
                         .children(scope.arena)
-                        .map(|child_id| walk(child_id, arena).0)
+                        .map(|child_id| walk(child_id, arena, scope).0)
                         .collect();
                     let ref_seq = RefIrSeq {
                         contents,
@@ -108,7 +109,7 @@ where
             })
             .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }
-    walk(root, &scope)
+    walk(root, arena, &scope)
 }
 
 impl Either<Markup> {
@@ -116,19 +117,19 @@ impl Either<Markup> {
         self,
         db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
-        arena: &mut IrArena<O>,
+        arena: &mut IrArena<Markup>,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let to_edge =
-            |opt_cite_edge: Option<CiteEdgeData<Markup>>, stack: Formatting| -> Option<Edge> {
+            |opt_cite_edge: Option<&CiteEdgeData<Markup>>, stack: Formatting| -> Option<Edge> {
                 opt_cite_edge.map(|cite_edge| db.edge(cite_edge.to_edge_data(fmt, stack)))
             };
         let ys_edge = db.edge(EdgeData::YearSuffixPlain);
         match self {
             Either::Build(opt) => {
                 let content = opt.map(CiteEdgeData::Output);
-                let edge = to_edge(content, stack);
+                let edge = to_edge(content.as_ref(), stack);
                 let gv = GroupVars::rendered_if(edge.is_some());
                 (RefIR::Edge(edge), gv)
             }
@@ -205,7 +206,7 @@ impl Disambiguation<Markup> for BodyDate {
                 )
             })
         } else {
-            either.map(|e| e.into_ref_ir(db, ctx, arena, stack))
+            either.map(|e| e.into_ref_ir(db, ctx, &mut arena, stack))
         }
         .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }
