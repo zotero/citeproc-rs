@@ -181,7 +181,7 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_first_year_and_suffix(node: NodeId, arena: &IrArena<O>) -> Option<(NodeId, u32)> {
         // if let Some(fy) = IR::find_first_year(node, arena) {
-        //     debug!("fy, {:?}", fy);
+        //     debug!("fy, {:?}", arena.get(fy).unwrap().get().0);
         // }
         // if let Some(ys) = IR::find_year_suffix(node, arena) {
         //     debug!("ys, {:?}", ys);
@@ -211,17 +211,16 @@ impl<O: OutputFormat> IR<O> {
             IR::Seq(_) => {
                 let mut iter = node.children(arena).fuse();
                 let first_two = (iter.next(), iter.next());
-                if iter.next().is_some() {
-                    return None;
-                }
                 // Check for the exact explicit year suffix IR output
-                let mut found = if let (Some(first), Some(second)) = first_two {
+                let mut found = if iter.next().is_some() {
+                    None
+                } else if let (Some(first), Some(second)) = first_two {
                     match arena.get(second).unwrap().get() {
                         (IR::YearSuffix(_), GroupVars::Unresolved) if has_explicit => {
                             IR::suppress_first_year(first, arena, has_explicit)
                         }
                         (IR::YearSuffix(_), GroupVars::Important)
-                            if !has_explicit && second.children(arena).next().is_some() =>
+                            if !has_explicit && !IR::is_empty(second, arena) =>
                         {
                             IR::suppress_first_year(first, arena, has_explicit)
                         }
@@ -270,7 +269,7 @@ impl<O: OutputFormat> IR<O> {
                 hook: YearSuffixHook::Explicit(_),
                 suffix_num: Some(n),
                 ..
-            }) if IR::is_empty(node, arena) => Some(n),
+            }) if !IR::is_empty(node, arena) => Some(n),
 
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // assumes it's the first one that appears
