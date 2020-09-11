@@ -203,7 +203,7 @@ where
         match &me.0 {
             IR::Rendered(None) => true,
             IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
-                node.children(arena).next().is_some()
+                node.children(arena).next().is_none()
             }
             IR::NameCounter(nc) => false,
             _ => false,
