@@ -816,6 +816,7 @@ fn disambiguate_add_year_suffix(
         };
         let gv = sum.1;
         let node = arena.new_node(sum);
+        yid.append(node, arena);
         let (ys, ys_gv) = get_ys_mut(yid, arena);
         *ys_gv = gv;
         ys.suffix_num = Some(suffix);
@@ -835,6 +836,7 @@ fn disambiguate_add_year_suffix(
         };
         let gv = sum.1;
         let node = arena.new_node(sum);
+        yid.append(node, arena);
         let (ys, ys_gv) = get_ys_mut(yid, arena);
         *ys_gv = gv;
         ys.suffix_num = Some(suffix);
