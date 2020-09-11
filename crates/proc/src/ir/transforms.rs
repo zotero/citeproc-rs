@@ -873,10 +873,9 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
                         replace_single_child(current_id, node, arena);
                     }
                 } else if sas.is_empty() {
-                    *current_ir = IR::Rendered(None);
+                    let empty_node = arena.new_node((IR::Rendered(None), GroupVars::Important));
+                    replace_single_child(current_id, empty_node, arena);
                 } else {
-                    *current_ir = IR::Seq(IrSeq::default());
-
                     // Remove all children
                     let children: Vec<_> = current_id.children(arena).collect();
                     children.into_iter().for_each(|ch| ch.remove_subtree(arena));

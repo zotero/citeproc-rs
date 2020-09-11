@@ -1499,13 +1499,15 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     .map(|x| (x.as_ref(), bib.subsequent_author_substitute_rule))
             });
             if let (Some(prev_name_block), Some(current_name_block), Some((sas, sas_rule))) = (
-                prev.as_ref().and_then(|(root, gen)| gen.arena.get(*root)),
+                prev.as_ref().and_then(|(first_block, gen)| gen.arena.get(*first_block)),
                 current,
                 sas,
             ) {
                 let mutated = Arc::make_mut(&mut gen0);
                 let did = crate::transforms::subsequent_author_substitute(
                     &fmt,
+                    // In order to unwrap this here, you must only replace the NameIR node's
+                    // children, not the IR.
                     prev_name_block.get().0.unwrap_name_ir(),
                     current_name_block,
                     &mut mutated.arena,
