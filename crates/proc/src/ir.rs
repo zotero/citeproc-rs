@@ -10,6 +10,7 @@ use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, Choose, DateVariable, Formatting, GivenNameDisambiguationRule, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
+use std::cmp::Ordering;
 
 use std::sync::Arc;
 
@@ -78,7 +79,6 @@ pub struct YearSuffix {
 
     // Clone element into here, because we already know it's a <text variable="" />
     pub(crate) hook: YearSuffixHook,
-    pub(crate) group_vars: GroupVars,
     pub(crate) suffix_num: Option<u32>,
 }
 
@@ -87,7 +87,6 @@ impl<O: OutputFormat> IR<O> {
         (
             IR::YearSuffix(YearSuffix {
                 hook,
-                group_vars: GroupVars::Unresolved,
                 suffix_num: None,
             }),
             GroupVars::Unresolved,
@@ -158,7 +157,6 @@ use crate::disamb::names::NameIR;
 pub struct ConditionalDisambIR {
     // Has IR children
     pub choose: Arc<Choose>,
-    pub group_vars: GroupVars,
     pub done: bool,
 }
 
@@ -415,11 +413,28 @@ impl<O: OutputFormat> IR<O> {
             Some(x) => x.get(),
             None => return,
         };
-        for node in arena.iter() {
+        let mut queue = Vec::new();
+        for node in arena.iter().filter(|n| !n.is_removed()) {
+            match &node.get().0 {
+                IR::Seq(_) => {
+                    if let Some(id) = arena.get_node_id(node) {
+                        queue.push(id);
+                    }
+                }
+                _ => {}
+            }
         }
-        match &me.0 {
-            IR::Seq(seq) => IrSeq::recompute_group_vars(node, arena),
-            _ => {}
+        // Sort such that descendants are recalculated first
+        queue.sort_by(|a, b| {
+            if a.ancestors(arena).find(|id| b == id).is_some() {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }
+        });
+        for node in queue {
+            // let data = arena.get_mut(node).unwrap().get_mut();
+            IrSeq::recompute_group_vars(node, arena);
         }
     }
 }
@@ -445,36 +460,14 @@ impl IrSeq {
     }
     /// GVs are stored outside of individual child IRs, so we need a way to update those if the
     /// children have mutated themselves.
-    pub(crate) fn recompute_group_vars<O: OutputFormat>(self_id: NodeId, arena: &mut IrArena<O>) {
-        // Assume self_id points to an IrSeq.
-        let children = Vec::new();
-        for child_id in self_id.children(arena) {
-            if let Some(force) = IR::force_gv(child_id, arena) {
-                children.push((child_id, force));
-            }
+    pub(crate) fn recompute_group_vars<O: OutputFormat>(node: NodeId, arena: &mut IrArena<O>) {
+        // Assume node points to an IrSeq.
+        let mut total_gv = GroupVars::new();
+        for child_id in node.children(arena) {
+            let gv = arena.get(child_id).unwrap().get().1;
+            total_gv = total_gv.neighbour(gv);
         }
-        for (child_id, force) in children {
-            arena.get_mut(child_id).unwrap().get_mut().1 = force;
-        }
-    }
-}
-
-impl<O> IR<O>
-where
-    O: OutputFormat,
-{
-    pub(crate) fn force_gv(self_id: NodeId, arena: &IrArena<O>) -> Option<GroupVars> {
-        match arena.get(self_id)?.get().0 {
-            IR::Rendered(_) => None,
-            IR::Seq(seq) => {
-                IrSeq::recompute_group_vars(self_id, arena);
-                IrSeq::overall_group_vars(seq.dropped_gv, self_id, arena)
-            }
-            IR::YearSuffix(ys) => Some(ys.group_vars),
-            IR::ConditionalDisamb(c) => Some(c.group_vars),
-            IR::Name(_) => None,
-            IR::NameCounter(nc) => Some(nc.group_vars),
-        }
+        arena.get_mut(node).unwrap().get_mut().1 = total_gv;
     }
 }
 

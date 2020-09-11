@@ -32,9 +32,8 @@ where
                         IR::ConditionalDisamb(ConditionalDisambIR {
                             choose: self.clone(),
                             done: false,
-                            group_vars: gv,
                         }),
-                        gv,
+                        gv, // TODO: should this be unresolved?
                     ));
                     cond.append(sub_node, arena);
                     cond

@@ -510,8 +510,6 @@ fn list_all_name_blocks(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
     vec
 }
 
-type CondDisambRef = Arc<Mutex<ConditionalDisambIR>>;
-
 fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
     fn list_all_cd_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
         let me = match arena.get(node) {
@@ -541,21 +539,13 @@ use crate::disamb::names::{DisambNameRatchet, NameIR, NameVariantMatcher, RefNam
 fn get_nir_mut(nid: NodeId, arena: &mut IrArena<Markup>) -> &mut NameIR<Markup> {
     arena.get_mut(nid).unwrap().get_mut().0.unwrap_name_ir_mut()
 }
-fn get_ys_mut(yid: NodeId, arena: &mut IrArena<Markup>) -> &mut YearSuffix {
-    arena
-        .get_mut(yid)
-        .unwrap()
-        .get_mut()
-        .0
-        .unwrap_year_suffix_mut()
+fn get_ys_mut(yid: NodeId, arena: &mut IrArena<Markup>) -> (&mut YearSuffix, &mut GroupVars) {
+    let both = arena.get_mut(yid).unwrap().get_mut();
+    (both.0.unwrap_year_suffix_mut(), &mut both.1)
 }
-fn get_cond_mut(cid: NodeId, arena: &mut IrArena) -> &mut ConditionalDisambIR {
-    arena
-        .get_mut(cid)
-        .unwrap()
-        .get_mut()
-        .0
-        .unwrap_cond_disamb_mut()
+fn get_cond_mut(cid: NodeId, arena: &mut IrArena) -> (&mut ConditionalDisambIR, &mut GroupVars) {
+    let both = arena.get_mut(cid).unwrap().get_mut();
+    (both.0.unwrap_cond_disamb_mut(), &mut both.1)
 }
 
 fn disambiguate_add_names(
@@ -765,17 +755,16 @@ fn disambiguate_add_year_suffix(
     let hooks = IR::list_year_suffix_hooks(root, arena);
     let mut added_suffix = false;
     for yid in hooks {
-        let ys = get_ys_mut(yid, arena);
+        let (ys, _) = get_ys_mut(yid, arena);
         let sum: IrSum<Markup> = match &ys.hook {
             YearSuffixHook::Explicit(_) => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
         let node = arena.new_node(sum);
-        let ys = get_ys_mut(yid, arena);
-        ys.group_vars = gv;
+        let (ys, ys_gv) = get_ys_mut(yid, arena);
+        *ys_gv = gv;
         ys.suffix_num = Some(suffix);
-        added_suffix = true;
         break;
     }
     if added_suffix {
@@ -784,15 +773,15 @@ fn disambiguate_add_year_suffix(
 
     // Then attempt to do it for the ones that are embedded in date output
     for yid in hooks {
-        let ys = get_ys_mut(yid, arena);
+        let (ys, _) = get_ys_mut(yid, arena);
         let sum: IrSum<Markup> = match &ys.hook {
             YearSuffixHook::Plain => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
         let node = arena.new_node(sum);
-        let ys = get_ys_mut(yid, arena);
-        ys.group_vars = gv;
+        let (ys, ys_gv) = get_ys_mut(yid, arena);
+        *ys_gv = gv;
         ys.suffix_num = Some(suffix);
         break;
     }
@@ -837,14 +826,14 @@ fn disambiguate_true(
             break;
         }
         {
-            let cond = get_cond_mut(cid, arena);
+            let (cond, _) = get_cond_mut(cid, arena);
             let choose = cond.choose.clone();
             let new_node = choose.intermediate(db, state, ctx, arena);
             let gv = arena.get(new_node).unwrap().get().1;
             replace_single_child(cid, new_node, arena);
-            let cond = get_cond_mut(cid, arena);
+            let (cond, cond_gv) = get_cond_mut(cid, arena);
             cond.done = true;
-            cond.group_vars = gv;
+            *cond_gv = gv;
         }
         IR::recompute_group_vars(root, arena);
     }
