@@ -370,7 +370,8 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
         },
         ..Default::default()
     };
-    arena.new_node((IR::Seq(seq), GroupVars::Important))
+    *arena.get_mut(seq_node).unwrap().get_mut() = (IR::Seq(seq), GroupVars::Important);
+    seq_node
 }
 
 impl<'c, O, I> Proc<'c, O, I> for Names

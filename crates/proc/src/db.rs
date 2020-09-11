@@ -293,7 +293,7 @@ fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IrGen {
     pub(crate) arena: IrArena<Markup>,
     pub(crate) root: NodeId,
@@ -308,6 +308,28 @@ impl PartialEq<IrGen> for IrGen {
             && self.state == other.state
             && self.root == other.root
             && self.arena == other.arena
+    }
+}
+
+use std::fmt;
+impl fmt::Debug for IrGen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn go(
+            indent: u32,
+            node: NodeId,
+            arena: &IrArena<Markup>,
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
+            let pair = arena.get(node).unwrap().get();
+            for _ in 0..indent {
+                write!(f, "    ")?;
+            }
+            writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
+            node.children(arena)
+                .try_for_each(|ch| go(indent + 1, ch, arena, f))
+        }
+        write!(f, "\n")?;
+        go(0, self.root, &self.arena, f)
     }
 }
 
@@ -625,6 +647,14 @@ fn disambiguate_add_names(
                 if let Some(expanded) =
                     expand_one_name_ir(db, ctx, &initial_refs, get_nir_mut(nid, arena), n as u32)
                 {
+                    let seq = NameIR::rendered_ntbs_to_node(
+                        expanded,
+                        arena,
+                        is_sort_key,
+                        label_after_name,
+                        built_label.as_ref(),
+                    );
+                    replace_single_child(nid, seq, arena);
                 }
             }
             IR::recompute_group_vars(root, arena);
@@ -736,9 +766,29 @@ fn disambiguate_add_givennames(
     let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(db, root, arena, ctx);
     let name_refs = list_all_name_blocks(root, arena);
+
+    let is_sort_key = ctx.sort_key.is_some();
     for (n, nid) in name_refs.into_iter().enumerate() {
         let nir = get_nir_mut(nid, arena);
-        expand_one_name_ir(db, ctx, &refs, nir, n as u32);
+
+        let label_after_name = nir
+            .names_inheritance
+            .label
+            .as_ref()
+            .map_or(false, |x| x.after_name);
+        let built_label = nir.built_label.clone();
+
+        if let Some(expanded) = expand_one_name_ir(db, ctx, &refs, nir, n as u32) {
+            let seq = NameIR::rendered_ntbs_to_node(
+                expanded,
+                arena,
+                is_sort_key,
+                label_after_name,
+                built_label.as_ref(),
+            );
+            replace_single_child(nid, seq, arena);
+        }
+        // TODO: this is likely unnecessary
         IR::recompute_group_vars(root, arena);
     }
     if also_add {
@@ -856,7 +906,9 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let root = style.intermediate(db, &mut state, &ctx, &mut arena);
     let _fmt = db.get_formatter();
     let matching = refs_accepting_cite(db, root, &arena, &ctx);
-    Arc::new(IrGen::new(root, arena, matching, state))
+    let irgen = IrGen::new(root, arena, matching, state);
+    debug!("{:?}", irgen);
+    Arc::new(irgen)
 }
 
 enum IrGenCow {

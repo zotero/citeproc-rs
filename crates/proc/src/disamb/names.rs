@@ -63,20 +63,28 @@ impl Disambiguation<Markup> for Names {
             let mut nfa = Nfa::new();
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
-            let (ntbs, mut ntb_len) = runner.names_to_builds(
-                &nir.disamb_names,
-                ctx.position,
-                &self.et_al,
-                false,
-                and_term.as_ref(),
-                etal_term.as_ref(),
-            );
-            // We need to use this a couple of times.
-            let ntbs = ntbs.collect::<Vec<_>>();
             let mut max_counted_tokens = 0u16;
-            let mut counted_tokens = ntb_len;
+            let mut counted_tokens = 0;
 
-            while counted_tokens > max_counted_tokens {
+            let mut once = false;
+            loop {
+                if once {
+                    runner.bump_name_count += 1;
+                }
+                once = true;
+                let (ntbs, ntb_len) = runner.names_to_builds(
+                    &nir.disamb_names,
+                    ctx.position,
+                    &self.et_al,
+                    false,
+                    and_term.as_ref(),
+                    etal_term.as_ref(),
+                );
+                counted_tokens = ntb_len;
+                if counted_tokens <= max_counted_tokens {
+                    break;
+                }
+
                 let one_run = graph_with_stack(
                     db,
                     fmt,
@@ -85,7 +93,7 @@ impl Disambiguation<Markup> for Names {
                     runner.name_el.affixes.as_ref(),
                     start,
                     |nfa, mut spot| {
-                        for ntb in &ntbs {
+                        for ntb in ntbs {
                             match ntb {
                                 NameTokenBuilt::Built(b) => {
                                     if !fmt.is_empty(&b) {
@@ -96,7 +104,7 @@ impl Disambiguation<Markup> for Names {
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                     }
                                 }
-                                NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[*index] {
+                                NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
                                     DisambNameRatchet::Literal(b) => {
                                         if !fmt.is_empty(b) {
                                             let out =
@@ -127,17 +135,7 @@ impl Disambiguation<Markup> for Names {
                     continue;
                 }
                 nfa.accepting.insert(one_run);
-                runner.bump_name_count += 1;
-                let (ntbs, ntb_len) = runner.names_to_builds(
-                    &nir.disamb_names,
-                    ctx.position,
-                    &self.et_al,
-                    false,
-                    and_term.as_ref(),
-                    etal_term.as_ref(),
-                );
                 max_counted_tokens = counted_tokens;
-                counted_tokens = ntb_len;
             }
             if !nfa.accepting.is_empty() {
                 seq.contents
