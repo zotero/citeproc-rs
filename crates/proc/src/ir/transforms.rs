@@ -449,7 +449,7 @@ pub struct Unnamed3<O: OutputFormat> {
 
 use std::fmt::{Debug, Formatter};
 
-impl Debug for Unnamed3<Markup> {
+impl<O: OutputFormat<Output = String>> Debug for Unnamed3<O> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let fmt = &Markup::default();
         f.debug_struct("Unnamed3")
@@ -468,7 +468,7 @@ impl Debug for Unnamed3<Markup> {
             .field("collapsed_year_suffixes", &self.collapsed_year_suffixes)
             .field("collapsed_ranges", &self.collapsed_ranges)
             .field("vanished", &self.vanished)
-            .field("gen4_full", &self.gen4.arena)
+            .field("gen4_full", &self.gen4)
             .finish()
     }
 }
@@ -493,6 +493,7 @@ impl<O: OutputFormat> Unnamed3<O> {
     }
 }
 
+// pub fn group_and_collapse<O: OutputFormat<Output = String>>(
 pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     db: &dyn IrDatabase,
     fmt: &Markup,
@@ -636,7 +637,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                         if u.is_first {
                             let following = rest.iter_mut().take_while(|u| u.should_collapse);
                             let mut count = 0;
-                            for (nix, cite) in following.enumerate() {
+                            for cite in following {
                                 let gen4 = Arc::make_mut(&mut cite.gen4);
                                 IR::suppress_names(gen4.root, &mut gen4.arena);
                                 count += 1;
@@ -654,7 +655,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                     if let Some((u, rest)) = slice.split_first_mut() {
                         if u.is_first {
                             let following = rest.iter_mut().take_while(|u| u.should_collapse);
-                            for (nix, cite) in following.enumerate() {
+                            for cite in following {
                                 let gen4 = Arc::make_mut(&mut cite.gen4);
                                 IR::suppress_names(gen4.root, &mut gen4.arena)
                             }
@@ -708,7 +709,6 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
                     ix += 1;
                 }
             }
-            _ => {}
         }
     }
 }

@@ -909,7 +909,6 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let _fmt = db.get_formatter();
     let matching = refs_accepting_cite(db, root, &arena, &ctx);
     let irgen = IrGen::new(root, arena, matching, state);
-    debug!("{:?}", irgen);
     Arc::new(irgen)
 }
 
@@ -1096,7 +1095,7 @@ pub fn built_cluster_before_output(
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            Unnamed3::new(cite, cnum, gen4.clone())
+            Unnamed3::new(cite, cnum, gen4)
         })
         .collect();
 
@@ -1499,7 +1498,8 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     .map(|x| (x.as_ref(), bib.subsequent_author_substitute_rule))
             });
             if let (Some(prev_name_block), Some(current_name_block), Some((sas, sas_rule))) = (
-                prev.as_ref().and_then(|(first_block, gen)| gen.arena.get(*first_block)),
+                prev.as_ref()
+                    .and_then(|(first_block, gen)| gen.arena.get(*first_block)),
                 current,
                 sas,
             ) {

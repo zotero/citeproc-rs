@@ -141,7 +141,11 @@ where
                                         dropped_gv: None,
                                     };
                                     // the citation-label is important, so so is the seq
-                                    arena.new_node((IR::Seq(seq), GroupVars::Important))
+                                    let seq_node =
+                                        arena.new_node((IR::Seq(seq), GroupVars::Important));
+                                    seq_node.append(label_node, arena);
+                                    seq_node.append(hook_node, arena);
+                                    seq_node
                                 })
                                 .unwrap_or_else(|| {
                                     arena.new_node((IR::Rendered(None), GroupVars::Missing))
