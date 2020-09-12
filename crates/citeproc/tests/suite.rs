@@ -101,7 +101,8 @@ fn csl_test_suite(path: &Path) {
     if let Some(res) = test_case.execute() {
         let pass = res == test_case.result;
         if !pass && is_snapshot(path) {
-            insta::assert_snapshot!(res);
+            let name = path.file_name().unwrap().to_string_lossy();
+            insta::assert_snapshot!(name.as_ref(), res);
         } else {
             assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
         }
