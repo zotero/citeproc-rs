@@ -1261,11 +1261,8 @@ pub fn built_cluster_before_output(
     let mut ix = 0;
     while ix < irs.len() {
         let Unnamed3 {
-            cite,
-            gen4,
             vanished,
             collapsed_ranges,
-            collapsed_year_suffixes,
             is_first,
             ..
         } = &irs[ix];

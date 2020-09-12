@@ -175,8 +175,8 @@ impl<O: OutputFormat> IR<O> {
     }
 
     pub fn find_year_suffix(node: NodeId, arena: &IrArena<O>) -> Option<u32> {
-        IR::has_implicit_year_suffix(node, arena)
-            .or_else(|| IR::has_explicit_year_suffix(node, arena))
+        IR::has_explicit_year_suffix(node, arena)
+            .or_else(|| IR::has_implicit_year_suffix(node, arena))
     }
 
     fn find_first_year_and_suffix(node: NodeId, arena: &IrArena<O>) -> Option<(NodeId, u32)> {
@@ -252,7 +252,7 @@ impl<O: OutputFormat> IR<O> {
                 hook: YearSuffixHook::Plain,
                 suffix_num: Some(n),
                 ..
-            }) if IR::is_empty(node, arena) => Some(n),
+            }) if !IR::is_empty(node, arena) => Some(n),
 
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // assumes it's the first one that appears
