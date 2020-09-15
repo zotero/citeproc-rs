@@ -85,33 +85,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
 
 impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
+        let get = |v: Variable| self.reference.ordinary.get(&v).map(|s| s.as_str()).map(Cow::Borrowed);
         match (var, form) {
-            (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
-                .reference
-                .ordinary
-                .get(&Variable::TitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::Title))
-                .map(|s| s.as_str())
-                .map(Cow::Borrowed),
-            (Variable::ContainerTitleShort, _)
-            | (Variable::ContainerTitle, VariableForm::Short) => self
-                .reference
-                .ordinary
-                .get(&Variable::ContainerTitleShort)
-                .or_else(|| self.reference.ordinary.get(&Variable::JournalAbbreviation))
-                .or_else(|| self.reference.ordinary.get(&Variable::ContainerTitle))
-                .map(|s| s.as_str())
-                .map(Cow::Borrowed),
+            (Variable::Title, VariableForm::Short) => get(Variable::TitleShort).or_else(|| get(Variable::Title)),
+            (Variable::ContainerTitleShort, _) => get(Variable::ContainerTitleShort).or_else(|| get(Variable::JournalAbbreviation)),
+            (Variable::ContainerTitle, VariableForm::Short) => get(Variable::ContainerTitleShort)
+                .or_else(|| get(Variable::JournalAbbreviation))
+                .or_else(|| get(Variable::ContainerTitle)),
             (Variable::CitationLabel, _) if self.reference.ordinary.get(&var).is_none() => {
                 let tri = crate::citation_label::Trigraph::default();
                 Some(Cow::Owned(tri.make_label(self.reference)))
             }
-            _ => self
-                .reference
-                .ordinary
-                .get(&var)
-                .map(|s| s.as_str())
-                .map(Cow::Borrowed),
+            _ => get(var),
         }
     }
 
