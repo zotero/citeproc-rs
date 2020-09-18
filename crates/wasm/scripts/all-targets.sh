@@ -18,6 +18,7 @@ function usage() {
   echo "  --set-name NAME          Use this package name"
   echo "  --package-only           Don't rebuild, just rewrite the package.json"
   echo "  --github-packages        Configure for publishing to GitHub packages"
+  echo "  --features               List of cargo features to enable (comma-sep)"
   echo
   exit 1
 }
@@ -29,6 +30,7 @@ SET_NAME=
 PACKAGE_ONLY=
 GITHUB_PACKAGES=
 CANARY_SHA=
+FEATURES=
 
 # parse params
 while [[ "$#" > 0 ]]; do case $1 in
@@ -39,6 +41,7 @@ while [[ "$#" > 0 ]]; do case $1 in
   --cargo-version) USE_CARGO_VERSION=true; shift;;
   --package-only) PACKAGE_ONLY=true;shift;;
   --github-packages) GITHUB_PACKAGES=true;shift;;
+  --features) FEATURES="$2";shift;shift;;
   *) usage "Unknown parameter passed: $1"; shift; shift;;
 esac; done
 
@@ -75,6 +78,10 @@ CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages  
 # The PR linked above uses different folder names, but these ones accurately
 # describe why we need different builds in different environments.
 
+if [ -n "$FEATURES" ]; then
+  FEATURES="--features $FEATURES"
+fi
+
 if [ -z "$PACKAGE_ONLY" ]; then
   mkdir -p pkg-scratch
   rm -rf $DEST
@@ -84,7 +91,7 @@ if [ -z "$PACKAGE_ONLY" ]; then
   target() {
     TARGET=$1
     OUT=$2
-    wasm-pack build --release --out-name citeproc_rs_wasm --scope citeproc-rs --target $TARGET --out-dir pkg-scratch/$TARGET
+    wasm-pack build --release --out-name citeproc_rs_wasm --scope citeproc-rs --target $TARGET --out-dir pkg-scratch/$TARGET -- $FEATURES
     mkdir -p $DEST/$OUT
     cp pkg-scratch/$TARGET/citeproc_rs_wasm* $DEST/$OUT/
   }

@@ -116,7 +116,7 @@ jobs:
 
       - name: Build WASM
         working-directory: crates/wasm
-        run: wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs
+        run: wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs --dev
 
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path

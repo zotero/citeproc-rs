@@ -82,7 +82,7 @@ jobs:
       - name: Build for all targets
         working-directory: crates/wasm
         run: |
-          ./scripts/all-targets.sh
+          ./scripts/all-targets.sh --features console
 
       - name: Publish to NPM canary dist tag
         working-directory: crates/wasm
