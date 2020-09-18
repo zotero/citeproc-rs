@@ -88,7 +88,7 @@ jobs:
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
 
   wasm_tests:
-    name: "Test the WASM package from a JS environment"
+    name: "Test the WASM package"
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
