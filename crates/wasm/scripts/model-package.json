@@ -3,8 +3,13 @@
   "collaborators": [
     "Cormac Relf <web@cormacrelf.net>"
   ],
+  "description": "citeproc-rs, compiled to WebAssembly",
   "version": "0.0.1",
   "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cormacrelf/citeproc-rs"
+  },
   "files": [
     "_cjs/*",
     "_esm/*",

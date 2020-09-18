@@ -1,0 +1,21 @@
+{
+  "name": "js-tests",
+  "version": "0.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "test": "jest",
+    "build": "wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs"
+  },
+  "dependencies": {
+    "@citeproc-rs/wasm": "file:../pkg-node",
+    "@types/jest": "^26.0.14"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.11.6",
+    "@babel/preset-env": "^7.11.5",
+    "@babel/preset-typescript": "^7.10.4",
+    "babel-jest": "^26.3.0",
+    "jest": "^26.4.2"
+  }
+}
