@@ -1314,7 +1314,6 @@ fn cite_positions(db: &impl IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opt
 
     let style = db.style();
     let near_note_distance = style.citation.near_note_distance;
-    warn!("near_note_distance {}", near_note_distance);
 
     // Backref table for FRNN
     // No entries for first ref == an in-text reference, only first time it appeared in a

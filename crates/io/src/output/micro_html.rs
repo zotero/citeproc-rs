@@ -53,8 +53,8 @@ pub trait HtmlReader<T> {
         } else if tag.name == "i" || tag.name == "b" || tag.name == "sup" || tag.name == "sub" {
             // ok
         } else if tag.name == "span" {
-            tag.allow_attribute(String::from("style"));
-            tag.allow_attribute(String::from("class"));
+            tag.allow_attribute("style");
+            tag.allow_attribute("class");
         } else {
             tag.ignore_self();
         }
@@ -94,9 +94,9 @@ impl HtmlReader<String> for PlainHtmlReader {
             "span" => match tag.attrs {
                 // very specific!
                 [("style", "font-variant:small-caps;")]
-                | [("style", "font-variant: small-caps;")] => children,
-                [("class", "nocase")] => children,
-                [("class", "nodecor")] => children,
+                | [("style", "font-variant: small-caps;")]
+                | [("class", "nocase")]
+                | [("class", "nodecor")] => children,
                 _ => return vec![],
             },
             _ => return vec![],
@@ -128,8 +128,11 @@ impl HtmlReader<MicroNode> for MicroHtmlReader<'_> {
                 }
                 [("class", "nocase")] => MicroNode::NoCase(children),
                 [("class", "nodecor")] => MicroNode::NoDecor(children),
+                // TODO: do we really want <span class="unrecognised">Children</span> to be removed
+                // completely?
                 _ => return vec![],
             },
+            // TODO: Same here
             _ => return vec![],
         };
         vec![single]
@@ -231,7 +234,7 @@ impl<'input> TagParser {
             let attrs: Vec<(&str, &str)> = tag
                 .attrs
                 .iter()
-                .filter(|a| tag.allowed_attributes.iter().any(|b| b == a.0))
+                .filter(|a| tag.allowed_attributes.iter().any(|b| b == &a.0))
                 .cloned()
                 .collect();
 
@@ -294,7 +297,7 @@ pub struct Tag<'a> {
     /// The attributes of the HTML tag, e.g. ('style', 'width: 100%').
     pub attrs: &'a [(&'a str, &'a str)],
 
-    allowed_attributes: Vec<String>,
+    allowed_attributes: Vec<&'static str>,
     ignore_self: bool,
     ignore_contents: bool,
 }
@@ -314,17 +317,17 @@ impl<'a> Tag<'a> {
     /// Allow the given attribute. This attribute does not have to exist in the `attrs` tag.
     ///
     /// When this HTML node gets printed, this attribute will also get printed.
-    pub fn allow_attribute(&mut self, attr: String) {
+    pub fn allow_attribute(&mut self, attr: &'static str) {
         self.allowed_attributes.push(attr);
     }
 
     /// Allow the given attributes. These attributes do not have to exist in the `attrs` tag.
     ///
     /// When this HTML node gets printed, these attributes will also get printed.
-    pub fn allow_attributes(&mut self, attr: &[String]) {
-        self.allowed_attributes.reserve(attr.len());
-        for attr in attr {
-            self.allowed_attributes.push(attr.clone());
+    pub fn allow_attributes(&mut self, attrs: &[&'static str]) {
+        self.allowed_attributes.reserve(attrs.len());
+        for attr in attrs {
+            self.allowed_attributes.push(attr);
         }
     }
 

@@ -863,8 +863,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             self.demote_non_dropping_particle,
         );
 
-        let mut build = vec![];
         let filtered_tokens = pn_filtered_parts(pn, order);
+        let mut build = Vec::with_capacity(2 * filtered_tokens.len());
         for token in filtered_tokens {
             // We already tested is_some() for all these Some::unwrap() calls
             match token {

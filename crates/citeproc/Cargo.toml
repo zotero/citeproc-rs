@@ -12,11 +12,20 @@ license = "MPL-2.0"
 edition = "2018"
 
 [lib]
-crate-type = ["rlib", "staticlib"]
+bench = false
 
 [features]
-default = ["parallel"]
+
+# For WASM builds, use `citeproc = { version = "...", default-features = false }`
+default = ["parallel", "jemalloc"]
+
+# Lets the processor compute batched updates in parallel on multiple threads,
+# using rayon's work-stealing queues
 parallel = ["rayon", "citeproc-db/parallel"]
+
+# enables jemalloc for the test binaries. Gives 25-50% faster execution with
+# the allocation-heavy code at the time of writing.
+jemalloc = ["jemallocator"]
 
 [dependencies]
 rayon = { version = "1.2.0", optional = true }
@@ -32,10 +41,11 @@ citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 citeproc-db = { path = "../db" }
 thiserror = "1.0.6"
+jemallocator = { version = "0.3.2", optional = true }
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }
-criterion = "0.3.0"
+criterion = "0.3.1"
 pretty_assertions = "0.6.1"
 lazy_static = "1.4.0"
 serde_yaml = "0.8.9"
@@ -48,7 +58,7 @@ git = "https://github.com/cormacrelf/datatest"
 branch = "test_type"
 features = ["post_v139"]
 
-# [[bench]]
-# name = "some"
-# harness = false
+[[bench]]
+name = "some"
+harness = false
 

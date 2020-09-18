@@ -7,6 +7,19 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(datatest::runner)]
 
+use cfg_if::cfg_if;
+cfg_if! {
+    if #[cfg(feature="jemalloc")] {
+        use jemallocator::Jemalloc;
+        #[global_allocator]
+        static A: Jemalloc = Jemalloc;
+    } else {
+        use std::alloc::System;
+        #[global_allocator]
+        static A: System = System;
+    }
+}
+
 use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
 
 use lazy_static::lazy_static;
