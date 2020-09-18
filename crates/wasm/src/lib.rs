@@ -86,8 +86,8 @@ impl Driver {
 
     /// Inserts or overwrites references as a batch operation.
     /// This **will not** delete references that are not in the provided list.
-    #[wasm_bindgen(js_name = "setReferences")]
-    pub fn set_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
+    #[wasm_bindgen(js_name = "insertReferences")]
+    pub fn insert_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
         self.engine.borrow_mut().extend_references(refs);
         Ok(())

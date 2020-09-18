@@ -179,7 +179,7 @@ fn main() {
 
     // if let Some(_) = matches.subcommand_matches("disamb-index") {
     //     let mut db = Processor::new(filesystem_fetcher);
-    //     db.set_references(refs);
+    //     db.insert_references(refs);
     //     for (tok, ids) in db.inverted_index().iter() {
     //         // if ids.len() > 1 {
     //         let token = tok.clone();
@@ -211,7 +211,7 @@ fn main() {
                     note_number: 1,
                     cites: vec![citeproc::input::Cite::basic(key)],
                 }]);
-                db.set_references(refs);
+                db.inssert_references(refs);
 
                 let inlines = db.get_cluster(0).to_vec();
 
@@ -264,7 +264,7 @@ fn do_pandoc() {
     match Processor::new(&text, Arc::new(Filesystem::default()), false) {
         Ok(mut db) => {
             if let Some(library_path) = pandoc_meta_str(&doc, "bibliography") {
-                db.set_references(expect_refs(library_path));
+                db.reset_references(expect_refs(library_path));
             }
             db.init_clusters(pandoc::get_clusters(&mut doc));
             db.compute();

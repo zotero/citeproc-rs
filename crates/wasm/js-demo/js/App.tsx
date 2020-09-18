@@ -133,18 +133,18 @@ async function loadEditor() {
     // Removes failed expectation of immediate response compared to lazily loading it.
     await import('../../pkg');
 
-    const StyleEditor = ({style, setStyle, setReferences} : {
+    const StyleEditor = ({style, setStyle, resetReferences} : {
         inFlight: boolean,
         style: string,
         setStyle: React.Dispatch<string>,
-        setReferences: (rs: Reference[]) => void;
+        resetReferences: (rs: Reference[]) => void;
     }) => {
         const [refsText, setRefsText] = useState(JSON.stringify(initialReferences, null, 2));
 
         const parseRefs = () => {
             try {
                 let refs = JSON.parse(refsText);
-                setReferences(refs);
+                resetReferences(refs);
             } catch (e) {
                 console.error("could not parse references json", e);
             }
@@ -243,7 +243,7 @@ const App = () => {
                     Test driver for <code>citeproc-wasm</code>
                 </a>
             </header>
-            <AsyncEditor style={style} setStyle={setStyle} inFlight={inFlight} setReferences={resetReferences} />
+            <AsyncEditor style={style} setStyle={setStyle} inFlight={inFlight} resetReferences={resetReferences} />
             <div  style={{display: 'flex'}}>
                 <section style={{flexGrow: 1}}>
                     <Results style={style} driver={driver} />

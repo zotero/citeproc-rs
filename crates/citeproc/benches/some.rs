@@ -89,7 +89,7 @@ fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) ->
 
 fn bench_build_cluster(b: &mut Bencher, style: &str) {
     let mut proc = Processor::new(style, fetcher(), false, SupportedFormat::Html).unwrap();
-    proc.set_references(vec![common_reference(1)]);
+    proc.insert_reference(common_reference(1));
     let cite_id = basic_cluster_get_cite_id(&mut proc, 1, "id_1");
     proc.set_cluster_order(&[ClusterPosition { id: 1, note: Some(1) }]).unwrap();
     b.iter(move || invalidate_rebuild_cluster(&mut proc, 1, cite_id));

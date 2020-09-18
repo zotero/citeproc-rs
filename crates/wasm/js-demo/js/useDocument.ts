@@ -48,12 +48,12 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
             let d = CreateDriver.new(style, fetcher, "html");
-            d.setReferences(references);
+            d.resetReferences(references);
             return d;
         });
         if (d.is_ok()) {
             let newDriver = d.unwrap();
-            newDriver.setReferences(references);
+            newDriver.resetReferences(references);
             await flightFetcher(newDriver);
         }
         setDriver(d);
@@ -94,7 +94,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         setReferences(refs);
         if (driver.is_ok()) {
             let d = driver.unwrap();
-            d.setReferences(refs);
+            d.resetReferences(refs);
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         }
@@ -110,7 +110,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
                 neu[i] = ref;
             }
         }
-        driver.tap(d => d.setReferences(refs));
+        driver.tap(d => d.insertReferences(refs));
         setReferences(neu);
         if (driver.is_ok()) {
             let d = driver.unwrap();
@@ -169,7 +169,7 @@ class _ExampleManager implements Lifecycle {
         // must be async imported to use
         // let newDriver = Driver.new(styleText, this);
         let newDriver = undefined as Driver;
-        newDriver.setReferences(this.references);
+        newDriver.resetReferences(this.references);
         newDriver.initClusters(this.clusters);
         // wait for any locales to come back
         await newDriver.fetchAll();
@@ -196,7 +196,7 @@ class _ExampleManager implements Lifecycle {
     async resetReferences(refs: Reference[]) {
         this.references = refs;
         if (this.driver) {
-            this.driver.setReferences(refs);
+            this.driver.resetReferences(refs);
             await this.driver.fetchAll();
             this.update();
         }
@@ -218,7 +218,7 @@ class _ExampleManager implements Lifecycle {
             } else {
                 neu[i] = ref;
             }
-            this.driver && this.driver.setReferences(refs);
+            this.driver && this.driver.resetReferences(refs);
         }
         this.references = neu;
         if (this.driver) {
