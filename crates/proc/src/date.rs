@@ -722,17 +722,23 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
 
 fn dp_render_sort_string(part: &DatePart, date: &Date, key: &SortKey, is_filtered: bool) -> Option<String> {
     match part.form {
-        DatePartForm::Year(_form) => Some(format!("{:04}_", date.year)),
-        DatePartForm::Month(_form, _strip_periods) => {
+        DatePartForm::Year(_) => Some(format!("{:04}_", date.year)),
+        DatePartForm::Month(..) => {
+            if is_filtered {
+                return None;
+            }
             // Sort strings do not compare seasons
-            if !is_filtered && date.month > 0 && date.month <= 12 {
+            if date.month > 0 && date.month <= 12 {
                 Some(format!("{:02}", date.month))
             } else {
                 Some("00".to_owned())
             }
         }
-        DatePartForm::Day(_form) => {
-            if !is_filtered && date.day > 0 {
+        DatePartForm::Day(_) => {
+            if is_filtered {
+                return None;
+            }
+            if date.day > 0 {
                 Some(format!("{:02}", date.day))
             } else {
                 Some("00".to_owned())
