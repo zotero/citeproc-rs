@@ -886,6 +886,16 @@ fn built_cluster(
     Arc::new(string)
 }
 
+pub fn built_cluster_preview(
+    db: &dyn IrDatabase,
+    cluster_id: ClusterId,
+    formatter: &Markup,
+) -> Arc<<Markup as OutputFormat>::Output> {
+    let build = built_cluster_before_output(db, cluster_id);
+    let string = formatter.output(build, get_piq(db));
+    Arc::new(string)
+}
+
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,

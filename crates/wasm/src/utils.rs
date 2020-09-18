@@ -30,11 +30,14 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "console")] {
         pub fn init_log() {
+            use log::LevelFilter;
             fern::Dispatch::new()
-                .level(log::LevelFilter::Warn)
-                .level_for("salsa", log::LevelFilter::Info)
-                .level_for("salsa::derived", log::LevelFilter::Warn)
-                .level_for("html5ever", log::LevelFilter::Off)
+                .level(LevelFilter::Warn)
+                .level_for("citeproc_proc::db", LevelFilter::Info)
+                // .level_for("citeproc_proc::ir", LevelFilter::Info)
+                .level_for("salsa", LevelFilter::Warn)
+                .level_for("salsa::derived", LevelFilter::Warn)
+                .level_for("html5ever", LevelFilter::Off)
                 .format(|out, message, record| {
                     out.finish(format_args!(
                         "[{}][{}] {}",

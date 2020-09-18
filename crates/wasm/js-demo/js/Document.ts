@@ -134,6 +134,7 @@ export class Document {
         this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
         // Drain the update queue, because we know we're up to date
         this.driver.drain();
+        console.log(this.driver);
     }
 
     /** Warning: Does not free the old driver. You should have kept a copy to call free() on. */

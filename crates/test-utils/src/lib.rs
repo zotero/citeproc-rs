@@ -107,7 +107,7 @@ impl TestCase {
             let fet = Arc::new(Filesystem::project_dirs());
             Processor::new(&csl, fet, true, format.0).expect("could not construct processor")
         };
-        processor.set_references(input.clone());
+        processor.reset_references(input.clone());
         Warmup::maximum().execute(&mut processor);
         TestCase {
             mode,
