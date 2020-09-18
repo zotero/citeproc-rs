@@ -352,7 +352,7 @@ fn test_date_as_macro_strip_delims() {
         DateVariable::Issued,
         DateOrRange::Single(Date::new(2000, 1, 1)),
     );
-    db.set_references(vec![refr]);
+    db.insert_reference(refr);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">
            <macro name="year-date">

@@ -98,7 +98,7 @@ impl TomlTestCase {
         let mut proc =
             Processor::new(&self.style.csl, fet, true).expect("could not construct processor");
 
-        proc.set_references(self.references.clone());
+        proc.reset_references(self.references.clone());
         "".into()
         // Because citeproc-rs is a bit keen to escape things
         // Slashes are fine if they're not next to angle braces

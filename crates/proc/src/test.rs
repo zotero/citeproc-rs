@@ -104,7 +104,7 @@ impl MockProcessor {
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
-    pub fn set_references(&mut self, refs: Vec<Reference>) {
+    pub fn insert_references(&mut self, refs: Vec<Reference>) {
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
             self.set_reference_input(r.id.clone(), Arc::new(r));

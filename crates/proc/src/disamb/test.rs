@@ -150,7 +150,7 @@ fn test() {
 
     use citeproc_io::{Cite, Cluster, IntraNote};
 
-    db.set_references(vec![refr, refr2]);
+    db.insert_references(vec![refr, refr2]);
     let cluster = Cluster {
         id: 1,
         cites: vec![Cite::basic("ref_id")],
