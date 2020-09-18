@@ -1,0 +1,23 @@
+{
+  "name": "@citeproc-rs/wasm",
+  "collaborators": [
+    "Cormac Relf <web@cormacrelf.net>"
+  ],
+  "description": "citeproc-rs, compiled to WebAssembly",
+  "version": "0.0.1",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cormacrelf/citeproc-rs"
+  },
+  "files": [
+    "_cjs/*",
+    "_esm/*",
+    "_web/*",
+    "README.md"
+  ],
+  "main": "_cjs/citeproc_rs_wasm.js",
+  "browser": "_esm/citeproc_rs_wasm.js",
+  "types": "_esm/citeproc_rs_wasm.d.ts",
+  "sideEffects": false
+}

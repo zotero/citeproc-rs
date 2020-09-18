@@ -9,9 +9,10 @@ jobs:
     name: CSL Test Suite Regressions
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
           submodules: recursive
+
       - name: Extract branch name
         shell: bash
         run: |
@@ -29,13 +30,12 @@ jobs:
           GITHUB_HEAD=${GITHUB_HEAD#refs/heads/}
           GITHUB_HEAD=$(echo ${GITHUB_HEAD#refs/} | tr '/' '-')
           echo "GITHUB_HEAD = ${GITHUB_HEAD}"
-          echo "##[set-output name=head;]${GITHUB_HEAD}"
+          echo "::set-output name=head::${GITHUB_HEAD}"
 
           GITHUB_BASE=${GITHUB_BASE#refs/heads/}
           GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
           echo "GITHUB_BASE = ${GITHUB_BASE}"
-          echo "##[set-output name=base;]${GITHUB_BASE}"
-
+          echo "::set-output name=base::${GITHUB_BASE}"
 
         id: branch
       - name: Download base output
@@ -48,29 +48,22 @@ jobs:
         run: |
           mkdir -p .snapshots/branches
           aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_BASE .snapshots/branches/$GITHUB_BASE
-      - uses: hecrj/setup-rust-action@v1
+
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
         with:
-          rust-version: nightly
-      - name: Create ~/.cargo directory
-        run: |
-          mkdir -p ~/.cargo/registry
-          mkdir -p ~/.cargo/git
-          mkdir -p ./target
-      - name: Cache cargo registry
-        uses: actions/cache@v1
+            toolchain: nightly
+            override: true
+      - name: Cache cargo directories
+        uses: actions/cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      - name: Cache cargo index
-        uses: actions/cache@v1
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      - name: Cache cargo build
-        uses: actions/cache@v1
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       - name: "Build tools package"
         run: cargo build --package tools
       - name: "Pull locales"
@@ -95,4 +88,60 @@ jobs:
         run: |
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
+
+  wasm_tests:
+    name: "Test the WASM package"
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Cache cargo directories
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            # use "-wasm-target" to cache these separately from the CI workflow
+          key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-target-
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+
+      - name: Build WASM
+        working-directory: crates/wasm
+        run: wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs --dev
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+      - name: Restore yarn cache
+        uses: actions/cache@v2
+        id: yarn-cache
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Yarn install
+        working-directory: crates/wasm/js-tests
+        run: yarn install
+
+      - name: Run tests
+        working-directory: crates/wasm/js-tests
+        run: yarn test
+
+      # otherwise, the yarn cache will contain a different @citeproc-rs/wasm
+      # entry every time.
+      - name: Clean yarn cache dir of wasm output
+        run: |
+          cd "$(yarn cache dir)"
+          ls | grep citeproc-rs-wasm | xargs rm -rf
 

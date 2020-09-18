@@ -5,11 +5,14 @@
 # Copyright © 2018 Corporation for Digital Scholarship
 
 [package]
-name = "citeproc-wasm"
+# package name on NPM = @citeproc-rs/ + this field = @citeproc-rs/wasm
+name = "wasm"
 version = "0.0.1"
 authors = ["Cormac Relf <web@cormacrelf.net>"]
 license = "MPL-2.0"
 edition = "2018"
+repository = "https://github.com/cormacrelf/citeproc-rs"
+description = "citeproc-rs, compiled to WebAssembly"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

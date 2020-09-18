@@ -1,17 +1,31 @@
-name: Build WASM
+name: Publish WASM
 on:
-  push: 
+  push:
     branches:
     - master
+
 jobs:
-  build_wasm:
-    name: Build WebAssembly Package & deploy demo
+  publish_wasm_demo:
+    name: Publish WebAssembly Demo
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@master
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
         with:
-          rust-version: nightly
+          toolchain: nightly
+          override: true
+      - name: Cache cargo directories
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          # use "-wasm-target" to cache these separately from the CI workflow
+          key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-target-
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
       - name: Yarn install
@@ -32,3 +46,63 @@ jobs:
           PUBLISH_DIR: ./crates/wasm/js-demo/dist
           EXTERNAL_REPOSITORY: cormacrelf/citeproc-wasm-demo
           PUBLISH_BRANCH: gh-pages
+
+  publish_npm_canary:
+    name: "Publish to the 'canary' npm dist-tag"
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: nightly
+            override: true
+      - name: Cache cargo directories
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          # use "-wasm-target" to cache these separately from the CI workflow
+          key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-target-
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+
+      - name: Get version info
+        id: version
+        run: |
+          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
+          echo "::set-output name=short_sha::${SHORT_SHA}"
+          echo "::set-output name=npm_version::v0.0.0-canary-${SHORT_SHA}"
+
+      - name: Build for all targets
+        working-directory: crates/wasm
+        run: |
+          ./scripts/all-targets.sh --features console
+
+      - name: Publish to NPM canary dist tag
+        working-directory: crates/wasm
+        run: |
+          ./scripts/all-targets.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
+          # log in to the NPM repository
+          echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" >> .npmrc
+          npm publish dist --tag canary --access public
+
+      - name: Publish to GitHub Packages canary dist tag
+        working-directory: crates/wasm
+        run: |
+          # GitHub packages must be scoped by their repo owner
+          # This configures a publishConfig field pointing to GitHub in the package.json
+          ./scripts/all-targets.sh --package-only \
+            --canary-sha ${{steps.version.outputs.short_sha}} \
+            --github-packages \
+            --set-name "@cormacrelf/citeproc-wasm"
+          # log in to the NPM repository
+          echo "//npm.pkg.github.com/:_authToken=${{secrets.GITHUB_TOKEN}}" >> .npmrc
+          npm publish dist --tag canary --access public
+
+
