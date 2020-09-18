@@ -1,4 +1,4 @@
-name: Build WASM
+name: Publish WASM
 on:
   pull_request: {}
   # swap this in before merge
@@ -7,8 +7,8 @@ on:
     # - master
 
 jobs:
-  build_wasm:
-    name: Build WebAssembly Package & deploy demo
+  publish_wasm_demo:
+    name: Publish WebAssembly Demo
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
@@ -26,6 +26,8 @@ jobs:
             target
           # use "-wasm-target" to cache these separately from the CI workflow
           key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-target-
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
       - name: Yarn install
@@ -66,6 +68,8 @@ jobs:
             target
           # use "-wasm-target" to cache these separately from the CI workflow
           key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-target-
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
@@ -88,7 +92,7 @@ jobs:
           NPM_TOKEN: ${{secrets.NPM_PUBLISH_TOKEN}}
         run: |
           ./scripts/all-targets.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
-          npm publish dist --tag canary
+          npm publish dist --tag canary --access public
 
       - name: Publish to GitHub Packages canary dist tag
         working-directory: crates/wasm
