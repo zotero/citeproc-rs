@@ -2,12 +2,12 @@ use unicase::UniCase;
 
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
+use citeproc_db::ClusterData;
 use citeproc_io::output::plain::PlainText;
-use citeproc_io::{Reference, ClusterId};
+use citeproc_io::ClusterId;
 use csl::*;
 use fnv::FnvHashMap;
 use std::sync::Arc;
-use citeproc_db::ClusterData;
 
 use std::cmp::Ordering;
 #[derive(Debug)]
@@ -42,13 +42,13 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
 }
 
 pub fn sort_string_citation(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     cite_id: CiteId,
     macro_name: Atom,
     key: SortKey,
 ) -> Option<Arc<String>> {
-    let cite = cite_id.lookup(db);
-    with_cite_context(db, cite_id, None, Some(key), true, None, |ctx| {
+    let bib_num = db.bib_number(cite_id);
+    with_cite_context(db, cite_id, bib_num, Some(key), true, None, |ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
         let (string, _gv) = walker.text_macro(&text, &macro_name);
@@ -58,7 +58,7 @@ pub fn sort_string_citation(
 
 // Cached by the DB because typically the output needs to be compared more than once
 pub fn sort_string_bibliography(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     ref_id: Atom,
     macro_name: Atom,
     key: SortKey,
@@ -71,7 +71,7 @@ pub fn sort_string_bibliography(
     })
 }
 
-pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
+pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
     let style = db.style();
     let bib = match style.bibliography {
         None => None,
@@ -80,12 +80,18 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
 
     let mut citation_numbers = FnvHashMap::default();
 
-    // only the references that exist go in the bibliography
+    // Construct preordered, which will then be stably sorted. It contains:
+    // - All refs from all cites, in the order they appear (excluding non-existent)
+    // - Then, all of the uncited reference ids.
+    // 
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
     let all_cite_ids = db.all_cite_ids();
+    let uncited_ordered = db.uncited_ordered();
     let mut preordered = Vec::with_capacity(all.len());
+
+    // Put all the cited refs in
     let mut i = 1;
     for &id in all_cite_ids.iter() {
         let ref_id = &id.lookup(db).ref_id;
@@ -95,46 +101,43 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
             i += 1;
         }
     }
+    // Then all the uncited ones
+    for id in uncited_ordered.iter() {
+        // guaranteed to be a valid reference id already.
+        // but may have duplicated an actual cite.
+        preordered.push(id.clone());
+        citation_numbers.insert(id.clone(), i as u32);
+        i += 1;
+    }
+
     let refs = if let Some(ref sort) = bib {
         // dbg!(sort);
+        // TODO: explore the sort_by_cached_key, but reimplement to have a closure sort function
+        // rather than Ord.
         preordered.sort_by(|a, b| {
             let a_cnum = citation_numbers.get(a).unwrap();
             let b_cnum = citation_numbers.get(b).unwrap();
-            let ar = db.reference_input(a.clone());
-            let br = db.reference_input(b.clone());
-            with_bib_context(
-                db,
-                a.clone(),
-                Some(*a_cnum),
-                None,
-                None,
-                |_, a_ctx| {
-                    with_bib_context(
+            with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, a_ctx| {
+                with_bib_context(db, b.clone(), Some(*b_cnum), None, None, |_, b_ctx| {
+                    bib_ordering(
                         db,
-                        b.clone(),
-                        Some(*b_cnum),
-                        None,
-                        None,
-                        |_, b_ctx| {
-                            bib_ordering(
-                                db,
-                                |db, ref_id, macro_name, key| {
-                                    db.sort_string_bibliography(ref_id.clone(), macro_name, key)
-                                },
-                                CiteOrBib::Bibliography,
-                                (a, &a_ctx, *a_cnum),
-                                (b, &b_ctx, *b_cnum),
-                                sort,
-                            )
+                        |db, ref_id, macro_name, key| {
+                            db.sort_string_bibliography(ref_id.clone(), macro_name, key)
                         },
+                        CiteOrBib::Bibliography,
+                        (a, &a_ctx, *a_cnum),
+                        (b, &b_ctx, *b_cnum),
+                        sort,
                     )
-                },
-            ).flatten().unwrap_or(Ordering::Equal)
+                })
+            })
+            .flatten()
+            .unwrap_or(Ordering::Equal)
         });
         preordered
     } else {
         // In the absence of cs:sort, cites and bibliographic entries appear in the order in which
-        // they are cited.
+        // they are cited. The uncited ones come last.
         preordered
     };
     for (i, ref_id) in refs.iter().enumerate() {
@@ -143,7 +146,7 @@ pub fn sorted_refs(db: &impl IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32
     Arc::new((refs, citation_numbers))
 }
 
-pub fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
+pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
     let cluster_ids = db.cluster_ids();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
@@ -155,7 +158,7 @@ pub fn clusters_cites_sorted(db: &impl IrDatabase) -> Arc<Vec<ClusterData>> {
     Arc::new(clusters)
 }
 
-pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<ClusterData> {
+pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<ClusterData> {
     db.cluster_note_number(id).map(|number| {
         // Order of operations: bib gets sorted first, so cites can be sorted by
         // citation-number.
@@ -169,47 +172,32 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
                 let cite = cite_id.lookup(db);
                 let cnum = db.reference(cite.ref_id.clone()).map(|refr| {
                     *citation_numbers_by_id
-                        .get(&cite.ref_id)
+                        .get(&refr.id)
                         .expect("sorted_refs should contain a bib_item key")
                 });
                 cnum
             };
-            neu.sort_by(|a_id, b_id| {
-                use std::cmp::Ordering;
-                match (getter(a_id), getter(b_id)) {
-                    (Some(_), None) => Ordering::Less,
-                    (None, Some(_)) => Ordering::Greater,
-                    (None, None) => Ordering::Equal,
-                    (Some(a_cnum), Some(b_cnum)) => with_cite_context(
-                        db,
-                        a_id.clone(),
-                        Some(a_cnum),
-                        None,
-                        true,
-                        None,
-                        |a_ctx| {
-                            with_cite_context(
+            neu.sort_by(|a_id, b_id| match (getter(a_id), getter(b_id)) {
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+                (Some(a_cnum), Some(b_cnum)) => {
+                    with_cite_context(db, *a_id, Some(a_cnum), None, true, None, |a_ctx| {
+                        with_cite_context(db, *b_id, Some(b_cnum), None, true, None, |b_ctx| {
+                            bib_ordering(
                                 db,
-                                b_id.clone(),
-                                Some(b_cnum),
-                                None,
-                                true,
-                                None,
-                                |b_ctx| {
-                                    bib_ordering(
-                                        db,
-                                        |db, cite_id, macro_name, key| {
-                                            db.sort_string_citation(cite_id, macro_name, key)
-                                        },
-                                        CiteOrBib::Bibliography,
-                                        (*a_id, &a_ctx, a_cnum),
-                                        (*b_id, &b_ctx, b_cnum),
-                                        sort,
-                                    )
+                                |db, cite_id, macro_name, key| {
+                                    db.sort_string_citation(cite_id, macro_name, key)
                                 },
+                                CiteOrBib::Bibliography,
+                                (*a_id, &a_ctx, a_cnum),
+                                (*b_id, &b_ctx, b_cnum),
+                                sort,
                             )
-                        },
-                    ).flatten().unwrap_or(Ordering::Equal),
+                        })
+                    })
+                    .flatten()
+                    .unwrap_or(Ordering::Equal)
                 }
             });
             cites = Arc::new(neu);
@@ -218,7 +206,7 @@ pub fn cluster_data_sorted(db: &impl IrDatabase, id: ClusterId) -> Option<Cluste
     })
 }
 
-pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
+pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
     let cite = id.lookup(db);
     let arc = db.sorted_refs();
     let (_, ref lookup_ref_ids) = &*arc;
@@ -227,22 +215,22 @@ pub fn bib_number(db: &impl IrDatabase, id: CiteId) -> Option<u32> {
 
 /// Creates a total ordering of References from a Sort element. (Not a query)
 pub fn bib_ordering<
-    DB: IrDatabase,
     ID: std::fmt::Debug + Copy,
-    M: Fn(&DB, ID, Atom, SortKey) -> Option<Arc<String>>,
+    MacroRunner: Fn(&dyn IrDatabase, ID, Atom, SortKey) -> Option<Arc<String>>,
     O: OutputFormat,
     I: OutputFormat,
 >(
-    db: &DB,
-    sort_macro: M,
+    db: &dyn IrDatabase,
+    // Cached lookup from (id, macro name, sort key) -> a comparable string
+    sort_macro_runner: MacroRunner,
     cite_or_bib: CiteOrBib,
-    a: (ID, &CiteContext<'_, O, I>, u32),
-    b: (ID, &CiteContext<'_, O, I>, u32),
+    a_id_ctx_cnum: (ID, &CiteContext<'_, O, I>, u32),
+    b_id_ctx_cnum: (ID, &CiteContext<'_, O, I>, u32),
     sort: &Sort,
 ) -> Ordering {
     let mut ord = Ordering::Equal;
-    let (a_id, a_ctx, a_cnum) = a;
-    let (b_id, b_ctx, b_cnum) = b;
+    let (a_id, a_ctx, a_cnum) = a_id_ctx_cnum;
+    let (b_id, b_ctx, b_cnum) = b_id_ctx_cnum;
     let a_ref = a_ctx.reference;
     let b_ref = b_ctx.reference;
     for key in sort.keys.iter() {
@@ -252,10 +240,8 @@ pub fn bib_ordering<
         }
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string =
-                    sort_macro(db, a_id, macro_name.clone(), key.clone());
-                let b_string =
-                    sort_macro(db, b_id, macro_name.clone(), key.clone());
+                let a_string = sort_macro_runner(db, a_id, macro_name.clone(), key.clone());
+                let b_string = sort_macro_runner(db, b_id, macro_name.clone(), key.clone());
                 let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
                 let x = compare_demoting_none(a_nat, b_nat);
@@ -298,10 +284,7 @@ pub fn bib_ordering<
                     compare_demoting_none(Some(a_cnum), Some(b_cnum))
                 }
                 AnyVariable::Number(v) => {
-                    compare_demoting_none(
-                        a_ctx.get_number(v),
-                        b_ctx.get_number(v),
-                    )
+                    compare_demoting_none(a_ctx.get_number(v), b_ctx.get_number(v))
                 }
                 AnyVariable::Name(v) => {
                     let a_strings =
@@ -317,8 +300,8 @@ pub fn bib_ordering<
                 }
                 // TODO: compare dates, using details from spec for ranges
                 AnyVariable::Date(v) => {
-                    let a_date = a.1.reference.date.get(&v);
-                    let b_date = b.1.reference.date.get(&v);
+                    let a_date = a_ctx.reference.date.get(&v);
+                    let b_date = b_ctx.reference.date.get(&v);
                     compare_demoting_none(a_date, b_date)
                 }
             },
@@ -335,15 +318,15 @@ pub fn bib_ordering<
 }
 
 /// Currently only works where
-struct SortingWalker<'a, DB: IrDatabase, I: OutputFormat> {
-    db: &'a DB,
+struct SortingWalker<'a, I: OutputFormat> {
+    db: &'a dyn IrDatabase,
     /// the cite is in its original format, but the formatter is PlainText
     ctx: CiteContext<'a, PlainText, I>,
     state: IrState,
 }
 
-impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
-    pub fn new<O: OutputFormat>(db: &'a DB, ctx: &'a CiteContext<'a, O, I>) -> Self {
+impl<'a, I: OutputFormat> SortingWalker<'a, I> {
+    pub fn new<O: OutputFormat>(db: &'a dyn IrDatabase, ctx: &'a CiteContext<'a, O, I>) -> Self {
         let plain_ctx = ctx.change_format(PlainText);
         SortingWalker {
             db,
@@ -361,7 +344,7 @@ impl<'a, DB: IrDatabase, I: OutputFormat> SortingWalker<'a, DB, I> {
 fn test_date_as_macro_strip_delims() {
     use crate::test::MockProcessor;
     let mut db = MockProcessor::new();
-    let mut refr = Reference::empty("ref_id".into(), CslType::Book);
+    let mut refr = citeproc_io::Reference::empty("ref_id".into(), CslType::Book);
     use citeproc_io::{Date, DateOrRange};
     let mac = "indep";
     refr.ordinary.insert(Variable::Title, String::from("title"));
@@ -464,7 +447,7 @@ fn test_date_as_macro_strip_delims() {
     );
 }
 
-impl<'a, DB: IrDatabase, O: OutputFormat> StyleWalker for SortingWalker<'a, DB, O> {
+impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     type Output = (String, GroupVars);
     type Checker = CiteContext<'a, PlainText, O>;
 

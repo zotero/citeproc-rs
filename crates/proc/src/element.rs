@@ -10,7 +10,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -26,7 +26,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -57,7 +57,7 @@ where
 {
     fn intermediate(
         &self,
-        db: &impl IrDatabase,
+        db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
     ) -> IrSum<O> {
@@ -244,18 +244,17 @@ impl YearSuffixHook {
     }
 }
 
-struct ProcWalker<'a, DB, O, I>
+struct ProcWalker<'a, O, I>
 where
-    DB: IrDatabase,
     O: OutputFormat,
     I: OutputFormat,
 {
-    db: &'a DB,
+    db: &'a dyn IrDatabase,
     state: IrState,
     ctx: &'a CiteContext<'a, O, I>,
 }
 
-impl<'a, DB: IrDatabase, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, DB, O, I> {
+impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> {
     type Output = IrSum<O>;
     type Checker = CiteContext<'a, O, I>;
     fn get_checker(&self) -> Option<&Self::Checker> {

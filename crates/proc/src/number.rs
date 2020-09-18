@@ -134,7 +134,7 @@ fn tokens_to_string(
                 None
             }
             Hyphen => {
-                let mut hyphen = get_hyphen(locale, variable);
+                let hyphen = get_hyphen(locale, variable);
                 s.push_str(hyphen);
                 match state {
                     Some(NumBefore::SeenNum(i)) => Some(NumBefore::SeenNumHyphen(i)),

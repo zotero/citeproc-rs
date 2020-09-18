@@ -8,17 +8,16 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::enum_variant_names)]
 
-pub mod update;
-
-#[cfg(test)]
-mod test;
-
 use crate::prelude::*;
 
-use self::update::{
-    BibliographyMeta, BibliographyUpdate, DocUpdate, SecondFieldAlign, UpdateSummary,
+use crate::api::{
+    BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
+    UpdateSummary,
 };
-use citeproc_db::{CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage};
+use citeproc_db::{
+    CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
+    CiteData,
+};
 use citeproc_proc::db::IrDatabaseStorage;
 
 use salsa::Durability;
@@ -57,6 +56,9 @@ impl SavedBib {
     }
 }
 
+// Need to keep this index in sync with the order in which the group storage structs appear below
+const IR_GROUP_INDEX: u16 = 3;
+
 #[salsa::database(
     StyleDatabaseStorage,
     LocaleDatabaseStorage,
@@ -64,7 +66,7 @@ impl SavedBib {
     IrDatabaseStorage
 )]
 pub struct Processor {
-    runtime: salsa::Runtime<Self>,
+    storage: salsa::Storage<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
     pub formatter: Markup,
     queue: Arc<Mutex<Vec<DocUpdate>>>,
@@ -74,26 +76,36 @@ pub struct Processor {
 
 /// This impl tells salsa where to find the salsa runtime.
 impl salsa::Database for Processor {
-    fn salsa_runtime(&self) -> &salsa::Runtime<Processor> {
-        &self.runtime
-    }
-
     /// A way to extract imperative update sequences from a "here's the entire world" API. An
     /// editor might require simple instructions to update a document; modify this footnote,
     /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
     /// things were recomputed, and assume a recomputation means re-rendering is necessary.
-    fn salsa_event(&self, event_fn: impl Fn() -> salsa::Event<Self>) {
+    fn salsa_event(&self, event: salsa::Event) {
         if !self.save_updates {
             return;
         }
-        use self::__SalsaDatabaseKeyKind::IrDatabaseStorage as RDS;
-        use citeproc_proc::db::IrDatabaseGroupKey__ as GroupKey;
         use salsa::EventKind::*;
-        let kind = event_fn().kind;
-        if let WillExecute { database_key } = kind {
-            if let RDS(GroupKey::built_cluster(key)) = database_key.kind {
+        if let WillExecute {
+            database_key: db_key,
+        } = event.kind
+        {
+            use citeproc_proc::db::BuiltClusterQuery;
+            if db_key.group_index() == IR_GROUP_INDEX
+                && db_key.query_index() == <BuiltClusterQuery as salsa::Query>::QUERY_INDEX
+            {
+                // TODO: this is a massive hack. Get a key index lookup function into Salsa.
+                let formatted = format!("{:?}", db_key.debug(self));
+                // The format is "built_cluster(123)".
+                // log::error!("{:?}", db_key.debug(self));
+                let id: u32 = formatted
+                    .strip_prefix("built_cluster(")
+                    .unwrap()
+                    .trim_end_matches(')')
+                    .parse()
+                    .unwrap();
+
                 let mut q = self.queue.lock().unwrap();
-                let upd = DocUpdate::Cluster(key);
+                let upd = DocUpdate::Cluster(id);
                 // info!("produced update, {:?}", upd);
                 q.push(upd);
             }
@@ -105,7 +117,7 @@ impl salsa::Database for Processor {
 impl ParallelDatabase for Processor {
     fn snapshot(&self) -> Snapshot<Self> {
         Snapshot::new(Processor {
-            runtime: self.runtime.snapshot(self),
+            storage: self.storage.snapshot(),
             fetcher: self.fetcher.clone(),
             queue: self.queue.clone(),
             save_updates: self.save_updates,
@@ -138,42 +150,10 @@ impl Clone for Snap {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum SupportedFormat {
-    Html,
-    Rtf,
-    Plain,
-    TestHtml,
-}
-
-impl FromStr for SupportedFormat {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "html" => Ok(SupportedFormat::Html),
-            "rtf" => Ok(SupportedFormat::Rtf),
-            "plain" => Ok(SupportedFormat::Plain),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        use serde::de::Error as DeError;
-        SupportedFormat::from_str(s.as_str())
-            .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
-    }
-}
-
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut db = Processor {
-            runtime: Default::default(),
+            storage: Default::default(),
             fetcher,
             queue: Arc::new(Mutex::new(Default::default())),
             save_updates: false,
@@ -312,6 +292,17 @@ impl Processor {
         self.set_references(vec![refr])
     }
 
+    pub fn include_uncited(&mut self, uncited: IncludeUncited) {
+        let db_uncited = match uncited {
+            IncludeUncited::All => Uncited::All,
+            IncludeUncited::None => Uncited::default(),
+            IncludeUncited::Specific(list) => {
+                Uncited::Enumerated(list.iter().map(String::as_str).map(Atom::from).collect())
+            }
+        };
+        self.set_all_uncited(Arc::new(db_uncited));
+    }
+
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
@@ -321,7 +312,11 @@ impl Processor {
             } = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
+                let cite_id = self.cite(CiteData::RealCite {
+                    cluster: cluster_id,
+                    index: index as u32,
+                    cite: Arc::new(cite),
+                });
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
@@ -360,7 +355,11 @@ impl Processor {
 
         let mut ids = Vec::new();
         for (index, cite) in cites.iter().enumerate() {
-            let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite.clone()));
+            let cite_id = self.cite(CiteData::RealCite {
+                cluster: cluster_id,
+                index: index as u32,
+                cite: Arc::new(cite.clone()),
+            });
             ids.push(cite_id);
         }
         self.set_cluster_cites(cluster_id, Arc::new(ids));

@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use csl::*;
-
-use super::Processor;
+use crate::prelude::*;
 
 mod position {
     use super::*;

@@ -48,7 +48,8 @@ impl<O: OutputFormat> IR<O> {
 
 impl<O: OutputFormat> IR<O> {
     pub fn split_first_field(&mut self) {
-        if let Some(((first, gv), mut me)) = match self {
+        // Pull off the first field of self -> [first, ...rest]
+        if let Some(((first, gv), mut rest)) = match self {
             IR::Seq(seq) => if seq.contents.len() > 1 {
                 Some(seq.contents.remove(0))
             } else {
@@ -57,8 +58,10 @@ impl<O: OutputFormat> IR<O> {
             .and_then(|f| Some((f, mem::take(seq)))),
             _ => None,
         } {
-            me.display = Some(DisplayMode::RightInline);
-            let (afpre, afsuf) = me
+            rest.display = Some(DisplayMode::RightInline);
+
+            // Split the affixes into two sets with empty inside.
+            let (afpre, afsuf) = rest
                 .affixes
                 .map(|mine| {
                     (
@@ -73,38 +76,37 @@ impl<O: OutputFormat> IR<O> {
                     )
                 })
                 .unwrap_or((None, None));
-            mem::replace(
-                self,
-                IR::Seq(IrSeq {
-                    contents: vec![
-                        (
-                            IR::Seq(IrSeq {
-                                contents: vec![(first, gv)],
-                                display: Some(DisplayMode::LeftMargin),
-                                affixes: afpre,
-                                ..Default::default()
-                            }),
-                            gv,
-                        ),
-                        (
-                            IR::Seq(IrSeq {
-                                contents: me.contents,
-                                display: Some(DisplayMode::RightInline),
-                                affixes: afsuf,
-                                ..Default::default()
-                            }),
-                            GroupVars::Important,
-                        ),
-                    ],
-                    display: None,
-                    formatting: me.formatting,
-                    affixes: None,
-                    delimiter: me.delimiter.clone(),
-                    dropped_gv: None,
-                    quotes: me.quotes.clone(),
-                    text_case: me.text_case,
-                }),
-            );
+
+            // Replace with joined splits
+            *self = IR::Seq(IrSeq {
+                contents: vec![
+                    (
+                        IR::Seq(IrSeq {
+                            contents: vec![(first, gv)],
+                            display: Some(DisplayMode::LeftMargin),
+                            affixes: afpre,
+                            ..Default::default()
+                        }),
+                        gv,
+                    ),
+                    (
+                        IR::Seq(IrSeq {
+                            contents: rest.contents,
+                            display: Some(DisplayMode::RightInline),
+                            affixes: afsuf,
+                            ..Default::default()
+                        }),
+                        GroupVars::Important,
+                    ),
+                ],
+                display: None,
+                formatting: rest.formatting,
+                affixes: None,
+                delimiter: rest.delimiter.clone(),
+                dropped_gv: None,
+                quotes: rest.quotes.clone(),
+                text_case: rest.text_case,
+            });
         }
     }
 }
@@ -324,13 +326,6 @@ impl CnumIx {
             force_single: false,
         }
     }
-    fn force_single(c: u32, ix: usize) -> Self {
-        CnumIx {
-            cnum: c,
-            ix,
-            force_single: true,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -483,7 +478,7 @@ impl<O: OutputFormat> Unnamed3<O> {
 }
 
 pub fn group_and_collapse<O: OutputFormat<Output = String>>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     fmt: &Markup,
     delim: &str,
     collapse: Option<Collapse>,
@@ -776,7 +771,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
     sas: &str,
     sas_rule: SasRule,
 ) -> bool {
-    let mut pre = previous.lock().unwrap();
+    let pre = previous.lock().unwrap();
     let mut cur = current.lock().unwrap();
     let pre_tokens = pre.iter_bib_rendered_names(fmt);
     let pre_reduced = pre_tokens

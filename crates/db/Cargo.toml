@@ -10,7 +10,7 @@ edition = "2018"
 parallel = []
 
 [dependencies]
-salsa = "0.13.0"
+salsa = "0.15.2"
 fnv = "1.0.6"
 csl = { path = "../csl" }
 citeproc-io = { path = "../io" }

@@ -1,6 +1,6 @@
 import { Document, RenderedDocument } from './Document';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Cluster, Cite } from '../../pkg';
+import { Cluster, Cite, IncludeUncited } from '../../pkg';
 
 import './bibliography.css';
 
@@ -9,6 +9,7 @@ const btnStyle = {
 }
 
 export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
+  let [csvIncl, setCsvIncl] = useState("");
     const insertCluster = (before: number) => {
         let neu = document.produce(draft => {
             let cl = draft.createCluster([{ id: 'citekey' }]);
@@ -29,6 +30,27 @@ export const DocumentEditor = ({document, onChange}: { document: Document; onCha
     return <>
         { editors }
         <button style={btnStyle} onClick={() => insertCluster(null)} >+cluster</button>
+          <div>
+            Include uncited items?
+              <input style={{width: 400}} type="text" value={csvIncl} onChange={(ev) => {
+                let val = ev.target.value;
+                let unc: IncludeUncited = "None";
+                let joined = val;
+                if (val == "All") {
+                  unc = "All";
+                } else if (val == "None") {
+                  unc = "None";
+                } else if (val == "") {
+                  unc = "None";
+                } else {
+                  let arr = ev.target.value.split(/, */);
+                  unc = { Specific: arr };
+                  joined = arr.join(", ");
+                }
+                document.produce(d => d.setIncludeUncited(unc));
+                setCsvIncl(joined);
+              }} placeholder="None (default), All, or a comma-separated list of citekeys"/>
+        </div>
         <DocumentViewer renderedDocument={document.rendered} />
     </>;
 };

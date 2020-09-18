@@ -123,7 +123,7 @@ pub struct RefIrSeq {
 }
 
 impl RefIR {
-    pub fn debug(&self, db: &impl IrDatabase) -> String {
+    pub fn debug(&self, db: &dyn IrDatabase) -> String {
         match self {
             RefIR::Edge(Some(e)) => format!("{:?}", db.lookup_edge(*e)),
             RefIR::Edge(None) => "None".into(),
@@ -298,11 +298,6 @@ pub struct IrNameCounter<O: OutputFormat> {
     pub group_vars: GroupVars,
 }
 
-#[derive(Debug, Clone)]
-pub struct RefIrNameCounter {
-    name_irs: Vec<RefNameIR>,
-}
-
 impl<O: OutputFormat> IrNameCounter<O> {
     pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'_, O, I>) -> u32 {
         self.name_irs
@@ -327,18 +322,22 @@ impl<O: OutputFormat> IrNameCounter<O> {
     }
 }
 
-impl RefIrNameCounter {
-    fn count(&self) -> u32 {
-        500
-    }
-    pub fn render_ref(&self, db: &impl IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
-        let count = self.count();
-        let fmt = ctx.format;
-        let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);
-        let edge = db.edge(EdgeData::<Markup>::Output(out));
-        (RefIR::Edge(Some(edge)), GroupVars::Important)
-    }
-}
+// #[derive(Debug, Clone)]
+// pub struct RefIrNameCounter {
+//     name_irs: Vec<RefNameIR>,
+// }
+// impl RefIrNameCounter {
+//     fn count(&self) -> u32 {
+//         500
+//     }
+//     pub fn render_ref(&self, db: &dyn IrDatabase, ctx: &RefContext<'_, Markup>, stack: Formatting, piq: Option<bool>) -> (RefIR, GroupVars) {
+//         let count = self.count();
+//         let fmt = ctx.format;
+//         let out = fmt.output_in_context(fmt.text_node(format!("{}", count), None), stack, piq);
+//         let edge = db.edge(EdgeData::<Markup>::Output(out));
+//         (RefIR::Edge(Some(edge)), GroupVars::Important)
+//     }
+// }
 
 impl<O> IR<O>
 where
@@ -369,14 +368,22 @@ where
             (IR::Seq(s), IR::Seq(o)) if s == o => true,
             (IR::YearSuffix(s), IR::YearSuffix(o)) if s == o => true,
             (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) => {
-                let aa = a.lock().unwrap();
-                let bb = b.lock().unwrap();
-                *aa == *bb
+                if Arc::ptr_eq(a, b) {
+                    true
+                } else {
+                    let aa = a.lock().unwrap();
+                    let bb = b.lock().unwrap();
+                    *aa == *bb
+                }
             }
             (IR::Name(self_nir), IR::Name(other_nir)) => {
-                let s = self_nir.lock().unwrap();
-                let o = other_nir.lock().unwrap();
-                *s == *o
+                if Arc::ptr_eq(self_nir, other_nir) {
+                    true
+                } else {
+                    let s = self_nir.lock().unwrap();
+                    let o = other_nir.lock().unwrap();
+                    *s == *o
+                }
             }
             _ => false,
         }

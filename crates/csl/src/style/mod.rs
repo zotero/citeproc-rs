@@ -950,7 +950,7 @@ impl Citation {
         let col = self.collapse;
         match self.cite_group_delimiter.as_ref() {
             Some(cgd) => Some((cgd.as_ref(), col)),
-            None => col.map(|c| (", ", col)),
+            None => col.map(|c| (", ", Some(c))),
         }
     }
 }

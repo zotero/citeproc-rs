@@ -12,7 +12,7 @@ use csl::Atom;
 use csl::{Affixes, DisplayMode, Element, Formatting};
 
 pub fn sequence_basic<'c, O, I>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
     els: &[Element],
@@ -26,7 +26,7 @@ where
 
 
 pub fn sequence<'c, O, I>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
     els: &[Element],
@@ -87,7 +87,7 @@ where
 }
 
 pub fn ref_sequence_basic<'c>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &RefContext<'c>,
     els: &[Element],
@@ -98,7 +98,7 @@ pub fn ref_sequence_basic<'c>(
 
 
 pub fn ref_sequence<'c>(
-    db: &impl IrDatabase,
+    db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &RefContext<'c, Markup>,
     els: &[Element],
