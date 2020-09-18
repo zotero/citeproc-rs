@@ -88,10 +88,10 @@ jobs:
 
       - name: Publish to NPM canary dist tag
         working-directory: crates/wasm
-        env:
-          NPM_TOKEN: ${{secrets.NPM_PUBLISH_TOKEN}}
         run: |
           ./scripts/all-targets.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
+          # log in to the NPM repository
+          echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" >> .npmrc
           npm publish dist --tag canary --access public
 
       - name: Publish to GitHub Packages canary dist tag
