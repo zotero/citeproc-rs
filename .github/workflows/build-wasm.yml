@@ -105,6 +105,6 @@ jobs:
             --set-name "@cormacrelf/citeproc-wasm"
           # log in to the NPM repository
           echo "//npm.pkg.github.com/:_authToken=${{secrets.GITHUB_TOKEN}}" >> .npmrc
-          npm publish dist --tag canary
+          npm publish dist --tag canary --access public
 
 
