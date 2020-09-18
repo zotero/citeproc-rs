@@ -115,6 +115,10 @@ elif [ -n "$USE_CARGO_VERSION" ]; then
   append "--arg version $CARGO_VERSION" '.version = $version'
 fi
 
+if [ -n "$SET_NAME" ]; then
+  append "--arg name $SET_NAME" '.name = $name'
+fi
+
 if [ -n "$GITHUB_PACKAGES" ]; then
   append ' ' '.publishConfig = {repository: "https://npm.pkg.github.com"}'
 fi
