@@ -35,7 +35,7 @@ let prom = async () => {
   try {
     let fetcher = new Fetcher();
     let driver = Driver.new(style, fetcher, "html");
-    driver.setReferences([
+    driver.insertReferences([
       {
         id: 'citekey',
         type: 'book',

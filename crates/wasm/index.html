@@ -68,7 +68,7 @@
         }
 
         console.log("--- Successfully loaded wasm driver. You can now use it. ---")
-        driver.setReferences([{id: "citekey", title: "Hello", language: 'fr-FR'}]);
+        driver.insertReferences([{id: "citekey", title: "Hello", language: 'fr-FR'}]);
         driver.initClusters([{id: 1, cites: [{id: "citekey"}]}]);
         driver.setClusterOrder([ {id: 1} ]);
         await driver.fetchAll();
