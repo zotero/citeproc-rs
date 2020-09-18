@@ -197,7 +197,7 @@ fn stamp<'a>(
 
 #[test]
 fn test_stamp() {
-    env_logger::init();
+    // env_logger::init();
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let options = IngestOptions::default_with_quotes(LocalizedQuotes::simple());
     let inters = vec![

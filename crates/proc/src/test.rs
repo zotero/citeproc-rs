@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase, CiteData};
 use citeproc_io::{output::markup::Markup, Cluster, Reference};
 use csl::Atom;
 
@@ -45,19 +45,15 @@ pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
     crate::db::IrDatabaseStorage
 )]
 pub struct MockProcessor {
-    runtime: salsa::Runtime<Self>,
+    storage: salsa::Storage<Self>,
     fetcher: Arc<dyn LocaleFetcher>,
 }
+
+impl salsa::Database for MockProcessor {}
 
 impl HasFormatter for MockProcessor {
     fn get_formatter(&self) -> Markup {
         Markup::html()
-    }
-}
-
-impl salsa::Database for MockProcessor {
-    fn salsa_runtime(&self) -> &salsa::Runtime<MockProcessor> {
-        &self.runtime
     }
 }
 
@@ -71,7 +67,7 @@ impl MockProcessor {
     pub fn new() -> Self {
         let fetcher = Arc::new(PredefinedLocales::bundled_en_us());
         let mut db = MockProcessor {
-            runtime: Default::default(),
+            storage: Default::default(),
             fetcher,
         };
         citeproc_db::safe_default(&mut db);
@@ -94,7 +90,11 @@ impl MockProcessor {
             } = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
-                let cite_id = self.cite(cluster_id, index as u32, Arc::new(cite));
+                let cite_id = self.cite(CiteData::RealCite {
+                    cluster: cluster_id,
+                    index: index as u32,
+                    cite: Arc::new(cite),
+                });
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
