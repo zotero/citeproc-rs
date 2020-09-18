@@ -855,7 +855,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             None => fmt.text_node(s.into(), None),
             Some(ref part) => {
                 let NamePart {
-                    // TODO: need to set text case on name parts.
                     text_case,
                     formatting,
                     // Don't apply affixes here; that has to be done separately for the weirdo
