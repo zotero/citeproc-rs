@@ -186,7 +186,7 @@ mod preview {
         let mut db = mk_db();
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         let cites = vec![Cite::basic("two")];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(1));
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(1), None);
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(preview.ok(), Some("Book two"));
     }
@@ -196,7 +196,7 @@ mod preview {
         let mut db = mk_db();
         assert_cluster!(db.get_cluster(2), Some("Book two"));
         let cites = vec![Cite::basic("one")];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(2));
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::ReplaceCluster(2), None);
         assert_cluster!(db.get_cluster(2), Some("Book two"));
         assert_cluster!(preview.ok(), Some("Book one, ibid"));
     }
@@ -210,7 +210,7 @@ mod preview {
             ClusterPosition { id: 2, note: Some(2) },
             ClusterPosition { id: 0, note: Some(3) }, // Append at the end
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one, subsequent"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));
@@ -225,7 +225,7 @@ mod preview {
             ClusterPosition { id: 1, note: Some(1) },
             ClusterPosition { id: 2, note: Some(2) },
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one; Book three"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));
@@ -239,7 +239,7 @@ mod preview {
             ClusterPosition { id: 0, note: Some(1) }, // Replace cluster #1
             ClusterPosition { id: 2, note: Some(2) },
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions));
+        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book three"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));

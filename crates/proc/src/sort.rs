@@ -346,13 +346,12 @@ fn test_date_as_macro_strip_delims() {
     let mut db = MockProcessor::new();
     let mut refr = citeproc_io::Reference::empty("ref_id".into(), CslType::Book);
     use citeproc_io::{Date, DateOrRange};
-    let mac = "indep";
     refr.ordinary.insert(Variable::Title, String::from("title"));
     refr.date.insert(
         DateVariable::Issued,
         DateOrRange::Single(Date::new(2000, 1, 1)),
     );
-    db.insert_reference(refr);
+    db.insert_references(vec![refr]);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">
            <macro name="year-date">

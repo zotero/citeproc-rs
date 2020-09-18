@@ -12,7 +12,7 @@ use citeproc_io::output::markup::Markup;
 use citeproc_io::{ClusterNumber, Reference};
 
 use csl::Variable;
-use csl::{Cond, CslType, Position};
+use csl::CslType;
 
 macro_rules! style_text_layout {
     ($ex:expr) => {{
@@ -137,15 +137,15 @@ fn test() {
         .ordinary
         .insert(Variable::ContainerTitle, "Title".into());
 
-    let vec = create_ref_ir::<Markup, MockProcessor>(db, &refr);
+    let vec = create_ref_ir::<Markup>(db, &refr);
     for (fc, ir) in &vec {
         println!("{:?}:\n    {}", fc, ir.debug(db));
     }
-    let dfa = create_dfa::<Markup, MockProcessor>(db, &refr);
+    let dfa = create_dfa::<Markup>(db, &refr);
     println!("{}", dfa.debug_graph(db));
 
-    let _vec = create_ref_ir::<Markup, MockProcessor>(db, &refr2);
-    let dfa2 = create_dfa::<Markup, MockProcessor>(db, &refr2);
+    let _vec = create_ref_ir::<Markup>(db, &refr2);
+    let dfa2 = create_dfa::<Markup>(db, &refr2);
     println!("{}", dfa2.debug_graph(db));
 
     use citeproc_io::{Cite, Cluster, IntraNote};

@@ -14,11 +14,11 @@ fn normalise() {
         InlineElement::Micro(MicroNode::parse("b", &Default::default())),
     ];
     normalise_text_elements(&mut nodes);
-    assert_eq!(&nodes[..], &[InlineElement::Micro(MicroNode::parse("ab", &Default::default()))][..]);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
 }
 
 fn smash_string_push(base: &mut String, mut suff: &str) {
-    info!("smash_string_push {:?} <- {:?}", base, suff);
+    trace!("smash_string_push {:?} <- {:?}", base, suff);
     let suff_trimmed = suff.trim_start();
     if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
         && suff_trimmed.chars().nth(0).map_or(false, is_punc)
@@ -40,14 +40,14 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
         let start = base_len - last_width;
         let range = start .. start + width;
         if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
-            info!("smash_string_push REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            trace!("smash_string_push REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
             base.replace_range(range, *replacement);
         }
     }
 }
 
 fn smash_just_punc(base: &mut String, suff: &mut String) {
-    info!("smash_just_punc {:?} <- {:?}", base, suff);
+    trace!("smash_just_punc {:?} <- {:?}", base, suff);
     let mut suff_append: &str = suff.as_ref();
     let suff_trimmed = suff_append.trim_start();
     if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
@@ -70,7 +70,7 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
         let start = base_len - last_width;
         let range = start .. start + width;
         if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
-            info!("smash_just_punc REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            trace!("smash_just_punc REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
             base.replace_range(range, *replacement);
             suff.replace_range(..first_width, "");
         } else {
@@ -143,7 +143,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
                         }
                     }
                     (InlineElement::Formatted(children, _), InlineElement::Micro(ms2)) => {
-                        info!("formatted, micro");
+                        trace!("formatted, micro");
                         match children.last_mut().and_then(find_string_right_f) {
                             Some(s1) => match ms2.first_mut().and_then(find_string_left_micro) {
                                 Some(s2) => smash_just_punc(s1, s2),
@@ -223,7 +223,7 @@ enum Motion {
 // Basically, affixes go outside Quoted elements. So we can just look for text elements that come
 // right after quoted ones.
 pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Option<bool>) {
-    info!("move_punctuation {:?} {:?}", slice, punctuation_in_quote);
+    trace!("move_punctuation {:?} {:?}", slice, punctuation_in_quote);
     normalise_text_elements(slice);
 
     if slice.len() > 1 {
