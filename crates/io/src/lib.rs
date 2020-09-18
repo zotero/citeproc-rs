@@ -282,8 +282,11 @@ fn stopword_regex() -> &'static regex::Regex {
         // Skip the | on the last one
         ")(?:\\s|$)",
         // John d’Doe
-        "|(?-i)d\u{2019}",
-        "|(?-i)of-"
+        "|^(?-i)d\u{2019}",
+        "|^(?-i)d'",
+        "|^(?-i)l\u{2019}",
+        "|^(?-i)l'",
+        "|^(?-i)of-"
     ];
 
     CITEPROC_JS_STOPWORD_REGEX.get_or_init(|| regex::Regex::new(re).unwrap())
@@ -299,6 +302,7 @@ fn stopwords() {
     assert!(!is_stopword("grandiloquent "));
     assert!(is_stopword("l’Anglais "));
     assert!(is_stopword("l’Égypte "));
+    assert!(!is_stopword("this word followed by l’Égypte "));
 }
 
 /// Returns the length of the matched word
@@ -351,12 +355,11 @@ fn title_case_word<'a>(
     entire_is_uppercase: bool,
     no_stopword: bool,
 ) -> (Cow<'a, str>, Option<usize>) {
-    let expect = "only called with nonempty words";
-    trace!("title_case_word {}", word);
     if !no_stopword {
         if let Some(mut match_len) = is_stopword(word_and_rest) {
             // drop the trailing whitespace
             let matched = &word_and_rest[..match_len];
+            debug!("title_case_word -- is_stopword: {}", matched);
             let last_char = matched.chars().rev().nth(0).map_or(0, |c| if c == '-' || c.is_whitespace() { c.len_utf8() } else { 0 });
             match_len = match_len - last_char;
             let lowered = word_and_rest[..match_len].to_lowercase();
