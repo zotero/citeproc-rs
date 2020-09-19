@@ -8,12 +8,9 @@ use crate::prelude::*;
 
 use crate::ir::ConditionalDisambIR;
 use citeproc_io::DateOrRange;
-use csl::{
-    Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position,
-};
 use csl::{AnyVariable, DateVariable};
-
-use std::sync::{Arc, Mutex};
+use csl::{Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position};
+use std::sync::Arc;
 
 impl<'c, O, I> Proc<'c, O, I> for Arc<Choose>
 where
@@ -25,22 +22,25 @@ where
         db: &dyn IrDatabase,
         state: &mut IrState,
         ctx: &CiteContext<'c, O, I>,
-    ) -> IrSum<O> {
-        let make_mutex = |d: bool, content: IR<O>, gv: GroupVars| {
-            if d {
-                (
-                    IR::ConditionalDisamb(Arc::new(Mutex::new(ConditionalDisambIR {
-                        choose: self.clone(),
-                        done: false,
-                        ir: Box::new(content),
-                        group_vars: gv,
-                    }))),
-                    gv,
-                )
-            } else {
-                (content, gv)
-            }
-        };
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
+        let maybe_leave_unresolved =
+            |unresolved: bool, sub_node: NodeId, arena: &mut IrArena<O>| {
+                if unresolved {
+                    let gv = arena.get(sub_node).unwrap().get().1;
+                    let cond = arena.new_node((
+                        IR::ConditionalDisamb(ConditionalDisambIR {
+                            choose: self.clone(),
+                            done: false,
+                        }),
+                        gv, // TODO: should this be unresolved?
+                    ));
+                    cond.append(sub_node, arena);
+                    cond
+                } else {
+                    sub_node
+                }
+            };
         // XXX: should you treat conditional evaluations as a "variable test"?
         let Choose(ref head, ref rest, ref last) = **self;
         let mut disamb = false;
@@ -49,13 +49,13 @@ where
             let BranchEval {
                 disambiguate,
                 content,
-            } = eval_ifthen(db, head, state, ctx);
+            } = eval_ifthen(db, head, state, ctx, arena);
             found = content;
             disamb = disamb || disambiguate;
         }
         // check the <if> element
-        if let Some((content, gv)) = found {
-            return make_mutex(disamb, content, gv);
+        if let Some(content) = found {
+            return maybe_leave_unresolved(disamb, content, arena);
         } else {
             // check the <else-if> elements
             for branch in rest.iter() {
@@ -65,19 +65,19 @@ where
                 let BranchEval {
                     disambiguate,
                     content,
-                } = eval_ifthen(db, branch, state, ctx);
+                } = eval_ifthen(db, branch, state, ctx, arena);
                 found = content;
                 disamb = disamb || disambiguate;
             }
         }
         // did any of the <else-if> elements match?
-        if let Some((content, gv)) = found {
-            make_mutex(disamb, content, gv)
+        if let Some(content) = found {
+            maybe_leave_unresolved(disamb, content, arena)
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let (content, gv) = sequence_basic(db, state, ctx, &els);
-            make_mutex(disamb, content, gv)
+            let content = sequence_basic(db, state, ctx, arena, &els);
+            maybe_leave_unresolved(disamb, content, arena)
         }
     }
 }
@@ -103,10 +103,10 @@ impl Disambiguation<Markup> for Choose {
     }
 }
 
-struct BranchEval<O: OutputFormat> {
+struct BranchEval {
     // the bools indicate if disambiguate was set
     disambiguate: bool,
-    content: Option<IrSum<O>>,
+    content: Option<NodeId>,
 }
 
 fn eval_ifthen<'c, O, I>(
@@ -114,7 +114,8 @@ fn eval_ifthen<'c, O, I>(
     branch: &'c IfThen,
     state: &mut IrState,
     ctx: &CiteContext<'c, O, I>,
-) -> BranchEval<O>
+    arena: &mut IrArena<O>,
+) -> BranchEval
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -122,7 +123,7 @@ where
     let IfThen(ref conditions, ref elements) = *branch;
     let (matched, disambiguate) = eval_conditions(conditions, ctx, /* phony, not used */ 0);
     let content = if matched {
-        Some(sequence_basic(db, state, ctx, &elements))
+        Some(sequence_basic(db, state, ctx, arena, &elements))
     } else {
         None
     };

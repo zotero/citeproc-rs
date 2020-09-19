@@ -374,15 +374,15 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
             .get_text_term(term_selector, plural)
             .filter(|x| !x.is_empty())
             .map(|val| {
-            let options = IngestOptions {
-                text_case: text.text_case,
-                quotes: self.quotes(),
-                strip_periods: text.strip_periods,
-                is_english: self.ctx.is_english(),
-                ..Default::default()
-            };
-            self.render_text_el(val, text, &options, None)
-        })
+                let options = IngestOptions {
+                    text_case: text.text_case,
+                    quotes: self.quotes(),
+                    strip_periods: text.strip_periods,
+                    is_english: self.ctx.is_english(),
+                    ..Default::default()
+                };
+                self.render_text_el(val, text, &options, None)
+            })
     }
 
     fn render_text_el(
@@ -403,7 +403,12 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    pub fn name_label(&self, label: &NameLabel, var: NameVariable, label_var: NameVariable) -> Option<O::Build> {
+    pub fn name_label(
+        &self,
+        label: &NameLabel,
+        var: NameVariable,
+        label_var: NameVariable,
+    ) -> Option<O::Build> {
         let NameLabel {
             form,
             formatting,

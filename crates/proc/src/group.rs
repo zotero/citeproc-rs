@@ -88,7 +88,6 @@ impl GroupVars {
     /// ```
     pub fn neighbour(self, other: Self) -> Self {
         match (self, other) {
-
             // if either is Important, the parent group will be too. For sure. Don't need to track
             // Unresolved any further than this.
             (Important, _) | (_, Important) => Important,
@@ -132,7 +131,10 @@ impl GroupVars {
     }
 
     #[inline]
-    pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(self, ir: T) -> (T, Self) {
+    pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(
+        self,
+        ir: T,
+    ) -> (T, Self) {
         let default = T::default();
         if self == Missing {
             (default, GroupVars::Missing)
@@ -144,14 +146,7 @@ impl GroupVars {
             // groups.
             //
             // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
-            (
-                ir,
-                if self == Plain {
-                    Important
-                } else {
-                    self
-                }
-            )
+            (ir, if self == Plain { Important } else { self })
         }
     }
 }

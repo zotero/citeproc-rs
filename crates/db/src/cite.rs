@@ -92,11 +92,15 @@ impl CiteId {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CiteData {
     /// This represents an actual cite in an actual cluster in the document.
-    RealCite { cluster: ClusterId, index: u32, cite: Arc<Cite<Markup>> },
+    RealCite {
+        cluster: ClusterId,
+        index: u32,
+        cite: Arc<Cite<Markup>>,
+    },
     /// These are created as necessary when uncited items need to be rendered for disambiguation.
     /// The Arc<Cite> is the null object pattern, used merely to hold a reference id but keep the
     /// cite IR rendering identical for ghost and real cites.
-    BibliographyGhost { cite: Arc<Cite<Markup>>, },
+    BibliographyGhost { cite: Arc<Cite<Markup>> },
 }
 
 fn ghost_cite(_db: &dyn CiteDatabase, ref_id: Atom) -> Arc<Cite<Markup>> {

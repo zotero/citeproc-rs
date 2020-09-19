@@ -49,7 +49,9 @@ impl PartialOrd for DateOrRange {
             (DateOrRange::Single(a), DateOrRange::Single(b)) => Some(a.cmp(b)),
             (DateOrRange::Range(a1, a2), DateOrRange::Single(b)) => Some(a1.cmp(b).then(a2.cmp(b))),
             (DateOrRange::Single(a), DateOrRange::Range(b1, b2)) => Some(a.cmp(b1).then(a.cmp(b2))),
-            (DateOrRange::Range(a1, a2), DateOrRange::Range(b1, b2)) => Some(a1.cmp(b1).then(a2.cmp(b2))),
+            (DateOrRange::Range(a1, a2), DateOrRange::Range(b1, b2)) => {
+                Some(a1.cmp(b1).then(a2.cmp(b2)))
+            }
         }
     }
 }

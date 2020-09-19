@@ -38,9 +38,13 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
     // Smash across the boundary
     if base_len > 0 && suff_len > 0 {
         let start = base_len - last_width;
-        let range = start .. start + width;
+        let range = start..start + width;
         if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
-            trace!("smash_string_push REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            trace!(
+                "smash_string_push REPLACING {:?} with {:?}",
+                &base[range.clone()],
+                *replacement
+            );
             base.replace_range(range, *replacement);
         }
     }
@@ -68,9 +72,13 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
     // Smash across the boundary
     if base_len > 0 && suff_len > 0 {
         let start = base_len - last_width;
-        let range = start .. start + width;
+        let range = start..start + width;
         if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
-            trace!("smash_just_punc REPLACING {:?} with {:?}", &base[range.clone()], *replacement);
+            trace!(
+                "smash_just_punc REPLACING {:?} with {:?}",
+                &base[range.clone()],
+                *replacement
+            );
             base.replace_range(range, *replacement);
             suff.replace_range(..first_width, "");
         } else {
@@ -109,7 +117,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
     let mut ix = 0;
     for inl in slice.iter_mut() {
         match inl {
-            | InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
+            InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
             _ => {}
         }
     }
@@ -125,7 +133,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
         if let Some(tail_head) = slice.get_mut(ix + 1) {
             if let Some(before) = tail_head.normalise_micro_single_text() {
                 drop(tail_head);
-                drop(slice.splice(ix + 1..ix +1, before.into_iter()));
+                drop(slice.splice(ix + 1..ix + 1, before.into_iter()));
                 continue;
             }
         }
@@ -148,7 +156,7 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
                             Some(s1) => match ms2.first_mut().and_then(find_string_left_micro) {
                                 Some(s2) => smash_just_punc(s1, s2),
                                 None => {}
-                            }
+                            },
                             None => {}
                         }
                     }
@@ -176,9 +184,11 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-            | InlineElement::Anchor { content: inlines, .. }
+            | InlineElement::Anchor {
+                content: inlines, ..
+            }
             | InlineElement::Formatted(inlines, _) => normalise_text_elements(inlines),
-            | InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
+            InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
             _ => {}
         }
     }
@@ -208,7 +218,8 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
     for inl in slice.iter_mut() {
         match inl {
             MicroNode::Quoted { children, .. }
-            | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
+            | MicroNode::NoDecor(children)
+            | MicroNode::NoCase(children)
             | MicroNode::Formatted(children, _) => normalise_text_elements_micro(children),
             _ => {}
         }
@@ -257,9 +268,15 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-                | InlineElement::Anchor { content: inlines, .. }
-            | InlineElement::Anchor { content: inlines, .. }
-            | InlineElement::Formatted(inlines, _) => move_punctuation(inlines, punctuation_in_quote),
+            | InlineElement::Anchor {
+                content: inlines, ..
+            }
+            | InlineElement::Anchor {
+                content: inlines, ..
+            }
+            | InlineElement::Formatted(inlines, _) => {
+                move_punctuation(inlines, punctuation_in_quote)
+            }
             _ => {}
         }
     }
@@ -317,7 +334,7 @@ fn move_around_quote(els: &mut Vec<InlineElement>, ix: usize, piq: bool) -> Opti
                 out_remove_count = 2;
                 inside_char = outside_char;
                 outside_char = second;
-                // Continue onwards
+            // Continue onwards
             } else if piq && can_move_in(outside_char) {
                 {
                     let insert = insertion_point.last_string_mut()?;
@@ -457,7 +474,7 @@ fn find_string_left(next: &mut InlineElement) -> Option<&mut String> {
     match next {
         InlineElement::Text(ref mut string) => Some(string),
         InlineElement::Micro(ref mut micros) => micros.first_mut().and_then(find_string_left_micro),
-        InlineElement::Quoted {..} => None,
+        InlineElement::Quoted { .. } => None,
         _ => None,
     }
 }
@@ -466,9 +483,11 @@ fn find_string_left(next: &mut InlineElement) -> Option<&mut String> {
 fn find_string_right_f(next: &mut InlineElement) -> Option<&mut String> {
     match next {
         InlineElement::Text(ref mut string) => Some(string),
-        InlineElement::Micro(ref mut micros) => micros.last_mut().and_then(find_string_right_f_micro),
+        InlineElement::Micro(ref mut micros) => {
+            micros.last_mut().and_then(find_string_right_f_micro)
+        }
         InlineElement::Formatted(children, _) => children.last_mut().and_then(find_string_right_f),
-        InlineElement::Quoted {..} => None,
+        InlineElement::Quoted { .. } => None,
         _ => None,
     }
 }
@@ -532,17 +551,22 @@ fn remove_empty_left(els: &mut Vec<InlineElement>, mut ix: usize) -> usize {
 // Additionally, we are trying to avoid doubling up. If there's already punctuation right before |,
 // don't actually insert anything.
 
-fn find_right_quote<'a>(els: &'a mut Vec<InlineElement>, ix: usize, punctuation_in_quote: bool) -> Option<RightQuoteInsertionPoint<'a>> {
+fn find_right_quote<'a>(
+    els: &'a mut Vec<InlineElement>,
+    ix: usize,
+    punctuation_in_quote: bool,
+) -> Option<RightQuoteInsertionPoint<'a>> {
     // outside needs to return OutsideInline/OutsideMicro which need to append to the vector that
     // contains a Quoted, rather than the vector inside it. These variants still have access to the
     // quoted, through find_right_quote_inside(els.get_mut(ix)) later on
     // if punctuation_in_quote {
-        (&mut els[ix..])
-            .split_first_mut()
-            .and_then(|(this_last, rest)| {
-                let next = rest.first_mut()?;
-                find_string_left(next).and_then(move |suffix| find_right_quote_inside(this_last, suffix))
-            })
+    (&mut els[ix..])
+        .split_first_mut()
+        .and_then(|(this_last, rest)| {
+            let next = rest.first_mut()?;
+            find_string_left(next)
+                .and_then(move |suffix| find_right_quote_inside(this_last, suffix))
+        })
     // } else {
     //     (&mut els[ix..])
     //         .split_first_mut()
@@ -554,7 +578,10 @@ fn find_right_quote<'a>(els: &'a mut Vec<InlineElement>, ix: usize, punctuation_
     // }
 }
 
-fn find_right_quote_inside<'a>(el: &'a mut InlineElement, next: &'a mut String) -> Option<RightQuoteInsertionPoint<'a>> {
+fn find_right_quote_inside<'a>(
+    el: &'a mut InlineElement,
+    next: &'a mut String,
+) -> Option<RightQuoteInsertionPoint<'a>> {
     match el {
         InlineElement::Quoted { inlines, .. } => {
             // prefer to dive deeper, and catch "'inner quotes,'" too.
@@ -562,8 +589,7 @@ fn find_right_quote_inside<'a>(el: &'a mut InlineElement, next: &'a mut String) 
             if !inlines.is_empty() {
                 let len = inlines.len();
                 let next = unsafe { &mut *(next as *mut String) };
-                let last_mut =
-                    unsafe { &mut (*((inlines) as *mut Vec<InlineElement>))[len - 1] };
+                let last_mut = unsafe { &mut (*((inlines) as *mut Vec<InlineElement>))[len - 1] };
                 let deeper = find_right_quote_inside(last_mut, next);
                 if deeper.is_some() {
                     return deeper;
@@ -571,15 +597,20 @@ fn find_right_quote_inside<'a>(el: &'a mut InlineElement, next: &'a mut String) 
             }
             Some(RightQuoteInsertionPoint::InsideInline(inlines, next))
         }
-        InlineElement::Micro(micros) => micros.last_mut().and_then(move |x| find_right_quote_inside_micro(x, next)),
-        InlineElement::Div(_, inlines) | InlineElement::Formatted(inlines, _) => {
-            inlines.last_mut().and_then(move |x| find_right_quote_inside(x, next))
-        }
+        InlineElement::Micro(micros) => micros
+            .last_mut()
+            .and_then(move |x| find_right_quote_inside_micro(x, next)),
+        InlineElement::Div(_, inlines) | InlineElement::Formatted(inlines, _) => inlines
+            .last_mut()
+            .and_then(move |x| find_right_quote_inside(x, next)),
         _ => None,
     }
 }
 
-fn find_right_quote_inside_micro<'b>(micro: &'b mut MicroNode, next: &'b mut String) -> Option<RightQuoteInsertionPoint<'b>> {
+fn find_right_quote_inside_micro<'b>(
+    micro: &'b mut MicroNode,
+    next: &'b mut String,
+) -> Option<RightQuoteInsertionPoint<'b>> {
     match micro {
         MicroNode::Quoted {
             localized,
@@ -609,7 +640,9 @@ fn find_right_quote_inside_micro<'b>(micro: &'b mut MicroNode, next: &'b mut Str
         }
         // Dive into formatted bits
         MicroNode::NoDecor(nodes) | MicroNode::NoCase(nodes) | MicroNode::Formatted(nodes, _) => {
-            nodes.last_mut().and_then(move |x| find_right_quote_inside_micro(x, next))
+            nodes
+                .last_mut()
+                .and_then(move |x| find_right_quote_inside_micro(x, next))
         }
         _ => None,
     }
@@ -622,7 +655,7 @@ enum RightQuoteInsertionPoint<'a> {
     InsideMicro(&'a mut Vec<MicroNode>, &'a mut String),
     OutsideInline {
         list: &'a mut Vec<InlineElement>,
-        quoted_index: usize
+        quoted_index: usize,
     },
     OutsideMicro {
         list: &'a mut Vec<MicroNode>,
@@ -634,7 +667,8 @@ impl RightQuoteInsertionPoint<'_> {
     fn insert_smushed(&mut self, smushed: &str) {
         match self {
             // "quoted" => "quoted,"
-            RightQuoteInsertionPoint::InsideInline(..) | RightQuoteInsertionPoint::InsideMicro(..) => {
+            RightQuoteInsertionPoint::InsideInline(..)
+            | RightQuoteInsertionPoint::InsideMicro(..) => {
                 if let Some(last_string) = self.last_string_mut() {
                     last_string.push_str(smushed);
                 }
@@ -654,12 +688,8 @@ impl RightQuoteInsertionPoint<'_> {
     fn last_string_mut(&mut self) -> Option<&mut String> {
         match self {
             // e.g. "quoted inlines;" => ';'
-            RightQuoteInsertionPoint::InsideInline(inlines, _) => {
-                last_string(inlines)
-            }
-            RightQuoteInsertionPoint::InsideMicro(micros, _) => {
-                last_string_micro(micros)
-            }
+            RightQuoteInsertionPoint::InsideInline(inlines, _) => last_string(inlines),
+            RightQuoteInsertionPoint::InsideMicro(micros, _) => last_string_micro(micros),
             // very similar; e.g. "quoted;" => ';'
             RightQuoteInsertionPoint::OutsideInline { list, quoted_index } => {
                 last_string(&mut list[..*quoted_index])
@@ -672,10 +702,8 @@ impl RightQuoteInsertionPoint<'_> {
     fn next_string_mut(&mut self) -> Option<&mut String> {
         match self {
             // e.g. "quoted inlines;" => ';'
-            RightQuoteInsertionPoint::InsideMicro(_, string) |
-            RightQuoteInsertionPoint::InsideInline(_, string) => {
-                Some(string)
-            }
+            RightQuoteInsertionPoint::InsideMicro(_, string)
+            | RightQuoteInsertionPoint::InsideInline(_, string) => Some(string),
             // very similar; e.g. "quoted;" => ';'
             RightQuoteInsertionPoint::OutsideInline { list, quoted_index } => {
                 list.get_mut(*quoted_index).and_then(find_string_left)
@@ -692,9 +720,7 @@ fn last_string(is: &mut [InlineElement]) -> Option<&mut String> {
         InlineElement::Micro(micros) => last_string_micro(micros),
         InlineElement::Quoted { inlines, .. }
         | InlineElement::Div(_, inlines)
-        | InlineElement::Formatted(inlines, _) => {
-            last_string(inlines)
-        }
+        | InlineElement::Formatted(inlines, _) => last_string(inlines),
         InlineElement::Text(string) => Some(string),
         _ => None,
     })
@@ -703,10 +729,9 @@ fn last_string(is: &mut [InlineElement]) -> Option<&mut String> {
 fn last_string_micro(ms: &mut [MicroNode]) -> Option<&mut String> {
     ms.last_mut().and_then(|m| match m {
         MicroNode::Quoted { children, .. }
-        | MicroNode::NoDecor(children) | MicroNode::NoCase(children)
-        | MicroNode::Formatted(children, _) => {
-            last_string_micro(children)
-        }
+        | MicroNode::NoDecor(children)
+        | MicroNode::NoCase(children)
+        | MicroNode::Formatted(children, _) => last_string_micro(children),
         MicroNode::Text(string) => Some(string),
     })
 }
@@ -874,4 +899,3 @@ static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map
     b"?," => None,
     b",," => Some(","),
 };
-

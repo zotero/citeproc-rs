@@ -10,7 +10,8 @@ use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
 use crate::IngestOptions;
 use csl::{
-    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment, TextCase,
+    DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextCase, TextDecoration,
+    VerticalAlignment,
 };
 
 mod rtf;

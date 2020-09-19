@@ -1,5 +1,5 @@
-use citeproc_io::{Reference, Name, PersonName, DateOrRange, Date};
-use csl::{NameVariable, DateVariable};
+use citeproc_io::{Name, PersonName, Reference};
+use csl::{DateVariable, NameVariable};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Trigraph(Vec<Vec<ConfigCell>>);
@@ -23,8 +23,8 @@ impl Trigraph {
         if self.0.len() == 0 {
             return string;
         }
-        use unic_segment::Graphemes;
         use std::fmt::Write;
+        use unic_segment::Graphemes;
         if let Some(authors) = authors {
             let count = authors.len();
             let ix = std::cmp::min(count, self.0.len()) - 1;
@@ -48,9 +48,11 @@ impl Trigraph {
                         _ => {
                             prog += 1;
                             continue;
-                        },
+                        }
                     };
-                    let len = Graphemes::new(name_to_write).take(author_printer as usize).fold(0, |acc, x| acc + x.len());
+                    let len = Graphemes::new(name_to_write)
+                        .take(author_printer as usize)
+                        .fold(0, |acc, x| acc + x.len());
                     write!(string, "{}", &name_to_write[..len]).unwrap();
                     prog += 1;
                 }
@@ -73,33 +75,42 @@ impl Trigraph {
 
 impl Default for Trigraph {
     fn default() -> Self {
-        Trigraph::parse("Aaaa00:AaAa00:AaAA00:AAAA00").expect("Trigraph ought to parse the default!")
+        Trigraph::parse("Aaaa00:AaAa00:AaAA00:AAAA00")
+            .expect("Trigraph ought to parse the default!")
     }
 }
 
 #[test]
 fn test_write_label() {
+    use citeproc_io::{Date, DateOrRange};
     let trigraph = Trigraph::default();
     use csl::CslType;
     let mut refr = Reference::empty("ref_id".into(), CslType::Book);
-    refr.name.insert(NameVariable::Author, vec![
-        Name::Person(PersonName {
+    refr.name.insert(
+        NameVariable::Author,
+        vec![Name::Person(PersonName {
             family: Some("Jobs".to_owned()),
             ..Default::default()
-        })
-    ]);
-    refr.date.insert(DateVariable::Issued, DateOrRange::Single(Date::new(1995, 0, 0)));
+        })],
+    );
+    refr.date.insert(
+        DateVariable::Issued,
+        DateOrRange::Single(Date::new(1995, 0, 0)),
+    );
     assert_eq!(trigraph.make_label(&refr), "Jobs95".to_owned());
-    refr.name.insert(NameVariable::Author, vec![
-        Name::Person(PersonName {
-            family: Some("Boris".to_owned()),
-            ..Default::default()
-        }),
-        Name::Person(PersonName {
-            family: Some("Johnson".to_owned()),
-            ..Default::default()
-        })
-    ]);
+    refr.name.insert(
+        NameVariable::Author,
+        vec![
+            Name::Person(PersonName {
+                family: Some("Boris".to_owned()),
+                ..Default::default()
+            }),
+            Name::Person(PersonName {
+                family: Some("Johnson".to_owned()),
+                ..Default::default()
+            }),
+        ],
+    );
     assert_eq!(trigraph.make_label(&refr), "BoJo95".to_owned());
 }
 
@@ -144,9 +155,9 @@ mod parser {
     use super::*;
     use nom::{
         branch::alt,
-        bytes::complete::{take_while, take_while1, take_while_m_n},
+        bytes::complete::{take_while, take_while1},
         character::complete::char,
-        combinator::{map, opt, recognize},
+        combinator::recognize,
         multi::{many1, separated_nonempty_list},
         IResult,
     };
@@ -174,7 +185,10 @@ mod parser {
 
     #[test]
     fn test_author() {
-        assert_eq!(author("Aaaa"), Ok(("", ConfigCell::Author { first_n_letters: 4 })))
+        assert_eq!(
+            author("Aaaa"),
+            Ok(("", ConfigCell::Author { first_n_letters: 4 }))
+        )
     }
 
     pub(super) fn colon_separated(inp: &str) -> IResult<&str, Vec<Vec<ConfigCell>>> {

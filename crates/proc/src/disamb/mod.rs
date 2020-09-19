@@ -110,6 +110,9 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
     type Output = FreeCondSets;
     type Checker = crate::choose::UselessCondChecker;
 
+    fn default(&mut self) -> Self::Output {
+        FreeCondSets::default()
+    }
     /// For joining 2+ side-by-side FreeCondSets. This is the `sequence` for get_free_conds.
     fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
         // TODO: keep track of which empty variables caused GroupVars to not render, if
@@ -387,9 +390,11 @@ pub fn add_to_graph(
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
-                    Some(db.edge(EdgeData::Output(
-                        fmt.output_in_context(fmt.plain(s), Default::default(), None),
-                    )))
+                    Some(db.edge(EdgeData::Output(fmt.output_in_context(
+                        fmt.plain(s),
+                        Default::default(),
+                        None,
+                    ))))
                 } else {
                     None
                 })

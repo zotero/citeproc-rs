@@ -215,8 +215,11 @@ impl Driver {
         let cites: Vec<Cite<Markup>> = utils::read_js_array(cites)?;
         let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
-        let preview =
-            eng.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(&positions), SupportedFormat::from_str(format).ok());
+        let preview = eng.preview_citation_cluster(
+            cites,
+            PreviewPosition::MarkWithZero(&positions),
+            SupportedFormat::from_str(format).ok(),
+        );
         preview
             .map_err(|e| JsError::new(&e.to_string()))
             .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(&e.to_string())))

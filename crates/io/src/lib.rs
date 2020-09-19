@@ -360,7 +360,13 @@ fn title_case_word<'a>(
             // drop the trailing whitespace
             let matched = &word_and_rest[..match_len];
             debug!("title_case_word -- is_stopword: {}", matched);
-            let last_char = matched.chars().rev().nth(0).map_or(0, |c| if c == '-' || c.is_whitespace() { c.len_utf8() } else { 0 });
+            let last_char = matched.chars().rev().nth(0).map_or(0, |c| {
+                if c == '-' || c.is_whitespace() {
+                    c.len_utf8()
+                } else {
+                    0
+                }
+            });
             match_len = match_len - last_char;
             let lowered = word_and_rest[..match_len].to_lowercase();
             return (Cow::Owned(lowered), Some(match_len));
@@ -394,12 +400,7 @@ fn transform_title_case(s: &str, seen_one: bool, is_last: bool) -> String {
     )
 }
 
-fn transform_each_word<'a, F>(
-    mut s: &'a str,
-    seen_one: bool,
-    is_last: bool,
-    transform: F,
-) -> String
+fn transform_each_word<'a, F>(mut s: &'a str, seen_one: bool, is_last: bool, transform: F) -> String
 where
     F: Fn(&'a str, &'a str, bool, bool) -> (Cow<'a, str>, Option<usize>),
 {
@@ -493,11 +494,11 @@ impl IngestOptions {
                         self.apply_text_case_micro_inner(micros.as_mut(), seen_one, is_uppercase)
                             || seen_one;
                 }
-                InlineElement::Quoted { inlines: content, .. }
+                InlineElement::Quoted {
+                    inlines: content, ..
+                }
                 | InlineElement::Div(_, content)
-                | InlineElement::Anchor {
-                    content, ..
-                } => {
+                | InlineElement::Anchor { content, .. } => {
                     seen_one = self.apply_text_case_inner(content.as_mut(), seen_one, is_uppercase)
                         || seen_one;
                 }
@@ -588,12 +589,12 @@ impl IngestOptions {
                 transform_sentence_case(s, seen_one, is_last, entire_is_uppercase)
             }
             // Fallback is nothing
-            TextCase::Title if self.is_english => {
-                transform_title_case(&s, seen_one, is_last)
+            TextCase::Title if self.is_english => transform_title_case(&s, seen_one, is_last),
+            TextCase::CapitalizeAll => {
+                transform_each_word(&s, seen_one, is_last, |word, _, _, _| {
+                    (transform_uppercase_first(word), None)
+                })
             }
-            TextCase::CapitalizeAll => transform_each_word(&s, seen_one, is_last, |word, _, _, _| {
-                (transform_uppercase_first(word), None)
-            }),
             TextCase::None | _ => s,
         }
     }

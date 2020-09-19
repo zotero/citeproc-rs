@@ -138,7 +138,11 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
 
     fn is_empty(&self, a: &Self::Build) -> bool;
     fn output(&self, intermediate: Self::Build, punctuation_in_quote: bool) -> Self::Output {
-        self.output_in_context(intermediate, Formatting::default(), Some(punctuation_in_quote))
+        self.output_in_context(
+            intermediate,
+            Formatting::default(),
+            Some(punctuation_in_quote),
+        )
     }
 
     fn output_in_context(

@@ -1,10 +1,10 @@
 use crate::output::micro_html::MicroNode;
+use crate::output::FormatCmd;
 use crate::IngestOptions;
 #[cfg(test)]
 use crate::LocalizedQuotes;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
-use crate::output::FormatCmd;
 
 pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Vec<MicroNode> {
     let matcher = QuoteMatcher {
@@ -30,19 +30,18 @@ fn test_parse_quotes() {
     );
     let options = Default::default();
     assert_eq!(
-        parse_quotes(MicroNode::parse("<i>'quotes in italics'</i>", &options), &options),
-        vec![
-            MicroNode::Formatted(
-                vec![
-                    MicroNode::Quoted {
-                        is_inner: false,
-                        localized: LocalizedQuotes::simple(),
-                        children: vec![MicroNode::Text("quotes in italics".to_owned()),]
-                    }
-                ],
-                FormatCmd::FontStyleItalic
-            )
-        ]
+        parse_quotes(
+            MicroNode::parse("<i>'quotes in italics'</i>", &options),
+            &options
+        ),
+        vec![MicroNode::Formatted(
+            vec![MicroNode::Quoted {
+                is_inner: false,
+                localized: LocalizedQuotes::simple(),
+                children: vec![MicroNode::Text("quotes in italics".to_owned()),]
+            }],
+            FormatCmd::FontStyleItalic
+        )]
     );
 }
 
@@ -113,7 +112,11 @@ fn stamp<'a>(
 ) -> Vec<MicroNode> {
     let mut stack = QuotedStack::with_capacity(len_hint);
     let mut drained = 0;
-    let drain = |start: usize, end: usize, drained: &mut usize, orig: &mut Vec<MicroNode>, stack: &mut QuotedStack| {
+    let drain = |start: usize,
+                 end: usize,
+                 drained: &mut usize,
+                 orig: &mut Vec<MicroNode>,
+                 stack: &mut QuotedStack| {
         stack
             .mut_ref()
             .extend(orig.drain(start - *drained..end - *drained));
@@ -169,12 +172,15 @@ fn stamp<'a>(
             Intermediate::Index(ix) => {
                 let node = orig.get_mut(ix - drained).unwrap();
                 match node {
-                    MicroNode::Quoted { children, .. } | MicroNode::NoDecor(children)| MicroNode::NoCase(children) | MicroNode::Formatted(children, _) => {
+                    MicroNode::Quoted { children, .. }
+                    | MicroNode::NoDecor(children)
+                    | MicroNode::NoCase(children)
+                    | MicroNode::Formatted(children, _) => {
                         let to_parse_owned = mem::replace(children, Vec::new());
                         let parsed = parse_quotes(to_parse_owned, options);
                         *children = parsed;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 };
                 if let Some(ref mut range) = range_wip {
                     if range.1 == ix {
@@ -209,9 +215,7 @@ fn test_stamp() {
     ];
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig, &options),
-        &[
-            MicroNode::Text("prefix, 'hihosuffix".into()),
-        ]
+        &[MicroNode::Text("prefix, 'hihosuffix".into()),]
     );
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let inters = vec![
@@ -380,7 +384,7 @@ fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
         _ => {
             debug!("quote_event doesn't want a quote: {:?}", ch);
             return None;
-        },
+        }
     };
     Some(ev)
 }

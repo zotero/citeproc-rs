@@ -14,8 +14,8 @@ use csl::Features;
 use csl::Locale;
 use csl::*;
 use csl::{CslType, Delimiter, Name as NameEl, Position, SortKey, Style, VariableForm};
-use std::sync::Arc;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CiteContext<
@@ -42,7 +42,6 @@ pub struct CiteContext<
 
     pub in_bibliography: bool,
     pub sort_key: Option<SortKey>,
-
 
     /// It isn't easy to sort by year-suffix. Year-suffix disambiguation requires a representation
     /// of the style's output (Called ir_gen2 in citeproc-rs). This requires knowing a cite's
@@ -85,7 +84,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
 
 impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
     pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
-        (match (var, form) {
+        match (var, form) {
             (Variable::TitleShort, _) | (Variable::Title, VariableForm::Short) => self
                 .reference
                 .ordinary
@@ -106,10 +105,13 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 let tri = crate::citation_label::Trigraph::default();
                 Some(Cow::Owned(tri.make_label(self.reference)))
             }
-            _ => self.reference.ordinary.get(&var)
+            _ => self
+                .reference
+                .ordinary
+                .get(&var)
                 .map(|s| s.as_str())
                 .map(Cow::Borrowed),
-        })
+        }
     }
 
     pub fn has_variable(&self, var: AnyVariable) -> bool {

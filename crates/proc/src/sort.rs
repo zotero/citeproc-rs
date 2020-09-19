@@ -83,7 +83,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
     // Construct preordered, which will then be stably sorted. It contains:
     // - All refs from all cites, in the order they appear (excluding non-existent)
     // - Then, all of the uncited reference ids.
-    // 
+    //
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
@@ -323,6 +323,8 @@ struct SortingWalker<'a, I: OutputFormat> {
     /// the cite is in its original format, but the formatter is PlainText
     ctx: CiteContext<'a, PlainText, I>,
     state: IrState,
+    /// Use this for generating names and dates, and not creating a new one each time
+    arena: IrArena<PlainText>,
 }
 
 impl<'a, I: OutputFormat> SortingWalker<'a, I> {
@@ -332,6 +334,7 @@ impl<'a, I: OutputFormat> SortingWalker<'a, I> {
             db,
             ctx: plain_ctx,
             state: Default::default(),
+            arena: Default::default(),
         }
     }
 
@@ -450,11 +453,14 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     type Output = (String, GroupVars);
     type Checker = CiteContext<'a, PlainText, O>;
 
+    fn default(&mut self) -> Self::Output {
+        Default::default()
+    }
     fn get_checker(&self) -> Option<&Self::Checker> {
         Some(&self.ctx)
     }
 
-    fn fold(&mut self, elements: &[Element], _fold_type: WalkerFoldType) -> Self::Output {
+    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
         let iter = elements.iter();
         let mut output: Option<String> = None;
         // Avoid allocating one new string
@@ -470,7 +476,11 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
                 None => Some(child),
             }
         }
-        (output.unwrap_or_default(), gv_acc)
+        let out = output.unwrap_or_default();
+        match fold_type {
+            WalkerFoldType::Group(g) => gv_acc.implicit_conditional(out),
+            _ => (out, gv_acc),
+        }
     }
 
     fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
@@ -565,16 +575,25 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     //     3. Return count as a {:08} padded number
 
     fn names(&mut self, names: &Names) -> Self::Output {
-        let (ir, gv) = crate::names::intermediate(names, self.db, &mut self.state, &self.ctx);
-        (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
+        let node =
+            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
+        (
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
     }
 
     // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
     // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
     //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
-        let (ir, gv) = date.intermediate(self.db, &mut self.state, &self.ctx);
-        (ir.flatten(&self.ctx.format).unwrap_or_default(), gv)
+        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
+        (
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {

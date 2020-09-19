@@ -317,7 +317,10 @@ impl Locale {
             .map(|term_plurality| term_plurality.singular())
     }
 
-    pub fn et_al_term(&self, element: Option<&crate::NameEtAl>) -> Option<(String, Option<Formatting>)> {
+    pub fn et_al_term(
+        &self,
+        element: Option<&crate::NameEtAl>,
+    ) -> Option<(String, Option<Formatting>)> {
         let mut term = MiscTerm::EtAl;
         let mut default = "et al";
         let mut formatting = None;

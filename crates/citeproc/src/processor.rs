@@ -541,10 +541,7 @@ pub enum PreviewPosition<'a> {
 }
 
 impl Processor {
-    fn save_cluster_state(
-        &self,
-        relevant_cluster: Option<ClusterId>,
-    ) -> ClusterState {
+    fn save_cluster_state(&self, relevant_cluster: Option<ClusterId>) -> ClusterState {
         let cluster_ids = self.cluster_ids();
         let relevant_one = relevant_cluster
             .filter(|rc| cluster_ids.contains(rc))
@@ -612,7 +609,7 @@ impl Processor {
             }
             PreviewPosition::MarkWithZero(positions) => {
                 if positions.iter().filter(|pos| pos.id == 0).count() != 1 {
-                    return Err(ErrorKind::DidNotSupplyZeroPosition)
+                    return Err(ErrorKind::DidNotSupplyZeroPosition);
                 }
                 let mut vec = Vec::new();
                 // Save state first so we don't clobber its cluster_ids store
@@ -624,7 +621,9 @@ impl Processor {
             }
         };
         self.insert_cluster(Cluster { id, cites });
-        let formatter = format.map(markup_supported).unwrap_or_else(|| self.formatter.clone());
+        let formatter = format
+            .map(markup_supported)
+            .unwrap_or_else(|| self.formatter.clone());
         let markup = citeproc_proc::db::built_cluster_preview(self, id, &formatter);
         self.restore_cluster_state(state);
         Ok(markup)
@@ -637,9 +636,7 @@ pub enum ErrorKind {
         "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
     )]
     NonMonotonicNoteNumber(u32),
-    #[error(
-        "call to preview_citation_cluster must provide exactly one id=0 position"
-    )]
+    #[error("call to preview_citation_cluster must provide exactly one id=0 position")]
     DidNotSupplyZeroPosition,
 }
 

@@ -50,7 +50,10 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
     let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
     debug!("split_particles: {:?}", orig_name_str);
     let (splitter, name_str) = if is_given {
-        (givenn_particles_re, Cow::Owned(orig_name_str.chars().rev().collect()))
+        (
+            givenn_particles_re,
+            Cow::Owned(orig_name_str.chars().rev().collect()),
+        )
     } else {
         (family_particles_re, Cow::Borrowed(orig_name_str))
     };
@@ -85,7 +88,7 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
         if particles.len() > 1 {
             for i in 1..particles.len() {
                 if particles[i].chars().nth(0) == Some(' ') {
-                    particles[i-1].to_mut().push(' ');
+                    particles[i - 1].to_mut().push(' ');
                 }
             }
         }
@@ -102,7 +105,10 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
         None
     } else {
         use itertools::Itertools;
-        Some((particles.iter().map(|cow| cow.as_ref()).join(""), replace_apostrophes(remain)))
+        Some((
+            particles.iter().map(|cow| cow.as_ref()).join(""),
+            replace_apostrophes(remain),
+        ))
     }
 }
 
@@ -140,9 +146,11 @@ fn trim_last(string: &mut String) {
     // graphemes unnecessary as particles basically end with one of a few select characters in the
     // regex below
     if let Some(last_char) = last_char {
-        if last_char == ' ' && string.chars().rev().nth(0).map_or(false, |second_last| {
-            second_last == '\'' || second_last == '\u{2019}'
-        }) {
+        if last_char == ' '
+            && string.chars().rev().nth(0).map_or(false, |second_last| {
+                second_last == '\'' || second_last == '\u{2019}'
+            })
+        {
             string.push(' ');
         }
     }
@@ -160,10 +168,16 @@ impl PersonName {
             comma_suffix,
         } = self;
         // Don't parse if these are supplied
-        if *static_particles || non_dropping_particle.is_some() || dropping_particle.is_some() || suffix.is_some() {
+        if *static_particles
+            || non_dropping_particle.is_some()
+            || dropping_particle.is_some()
+            || suffix.is_some()
+        {
             *family = family.as_ref().map(|x| replace_apostrophes(x));
             *given = given.as_ref().map(|x| replace_apostrophes(x));
-            *non_dropping_particle = non_dropping_particle.as_ref().map(|x| replace_apostrophes(x));
+            *non_dropping_particle = non_dropping_particle
+                .as_ref()
+                .map(|x| replace_apostrophes(x));
             *dropping_particle = dropping_particle.as_ref().map(|x| replace_apostrophes(x));
             return;
         }
@@ -205,12 +219,15 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("Schnitzel".to_owned()),
-        non_dropping_particle: Some("von".to_owned()),
-        family: Some("Crumb".to_owned()),
-        ..Default::default()
-    });
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("Schnitzel".to_owned()),
+            non_dropping_particle: Some("von".to_owned()),
+            family: Some("Crumb".to_owned()),
+            ..Default::default()
+        }
+    );
 
     let mut init = PersonName {
         given: Some("Eric".to_owned()),
@@ -218,12 +235,15 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("Eric".to_owned()),
-        non_dropping_particle: Some("van der".to_owned()),
-        family: Some("Vlist".to_owned()),
-        ..Default::default()
-    });
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("Eric".to_owned()),
+            non_dropping_particle: Some("van der".to_owned()),
+            family: Some("Vlist".to_owned()),
+            ..Default::default()
+        }
+    );
 
     let mut init = PersonName {
         given: Some("Eric".to_owned()),
@@ -231,12 +251,15 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("Eric".to_owned()),
-        non_dropping_particle: Some("del".to_owned()),
-        family: Some("Familyname".to_owned()),
-        ..Default::default()
-    });
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("Eric".to_owned()),
+            non_dropping_particle: Some("del".to_owned()),
+            family: Some("Familyname".to_owned()),
+            ..Default::default()
+        }
+    );
 
     let mut init = PersonName {
         given: Some("Givenname d'".to_owned()),
@@ -244,12 +267,15 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("Givenname".to_owned()),
-        dropping_particle: Some("d\u{2019}".to_owned()),
-        family: Some("Familyname".to_owned()),
-        ..Default::default()
-    });
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("Givenname".to_owned()),
+            dropping_particle: Some("d\u{2019}".to_owned()),
+            family: Some("Familyname".to_owned()),
+            ..Default::default()
+        }
+    );
 
     let mut init = PersonName {
         family: Some("Aubignac".to_owned()),
@@ -257,12 +283,15 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("François Hédelin".to_owned()),
-        dropping_particle: Some("d\u{2019}".to_owned()),
-        family: Some("Aubignac".to_owned()),
-        ..Default::default()
-    });
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("François Hédelin".to_owned()),
+            dropping_particle: Some("d\u{2019}".to_owned()),
+            family: Some("Aubignac".to_owned()),
+            ..Default::default()
+        }
+    );
 
     let mut init = PersonName {
         family: Some("d’Aubignac".to_owned()),
@@ -270,24 +299,25 @@ fn parse_particles() {
         ..Default::default()
     };
     init.parse_particles();
-    assert_eq!(init, PersonName {
-        given: Some("François Hédelin".to_owned()),
-        non_dropping_particle: Some("d\u{2019}".to_owned()),
-        family: Some("Aubignac".to_owned()),
-        ..Default::default()
-    });
-
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("François Hédelin".to_owned()),
+            non_dropping_particle: Some("d\u{2019}".to_owned()),
+            family: Some("Aubignac".to_owned()),
+            ..Default::default()
+        }
+    );
 }
 
 /// https://users.rust-lang.org/t/trim-string-in-place/15809/8
 pub trait TrimInPlace {
-    fn trim_in_place (self: &'_ mut Self);
-    fn trim_start_in_place (self: &'_ mut Self);
-    fn trim_end_in_place (self: &'_ mut Self);
+    fn trim_in_place(self: &'_ mut Self);
+    fn trim_start_in_place(self: &'_ mut Self);
+    fn trim_end_in_place(self: &'_ mut Self);
 }
 impl TrimInPlace for String {
-    fn trim_in_place (self: &'_ mut Self)
-    {
+    fn trim_in_place(self: &'_ mut Self) {
         let (start, len): (*const u8, usize) = {
             let self_trimmed: &str = self.trim();
             (self_trimmed.as_ptr(), self_trimmed.len())
@@ -301,8 +331,7 @@ impl TrimInPlace for String {
         }
         self.truncate(len); // no String::set_len() in std ...
     }
-    fn trim_start_in_place (self: &'_ mut Self)
-    {
+    fn trim_start_in_place(self: &'_ mut Self) {
         let (start, len): (*const u8, usize) = {
             let self_trimmed: &str = self.trim_start();
             (self_trimmed.as_ptr(), self_trimmed.len())
@@ -316,8 +345,7 @@ impl TrimInPlace for String {
         }
         self.truncate(len); // no String::set_len() in std ...
     }
-    fn trim_end_in_place (self: &'_ mut Self)
-    {
+    fn trim_end_in_place(self: &'_ mut Self) {
         self.truncate(self.trim_end().len());
     }
 }

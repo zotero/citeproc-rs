@@ -287,7 +287,7 @@ dependencies = [
  "csl",
  "env_logger 0.7.1",
  "fnv",
- "generational-arena",
+ "indextree",
  "itertools",
  "lazy_static",
  "log",
@@ -703,15 +703,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generational-arena"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "675c9623fbcdb4b402176db720bf5d95883a36303703ed1bd3a03482382f735a"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,6 +788,12 @@ checksum = "712d7b3ea5827fcb9d4fda14bf4da5f136f0db2ae9c8f4bd4e2d1c6fde4e6db2"
 dependencies = [
  "autocfg 0.1.7",
 ]
+
+[[package]]
+name = "indextree"
+version = "4.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "990980c3d268c9b99df35e813eca2b8d1ee08606f6d2bb325edbd0b0c68f9ffe"
 
 [[package]]
 name = "insta"
