@@ -99,10 +99,11 @@ if [ -z "$PACKAGE_ONLY" ]; then
   target nodejs _cjs
   target browser _esm
   target web _web
+  target no-modules _no_modules
 fi
 
 
-cp pkg-scratch/browser/README.md $DEST/
+cp README.md $DEST/
 # cp scripts/model-package.json $DEST/package.json
 
 TARGET_VERSION=${SET_VERSION:-$CARGO_VERSION}
