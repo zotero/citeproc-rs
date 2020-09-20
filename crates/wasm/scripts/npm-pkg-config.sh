@@ -10,15 +10,15 @@ function usage() {
     echo -e "${RED}👉 $1${CLEAR}\n";
   fi
   echo "Usage: $0"
-  echo "  --dest DEST              Write output to this folder (rm -rf/deletes it first!)"
-  echo "                           The default is './dist'"
-  echo "  --canary-sha SHA_COMMIT  Set version to '0.0.0-canary-\$SHA_COMMIT'"
-  echo "  --set-version VERSION    Use this version specifically"
-  echo "  --cargo-version          Use the version from Cargo.toml"
-  echo "  --set-name NAME          Use this package name"
-  echo "  --package-only           Don't rebuild, just rewrite the package.json"
-  echo "  --github-packages        Configure for publishing to GitHub packages"
-  echo "  --features               List of cargo features to enable (comma-sep)"
+  echo "  --dest DEST                            Write output to this folder (rm -rf/deletes it first!)"
+  echo "                                         The default is './dist'"
+  echo "  --canary-sha SHA_COMMIT                Set version to '0.0.0-canary-\$SHA_COMMIT'"
+  echo "  --set-version VERSION                  Use this version specifically"
+  echo "  --cargo-version                        Use the version from Cargo.toml"
+  echo "  --set-name NAME                        Use this package name"
+  echo "  --package-only                         Don't rebuild, just rewrite the package.json"
+  echo "  --github-packages @scope/repo/pkg-name Configure for publishing to GitHub packages, @scope/pkg-name in repo @scope/repo"
+  echo "  --features                             List of cargo features to enable (comma-sep)"
   echo
   exit 1
 }
@@ -28,7 +28,7 @@ SET_VERSION=
 USE_CARGO_VERSION=
 SET_NAME=
 PACKAGE_ONLY=
-GITHUB_PACKAGES=
+GITHUB_PACKAGES_DEF=
 CANARY_SHA=
 FEATURES=
 
@@ -38,9 +38,9 @@ while [[ "$#" > 0 ]]; do case $1 in
   --set-name) SET_NAME="$2";shift;shift;;
   --canary-sha) CANARY_SHA="$2";shift;shift;;
   --set-version) SET_VERSION="$2";shift;shift;;
-  --cargo-version) USE_CARGO_VERSION=true; shift;;
+  --cargo-version) USE_CARGO_VERSION=true;shift;;
   --package-only) PACKAGE_ONLY=true;shift;;
-  --github-packages) GITHUB_PACKAGES=true;shift;;
+  --github-packages) GITHUB_PACKAGES_DEF="$2";shift;shift;;
   --features) FEATURES="$2";shift;shift;;
   *) usage "Unknown parameter passed: $1"; shift; shift;;
 esac; done
@@ -108,10 +108,10 @@ cp pkg-scratch/browser/README.md $DEST/
 TARGET_VERSION=${SET_VERSION:-$CARGO_VERSION}
 
 JQ_ARGS=""
-JQ_FILTERS=". "
+JQ_FILTERS="  ."
 function append() {
-  JQ_ARGS="$JQ_ARGS $1"
-  JQ_FILTERS="$JQ_FILTERS | $2"
+  if [ -n "$1" ]; then JQ_ARGS=$(printf "$JQ_ARGS \n  $1"); fi
+  if [ -n "$2" ]; then JQ_FILTERS=$(printf "$JQ_FILTERS \n  | $2"); fi
 }
 
 if [ -n "$CANARY_SHA" ]; then
@@ -122,15 +122,27 @@ elif [ -n "$USE_CARGO_VERSION" ]; then
   append "--arg version $CARGO_VERSION" '.version = $version'
 fi
 
-if [ -n "$SET_NAME" ]; then
+if [ -n "$GITHUB_PACKAGES_DEF" ]; then
+  NO_AT=${GITHUB_PACKAGES_DEF#@}
+  PKG=$(basename $NO_AT)
+  REPO=${NO_AT%/$PKG}
+  REPO=${REPO#@}
+  SCO=${NO_AT%%/*/$PKG}
+  NAME="@$SCO/$PKG"
+
+  append '' '.publishConfig = { repository: "https://npm.pkg.github.com" }'
+
+  append "--arg url ssh://git@github.com/$REPO.git --arg pkg packages/$PKG" \
+         '.repository = { type: "git", url: $url, directory: $pkg }'
+
+  append "--arg name $NAME" '.name = $name'
+
+elif [ -n "$SET_NAME" ]; then
   append "--arg name $SET_NAME" '.name = $name'
 fi
 
-if [ -n "$GITHUB_PACKAGES" ]; then
-  append ' ' '.publishConfig = {repository: "https://npm.pkg.github.com"}'
-fi
 
-# echo $JQ_ARGS \'$JQ_FILTERS\'
+printf "Writing package.json with: $JQ_ARGS\n$JQ_FILTERS\n"
 
 jq $JQ_ARGS "$JQ_FILTERS" < scripts/model-package.json > $DEST/package.json
 
