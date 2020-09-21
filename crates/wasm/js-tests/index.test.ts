@@ -1,56 +1,5 @@
-import { Driver, UpdateSummary } from '@citeproc-rs/wasm';
-
-const mkStyle = (inner: string) => {
-    return `
-    <style class="note">
-      <citation>
-        <layout>
-          ${inner}
-        </layout>
-      </citation>
-    </style>
-    `;
-}
-
-const mkLocale = (lang: string, terms: { [key: string]: string }) => {
-    return `
-    <?xml version="1.0" encoding="utf-8"?>
-    <locale xml:lang="${lang}">
-    <terms>
-        ${ Object.entries(terms).map((k,v) => `<term name="${k}">${v}</term>`).join("\n") }
-    </terms>
-    </locale>
-    `;
-}
-
-class Fetcher {
-    constructor(private callback: (lang: string) => void, private factory: (lang: string) => string) { }
-    async fetchLocale(lang: string) {
-        this.callback(lang);
-        return this.factory(lang);
-    }
-}
-
-const boringFetcher = new Fetcher(() => {}, (lang: string) => mkLocale(lang, {}));
-const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
-    let style = cfg.style || mkStyle('<text variable="title" />');
-    let fetcher = cfg.fetcher || boringFetcher;
-    let fmt = cfg.format || "plain";
-    let driver = Driver.new(style, fetcher, fmt);
-    callback(driver);
-    driver.free();
-};
-const oneOneOne = (driver: Driver, r?: any) => {
-    let refr = {
-        type: "book",
-        title: "TEST_TITLE",
-        ...r,
-        id: "citekey"
-    }
-    driver.insertReference(refr);
-    driver.initClusters([{id: 1, cites: [{id: "citekey"}]}]);
-    driver.setClusterOrder([{ id: 1 }]);
-};
+import { withDriver, oneOneOne, mkStyle, checkUpdatesLen } from './utils';
+import {UpdateSummary} from '@citeproc-rs/wasm';
 
 test('boots', () => {
     withDriver({}, driver => {
@@ -72,12 +21,77 @@ test('returns a single cluster, single cite, single ref', () => {
 
 test('gets an update when ref changes', () => {
     withDriver({}, driver => {
-        let updates: UpdateSummary;
         oneOneOne(driver);
-        updates = driver.batchedUpdates();
+        let updates = driver.batchedUpdates();
         expect(updates.clusters).toContainEqual([1, "TEST_TITLE"]);
         driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE_2" });
         updates = driver.batchedUpdates();
         expect(updates.clusters).toContainEqual([1, "TEST_TITLE_2"]);
     });
+});
+
+let bibStyle = mkStyle(
+    '<text variable="title" />',
+    `<bibliography>
+        <layout>
+            <text variable = "title" />
+        </layout>
+    </bibliography>`
+);
+
+test('fullRender works', () => {
+    withDriver({style: bibStyle}, driver => {
+        oneOneOne(driver);
+        let full = driver.fullRender();
+        expect(full.allClusters).toHaveProperty("1", "TEST_TITLE");
+        expect(full.bibEntries).toContainEqual({ id: "citekey", value: "TEST_TITLE" });
+    })
+});
+
+test('update queue generally', () => {
+    withDriver({style: bibStyle}, driver => {
+        let once: UpdateSummary, twice: UpdateSummary;
+
+        // Initially empty
+        checkUpdatesLen(driver.batchedUpdates(), 0, 0);
+
+        // Add stuff, check it creates
+        oneOneOne(driver);
+        checkUpdatesLen(driver.batchedUpdates(), 1, 1);
+
+        // Now fullRender one should drain the queue.
+        driver.fullRender();
+        checkUpdatesLen(driver.batchedUpdates(), 0, 0);
+
+        // Edit a reference
+        oneOneOne(driver, { title: "ALTERED" });
+        let up = driver.batchedUpdates();
+        checkUpdatesLen(up, 1, 1);
+        expect(up.bibliography?.entryIds).toEqual(null);
+        expect(driver.builtCluster(1)).toBe("ALTERED");
+
+        // Should have no updates, as we just called batchedUpdates.
+        once = driver.batchedUpdates(); twice = driver.batchedUpdates();
+        expect(once).toEqual(twice);
+        expect(once.bibliography).toBeFalsy();
+        checkUpdatesLen(once, 0, 0);
+
+        // Only inserting a reference does nothing
+        driver.insertReference({ id: "added", type: "book", title: "ADDED" });
+        once = driver.batchedUpdates(); twice = driver.batchedUpdates();
+        expect(once).toEqual(twice);
+
+        // Only inserting a cluster not in the document does nothing
+        driver.insertCluster({ id: 123, cites: [{ id: "added" }] });
+        once = driver.batchedUpdates(); twice = driver.batchedUpdates();
+        expect(once).toEqual(twice); checkUpdatesLen(once, 0, 0);
+
+        // Add it to the document, and it's a different story
+        driver.setClusterOrder([ {id:1},{id:123} ]);
+        once = driver.batchedUpdates(); twice = driver.batchedUpdates();
+        expect(once).not.toEqual(twice); checkUpdatesLen(twice, 0, 0);
+        expect(once.clusters).toContainEqual([123, "ADDED"]);
+        expect(once.bibliography?.entryIds).toEqual(["citekey", "added"]);
+        expect(once.bibliography?.updatedEntries).toHaveProperty("added", "ADDED");
+    })
 })

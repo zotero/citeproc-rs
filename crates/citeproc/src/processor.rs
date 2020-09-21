@@ -455,11 +455,11 @@ impl Processor {
         }
         last_bibliography.bib_entries = new;
         let sorted_refs = self.sorted_refs();
-        if sorted_refs != old.sorted_refs {
+        if sorted_refs.0 != old.sorted_refs.0 {
             update.entry_ids = Some(sorted_refs.0.clone());
-            last_bibliography.sorted_refs = sorted_refs;
-            Some(update)
-        } else if update.updated_entries.is_empty() {
+        }
+        last_bibliography.sorted_refs = sorted_refs;
+        if update.updated_entries.is_empty() && update.entry_ids.is_none() {
             None
         } else {
             Some(update)

@@ -9,7 +9,6 @@
 use super::Processor;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
-use citeproc_proc::db::IrDatabase;
 use std::str::FromStr;
 use std::sync::Arc;
 

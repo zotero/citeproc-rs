@@ -294,6 +294,8 @@ impl Driver {
     }
 
     /// Returns all the clusters and bibliography entries in the document.
+    /// Also drains the queue, just like batchedUpdates().
+    /// Use this to rehydrate a document or run non-interactively.
     #[wasm_bindgen(js_name = "fullRender")]
     pub fn full_render(&self) -> Result<TFullRender, JsValue> {
         let mut eng = self.engine.borrow_mut();
@@ -307,8 +309,7 @@ impl Driver {
         Ok(js_err!(JsValue::from_serde(&all).map(TFullRender::from)))
     }
 
-    /// Drains the `batchedUpdates` queue manually. Use it to avoid serializing an unneeded
-    /// `UpdateSummary`.
+    /// Drains the `batchedUpdates` queue manually.
     #[wasm_bindgen(js_name = "drain")]
     pub fn drain(&self) {
         let mut eng = self.engine.borrow_mut();
