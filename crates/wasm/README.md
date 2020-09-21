@@ -300,20 +300,24 @@ that have changed, and bibliography entries that have changed.
 ```javascript
 import { UpdateSummary } from "@citeproc-rs/wasm"; // typescript users, annotate with this
 
+// Get the diff since last time batchedUpdates, fullRender or drain was called.
 let diff = driver.batchedUpdates();
 
 // apply to the UI
-diff.clusters.forEach(changedCluster => {
+for (let changedCluster of diff.clusters) {
     let [id, html] = changedCluster;
     myDocument.updateCluster(id, html);
-});
+}
 
 // Null? No change to the bibliography.
 if (diff.bibliography != null) {
     let bib = diff.bibliography;
     // entryIds is the full list of entries in the bibliography.
     // If a citekey isn't in there, it should be removed.
-    myDocument.removeAbsentEntryIds(bib.entryIds);
+    // It is non-null when it has changed.
+    if (bib.entryIds != null) {
+        myDocument.setBibliographyOrder(bib.entryIds);
+    }
     // Then, apply the entries that have actually changed
     for (let key of Object.keys(bib.updatedEntries)) {
         let rendered = bib.updatedEntries[key];
@@ -327,15 +331,18 @@ diff will be empty.
 
 ### Bibliographies
 
-There are two functions for producing a bibliography.
+Beyond the interactive batchedUpdates method, there are two functions for
+producing a bibliography statically.
 
 ```javascript
-// returns BibliographyMeta
+// returns BibliographyMeta, with information about how a library consumer should
+// lay out the bibliography. There is a similar API in citeproc-js.
 let meta = driver.bibliographyMeta();
 
 // This is an array of BibEntry
 let bibliography = driver.makeBibliography();
 for (let entry of bibliography) {
+    console.log(entry.id, entry.value);
 }
 ```
 
@@ -377,8 +384,9 @@ let allNotes = myDocument.footnotes.map(fn => {
     return { cluster: getCluster(fn), number: fn.number }
 });
 
-// Re-hydrate the entire document
-driver.resetReferences(allReferences);
+// Re-hydrate the entire document based on the reference library and your
+// document's clusters
+driver.resetReferences(myDocument.allReferences);
 driver.initClusters(allNotes.map(fn => fn.cluster));
 driver.setClusterOrder(allNotes.map(fn => { id: fn.cluster.id, note: fn.number }));
 
@@ -393,12 +401,12 @@ for (let fn of allNotes) {
 }
 
 // Write out the bibliography entries as well
-let allBibKeys = render.bib_entries.map(entry => entry.id);
+let allBibKeys = render.bibEntries.map(entry => entry.id);
 for (let bibEntry of render.bibEntries) {
     myDocument.bibliographyMap[entry.id] = entry.value;
 }
 
-// Update the UI
+// Update your (example) UI
 updateUserInterface(allNotes, myDocument, whatever);
 ```
 
