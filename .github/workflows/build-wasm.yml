@@ -99,7 +99,7 @@ jobs:
           # This configures a publishConfig field pointing to GitHub in the package.json
           ./scripts/all-targets.sh --package-only \
             --canary-sha ${{steps.version.outputs.short_sha}} \
-            --github-packages \
+            --github-packages @cormacrelf/citeproc-rs/citeproc-wasm \
             --set-name "@cormacrelf/citeproc-wasm"
           # log in to the NPM repository
           echo "//npm.pkg.github.com/:_authToken=${{secrets.GITHUB_TOKEN}}" >> .npmrc
