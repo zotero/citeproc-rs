@@ -117,27 +117,18 @@ impl Driver {
         Ok(())
     }
 
-    fn serde_result<T>(&self, f: impl Fn(&Processor) -> T) -> Result<JsValue, JsValue>
-    where
-        T: Serialize,
-    {
-        let engine = self.engine.borrow();
-        let to_serialize = f(&engine);
-        Ok(JsValue::from_serde(&to_serialize).unwrap())
-    }
-
     /// Gets a list of locales in use by the references currently loaded.
     ///
     /// Note that Driver comes pre-loaded with the `en-US` locale.
     #[wasm_bindgen(js_name = "toFetch")]
     pub fn locales_to_fetch(&self) -> Result<JsValue, JsValue> {
-        self.serde_result(|engine| {
-            engine
-                .get_langs_in_use()
-                .iter()
-                .map(|l| l.to_string())
-                .collect::<Vec<_>>()
-        })
+        let eng = self.engine.borrow();
+        let langs: Vec<_> = eng
+            .get_langs_in_use()
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
+        Ok(js_err!(JsValue::from_serde(&langs)))
     }
 
     /// Inserts or replaces a cluster with a matching `id`.
@@ -174,15 +165,12 @@ impl Driver {
     #[wasm_bindgen(js_name = "builtCluster")]
     pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
         let eng = self.engine.borrow();
-        let built = eng.get_cluster(id);
-        Ok(built
-            .ok_or_else(|| {
-                JsError::new(&format!(
-                    "Cluster {} has not been assigned a position in the document.",
-                    id
-                ))
-            })
-            .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(&e.to_string())))?)
+        let built = js_err!(eng.get_cluster(id).ok_or_else(|| anyhow::anyhow!(
+            "cluster {} either does not exist, or has not been assigned a position in the document",
+            id
+        )));
+        let js = js_err!(JsValue::from_serde(&built));
+        Ok(js)
     }
 
     /// Previews a formatted citation cluster, in a particular position.
@@ -215,13 +203,19 @@ impl Driver {
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]
-    pub fn full_bibliography(&self) -> Result<JsValue, JsValue> {
-        self.serde_result(|engine| engine.get_bibliography())
+    pub fn make_bibliography(&self) -> Result<TBibEntries, JsValue> {
+        let eng = self.engine.borrow();
+        Ok(js_err!(
+            JsValue::from_serde(&eng.get_bibliography()).map(TBibEntries::from)
+        ))
     }
 
     #[wasm_bindgen(js_name = "bibliographyMeta")]
-    pub fn bibliography_meta(&self) -> Result<JsValue, JsValue> {
-        self.serde_result(|engine| engine.get_bibliography_meta())
+    pub fn bibliography_meta(&self) -> Result<TBibliographyMeta, JsValue> {
+        let eng = self.engine.borrow();
+        Ok(js_err!(
+            JsValue::from_serde(&eng.get_bibliography_meta()).map(TBibliographyMeta::from)
+        ))
     }
 
     /// Replaces cluster numberings in one go.
@@ -291,10 +285,26 @@ impl Driver {
     ///
     /// * returns an `UpdateSummary`
     #[wasm_bindgen(js_name = "batchedUpdates")]
-    pub fn batched_updates(&self) -> TUpdateSummary {
+    pub fn batched_updates(&self) -> Result<TUpdateSummary, JsValue> {
         let eng = self.engine.borrow();
         let summary = eng.batched_updates();
-        TUpdateSummary::from(JsValue::from_serde(&summary).unwrap())
+        Ok(js_err!(
+            JsValue::from_serde(&summary).map(TUpdateSummary::from)
+        ))
+    }
+
+    /// Returns all the clusters and bibliography entries in the document.
+    #[wasm_bindgen(js_name = "fullRender")]
+    pub fn full_render(&self) -> Result<TFullRender, JsValue> {
+        let mut eng = self.engine.borrow_mut();
+        let all_clusters = eng.all_clusters();
+        let bib_entries = eng.get_bibliography();
+        let all = citeproc::FullRender {
+            all_clusters,
+            bib_entries,
+        };
+        eng.drain();
+        Ok(js_err!(JsValue::from_serde(&all).map(TFullRender::from)))
     }
 
     /// Drains the `batchedUpdates` queue manually. Use it to avoid serializing an unneeded
@@ -450,12 +460,41 @@ type Invalid = {
 type StyleError = Partial<ParseError & Invalid>;
 
 type IncludeUncited = "None" | "All" | { Specific: string[] };
+
+type BibEntry = {
+    id: string;
+    value: string;
+};
+
+type BibEntries = BibEntry[];
+
+type FullRender = {
+    allClusters: { [clusterId: string]: string },
+    bibEntries: BibEntries,
+};
+
+type BibliographyMeta = {
+    max_offset: number;
+    entry_spacing: number;
+    line_spacing: number;
+    hanging_indent: boolean;
+    /** the second-field-align value of the CSL style */
+    secondFieldAlign: null  | "flush" | "margin";
+    /** Format-specific metadata */
+    formatMeta: any,
+};
 "#;
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "UpdateSummary")]
     pub type TUpdateSummary;
+    #[wasm_bindgen(typescript_type = "BibEntries")]
+    pub type TBibEntries;
+    #[wasm_bindgen(typescript_type = "FullRender")]
+    pub type TFullRender;
+    #[wasm_bindgen(typescript_type = "BibliographyMeta")]
+    pub type TBibliographyMeta;
     #[wasm_bindgen(typescript_type = "IncludeUncited")]
     pub type TIncludeUncited;
     #[wasm_bindgen(typescript_type = "Reference")]
