@@ -292,18 +292,24 @@ driver.includeUncited("All");
 driver.includeUncited({ Specific: ["citekeyA", "citekeyB"] });
 ```
 
+The "All" is based on which references your driver knows about. If you have
+this set to "All", simply calling `driver.insertReference()` with a new
+reference ID will result in an entry being added to the bibliography. Entries
+in Specific mode do not have to exist when they are provided here; they can be,
+for instance, the citekeys of collection of references in a reference library
+which are subsequently provided in full to the driver, at which point they
+appear in the bibliography, but not items from elsewhere in the library.
+
 ### 3. Call `driver.batchedUpdates()` and apply the diff
 
 This gets you a diff to apply to your document UI. It includes both clusters 
 that have changed, and bibliography entries that have changed.
 
 ```javascript
-import { UpdateSummary } from "@citeproc-rs/wasm"; // typescript users, annotate with this
-
 // Get the diff since last time batchedUpdates, fullRender or drain was called.
 let diff = driver.batchedUpdates();
 
-// apply to the UI
+// apply cluster changes to the UI.
 for (let changedCluster of diff.clusters) {
     let [id, html] = changedCluster;
     myDocument.updateCluster(id, html);
@@ -312,16 +318,16 @@ for (let changedCluster of diff.clusters) {
 // Null? No change to the bibliography.
 if (diff.bibliography != null) {
     let bib = diff.bibliography;
+    // Save the entries that have actually changed
+    for (let key of Object.keys(bib.updatedEntries)) {
+        let rendered = bib.updatedEntries[key];
+        myDocument.updateBibEntry(key, rendered);
+    }
     // entryIds is the full list of entries in the bibliography.
     // If a citekey isn't in there, it should be removed.
     // It is non-null when it has changed.
     if (bib.entryIds != null) {
         myDocument.setBibliographyOrder(bib.entryIds);
-    }
-    // Then, apply the entries that have actually changed
-    for (let key of Object.keys(bib.updatedEntries)) {
-        let rendered = bib.updatedEntries[key];
-        myDocument.updateBibEntry(key, rendered);
     }
 }
 ```
