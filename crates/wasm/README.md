@@ -307,15 +307,37 @@ diff.clusters.forEach(changedCluster => {
     let [id, html] = changedCluster;
     myDocument.updateCluster(id, html);
 });
-diff.bibliography.entryIds.forEach(citekey => {
-    let html = diff.updatedEntries[citekey];
-    myDocument.updateBibEntry(citekey, html);
-});
+
+// Null? No change to the bibliography.
+if (diff.bibliography != null) {
+    let bib = diff.bibliography;
+    // entryIds is the full list of entries in the bibliography.
+    // If a citekey isn't in there, it should be removed.
+    myDocument.removeAbsentEntryIds(bib.entryIds);
+    // Then, apply the entries that have actually changed
+    for (let key of Object.keys(bib.updatedEntries)) {
+        let rendered = bib.updatedEntries[key];
+        myDocument.updateBibEntry(key, rendered);
+    }
+}
 ```
 
 Note, for some intuition, if you call `batchedUpdates()` again immediately, the 
 diff will be empty.
 
+### Bibliographies
+
+There are two functions for producing a bibliography.
+
+```javascript
+// returns BibliographyMeta
+let meta = driver.bibliographyMeta();
+
+// This is an array of BibEntry
+let bibliography = driver.makeBibliography();
+for (let entry of bibliography) {
+}
+```
 
 ### Preview citation clusters
 
@@ -358,20 +380,25 @@ let allNotes = myDocument.footnotes.map(fn => {
 // Re-hydrate the entire document
 driver.resetReferences(allReferences);
 driver.initClusters(allNotes.map(fn => fn.cluster));
-driver.setClusterOrder(allNotes.map(fn => { id: note.cluster.id, note: note.number }));
+driver.setClusterOrder(allNotes.map(fn => { id: fn.cluster.id, note: fn.number }));
 
-// Build every cluster, only after the driver knows about all of them
-allNotes.forEach(fn => {
-    fn.renderedHtml = driver.builtCluster(fn.cluster.id);
-});
+// Render every cluster and bibliography item.
+// It then drains the update queue, leaving the diff empty for the next edit.
+// see the FullRender typescript type
+let render = driver.fullRender();
 
-let bibliography = driver.makeBibliography();
+// Write out the rendered clusters into the doc
+for (let fn of allNotes) {
+    fn.renderedHtml = render.allClusters[fn.cluster.id];
+}
 
-// Drain the update queue, so the driver knows you're up to date and won't send 
-// you a whole-document diff
-driver.drain();
+// Write out the bibliography entries as well
+let allBibKeys = render.bib_entries.map(entry => entry.id);
+for (let bibEntry of render.bibEntries) {
+    myDocument.bibliographyMap[entry.id] = entry.value;
+}
 
 // Update the UI
-updateUserInterface(allNotes, bibliography);
+updateUserInterface(allNotes, myDocument, whatever);
 ```
 
