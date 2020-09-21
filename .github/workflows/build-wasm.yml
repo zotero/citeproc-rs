@@ -82,12 +82,12 @@ jobs:
       - name: Build for all targets
         working-directory: crates/wasm
         run: |
-          ./scripts/all-targets.sh --features console
+          ./scripts/npm-pkg-config.sh --features console
 
       - name: Publish to NPM canary dist tag
         working-directory: crates/wasm
         run: |
-          ./scripts/all-targets.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
+          ./scripts/npm-pkg-config.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
           # log in to the NPM repository
           echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" >> .npmrc
           npm publish dist --tag canary --access public
@@ -97,7 +97,7 @@ jobs:
         run: |
           # GitHub packages must be scoped by their repo owner
           # This configures a publishConfig field pointing to GitHub in the package.json
-          ./scripts/all-targets.sh --package-only \
+          ./scripts/npm-pkg-config.sh --package-only \
             --canary-sha ${{steps.version.outputs.short_sha}} \
             --github-packages @cormacrelf/citeproc-rs/citeproc-wasm \
             --set-name "@cormacrelf/citeproc-wasm"
