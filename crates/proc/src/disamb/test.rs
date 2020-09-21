@@ -11,8 +11,8 @@ use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{ClusterNumber, Reference};
 
-use csl::Variable;
 use csl::CslType;
+use csl::Variable;
 
 macro_rules! style_text_layout {
     ($ex:expr) => {{

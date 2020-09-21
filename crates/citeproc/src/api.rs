@@ -9,7 +9,6 @@
 use super::Processor;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::ClusterId;
-use citeproc_proc::db::IrDatabase;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -100,6 +99,20 @@ impl UpdateSummary {
             bibliography: None,
         }
     }
+}
+
+#[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BibEntry<O: OutputFormat = Markup> {
+    pub id: Atom,
+    pub value: Arc<O::Output>,
+}
+
+#[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FullRender {
+    pub all_clusters: FnvHashMap<ClusterId, Arc<String>>,
+    pub bib_entries: Vec<BibEntry<Markup>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, Ord, PartialOrd, PartialEq)]

@@ -20,9 +20,11 @@ export class RenderedDocument {
     constructor(clusters: Cluster[], oci: Array<ClusterPosition>, driver: Driver) {
         this[immerable] = true;
         this.orderedClusterIds = oci;
-        for (let cluster of clusters) {
-            this.builtClusters[cluster.id] = driver.builtCluster(cluster.id);
-            // TODO: send note through a round trip and get it from builtCluster
+        let render = driver.fullRender();
+        this.builtClusters = render.allClusters;
+        for (let bibEntry of render.bibEntries) {
+            this.bibliographyIds.push(bibEntry.id);
+            this.bibliography[bibEntry.id] = bibEntry.value;
         }
     }
 
@@ -132,8 +134,6 @@ export class Document {
         driver.setClusterOrder(this.clusterPositions());
         driver.includeUncited(this.includeUncited);
         this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
-        // Drain the update queue, because we know we're up to date
-        this.driver.drain();
         console.log(this.driver);
     }
 

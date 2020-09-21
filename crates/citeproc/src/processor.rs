@@ -11,7 +11,7 @@
 use crate::prelude::*;
 
 use crate::api::{
-    BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
+    BibEntry, BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
     UpdateSummary,
 };
 use citeproc_db::{
@@ -455,25 +455,40 @@ impl Processor {
         }
         last_bibliography.bib_entries = new;
         let sorted_refs = self.sorted_refs();
-        if sorted_refs != old.sorted_refs {
+        if sorted_refs.0 != old.sorted_refs.0 {
             update.entry_ids = Some(sorted_refs.0.clone());
-            last_bibliography.sorted_refs = sorted_refs;
-            Some(update)
-        } else if update.updated_entries.is_empty() {
+        }
+        last_bibliography.sorted_refs = sorted_refs;
+        if update.updated_entries.is_empty() && update.entry_ids.is_none() {
             None
         } else {
             Some(update)
         }
     }
 
-    pub fn get_bibliography(&self) -> Vec<MarkupOutput> {
+    pub fn all_clusters(&self) -> FnvHashMap<ClusterId, Arc<MarkupOutput>> {
+        let cluster_ids = self.cluster_ids();
+        let mut mapping = FnvHashMap::default();
+        mapping.reserve(cluster_ids.len());
+        for &cid in cluster_ids.iter() {
+            if let Some(built) = self.get_cluster(cid) {
+                mapping.insert(cid, built);
+            }
+        }
+        mapping
+    }
+
+    pub fn get_bibliography(&self) -> Vec<BibEntry> {
         let bib_map = self.get_bibliography_map();
         self.sorted_refs()
             .0
             .iter()
-            .filter_map(|k| bib_map.get(&k))
-            .filter(|k| !k.is_empty())
-            .map(|x| (**x).clone())
+            .filter_map(|k| bib_map.get(&k).map(|v| (k, v)))
+            .filter(|(k, v)| !v.is_empty())
+            .map(|(k, v)| BibEntry {
+                id: k.clone(),
+                value: v.clone(),
+            })
             .collect()
     }
 

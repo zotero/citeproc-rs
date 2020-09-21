@@ -104,21 +104,18 @@ const initialClusters: Cluster[] = [
         cites: [
             { id: "citekey" }
         ],
-        note: 1,
     },
     {
         id: 2,
         cites: [
             { id: "citekey2" }
         ],
-        note: 2,
     },
     {
         id: 3,
         cites: [
             { id: "citekey", locator: "56" }
         ],
-        note: 3,
     },
 ];
 
@@ -188,9 +185,11 @@ const Results = ({ driver, style }: { driver: Result<Driver, any>, style: string
             locales in use:
             <code>{JSON.stringify(d.toFetch().sort())}</code>
         </p>,
-        Err: e => <ErrorViewer style={style} error={e as StyleError} />
+        Err: e => <p style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>{e}</p>,
     });
 };
+
+
 
 const ErrorViewer = ({style, error}: { style: string, error: StyleError }) => {
     if (error.ParseError) {

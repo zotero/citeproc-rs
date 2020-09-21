@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use citeproc_db::{LocaleFetcher, PredefinedLocales, StyleDatabase, CiteData};
+use citeproc_db::{CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
 use citeproc_io::{output::markup::Markup, Cluster, Reference};
 use csl::Atom;
 

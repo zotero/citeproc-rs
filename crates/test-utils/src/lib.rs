@@ -200,11 +200,11 @@ fn get_bib_string(proc: &Processor) -> String {
         match fmt {
             Markup::Html(_) => {
                 string.push_str("  <div class=\"csl-entry\">");
-                string.push_str(&entry);
+                string.push_str(&entry.value);
                 string.push_str("</div>");
             }
             _ => {
-                string.push_str(&entry);
+                string.push_str(&entry.value);
             }
         }
     }

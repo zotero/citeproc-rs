@@ -222,7 +222,8 @@ mod preview {
                 note: Some(3),
             }, // Append at the end
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
+        let preview =
+            db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one, subsequent"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));
@@ -246,7 +247,8 @@ mod preview {
                 note: Some(2),
             },
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
+        let preview =
+            db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one; Book three"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));
@@ -266,7 +268,8 @@ mod preview {
                 note: Some(2),
             },
         ];
-        let preview = db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
+        let preview =
+            db.preview_citation_cluster(cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book three"));
         assert_cluster!(db.get_cluster(1), Some("Book one"));
         assert_cluster!(db.get_cluster(2), Some("Book two"));

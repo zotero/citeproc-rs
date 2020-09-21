@@ -8,7 +8,7 @@
     "build": "wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs"
   },
   "dependencies": {
-    "@citeproc-rs/wasm": "file:../pkg-node",
+    "@citeproc-rs/wasm": "../pkg-node",
     "@types/jest": "^26.0.14"
   },
   "devDependencies": {

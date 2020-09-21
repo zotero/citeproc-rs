@@ -62,7 +62,13 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     const updateStyle = async (style: string) => {
         if (driver.is_ok()) {
             let d = driver.unwrap();
-            setError(Option.from(d.setStyle(style)));
+            try {
+                d.setStyle(style);
+                setError(None());
+            } catch (e) {
+                console.error(e);
+                setError(Some("" + e));
+            }
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         } else {

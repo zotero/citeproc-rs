@@ -15,11 +15,11 @@ pub(crate) mod processor;
 #[cfg(test)]
 mod test;
 
-pub use self::api::{DocUpdate, IncludeUncited, SupportedFormat, UpdateSummary};
+pub use self::api::{DocUpdate, FullRender, IncludeUncited, SupportedFormat, UpdateSummary};
 pub use self::processor::{ErrorKind, PreviewPosition, Processor};
 
 pub mod prelude {
-    pub use crate::api::{DocUpdate, IncludeUncited, SupportedFormat, UpdateSummary};
+    pub use crate::api::{DocUpdate, FullRender, IncludeUncited, SupportedFormat, UpdateSummary};
     pub use crate::processor::{PreviewPosition, Processor};
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
