@@ -15,7 +15,7 @@ readme = "README.md"
 repository = "https://github.com/cormacrelf/citeproc-rs"
 
 [dependencies]
-roxmltree = "0.7.0"
+roxmltree = "0.13.0"
 fnv = "1.0.6"
 strum = "0.15.0"
 strum_macros = "0.19"
@@ -26,3 +26,4 @@ serde_derive = "1.0.100"
 string_cache = "0.7.3"
 semver = "0.9.0"
 log = "0.4.8"
+thiserror = "1.0.20"

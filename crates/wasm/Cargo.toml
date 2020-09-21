@@ -14,6 +14,20 @@ edition = "2018"
 repository = "https://github.com/cormacrelf/citeproc-rs"
 description = "citeproc-rs, compiled to WebAssembly"
 
+# TODO: Set the opt level on new wasm-pack 0.6.0 config
+# when it's released, so as not to interfere with the
+# other native binary targets (cargo only lets you set it
+# on the workspace root)
+
+# [profile.release]
+# # Tell `rustc` to optimize for small code size.
+# opt-level = "s"
+# lto = true
+
+# https://github.com/rustwasm/wasm-pack/issues/886#issuecomment-667669802
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--enable-mutable-globals"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -43,6 +57,7 @@ js-sys = "0.3.44"
 serde = "1.0.100"
 serde_derive = "1.0.100"
 serde_json = "1.0.40"
+anyhow = "1.0.32"
 
 [dependencies.wasm-bindgen]
 version = "0.2.67"
@@ -56,18 +71,4 @@ features = ["release_max_level_error"]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.17"
-
-# TODO: Set the opt level on new wasm-pack 0.6.0 config
-# when it's released, so as not to interfere with the
-# other native binary targets (cargo only lets you set it
-# on the workspace root)
-
-# [profile.release]
-# # Tell `rustc` to optimize for small code size.
-# opt-level = "s"
-# lto = true
-
-# https://github.com/rustwasm/wasm-pack/issues/886#issuecomment-667669802
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O3", "--enable-mutable-globals"]
 

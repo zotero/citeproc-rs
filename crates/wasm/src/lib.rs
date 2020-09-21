@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+#[macro_use]
 mod utils;
 
 #[macro_use]
@@ -12,12 +13,9 @@ extern crate serde_derive;
 #[macro_use]
 extern crate log;
 
-use self::utils::ErrorPlaceholder;
-
 use js_sys::{Error as JsError, Promise};
 use serde::Serialize;
 use std::cell::RefCell;
-use std::error::Error;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -49,11 +47,10 @@ impl Driver {
         // The Processor gets a "only has en-US, otherwise empty" fetcher.
         let us_fetcher = Arc::new(utils::USFetcher);
         let format = SupportedFormat::from_str(format)
-            .map_err(|_| JsError::new(&format!("unknown format `{}`", format)))?;
-        let engine = Processor::new(style, us_fetcher, true, format)
-            .map(RefCell::new)
-            .map(Rc::new)
-            .map_err(|e| JsError::new(&serde_json::to_string(&e).unwrap()))?;
+            .map_err(|_| anyhow::anyhow!("unknown format `{}`", format));
+        let format = js_err!(format);
+        let engine = js_err!(Processor::new(style, us_fetcher, true, format));
+        let engine = Rc::new(RefCell::new(engine));
 
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.
@@ -65,13 +62,10 @@ impl Driver {
 
     /// Sets the style (which will also cause everything to be recomputed)
     #[wasm_bindgen(js_name = "setStyle")]
-    pub fn set_style(&mut self, style_text: &str) -> JsValue {
-        self.engine
-            .borrow_mut()
-            .set_style_text(style_text)
-            .map_err(|e| JsValue::from_serde(&e).unwrap())
-            .err()
-            .unwrap_or(JsValue::UNDEFINED)
+    pub fn set_style(&mut self, style_text: &str) -> Result<(), JsValue> {
+        let mut eng = self.engine.borrow_mut();
+        js_err!(eng.set_style_text(style_text));
+        Ok(())
     }
 
     /// Completely overwrites the references library.
@@ -98,9 +92,7 @@ impl Driver {
     /// * `refr` is a Reference object.
     #[wasm_bindgen(js_name = "insertReference")]
     pub fn insert_reference(&mut self, refr: TReference) -> Result<(), JsValue> {
-        let refr = refr
-            .into_serde()
-            .map_err(|_| ErrorPlaceholder::throw("could not parse Reference from host"))?;
+        let refr = js_err!(refr.into_serde());
         // inserting & replacing are the same
         self.engine.borrow_mut().insert_reference(refr);
         Ok(())
@@ -120,9 +112,7 @@ impl Driver {
     /// * `refr` is a
     #[wasm_bindgen(js_name = "includeUncited")]
     pub fn include_uncited(&mut self, uncited: TIncludeUncited) -> Result<(), JsValue> {
-        let uncited = uncited
-            .into_serde()
-            .map_err(|_| ErrorPlaceholder::throw("could not parse IncludeUncited from host"))?;
+        let uncited = js_err!(uncited.into_serde());
         self.engine.borrow_mut().include_uncited(uncited);
         Ok(())
     }
@@ -153,9 +143,7 @@ impl Driver {
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(&mut self, cluster_id: JsValue) -> Result<(), JsValue> {
-        let cluster = cluster_id.into_serde().map_err(|e| {
-            ErrorPlaceholder::throw(&format!("could not parse cluster from host: {}", e))
-        })?;
+        let cluster = js_err!(cluster_id.into_serde());
         let mut eng = self.engine.borrow_mut();
         eng.insert_cluster(cluster);
         Ok(())
@@ -194,7 +182,7 @@ impl Driver {
                     id
                 ))
             })
-            .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(e.description())))?)
+            .and_then(|b| JsValue::from_serde(&b).map_err(|e| JsError::new(&e.to_string())))?)
     }
 
     /// Previews a formatted citation cluster, in a particular position.
@@ -291,8 +279,7 @@ impl Driver {
     pub fn set_cluster_order(&mut self, positions: Box<[JsValue]>) -> Result<(), JsValue> {
         let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
-        eng.set_cluster_order(&positions)
-            .map_err(|e| ErrorPlaceholder::throw(&format!("{:?}", e)))?;
+        js_err!(eng.set_cluster_order(&positions));
         Ok(())
     }
 
