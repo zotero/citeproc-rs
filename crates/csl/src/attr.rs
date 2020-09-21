@@ -132,7 +132,7 @@ pub(crate) fn attribute_var_type<T: GetAttribute>(
 
 pub(crate) fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
     node: &Node<'a, 'd>,
-    attr: impl Into<ExpandedName<'a>> + Clone,
+    attr: impl Into<ExpandedName<'a, 'd>> + Clone,
     info: &ParseInfo,
 ) -> Result<Option<T>, InvalidCsl> {
     match node.attribute(attr.clone()) {

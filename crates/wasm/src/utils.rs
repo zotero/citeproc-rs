@@ -56,13 +56,16 @@ cfg_if! {
     }
 }
 
-#[derive(Serialize)]
-pub struct ErrorPlaceholder(String);
-
-impl ErrorPlaceholder {
-    pub fn throw(msg: &str) -> JsValue {
-        JsValue::from_serde(&ErrorPlaceholder(msg.to_string())).unwrap()
-    }
+// https://github.com/rustwasm/wasm-bindgen/issues/1742
+macro_rules! js_err {
+    ($expression:expr) => {
+        match $expression {
+            Ok(a) => a,
+            Err(e) => {
+                return Err(js_sys::Error::new(&format!("{}", e)).into());
+            }
+        }
+    };
 }
 
 #[allow(clippy::boxed_local)]
@@ -71,9 +74,7 @@ where
     T: DeserializeOwned,
 {
     let xs: Result<Vec<T>, _> = js.iter().map(|x| x.into_serde()).collect();
-    xs
-        // TODO: remove Debug code
-        .map_err(|e| ErrorPlaceholder::throw(&format!("could not deserialize array: {:?}", e)))
+    Ok(js_err!(xs))
 }
 
 /// A `LocaleFetcher` that statically includes `en-US`, so it never has to be async-fetched, but

@@ -31,14 +31,27 @@ where
     s.serialize_str(&ToString::to_string(x))
 }
 
-#[derive(Debug, Serialize)]
+#[derive(thiserror::Error, Debug, Serialize)]
 pub enum StyleError {
-    Invalid(CslError),
-    ParseError(#[serde(serialize_with = "rox_error_serialize")] roxmltree::Error),
+    #[error("invalid style: {0}")]
+    Invalid(#[from] CslError),
+    #[error("could not parse style")]
+    ParseError(#[from] #[serde(serialize_with = "rox_error_serialize")] roxmltree::Error),
 }
 
 #[derive(Debug, Serialize)]
 pub struct CslError(pub Vec<InvalidCsl>);
+
+impl std::error::Error for CslError {}
+use std::fmt;
+impl fmt::Display for CslError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for i in &self.0 {
+            writeln!(f, "bytes {}..{} {}", i.range.start, i.range.end, i)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, PartialEq, Copy, Clone, Serialize)]
 pub enum Severity {
@@ -46,7 +59,8 @@ pub enum Severity {
     Warning,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize)]
+#[error("[{severity:?}] {message} ({hint})")]
 pub struct InvalidCsl {
     pub severity: Severity,
     // TODO: serialize_with or otherwise get this into the output
@@ -200,18 +214,6 @@ impl InvalidCsl {
             hint,
             severity,
         }
-    }
-}
-
-impl From<roxmltree::Error> for StyleError {
-    fn from(err: roxmltree::Error) -> StyleError {
-        StyleError::ParseError(err)
-    }
-}
-
-impl From<CslError> for StyleError {
-    fn from(err: CslError) -> StyleError {
-        StyleError::Invalid(err)
     }
 }
 
