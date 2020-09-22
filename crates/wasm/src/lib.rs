@@ -7,14 +7,12 @@
 #[macro_use]
 mod utils;
 
-#[macro_use]
 extern crate serde_derive;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 
 use js_sys::{Error as JsError, Promise};
-use serde::Serialize;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -49,7 +47,7 @@ impl Driver {
         let format = SupportedFormat::from_str(format)
             .map_err(|_| anyhow::anyhow!("unknown format `{}`", format));
         let format = js_err!(format);
-        let engine = js_err!(Processor::new(style, us_fetcher, true, format));
+        let engine = js_err!(Processor::new(style, us_fetcher, format));
         let engine = Rc::new(RefCell::new(engine));
 
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer

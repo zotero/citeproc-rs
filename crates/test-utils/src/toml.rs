@@ -96,7 +96,7 @@ impl TomlTestCase {
         }
         let fet = Arc::new(Filesystem::project_dirs());
         let mut proc =
-            Processor::new(&self.style.csl, fet, true).expect("could not construct processor");
+            Processor::new(&self.style.csl, fet).expect("could not construct processor");
 
         proc.reset_references(self.references.clone());
         "".into()
