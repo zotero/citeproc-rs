@@ -19,7 +19,6 @@ use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterId, Name};
 use citeproc_io::{ClusterNumber, IntraNote};
 use csl::{Atom, Bibliography, Position, SortKey};
-use std::sync::Mutex;
 
 use indextree::NodeId;
 
@@ -80,8 +79,12 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     // Includes intra-cluster sorting
     #[salsa::invoke(crate::sort::clusters_cites_sorted)]
     fn clusters_cites_sorted(&self) -> Arc<Vec<ClusterData>>;
+
     #[salsa::invoke(crate::sort::cluster_data_sorted)]
     fn cluster_data_sorted(&self, id: ClusterId) -> Option<ClusterData>;
+
+    /// Masks changes in note number
+    fn cluster_cites_sorted(&self, id: ClusterId) -> Option<Arc<Vec<CiteId>>>;
 
     /// Cite positions are mixed in with sorting. You cannot tell the positions of cites within a
     /// cluster until the sorting macros are called. So any cite sorting macros have to be given a
@@ -346,7 +349,7 @@ impl IrGen {
 
 fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
     if log {
-        eprintln!("citeproc-rs: reference {} not found", ref_id);
+        info!("citeproc-rs: reference {} not found", ref_id);
     }
     let mut arena = IrArena::new();
     let root = arena.new_node((
@@ -503,7 +506,7 @@ fn make_identical_name_formatter<'a>(
             }
         }
     }
-    info!("searching for the nth {} name block", index);
+    trace!("searching for the nth {} name block", index);
     let mut nth = index;
     find_name_block(&ref_ir, &mut nth).cloned()
 }
@@ -868,7 +871,7 @@ fn disambiguate_true(
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
-    info!(
+    debug!(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
@@ -954,31 +957,44 @@ impl std::ops::Deref for IrGenCow {
 }
 
 impl IrGenCow {
-    fn disambiguate_add_names(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+    /// Returned true indicates the cite is now unambiguous.
+    fn disambiguate_add_names(
+        &mut self,
+        db: &dyn IrDatabase,
+        ctx: &mut CiteContext<Markup>,
+    ) -> bool {
         if ctx.style.citation.disambiguate_add_names {
             ctx.disamb_pass = Some(DisambPass::AddNames);
             // Clone ir0; disambiguate by adding names
-            let mut cloned = self.to_mut();
-            disambiguate_add_names(db, cloned.root, &mut cloned.arena, &ctx, false);
+            let cloned = self.to_mut();
+            let unambiguous =
+                disambiguate_add_names(db, cloned.root, &mut cloned.arena, &ctx, false);
+            unambiguous
+        } else {
+            false
         }
     }
 
     fn disambiguate_add_given_name(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         if ctx.style.citation.disambiguate_add_givenname {
-            let mut cloned = self.to_mut();
+            let cloned = self.to_mut();
             let gndr = ctx.style.citation.givenname_disambiguation_rule;
             ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
             let also_add_names = ctx.style.citation.disambiguate_add_names;
             disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, &ctx, also_add_names);
         }
     }
-    fn disambiguate_add_year_suffix(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+    fn disambiguate_add_year_suffix(
+        &mut self,
+        db: &dyn IrDatabase,
+        ctx: &mut CiteContext<Markup>,
+    ) -> bool {
         if ctx.style.citation.disambiguate_add_year_suffix {
             let year_suffix = match db.year_suffix_for(ctx.cite.ref_id.clone()) {
                 Some(y) => y,
-                _ => return,
+                _ => return false,
             };
-            let mut cloned = self.to_mut();
+            let cloned = self.to_mut();
             ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
             disambiguate_add_year_suffix(
                 db,
@@ -988,10 +1004,13 @@ impl IrGenCow {
                 &ctx,
                 year_suffix,
             );
+            is_unambiguous(db, cloned.root, &cloned.arena)
+        } else {
+            false
         }
     }
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
-        let mut cloned = self.to_mut();
+        let cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
         disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
     }
@@ -1010,9 +1029,8 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     if is_unambiguous(db, irgen.root, &irgen.arena) {
         return irgen.into_arc();
     }
-    // TODO: let success = and use the disamb procedures' own knowledge to avoid is_unambiguous
-    irgen.disambiguate_add_names(db, &mut ctx);
-    if is_unambiguous(db, irgen.root, &irgen.arena) {
+    let successful = irgen.disambiguate_add_names(db, &mut ctx);
+    if successful {
         return irgen.into_arc();
     }
     irgen.disambiguate_add_given_name(db, &mut ctx);
@@ -1029,11 +1047,12 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     // Start with the given names done.
     let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
-    if is_unambiguous(db, irgen.root, &irgen.arena) {
+    let gen2_matching_refs = db.ir_gen2_matching_refs(id);
+    if gen2_matching_refs.len() <= 1 {
         return irgen.into_arc();
     }
-    irgen.disambiguate_add_year_suffix(db, &mut ctx);
-    if is_unambiguous(db, irgen.root, &irgen.arena) {
+    let successful = irgen.disambiguate_add_year_suffix(db, &mut ctx);
+    if successful {
         return irgen.into_arc();
     }
     irgen.disambiguate_conditionals(db, &mut ctx);
@@ -1070,17 +1089,21 @@ pub fn built_cluster_preview(
     Arc::new(string)
 }
 
+fn cluster_cites_sorted(db: &dyn IrDatabase, cluster_id: ClusterId) -> Option<Arc<Vec<CiteId>>> {
+    db.cluster_data_sorted(cluster_id)
+        .map(|data| data.cites.clone())
+}
+
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,
 ) -> <Markup as OutputFormat>::Build {
     let fmt = db.get_formatter();
-    let cluster = if let Some(data) = db.cluster_data_sorted(cluster_id) {
-        data
+    let cite_ids = if let Some(x) = db.cluster_cites_sorted(cluster_id) {
+        x
     } else {
         return fmt.plain("");
     };
-    let cite_ids = &cluster.cites;
     let style = db.style();
     let layout = &style.citation.layout;
     let sorted_refs_arc = db.sorted_refs();
@@ -1598,9 +1621,12 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                             // (because prev note wasn't homogenous)
                             clusters_in_last_note
                                 .iter()
-                                .filter_map(|&cluster_id| db.cluster_data_sorted(cluster_id))
-                                .flat_map(|cluster| (*cluster.cites).clone().into_iter())
-                                .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
+                                .filter_map(|&cluster_id| db.cluster_cites_sorted(cluster_id))
+                                .all(|cites| {
+                                    cites.iter().all(|cite_id| {
+                                        cite_id.lookup(db).ref_id == cite.ref_id
+                                    })
+                                })
                         } else {
                             prev_cluster
                                 .cites
