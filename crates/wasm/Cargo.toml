@@ -32,11 +32,11 @@ wasm-opt = ["-O3", "--enable-mutable-globals"]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# use --features console
+# by default, give debuggable panics.
+default = ["console"]
 console = ["console_error_panic_hook", "console_log", "fern"]
 # disable the source of js-demo's visualisation for the public API
 dot = []
-default = []
 
 [dependencies]
 citeproc = { path = "../citeproc", default-features = false, features=[] }

@@ -1,2 +1,5 @@
 [profile.dev]
 opt-level = "z" # otherwise the wasm binaries are too big to load quickly
+
+[profile.release]
+debug = true
