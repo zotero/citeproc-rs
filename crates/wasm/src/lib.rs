@@ -131,8 +131,8 @@ impl Driver {
 
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(&mut self, cluster_id: JsValue) -> Result<(), JsValue> {
-        let cluster = js_err!(cluster_id.into_serde());
+    pub fn insert_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
+        let cluster = js_err!(cluster.into_serde());
         let mut eng = self.engine.borrow_mut();
         eng.insert_cluster(cluster);
         Ok(())
