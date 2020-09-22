@@ -44,6 +44,7 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     // previous ir's Arc.
     fn ir_gen0(&self, key: CiteId) -> Arc<IrGen>;
     fn ir_gen2_add_given_name(&self, key: CiteId) -> Arc<IrGen>;
+    fn ir_gen2_matching_refs(&self, id: CiteId) -> Arc<Vec<Atom>>;
     fn year_suffixes(&self) -> Arc<FnvHashMap<Atom, u32>>;
     fn year_suffix_for(&self, ref_id: Atom) -> Option<u32>;
     fn ir_fully_disambiguated(&self, key: CiteId) -> Arc<IrGen>;
@@ -222,19 +223,21 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         .map(|id| {
             let cite = db.ghost_cite(id.clone());
             let cite_id = db.cite(CiteData::BibliographyGhost { cite });
-            (id.clone(), db.ir_gen2_add_given_name(cite_id))
+            (cite_id, id.clone(), db.ir_gen2_add_given_name(cite_id))
         })
-        .for_each(|(ref_id, ir2)| {
-            if ir2.unambiguous() {
+        .for_each(|(cite_id, ref_id, ir2)| {
+            let ir2_matching_refs = db.ir_gen2_matching_refs(cite_id);
+            // if matching refs <= 1, then it's unambiguous
+            if ir2_matching_refs.len() <= 1 {
                 // no need to check if own id is in a group, it will receive a suffix already
             } else {
                 // we make sure ref_id is included, even if there was a bug with RefIR and a
                 // cite didn't match its own reference
                 let mut coalesce: Option<(usize, FnvHashSet<Atom>)> = None;
                 for (n, group) in groups.iter_mut().enumerate() {
-                    if group.contains(&ref_id) || intersects(group, &ir2.matching_refs) {
+                    if group.contains(&ref_id) || intersects(group, &ir2_matching_refs) {
                         group.insert(ref_id.clone());
-                        for id in &ir2.matching_refs {
+                        for id in ir2_matching_refs.iter() {
                             group.insert(id.clone());
                         }
                         if let Some((_n, ref mut already)) = coalesce {
@@ -298,16 +301,12 @@ pub struct IrGen {
     pub(crate) arena: IrArena<Markup>,
     pub(crate) root: NodeId,
     pub(crate) state: IrState,
-    pub(crate) matching_refs: Vec<Atom>,
 }
 
 impl Eq for IrGen {}
 impl PartialEq<IrGen> for IrGen {
     fn eq(&self, other: &Self) -> bool {
-        self.matching_refs == other.matching_refs
-            && self.state == other.state
-            && self.root == other.root
-            && self.arena == other.arena
+        self.arena == other.arena && self.state == other.state && self.root == other.root
     }
 }
 
@@ -334,16 +333,8 @@ impl fmt::Debug for IrGen {
 }
 
 impl IrGen {
-    fn new(root: NodeId, arena: IrArena<Markup>, matching_refs: Vec<Atom>, state: IrState) -> Self {
-        IrGen {
-            root,
-            arena,
-            state,
-            matching_refs,
-        }
-    }
-    fn unambiguous(&self) -> bool {
-        self.matching_refs.len() <= 1
+    fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
+        IrGen { root, arena, state }
     }
     fn fresh_copy(&self) -> (NodeId, IrArena<Markup>, IrState) {
         let root = self.root;
@@ -362,9 +353,18 @@ fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
         IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
         GroupVars::Plain,
     ));
-    Arc::new(IrGen::new(root, arena, Vec::new(), IrState::new()))
+    Arc::new(IrGen::new(root, arena, IrState::new()))
 }
 
+// IR gen0 depends on:
+// style
+// cite
+// reference
+// locale_by_cite
+// cite_position
+//  -
+// bib_number
+//  - sorted_refs
 macro_rules! preamble {
     ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
         $style = $db.style();
@@ -395,14 +395,7 @@ macro_rules! preamble {
     }};
 }
 
-fn is_unambiguous(
-    db: &dyn IrDatabase,
-    _pass: Option<DisambPass>,
-    root: NodeId,
-    arena: &IrArena<Markup>,
-    _cite_id: Option<CiteId>,
-    _own_id: &Atom,
-) -> bool {
+fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>) -> bool {
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
     let mut n = 0;
     for k in db.disamb_participants().iter() {
@@ -421,13 +414,18 @@ fn is_unambiguous(
 }
 
 /// Returns the set of Reference IDs that could have produced a cite's IR
-fn refs_accepting_cite<O: OutputFormat>(
+fn refs_accepting_cite(
     db: &dyn IrDatabase,
     root: NodeId,
     arena: &IrArena<Markup>,
-    ctx: &CiteContext<'_, O>,
+    cite_id: Option<CiteId>,
+    ref_id: &Atom,
+    disamb_pass: Option<DisambPass>,
 ) -> Vec<Atom> {
-    use log::Level::{Info, Warn};
+    // Out of ctx, we need:
+    // - cite_id
+    // - reference.id
+    // - disamb_pass (for debug)
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
     let mut v = Vec::with_capacity(1);
     for k in db.disamb_participants().iter() {
@@ -438,20 +436,22 @@ fn refs_accepting_cite<O: OutputFormat>(
         if acc {
             v.push(k.clone());
         }
-        if log_enabled!(Warn) && ctx.cite_id.is_some() && k == &ctx.reference.id && !acc {
+        if log_enabled!(log::Level::Warn) && k == ref_id && !acc {
             warn!(
                 "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
-                ctx.cite_id,
+                cite_id,
                 k,
-                ctx.disamb_pass,
+                disamb_pass,
                 dfa.debug_graph(db),
                 edges
             );
         }
-        if log_enabled!(Info) && ctx.cite_id.is_some() && k != &ctx.reference.id && acc {
-            info!(
+        if log_enabled!(log::Level::Trace) && k != ref_id && acc {
+            trace!(
                 "{:?}: matched other reference {} during pass {:?}",
-                ctx.cite_id, k, ctx.disamb_pass
+                cite_id,
+                k,
+                disamb_pass
             );
         }
     }
@@ -580,11 +580,18 @@ fn disambiguate_add_names(
     let fmt = &db.get_formatter();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
-    let initial_refs = refs_accepting_cite(db, root, arena, ctx);
+    let initial_refs = refs_accepting_cite(
+        db,
+        root,
+        arena,
+        ctx.cite_id,
+        &ctx.reference.id,
+        ctx.disamb_pass,
+    );
     let mut best = initial_refs.len() as u16;
     let name_refs = list_all_name_blocks(root, arena);
 
-    info!(
+    debug!(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
@@ -764,7 +771,14 @@ fn disambiguate_add_givennames(
     also_add: bool,
 ) -> Option<bool> {
     let _fmt = db.get_formatter();
-    let refs = refs_accepting_cite(db, root, arena, ctx);
+    let refs = refs_accepting_cite(
+        db,
+        root,
+        arena,
+        ctx.cite_id,
+        &ctx.reference.id,
+        ctx.disamb_pass,
+    );
     let name_refs = list_all_name_blocks(root, arena);
 
     let is_sort_key = ctx.sort_key.is_some();
@@ -858,27 +872,13 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let un = is_unambiguous(
-        db,
-        ctx.disamb_pass,
-        root,
-        arena,
-        ctx.cite_id,
-        &ctx.reference.id,
-    );
+    let un = is_unambiguous(db, root, arena);
     if un {
         return;
     }
     let cond_refs = list_all_cond_disambs(root, arena);
     for cid in cond_refs.into_iter() {
-        if is_unambiguous(
-            db,
-            ctx.disamb_pass,
-            root,
-            arena,
-            ctx.cite_id,
-            &ctx.reference.id,
-        ) {
+        if is_unambiguous(db, root, arena) {
             debug!("successfully disambiguated with Cond");
             break;
         }
@@ -907,9 +907,15 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut arena = IrArena::new();
     let root = style.intermediate(db, &mut state, &ctx, &mut arena);
     let _fmt = db.get_formatter();
-    let matching = refs_accepting_cite(db, root, &arena, &ctx);
-    let irgen = IrGen::new(root, arena, matching, state);
+    let irgen = IrGen::new(root, arena, state);
     Arc::new(irgen)
+}
+
+fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
+    let cite = id.lookup(db);
+    let gen2 = db.ir_gen2_add_given_name(id);
+    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, None);
+    Arc::new(refs)
 }
 
 enum IrGenCow {
@@ -922,12 +928,7 @@ impl IrGenCow {
         *self = match self {
             IrGenCow::Arc(arc) => {
                 let (root, arena, state) = arc.as_ref().fresh_copy();
-                IrGenCow::Cloned(IrGen {
-                    root,
-                    arena,
-                    state,
-                    matching_refs: Default::default(),
-                })
+                IrGenCow::Cloned(IrGen { root, arena, state })
             }
             IrGenCow::Cloned(gen) => return gen,
         };
@@ -959,7 +960,6 @@ impl IrGenCow {
             // Clone ir0; disambiguate by adding names
             let mut cloned = self.to_mut();
             disambiguate_add_names(db, cloned.root, &mut cloned.arena, &ctx, false);
-            cloned.matching_refs = refs_accepting_cite(db, cloned.root, &cloned.arena, &ctx);
         }
     }
 
@@ -970,7 +970,6 @@ impl IrGenCow {
             ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
             let also_add_names = ctx.style.citation.disambiguate_add_names;
             disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, &ctx, also_add_names);
-            cloned.matching_refs = refs_accepting_cite(db, cloned.root, &cloned.arena, &ctx);
         }
     }
     fn disambiguate_add_year_suffix(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
@@ -989,15 +988,12 @@ impl IrGenCow {
                 &ctx,
                 year_suffix,
             );
-            cloned.matching_refs = refs_accepting_cite(db, cloned.root, &cloned.arena, &ctx);
         }
     }
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         let mut cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
         disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
-        // No point recomputing when nothing more can be done.
-        cloned.matching_refs = Vec::new();
     }
 }
 
@@ -1011,11 +1007,12 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
 
     let mut irgen = IrGenCow::Arc(db.ir_gen0(id));
-    if irgen.unambiguous() {
+    if is_unambiguous(db, irgen.root, &irgen.arena) {
         return irgen.into_arc();
     }
+    // TODO: let success = and use the disamb procedures' own knowledge to avoid is_unambiguous
     irgen.disambiguate_add_names(db, &mut ctx);
-    if irgen.unambiguous() {
+    if is_unambiguous(db, irgen.root, &irgen.arena) {
         return irgen.into_arc();
     }
     irgen.disambiguate_add_given_name(db, &mut ctx);
@@ -1032,11 +1029,11 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     // Start with the given names done.
     let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
-    if irgen.unambiguous() {
+    if is_unambiguous(db, irgen.root, &irgen.arena) {
         return irgen.into_arc();
     }
     irgen.disambiguate_add_year_suffix(db, &mut ctx);
-    if irgen.unambiguous() {
+    if is_unambiguous(db, irgen.root, &irgen.arena) {
         return irgen.into_arc();
     }
     irgen.disambiguate_conditionals(db, &mut ctx);
@@ -1454,8 +1451,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 }
             }
 
-            let matching = refs_accepting_cite(db, root, &arena, &ctx);
-            Arc::new(IrGen::new(root, arena, matching, state))
+            Arc::new(IrGen::new(root, arena, state))
         },
     )
 }
