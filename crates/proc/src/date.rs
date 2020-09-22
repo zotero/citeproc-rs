@@ -424,7 +424,7 @@ where
         }
     };
     let mut parts_slice = indep.date_parts.as_slice();
-    let mut parts = Vec::new();
+    let mut parts;
     if gen_date.sorting {
         parts = indep.date_parts.clone();
         // The parts are filtered, but we're not going to be able to parse out the year if they are
@@ -437,7 +437,7 @@ where
         arena,
         indep.variable,
         gen_date,
-        &indep.date_parts,
+        parts_slice,
         None,
     )
 }
