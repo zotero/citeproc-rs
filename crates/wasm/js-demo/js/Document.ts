@@ -153,7 +153,9 @@ export class Document {
         return produce(this, draft => {
             fn(draft);
             driver.setClusterOrder(draft.clusterPositions());
+            console.time("batchedUpdates");
             let summary = driver.batchedUpdates();
+            console.timeEnd("batchedUpdates");
             draft.rendered = draft.rendered.update(summary, this.clusterPositions());
         });
     };
