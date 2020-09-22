@@ -7,96 +7,8 @@ import { GraphViz } from './GraphViz';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { useDocument } from './useDocument';
 
-let initialStyle = `<style class="note">
-  <locale>
-    <terms>
-      <term name="ibid">ibid</term>
-    </terms>
-  </locale>
-  <citation et-al-min="1" et-al-use-first="1" disambiguate-add-givenname="true" givenname-disambiguation-rule="by-cite" disambiguate-add-names="true">
-    <layout delimiter="; " suffix=".">
-      <choose>
-        <if position="ibid-with-locator">
-          <group delimiter=", ">
-            <text term="ibid" />
-            <text variable="locator" />
-          </group>
-        </if>
-        <else-if position="ibid">
-          <text term="ibid" />
-        </else-if>
-        <else-if position="subsequent">
-          <group delimiter=", ">
-            <group delimiter=" ">
-              <text variable="title" font-style="italic" />
-              <text variable="year-suffix" />
-              <text prefix="(n " variable="first-reference-note-number" suffix=")" />
-            </group>
-            <text variable="locator" />
-          </group>
-        </else-if>
-        <else>
-          <group delimiter=", ">
-            <names variable="author">
-                <name initialize="true" initialize-with="." />
-            </names>
-            <group delimiter=" ">
-              <text variable="title" font-style="italic" />
-              <text variable="year-suffix" />
-            </group>
-            <text variable="locator" />
-          </group>
-        </else>
-      </choose>
-    </layout>
-  </citation>
-  <bibliography>
-      <layout>
-          <group display="left-margin">
-            <choose>
-                <if variable="author">
-                    <text value="Some Author" />
-                </if>
-                <else>
-                    <text value="no author" />
-                </else>
-            </choose>
-          </group>
-          <text variable="title" display="right-inline" />
-      </layout>
-  </bibliography>
-</style>`;
-
-const initialReferences: Reference[] = [
-    {
-        id: 'citekey',
-        type: 'book',
-        author: [
-            { given: "Kurt", family: "Camembert" },
-            { given: "Amadeus", family: "Rossi" },
-            { given: "Ignatius", family: "Irrelevant" }
-        ],
-        title: "Where The Vile Things Are",
-        issued: { "raw": "1999-08-09" },
-    },
-    {
-        id: 'citekey2',
-        type: 'book',
-        author: [
-            { given: "Kurt", family: "Camembert" },
-            { given: "Ariadne", family: "Rossi" },
-            { given: "Ignatius", family: "Irrelevant" }
-        ],
-        title: "Where The Vile Things Are",
-        issued: { "raw": "1999-08-09" },
-    },
-    {
-        id: 'foreign',
-        type: 'book',
-        title: "Some other title",
-        language: 'fr-FR',
-    }
-];
+import initialStyle from './style.csl';
+import { initialReferences } from './initialReferences.ts';
 
 const initialClusters: Cluster[] = [
     {
@@ -116,6 +28,36 @@ const initialClusters: Cluster[] = [
         cites: [
             { id: "citekey", locator: "56" }
         ],
+    },
+    {
+        id: 4,
+        cites: [
+            { id: "r1" }
+        ]
+    },
+    {
+        id: 5,
+        cites: [
+            { id: "ysuf1" }
+        ]
+    },
+    {
+        id: 6,
+        cites: [
+            { id: "ysuf2" }
+        ]
+    },
+    {
+        id: 7,
+        cites: [
+            { id: "ysuf1" }
+        ]
+    },
+    {
+        id: 8,
+        cites: [
+            { id: "r7" }
+        ]
     },
 ];
 

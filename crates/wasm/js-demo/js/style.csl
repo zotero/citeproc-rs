@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+  <info>
+    <id>https://github.com/cormacrelf/citeproc-rs/test-style</id>
+    <title>test-style</title>
+  </info>
+
+  <locale>
+    <terms>
+      <term name="ibid">ibid</term>
+    </terms>
+  </locale>
+
+  <macro name="year">
+    <group>
+      <date variable="issued" form="numeric" date-parts="year" />
+      <text variable="year-suffix" />
+    </group>
+  </macro>
+
+  <macro name="author">
+    <names variable="author">
+      <name initialize="true" initialize-with="." />
+    </names>
+  </macro>
+
+  <citation
+    et-al-min="1"
+    et-al-use-first="1"
+    disambiguate-add-givenname="true"
+    givenname-disambiguation-rule="by-cite"
+    disambiguate-add-names="true"
+    disambiguate-add-year-suffix="true">
+
+    <layout delimiter="; " suffix=".">
+      <choose>
+        <if position="ibid-with-locator">
+          <group delimiter=", ">
+            <text term="ibid" />
+            <text variable="locator" />
+          </group>
+        </if>
+        <else-if position="ibid">
+          <text term="ibid" />
+        </else-if>
+        <else-if position="subsequent">
+          <group delimiter=", ">
+            <group delimiter=" ">
+              <text variable="title" font-style="italic" />
+              <text macro="year" />
+              <text prefix="(n " variable="first-reference-note-number" suffix=")" />
+            </group>
+            <text variable="locator" />
+          </group>
+        </else-if>
+        <else>
+          <group delimiter=", ">
+            <group delimiter=" ">
+              <text macro="author" />
+              <text variable="title" font-style="italic" />
+              <text macro="year" />
+            </group>
+            <text variable="locator" />
+          </group>
+        </else>
+      </choose>
+    </layout>
+  </citation>
+  <bibliography>
+      <layout>
+          <group display="left-margin">
+            <choose>
+                <if variable="author">
+                  <names variable="author" />
+                </if>
+                <else>
+                    <text value="no author" />
+                </else>
+            </choose>
+          </group>
+          <text variable="title" display="right-inline" />
+      </layout>
+  </bibliography>
+</style>
