@@ -391,14 +391,14 @@ fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
 
 fn get_cmd_run(rest: &[String]) -> String {
     let rest = rest.join(" ");
-    let mut cmd = "cargo +nightly test --package citeproc --test suite -- ".to_owned();
+    let mut cmd = "cargo test --package citeproc --test suite -- ".to_owned();
     cmd.push_str(&rest);
     cmd
 }
 
 fn get_cmd(rest: &[String]) -> String {
     let rest = rest.join(" ");
-    let mut cmd = "cargo +nightly test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json -- ".to_owned();
+    let mut cmd = "cargo test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json -- ".to_owned();
     cmd.push_str(&rest);
     cmd
 }
