@@ -10,7 +10,7 @@ use citeproc_io::output::LocalizedQuotes;
 use csl::Atom;
 use csl::{Affixes, Choose, DateVariable, Formatting, GivenNameDisambiguationRule, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
-use std::cmp::Ordering;
+
 
 use std::sync::Arc;
 
@@ -205,7 +205,7 @@ where
             IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
                 node.children(arena).next().is_none()
             }
-            IR::NameCounter(nc) => false,
+            IR::NameCounter(_nc) => false,
             _ => false,
         }
     }
@@ -218,22 +218,22 @@ where
 {
     fn deep_equals(
         &self,
-        self_gv: GroupVars,
+        _self_gv: GroupVars,
         self_id: NodeId,
         self_arena: &IrArena<O>,
         other: &Self,
-        other_gv: GroupVars,
+        _other_gv: GroupVars,
         other_id: NodeId,
         other_arena: &IrArena<O>,
     ) -> bool {
-        let strategy = match (self, other) {
+        match (self, other) {
             (IR::Rendered(a), IR::Rendered(b)) if a == b => return true,
             (IR::Seq(a), IR::Seq(b)) if a == b => {}
             (IR::YearSuffix(a), IR::YearSuffix(b)) if a == b => {}
             (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) if a == b => {}
             (IR::Name(a), IR::Name(b)) if a == b => {}
             _ => return false,
-        };
+        }
         self_id
             .children(self_arena)
             .zip(other_id.children(other_arena))
@@ -359,7 +359,7 @@ impl IR<Markup> {
             IR::Rendered(Some(ed)) => {
                 edges.push(ed.to_edge_data(fmt, formatting))
             }
-            IR::YearSuffix(ys) => {
+            IR::YearSuffix(_ys) => {
                 if !IR::is_empty(node, arena) {
                     edges.push(EdgeData::YearSuffix);
                 }
@@ -409,7 +409,7 @@ impl IR<Markup> {
 
 impl<O: OutputFormat> IR<O> {
     pub(crate) fn recompute_group_vars(node: NodeId, arena: &mut IrArena<O>) {
-        let me = match arena.get(node) {
+        let _me = match arena.get(node) {
             Some(x) => x.get(),
             None => return,
         };
@@ -515,11 +515,11 @@ impl IrSeq {
         let IrSeq {
             ref affixes,
             ref delimiter,
-            // TODO: use these
-            quotes: _,
             formatting,
             display,
-            text_case,
+            // TODO: use these
+            quotes: _,
+            text_case: _,
             dropped_gv: _,
         } = *self;
         let affixes = affixes.as_ref();

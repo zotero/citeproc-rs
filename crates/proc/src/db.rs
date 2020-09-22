@@ -226,10 +226,9 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         .map(|id| {
             let cite = db.ghost_cite(id.clone());
             let cite_id = db.cite(CiteData::BibliographyGhost { cite });
-            (cite_id, id.clone(), db.ir_gen2_add_given_name(cite_id))
+            (id.clone(), db.ir_gen2_matching_refs(cite_id))
         })
-        .for_each(|(cite_id, ref_id, ir2)| {
-            let ir2_matching_refs = db.ir_gen2_matching_refs(cite_id);
+        .for_each(|(ref_id, ir2_matching_refs)| {
             // if matching refs <= 1, then it's unambiguous
             if ir2_matching_refs.len() <= 1 {
                 // no need to check if own id is in a group, it will receive a suffix already
@@ -543,12 +542,12 @@ fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
         };
         match &me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
-            IR::ConditionalDisamb(c) => {
+            IR::ConditionalDisamb(_c) => {
                 vec.push(node);
                 node.children(arena)
                     .for_each(|child| list_all_cd_inner(child, arena, vec));
             }
-            IR::Seq(seq) => {
+            IR::Seq(_seq) => {
                 node.children(arena)
                     .for_each(|child| list_all_cd_inner(child, arena, vec));
             }
@@ -673,7 +672,6 @@ fn disambiguate_add_names(
             best = std::cmp::min(best, new_count);
         }
         // TODO: simply save the node id of the rolled-back nir, and restore it to position.
-        let nir = get_nir_mut(nid, arena);
         if let Some(rolled_back) = get_nir_mut(nid, arena).rollback(db, ctx) {
             let new_seq = NameIR::rendered_ntbs_to_node(
                 rolled_back,
@@ -815,10 +813,10 @@ fn disambiguate_add_givennames(
 }
 
 fn disambiguate_add_year_suffix(
-    db: &dyn IrDatabase,
+    _db: &dyn IrDatabase,
     root: NodeId,
     arena: &mut IrArena<Markup>,
-    state: &mut IrState,
+    _state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
     suffix: u32,
 ) {
@@ -1119,8 +1117,8 @@ pub fn built_cluster_before_output(
         })
         .collect();
 
-    if let Some((cgd, collapse)) = style.citation.group_collapsing() {
-        group_and_collapse(db, &fmt, cgd, collapse, &mut irs);
+    if let Some((_cgd, collapse)) = style.citation.group_collapsing() {
+        group_and_collapse(&fmt, collapse, &mut irs);
     }
 
     // Cite capitalization
@@ -1481,10 +1479,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
 
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
-    let style = db.style();
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
-        let layout = &style.bibliography.as_ref().unwrap().layout;
-        let ir = &gen0.arena;
         let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
         // in a bibliography, we do the affixes etc inside Layout, so they're not here
         let string = fmt.output(flat, get_piq(db));
@@ -1505,7 +1500,6 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
     for key in sorted_refs.0.iter() {
         // TODO: put Nones in there so they can be updated
         if let Some(mut gen0) = db.bib_item_gen0(key.clone()) {
-            let layout = &style.bibliography.as_ref().unwrap().layout;
             // in a bibliography, we do the affixes etc inside Layout, so they're not here
             let current = IR::first_name_block(gen0.root, &gen0.arena);
             let sas = style.bibliography.as_ref().and_then(|bib| {

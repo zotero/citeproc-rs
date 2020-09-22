@@ -10,7 +10,7 @@ pub fn render_ordinal(
     ts: &[NumericToken],
     locale: &Locale,
     variable: NumberVariable,
-    prf: Option<PageRangeFormat>,
+    _prf: Option<PageRangeFormat>,
     gender: Gender,
     long: bool,
 ) -> String {
@@ -177,7 +177,7 @@ pub fn roman_lower(
     ts: &[NumericToken],
     locale: &Locale,
     variable: NumberVariable,
-    prf: Option<PageRangeFormat>,
+    _prf: Option<PageRangeFormat>,
 ) -> String {
     let mut s = String::with_capacity(ts.len() * 2); // estimate
     use std::convert::TryInto;

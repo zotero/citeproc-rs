@@ -140,13 +140,12 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     if is_editor_translator && !editortranslator_term_empty {
         let ed_val = refr.name.get(&NameVariable::Editor);
         let tr_val = refr.name.get(&NameVariable::Translator);
-        let _x = 5;
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
             // identical
             if ed == tr {
                 let ed_sup = state.is_name_suppressed(NameVariable::Editor);
                 let tran_sup = state.is_name_suppressed(NameVariable::Translator);
-                let to_use = if ed_sup && tran_sup {
+                if ed_sup && tran_sup {
                     slice_override = Some(&[][..]);
                 } else if ed_sup {
                     var_override = Some(NameVariable::EditorTranslator);
@@ -154,7 +153,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                 } else {
                     var_override = Some(NameVariable::EditorTranslator);
                     slice_override = Some(&[NameVariable::Editor][..]);
-                };
+                }
             }
         }
     }
@@ -231,7 +230,6 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     ctx: &CiteContext<'c, O, I>,
     arena: &mut IrArena<O>,
 ) -> NodeId {
-    let fmt = &ctx.format;
     let mut names_inheritance = state.name_override.inherited_names_options(
         &ctx.name_citation,
         &ctx.names_delimiter,
@@ -392,8 +390,6 @@ where
 
 impl<'c, O: OutputFormat> NameIR<O> {
     pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'c, O, I>) -> u32 {
-        let style = ctx.style;
-        let locale = ctx.locale;
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
@@ -833,7 +829,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     NamePartToken::Family
                     | NamePartToken::FamilyDropped
                     | NamePartToken::FamilyFull => {
-                        let name_part = &self.name_el.name_part_family;
                         if let Some(fam) = pn.family.as_ref() {
                             let dp = pn
                                 .dropping_particle
@@ -1085,13 +1080,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         &'a self,
         names_slice: &[DisambNameRatchet<O::Build>],
         position: Position,
-        et_al: &Option<NameEtAl>,
+        _et_al: &Option<NameEtAl>,
         is_sort_key: bool,
         and_term: Option<&String>,
         etal_term: Option<&(String, Option<Formatting>)>,
     ) -> (impl Iterator<Item = NameTokenBuilt<O::Build>> + 'a, u16) {
         let fmt = self.fmt.clone();
-        let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice.len(), is_sort_key, etal_term);
 
         let ntb_len = name_tokens.iter().fold(0, |acc, n| match n {
@@ -1100,12 +1094,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         });
 
         let and_term = and_term.cloned();
-        let etal_term = etal_term.cloned();
 
         let iterator = name_tokens.into_iter().filter_map(move |n| {
             Some(match n {
                 NameToken::Name(ratchet) => {
-                    seen_one = true;
                     NameTokenBuilt::Ratchet(ratchet)
                 }
                 NameToken::Delimiter => {
@@ -1124,16 +1116,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
                 NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
                 NameToken::And => {
-                    use csl::terms::*;
-                    let select = |form: TermFormExtended| {
-                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
-                    };
                     // If an And token shows up, we already know self.name_el.and is Some.
                     let form = match self.name_el.and {
                         Some(NameAnd::Symbol) => "&",
-                        // locale
-                        //     .get_text_term(select(TermFormExtended::Symbol), false)
-                        //     .unwrap_or("&"),
                         _ => and_term.as_ref().map(|x| x.as_ref()).unwrap_or("and"),
                     };
                     let mut string = form.to_owned();

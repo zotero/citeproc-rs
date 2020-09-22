@@ -348,7 +348,6 @@ where
     let locale = ctx.locale();
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
-    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
         GenericDateBits::sorting(locale)
     } else {
@@ -407,7 +406,6 @@ where
     I: OutputFormat,
 {
     let locale = ctx.locale();
-    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
         GenericDateBits::sorting(locale)
     } else {
@@ -465,7 +463,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
         };
     }
     let cloned_gen = gen_date.clone();
-    let mut do_single =
+    let do_single =
         |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
             if single.circa {
                 let circa = cloned_gen
@@ -802,7 +800,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
 fn dp_render_sort_string(
     part: &DatePart,
     date: &Date,
-    key: &SortKey,
+    _key: &SortKey,
     is_filtered: bool,
 ) -> Option<String> {
     match part.form {

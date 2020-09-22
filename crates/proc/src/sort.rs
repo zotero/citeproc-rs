@@ -478,7 +478,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         }
         let out = output.unwrap_or_default();
         match fold_type {
-            WalkerFoldType::Group(g) => gv_acc.implicit_conditional(out),
+            WalkerFoldType::Group(_g) => gv_acc.implicit_conditional(out),
             _ => (out, gv_acc),
         }
     }

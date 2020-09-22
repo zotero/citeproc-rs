@@ -166,7 +166,7 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_first_year(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
         match &arena.get(node)?.get().0 {
-            IR::Rendered(Some(CiteEdgeData::Year(b))) => Some(node),
+            IR::Rendered(Some(CiteEdgeData::Year(_b))) => Some(node),
             IR::Seq(_) | IR::ConditionalDisamb(_) => node
                 .children(arena)
                 .find_map(|child| IR::find_first_year(child, arena)),
@@ -495,9 +495,7 @@ impl<O: OutputFormat> Unnamed3<O> {
 
 // pub fn group_and_collapse<O: OutputFormat<Output = String>>(
 pub fn group_and_collapse<O: OutputFormat<Output = String>>(
-    db: &dyn IrDatabase,
     fmt: &Markup,
-    delim: &str,
     collapse: Option<Collapse>,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
@@ -854,8 +852,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
     match sas_rule {
         SasRule::CompleteAll | SasRule::CompleteEach => {
             if Iterator::eq(pre_reduced, cur_reduced) {
-                let (current_ir, current_gv) = arena.get_mut(current_id).unwrap().get_mut();
-                let current_nir = current_ir.unwrap_name_ir_mut();
+                let (current_ir, _current_gv) = arena.get_mut(current_id).unwrap().get_mut();
                 if sas_rule == SasRule::CompleteEach {
                     let current_nir = current_ir.unwrap_name_ir_mut();
                     // let nir handle it

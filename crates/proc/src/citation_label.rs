@@ -163,7 +163,7 @@ mod parser {
     };
 
     fn author(inp: &str) -> IResult<&str, ConfigCell> {
-        let (rest, cap) = char('A')(inp)?;
+        let (rest, _a) = char('A')(inp)?;
         let (rest, lowers) = recognize(take_while(|c: char| c == 'a'))(rest)?;
         Ok((
             rest,

@@ -64,7 +64,7 @@ impl Disambiguation<Markup> for Names {
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
             let mut max_counted_tokens = 0u16;
-            let mut counted_tokens = 0;
+            let mut counted_tokens;
 
             let mut once = false;
             loop {
@@ -623,7 +623,7 @@ where
     }
     pub fn rollback(
         &mut self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &CiteContext<'_, O>,
     ) -> Option<Vec<O::Build>> {
         let (_prev_best, at) = self.achieved_at;
@@ -643,7 +643,7 @@ where
     // returns false if couldn't add any more names
     pub fn add_name(
         &mut self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &CiteContext<'_, O>,
     ) -> Option<Vec<O::Build>> {
         self.name_counter.bump += 1;

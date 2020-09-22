@@ -11,7 +11,7 @@
 use crate::prelude::*;
 
 use crate::api::{
-    BibEntry, BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
+    BibEntry, BibliographyMeta, BibliographyUpdate, IncludeUncited, SecondFieldAlign,
     UpdateSummary,
 };
 use citeproc_db::{
