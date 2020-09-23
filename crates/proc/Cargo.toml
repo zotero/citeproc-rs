@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Cormac Relf <web@cormacrelf.net>"]
 edition = "2018"
 
+[features]
+default = []
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 csl = { path = "../csl" }
@@ -28,6 +31,7 @@ nom = { version = "5.0.1", default-features = false, features = ["std"] }
 unicase = "2.6.0"
 unic-segment = "0.9.0"
 indextree = "4.3.1"
+rayon = { version = "1.4.0", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.4.0"

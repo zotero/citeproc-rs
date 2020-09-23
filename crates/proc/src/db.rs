@@ -31,6 +31,10 @@ type MarkupBuild = <Markup as OutputFormat>::Build;
 #[allow(dead_code)]
 type MarkupOutput = <Markup as OutputFormat>::Output;
 
+// trait ParallelIrDatabase {
+//     fn snapshot(&self) -> salsa::Snapshot<&(dyn IrDatabase + 'static)>;
+// }
+
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
@@ -415,6 +419,19 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>) ->
     n <= 1
 }
 
+macro_rules! cfg_par_iter {
+    ($expr:expr) => {
+        {
+            #[cfg(feature = "rayon")] {
+                ($expr).par_iter()
+            }
+            #[cfg(not(feature = "rayon"))] {
+                ($expr).iter()
+            }
+        }
+    };
+}
+
 /// Returns the set of Reference IDs that could have produced a cite's IR
 fn refs_accepting_cite(
     db: &dyn IrDatabase,
@@ -430,33 +447,35 @@ fn refs_accepting_cite(
     // - disamb_pass (for debug)
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
     let mut v = Vec::with_capacity(1);
-    for k in db.disamb_participants().iter() {
-        let dfa = db
-            .ref_dfa(k.clone())
-            .expect("disamb_participants should all exist");
-        let acc = dfa.accepts_data(db, &edges);
-        if acc {
-            v.push(k.clone());
-        }
-        if log_enabled!(log::Level::Warn) && k == ref_id && !acc {
-            warn!(
-                "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
-                cite_id,
-                k,
-                disamb_pass,
-                dfa.debug_graph(db),
-                edges
-            );
-        }
-        if log_enabled!(log::Level::Trace) && k != ref_id && acc {
-            trace!(
-                "{:?}: matched other reference {} during pass {:?}",
-                cite_id,
-                k,
-                disamb_pass
-            );
-        }
-    }
+    let participants = db.disamb_participants();
+    let iter = cfg_par_iter!(participants);
+    iter.for_each(|k: &Atom| {
+            let dfa = db
+                .ref_dfa(k.clone())
+                .expect("disamb_participants should all exist");
+            let acc = dfa.accepts_data(db, &edges);
+            if acc {
+                v.push(k.clone());
+            }
+            if log_enabled!(log::Level::Warn) && k == ref_id && !acc {
+                warn!(
+                    "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
+                    cite_id,
+                    k,
+                    disamb_pass,
+                    dfa.debug_graph(db),
+                    edges
+                );
+            }
+            if log_enabled!(log::Level::Trace) && k != ref_id && acc {
+                trace!(
+                    "{:?}: matched other reference {} during pass {:?}",
+                    cite_id,
+                    k,
+                    disamb_pass
+                );
+            }
+        });
     v
 }
 
