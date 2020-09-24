@@ -443,7 +443,7 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
     struct OtherRef;
 
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
-    let mut n = 0;
+
     // Participants could be 100 different references, each with quite a lot of CPU work to do.
     // A possible improvement would be to check the ones that are likely to collide first, so
     // that the short circuit can be quicker.
@@ -453,18 +453,18 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
 
     let ref_dfas = db.all_ref_dfas();
 
-    let iter = cfg_par_iter!(ref_dfas);
+    let mut iter = cfg_par_iter!(ref_dfas);
 
     // THe bool -> true means matched self
     let res = iter
-        .try_fold(cfg_rayon!(|| false, false), |acc: bool, (k, dfa)| {
-            let acc = dfa.accepts_data(db, &edges);
-            if acc && k == self_id {
+        .try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
+            let accepts = dfa.accepts_data(db, &edges);
+            if accepts && k == self_id {
                 Ok(true)
-            } else if acc {
+            } else if accepts {
                 Err(OtherRef)
             } else {
-                Ok(false || acc)
+                Ok(false || accumulate)
             }
         });
     let res = cfg_rayon!(
