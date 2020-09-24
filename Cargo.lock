@@ -292,7 +292,6 @@ dependencies = [
  "lazy_static",
  "log",
  "nom 5.0.1",
- "parking_lot 0.9.0",
  "petgraph",
  "pretty_assertions",
  "rayon",
@@ -944,14 +943,6 @@ checksum = "ae91b68aebc4ddb91978b11a1b02ddd8602a05ec19002801c5666000e05e0f83"
 
 [[package]]
 name = "lock_api"
-version = "0.3.1"
-source = "git+https://github.com/cormacrelf/parking_lot.git?branch=wasm32#8fa2fd35fd8c74c7e959744b1ac47987cdd47f53"
-dependencies = [
- "scopeguard",
-]
-
-[[package]]
-name = "lock_api"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28247cc5a5be2f05fbcd76dd0cf2c7d3b5400cb978a28042abcd4fa0b3f8261c"
@@ -1143,38 +1134,13 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.9.0"
-source = "git+https://github.com/cormacrelf/parking_lot.git?branch=wasm32#8fa2fd35fd8c74c7e959744b1ac47987cdd47f53"
-dependencies = [
- "autocfg 0.1.7",
- "cfg-if",
- "lock_api 0.3.1",
- "parking_lot_core 0.6.2",
-]
-
-[[package]]
-name = "parking_lot"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4893845fa2ca272e647da5d0e46660a314ead9c2fdd9a883aabc32e481a8733"
 dependencies = [
  "instant",
- "lock_api 0.4.1",
- "parking_lot_core 0.8.0",
-]
-
-[[package]]
-name = "parking_lot_core"
-version = "0.6.2"
-source = "git+https://github.com/cormacrelf/parking_lot.git?branch=wasm32#8fa2fd35fd8c74c7e959744b1ac47987cdd47f53"
-dependencies = [
- "autocfg 0.1.7",
- "cfg-if",
- "cloudabi 0.0.3",
- "libc",
- "redox_syscall",
- "smallvec 0.6.13",
- "winapi",
+ "lock_api",
+ "parking_lot_core",
 ]
 
 [[package]]
@@ -1672,10 +1638,10 @@ checksum = "9ab29056d4fb4048a5f0d169c9b6e5526160c9ec37aded5a6879c2c9c445a8e4"
 dependencies = [
  "crossbeam-utils 0.7.2",
  "indexmap",
- "lock_api 0.4.1",
+ "lock_api",
  "log",
  "oorandom",
- "parking_lot 0.11.0",
+ "parking_lot",
  "rustc-hash",
  "salsa-macros",
  "smallvec 1.4.1",
