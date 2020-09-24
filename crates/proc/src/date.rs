@@ -51,18 +51,18 @@ fn to_ref_ir<F>(
     root: NodeId,
     arena: &IrArena<Markup>,
     stack: Formatting,
-    ys_edge: Edge,
+    ys_edge: EdgeData,
     to_edge: &F,
 ) -> (RefIR, GroupVars)
 where
-    F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+    F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
 {
     struct Scope<'a, F>
     where
-        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
     {
         stack: Formatting,
-        ys_edge: Edge,
+        ys_edge: EdgeData,
         to_edge: &'a F,
         arena: &'a IrArena<Markup>,
     }
@@ -74,7 +74,7 @@ where
     };
     fn walk<F>(node: NodeId, arena: &IrArena<Markup>, scope: &Scope<'_, F>) -> (RefIR, GroupVars)
     where
-        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
     {
         arena
             .get(node)
@@ -84,7 +84,7 @@ where
                     RefIR::Edge((scope.to_edge)(opt_build.as_ref(), scope.stack)),
                     GroupVars::Important,
                 ),
-                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge)), GroupVars::Important),
+                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge.clone())), GroupVars::Important),
                 IR::Seq(ir_seq) => {
                     let contents: Vec<RefIR> = node
                         .children(scope.arena)
@@ -120,10 +120,10 @@ impl Either<Markup> {
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let to_edge =
-            |opt_cite_edge: Option<&CiteEdgeData<Markup>>, stack: Formatting| -> Option<Edge> {
-                opt_cite_edge.map(|cite_edge| db.edge(cite_edge.to_edge_data(fmt, stack)))
+            |opt_cite_edge: Option<&CiteEdgeData<Markup>>, stack: Formatting| -> Option<EdgeData> {
+                opt_cite_edge.map(|cite_edge| cite_edge.to_edge_data(fmt, stack))
             };
-        let ys_edge = db.edge(EdgeData::YearSuffixPlain);
+        let ys_edge = EdgeData::YearSuffixPlain;
         match self {
             Either::Build(opt) => {
                 let content = opt.map(CiteEdgeData::Output);
@@ -199,7 +199,7 @@ impl Disambiguation<Markup> for BodyDate {
         if var == DateVariable::Accessed {
             either.map(|_| {
                 (
-                    RefIR::Edge(Some(db.edge(EdgeData::Accessed))),
+                    RefIR::Edge(Some(EdgeData::Accessed)),
                     GroupVars::Important,
                 )
             })

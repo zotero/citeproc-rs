@@ -73,7 +73,7 @@ pub(crate) mod prelude {
     pub use crate::ir::*;
     pub use crate::ref_ir::*;
 
-    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
+    pub(crate) use crate::disamb::{Disambiguation, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};

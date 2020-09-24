@@ -99,7 +99,7 @@ impl Disambiguation<Markup> for Names {
                                     if !fmt.is_empty(&b) {
                                         let out =
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
-                                        let e = db.edge(EdgeData::Output(out));
+                                        let e = EdgeData::Output(out);
                                         let ir = RefIR::Edge(Some(e));
                                         spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                     }
@@ -109,7 +109,7 @@ impl Disambiguation<Markup> for Names {
                                         if !fmt.is_empty(b) {
                                             let out =
                                                 fmt.output_in_context(b.clone(), child_stack, None);
-                                            let e = db.edge(EdgeData::Output(out));
+                                            let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
                                             spot = add_to_graph(db, fmt, nfa, &ir, spot);
                                         }
@@ -194,7 +194,7 @@ impl DisambNameData {
     }
 
     /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> Edge {
+    pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> EdgeData {
         let fmt = &db.get_formatter();
         let style = db.style();
         let builder = OneNameVar {
@@ -206,7 +206,7 @@ impl DisambNameData {
         };
         let built = builder.render_person_name(&self.value, !self.primary);
         let o = fmt.output_in_context(built, stack, None);
-        db.edge(EdgeData::Output(o))
+        EdgeData::Output(o)
     }
 
     pub fn disamb_iter(&self, rule: GivenNameDisambiguationRule) -> SingleNameDisambIter {
@@ -416,11 +416,11 @@ fn add_expanded_name_to_graph(
 }
 
 use smallvec::SmallVec;
-pub struct NameVariantMatcher(SmallVec<[Edge; 3]>);
+pub struct NameVariantMatcher(SmallVec<[EdgeData; 3]>);
 
 impl NameVariantMatcher {
-    pub fn accepts(&self, edge: Edge) -> bool {
-        self.0.contains(&edge)
+    pub fn accepts(&self, edge: &EdgeData) -> bool {
+        self.0.contains(edge)
     }
 
     pub fn from_disamb_name(db: &dyn IrDatabase, dn: DisambName) -> Self {
@@ -463,7 +463,7 @@ pub fn disambiguated_person_names(
     for &dn in dns.iter() {
         matchers.push(NameVariantMatcher::from_disamb_name(db, dn));
     }
-    let is_ambiguous = |edge: Edge| -> bool {
+    let is_ambiguous = |edge: &EdgeData| -> bool {
         let mut n = 0;
         for m in &matchers {
             let acc = m.accepts(edge);
@@ -481,7 +481,7 @@ pub fn disambiguated_person_names(
         let mut dn: DisambNameData = dn_id.lookup(db);
         let mut edge = dn.single_name_edge(db, Formatting::default());
         let mut iter = dn.disamb_iter(rule);
-        while is_ambiguous(edge) {
+        while is_ambiguous(&edge) {
             if let Some(pass) = iter.next() {
                 dn.apply_pass(pass);
                 edge = dn.single_name_edge(db, Formatting::default());

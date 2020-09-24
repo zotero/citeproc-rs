@@ -78,7 +78,7 @@ pub use free::{FreeCond, FreeCondSets};
 pub use names::{DisambName, DisambNameData};
 pub use ref_context::RefContext;
 
-pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
+pub use finite_automata::{Dfa, EdgeData, Nfa, NfaEdge};
 
 use csl::*;
 use csl::{Atom, IsIndependent};
@@ -276,9 +276,9 @@ pub fn create_ref_ir<O: OutputFormat>(
 ) -> Vec<(FreeCond, RefIR)> {
     let style = db.style();
     let locale = db.locale_by_reference(refr.id.clone());
-    let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
-    let ysh_plain_edge = db.edge(EdgeData::YearSuffixPlain);
-    let ysh_edge = db.edge(EdgeData::YearSuffix);
+    let ysh_explicit_edge = EdgeData::YearSuffixExplicit;
+    let ysh_plain_edge = EdgeData::YearSuffixPlain;
+    let ysh_edge = EdgeData::YearSuffix;
     let fcs = db.branch_runs();
     let fmt = db.get_formatter();
     let mut vec: Vec<(FreeCond, RefIR)> = fcs
@@ -308,7 +308,7 @@ pub fn create_ref_ir<O: OutputFormat>(
                 &mut state,
                 Formatting::default(),
             );
-            ir.keep_first_ysh(ysh_explicit_edge, ysh_plain_edge, ysh_edge);
+            ir.keep_first_ysh(ysh_explicit_edge.clone(), ysh_plain_edge.clone(), ysh_edge.clone());
             (fc, ir)
         })
         .collect();
@@ -334,17 +334,17 @@ pub fn graph_with_stack(
     fmt.stack_postorder(&mut close_tags, &stack);
     let mkedge = |s: SmartString| {
         RefIR::Edge(if !s.is_empty() {
-            Some(db.edge(EdgeData::Output(s)))
+            Some(EdgeData::Output(s))
         } else {
             None
         })
     };
     let mkedge_esc = |s: &str| {
         RefIR::Edge(if !s.is_empty() {
-            Some(db.edge(EdgeData::Output(
+            Some(EdgeData::Output(
                 // TODO: fmt.ingest
                 fmt.output_in_context(fmt.plain(s), Default::default(), None),
-            )))
+            ))
         } else {
             None
         })
@@ -374,7 +374,7 @@ pub fn add_to_graph(
         RefIR::Edge(None) => spot,
         RefIR::Edge(Some(e)) => {
             let to = nfa.graph.add_node(());
-            nfa.graph.add_edge(spot, to, NfaEdge::Token(*e));
+            nfa.graph.add_edge(spot, to, NfaEdge::Token(e.clone()));
             to
         }
         RefIR::Seq(ref seq) => {
@@ -390,11 +390,11 @@ pub fn add_to_graph(
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
-                    Some(db.edge(EdgeData::Output(fmt.output_in_context(
+                    Some(EdgeData::Output(fmt.output_in_context(
                         fmt.plain(s),
                         Default::default(),
                         None,
-                    ))))
+                    )))
                 } else {
                     None
                 })
@@ -456,8 +456,8 @@ fn test_determinism() {
     use crate::test::MockProcessor;
     let db = MockProcessor::new();
     let fmt = db.get_formatter();
-    let aa = db.edge(EdgeData::Output("aa".into()));
-    let bb = db.edge(EdgeData::Output("bb".into()));
+    let aa = EdgeData::Output("aa".into());
+    let bb = EdgeData::Output("bb".into());
 
     let make_dfa = || {
         let mut nfa = Nfa::new();

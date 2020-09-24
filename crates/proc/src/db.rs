@@ -11,7 +11,7 @@ use fnv::FnvHashMap;
 use std::sync::Arc;
 
 use crate::disamb::names::replace_single_child;
-use crate::disamb::{Dfa, DisambName, DisambNameData, Edge, EdgeData, FreeCondSets};
+use crate::disamb::{Dfa, DisambName, DisambNameData, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData};
@@ -75,9 +75,6 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
     /// After global disambiguation, any modifications to DisambNameData are stored within the IR.
     #[salsa::interned]
     fn disamb_name(&self, e: DisambNameData) -> DisambName;
-
-    #[salsa::interned]
-    fn edge(&self, e: EdgeData) -> Edge;
 
     // Sorting
 
@@ -780,7 +777,7 @@ fn expand_one_name_ir(
         }
     }
 
-    let name_ambiguity_number = |edge: Edge, slot: &[NameVariantMatcher]| -> u32 {
+    let name_ambiguity_number = |edge: &EdgeData, slot: &[NameVariantMatcher]| -> u32 {
         slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
     };
 
@@ -791,7 +788,7 @@ fn expand_one_name_ir(
                 // First, get the initial count
                 /* TODO: store format stack */
                 let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
-                let mut min = name_ambiguity_number(edge, slot);
+                let mut min = name_ambiguity_number(&edge, slot);
                 debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
                 let mut stage_dn = ratchet.data.clone();
                 // Then, try to improve it
@@ -800,7 +797,7 @@ fn expand_one_name_ir(
                     if let Some(next) = iter.next() {
                         stage_dn.apply_pass(next);
                         edge = stage_dn.single_name_edge(db, Formatting::default());
-                        let new_count = name_ambiguity_number(edge, slot);
+                        let new_count = name_ambiguity_number(&edge, slot);
                         if new_count < min {
                             // save the improvement
                             min = new_count;
