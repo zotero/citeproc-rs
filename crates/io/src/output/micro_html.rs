@@ -1,9 +1,7 @@
+use smartstring::alias::String;
 use super::FormatCmd;
 use crate::output::LocalizedQuotes;
 use crate::IngestOptions;
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct MicroHtml(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum MicroNode {
@@ -105,7 +103,7 @@ impl HtmlReader<String> for PlainHtmlReader {
 
     fn plain(&self, s: &str) -> Option<Vec<String>> {
         let plain = self.options.plain(s);
-        Some(vec![plain.into_owned()])
+        Some(vec![plain.as_ref().into()])
     }
 }
 

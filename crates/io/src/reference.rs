@@ -12,7 +12,6 @@ use fnv::FnvHashMap;
 
 use super::date::DateOrRange;
 use super::names::Name;
-use super::numeric::NumericValue;
 use crate::NumberLike;
 use csl::{Atom, CslType, DateVariable, Lang, NameVariable, NumberVariable, Variable};
 

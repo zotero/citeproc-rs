@@ -1,20 +1,21 @@
+use smartstring::alias::String;
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
 
 #[test]
 fn normalise() {
     let mut nodes = vec![
-        InlineElement::Text("a".to_owned()),
-        InlineElement::Text("b".to_owned()),
+        InlineElement::Text("a".into()),
+        InlineElement::Text("b".into()),
     ];
     normalise_text_elements(&mut nodes);
-    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".into())][..]);
     let mut nodes = vec![
         InlineElement::Micro(MicroNode::parse("a", &Default::default())),
         InlineElement::Micro(MicroNode::parse("b", &Default::default())),
     ];
     normalise_text_elements(&mut nodes);
-    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".into())][..]);
 }
 
 fn smash_string_push(base: &mut String, mut suff: &str) {
@@ -26,7 +27,8 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
         suff = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            base.truncate(trimmed.len());
+            let trimmed_len = trimmed.len();
+            base.truncate(trimmed_len);
         }
     }
     let base_len = base.len();
@@ -60,7 +62,8 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
         suff_append = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            base.truncate(trimmed.len())
+            let trimmed_len = trimmed.len();
+            base.truncate(trimmed_len)
         }
     }
     let base_len = base.len();
@@ -268,9 +271,6 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-            | InlineElement::Anchor {
-                content: inlines, ..
-            }
             | InlineElement::Anchor {
                 content: inlines, ..
             }
@@ -502,7 +502,7 @@ fn find_string_right_f_micro(m: &mut MicroNode) -> Option<&mut String> {
     }
 }
 
-fn remove_empty_left(els: &mut Vec<InlineElement>, mut ix: usize) -> usize {
+fn remove_empty_left(els: &mut Vec<InlineElement>, ix: usize) -> usize {
     fn should_remove(node: &mut InlineElement) -> bool {
         match node {
             InlineElement::Text(s) => s.is_empty(),
@@ -613,7 +613,6 @@ fn find_right_quote_inside_micro<'b>(
 ) -> Option<RightQuoteInsertionPoint<'b>> {
     match micro {
         MicroNode::Quoted {
-            localized,
             children,
             ..
         } => {
@@ -678,10 +677,10 @@ impl RightQuoteInsertionPoint<'_> {
                 // if let Some(next) = self.next_string_mut() {
                 //     next.insert_str(0, smushed)
                 // }
-                list.insert(*quoted_index + 1, InlineElement::Text(smushed.to_owned()));
+                list.insert(*quoted_index + 1, InlineElement::Text(smushed.into()));
             }
             RightQuoteInsertionPoint::OutsideMicro { list, quoted_index } => {
-                list.insert(*quoted_index + 1, MicroNode::Text(smushed.to_owned()));
+                list.insert(*quoted_index + 1, MicroNode::Text(smushed.into()));
             }
         }
     }
@@ -734,14 +733,6 @@ fn last_string_micro(ms: &mut [MicroNode]) -> Option<&mut String> {
         | MicroNode::Formatted(children, _) => last_string_micro(children),
         MicroNode::Text(string) => Some(string),
     })
-}
-
-fn punc_some(c: char) -> Option<char> {
-    if is_punc(c) {
-        Some(c)
-    } else {
-        None
-    }
 }
 
 pub fn append_suffix(pre_and_content: &mut Vec<InlineElement>, suffix: Vec<MicroNode>) {

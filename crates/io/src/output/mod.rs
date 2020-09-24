@@ -4,6 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use smartstring::alias::String;
+use std::marker::{Send, Sync};
+
 use crate::IngestOptions;
 use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 
@@ -15,8 +18,6 @@ pub mod pandoc;
 #[cfg(feature = "plain")]
 pub mod plain;
 mod superscript;
-
-use std::marker::{Send, Sync};
 
 // pub use self::pandoc::Pandoc;
 // pub use self::plain::PlainText;

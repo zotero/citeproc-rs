@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use smartstring::alias::String;
 use std::cmp::Ordering;
 
 /// TODO: parse 2018-3-17 as if it were '03'

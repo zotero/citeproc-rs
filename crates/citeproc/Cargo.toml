@@ -33,7 +33,7 @@ cfg-if = "0.1.10"
 fnv = "1.0.6"
 salsa = "0.15.2"
 log = "0.4.8"
-serde = { version = "1.0.100", features = ["rc"] }
+serde = { version = "1.0.116", features = ["rc"] }
 serde_derive = "1.0.100"
 
 csl = { path = "../csl" }
@@ -45,7 +45,7 @@ jemallocator = { version = "0.3.2", optional = true }
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }
-criterion = "0.3.1"
+criterion = "0.3.3"
 pretty_assertions = "0.6.1"
 lazy_static = "1.4.0"
 serde_yaml = "0.8.9"

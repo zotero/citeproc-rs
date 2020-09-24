@@ -43,14 +43,14 @@ pub use self::reference::*;
 
 use self::output::LocalizedQuotes;
 use csl::TextCase;
-use std::borrow::Cow;
+
+use smartstring::alias::String;
+pub(crate) type SmartCow<'a> = cervine::Cow<'a, String, str>;
 
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use csl::{FontVariant, VerticalAlignment};
 use unic_segment::{GraphemeIndices, WordBoundIndices, Words};
-
-use phf::phf_set;
 
 #[derive(Debug, Clone, Default)]
 pub struct IngestOptions {
@@ -61,15 +61,6 @@ pub struct IngestOptions {
     pub is_english: bool,
 }
 
-/// https://stackoverflow.com/a/38406885
-fn uppercase_first(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
-}
-
 // from the unic_segment example code
 fn has_alphanumeric(s: &&str) -> bool {
     is_word(*s)
@@ -78,63 +69,38 @@ fn is_word(s: &str) -> bool {
     s.chars().any(|ch| ch.is_alphanumeric())
 }
 
-fn transform_first_char_of_word<F, I>(word: &str, f: F) -> Cow<'_, str>
+fn transform_first_char_of_word<F, I>(word: &str, f: F) -> SmartCow
 where
     F: Fn(char) -> I,
     I: Iterator<Item = char> + Clone,
 {
     // Naively capitalizes without a stopword filter
-    let mut len = word.len();
     let mut chars = word.chars();
     match chars.next() {
-        None => Cow::Borrowed(word),
+        None => SmartCow::Borrowed(word),
         Some(first) => {
             let tx = f(first);
             // Don't allocate for Already Capitalized Words
             if tx.clone().count() == 1 && tx.clone().nth(0) == Some(first) {
-                return Cow::Borrowed(word);
+                return SmartCow::Borrowed(word);
             }
-            let mut s = String::with_capacity(len);
+            let mut s = String::new();
             s.extend(tx);
             // Fast convert back from iterator which knows its own byte offset
             s.push_str(chars.as_str());
-            Cow::Owned(s)
+            SmartCow::Owned(s)
         }
     }
 }
 
-fn transform_uppercase_first(word: &str) -> Cow<'_, str> {
+fn transform_uppercase_first(word: &str) -> SmartCow {
     transform_first_char_of_word(word, |c| c.to_uppercase())
 }
 
-static SPEC_STOPWORDS: phf::Set<&'static str> = phf_set! {
-    "a",
-    "an",
-    "and",
-    "as",
-    "at",
-    "but",
-    "by",
-    "down",
-    "for",
-    "from",
-    "in",
-    "into",
-    "nor",
-    "of",
-    "on",
-    "onto",
-    "or",
-    "over",
-    "so",
-    "the",
-    "till",
-    "to",
-    "up",
-    "via",
-    "with",
-    "yet",
-};
+// use phf::phf_set;
+// static SPEC_STOPWORDS: phf::Set<&'static str> = phf_set! { "a", "an", "and", "as", "at", "but",
+// "by", "down", "for", "from", "in", "into", "nor", "of", "on", "onto", "or", "over", "so", "the",
+// "till", "to", "up", "via", "with", "yet", };
 
 static CITEPROC_JS_STOPWORD_REGEX: once_cell::sync::OnceCell<regex::Regex> =
     once_cell::sync::OnceCell::new();
@@ -311,13 +277,14 @@ fn is_stopword(word_and_rest: &str) -> Option<usize> {
 }
 
 fn upper_word_to_title(word: &str) -> Option<String> {
-    let lowered = word.to_lowercase();
     let mut upper_gs = GraphemeIndices::new(word);
     if let Some((_, first_g)) = upper_gs.next() {
-        let mut ret = String::with_capacity(word.len());
+        let mut ret = String::new();
         ret.push_str(first_g);
         if let Some((rest_ix, _)) = upper_gs.next() {
-            ret.push_str(&word[rest_ix..].to_lowercase());
+            let rest = &word[rest_ix..];
+            let rest_lower = lazy_lowercase(rest);
+            ret.push_str(rest_lower.as_ref());
         }
         return Some(ret);
     }
@@ -325,7 +292,7 @@ fn upper_word_to_title(word: &str) -> Option<String> {
 }
 
 fn transform_sentence_case(
-    mut s: String,
+    s: String,
     seen_one: bool,
     is_last: bool,
     is_uppercase: bool,
@@ -335,13 +302,13 @@ fn transform_sentence_case(
             &s,
             seen_one,
             is_last,
-            |word, _word_and_rest, is_first, no_stop| {
+            |word, _word_and_rest, is_first, _no_stop| {
                 if is_first {
                     if let Some(upper) = upper_word_to_title(word) {
-                        return (Cow::Owned(upper), None);
+                        return (SmartCow::Owned(upper), None);
                     }
                 }
-                (Cow::Owned(word.to_lowercase()), None)
+                (lazy_lowercase(word), None)
             },
         )
     } else {
@@ -354,7 +321,7 @@ fn title_case_word<'a>(
     word_and_rest: &'a str,
     entire_is_uppercase: bool,
     no_stopword: bool,
-) -> (Cow<'a, str>, Option<usize>) {
+) -> (SmartCow<'a>, Option<usize>) {
     if !no_stopword {
         if let Some(mut match_len) = is_stopword(word_and_rest) {
             // drop the trailing whitespace
@@ -368,19 +335,20 @@ fn title_case_word<'a>(
                 }
             });
             match_len = match_len - last_char;
-            let lowered = word_and_rest[..match_len].to_lowercase();
-            return (Cow::Owned(lowered), Some(match_len));
+            let word_rest_upto_match = &word_and_rest[..match_len];
+            let lowered = lazy_lowercase(word_rest_upto_match);
+            return (lowered, Some(match_len));
         }
     }
     if !word.chars().any(|c| c.is_ascii_alphabetic() || c == '.') {
         // Entirely non-English
         // e.g. "β" in "β-Carotine"
         // Full stop is so A.D. doesn't become a.D.
-        return (Cow::Borrowed(word), None);
+        return (SmartCow::Borrowed(word), None);
     }
     if entire_is_uppercase {
         if let Some(ret) = upper_word_to_title(word) {
-            return (Cow::Owned(ret), None);
+            return (SmartCow::Owned(ret), None);
         }
     }
     (
@@ -402,9 +370,9 @@ fn transform_title_case(s: &str, seen_one: bool, is_last: bool) -> String {
 
 fn transform_each_word<'a, F>(mut s: &'a str, seen_one: bool, is_last: bool, transform: F) -> String
 where
-    F: Fn(&'a str, &'a str, bool, bool) -> (Cow<'a, str>, Option<usize>),
+    F: Fn(&'a str, &'a str, bool, bool) -> (SmartCow<'a>, Option<usize>),
 {
-    let mut acc = String::with_capacity(s.len());
+    let mut acc = String::new();
     let mut is_first = !seen_one;
     let mut bounds = WordBoundIndices::new(s);
     while let Some((ix, substr)) = bounds.next() {
@@ -433,13 +401,13 @@ where
     acc
 }
 
-fn transform_first_word<'a>(mut s: String, transform: impl Fn(&str) -> Cow<'_, str>) -> String {
+fn transform_first_word<'a>(s: String, transform: impl Fn(&str) -> SmartCow) -> String {
     let mut bounds = WordBoundIndices::new(&s);
     while let Some((ix, bound)) = bounds.next() {
         if is_word(bound) {
             let tx = transform(bound);
-            if tx != bound {
-                let mut ret = String::with_capacity(s.len());
+            if tx.as_ref() != bound {
+                let mut ret = String::new();
                 ret.push_str(&s[..ix]);
                 ret.push_str(&tx);
                 if let Some((rest_ix, _)) = bounds.next() {
@@ -459,15 +427,16 @@ fn string_contains_word(s: &str) -> bool {
 }
 
 impl IngestOptions {
-    pub fn plain<'s>(&self, s: &'s str) -> Cow<'s, str> {
-        let mut cow = Cow::Borrowed(s);
-        if self.replace_hyphens {
-            cow = Cow::Owned(cow.replace('-', "\u{2013}"));
+    pub fn plain<'s>(&self, s: &'s str) -> SmartCow<'s> {
+        if self.replace_hyphens && self.strip_periods {
+            lazy_replace_char(s, '-', "\u{2013}")
+        } else if self.replace_hyphens {
+            lazy_replace_char(s, '-', "\u{2013}")
+        } else if self.strip_periods {
+            lazy_replace_char(s, '.', "")
+        } else {
+            SmartCow::Borrowed(s)
         }
-        if self.strip_periods {
-            cow = Cow::Owned(cow.replace('.', ""));
-        }
-        cow
     }
     pub fn apply_text_case_inner(
         &self,
@@ -475,7 +444,6 @@ impl IngestOptions {
         mut seen_one: bool,
         is_uppercase: bool,
     ) -> bool {
-        let mut mine = false;
         let len = inlines.len();
         for (ix, inline) in inlines.iter_mut().enumerate() {
             if seen_one && self.text_case == TextCase::CapitalizeFirst {
@@ -531,7 +499,6 @@ impl IngestOptions {
         mut seen_one: bool,
         is_uppercase: bool,
     ) -> bool {
-        let mut mine = false;
         let len = micros.len();
         for (ix, micro) in micros.iter_mut().enumerate() {
             if seen_one && self.text_case == TextCase::CapitalizeFirst {
@@ -582,8 +549,8 @@ impl IngestOptions {
         entire_is_uppercase: bool,
     ) -> String {
         match self.text_case {
-            TextCase::Lowercase => s.to_lowercase(),
-            TextCase::Uppercase => s.to_uppercase(),
+            TextCase::Lowercase => lazy_lowercase_owned(s),
+            TextCase::Uppercase => lazy_uppercase_owned(s),
             TextCase::CapitalizeFirst => transform_first_word(s, transform_uppercase_first),
             TextCase::Sentence if !seen_one => {
                 transform_sentence_case(s, seen_one, is_last, entire_is_uppercase)
@@ -604,6 +571,64 @@ impl IngestOptions {
             ..Default::default()
         }
     }
+}
+
+use lazy_transform_str::{transform, TransformedPart};
+
+fn next_char(mutable: &mut &str) -> Option<char> {
+    let c = mutable.chars().next()?;
+    *mutable = &mutable[c.len_utf8()..];
+    Some(c)
+}
+
+fn lazy_lowercase_owned(s: String) -> String {
+    lazy_char_transform_owned(s, |c| c.to_lowercase())
+}
+
+fn lazy_lowercase(s: &str) -> SmartCow {
+    lazy_char_transform(s, |c| c.to_lowercase())
+}
+
+fn lazy_uppercase_owned(s: String) -> String {
+    lazy_char_transform_owned(s, |c| c.to_uppercase())
+}
+
+pub(crate) fn lazy_char_transform_owned<I: Iterator<Item = char>>(s: String, f: impl Fn(char) -> I) -> String {
+    let cow = lazy_char_transform(s.as_ref(), f);
+    match cow {
+        SmartCow::Borrowed(_) => s,
+        SmartCow::Owned(new_s) => new_s,
+    }
+}
+
+pub(crate) fn lazy_char_transform<I: Iterator<Item = char>>(s: &str, f: impl Fn(char) -> I) -> SmartCow {
+    transform(s, |rest| {
+        let next = next_char(rest).expect("only called when there is remaining input");
+        let mut lower_iter = f(next).peekable();
+        match lower_iter.next() {
+            // It's identical to the original
+            Some(c) if c == next => TransformedPart::Unchanged,
+            Some(c) => {
+                let mut transformed = String::new();
+                transformed.push(c);
+                transformed.extend(lower_iter);
+                TransformedPart::Changed(transformed)
+            }
+            None => TransformedPart::Changed(String::new()),
+        }
+    })
+}
+
+pub(crate) fn lazy_replace_char<'a>(s: &'a str, replace: char, with: &str) -> SmartCow<'a> {
+    transform(s, |rest| {
+        let next = next_char(rest).expect("only called when there is remaining input");
+        if next == replace {
+            let with = String::from(with);
+            TransformedPart::Changed(with)
+        } else {
+            TransformedPart::Unchanged
+        }
+    })
 }
 
 fn any_lowercase(s: &str) -> bool {

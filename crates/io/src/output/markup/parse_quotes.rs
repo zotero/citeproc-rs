@@ -1,5 +1,5 @@
+use smartstring::alias::String;
 use crate::output::micro_html::MicroNode;
-use crate::output::FormatCmd;
 use crate::IngestOptions;
 #[cfg(test)]
 use crate::LocalizedQuotes;
@@ -19,13 +19,13 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
 fn test_parse_quotes() {
     assert_eq!(
         parse_quotes(
-            vec![MicroNode::Text("'hello'".to_owned())],
+            vec![MicroNode::Text("'hello'".into())],
             &IngestOptions::default_with_quotes(LocalizedQuotes::simple())
         ),
         vec![MicroNode::Quoted {
             is_inner: false,
             localized: LocalizedQuotes::simple(),
-            children: vec![MicroNode::Text("hello".to_owned()),]
+            children: vec![MicroNode::Text("hello".into()),]
         }]
     );
     let options = Default::default();
@@ -38,7 +38,7 @@ fn test_parse_quotes() {
             vec![MicroNode::Quoted {
                 is_inner: false,
                 localized: LocalizedQuotes::simple(),
-                children: vec![MicroNode::Text("quotes in italics".to_owned()),]
+                children: vec![MicroNode::Text("quotes in italics".into()),]
             }],
             FormatCmd::FontStyleItalic
         )]
@@ -79,7 +79,7 @@ impl QuotedStack {
         if let Some(MicroNode::Text(ref mut string)) = dest.last_mut() {
             string.push_str(txt);
         } else {
-            dest.push(MicroNode::Text(txt.to_owned()));
+            dest.push(MicroNode::Text(txt.into()));
         }
     }
     fn push_string(&mut self, txt: String) {
@@ -219,12 +219,12 @@ fn test_stamp() {
     );
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let inters = vec![
-        Intermediate::Event(EventOwned::Text("prefix, ".to_owned())),
+        Intermediate::Event(EventOwned::Text("prefix, ".into())),
         Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
         Intermediate::Index(0),
         Intermediate::Index(1),
         Intermediate::Event(EventOwned::SmartQuoteSingleClose),
-        Intermediate::Event(EventOwned::Text(", suffix".to_owned())),
+        Intermediate::Event(EventOwned::Text(", suffix".into())),
     ];
     assert_eq!(
         &stamp(2, inters.into_iter(), &mut orig, &options),
@@ -358,7 +358,7 @@ enum EventOwned {
 impl<'a> From<Event<'a>> for EventOwned {
     fn from(ev: Event<'a>) -> Self {
         match ev {
-            Event::Text(s) => EventOwned::Text(s.to_owned()),
+            Event::Text(s) => EventOwned::Text(s.into()),
             Event::SmartMidwordInvertedComma => EventOwned::SmartMidwordInvertedComma,
             Event::SmartQuoteSingleOpen => EventOwned::SmartQuoteSingleOpen,
             Event::SmartQuoteDoubleOpen => EventOwned::SmartQuoteDoubleOpen,

@@ -147,7 +147,7 @@ dependencies = [
  "colored",
  "failure",
  "is_executable",
- "itertools",
+ "itertools 0.8.2",
  "serde",
  "serde_derive",
  "serde_json",
@@ -184,6 +184,15 @@ checksum = "f52a465a666ca3d838ebbf08b241383421412fe7ebb463527bba275526d89f76"
 dependencies = [
  "jobserver",
  "num_cpus",
+]
+
+[[package]]
+name = "cervine"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f0db89834ef04fc63d2f136327b42d532b45def0345213d28690a3446c7bdb5"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -256,11 +265,13 @@ dependencies = [
 name = "citeproc-io"
 version = "0.1.0"
 dependencies = [
+ "cervine",
  "csl",
  "env_logger 0.7.1",
  "fnv",
  "html5ever",
- "itertools",
+ "itertools 0.8.2",
+ "lazy-transform-str",
  "log",
  "nom 5.0.1",
  "once_cell",
@@ -271,6 +282,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "smartstring",
  "stringreader",
  "unic-segment",
  "v_htmlescape",
@@ -288,7 +300,7 @@ dependencies = [
  "env_logger 0.7.1",
  "fnv",
  "indextree",
- "itertools",
+ "itertools 0.8.2",
  "lazy_static",
  "log",
  "nom 5.0.1",
@@ -404,16 +416,16 @@ checksum = "995a44c877f9212528ccc74b21a232f66ad69001e40ede5bcee2ac9ef2657120"
 
 [[package]]
 name = "criterion"
-version = "0.3.1"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc755679c12bda8e5523a71e4d654b6bf2e14bd838dfc48cde6559a05caf7d1"
+checksum = "70daa7ceec6cf143990669a04c7df13391d55fb27bd4079d252fca774ba244d8"
 dependencies = [
  "atty",
  "cast",
  "clap",
  "criterion-plot",
  "csv",
- "itertools",
+ "itertools 0.9.0",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -421,6 +433,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde",
+ "serde_cbor",
  "serde_derive",
  "serde_json",
  "tinytemplate",
@@ -429,12 +442,12 @@ dependencies = [
 
 [[package]]
 name = "criterion-plot"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01e15e0ea58e8234f96146b1f91fa9d0e4dd7a38da93ff7a75d42c0b9d3a545"
+checksum = "e022feadec601fba1649cfa83586381a4ad31c6bf3a9ab7d408118b05dd9889d"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.9.0",
 ]
 
 [[package]]
@@ -503,6 +516,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_derive",
+ "smartstring",
  "string_cache",
  "strum",
  "strum_macros",
@@ -731,6 +745,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gnaw"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a79786fca5da31058bdc23d4a09a3b6ef0e1a77f6982cdcf6151bcbe41290d8b"
+
+[[package]]
+name = "half"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d36fab90f82edc3c747f9d438e06cf0a491055896f2a279638bb5beed6c40177"
+
+[[package]]
 name = "heck"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -837,6 +863,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -881,6 +916,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85a7e2c92a4804dd459b86c339278d0fe87cf93757fae222c3fa3ae75458bc73"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "lazy-transform-str"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3f2f08de5da0353709e66c6302747c07d60186e70d19b172dbdcc51a1de357e"
+dependencies = [
+ "cervine",
+ "gnaw",
+ "smartstring",
 ]
 
 [[package]]
@@ -1698,18 +1744,28 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.103"
+version = "1.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1217f97ab8e8904b57dd22eb61cde455fa7446a9c1cf43966066da047c1f3702"
+checksum = "96fe57af81d28386a513cbc6858332abc6117cfdb5999647c6444b8f43a370a5"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
-name = "serde_derive"
-version = "1.0.103"
+name = "serde_cbor"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8c6faef9a2e64b0064f48570289b4bf8823b7581f1d6157c1b52152306651d0"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
+ "serde",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.116"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f630a6370fd8e457873b4bd2ffdae75408bc291ba72be773772a4c2a065d9ae8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1775,6 +1831,22 @@ name = "smallvec"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3757cb9d89161a2f24e1cf78efa0c1fcff485d18e3f55e0aa3480824ddaa0f3f"
+
+[[package]]
+name = "smartstring"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5579edba9651e6b9ccf0d516c4457521a149dadeb77e88b03eb1ae3183fe180a"
+dependencies = [
+ "serde",
+ "static_assertions",
+]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "string_cache"
@@ -1987,9 +2059,9 @@ dependencies = [
 
 [[package]]
 name = "tinytemplate"
-version = "1.0.2"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4574b75faccaacddb9b284faecdf0b544b80b6b294f3d062d325c5726a209c20"
+checksum = "6d3dc76004a03cec1c5932bca4cdc2e39aaa798e3f82363dd94f9adf6098c12f"
 dependencies = [
  "serde",
  "serde_json",
