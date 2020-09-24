@@ -103,7 +103,7 @@ pub fn initialize<'n>(
             process_token(token)
         }
 
-        Cow::Owned(build.trim().to_string())
+        Cow::Owned(build.trim().into())
     } else {
         Cow::Borrowed(given_name)
     }

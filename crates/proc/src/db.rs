@@ -111,14 +111,14 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatt
         cite_id: CiteId,
         macro_name: Atom,
         sort_key: SortKey,
-    ) -> Option<Arc<String>>;
+    ) -> Option<Arc<SmartString>>;
     #[salsa::invoke(crate::sort::sort_string_bibliography)]
     fn sort_string_bibliography(
         &self,
         ref_id: Atom,
         macro_name: Atom,
         sort_key: SortKey,
-    ) -> Option<Arc<String>>;
+    ) -> Option<Arc<SmartString>>;
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }

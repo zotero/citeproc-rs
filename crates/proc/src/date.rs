@@ -802,18 +802,20 @@ fn dp_render_sort_string(
     date: &Date,
     _key: &SortKey,
     is_filtered: bool,
-) -> Option<String> {
+) -> Option<SmartString> {
     match part.form {
-        DatePartForm::Year(_) => Some(format!("{:04}_", date.year)),
+        DatePartForm::Year(_) => {
+            Some(smart_format!("{:04}_", date.year))
+        }
         DatePartForm::Month(..) => {
             if is_filtered {
                 return None;
             }
             // Sort strings do not compare seasons
             if date.month > 0 && date.month <= 12 {
-                Some(format!("{:02}", date.month))
+                Some(smart_format!("{:02}", date.month))
             } else {
-                Some("00".to_owned())
+                Some("00".into())
             }
         }
         DatePartForm::Day(_) => {
@@ -821,16 +823,16 @@ fn dp_render_sort_string(
                 return None;
             }
             if date.day > 0 {
-                Some(format!("{:02}", date.day))
+                Some(smart_format!("{:02}", date.day))
             } else {
-                Some("00".to_owned())
+                Some("00".into())
             }
         }
     }
 }
 
-fn render_year(year: i32, form: YearForm, locale: &Locale) -> String {
-    let mut s = String::new();
+fn render_year(year: i32, form: YearForm, locale: &Locale) -> SmartString {
+    let mut s = SmartString::new();
     if year == 0 {
         // Open year range
         return s;
@@ -864,7 +866,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: &GenericContext<'c, O, I>,
     date: &Date,
-) -> Option<String> {
+) -> Option<SmartString> {
     let locale = ctx.locale();
     match part.form {
         DatePartForm::Year(form) => Some(render_year(date.year, form, ctx.locale())),
@@ -873,32 +875,32 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 if date.month == 0 || date.month > 12 {
                     None
                 } else {
-                    Some(format!("{}", date.month))
+                    Some(smart_format!("{}", date.month))
                 }
             }
             MonthForm::NumericLeadingZeros => {
                 if date.month == 0 || date.month > 12 {
                     None
                 } else {
-                    Some(format!("{:02}", date.month))
+                    Some(smart_format!("{:02}", date.month))
                 }
             }
             _ => {
                 let sel = GenderedTermSelector::from_month_u32(date.month, form)?;
-                let string = locale
+                let string: SmartString = locale
                     .gendered_terms
                     .get(&sel)
-                    .map(|gt| gt.0.singular().to_string())
+                    .map(|gt| gt.0.singular().into())
                     .unwrap_or_else(|| {
                         let fallback = if form == MonthForm::Short {
                             MONTHS_SHORT
                         } else {
                             MONTHS_LONG
                         };
-                        fallback[date.month as usize].to_string()
+                        fallback[date.month as usize].into()
                     });
                 Some(if strip_periods {
-                    string.replace('.', "")
+                    citeproc_io::lazy_replace_char_owned(string, '.', "")
                 } else {
                     string
                 })
@@ -906,7 +908,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
         },
         DatePartForm::Day(form) => match form {
             _ if date.day == 0 => None,
-            DayForm::NumericLeadingZeros => Some(format!("{:02}", date.day)),
+            DayForm::NumericLeadingZeros => Some(smart_format!("{:02}", date.day)),
             DayForm::Ordinal
                 if !locale
                     .options_node
@@ -932,7 +934,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                     })
             }
             // Numeric or ordinal with limit-day-ordinals-to-day-1
-            _ => Some(format!("{}", date.day)),
+            _ => Some(smart_format!("{}", date.day)),
         },
     }
 }

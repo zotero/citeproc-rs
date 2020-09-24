@@ -45,7 +45,9 @@ use self::output::LocalizedQuotes;
 use csl::TextCase;
 
 use smartstring::alias::String;
-pub(crate) type SmartCow<'a> = cervine::Cow<'a, String, str>;
+// Export these, because proc is going to need them
+pub type SmartCow<'a> = cervine::Cow<'a, String, str>;
+pub type SmartString = String;
 
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
@@ -593,7 +595,7 @@ fn lazy_uppercase_owned(s: String) -> String {
     lazy_char_transform_owned(s, |c| c.to_uppercase())
 }
 
-pub(crate) fn lazy_char_transform_owned<I: Iterator<Item = char>>(s: String, f: impl Fn(char) -> I) -> String {
+pub fn lazy_char_transform_owned<I: Iterator<Item = char>>(s: String, f: impl Fn(char) -> I) -> String {
     let cow = lazy_char_transform(s.as_ref(), f);
     match cow {
         SmartCow::Borrowed(_) => s,
@@ -601,7 +603,7 @@ pub(crate) fn lazy_char_transform_owned<I: Iterator<Item = char>>(s: String, f: 
     }
 }
 
-pub(crate) fn lazy_char_transform<I: Iterator<Item = char>>(s: &str, f: impl Fn(char) -> I) -> SmartCow {
+pub fn lazy_char_transform<I: Iterator<Item = char>>(s: &str, f: impl Fn(char) -> I) -> SmartCow {
     transform(s, |rest| {
         let next = next_char(rest).expect("only called when there is remaining input");
         let mut lower_iter = f(next).peekable();
@@ -619,7 +621,15 @@ pub(crate) fn lazy_char_transform<I: Iterator<Item = char>>(s: &str, f: impl Fn(
     })
 }
 
-pub(crate) fn lazy_replace_char<'a>(s: &'a str, replace: char, with: &str) -> SmartCow<'a> {
+pub fn lazy_replace_char_owned(orig: String, replace: char, with: &str) -> String {
+    let cow = lazy_replace_char(&orig, replace, with);
+    match cow {
+        SmartCow::Borrowed(_) => orig,
+        SmartCow::Owned(x) => x,
+    }
+}
+
+pub fn lazy_replace_char<'a>(s: &'a str, replace: char, with: &str) -> SmartCow<'a> {
     transform(s, |rest| {
         let next = next_char(rest).expect("only called when there is remaining input");
         if next == replace {

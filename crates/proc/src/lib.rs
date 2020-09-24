@@ -15,6 +15,17 @@ use csl::Atom;
 
 use std::collections::HashSet;
 
+macro_rules! smart_format {
+    ($lit:literal, $($expr:expr),*) => {
+        {
+            use std::fmt::Write;
+            let mut smart = $crate::prelude::SmartString::new();
+            write!(&mut smart, $lit, $($expr),*).expect("a formatting trait implementation returned an error");
+            smart
+        }
+    }
+}
+
 mod choose;
 mod citation_label;
 mod cite_context;
@@ -53,6 +64,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
+    pub use citeproc_io::{SmartString, SmartCow};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 

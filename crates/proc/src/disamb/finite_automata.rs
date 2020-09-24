@@ -339,7 +339,7 @@ impl Dfa {
                         (EdgeData::Output(w), EdgeData::Output(t)) => {
                             if w == t {
                                 cursors.push((target, None, &chunk[min(1, chunk.len())..]));
-                            } else if t.starts_with(w) {
+                            } else if t.starts_with(w.as_str()) {
                                 let next = if prepended.is_some() {
                                     // already have split this one
                                     0

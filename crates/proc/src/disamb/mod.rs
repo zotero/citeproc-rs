@@ -328,11 +328,11 @@ pub fn graph_with_stack(
     f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
 ) -> NodeIndex {
     let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), None);
-    let mut open_tags = String::new();
-    let mut close_tags = String::new();
+    let mut open_tags = SmartString::new();
+    let mut close_tags = SmartString::new();
     fmt.stack_preorder(&mut open_tags, &stack);
     fmt.stack_postorder(&mut close_tags, &stack);
-    let mkedge = |s: String| {
+    let mkedge = |s: SmartString| {
         RefIR::Edge(if !s.is_empty() {
             Some(db.edge(EdgeData::Output(s)))
         } else {

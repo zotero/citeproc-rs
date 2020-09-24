@@ -175,13 +175,13 @@ impl<O: OutputFormat> IrNameCounter<O> {
         let count = self.count(ctx);
         let built = if ctx.sort_key.is_some() {
             fmt.affixed_text(
-                format!("{:08}", count),
+                smart_format!("{:08}", count),
                 None,
                 Some(&crate::sort::natural_sort::num_affixes()),
             )
         } else {
             // This isn't sort-mode, you can render NameForm::Count as text.
-            fmt.text_node(format!("{}", count), None)
+            fmt.text_node(smart_format!("{}", count), None)
         };
         (
             IR::Rendered(Some(CiteEdgeData::Output(built))),
@@ -253,7 +253,7 @@ impl<O: OutputFormat> Default for IR<O> {
 
 /// Currently, flattening into EdgeData(String) only works when the Output type is String
 /// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
-impl<O: OutputFormat<Output = String>> IR<O> {
+impl<O: OutputFormat<Output = SmartString>> IR<O> {
     /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
     /// be rendered
     pub fn flatten(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<O::Build> {
@@ -283,7 +283,7 @@ impl<O: OutputFormat<Output = String>> IR<O> {
     }
 }
 
-impl<O: OutputFormat<Output = String>> CiteEdgeData<O> {
+impl<O: OutputFormat<Output = SmartString>> CiteEdgeData<O> {
     pub(crate) fn to_edge_data(&self, fmt: &O, formatting: Formatting) -> EdgeData {
         match self {
             CiteEdgeData::Output(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
@@ -455,7 +455,7 @@ impl IrSeq {
 
 impl IrSeq {
     // TODO: Groupvars
-    fn flatten_seq<O: OutputFormat<Output = String>>(
+    fn flatten_seq<O: OutputFormat<Output = SmartString>>(
         &self,
         id: NodeId,
         arena: &IrArena<O>,
@@ -530,13 +530,13 @@ impl IrSeq {
         let sub_formatting = formatting
             .map(|mine| format_context.override_with(mine))
             .unwrap_or(format_context);
-        let mut open_tags = String::new();
-        let mut close_tags = String::new();
+        let mut open_tags = SmartString::new();
+        let mut close_tags = SmartString::new();
         fmt.stack_preorder(&mut open_tags, &stack);
         fmt.stack_postorder(&mut close_tags, &stack);
 
         if !affixes.map_or(true, |a| a.prefix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().prefix.to_string()));
+            edges.push(EdgeData::Output(affixes.unwrap().prefix.as_ref().into()));
         }
 
         if !open_tags.is_empty() {
@@ -568,7 +568,7 @@ impl IrSeq {
         }
 
         if !affixes.map_or(true, |a| a.suffix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().suffix.to_string()));
+            edges.push(EdgeData::Output(affixes.unwrap().suffix.as_ref().into()));
         }
     }
 }

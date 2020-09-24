@@ -188,7 +188,7 @@ fn test() {
 //     let mut state = DisambiguationState::new();
 //     group.construct_nfa(&db, &mut state);
 //     let dfa = state.nfa.brzozowski_minimise();
-//     let value = db.edge(EdgeData("value".to_string()));
+//     let value = db.edge(EdgeData("value".into()));
 //     let italic = db.edge(EdgeData("<i>italic</i>".to_string()));
 //     assert!(dfa.accepts(&[value, italic]));
 // }

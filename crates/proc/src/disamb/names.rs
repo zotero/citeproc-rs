@@ -35,7 +35,7 @@ impl Disambiguation<Markup> for Names {
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
 
-        let and_term = locale.and_term(None).map(|x| x.to_owned());
+        let and_term = locale.and_term(None).map(SmartString::from);
         let etal_term = locale.et_al_term(names_inheritance.et_al.as_ref());
         let mut runner = OneNameVar {
             name_el: &names_inheritance.name,
@@ -578,8 +578,8 @@ pub struct NameIR<O: OutputFormat> {
     // or make name tokens.
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool,
-    pub etal_term: Option<(String, Option<Formatting>)>,
-    pub and_term: Option<String>,
+    pub etal_term: Option<(SmartString, Option<Formatting>)>,
+    pub and_term: Option<SmartString>,
 }
 
 impl<O> NameIR<O>
@@ -593,8 +593,8 @@ where
         label_variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         style: &Style,
-        etal_term: Option<(String, Option<Formatting>)>,
-        and_term: Option<String>,
+        etal_term: Option<(SmartString, Option<Formatting>)>,
+        and_term: Option<SmartString>,
     ) -> Self {
         let built_label = names_inheritance.label.as_ref().and_then(|label| {
             let renderer = Renderer::gen(gen_ctx.clone());

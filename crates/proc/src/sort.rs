@@ -46,7 +46,7 @@ pub fn sort_string_citation(
     cite_id: CiteId,
     macro_name: Atom,
     key: SortKey,
-) -> Option<Arc<String>> {
+) -> Option<Arc<SmartString>> {
     let bib_num = db.bib_number(cite_id);
     with_cite_context(db, cite_id, bib_num, Some(key), true, None, |ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
@@ -62,7 +62,7 @@ pub fn sort_string_bibliography(
     ref_id: Atom,
     macro_name: Atom,
     key: SortKey,
-) -> Option<Arc<String>> {
+) -> Option<Arc<SmartString>> {
     with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
         let mut walker = SortingWalker::new(db, &ctx);
         let text = plain_macro_element(macro_name.clone());
@@ -216,7 +216,7 @@ pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
 /// Creates a total ordering of References from a Sort element. (Not a query)
 pub fn bib_ordering<
     ID: std::fmt::Debug + Copy,
-    MacroRunner: Fn(&dyn IrDatabase, ID, Atom, SortKey) -> Option<Arc<String>>,
+    MacroRunner: Fn(&dyn IrDatabase, ID, Atom, SortKey) -> Option<Arc<SmartString>>,
     O: OutputFormat,
     I: OutputFormat,
 >(
@@ -257,7 +257,7 @@ pub fn bib_ordering<
             SortSource::Variable(any) => match any {
                 AnyVariable::Ordinary(v) => {
                     use citeproc_io::micro_html_to_string;
-                    fn strip_markup(s: impl AsRef<str>) -> String {
+                    fn strip_markup(s: impl AsRef<str>) -> SmartString {
                         micro_html_to_string(s.as_ref(), &Default::default())
                     };
                     let aa = a_ctx
@@ -450,7 +450,7 @@ fn test_date_as_macro_strip_delims() {
 }
 
 impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
-    type Output = (String, GroupVars);
+    type Output = (SmartString, GroupVars);
     type Checker = CiteContext<'a, PlainText, O>;
 
     fn default(&mut self) -> Self::Output {
@@ -462,7 +462,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
 
     fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
         let iter = elements.iter();
-        let mut output: Option<String> = None;
+        let mut output: Option<SmartString> = None;
         // Avoid allocating one new string
         let mut gv_acc = GroupVars::new();
         for el in iter {

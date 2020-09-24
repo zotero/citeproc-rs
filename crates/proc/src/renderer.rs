@@ -216,7 +216,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let prf = self.page_range_format(var);
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
-                let mut s = String::new();
+                let mut s = SmartString::new();
                 for t in ts {
                     if !s.is_empty() {
                         s.push(',');
