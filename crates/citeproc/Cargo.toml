@@ -21,7 +21,7 @@ default = ["parallel", "jemalloc"]
 
 # Lets the processor compute batched updates in parallel on multiple threads,
 # using rayon's work-stealing queues
-parallel = ["rayon", "citeproc-db/parallel"]
+parallel = ["rayon", "citeproc-db/parallel", "citeproc-proc/parallel"]
 
 # enables jemalloc for the test binaries. Gives 25-50% faster execution with
 # the allocation-heavy code at the time of writing.

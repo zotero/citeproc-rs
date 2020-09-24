@@ -38,6 +38,7 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 #[salsa::query_group(IrDatabaseStorage)]
 pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
+    fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
     // TODO: cache this
     // #[salsa::invoke(crate::disamb::create_ref_ir)]
@@ -163,6 +164,16 @@ fn ref_dfa(db: &dyn IrDatabase, key: Atom) -> Option<Arc<Dfa>> {
     } else {
         None
     }
+}
+
+fn all_ref_dfas(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<Dfa>>> {
+    let map = db.disamb_participants()
+        .iter()
+        .filter_map(|key| {
+            db.ref_dfa(key.clone()).map(|v| (key.clone(), v))
+        })
+        .collect();
+    Arc::new(map)
 }
 
 fn branch_runs(db: &dyn IrDatabase) -> Arc<FreeCondSets> {
@@ -401,28 +412,11 @@ macro_rules! preamble {
     }};
 }
 
-fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>) -> bool {
-    let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
-    let mut n = 0;
-    for k in db.disamb_participants().iter() {
-        let dfa = db
-            .ref_dfa(k.clone())
-            .expect("disamb_participants should all exist");
-        let acc = dfa.accepts_data(db, &edges);
-        if acc {
-            n += 1;
-        }
-        if n > 1 {
-            break;
-        }
-    }
-    n <= 1
-}
-
 macro_rules! cfg_par_iter {
     ($expr:expr) => {
         {
             #[cfg(feature = "rayon")] {
+                use rayon::prelude::*;
                 ($expr).par_iter()
             }
             #[cfg(not(feature = "rayon"))] {
@@ -430,6 +424,56 @@ macro_rules! cfg_par_iter {
             }
         }
     };
+}
+
+macro_rules! cfg_rayon {
+    ($rayon:expr, $not:expr) => {
+        {
+            #[cfg(feature = "rayon")] {
+                $rayon
+            }
+            #[cfg(not(feature = "rayon"))] {
+                $not
+            }
+        }
+    };
+}
+
+fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, self_id: &Atom) -> bool {
+    struct OtherRef;
+
+    let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
+    let mut n = 0;
+    // Participants could be 100 different references, each with quite a lot of CPU work to do.
+    // A possible improvement would be to check the ones that are likely to collide first, so
+    // that the short circuit can be quicker.
+
+    #[cfg(feature = "rayon")]
+    use rayon::prelude::*;
+
+    let ref_dfas = db.all_ref_dfas();
+
+    let iter = cfg_par_iter!(ref_dfas);
+
+    // THe bool -> true means matched self
+    let res = iter
+        .try_fold(cfg_rayon!(|| false, false), |acc: bool, (k, dfa)| {
+            let acc = dfa.accepts_data(db, &edges);
+            if acc && k == self_id {
+                Ok(true)
+            } else if acc {
+                Err(OtherRef)
+            } else {
+                Ok(false || acc)
+            }
+        });
+    let res = cfg_rayon!(
+        res.try_reduce(|| false, |a, b| {
+            unimplemented!("")
+        }),
+        res
+    );
+    res.is_ok()
 }
 
 /// Returns the set of Reference IDs that could have produced a cite's IR
@@ -446,17 +490,16 @@ fn refs_accepting_cite(
     // - reference.id
     // - disamb_pass (for debug)
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
-    let mut v = Vec::with_capacity(1);
     let participants = db.disamb_participants();
+    #[cfg(feature = "rayon")]
+    use rayon::prelude::*;
+
     let iter = cfg_par_iter!(participants);
-    iter.for_each(|k: &Atom| {
+    iter.filter_map(|k: &Atom| {
             let dfa = db
                 .ref_dfa(k.clone())
                 .expect("disamb_participants should all exist");
             let acc = dfa.accepts_data(db, &edges);
-            if acc {
-                v.push(k.clone());
-            }
             if log_enabled!(log::Level::Warn) && k == ref_id && !acc {
                 warn!(
                     "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
@@ -475,8 +518,13 @@ fn refs_accepting_cite(
                     disamb_pass
                 );
             }
-        });
-    v
+            if acc {
+                Some(k.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 ///
@@ -892,13 +940,13 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let un = is_unambiguous(db, root, arena);
+    let un = is_unambiguous(db, root, arena, &ctx.reference.id);
     if un {
         return;
     }
     let cond_refs = list_all_cond_disambs(root, arena);
     for cid in cond_refs.into_iter() {
-        if is_unambiguous(db, root, arena) {
+        if is_unambiguous(db, root, arena, &ctx.reference.id) {
             debug!("successfully disambiguated with Cond");
             break;
         }
@@ -1021,7 +1069,7 @@ impl IrGenCow {
                 &ctx,
                 year_suffix,
             );
-            is_unambiguous(db, cloned.root, &cloned.arena)
+            is_unambiguous(db, cloned.root, &cloned.arena, &ctx.reference.id)
         } else {
             false
         }
@@ -1043,7 +1091,7 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
 
     let mut irgen = IrGenCow::Arc(db.ir_gen0(id));
-    if is_unambiguous(db, irgen.root, &irgen.arena) {
+    if is_unambiguous(db, irgen.root, &irgen.arena, &ctx.reference.id) {
         return irgen.into_arc();
     }
     let successful = irgen.disambiguate_add_names(db, &mut ctx);
