@@ -186,6 +186,15 @@ impl Processor {
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
+
+            // Prefetch the DFAs
+            let participants = self.disamb_participants();
+            participants
+                .par_iter()
+                .for_each_with(self.snap(), |snap, &ref_id| {
+                    self.ref_dfa(ref_id.clone());
+                });
+
             let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
             // single rayon thread
