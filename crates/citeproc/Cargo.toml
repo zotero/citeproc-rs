@@ -30,19 +30,19 @@ parallel = ["rayon", "citeproc-db/parallel", "citeproc-proc/parallel"]
 jemalloc = ["jemallocator"]
 
 [dependencies]
-rayon = { version = "1.2.0", optional = true }
+rayon = { version = "1.4.1", optional = true }
 cfg-if = "0.1.10"
-fnv = "1.0.6"
+fnv = "1.0.7"
 salsa = "0.15.2"
-log = "0.4.8"
+log = "0.4.11"
 serde = { version = "1.0.116", features = ["rc"] }
-serde_derive = "1.0.100"
+serde_derive = "1.0.116"
 
 csl = { path = "../csl" }
 citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 citeproc-db = { path = "../db" }
-thiserror = "1.0.6"
+thiserror = "1.0.20"
 jemallocator = { version = "0.3.2", optional = true }
 
 [dev-dependencies]
@@ -50,10 +50,10 @@ test_utils = { path = "../test-utils" }
 criterion = "0.3.3"
 pretty_assertions = "0.6.1"
 lazy_static = "1.4.0"
-serde_yaml = "0.8.9"
-toml = "0.5.3"
-env_logger = "0.6.2"
-insta = "0.12.0"
+serde_yaml = "0.8.13"
+toml = "0.5.6"
+env_logger = "0.7.1"
+insta = "0.16.1"
 
 [dev-dependencies.datatest]
 git = "https://github.com/cormacrelf/datatest"

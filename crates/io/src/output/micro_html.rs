@@ -170,7 +170,7 @@ fn test_sanitize() {
 
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
-use html5ever::rcdom::{Handle, NodeData, RcDom};
+use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::{local_name, parse_fragment, Namespace};
