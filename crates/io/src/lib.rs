@@ -44,10 +44,13 @@ pub use self::reference::*;
 use self::output::LocalizedQuotes;
 use csl::TextCase;
 
-use smartstring::alias::String;
 // Export these, because proc is going to need them
+// type Sixteen = smallstr::SmallString<[u8; 16]>;
+// type TwentyFour = smallstr::SmallString<[u8; 24]>;
+
+pub type SmartString = std::string::String;
+pub(crate) type String = std::string::String;
 pub type SmartCow<'a> = cervine::Cow<'a, String, str>;
-pub type SmartString = String;
 
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
@@ -575,8 +578,6 @@ impl IngestOptions {
     }
 }
 
-use lazy_transform_str::{transform, TransformedPart};
-
 fn next_char(mutable: &mut &str) -> Option<char> {
     let c = mutable.chars().next()?;
     *mutable = &mutable[c.len_utf8()..];
@@ -639,6 +640,41 @@ pub fn lazy_replace_char<'a>(s: &'a str, replace: char, with: &str) -> SmartCow<
             TransformedPart::Unchanged
         }
     })
+}
+
+// Copied from lazy_transform_str
+enum TransformedPart {
+    Unchanged,
+    Changed(String),
+}
+fn transform(
+    slice: &str,
+    mut transform_next: impl FnMut(&mut &str) -> TransformedPart,
+) -> SmartCow {
+    let mut rest = slice;
+    let mut copied = loop {
+        if rest.is_empty() {
+            return SmartCow::Borrowed(slice);
+        }
+        let unchanged_rest = rest;
+        if let TransformedPart::Changed(transformed) = transform_next(&mut rest) {
+            let mut copied = String::from(&slice[..slice.len() - unchanged_rest.len()]);
+            copied.push_str(&transformed);
+            break copied;
+        }
+    };
+
+    while !rest.is_empty() {
+        let unchanged_rest = rest;
+        match transform_next(&mut rest) {
+            TransformedPart::Unchanged => {
+                copied.push_str(&unchanged_rest[..unchanged_rest.len() - rest.len()]);
+            }
+            TransformedPart::Changed(changed) => copied.push_str(&changed),
+        }
+    }
+
+    SmartCow::Owned(copied)
 }
 
 fn any_lowercase(s: &str) -> bool {

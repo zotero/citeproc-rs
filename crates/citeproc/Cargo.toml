@@ -16,8 +16,10 @@ bench = false
 
 [features]
 
+default = []
+
 # For WASM builds, use `citeproc = { version = "...", default-features = false }`
-default = ["parallel", "jemalloc"]
+# default = ["parallel", "jemalloc"]
 
 # Lets the processor compute batched updates in parallel on multiple threads,
 # using rayon's work-stealing queues

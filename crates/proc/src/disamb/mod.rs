@@ -130,13 +130,13 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.db.style();
-        let macro_unsafe = style
+        let macro_elements = style
             .macros
             .get(name)
             .expect("macro errors not implemented!");
 
         self.state.push_macro(name);
-        let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
+        let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
         self.state.pop_macro(name);
         ret
     }
@@ -373,6 +373,17 @@ pub fn add_to_graph(
     match ir {
         RefIR::Edge(None) => spot,
         RefIR::Edge(Some(e)) => {
+            // {
+            //     use std::io::Write;
+            //     use std::fs::OpenOptions;
+            //     let mut file = OpenOptions::new()
+            //         .write(true)
+            //         .append(true)
+            //         .create(true)
+            //         .open("./add_to_graph.txt")
+            //         .unwrap();
+            //     writeln!(file, "add_to_graph: {:?}", e).unwrap();
+            // }
             let to = nfa.graph.add_node(());
             nfa.graph.add_edge(spot, to, NfaEdge::Token(e.clone()));
             to
@@ -403,7 +414,7 @@ pub fn add_to_graph(
             graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
                 let mut seen = false;
                 for x in contents {
-                    if x != &RefIR::Edge(None) {
+                    if !matches!(x, RefIR::Edge(None)) {
                         if seen {
                             spot = add_to_graph(db, fmt, nfa, delim, spot);
                         }

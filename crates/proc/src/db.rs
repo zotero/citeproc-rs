@@ -310,18 +310,11 @@ fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct IrGen {
     pub(crate) arena: IrArena<Markup>,
     pub(crate) root: NodeId,
     pub(crate) state: IrState,
-}
-
-impl Eq for IrGen {}
-impl PartialEq<IrGen> for IrGen {
-    fn eq(&self, other: &Self) -> bool {
-        self.arena == other.arena && self.state == other.state && self.root == other.root
-    }
 }
 
 use std::fmt;
@@ -450,12 +443,13 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
 
     let ref_dfas = db.all_ref_dfas();
 
+    #[allow(unused_mut)]
     let mut iter = cfg_par_iter!(ref_dfas);
 
     // THe bool -> true means matched self
     let res = iter
         .try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
-            let accepts = dfa.accepts_data(db, &edges);
+            let accepts = dfa.accepts_data(&edges);
             if accepts && k == self_id {
                 Ok(true)
             } else if accepts {
@@ -465,9 +459,7 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
             }
         });
     let res = cfg_rayon!(
-        res.try_reduce(|| false, |a, b| {
-            unimplemented!("")
-        }),
+        res.try_reduce(|| false, |a, b| Ok(a || b)),
         res
     );
     res.is_ok()
@@ -491,22 +483,14 @@ fn refs_accepting_cite(
     #[cfg(feature = "rayon")]
     use rayon::prelude::*;
 
-    let iter = cfg_par_iter!(participants);
-    iter.filter_map(|k: &Atom| {
-            let dfa = db
-                .ref_dfa(k.clone())
-                .expect("disamb_participants should all exist");
-            let acc = dfa.accepts_data(db, &edges);
-            if log_enabled!(log::Level::Warn) && k == ref_id && !acc {
-                warn!(
-                    "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
-                    cite_id,
-                    k,
-                    disamb_pass,
-                    dfa.debug_graph(db),
-                    edges
-                );
-            }
+    let ref_dfas = db.all_ref_dfas();
+
+    let iter = cfg_par_iter!(ref_dfas);
+
+    let mut own_ref_nonmatch = true;
+
+    let ret: Vec<Atom> = iter.filter_map(|(k, dfa)| {
+            let acc = dfa.accepts_data(&edges);
             if log_enabled!(log::Level::Trace) && k != ref_id && acc {
                 trace!(
                     "{:?}: matched other reference {} during pass {:?}",
@@ -521,7 +505,20 @@ fn refs_accepting_cite(
                 None
             }
         })
-        .collect()
+        .collect();
+
+    if log_enabled!(log::Level::Warn) && !ret.contains(ref_id) {
+        let dfa = ref_dfas.get(ref_id).unwrap();
+        warn!(
+            "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
+            cite_id,
+            ref_id,
+            disamb_pass,
+            dfa.debug_graph(db),
+            edges
+        );
+    }
+    ret
 }
 
 ///
@@ -679,7 +676,7 @@ fn disambiguate_add_names(
             let edges = IR::to_edge_stream(root, arena, fmt);
             let count = dfas
                 .iter()
-                .filter(|dfa| dfa.accepts_data(db, &edges))
+                .filter(|dfa| dfa.accepts_data(&edges))
                 .count() as u16;
             if count == 0 {
                 warn!("should not get to zero matching refs");

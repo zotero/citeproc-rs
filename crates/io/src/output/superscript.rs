@@ -1,4 +1,4 @@
-use smartstring::alias::String;
+use crate::String;
 use super::micro_html::MicroNode;
 use super::FormatCmd;
 

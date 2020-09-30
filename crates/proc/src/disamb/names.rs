@@ -78,7 +78,7 @@ impl Disambiguation<Markup> for Names {
                     &self.et_al,
                     false,
                     and_term.as_ref(),
-                    etal_term.as_ref(),
+                    etal_term.as_ref().map(|(a, b)| (a.as_str().into(), b.clone())).as_ref(),
                 );
                 counted_tokens = ntb_len;
                 if counted_tokens <= max_counted_tokens {

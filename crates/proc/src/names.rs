@@ -102,7 +102,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
             label_var,
             ratchets,
             style,
-            locale.et_al_term(names_inheritance.et_al.as_ref()),
+            locale.et_al_term(names_inheritance.et_al.as_ref()).map(|(a, b)| (SmartString::from(a), b) ),
             locale.and_term(None).map(|x| x.into()),
         )
     };
@@ -931,7 +931,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             },
                             self.initialize_with_hyphen,
                         );
-                        parts.push(self.format_with_part(given_part, initialized));
+                        parts.push(self.format_with_part(given_part, initialized.as_ref()));
                         if token != NamePartToken::Given {
                             if let Some(dp) = pn.dropping_particle.as_ref() {
                                 parts.push(fmt.plain(" "));

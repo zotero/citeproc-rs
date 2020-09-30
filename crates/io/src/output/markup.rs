@@ -33,7 +33,7 @@ pub use self::move_punctuation::is_punc;
 pub use self::parse_quotes::parse_quotes;
 pub(self) mod puncttable;
 
-use smartstring::alias::String;
+use crate::String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {

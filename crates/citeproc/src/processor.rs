@@ -32,7 +32,7 @@ use csl::Style;
 use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference, SmartString};
 use csl::Atom;
 
 #[allow(dead_code)]
@@ -66,7 +66,7 @@ pub struct Processor {
     pub fetcher: Arc<dyn LocaleFetcher>,
     pub formatter: Markup,
     last_bibliography: Arc<Mutex<SavedBib>>,
-    last_clusters: Arc<Mutex<FnvHashMap<ClusterId, Arc<String>>>>,
+    last_clusters: Arc<Mutex<FnvHashMap<ClusterId, Arc<SmartString>>>>,
 }
 
 impl salsa::Database for Processor {}
@@ -163,8 +163,8 @@ impl Processor {
     // TODO: This might not play extremely well with Salsa's garbage collector,
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
-    pub fn compute(&self) -> Vec<(ClusterId, Arc<String>)> {
-        fn upsert_diff(into_h: &mut FnvHashMap<ClusterId, Arc<String>>, id: ClusterId, built: Arc<String>) -> Option<(ClusterId, Arc<String>)> {
+    pub fn compute(&self) -> Vec<(ClusterId, Arc<SmartString>)> {
+        fn upsert_diff(into_h: &mut FnvHashMap<ClusterId, Arc<SmartString>>, id: ClusterId, built: Arc<SmartString>) -> Option<(ClusterId, Arc<SmartString>)> {
             let mut diff = None;
             into_h
                 .entry(id)
@@ -186,13 +186,14 @@ impl Processor {
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
+            use std::ops::DerefMut;
 
             // Prefetch the DFAs
             let participants = self.disamb_participants();
             participants
                 .par_iter()
-                .for_each_with(self.snap(), |snap, &ref_id| {
-                    self.ref_dfa(ref_id.clone());
+                .for_each_with(self.snap(), |snap, ref_id| {
+                    snap.0.ref_dfa(ref_id.clone());
                 });
 
             let cite_ids = self.all_cite_ids();
@@ -209,7 +210,7 @@ impl Processor {
                 .map_with(self.snap(), |snap, cluster| {
                     let built = snap.0.built_cluster(cluster.id);
                     let mut into_hashmap = snap.0.last_clusters.lock().unwrap();
-                    upsert_diff(&mut into_hashmap, cluster.id, built)
+                    upsert_diff(into_hashmap.deref_mut(), cluster.id, built)
                 })
                 .filter_map(|x| x)
                 .collect()
@@ -440,7 +441,7 @@ impl Processor {
         self.sorted_refs()
             .0
             .iter()
-            .filter_map(|k| bib_map.get(&k).map(|v| (k, v)))
+            .filter_map(|k| bib_map.get(k.as_str()).map(|v| (k, v)))
             .filter(|(_, v)| !v.is_empty())
             .map(|(k, v)| BibEntry {
                 id: k.clone(),

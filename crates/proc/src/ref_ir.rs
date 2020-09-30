@@ -12,7 +12,7 @@ use csl::Atom;
 use csl::{Affixes, Formatting};
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RefIR {
     /// A piece of output that a cite can match in the final DFA.
     /// e.g.
@@ -57,19 +57,13 @@ pub enum RefIR {
     // Branch(Arc<Conditions>, Box<IR<O>>),
 }
 
-impl Eq for RefIR {}
-impl PartialEq for RefIR {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
 impl Default for RefIR {
     fn default() -> Self {
         RefIR::Edge(None)
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct RefIrSeq {
     pub contents: Vec<RefIR>,
     pub formatting: Option<Formatting>,

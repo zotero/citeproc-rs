@@ -13,7 +13,6 @@ use crate::{FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
 use std::str::FromStr;
-use smartstring::alias::String as SmartString;
 
 mod lang;
 pub use self::lang::{IsoCountry, IsoLang, Lang, LocaleSource};
@@ -321,7 +320,7 @@ impl Locale {
     pub fn et_al_term(
         &self,
         element: Option<&crate::NameEtAl>,
-    ) -> Option<(SmartString, Option<Formatting>)> {
+    ) -> Option<(String, Option<Formatting>)> {
         let mut term = MiscTerm::EtAl;
         let mut default = "et al";
         let mut formatting = None;

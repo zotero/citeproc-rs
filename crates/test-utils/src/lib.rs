@@ -147,7 +147,7 @@ impl TestCase {
                 let mut cites = Vec::new();
                 // TODO: assemble cites/clusters the other few available ways
                 for refr in self.input.iter() {
-                    cites.push(Cite::basic(&refr.id));
+                    cites.push(Cite::basic(&*refr.id));
                 }
                 clusters_auto.push(Cluster { id: 1, cites });
                 &clusters_auto

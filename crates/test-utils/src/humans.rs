@@ -9,7 +9,7 @@ use super::{Format, Mode, TestCase};
 use citeproc::prelude::*;
 use citeproc_io::{
     Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Locators, Reference,
-    Suppression,
+    Suppression, SmartString,
 };
 
 use lazy_static::lazy_static;
@@ -70,8 +70,8 @@ impl CiteprocJsCite {
     fn to_cite(&self) -> Cite<Markup> {
         Cite {
             ref_id: csl::Atom::from(self.id.as_str()),
-            prefix: self.prefix.clone(),
-            suffix: self.suffix.clone(),
+            prefix: self.prefix.as_ref().map(SmartString::from),
+            suffix: self.suffix.as_ref().map(SmartString::from),
             locators: self.locators.clone(),
             suppression: match (self.suppress_author, self.author_only) {
                 (false, true) => Some(Suppression::InText),

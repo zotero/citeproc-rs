@@ -1,4 +1,4 @@
-use smartstring::alias::String;
+use crate::String;
 use crate::output::micro_html::MicroNode;
 use crate::IngestOptions;
 #[cfg(test)]

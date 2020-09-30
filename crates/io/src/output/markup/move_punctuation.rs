@@ -1,4 +1,4 @@
-use smartstring::alias::String;
+use crate::String;
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
 
@@ -31,23 +31,41 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
             base.truncate(trimmed_len);
         }
     }
-    let base_len = base.len();
-    let suff_len = suff.len();
-    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
-    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
-    let width = last_width + first_width;
-    base.push_str(suff);
-    // Smash across the boundary
-    if base_len > 0 && suff_len > 0 {
-        let start = base_len - last_width;
-        let range = start..start + width;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+
+    // Place the last char of base, and the first char of suff, into an array.
+    let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
+    let mut work = &mut work_area[..];
+    let mut total = 0;
+    if let Some(base_last) = base.chars().rev().nth(0) {
+        let len = base_last.len_utf8();
+        base_last.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    let mut suff_rest = suff;
+    if let Some(suff_first) = suff.chars().nth(0) {
+        let len = suff_first.len_utf8();
+        suff_first.encode_utf8(work);
+        work = &mut work[len..];
+        suff_rest = &suff[len..];
+        total += len;
+    }
+    let last_and_first = &work_area[..total];
+
+    if last_and_first.len() > 0 {
+        // Smash across the boundary
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(last_and_first) {
             trace!(
                 "smash_string_push REPLACING {:?} with {:?}",
-                &base[range.clone()],
+                std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            base.replace_range(range, *replacement);
+            // We never removed it from base, so pop() == base_first at this point
+            base.pop();
+            base.push_str(replacement);
+            base.push_str(suff_rest);
+        } else {
+            base.push_str(suff);
         }
     }
 }
@@ -66,26 +84,37 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
             base.truncate(trimmed_len)
         }
     }
-    let base_len = base.len();
-    let suff_len = suff.len();
-    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
-    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
-    let width = last_width + first_width;
-    base.push_str(&suff[..first_width]);
-    // Smash across the boundary
-    if base_len > 0 && suff_len > 0 {
-        let start = base_len - last_width;
-        let range = start..start + width;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+
+    // Place the last char of base, and the first char of suff, into an array.
+    let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
+    let mut work = &mut work_area[..];
+    let mut total = 0;
+    if let Some(base_last) = base.chars().rev().nth(0) {
+        let len = base_last.len_utf8();
+        base_last.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    if let Some(suff_first) = suff.chars().nth(0) {
+        let len = suff_first.len_utf8();
+        suff_first.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    let last_and_first = &work_area[..total];
+
+    if last_and_first.len() > 0 {
+        // Smash across the boundary
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(last_and_first) {
             trace!(
-                "smash_just_punc REPLACING {:?} with {:?}",
-                &base[range.clone()],
+                "smash_string_push REPLACING {:?} with {:?}",
+                std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            base.replace_range(range, *replacement);
-            suff.replace_range(..first_width, "");
-        } else {
-            base.truncate(base_len);
+            // We never removed it from base, so pop() == base_first at this point
+            base.pop();
+            base.push_str(replacement);
+            suff.remove(0);
         }
     }
 }

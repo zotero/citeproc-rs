@@ -16,7 +16,7 @@ serde = "1.0.116"
 serde_derive = "1.0.100"
 fnv = "1.0.6"
 ucd-trie = "0.1.2"
-petgraph = "0.4.13"
+petgraph = "0.5.1"
 cfg-if = "0.1.9"
 salsa = "0.15.2"
 citeproc-db = { path = "../db" }

@@ -14,12 +14,13 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EdgeData<O: OutputFormat = Markup> {
-    Output(O::Output),
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum EdgeData<O = <Markup as OutputFormat>::Output> {
+    Output(O),
 
     // The rest are synchronised with fields on CiteContext and IR.
     Locator,
+    NotUsed,
     LocatorLabel,
 
     /// TODO: add a parameter to Dfa::accepts_data to supply the actual year suffix for the particular reference.
@@ -39,23 +40,6 @@ pub enum EdgeData<O: OutputFormat = Markup> {
 
     /// The accessed date, which should not help disambiguate cites.
     Accessed,
-}
-
-use std::hash::{Hash, Hasher};
-
-/// Have to implement Hash ourselves because of the blanket O on EdgeData<O>>. This is basically
-/// what the derive macro spits out.
-impl Hash for EdgeData {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        use std::mem::discriminant;
-        match self {
-            EdgeData::Output(ref outp) => {
-                ::core::hash::Hash::hash(&discriminant(self), state);
-                ::core::hash::Hash::hash(&(*outp), state)
-            }
-            _ => ::core::hash::Hash::hash(&discriminant(self), state),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -107,6 +91,33 @@ impl Default for Nfa {
     }
 }
 
+/// https://github.com/petgraph/petgraph/issues/199#issuecomment-484077775
+fn graph_eq<N, E, Ty, Ix>(
+    a: &petgraph::graph::Graph<N, E, Ty, Ix>,
+    b: &petgraph::graph::Graph<N, E, Ty, Ix>,
+) -> bool
+where
+    N: PartialEq,
+    E: PartialEq,
+    Ty: petgraph::EdgeType,
+    Ix: petgraph::graph::IndexType + PartialEq,
+{
+    let a_ns = a.raw_nodes().iter().map(|n| &n.weight);
+    let b_ns = b.raw_nodes().iter().map(|n| &n.weight);
+    let a_es = a.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+    let b_es = b.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+    a_ns.eq(b_ns) && a_es.eq(b_es)
+}
+
+/// We have to have an Eq impl for Nfa so RefIR can have one
+impl std::cmp::PartialEq for Nfa {
+    fn eq(&self, other: &Self) -> bool {
+        self.accepting == other.accepting
+            && self.start == other.start
+            && graph_eq(&self.graph, &other.graph)
+    }
+}
+
 #[derive(Clone)]
 pub struct Dfa {
     pub graph: DfaGraph,
@@ -114,12 +125,14 @@ pub struct Dfa {
     pub start: NodeIndex,
 }
 
-// This is not especially useful for comparing Dfas, but it allows Salsa to cache it as opposed to
-// not at all.
-impl Eq for Dfa {}
-impl PartialEq for Dfa {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+/// We have to have an Eq impl so Dfa can be returned from a salsa query.
+/// this compares each graph bit-for-bit.
+impl std::cmp::Eq for Dfa {}
+impl std::cmp::PartialEq for Dfa {
+    fn eq(&self, other: &Self) -> bool {
+        self.accepting == other.accepting
+            && self.start == other.start
+            && graph_eq(&self.graph, &other.graph)
     }
 }
 
@@ -291,7 +304,7 @@ pub fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    pub fn accepts_data(&self, db: &dyn IrDatabase, data: &[EdgeData]) -> bool {
+    pub fn accepts_data(&self, data: &[EdgeData]) -> bool {
         let mut cursors = Vec::new();
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {

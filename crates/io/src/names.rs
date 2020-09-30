@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use smartstring::alias::String;
+use crate::String;
 use crate::SmartCow;
 
 // kebab-case here is the same as Strum's "kebab_case",

@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use smartstring::alias::String;
+use crate::String;
 use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;

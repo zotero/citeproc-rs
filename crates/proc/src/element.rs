@@ -73,7 +73,7 @@ where
                 match text.source {
                     TextSource::Macro(ref name) => {
                         // TODO: be able to return errors
-                        let macro_unsafe = ctx
+                        let macro_elements = ctx
                             .style
                             .macros
                             .get(name)
@@ -88,7 +88,7 @@ where
                             state,
                             ctx,
                             arena,
-                            &macro_unsafe,
+                            &macro_elements,
                             "".into(),
                             text.formatting,
                             text.affixes.as_ref(),

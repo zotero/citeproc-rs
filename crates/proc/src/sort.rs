@@ -599,13 +599,13 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.ctx.style;
-        let macro_unsafe = style
+        let macro_elements = style
             .macros
             .get(name)
             .expect("macro errors not implemented!");
 
         self.state.push_macro(name);
-        let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
+        let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
         self.state.pop_macro(name);
         ret
     }

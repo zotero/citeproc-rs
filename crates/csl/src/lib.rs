@@ -6,7 +6,8 @@
 
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
-pub use string_cache::DefaultAtom as Atom;
+// pub use string_cache::DefaultAtom as Atom;
+pub use smartstring::alias::String as Atom;
 
 #[macro_use]
 extern crate serde_derive;
@@ -35,6 +36,7 @@ pub use self::version::*;
 
 use self::attr::*;
 use fnv::FnvHashMap;
+use std::collections::HashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
 
@@ -1269,7 +1271,7 @@ impl FromNode for Style {
     fn from_node(node: &Node, default_info: &ParseInfo) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
         // let info_node = get_toplevel(&doc, "info")?;
-        let mut macros = FnvHashMap::default();
+        let mut macros = HashMap::default();
         let mut locale_overrides = FnvHashMap::default();
         let mut errors: Vec<CslError> = Vec::new();
 

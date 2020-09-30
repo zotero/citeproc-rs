@@ -1,4 +1,4 @@
-use smartstring::alias::String;
+use crate::String;
 use super::FormatCmd;
 use crate::output::LocalizedQuotes;
 use crate::IngestOptions;

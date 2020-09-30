@@ -167,9 +167,9 @@ fn test() {
 
     let cite_edges = get_stream(0);
     dbg!(&cite_edges);
-    assert!(dfa.accepts_data(db, &cite_edges));
+    assert!(dfa.accepts_data(&cite_edges));
     println!("dfa2?");
-    assert!(dfa2.accepts_data(db, &cite_edges));
+    assert!(dfa2.accepts_data(&cite_edges));
 }
 
 // #[test(ignore)]
