@@ -60,8 +60,9 @@ fn ignore_file(file: &str) -> HashSet<String> {
 lazy_static! {
     static ref IGNORES: HashSet<String> = {
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
-        let ignores = include_str!("./data/ignore.txt");
-        ignore_file(ignores)
+        let ignores = read_to_string("./tests/data/ignore.txt").unwrap();
+        // let ignores = include_str!("./data/ignore.txt");
+        ignore_file(&ignores)
     };
 }
 
