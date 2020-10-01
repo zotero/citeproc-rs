@@ -61,221 +61,6 @@ impl Disambiguation<Markup> for Group {
     }
 }
 
-pub fn named_item(el: &Element, db: &dyn IrDatabase, ctx: &RefContext<Markup>, state: &mut IrState, stack: Formatting) -> (RefIR, GroupVars) {
-    let renderer = Renderer::refr(ctx);
-    let fmt = ctx.format;
-    match el {
-        // TODO: keep track of which empty variables caused GroupVars to not render, if
-        // they are indeed free variables.
-        Element::Group(g) => g.ref_ir(db, ctx, state, stack),
-        Element::Names(n) => n.ref_ir(db, ctx, state, stack),
-        Element::Choose(c) => c.ref_ir(db, ctx, state, stack),
-        Element::Date(dt) => {
-            let var = dt.variable();
-            state.maybe_suppress_date(var, |state| dt.ref_ir(db, ctx, state, stack))
-        }
-        Element::Number(number) => {
-            let var = number.variable;
-            let content = if state.is_suppressed_num(var) {
-                None
-            } else {
-                state.maybe_suppress_num(var);
-                match var {
-                    NumberVariable::Locator => {
-                        let e = ctx.locator_type.map(|_| EdgeData::Locator);
-                        return (RefIR::Edge(e), GroupVars::Important);
-                    }
-                    v => ctx.get_number(v).map(|val| renderer.number(number, &val)),
-                }
-            };
-            let content = content
-                .map(|x| fmt.output_in_context(x, stack, None))
-                .map(EdgeData::Output)
-                .map(|label| label);
-            let gv = GroupVars::rendered_if(content.is_some());
-            (RefIR::Edge(content), gv)
-        }
-        Element::Text(text) => match text.source {
-            TextSource::Variable(var, form) => {
-                if var == StandardVariable::Number(NumberVariable::Locator) {
-                    if let Some(_loctype) = ctx.locator_type {
-                        let edge = EdgeData::Locator;
-                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
-                    }
-                }
-                if var == StandardVariable::Ordinary(Variable::YearSuffix) {
-                    if ctx.year_suffix {
-                        let edge = EdgeData::YearSuffixExplicit;
-                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
-                    } else {
-                        return (RefIR::Edge(None), GroupVars::Plain);
-                    }
-                }
-                if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
-                    && ctx.position == Position::Subsequent
-                {
-                    let edge = EdgeData::Frnn;
-                    return (RefIR::Edge(Some(edge)), GroupVars::Important);
-                }
-                if var == StandardVariable::Number(NumberVariable::CitationNumber)
-                    && ctx.style.bibliography.is_some()
-                {
-                    let edge = EdgeData::CitationNumber;
-                    return (RefIR::Edge(Some(edge)), GroupVars::Important);
-                }
-                if var == StandardVariable::Ordinary(Variable::CitationLabel) {
-                    let v = Variable::CitationLabel;
-                    let vario = if state.is_suppressed_ordinary(v) {
-                        None
-                    } else {
-                        state.maybe_suppress_ordinary(v);
-                        ctx.get_ordinary(v, form).map(|val| {
-                            renderer.text_variable(
-                                &crate::helpers::plain_text_element(v),
-                                var,
-                                &val,
-                            )
-                        })
-                    };
-                    return vario
-                        .map(|x| fmt.output_in_context(x, stack, None))
-                        .map(EdgeData::Output)
-                        .map(|edge| {
-                            let label = RefIR::Edge(Some(edge));
-                            let suffix_edge =
-                                RefIR::Edge(Some(EdgeData::YearSuffixPlain));
-                            let mut contents = Vec::new();
-                            contents.push(label);
-                            if ctx.year_suffix {
-                                contents.push(suffix_edge);
-                            }
-                            let seq = RefIrSeq {
-                                contents,
-                                affixes: text.affixes.clone(),
-                                formatting: text.formatting,
-                                delimiter: Atom::from(""),
-                                text_case: text.text_case,
-                                quotes: renderer.quotes_if(text.quotes),
-                            };
-                            (RefIR::Seq(seq), GroupVars::Important)
-                        })
-                    .unwrap_or((RefIR::Edge(None), GroupVars::Missing));
-                    }
-                let content = match var {
-                    StandardVariable::Ordinary(v) => {
-                        if state.is_suppressed_ordinary(v) {
-                            None
-                        } else {
-                            state.maybe_suppress_ordinary(v);
-                            ctx.get_ordinary(v, form)
-                                .map(|val| renderer.text_variable(text, var, &val))
-                        }
-                    }
-                    StandardVariable::Number(v) => {
-                        if state.is_suppressed_num(v) {
-                            None
-                        } else {
-                            state.maybe_suppress_num(v);
-                            ctx.get_number(v)
-                                .map(|val| renderer.text_number_variable(text, v, &val))
-                        }
-                    }
-                };
-                let content = content
-                    .map(|x| fmt.output_in_context(x, stack, None))
-                    .map(EdgeData::Output);
-                let gv = GroupVars::rendered_if(content.is_some());
-                (RefIR::Edge(content), gv)
-            }
-            TextSource::Value(ref val) => {
-                let content = renderer
-                    .text_value(text, &val)
-                    .map(|x| fmt.output_in_context(x, stack, None))
-                    .map(EdgeData::Output);
-                (RefIR::Edge(content), GroupVars::new())
-            }
-            TextSource::Term(term_selector, plural) => {
-                let content = renderer
-                    .text_term(text, term_selector, plural)
-                    .map(|x| fmt.output_in_context(x, stack, None))
-                    .map(EdgeData::Output);
-                (RefIR::Edge(content), GroupVars::new())
-            }
-            TextSource::Macro(ref name) => {
-                let macro_elements = ctx
-                    .style
-                    .macros
-                    .get(name)
-                    .expect("macro errors not implemented!");
-                state.push_macro(name);
-                let els = macro_elements;
-                let (seq, group_vars) = ref_sequence(
-                    db,
-                    state,
-                    ctx,
-                    &macro_elements,
-                    "".into(),
-                    text.formatting,
-                    text.affixes.as_ref(),
-                    text.display,
-                    renderer.quotes_if(text.quotes),
-                    text.text_case,
-                );
-                state.pop_macro(name);
-                group_vars.implicit_conditional(seq)
-            }
-        },
-        Element::Label(label) => {
-            let var = label.variable;
-            let custom = match var {
-                NumberVariable::Locator if ctx.locator_type.is_some() => {
-                    eprintln!("added LocatorLabel");
-                    Some(EdgeData::LocatorLabel)
-                }
-                NumberVariable::FirstReferenceNoteNumber
-                    if ctx.position == Position::Subsequent =>
-                    {
-                        Some(EdgeData::FrnnLabel)
-                    }
-                NumberVariable::CitationNumber if ctx.style.bibliography.is_some() => {
-                    Some(EdgeData::CitationNumberLabel)
-                }
-                NumberVariable::Locator
-                    | NumberVariable::FirstReferenceNoteNumber
-                    | NumberVariable::CitationNumber
-                    | _ if state.is_suppressed_num(var) => {
-                        eprintln!("locaor supposed to be not present, so no LocatorLabel, only None");
-                        return (RefIR::Edge(None), GroupVars::new());
-                    }
-                _ => None,
-            };
-            if let Some(edge_data) = custom {
-                let edge = edge_data;
-                // {
-                //     use std::io::Write;
-                //     use std::fs::OpenOptions;
-                //     let mut file = OpenOptions::new()
-                //         .write(true)
-                //         .append(true)
-                //         .create(true)
-                //         .open("./disimplementation.txt")
-                //         .unwrap();
-                //     writeln!(file, "created edgedata: {:?}", edge).unwrap();
-                // }
-                return (RefIR::Edge(Some(edge)), GroupVars::Important);
-            }
-            let content = ctx
-                .get_number(var)
-                .and_then(|val| renderer.numeric_label(label, &val))
-                .map(|x| fmt.output_in_context(x, stack, None))
-                .map(EdgeData::Output)
-                .map(|label| label);
-            let gv = GroupVars::rendered_if(content.is_some());
-            (RefIR::Edge(content), gv)
-        }
-    }
-}
-
 impl Disambiguation<Markup> for Element {
     fn ref_ir(
         &self,
@@ -284,6 +69,218 @@ impl Disambiguation<Markup> for Element {
         state: &mut IrState,
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
-        named_item(self, db, ctx, state, stack)
+        let renderer = Renderer::refr(ctx);
+        let fmt = ctx.format;
+        match self {
+            // TODO: keep track of which empty variables caused GroupVars to not render, if
+            // they are indeed free variables.
+            Element::Group(g) => g.ref_ir(db, ctx, state, stack),
+            Element::Names(n) => n.ref_ir(db, ctx, state, stack),
+            Element::Choose(c) => c.ref_ir(db, ctx, state, stack),
+            Element::Date(dt) => {
+                let var = dt.variable();
+                state.maybe_suppress_date(var, |state| dt.ref_ir(db, ctx, state, stack))
+            }
+            Element::Number(number) => {
+                let var = number.variable;
+                let content = if state.is_suppressed_num(var) {
+                    None
+                } else {
+                    state.maybe_suppress_num(var);
+                    match var {
+                        NumberVariable::Locator => {
+                            let e = ctx.locator_type.map(|_| EdgeData::Locator);
+                            return (RefIR::Edge(e), GroupVars::Important);
+                        }
+                        v => ctx.get_number(v).map(|val| renderer.number(number, &val)),
+                    }
+                };
+                let content = content
+                    .map(|x| fmt.output_in_context(x, stack, None))
+                    .map(EdgeData::Output)
+                    .map(|label| label);
+                let gv = GroupVars::rendered_if(content.is_some());
+                (RefIR::Edge(content), gv)
+            }
+            Element::Text(text) => match text.source {
+                TextSource::Variable(var, form) => {
+                    if var == StandardVariable::Number(NumberVariable::Locator) {
+                        if let Some(_loctype) = ctx.locator_type {
+                            let edge = EdgeData::Locator;
+                            return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                        }
+                    }
+                    if var == StandardVariable::Ordinary(Variable::YearSuffix) {
+                        if ctx.year_suffix {
+                            let edge = EdgeData::YearSuffixExplicit;
+                            return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                        } else {
+                            return (RefIR::Edge(None), GroupVars::Plain);
+                        }
+                    }
+                    if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
+                        && ctx.position == Position::Subsequent
+                    {
+                        let edge = EdgeData::Frnn;
+                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                    }
+                    if var == StandardVariable::Number(NumberVariable::CitationNumber)
+                        && ctx.style.bibliography.is_some()
+                    {
+                        let edge = EdgeData::CitationNumber;
+                        return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                    }
+                    if var == StandardVariable::Ordinary(Variable::CitationLabel) {
+                        let v = Variable::CitationLabel;
+                        let vario = if state.is_suppressed_ordinary(v) {
+                            None
+                        } else {
+                            state.maybe_suppress_ordinary(v);
+                            ctx.get_ordinary(v, form).map(|val| {
+                                renderer.text_variable(
+                                    &crate::helpers::plain_text_element(v),
+                                    var,
+                                    &val,
+                                )
+                            })
+                        };
+                        return vario
+                            .map(|x| fmt.output_in_context(x, stack, None))
+                            .map(EdgeData::Output)
+                            .map(|edge| {
+                                let label = RefIR::Edge(Some(edge));
+                                let suffix_edge = RefIR::Edge(Some(EdgeData::YearSuffixPlain));
+                                let mut contents = Vec::new();
+                                contents.push(label);
+                                if ctx.year_suffix {
+                                    contents.push(suffix_edge);
+                                }
+                                let seq = RefIrSeq {
+                                    contents,
+                                    affixes: text.affixes.clone(),
+                                    formatting: text.formatting,
+                                    delimiter: Atom::from(""),
+                                    text_case: text.text_case,
+                                    quotes: renderer.quotes_if(text.quotes),
+                                };
+                                (RefIR::Seq(seq), GroupVars::Important)
+                            })
+                            .unwrap_or((RefIR::Edge(None), GroupVars::Missing));
+                    }
+                    let content = match var {
+                        StandardVariable::Ordinary(v) => {
+                            if state.is_suppressed_ordinary(v) {
+                                None
+                            } else {
+                                state.maybe_suppress_ordinary(v);
+                                ctx.get_ordinary(v, form)
+                                    .map(|val| renderer.text_variable(text, var, &val))
+                            }
+                        }
+                        StandardVariable::Number(v) => {
+                            if state.is_suppressed_num(v) {
+                                None
+                            } else {
+                                state.maybe_suppress_num(v);
+                                ctx.get_number(v)
+                                    .map(|val| renderer.text_number_variable(text, v, &val))
+                            }
+                        }
+                    };
+                    let content = content
+                        .map(|x| fmt.output_in_context(x, stack, None))
+                        .map(EdgeData::Output);
+                    let gv = GroupVars::rendered_if(content.is_some());
+                    (RefIR::Edge(content), gv)
+                }
+                TextSource::Value(ref val) => {
+                    let content = renderer
+                        .text_value(text, &val)
+                        .map(|x| fmt.output_in_context(x, stack, None))
+                        .map(EdgeData::Output);
+                    (RefIR::Edge(content), GroupVars::new())
+                }
+                TextSource::Term(term_selector, plural) => {
+                    let content = renderer
+                        .text_term(text, term_selector, plural)
+                        .map(|x| fmt.output_in_context(x, stack, None))
+                        .map(EdgeData::Output);
+                    (RefIR::Edge(content), GroupVars::new())
+                }
+                TextSource::Macro(ref name) => {
+                    let macro_elements = ctx
+                        .style
+                        .macros
+                        .get(name)
+                        .expect("macro errors not implemented!");
+                    state.push_macro(name);
+                    let els = macro_elements;
+                    let (seq, group_vars) = ref_sequence(
+                        db,
+                        state,
+                        ctx,
+                        &macro_elements,
+                        "".into(),
+                        text.formatting,
+                        text.affixes.as_ref(),
+                        text.display,
+                        renderer.quotes_if(text.quotes),
+                        text.text_case,
+                    );
+                    state.pop_macro(name);
+                    group_vars.implicit_conditional(seq)
+                }
+            },
+            Element::Label(label) => {
+                let var = label.variable;
+                let custom = match var {
+                    NumberVariable::Locator if ctx.locator_type.is_some() => {
+                        eprintln!("added LocatorLabel");
+                        Some(EdgeData::LocatorLabel)
+                    }
+                    NumberVariable::FirstReferenceNoteNumber
+                        if ctx.position == Position::Subsequent =>
+                    {
+                        Some(EdgeData::FrnnLabel)
+                    }
+                    NumberVariable::CitationNumber if ctx.style.bibliography.is_some() => {
+                        Some(EdgeData::CitationNumberLabel)
+                    }
+                    NumberVariable::Locator
+                    | NumberVariable::FirstReferenceNoteNumber
+                    | NumberVariable::CitationNumber
+                    | _ if state.is_suppressed_num(var) => {
+                        eprintln!(
+                            "locaor supposed to be not present, so no LocatorLabel, only None"
+                        );
+                        return (RefIR::Edge(None), GroupVars::new());
+                    }
+                    _ => None,
+                };
+                if let Some(edge_data) = custom {
+                    let edge = edge_data;
+                    // {
+                    //     use std::io::Write;
+                    //     use std::fs::OpenOptions;
+                    //     let mut file = OpenOptions::new()
+                    //         .write(true)
+                    //         .append(true)
+                    //         .create(true)
+                    //         .open("./disimplementation.txt")
+                    //         .unwrap();
+                    //     writeln!(file, "created edgedata: {:?}", edge).unwrap();
+                    // }
+                    return (RefIR::Edge(Some(edge)), GroupVars::Important);
+                }
+                let content = ctx
+                    .get_number(var)
+                    .and_then(|val| renderer.numeric_label(label, &val))
+                    .map(|x| fmt.output_in_context(x, stack, None))
+                    .map(EdgeData::Output)
+                    .map(|label| label);
+                let gv = GroupVars::rendered_if(content.is_some());
+                (RefIR::Edge(content), gv)
+            }
+        }
     }
 }

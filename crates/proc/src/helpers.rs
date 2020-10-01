@@ -146,17 +146,10 @@ pub fn ref_sequence<'c>(
     let mut contents = Vec::with_capacity(els.len());
     let mut overall_gv = GroupVars::new();
 
-    // let mut dropped_gv = GroupVars::new();
-    // let els_ptr = els.as_ptr();
-    // eprintln!("els_ptr {:x}", els_ptr as usize);
-
     for el in els {
-        let (got_ir, gv) =
-            crate::disamb::implementation::named_item(el, db, ctx, state, formatting.unwrap_or_default());
-            eprintln!("{:?}", got_ir);
+        let (got_ir, gv) = el.ref_ir(db, ctx, state, formatting.unwrap_or_default());
         match got_ir {
             RefIR::Edge(None) => {
-                // dropped_gv = dropped_gv.neighbour(gv);
                 overall_gv = overall_gv.neighbour(gv);
             }
             _ => {
