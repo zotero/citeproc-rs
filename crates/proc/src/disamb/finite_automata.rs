@@ -377,7 +377,7 @@ impl Dfa {
 
 #[test]
 fn nfa() {
-    let andy = EdgeData::Output("andy");
+    let andy = EdgeData::Output("andy".into());
     let reuben = EdgeData::Output("reuben".into());
     let peters = EdgeData::Output("peters".into());
     let comma = EdgeData::Output(", ".into());
