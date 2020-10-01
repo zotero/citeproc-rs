@@ -86,7 +86,6 @@ impl Disambiguation<Markup> for Names {
                 }
 
                 let one_run = graph_with_stack(
-                    db,
                     fmt,
                     &mut nfa,
                     runner.name_el.formatting,
@@ -101,7 +100,7 @@ impl Disambiguation<Markup> for Names {
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
                                         let e = EdgeData::Output(out);
                                         let ir = RefIR::Edge(Some(e));
-                                        spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                        spot = add_to_graph(fmt, nfa, &ir, spot);
                                     }
                                 }
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
@@ -111,7 +110,7 @@ impl Disambiguation<Markup> for Names {
                                                 fmt.output_in_context(b.clone(), child_stack, None);
                                             let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
-                                            spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                            spot = add_to_graph(fmt, nfa, &ir, spot);
                                         }
                                     }
                                     DisambNameRatchet::Person(ratchet) => {
@@ -402,14 +401,14 @@ fn add_expanded_name_to_graph(
     let fmt = &db.get_formatter();
     let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
-    let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     for pass in dn.disamb_iter(rule) {
         dn.apply_pass(pass);
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
         let edge = dn.single_name_edge(db, stack);
-        let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
         nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     }
     next_spot

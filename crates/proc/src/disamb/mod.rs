@@ -254,7 +254,7 @@ pub fn create_dfa<O: OutputFormat>(db: &dyn IrDatabase, refr: &Reference) -> Dfa
     for (_fc, ir) in runs {
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
-        let last = add_to_graph(db, &fmt, &mut nfa, &ir, first);
+        let last = add_to_graph(&fmt, &mut nfa, &ir, first);
         nfa.accepting.insert(last);
     }
     nfa.brzozowski_minimise()
@@ -319,7 +319,6 @@ pub fn create_ref_ir<O: OutputFormat>(
 use petgraph::graph::NodeIndex;
 
 pub fn graph_with_stack(
-    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     formatting: Option<Formatting>,
@@ -352,19 +351,18 @@ pub fn graph_with_stack(
     let open_tags = &mkedge(open_tags);
     let close_tags = &mkedge(close_tags);
     if let Some(pre) = affixes.as_ref().map(|a| mkedge_esc(&*a.prefix)) {
-        spot = add_to_graph(db, fmt, nfa, &pre, spot);
+        spot = add_to_graph(fmt, nfa, &pre, spot);
     }
-    spot = add_to_graph(db, fmt, nfa, open_tags, spot);
+    spot = add_to_graph(fmt, nfa, open_tags, spot);
     spot = f(nfa, spot);
-    spot = add_to_graph(db, fmt, nfa, close_tags, spot);
+    spot = add_to_graph(fmt, nfa, close_tags, spot);
     if let Some(suf) = affixes.as_ref().map(|a| mkedge_esc(&*a.suffix)) {
-        spot = add_to_graph(db, fmt, nfa, &suf, spot);
+        spot = add_to_graph(fmt, nfa, &suf, spot);
     }
     spot
 }
 
 pub fn add_to_graph(
-    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,
@@ -411,16 +409,16 @@ pub fn add_to_graph(
                 })
             };
             let delim = &mkedge(&*delimiter);
-            graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
+            graph_with_stack(fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
                 let mut seen = false;
                 for x in contents {
                     if !matches!(x, RefIR::Edge(None)) {
                         if seen {
-                            spot = add_to_graph(db, fmt, nfa, delim, spot);
+                            spot = add_to_graph(fmt, nfa, delim, spot);
                         }
                         seen = true;
                     }
-                    spot = add_to_graph(db, fmt, nfa, x, spot);
+                    spot = add_to_graph(fmt, nfa, x, spot);
                 }
                 spot
             })
@@ -475,7 +473,7 @@ fn test_determinism() {
         for ir in &[RefIR::Edge(Some(aa)), RefIR::Edge(Some(bb))] {
             let first = nfa.graph.add_node(());
             nfa.start.insert(first);
-            let last = add_to_graph(&db, &fmt, &mut nfa, ir, first);
+            let last = add_to_graph(&fmt, &mut nfa, ir, first);
             nfa.accepting.insert(last);
         }
         nfa.brzozowski_minimise()
@@ -485,7 +483,7 @@ fn test_determinism() {
     for _ in 0..100 {
         let dfa = make_dfa();
         debug!("{}", dfa.debug_graph(&db));
-        if dfa.accepts_data(&db, &[aa.lookup(&db)]) {
+        if dfa.accepts_data(&[aa]) {
             count += 1;
         }
     }
