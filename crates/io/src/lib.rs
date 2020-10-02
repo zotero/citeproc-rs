@@ -48,8 +48,8 @@ use csl::TextCase;
 // type Sixteen = smallstr::SmallString<[u8; 16]>;
 // type TwentyFour = smallstr::SmallString<[u8; 24]>;
 
-pub type SmartString = std::string::String;
-pub(crate) type String = std::string::String;
+pub type SmartString = smartstring::alias::String;
+pub(crate) type String = smartstring::alias::String;
 pub type SmartCow<'a> = cervine::Cow<'a, String, str>;
 
 use crate::output::markup::InlineElement;
