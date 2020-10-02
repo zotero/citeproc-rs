@@ -9,10 +9,13 @@
 
 use cfg_if::cfg_if;
 cfg_if! {
-    if #[cfg(feature="jemalloc")] {
+    if #[cfg(feature="test-jemalloc")] {
         use jemallocator::Jemalloc;
         #[global_allocator]
         static A: Jemalloc = Jemalloc;
+    } else if #[cfg(feature="test-dlmalloc")] {
+        #[global_allocator]
+        static A: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
     } else {
         use std::alloc::System;
         #[global_allocator]

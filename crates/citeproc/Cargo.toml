@@ -16,18 +16,15 @@ bench = false
 
 [features]
 
-default = []
-
 # For WASM builds, use `citeproc = { version = "...", default-features = false }`
-# default = ["parallel", "jemalloc"]
+default = ["parallel"]
 
 # Lets the processor compute batched updates in parallel on multiple threads,
 # using rayon's work-stealing queues
 parallel = ["rayon", "citeproc-db/parallel", "citeproc-proc/parallel"]
 
-# enables jemalloc for the test binaries. Gives 25-50% faster execution with
-# the allocation-heavy code at the time of writing.
-jemalloc = ["jemallocator"]
+test-jemalloc = []
+test-dlmalloc = []
 
 [dependencies]
 rayon = { version = "1.4.1", optional = true }
@@ -43,7 +40,6 @@ citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 citeproc-db = { path = "../db" }
 thiserror = "1.0.20"
-jemallocator = { version = "0.3.2", optional = true }
 
 [dev-dependencies]
 test_utils = { path = "../test-utils" }
@@ -54,6 +50,10 @@ serde_yaml = "0.8.13"
 toml = "0.5.6"
 env_logger = "0.7.1"
 insta = "0.16.1"
+# enables jemalloc for the test binaries. Gives 25-50% faster execution with
+# the allocation-heavy code at the time of writing.
+jemallocator = "0.3.2"
+dlmalloc = { version = "0.1.4", features = ["global"] }
 
 [dev-dependencies.datatest]
 git = "https://github.com/cormacrelf/datatest"
