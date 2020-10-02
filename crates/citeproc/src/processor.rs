@@ -441,7 +441,7 @@ impl Processor {
         self.sorted_refs()
             .0
             .iter()
-            .filter_map(|k| bib_map.get(k.as_str()).map(|v| (k, v)))
+            .filter_map(|k| bib_map.get(k).map(|v| (k, v)))
             .filter(|(_, v)| !v.is_empty())
             .map(|(k, v)| BibEntry {
                 id: k.clone(),
