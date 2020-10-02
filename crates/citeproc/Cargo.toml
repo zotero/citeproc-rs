@@ -21,7 +21,14 @@ default = ["parallel"]
 
 # Lets the processor compute batched updates in parallel on multiple threads,
 # using rayon's work-stealing queues
-parallel = ["rayon", "citeproc-db/parallel", "citeproc-proc/parallel"]
+parallel = [
+  "rayon",
+  "citeproc-db/parallel",
+  # enables rayon for checking many DFA matches in parallel.
+  # should only really help for docs with many references,
+  # and otherwise slow things down a little bit.
+  "citeproc-proc/parallel",
+]
 
 test-jemalloc = []
 test-dlmalloc = []
