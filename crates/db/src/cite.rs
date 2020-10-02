@@ -66,13 +66,13 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 macro_rules! intern_key {
     ($vis:vis $name:ident) => {
         #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-        $vis struct $name(u32);
+        $vis struct $name(salsa::InternId);
         impl ::salsa::InternKey for $name {
             fn from_intern_id(v: ::salsa::InternId) -> Self {
-                $name(u32::from(v))
+                $name(v)
             }
             fn as_intern_id(&self) -> ::salsa::InternId {
-                self.0.into()
+                self.0
             }
         }
     };
