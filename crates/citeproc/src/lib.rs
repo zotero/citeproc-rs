@@ -15,19 +15,31 @@ pub(crate) mod processor;
 #[cfg(test)]
 mod test;
 
-pub use self::api::{DocUpdate, FullRender, IncludeUncited, SupportedFormat, UpdateSummary};
-pub use self::processor::{ErrorKind, PreviewPosition, Processor};
+pub use self::api::*;
+
+pub use self::processor::Processor;
 
 pub mod prelude {
-    pub use crate::api::{DocUpdate, FullRender, IncludeUncited, SupportedFormat, UpdateSummary};
-    pub use crate::processor::{PreviewPosition, Processor};
+    pub use crate::api::*;
+    pub use crate::processor::Processor;
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
+        IntraNote, ClusterNumber
     };
     pub use citeproc_io::output::{markup::Markup, OutputFormat};
-    pub use citeproc_io::{
-        Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Reference,
-    };
-    pub use citeproc_proc::db::{HasFormatter, IrDatabase};
+    pub use citeproc_io::{ Cite, Reference, SmartString, };
+    pub use citeproc_proc::db::{ImplementationDetails, IrDatabase};
     pub use csl::Atom;
+}
+
+pub fn random_cluster_id() -> citeproc_io::SmartString {
+    use rand::{thread_rng, Rng};
+    use rand::distributions::Alphanumeric;
+    let prefix = "cluster-";
+    let mut string = citeproc_io::SmartString::from(prefix);
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(23 - prefix.len())
+        .for_each(|ch| string.push(ch));
+    string
 }

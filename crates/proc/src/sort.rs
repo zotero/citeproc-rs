@@ -2,9 +2,8 @@ use unicase::UniCase;
 
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
-use citeproc_db::ClusterData;
+use citeproc_db::{ClusterData, ClusterId};
 use citeproc_io::output::plain::PlainText;
-use citeproc_io::ClusterId;
 use csl::*;
 use fnv::FnvHashMap;
 use std::sync::Arc;

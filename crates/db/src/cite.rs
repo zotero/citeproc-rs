@@ -5,13 +5,14 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::xml::{LocaleDatabase, StyleDatabase};
+use super::cluster::*;
 
 use csl::Locale;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Cite, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Reference};
 use csl::Atom;
 
 #[salsa::query_group(CiteDatabaseStorage)]

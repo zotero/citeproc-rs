@@ -3,9 +3,11 @@ extern crate log;
 
 mod cite;
 mod xml;
+mod cluster;
 
 pub use cite::*;
 pub use xml::*;
+pub use cluster::*;
 
 pub fn safe_default(db: &mut (impl cite::CiteDatabase + xml::LocaleDatabase + xml::StyleDatabase)) {
     use std::sync::Arc;

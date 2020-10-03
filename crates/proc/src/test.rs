@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use citeproc_db::{CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Cluster, Reference};
+use citeproc_db::{Cluster, CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_io::{output::markup::Markup, Reference};
 use csl::Atom;
 
 use csl::Style;
@@ -51,7 +51,7 @@ pub struct MockProcessor {
 
 impl salsa::Database for MockProcessor {}
 
-impl HasFormatter for MockProcessor {
+impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         Markup::html()
     }

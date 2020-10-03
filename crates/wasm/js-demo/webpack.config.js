@@ -43,7 +43,8 @@ module.exports = {
 
     new WasmPackPlugin({
       crateDirectory: path.resolve(__dirname, "../"),
-      extraArgs: "-- --features console,dot"
+      extraArgs: "-- --features console,dot",
+      forceMode: "production",
     }),
   ]
 };

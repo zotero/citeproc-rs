@@ -8,7 +8,7 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc_io::{
-    Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Locators, Reference,
+    Cite, Cluster, ClusterNumber, IntraNote, Locators, Reference,
     Suppression, SmartString,
 };
 

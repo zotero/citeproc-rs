@@ -6,16 +6,115 @@
 
 #![allow(dead_code)]
 
-use super::Processor;
+use super::processor::Interner;
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{ClusterId, SmartString};
+use citeproc_io::{SmartString, Cite};
+use citeproc_db::ClusterId as ClusterIdInternal;
 use std::str::FromStr;
 use std::sync::Arc;
+use csl::Atom;
+use fnv::FnvHashMap;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum DocUpdate {
-    // We recomputed a cluster -- it now needs to be re-rendered
-    Cluster(ClusterId),
+/// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
+/// identifier, but `citeproc_db` is not responsible for interning those ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ClusterId(ClusterIdInternal);
+
+impl ClusterId {
+    pub(crate) fn new(internal: ClusterIdInternal) -> Self {
+        ClusterId(internal)
+    }
+    pub(crate) fn raw(&self) -> ClusterIdInternal {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cluster<O: OutputFormat> {
+    pub id: ClusterId,
+    pub cites: Vec<Cite<O>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClusterPosition {
+    pub id: ClusterId,
+    /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
+    pub note: Option<u32>,
+}
+
+#[derive(Debug, Copy, Clone, thiserror::Error)]
+pub enum ReorderingError {
+    #[error(
+        "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
+    )]
+    NonMonotonicNoteNumber(u32),
+    #[error("call to preview_citation_cluster must provide exactly one preview position")]
+    DidNotSupplyZeroPosition,
+    #[error("non-existent cluster {0:?}")]
+    NonExistentCluster(ClusterId),
+}
+
+impl ReorderingError {
+    pub(crate) fn to_external(self, interner: &Interner) -> string_id::ReorderingError {
+        match self {
+            ReorderingError::NonExistentCluster(id) => {
+                if let Some(string) = interner.resolve(id.raw()) {
+                    string_id::ReorderingError::NonExistentCluster(SmartString::from(string))
+                } else {
+                    string_id::ReorderingError::Internal(self)
+                }
+            }
+            _ => string_id::ReorderingError::Internal(self),
+        }
+    }
+}
+
+pub mod string_id {
+    //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
+    //! consumers.
+    use citeproc_io::{SmartString, output::{OutputFormat, markup::Markup}, Cite};
+    use std::sync::Arc;
+    use super::{BibliographyUpdate, BibEntry};
+    use fnv::FnvHashMap;
+
+    #[derive(Deserialize, Debug, Clone, PartialEq)]
+    #[serde(bound(deserialize = ""))]
+    pub struct Cluster<O: OutputFormat> {
+        pub id: SmartString,
+        pub cites: Vec<Cite<O>>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct ClusterPosition {
+        pub id: Option<SmartString>,
+        /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub note: Option<u32>,
+    }
+
+    #[derive(Default, Debug, Clone, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct UpdateSummary<O: OutputFormat = Markup> {
+        /// A list of clusters that were updated, paired with the formatted output for each
+        pub clusters: Vec<(SmartString, Arc<O::Output>)>,
+        pub bibliography: Option<BibliographyUpdate>,
+    }
+
+    #[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct FullRender {
+        pub all_clusters: FnvHashMap<SmartString, Arc<SmartString>>,
+        pub bib_entries: Vec<BibEntry<Markup>>,
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    pub enum ReorderingError {
+        #[error("{0}")]
+        Internal(#[from] super::ReorderingError),
+        #[error("non-existent cluster id {0:?}")]
+        NonExistentCluster(SmartString),
+    }
+
 }
 
 #[derive(Clone, Serialize)]
@@ -48,9 +147,6 @@ pub struct BibliographyMeta<O: OutputFormat = Markup> {
     pub format_meta: O::BibMeta,
 }
 
-use csl::Atom;
-use fnv::FnvHashMap;
-
 #[derive(Clone, Serialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BibliographyUpdate<O: OutputFormat = Markup> {
@@ -67,38 +163,11 @@ impl BibliographyUpdate {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone)]
 pub struct UpdateSummary<O: OutputFormat = Markup> {
     /// A list of clusters that were updated, paired with the formatted output for each
     pub clusters: Vec<(ClusterId, Arc<O::Output>)>,
     pub bibliography: Option<BibliographyUpdate>,
-}
-
-impl UpdateSummary {
-    pub fn summarize(db: &Processor, updates: &[DocUpdate]) -> Self {
-        let ids = updates.iter().map(|&u| match u {
-            DocUpdate::Cluster(x) => x,
-        });
-        let mut set = fnv::FnvHashSet::default();
-        for id in ids {
-            set.insert(id);
-        }
-        let mut clusters = Vec::with_capacity(set.len());
-        for id in set {
-            if id == 0 {
-                // It's a dummy value for preview_citation_cluster.
-                continue;
-            }
-            if let Some(output) = db.get_cluster(id) {
-                clusters.push((id, output));
-            }
-        }
-        UpdateSummary {
-            clusters,
-            bibliography: None,
-        }
-    }
 }
 
 #[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
@@ -108,8 +177,7 @@ pub struct BibEntry<O: OutputFormat = Markup> {
     pub value: Arc<O::Output>,
 }
 
-#[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct FullRender {
     pub all_clusters: FnvHashMap<ClusterId, Arc<SmartString>>,
     pub bib_entries: Vec<BibEntry<Markup>>,
@@ -139,6 +207,17 @@ pub enum SupportedFormat {
     TestHtml,
 }
 
+impl SupportedFormat {
+    pub fn make_markup(&self) -> Markup {
+        match self {
+            SupportedFormat::Html => Markup::html(),
+            SupportedFormat::Rtf => Markup::rtf(),
+            SupportedFormat::Plain => Markup::plain(),
+            SupportedFormat::TestHtml => Markup::test_html(),
+        }
+    }
+}
+
 impl FromStr for SupportedFormat {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -162,3 +241,15 @@ impl<'de> serde::de::Deserialize<'de> for SupportedFormat {
             .map_err(|()| DeError::custom(format!("unknown format {}", s.as_str())))
     }
 }
+
+pub enum PreviewPosition<'a> {
+    /// Convenience, if your user is merely editing a cluster.
+    ReplaceCluster(ClusterId),
+    /// Full power method, temporarily renumbers the entire document. You specify where the preview
+    /// goes by setting the id to 0 in one of the `ClusterPosition`s. Thus, you can replace a
+    /// cluster (by omitting the original), but also insert one at any position, including in a new
+    /// note or in-text position, or even between existing clusters in an existing note.
+    MarkWithZero(&'a [ClusterPosition]),
+    MarkWithZeroStr(&'a [string_id::ClusterPosition]),
+}
+

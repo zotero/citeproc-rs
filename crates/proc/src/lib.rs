@@ -58,7 +58,7 @@ pub(crate) mod prelude {
         Citation,
         Bibliography,
     }
-    pub use crate::db::{HasFormatter, IrDatabase};
+    pub use crate::db::{ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
     pub use crate::walker::{StyleWalker, WalkerFoldType};
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
