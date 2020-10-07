@@ -61,7 +61,7 @@ impl Driver {
 
     /// Sets the style (which will also cause everything to be recomputed)
     #[wasm_bindgen(js_name = "setStyle")]
-    pub fn set_style(&mut self, style_text: &str) -> Result<(), JsValue> {
+    pub fn set_style(&self, style_text: &str) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
         js_err!(eng.set_style_text(style_text));
         Ok(())
@@ -70,7 +70,7 @@ impl Driver {
     /// Completely overwrites the references library.
     /// This **will** delete references that are not in the provided list.
     #[wasm_bindgen(js_name = "resetReferences")]
-    pub fn reset_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
+    pub fn reset_references(&self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
         let mut engine = self.engine.borrow_mut();
         engine.reset_references(refs);
@@ -80,7 +80,7 @@ impl Driver {
     /// Inserts or overwrites references as a batch operation.
     /// This **will not** delete references that are not in the provided list.
     #[wasm_bindgen(js_name = "insertReferences")]
-    pub fn insert_references(&mut self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
+    pub fn insert_references(&self, refs: Box<[JsValue]>) -> Result<(), JsValue> {
         let refs = utils::read_js_array(refs)?;
         self.engine.borrow_mut().extend_references(refs);
         Ok(())
@@ -90,7 +90,7 @@ impl Driver {
     ///
     /// * `refr` is a Reference object.
     #[wasm_bindgen(js_name = "insertReference")]
-    pub fn insert_reference(&mut self, refr: TReference) -> Result<(), JsValue> {
+    pub fn insert_reference(&self, refr: TReference) -> Result<(), JsValue> {
         let refr = js_err!(refr.into_serde());
         // inserting & replacing are the same
         self.engine.borrow_mut().insert_reference(refr);
@@ -100,7 +100,7 @@ impl Driver {
     /// Removes a reference by id. If it is cited, any cites will be dangling. It will also
     /// disappear from the bibliography.
     #[wasm_bindgen(js_name = "removeReference")]
-    pub fn remove_reference(&mut self, id: &str) -> Result<(), JsValue> {
+    pub fn remove_reference(&self, id: &str) -> Result<(), JsValue> {
         let id = Atom::from(id);
         self.engine.borrow_mut().remove_reference(id);
         Ok(())
@@ -110,7 +110,7 @@ impl Driver {
     ///
     /// * `refr` is a
     #[wasm_bindgen(js_name = "includeUncited")]
-    pub fn include_uncited(&mut self, uncited: TIncludeUncited) -> Result<(), JsValue> {
+    pub fn include_uncited(&self, uncited: TIncludeUncited) -> Result<(), JsValue> {
         let uncited = js_err!(uncited.into_serde());
         self.engine.borrow_mut().include_uncited(uncited);
         Ok(())
@@ -140,7 +140,7 @@ impl Driver {
 
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
+    pub fn insert_cluster(&self, cluster: JsValue) -> Result<(), JsValue> {
         let cluster: string_id::Cluster<Markup> = js_err!(cluster.into_serde());
         let mut eng = self.engine.borrow_mut();
         eng.insert_cites_str(&cluster.id, &cluster.cites);
@@ -149,7 +149,7 @@ impl Driver {
 
     /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
-    pub fn remove_cluster(&mut self, cluster_id: &str) -> Result<(), JsValue> {
+    pub fn remove_cluster(&self, cluster_id: &str) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
         eng.remove_cluster_str(cluster_id);
         Ok(())
@@ -159,7 +159,7 @@ impl Driver {
     ///
     /// * `clusters` is a Cluster[]
     #[wasm_bindgen(js_name = "initClusters")]
-    pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
+    pub fn init_clusters(&self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
         let clusters: Vec<_> = utils::read_js_array(clusters)?;
         self.engine.borrow_mut().init_clusters_str(clusters);
         Ok(())
@@ -190,7 +190,7 @@ impl Driver {
     ///
     #[wasm_bindgen(js_name = "previewCitationCluster")]
     pub fn preview_citation_cluster(
-        &mut self,
+        &self,
         cites: Box<[JsValue]>,
         positions: Box<[JsValue]>,
         format: &str,
@@ -249,7 +249,7 @@ impl Driver {
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     #[wasm_bindgen(js_name = "setClusterOrder")]
-    pub fn set_cluster_order(&mut self, positions: Box<[JsValue]>) -> Result<(), JsValue> {
+    pub fn set_cluster_order(&self, positions: Box<[JsValue]>) -> Result<(), JsValue> {
         let positions: Vec<string_id::ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
         js_err!(eng.set_cluster_order_str(&positions));
