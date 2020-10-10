@@ -1,4 +1,4 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
+// This Source Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
@@ -43,6 +43,9 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + Implementa
     // TODO: cache this
     // #[salsa::invoke(crate::disamb::create_ref_ir)]
     // fn ref_ir(&self, key: Atom) -> Arc<Vec<(FreeCond, RefIR)>>;
+
+    // Cache the most expensive thing, dfa.accepts_data() on the same edge streams over and over
+    fn edge_stream_matches_ref(&self, edges: Vec<EdgeData>, ref_id: Atom) -> bool;
 
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
@@ -362,7 +365,14 @@ macro_rules! preamble {
     ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
         $style = $db.style();
         $locale = $db.locale_by_cite($id);
-        $cite = $id.lookup($db);
+        let cite_data = $id.lookup($db);
+        // Avoid making bibliography ghosts all depend any positional / note num info
+        let cite_stuff = match $db.lookup_cite($id) {
+                CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
+                CiteData::BibliographyGhost { cite, .. } => (cite, (Position::First, None)),
+        };
+        $cite = cite_stuff.0;
+        let position = cite_stuff.1;
         $refr = match $db.reference($cite.ref_id.clone()) {
             None => return ref_not_found($db, &$cite.ref_id, true),
             Some(r) => r,
@@ -373,7 +383,7 @@ macro_rules! preamble {
             format: $db.get_formatter(),
             cite_id: Some($id),
             cite: &$cite,
-            position: $db.cite_position($id),
+            position,
             citation_number: 0,
             disamb_pass: $pass,
             style: &$style,
@@ -451,6 +461,14 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
     res.is_ok()
 }
 
+fn edge_stream_matches_ref(db: &dyn IrDatabase, edges: Vec<EdgeData>, ref_id: Atom) -> bool {
+    if let Some(dfa) = db.ref_dfa(ref_id) {
+        dfa.accepts_data(&edges)
+    } else {
+        false
+    }
+}
+
 /// Returns the set of Reference IDs that could have produced a cite's IR
 fn refs_accepting_cite(
     db: &dyn IrDatabase,
@@ -466,17 +484,13 @@ fn refs_accepting_cite(
     // - disamb_pass (for debug)
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
     let participants = db.disamb_participants();
-    #[cfg(feature = "rayon")]
-    use rayon::prelude::*;
+    // #[cfg(feature = "rayon")]
+    // use rayon::prelude::*;
 
-    let ref_dfas = db.all_ref_dfas();
+    let iter = participants.iter();
 
-    let iter = cfg_par_iter!(ref_dfas);
-
-    let mut own_ref_nonmatch = true;
-
-    let ret: Vec<Atom> = iter.filter_map(|(k, dfa)| {
-            let acc = dfa.accepts_data(&edges);
+    let ret: Vec<Atom> = iter.filter_map(|k| {
+            let acc = db.edge_stream_matches_ref(edges.clone(), k.clone());
             if log_enabled!(log::Level::Trace) && k != ref_id && acc {
                 trace!(
                     "{:?}: matched other reference {} during pass {:?}",
@@ -494,7 +508,7 @@ fn refs_accepting_cite(
         .collect();
 
     if log_enabled!(log::Level::Warn) && !ret.contains(ref_id) {
-        let dfa = ref_dfas.get(ref_id).unwrap();
+        let dfa = db.ref_dfa(ref_id.clone()).unwrap();
         warn!(
             "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
             cite_id,
