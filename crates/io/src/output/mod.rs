@@ -193,7 +193,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         } else {
             b
         };
-        let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_str()) {
+        let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_ref()) {
             if !prefix.is_empty() {
                 // TODO: use the localized quotes.
                 self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
@@ -203,7 +203,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         } else {
             b
         };
-        if let Some(suffix) = affixes.map(|a| a.suffix.as_str()) {
+        if let Some(suffix) = affixes.map(|a| a.suffix.as_ref()) {
             if !suffix.is_empty() {
                 self.append_suffix(&mut pre_and_content, suffix);
             }

@@ -6,8 +6,8 @@
 
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
-// pub use string_cache::DefaultAtom as Atom;
-pub use smartstring::alias::String as Atom;
+// pub use smartstring::alias::String as Atom;
+pub use string_cache::DefaultAtom as Atom;
 
 #[macro_use]
 extern crate serde_derive;
