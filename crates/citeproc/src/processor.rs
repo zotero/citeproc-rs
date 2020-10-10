@@ -146,13 +146,13 @@ impl Processor {
         let mut db = Processor::safe_default(fetcher);
         db.formatter = format.make_markup();
         let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style_with_durability(style, Durability::MEDIUM);
+        db.set_style_with_durability(style, Durability::HIGH);
         Ok(db)
     }
 
     pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
         let style = Style::from_str(style_text)?;
-        self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
+        self.set_style_with_durability(Arc::new(style), Durability::HIGH);
         Ok(())
     }
 
@@ -265,7 +265,7 @@ impl Processor {
     }
 
     pub fn clear_references(&mut self) {
-        self.set_all_keys(Arc::new(HashSet::new()));
+        self.set_all_keys_with_durability(Arc::new(HashSet::new()), Durability::MEDIUM);
     }
 
     fn intern_cluster_id(&self, string: impl AsRef<str>) -> ClusterId {
@@ -316,9 +316,9 @@ impl Processor {
     pub fn reset_references(&mut self, refs: Vec<Reference>) {
         let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
-            self.set_reference_input(r.id.clone(), Arc::new(r));
+            self.set_reference_input_with_durability(r.id.clone(), Arc::new(r), Durability::MEDIUM);
         }
-        self.set_all_keys(Arc::new(keys));
+        self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }
 
     pub fn extend_references(&mut self, refs: Vec<Reference>) {
@@ -326,24 +326,24 @@ impl Processor {
         let mut keys = HashSet::clone(&keys);
         for r in refs {
             keys.insert(r.id.clone());
-            self.set_reference_input(r.id.clone(), Arc::new(r));
+            self.set_reference_input_with_durability(r.id.clone(), Arc::new(r), Durability::MEDIUM);
         }
-        self.set_all_keys(Arc::new(keys));
+        self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }
 
     pub fn insert_reference(&mut self, refr: Reference) {
         let keys = self.all_keys();
         let mut keys = HashSet::clone(&keys);
         keys.insert(refr.id.clone());
-        self.set_reference_input(refr.id.clone(), Arc::new(refr));
-        self.set_all_keys(Arc::new(keys));
+        self.set_reference_input_with_durability(refr.id.clone(), Arc::new(refr), Durability::MEDIUM);
+        self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }
 
     pub fn remove_reference(&mut self, id: Atom) {
         let keys = self.all_keys();
         let mut keys = HashSet::clone(&keys);
         keys.remove(&id);
-        self.set_all_keys(Arc::new(keys));
+        self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }
 
     pub fn include_uncited(&mut self, uncited: IncludeUncited) {
@@ -354,7 +354,7 @@ impl Processor {
                 Uncited::Enumerated(list.iter().map(String::as_str).map(Atom::from).collect())
             }
         };
-        self.set_all_uncited(Arc::new(db_uncited));
+        self.set_all_uncited_with_durability(Arc::new(db_uncited), Durability::MEDIUM);
     }
 
     pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
@@ -573,7 +573,7 @@ impl Processor {
         let mut langs = (*self.locale_input_langs()).clone();
         for (lang, xml) in locales {
             langs.insert(lang.clone());
-            self.set_locale_input_xml_with_durability(lang, Arc::new(xml), Durability::MEDIUM);
+            self.set_locale_input_xml_with_durability(lang, Arc::new(xml), Durability::HIGH);
         }
         self.set_locale_input_langs(Arc::new(langs));
     }
