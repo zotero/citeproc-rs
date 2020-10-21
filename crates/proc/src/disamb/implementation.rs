@@ -235,7 +235,6 @@ impl Disambiguation<Markup> for Element {
                 let var = label.variable;
                 let custom = match var {
                     NumberVariable::Locator if ctx.locator_type.is_some() => {
-                        eprintln!("added LocatorLabel");
                         Some(EdgeData::LocatorLabel)
                     }
                     NumberVariable::FirstReferenceNoteNumber
@@ -250,26 +249,12 @@ impl Disambiguation<Markup> for Element {
                     | NumberVariable::FirstReferenceNoteNumber
                     | NumberVariable::CitationNumber
                     | _ if state.is_suppressed_num(var) => {
-                        eprintln!(
-                            "locaor supposed to be not present, so no LocatorLabel, only None"
-                        );
                         return (RefIR::Edge(None), GroupVars::new());
                     }
                     _ => None,
                 };
                 if let Some(edge_data) = custom {
                     let edge = edge_data;
-                    // {
-                    //     use std::io::Write;
-                    //     use std::fs::OpenOptions;
-                    //     let mut file = OpenOptions::new()
-                    //         .write(true)
-                    //         .append(true)
-                    //         .create(true)
-                    //         .open("./disimplementation.txt")
-                    //         .unwrap();
-                    //     writeln!(file, "created edgedata: {:?}", edge).unwrap();
-                    // }
                     return (RefIR::Edge(Some(edge)), GroupVars::Important);
                 }
                 let content = ctx

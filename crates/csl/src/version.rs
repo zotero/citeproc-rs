@@ -247,7 +247,7 @@ pub fn read_features<'a>(
         // let stable_removed = STABLE_REMOVED_FEATURES.iter().find(|f| name == f.0);
         // if let Some((.., reason)) = removed.or(stable_removed) {
         if let Some((.., reason)) = removed {
-            eprintln!("{:?}", reason);
+            log::warn!("{:?}", reason);
             // feature_removed(span_handler, mi.span, *reason);
             // continue
             return Err(kebab);

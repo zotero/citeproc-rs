@@ -371,17 +371,6 @@ pub fn add_to_graph(
     match ir {
         RefIR::Edge(None) => spot,
         RefIR::Edge(Some(e)) => {
-            // {
-            //     use std::io::Write;
-            //     use std::fs::OpenOptions;
-            //     let mut file = OpenOptions::new()
-            //         .write(true)
-            //         .append(true)
-            //         .create(true)
-            //         .open("./add_to_graph.txt")
-            //         .unwrap();
-            //     writeln!(file, "add_to_graph: {:?}", e).unwrap();
-            // }
             let to = nfa.graph.add_node(());
             nfa.graph.add_edge(spot, to, NfaEdge::Token(e.clone()));
             to
