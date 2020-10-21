@@ -189,12 +189,12 @@ fn sep_or_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, Num
     fn sep_from(input: char) -> NumericToken {
         match input {
             ',' => Comma,
-            '-' => Hyphen,
+            '-' | '\u{2013}' => Hyphen,
             '&' => Ampersand,
             _ => unreachable!(),
         }
     }
-    move |inp| alt((sep_and(and_term), map(one_of(",&-"), sep_from)))(inp)
+    move |inp| alt((sep_and(and_term), map(one_of(",&-\u{2013}"), sep_from)))(inp)
 }
 
 fn sep<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
@@ -230,7 +230,7 @@ fn esc<'a>(
         if i.len() == 0 {
             return Err(nom::Err::Error((i, nom::error::ErrorKind::Escaped)));
         }
-        escaped(f, '\\', one_of(r#"\ ,&-"#))(i)
+        escaped(f, '\\', one_of(r#"\ ,&-\u{2013}"#))(i)
     }
 }
 
@@ -243,7 +243,7 @@ fn unescape(inp: &str) -> String {
         if ch == '\\'
             && !after_backslash
             && inp[i..].chars().nth(0).map_or(false, |c| {
-                c == ' ' || c == ',' || c == '-' || c == '&' || c == '\\'
+                c == ' ' || c == ',' || c == '-' || c == '&' || c == '\\' || c == '\u{2013}'
             })
         {
             after_backslash = true;
@@ -257,11 +257,11 @@ fn unescape(inp: &str) -> String {
 
 fn num_pre(inp: &str) -> IResult<&str, &str> {
     // Note! Does not exclude zero. So this will pick up a leading zero prefix.
-    esc(is_not("\\ ,&-123456789"))(inp)
+    esc(is_not("\\ ,&-\u{2013}123456789"))(inp)
 }
 
 fn non_sep(inp: &str) -> IResult<&str, &str> {
-    esc(is_not(" ,&-"))(inp)
+    esc(is_not(" ,&-\u{2013}"))(inp)
 }
 
 fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
