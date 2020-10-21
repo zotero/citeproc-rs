@@ -185,9 +185,6 @@ impl TestCase {
             }
             match self.mode {
                 Mode::Citation => {
-                    if self.result == "[CSL STYLE ERROR: reference with no printed form.]" {
-                        self.result = String::new()
-                    }
                     // Because citeproc-rs is a bit keen to escape things
                     // Slashes are fine if they're not next to angle braces
                     // let's hope they're not

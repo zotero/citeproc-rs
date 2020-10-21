@@ -1,5 +1,5 @@
 mode: citation
-result: ""
+result: "[CSL STYLE ERROR: reference with no printed form.]"
 input:
   - id: "ITEM-1"
     type: book

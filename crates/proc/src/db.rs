@@ -1235,7 +1235,10 @@ pub fn built_cluster_before_output(
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
-        let flattened = IR::flatten(gen4.root, &gen4.arena, &fmt)?;
+        let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt) {
+            Some(x) => x,
+            None => fmt.plain("[CSL STYLE ERROR: reference with no printed form.]"),
+        };
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         if !pre.is_empty() && !pre.ends_with(' ') {
