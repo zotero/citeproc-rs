@@ -12,7 +12,7 @@ pub mod roman;
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum NumericValue<'a> {
-    Tokens(Cow<'a, str>, Vec<NumericToken>),
+    Tokens(Cow<'a, str>, Vec<NumericToken>, bool),
     /// For values that could not be parsed.
     Str(Cow<'a, str>),
 }
@@ -78,20 +78,20 @@ impl NumericToken {
 
 impl<'a> NumericValue<'a> {
     pub fn num(i: u32) -> Self {
-        NumericValue::Tokens(format!("{}", i).into(), vec![Num(i)])
+        NumericValue::Tokens(format!("{}", i).into(), vec![Num(i)], true)
     }
     pub fn page_first(&self) -> Option<Self> {
         self.first_num().map(NumericValue::num)
     }
     fn first_num(&self) -> Option<u32> {
         match *self {
-            NumericValue::Tokens(_, ref ts) => ts.get(0).and_then(|token| token.get_num()),
+            NumericValue::Tokens(_, ref ts, _) => ts.get(0).and_then(|token| token.get_num()),
             NumericValue::Str(_) => None,
         }
     }
     pub fn is_numeric(&self) -> bool {
         match *self {
-            NumericValue::Tokens(_, _) => true,
+            NumericValue::Tokens(_, _, is_numeric) => is_numeric,
             NumericValue::Str(_) => false,
         }
     }
@@ -102,7 +102,7 @@ impl<'a> NumericValue<'a> {
             // “page 1”, “pages 1-3”, “volume 2”, “volumes 2 & 4”), or, in the case of the
             // “number-of-pages” and “number-of-volumes” variables, when the number is higher
             // than 1 (“1 volume” and “3 volumes”).
-            NumericValue::Tokens(_, ref ts) => {
+            NumericValue::Tokens(_, ref ts, _isnum) => {
                 if var.is_quantity() {
                     match ts.len() {
                         0 => true, // doesn't matter
@@ -125,7 +125,7 @@ impl<'a> NumericValue<'a> {
     }
     pub fn verbatim(&self) -> &str {
         match self {
-            NumericValue::Tokens(verb, _) => verb,
+            NumericValue::Tokens(verb, _, _isnum) => verb,
             NumericValue::Str(s) => s,
         }
     }
@@ -135,9 +135,18 @@ impl<'a> NumericValue<'a> {
 
 impl<'a> NumericValue<'a> {
     fn parse_full(input: &'a str, and_term: &'a str) -> Self {
-        if let Ok((remainder, parsed)) = num_tokens(and_term)(input) {
-            if remainder.is_empty() && parsed.iter().any(|x| matches!(x, Num(_) | Roman(..) | Affixed(..))) {
-                NumericValue::Tokens(input.into(), parsed)
+        if let Ok((remainder, mut parsed)) = num_tokens(and_term)(input) {
+            if remainder.is_empty() {
+                if parsed.iter().any(|x| matches!(x, Num(_) | Roman(..) | Affixed(..))) {
+                    NumericValue::Tokens(input.into(), parsed, true)
+                } else {
+                    NumericValue::Str(input.into())
+                }
+            } else if !parsed.is_empty() {
+                // Use as much as we can, slap the rest on as a block.
+                // Also, cement that it can't be numeric even if it was partially parsed.
+                parsed.push(Str(remainder.into()));
+                NumericValue::Tokens(input.into(), parsed, false)
             } else {
                 NumericValue::Str(input.into())
             }
@@ -314,7 +323,7 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
         },
     )(inp)?;
     let token = match res {
-        Acc::Len(len) => NumericToken::Str(unescape(&inp[..len])),
+        Acc::Len(_len) => return Err(nom::Err::Error((inp, nom::error::ErrorKind::Many1))),
         Acc::LenNum {
             prefix,
             num_len,

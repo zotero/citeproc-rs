@@ -215,7 +215,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let fmt = self.fmt();
         let prf = self.page_range_format(var);
         match (val, form) {
-            (NumericValue::Tokens(_, ts), _) => {
+            (NumericValue::Tokens(_, ts, is_numeric), _) if *is_numeric => {
                 let mut s = SmartString::new();
                 for t in ts {
                     if !s.is_empty() {
@@ -246,7 +246,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let style = self.ctx.style();
         debug!("number {:?}", val);
         let prf = self.page_range_format(number.variable);
-        let string = if let NumericValue::Tokens(_, ts) = val {
+        let string = if let NumericValue::Tokens(s, ts, true) = val {
             match number.form {
                 NumericForm::Roman if roman_representable(&val) => {
                     roman_lower(&ts, locale, number.variable, prf)
@@ -271,7 +271,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         };
         let fmt = self.fmt();
         let options = IngestOptions {
-            replace_hyphens: number.variable.should_replace_hyphens(style),
             text_case: number.text_case,
             quotes: self.quotes(),
             is_english: self.ctx.is_english(),
