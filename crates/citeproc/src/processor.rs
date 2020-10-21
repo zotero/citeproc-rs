@@ -273,6 +273,10 @@ impl Processor {
         ClusterId::new(w.get_or_intern(string))
     }
 
+    fn preview_cluster_id(&self) -> ClusterId {
+        self.preview_cluster_id
+    }
+
     /// Gives you an interned cluster id to work with. Use this to insert cites, call
     /// `set_cluster_order`, and generally identify clusters in your document.
     ///
@@ -293,7 +297,7 @@ impl Processor {
     }
 
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
-    pub fn random_cluster_id(&self) -> SmartString {
+    pub fn random_cluster_id_str(&self) -> SmartString {
         let interner = self.interner.read();
         loop {
             let smart_string = crate::random_cluster_id();
@@ -301,6 +305,12 @@ impl Processor {
                 return smart_string;
             }
         }
+    }
+
+    /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
+    pub fn random_cluster_id(&self) -> ClusterId {
+        let rand_id = self.random_cluster_id_str();
+        ClusterId::new(self.interner.write().get_or_intern(rand_id))
     }
 
     pub fn reset_references(&mut self, refs: Vec<Reference>) {
@@ -345,6 +355,26 @@ impl Processor {
             }
         };
         self.set_all_uncited(Arc::new(db_uncited));
+    }
+
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
+        let mut cluster_ids = Vec::new();
+        for cluster in clusters {
+            let Cluster { id: cluster_id, cites, } = cluster;
+            let mut ids = Vec::with_capacity(cites.len());
+            for (index, cite) in cites.into_iter().enumerate() {
+                let cite_id = self.cite(CiteData::RealCite {
+                    cluster: cluster_id.raw(),
+                    index: index as u32,
+                    cite: Arc::new(cite),
+                });
+                ids.push(cite_id);
+            }
+            self.set_cluster_cites(cluster_id.raw(), Arc::new(ids));
+            self.set_cluster_note_number(cluster_id.raw(), None);
+            cluster_ids.push(cluster_id.raw());
+        }
+        self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
     pub fn init_clusters_str(&mut self, clusters: Vec<string_id::Cluster<Markup>>) {
@@ -426,6 +456,10 @@ impl Processor {
         } else {
             None
         }
+    }
+
+    pub fn get_cluster_note_number(&self, cluster_id: ClusterId) -> Option<ClusterNumber> {
+        self.cluster_note_number(cluster_id.raw())
     }
 
     /// Returns None if the cluster has not been assigned a position in the document.

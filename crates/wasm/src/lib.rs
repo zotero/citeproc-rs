@@ -135,7 +135,7 @@ impl Driver {
     #[wasm_bindgen(js_name = "randomClusterId")]
     pub fn random_cluster_id(&self) -> String {
         let eng = self.engine.borrow();
-        eng.random_cluster_id().into()
+        eng.random_cluster_id_str().into()
     }
 
     /// Inserts or replaces a cluster with a matching `id`.
