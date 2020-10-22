@@ -8,26 +8,6 @@ use csl::*;
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
-use std::cmp::Ordering;
-#[derive(Debug)]
-enum Demoted {
-    Left,
-    Right,
-}
-use natural_sort::NaturalCmp;
-
-fn compare_demoting_none<T: PartialOrd>(
-    aa: Option<T>,
-    bb: Option<T>,
-) -> (Ordering, Option<Demoted>) {
-    match (aa, bb) {
-        (None, None) => (Ordering::Equal, None),
-        (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
-        (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
-        (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
-    }
-}
-
 fn plain_macro_element(macro_name: Atom) -> TextElement {
     TextElement {
         source: TextSource::Macro(macro_name),
@@ -48,10 +28,7 @@ pub fn sort_string_citation(
 ) -> Option<Arc<SmartString>> {
     let bib_num = db.bib_number(cite_id);
     with_cite_context(db, cite_id, bib_num, Some(key), true, None, |ctx| {
-        let mut walker = SortingWalker::new(db, &ctx);
-        let text = plain_macro_element(macro_name.clone());
-        let (string, _gv) = walker.text_macro(&text, &macro_name);
-        Arc::new(string)
+        Arc::new(ctx_sort_string(ctx, macro_name, key))
     })
 }
 
@@ -63,11 +40,15 @@ pub fn sort_string_bibliography(
     key: SortKey,
 ) -> Option<Arc<SmartString>> {
     with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
-        let mut walker = SortingWalker::new(db, &ctx);
-        let text = plain_macro_element(macro_name.clone());
-        let (string, _gv) = walker.text_macro(&text, &macro_name);
-        Arc::new(string)
+        Arc::new(ctx_sort_string(ctx, macro_name, key))
     })
+}
+
+fn ctx_sort_string(ctx: &CiteContext<Markup, Markup>, macro_name: Atom) -> SmartString {
+    let mut walker = SortingWalker::new(db, &ctx);
+    let text = plain_macro_element(macro_name);
+    let (string, _gv) = walker.text_macro(&text, &macro_name);
+    string
 }
 
 pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
@@ -108,6 +89,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         citation_numbers.insert(id.clone(), i as u32);
         i += 1;
     }
+    let mut sort_cache = FnvHashMap::default();
 
     let refs = if let Some(ref sort) = bib {
         // dbg!(sort);
@@ -120,12 +102,10 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
                 with_bib_context(db, b.clone(), Some(*b_cnum), None, None, |_, b_ctx| {
                     bib_ordering(
                         db,
-                        |db, ref_id, macro_name, key| {
-                            db.sort_string_bibliography(ref_id.clone(), macro_name, key)
-                        },
+                        &mut sort_cache,
                         CiteOrBib::Bibliography,
-                        (a, &a_ctx, *a_cnum),
-                        (b, &b_ctx, *b_cnum),
+                        (a, &mut a_ctx, *a_cnum),
+                        (b, &mut b_ctx, *b_cnum),
                         sort,
                     )
                 })
@@ -176,21 +156,20 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
                 });
                 cnum
             };
+            let mut sort_cache = FnvHashMap::default();
             neu.sort_by(|a_id, b_id| match (getter(a_id), getter(b_id)) {
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,
                 (Some(a_cnum), Some(b_cnum)) => {
-                    with_cite_context(db, *a_id, Some(a_cnum), None, true, None, |a_ctx| {
-                        with_cite_context(db, *b_id, Some(b_cnum), None, true, None, |b_ctx| {
+                    with_cite_context(db, *a_id, Some(a_cnum), None, true, None, |mut a_ctx| {
+                        with_cite_context(db, *b_id, Some(b_cnum), None, true, None, |mut b_ctx| {
                             bib_ordering(
                                 db,
-                                |db, cite_id, macro_name, key| {
-                                    db.sort_string_citation(cite_id, macro_name, key)
-                                },
+                                sort_cache,
                                 CiteOrBib::Bibliography,
-                                (*a_id, &a_ctx, a_cnum),
-                                (*b_id, &b_ctx, b_cnum),
+                                (*a_id, &mut a_ctx, a_cnum),
+                                (*b_id, &mut b_ctx, b_cnum),
                                 sort,
                             )
                         })
@@ -212,37 +191,187 @@ pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
     lookup_ref_ids.get(&cite.ref_id).cloned()
 }
 
+#[derive(PartialEq, Eq)]
+enum SortItem {
+    Macro(NaturalCmp),
+    OrdinaryVariable(UniCase<SmartString>),
+    Cnum(u32),
+    Number(citeproc_io::NumericValueOwned),
+    Names(Option<Vec<UniCase<SmartString>>>),
+    Date(DateOrRange),
+}
+
+use std::cmp::Ordering;
+#[derive(Debug)]
+enum Demoted {
+    Left,
+    Right,
+}
+use natural_sort::NaturalCmp;
+
+#[derive(Eq)]
+struct Demoting<T> {
+    // ignored in partialeq/eq/ord equivalence
+    direction: SortDirection,
+    option: Option<T>
+}
+
+impl<T: Eq> PartialEq for Demoting<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.option == other.option
+    }
+}
+
+impl<T: Eq + Ord> Ord for Demoting<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let (ordering, demoted) = compare_demoting_none(&self.option, &other.option);
+        // Necessary for Ord implementation contract
+        // These will always be the same as we always build the two vecs from the same sort keys
+        debug_assert_eq!(self.direction, other.direction);
+        match (self.direction, demoted) {
+            // Wants to be reversed, but overridden by demotion
+            (_, Some(Demoted::Left)) => Ordering::Greater,
+            (_, Some(Demoted::Right)) => Ordering::Less,
+            (SortDirection::Descending, _) => ordering.reverse(),
+            _ => ordering,
+        }
+    }
+}
+
+fn compare_demoting_none<T: PartialOrd>(
+    aa: Option<T>,
+    bb: Option<T>,
+) -> (Ordering, Option<Demoted>) {
+    match (aa, bb) {
+        (None, None) => (Ordering::Equal, None),
+        (None, Some(_)) => (Ordering::Greater, Some(Demoted::Left)),
+        (Some(_), None) => (Ordering::Less, Some(Demoted::Right)),
+        (Some(aaa), Some(bbb)) => (aaa.partial_cmp(&bbb).unwrap_or(Ordering::Equal), None),
+    }
+}
+
+pub fn ctx_sort_items<ID, O, I>(
+    db: &dyn IrDatabase,
+    sort_cache: &mut FnvHashMap<(ID, Atom, SortKey), Option<Arc<SmartString>>>,
+    // Cached lookup from (id, macro name, sort key) -> a comparable string
+    cite_or_bib: CiteOrBib,
+    a_id: ID,
+    a_ctx: &mut CiteContext<'_, O, I>
+    a_cnum: u32,
+    sort: &Sort,
+)
+where
+    ID: Copy + Eq + std::hash::Hash + Debug,
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    let sort_string = |ctx: &mut CiteContext<Markup, Markup>, macro_name: Atom, key: SortKey, cnum: u32| {
+        ctx.bib_number = Some(cnum);
+        if cite_or_bib == CiteOrBib::Bibliography {
+            ctx.sort_key = Some(key);
+            ctx_sort_string(ctx, macro_name)
+        } else {
+            ctx.sort_key = Some(key);
+            ctx_sort_string(ctx, macro_name)
+        }
+    };
+    let items = Vec::with_capacity(sort.keys.len());
+    for key in sort.keys.iter() {
+        let (o, demoted) = match key.sort_source {
+            SortSource::Macro(ref macro_name) => {
+                let a_string = sort_string(a_ctx, macro_name.clone(), key.clone(), a_cnum);
+                let a_nat = NaturalCmp::new(a_string);
+                SortItem::Macro(a_nat)
+            }
+            // For variables, we're not going to use the CiteContext wrappers, because if a
+            // variable is not defined directly on the reference, it shouldn't be sortable-by, so
+            // will just come back as None from reference.xxx.get() and produce Equal.
+            SortSource::Variable(any) => match any {
+                AnyVariable::Ordinary(v) => {
+                    use citeproc_io::micro_html_to_string;
+                    fn strip_markup(s: impl AsRef<str>) -> SmartString {
+                        micro_html_to_string(s.as_ref(), &Default::default())
+                    };
+                    a_ctx
+                        .get_ordinary(v, VariableForm::default())
+                        .map(strip_markup)
+                        .map(UniCase::new);
+                }
+                AnyVariable::Number(NumberVariable::CitationNumber) => {
+                    SortItem::Cnum(a_cnum)
+                }
+                AnyVariable::Number(v) => {
+                    SortItem::Number(a_ctx.get_number(v).into())
+                    compare_demoting_none(a_ctx.get_number(v), b_ctx.get_number(v))
+                }
+                AnyVariable::Name(v) => {
+                    let a_strings =
+                        crate::names::sort_strings_for_names(db, &a_ctx.reference, v, key, cite_or_bib);
+                    let b_strings =
+                        crate::names::sort_strings_for_names(db, &b_ctx.reference, v, key, cite_or_bib);
+                    let x = compare_demoting_none(a_strings.as_ref(), b_strings.as_ref());
+                    debug!(
+                        "cmp names {:?}: {:?} {:?} {:?} {:?} {:?}",
+                        v, a_id, a_strings, x.0, b_id, b_strings
+                    );
+                    x
+                }
+                // TODO: compare dates, using details from spec for ranges
+                AnyVariable::Date(v) => {
+                    let a_date = a_ctx.reference.date.get(&v);
+                    let b_date = b_ctx.reference.date.get(&v);
+                    compare_demoting_none(a_date, b_date)
+                }
+            },
+        };
+        ord = match (key.direction.as_ref(), demoted) {
+            // Wants to be reversed, but overridden by demotion
+            (_, Some(Demoted::Left)) => Ordering::Greater,
+            (_, Some(Demoted::Right)) => Ordering::Less,
+            (Some(SortDirection::Descending), _) => o.reverse(),
+            _ => o,
+        };
+    }
+}
+
 /// Creates a total ordering of References from a Sort element. (Not a query)
 pub fn bib_ordering<
-    ID: std::fmt::Debug + Copy,
-    MacroRunner: Fn(&dyn IrDatabase, ID, Atom, SortKey) -> Option<Arc<SmartString>>,
+    ID: std::fmt::Debug + Copy + Eq + std::hash::Hash,
     O: OutputFormat,
     I: OutputFormat,
 >(
     db: &dyn IrDatabase,
+    sort_cache: &mut FnvHashMap<(ID, Atom, SortKey), Option<Arc<SmartString>>>,
     // Cached lookup from (id, macro name, sort key) -> a comparable string
-    sort_macro_runner: MacroRunner,
     cite_or_bib: CiteOrBib,
-    a_id_ctx_cnum: (ID, &CiteContext<'_, O, I>, u32),
-    b_id_ctx_cnum: (ID, &CiteContext<'_, O, I>, u32),
+    a_id_ctx_cnum: (ID, &mut CiteContext<'_, O, I>, u32),
+    b_id_ctx_cnum: (ID, &mut CiteContext<'_, O, I>, u32),
     sort: &Sort,
-) -> Ordering {
+) -> Vec<SortIten> {
     let mut ord = Ordering::Equal;
     let (a_id, a_ctx, a_cnum) = a_id_ctx_cnum;
     let (b_id, b_ctx, b_cnum) = b_id_ctx_cnum;
-    let a_ref = a_ctx.reference;
-    let b_ref = b_ctx.reference;
+    let mut cached_sort_string = |ctx: &mut CiteContext<Markup, Markup>, macro_name: Atom, key: SortKey, cnum: u32| {
+        sort_cache
+            .entry((a_id, macro_name.clone(), key.clone()))
+            .or_insert_with(|| {
+                ctx.bib_number = Some(cnum);
+                if cite_or_bib == CiteOrBib::Bibliography {
+                    ctx.sort_key = Some(key);
+                    ctx_sort_string(ctx, macro_name)
+                } else {
+                    ctx.sort_key = Some(key);
+                    ctx_sort_string(ctx, macro_name)
+                }
+            })
+    };
     for key in sort.keys.iter() {
-        // If an ordering is found, you don't need to tie-break any further with more sort keys.
-        if ord != Ordering::Equal {
-            break;
-        }
         let (o, demoted) = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string = sort_macro_runner(db, a_id, macro_name.clone(), key.clone());
-                let b_string = sort_macro_runner(db, b_id, macro_name.clone(), key.clone());
-                let a_nat = a_string.as_ref().and_then(|x| NaturalCmp::new(x));
-                let b_nat = b_string.as_ref().and_then(|x| NaturalCmp::new(x));
+                let a_string = cached_sort_string(a_ctx, macro_name.clone(), key.clone(), a_cnum);
+                let b_string = cached_sort_string(b_ctx, macro_name.clone(), key.clone(), b_cnum);
+                let a_nat = NaturalCmp::new(a_string);
+                let b_nat = NaturalCmp::new(b_string);
                 let x = compare_demoting_none(a_nat, b_nat);
                 debug!(
                     "cmp macro {}: {:?} {:?} {:?} {:?} {:?}",
@@ -271,10 +400,10 @@ pub fn bib_ordering<
                     debug!(
                         "cmp ordinary {:?}: {:?} {:?} {:?} {:?} {:?}",
                         v,
-                        a_ref.id,
+                        a_ctx.reference.id,
                         aa.as_ref(),
                         x.0,
-                        b_ref.id,
+                        b_ctx.reference.id,
                         bb.as_ref()
                     );
                     x
@@ -287,9 +416,9 @@ pub fn bib_ordering<
                 }
                 AnyVariable::Name(v) => {
                     let a_strings =
-                        crate::names::sort_strings_for_names(db, a_ref, v, key, cite_or_bib);
+                        crate::names::sort_strings_for_names(db, &a_ctx.reference, v, key, cite_or_bib);
                     let b_strings =
-                        crate::names::sort_strings_for_names(db, b_ref, v, key, cite_or_bib);
+                        crate::names::sort_strings_for_names(db, &b_ctx.reference, v, key, cite_or_bib);
                     let x = compare_demoting_none(a_strings.as_ref(), b_strings.as_ref());
                     debug!(
                         "cmp names {:?}: {:?} {:?} {:?} {:?} {:?}",

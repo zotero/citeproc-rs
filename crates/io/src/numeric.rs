@@ -17,6 +17,19 @@ pub enum NumericValue<'a> {
     Str(Cow<'a, str>),
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum NumericValueOwned {
+    Tokens(Vec<NumericToken>),
+    Str(String),
+}
+impl From<NumericValue<'_>> for NumericValueOwned {
+    fn from(other: NumericValue) -> Self {
+        match other {
+            NumericValue::Tokens(_, tk, _) => NumericValueOwned::Tokens(tk.clone()),
+            NumericValue::Str(s) => NumericValueOwned::Str(String::from(s.as_ref())),
+        }
+    }
+}
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum NumericToken {
