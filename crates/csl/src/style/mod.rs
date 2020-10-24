@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::terms::{Category, TermForm, TermFormExtended, TextTermSelector};
+use super::terms::{TermForm, TermFormExtended, TextTermSelector};
 use super::IsIndependent;
 use crate::error::*;
 use crate::locale::{Lang, Locale};
@@ -16,6 +16,9 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
+
+pub mod info;
+use info::Info;
 
 type TermPlural = bool;
 type StripPeriods = bool;
@@ -1072,11 +1075,6 @@ impl Default for StyleClass {
     fn default() -> Self {
         StyleClass::Note
     }
-}
-
-#[derive(Default, Debug, Eq, Clone, PartialEq)]
-pub struct Info {
-    pub categories: Vec<Category>,
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]

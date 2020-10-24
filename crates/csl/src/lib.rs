@@ -18,9 +18,23 @@ extern crate log;
 
 use std::sync::Arc;
 
+#[macro_use]
+pub mod error;
+
+macro_rules! append_err {
+    ($res:expr, $errs:expr) => {
+        match $res {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                $errs.extend(e.0.into_iter());
+                Err($crate::error::ChildGetterError)
+            }
+        }
+    };
+}
+
 pub(crate) mod attr;
 pub use self::attr::GetAttribute;
-pub mod error;
 pub mod locale;
 pub mod style;
 pub mod terms;
@@ -29,16 +43,16 @@ pub mod version;
 
 pub use self::error::*;
 pub use self::locale::*;
-pub use self::style::*;
+pub use self::style::{info::*, *};
 pub use self::terms::*;
 pub use self::variables::*;
 pub use self::version::*;
 
 use self::attr::*;
 use fnv::FnvHashMap;
-use std::collections::HashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
+use std::collections::HashMap;
 
 /// Something is Independent if what it represents is computed during processing, based on a Cite
 /// and the rest of a document. That is, it is not sourced directly from a Reference.
@@ -58,6 +72,69 @@ where
     Self: Sized,
 {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self>;
+    fn select_child(_node: &Node) -> bool {
+        false
+    }
+    const CHILD_DESC: &'static str = "unimplemented";
+}
+
+pub(crate) fn exactly_one_child<T: FromNode>(
+    node: &Node,
+    info: &ParseInfo,
+    errors: &mut Vec<InvalidCsl>,
+) -> ChildGetterResult<T> {
+    let mut iter = node.children().filter(T::select_child);
+    if let Some(child) = iter.next() {
+        if iter.next().is_some() {
+            errors.push(InvalidCsl::new(
+                node,
+                format!("Cannot have more than one <{}>", T::CHILD_DESC),
+            ));
+            return Err(ChildGetterError);
+        }
+        append_err!(T::from_node(&child, info), errors)
+    } else {
+        errors.push(InvalidCsl::new(
+            node,
+            format!("Must have exactly one <{}>", T::CHILD_DESC),
+        ));
+        Err(ChildGetterError)
+    }
+}
+
+pub(crate) fn max_one_child<T: FromNode>(
+    node: &Node,
+    info: &ParseInfo,
+    errors: &mut Vec<InvalidCsl>,
+) -> ChildGetterResult<Option<T>> {
+    let mut iter = node.children().filter(T::select_child);
+    if let Some(child) = iter.next() {
+        if iter.next().is_some() {
+            errors.push(InvalidCsl::new(
+                node,
+                format!("Cannot have more than one <{}>", T::CHILD_DESC),
+            ));
+            return Err(ChildGetterError);
+        }
+        append_err!(T::from_node(&child, info), errors).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+pub(crate) fn many_children<T: FromNode>(
+    node: &Node,
+    info: &ParseInfo,
+    errors: &mut Vec<InvalidCsl>,
+) -> ChildGetterResult<Vec<T>> {
+    let mut iter = node.children().filter(T::select_child);
+    let mut results = Vec::new();
+    while let Some(child) = iter.next() {
+        if let Ok(ch) = append_err!(T::from_node(&child, info), errors) {
+            results.push(ch);
+        }
+    }
+    Ok(results)
 }
 
 trait AttrChecker
@@ -65,6 +142,9 @@ where
     Self: Sized,
 {
     fn filter_attribute(attr: &str) -> bool;
+    fn filter_attribute_full(a: &roxmltree::Attribute) -> bool {
+        Self::filter_attribute(a.name())
+    }
     fn is_on_node<'a>(node: &'a Node) -> bool {
         node.attributes()
             .iter()
@@ -155,6 +235,10 @@ impl FromNode for Formatting {
 }
 
 impl FromNode for Citation {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("citation")
+    }
+    const CHILD_DESC: &'static str = "citation";
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         // TODO: remove collect() using Peekable
         let layouts: Vec<_> = node
@@ -248,6 +332,10 @@ impl FromNode for SortSource {
 }
 
 impl FromNode for Bibliography {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("bibliography")
+    }
+    const CHILD_DESC: &'static str = "bibliography";
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         // TODO: layouts matching locales in CSL-M mode
         // TODO: make sure that all elements are under the control of a display attribute
@@ -727,7 +815,7 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
     Ok(Element::Choose(Arc::new(Choose(_if, elseifs, else_block))))
 }
 
-fn max1_child<T: FromNode>(
+pub(crate) fn max1_child<T: FromNode>(
     parent_tag: &str,
     child_tag: &str,
     els: Children,
@@ -765,6 +853,9 @@ where
 {
     fn filter_attribute(attr: &str) -> bool {
         T::filter_attribute(attr)
+    }
+    fn filter_attribute_full(attr: &roxmltree::Attribute) -> bool {
+        T::filter_attribute_full(attr)
     }
 }
 
@@ -884,26 +975,6 @@ impl FromNode for Element {
     }
 }
 
-fn get_toplevel<'a, 'd: 'a>(
-    root: &Node<'a, 'd>,
-    nodename: &'static str,
-) -> Result<Node<'a, 'd>, CslError> {
-    // TODO: remove collect()
-    let matches: Vec<_> = root
-        .children()
-        .filter(|n| n.has_tag_name(nodename))
-        .collect();
-    if matches.len() > 1 {
-        Err(InvalidCsl::new(&root, &format!("Cannot have more than one <{}>", nodename)).into())
-    } else {
-        // move matches into its first item
-        Ok(matches
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| InvalidCsl::new(&root, &format!("Must have one <{}>", nodename)))?)
-    }
-}
-
 impl FromNode for MacroMap {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         // TODO: remove collect()
@@ -923,6 +994,10 @@ impl FromNode for MacroMap {
             elements: elements?,
         })
     }
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("macro")
+    }
+    const CHILD_DESC: &'static str = "macro";
 }
 
 fn write_slot_once<T: FromNode>(
@@ -1248,23 +1323,10 @@ impl FromNode for Features {
             InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)).into()
         })
     }
-}
-
-impl FromNode for Info {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let categories = node
-            .children()
-            .filter(|el| el.has_tag_name("category"))
-            .map(|el| Category::from_node(&el, info))
-            .partition_results()?;
-        Ok(Info { categories })
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("features")
     }
-}
-
-impl FromNode for Category {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(attribute_required(node, "name", info)?)
-    }
+    const CHILD_DESC: &'static str = "features";
 }
 
 impl FromNode for Style {
@@ -1273,129 +1335,61 @@ impl FromNode for Style {
         // let info_node = get_toplevel(&doc, "info")?;
         let mut macros = HashMap::default();
         let mut locale_overrides = FnvHashMap::default();
-        let mut errors: Vec<CslError> = Vec::new();
+        let mut errors: Vec<InvalidCsl> = Vec::new();
 
-        // Check features first, so we know when parsing the rest which are enabled
-        let feat_matches: Vec<_> = node
-            .children()
-            .filter(|n| n.has_tag_name("features"))
-            .collect();
-        let feat_node = if feat_matches.len() > 1 {
-            return Err(
-                InvalidCsl::new(&node, "Cannot have more than one <features> section").into(),
-            );
-        } else {
-            // move matches into its first item
-            Ok(feat_matches.into_iter().nth(0))
-        };
+        let features = max_one_child::<Features>(node, default_info, &mut errors)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Features::new());
 
-        let features = match feat_node {
-            Ok(Some(node)) => match Features::from_node(&node, default_info) {
-                Ok(bib) => Some(bib),
-                Err(err) => {
-                    errors.push(err);
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(e) => {
-                errors.push(e);
-                None
-            }
-        }
-        .unwrap_or_else(Features::new);
         // Create our own info struct, ignoring the one passed in.
-        let info = ParseInfo {
+        let parse_info = ParseInfo {
             features: features.clone(),
         };
 
-        let locales_res = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("locale"))
-            .map(|el| Locale::from_node(&el, &info))
-            .partition_results();
-        match locales_res {
-            Ok(locales) => {
-                for loc in locales {
-                    locale_overrides.insert(loc.lang.clone(), loc);
-                }
-            }
-            Err(mut errs) => {
-                errors.append(&mut errs);
+        let locales_res = many_children::<Locale>(node, &parse_info, &mut errors);
+        if let Ok(locales) = locales_res {
+            for loc in locales {
+                locale_overrides.insert(loc.lang.clone(), loc);
             }
         }
-        // TODO: output errors from macros, locales as well as citation and bibliography, if there are errors in
-        // all
-        let macro_res = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el, &info))
-            .partition_results();
-        match macro_res {
-            Ok(macro_maps) => {
-                for mac in macro_maps {
-                    macros.insert(mac.name, mac.elements);
-                }
-            }
-            Err(mut errs) => {
-                errors.append(&mut errs);
+
+        let macro_res = many_children::<MacroMap>(node, &parse_info, &mut errors);
+        if let Ok(macro_maps) = macro_res {
+            for mac in macro_maps {
+                macros.insert(mac.name, mac.elements);
             }
         }
-        let citation = match Citation::from_node(&get_toplevel(&node, "citation")?, &info) {
-            Ok(cit) => Ok(cit),
-            Err(err) => {
-                errors.push(err);
-                Err(CslError(Vec::new()))
-            }
-        };
 
-        let matches: Vec<_> = node
-            .children()
-            .filter(|n| n.has_tag_name("bibliography"))
-            .collect();
-
-        let bib_node = if matches.len() > 1 {
-            return Err(InvalidCsl::new(&node, "Cannot have more than one <bibliography>").into());
+        let info = exactly_one_child::<Info>(node, &parse_info, &mut errors);
+        let (citation, bibliography) = if matches!(info, Ok(Info { parent: None, .. }) | Err(_)) {
+            let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
+            let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
+            (citation, bibliography)
         } else {
-            // move matches into its first item
-            Ok(matches.into_iter().nth(0))
-        };
-
-        let bibliography = match bib_node {
-            Ok(Some(node)) => match Bibliography::from_node(&node, &info) {
-                Ok(bib) => Some(bib),
-                Err(err) => {
-                    errors.push(err);
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(e) => {
-                errors.push(e);
-                None
-            }
+            (Ok(Citation::default()), Ok(None))
         };
 
         if !errors.is_empty() {
-            return Err(errors.into());
+            return Err(CslError(errors));
         }
 
         Ok(Style {
             macros,
             version_req,
             locale_overrides,
-            default_locale: attribute_optional(node, "default-locale", &info)?,
-            citation: citation?,
             features,
-            bibliography,
-            info: Info::from_node(&node, &info)?,
-            class: attribute_required(node, "class", &info)?,
-            name_inheritance: Name::from_node(&node, &info)?,
-            page_range_format: attribute_option(node, "page-range-format", &info)?,
+            info: info?,
+            citation: citation?,
+            bibliography: bibliography?,
+            class: attribute_required(node, "class", &parse_info)?,
+            default_locale: attribute_optional(node, "default-locale", &parse_info)?,
+            name_inheritance: Name::from_node(&node, &parse_info)?,
+            page_range_format: attribute_option(node, "page-range-format", &parse_info)?,
             demote_non_dropping_particle: attribute_optional(
                 node,
                 "demote-non-dropping-particle",
-                &info,
+                &parse_info,
             )?,
             initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
             names_delimiter: node

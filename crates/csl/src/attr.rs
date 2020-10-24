@@ -4,11 +4,12 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::error::ExpName;
 use crate::error::{InvalidCsl, NeedVarType, UnknownAttributeValue};
 use crate::version::Features;
 use crate::Atom;
 use crate::ParseInfo;
-use roxmltree::{ExpandedName, Node};
+use roxmltree::Node;
 use std::str::FromStr;
 use strum::EnumProperty;
 
@@ -30,7 +31,11 @@ impl<T: FromStr + EnumProperty> GetAttribute for T {
     }
 }
 
-pub(crate) fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<bool, InvalidCsl> {
+pub(crate) fn attribute_bool(
+    node: &Node,
+    attr: &'static str,
+    default: bool,
+) -> Result<bool, InvalidCsl> {
     match node.attribute(attr) {
         Some("true") => Ok(true),
         Some("false") => Ok(false),
@@ -39,7 +44,10 @@ pub(crate) fn attribute_bool(node: &Node, attr: &str, default: bool) -> Result<b
     }
 }
 
-pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bool>, InvalidCsl> {
+pub(crate) fn attribute_option_bool(
+    node: &Node,
+    attr: &'static str,
+) -> Result<Option<bool>, InvalidCsl> {
     match node.attribute(attr) {
         Some("true") => Ok(Some(true)),
         Some("false") => Ok(Some(false)),
@@ -48,7 +56,11 @@ pub(crate) fn attribute_option_bool(node: &Node, attr: &str) -> Result<Option<bo
     }
 }
 
-pub(crate) fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32, InvalidCsl> {
+pub(crate) fn attribute_int(
+    node: &Node,
+    attr: &'static str,
+    default: u32,
+) -> Result<u32, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s.trim(), 10);
@@ -58,7 +70,10 @@ pub(crate) fn attribute_int(node: &Node, attr: &str, default: u32) -> Result<u32
     }
 }
 
-pub(crate) fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32>, InvalidCsl> {
+pub(crate) fn attribute_option_int(
+    node: &Node,
+    attr: &'static str,
+) -> Result<Option<u32>, InvalidCsl> {
     match node.attribute(attr) {
         Some(s) => {
             let parsed = u32::from_str_radix(s.trim(), 10);
@@ -70,31 +85,32 @@ pub(crate) fn attribute_option_int(node: &Node, attr: &str) -> Result<Option<u32
     }
 }
 
-pub(crate) fn attribute_string(node: &Node, attr: &str) -> String {
+pub(crate) fn attribute_string(node: &Node, attr: &'static str) -> String {
     node.attribute(attr)
         .map(String::from)
         .unwrap_or_else(|| String::from(""))
 }
 
-pub(crate) fn attribute_atom(node: &Node, attr: &str) -> Atom {
+pub(crate) fn attribute_atom(node: &Node, attr: &'static str) -> Atom {
     node.attribute(attr)
         .map(Atom::from)
         .unwrap_or_else(|| Atom::from(""))
 }
 
-pub(crate) fn attribute_atom_default(node: &Node, attr: &str, default: Atom) -> Atom {
+pub(crate) fn attribute_atom_default(node: &Node, attr: &'static str, default: Atom) -> Atom {
     node.attribute(attr).map(Atom::from).unwrap_or(default)
 }
 
-pub(crate) fn attribute_option_atom(node: &Node, attr: &str) -> Option<Atom> {
+pub(crate) fn attribute_option_atom(node: &Node, attr: &'static str) -> Option<Atom> {
     node.attribute(attr).map(Atom::from)
 }
 
 pub(crate) fn attribute_required<T: GetAttribute>(
     node: &Node,
-    attr: &str,
+    attr: impl Into<ExpName>,
     info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
+    let attr = attr.into();
     match node.attribute(attr) {
         Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
@@ -108,7 +124,7 @@ use super::variables::*;
 
 pub(crate) fn attribute_var_type<T: GetAttribute>(
     node: &Node,
-    attr: &str,
+    attr: &'static str,
     need: NeedVarType,
     info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
@@ -125,24 +141,21 @@ pub(crate) fn attribute_var_type<T: GetAttribute>(
         },
         None => Err(InvalidCsl::new(
             node,
-            &format!("Must have '{}' attribute", attr),
+            &format!("Must have '{:?}' attribute", attr),
         )),
     }
 }
 
-pub(crate) fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
-    node: &Node<'a, 'd>,
-    attr: impl Into<ExpandedName<'a, 'd>> + Clone,
+pub(crate) fn attribute_option<T: GetAttribute>(
+    node: &Node,
+    attr: impl Into<ExpName>,
     info: &ParseInfo,
 ) -> Result<Option<T>, InvalidCsl> {
+    let attr = attr.into();
     match node.attribute(attr.clone()) {
         Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(Some(val)),
-            Err(e) => Err(InvalidCsl::attr_val(
-                node,
-                &format!("{:?}", attr.into()),
-                &e.value,
-            )),
+            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
         },
         None => Ok(None),
     }
@@ -150,9 +163,10 @@ pub(crate) fn attribute_option<'a, 'd: 'a, T: GetAttribute>(
 
 pub(crate) fn attribute_optional<T: Default + GetAttribute>(
     node: &Node,
-    attr: &str,
+    attr: impl Into<ExpName>,
     info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
+    let attr = attr.into();
     match node.attribute(attr) {
         Some(a) => match T::get_attr(a, &info.features) {
             Ok(val) => Ok(val),
@@ -164,7 +178,7 @@ pub(crate) fn attribute_optional<T: Default + GetAttribute>(
 
 pub(crate) fn attribute_array_var<T: GetAttribute>(
     node: &Node,
-    attr: &str,
+    attr: &'static str,
     need: NeedVarType,
     info: &ParseInfo,
 ) -> Result<Vec<T>, InvalidCsl> {
@@ -192,7 +206,7 @@ pub(crate) fn attribute_array_var<T: GetAttribute>(
 
 pub(crate) fn attribute_array<T: GetAttribute>(
     node: &Node,
-    attr: &str,
+    attr: &'static str,
     info: &ParseInfo,
 ) -> Result<Vec<T>, InvalidCsl> {
     match node.attribute(attr) {

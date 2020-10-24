@@ -36,6 +36,27 @@ impl Default for Lang {
     }
 }
 
+impl fmt::Display for Lang {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Lang::Iso(l, None) => write!(f, "{}", l),
+            Lang::Iso(l, Some(c)) => write!(f, "{}-{}", l, c),
+            Lang::Iana(u) => write!(f, "i-{}", u),
+            Lang::Unofficial(u) => write!(f, "x-{}", u),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Lang {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_string(self.to_string())
+    }
+}
+
 impl Lang {
     pub fn en_us() -> Self {
         Lang::Iso(IsoLang::English, Some(IsoCountry::US))
@@ -117,17 +138,6 @@ fn test_french() {
             LocaleSource::File(en_us),
         ]
     );
-}
-
-impl fmt::Display for Lang {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Lang::Iso(l, None) => write!(f, "{}", l),
-            Lang::Iso(l, Some(c)) => write!(f, "{}-{}", l, c),
-            Lang::Iana(u) => write!(f, "i-{}", u),
-            Lang::Unofficial(u) => write!(f, "x-{}", u),
-        }
-    }
 }
 
 /// Language codes for `Lang::Iso`.

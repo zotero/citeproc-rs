@@ -9,6 +9,8 @@ use roxmltree::Node;
 use std::num::ParseIntError;
 use std::ops::Range;
 
+pub(crate) type ExpName = roxmltree::ExpandedName<'static, 'static>;
+
 #[derive(Debug, PartialEq)]
 pub struct UnknownAttributeValue {
     pub value: String,
@@ -36,10 +38,14 @@ pub enum StyleError {
     #[error("invalid style: {0}")]
     Invalid(#[from] CslError),
     #[error("could not parse style")]
-    ParseError(#[from] #[serde(serialize_with = "rox_error_serialize")] roxmltree::Error),
+    ParseError(
+        #[from]
+        #[serde(serialize_with = "rox_error_serialize")]
+        roxmltree::Error,
+    ),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 pub struct CslError(pub Vec<InvalidCsl>);
 
 impl std::error::Error for CslError {}
@@ -50,6 +56,15 @@ impl fmt::Display for CslError {
             writeln!(f, "bytes {}..{} {}", i.range.start, i.range.end, i)?;
         }
         Ok(())
+    }
+}
+
+pub(crate) struct ChildGetterError;
+pub(crate) type ChildGetterResult<T> = Result<T, ChildGetterError>;
+impl From<ChildGetterError> for CslError {
+    fn from(_: ChildGetterError) -> Self {
+        log::warn!("converting ChildGetterError to CslError (errors collector not checked)");
+        CslError(Vec::new())
     }
 }
 
@@ -151,13 +166,23 @@ impl NeedVarType {
 }
 
 impl InvalidCsl {
-    pub fn new(node: &Node, message: &str) -> Self {
+    pub fn new(node: &Node, message: impl Into<String>) -> Self {
         let range = node.range();
         InvalidCsl {
             range,
             severity: Severity::Error,
             hint: "".to_string(),
-            message: message.to_owned(),
+            message: message.into(),
+        }
+    }
+
+    pub fn no_content(node: &Node, datatype: &str, hint: Option<&str>) -> Self {
+        let range = node.range();
+        InvalidCsl {
+            range,
+            severity: Severity::Error,
+            hint: hint.unwrap_or("").to_owned(),
+            message: format!("<{}> empty, expected {}", node.tag_name().name(), datatype),
         }
     }
 
@@ -172,16 +197,17 @@ impl InvalidCsl {
         }
     }
 
-    pub fn missing(node: &Node, attr: &str) -> Self {
-        InvalidCsl::new(node, &format!("Must have `{}` attribute", attr))
+    pub fn missing(node: &Node, attr: impl Into<ExpName>) -> Self {
+        InvalidCsl::new(node, &format!("Must have `{:?}` attribute", attr.into()))
     }
 
-    pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
+    pub fn attr_val(node: &Node, attr: impl Into<ExpName>, uav: &str) -> Self {
+        let attr = attr.into();
         let at = node.attribute_node(attr).unwrap();
         let range = at.range();
         InvalidCsl {
             range,
-            message: format!("Unknown attribute value for `{}`: \"{}\"", attr, uav),
+            message: format!("Unknown attribute value for `{:?}`: \"{}\"", attr, uav),
             hint: "".to_string(),
             severity: Severity::Error,
         }

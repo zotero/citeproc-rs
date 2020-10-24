@@ -9,7 +9,7 @@ use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
 use crate::terms::*;
 use crate::variables::NumberVariable;
-use crate::{FromNode, FromNodeResult, ParseInfo};
+use crate::{AttrChecker, FromNode, FromNodeResult, ParseInfo};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
 use std::str::FromStr;
@@ -89,9 +89,32 @@ impl FromStr for Locale {
 const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 // const CSL_NAMESPACE: &str = "http://purl.org/net/xbiblio/csl";
 
-impl FromNode for Locale {
+pub(crate) const LANG_ATTR: (&str, &str) = (XML_NAMESPACE, "lang");
+
+impl FromNode for Lang {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let lang = attribute_option(node, (XML_NAMESPACE, "lang"), info)?;
+        let lang = attribute_required(node, (XML_NAMESPACE, "lang"), info)?;
+        Ok(lang)
+    }
+}
+
+impl AttrChecker for Lang {
+    fn filter_attribute(_attr: &str) -> bool {
+        // unreachable
+        false
+    }
+    fn filter_attribute_full(a: &roxmltree::Attribute) -> bool {
+        a.name() == "lang" && a.namespace() == Some(XML_NAMESPACE)
+    }
+}
+
+impl FromNode for Locale {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("locale")
+    }
+    const CHILD_DESC: &'static str = "locale";
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let lang: Option<Lang> = FromNode::from_node(node, info)?;
 
         // TODO: one slot for each date form, avoid allocations?
         let dates_vec = node
