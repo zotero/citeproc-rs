@@ -85,7 +85,7 @@ macro_rules! declare_features {
             &[$((stringify!($feature), $ver, $issue, $edition, set!($feature))),+];
 
         /// A set of features to be used by later passes.
-        #[derive(Clone, Eq, PartialEq, Debug, Default)]
+        #[derive(Clone, Eq, PartialEq, Default)]
         pub struct Features {
             // `#![feature]` attrs for language features, for error reporting
             pub declared_lang_features: Vec<Atom>,
@@ -125,6 +125,21 @@ macro_rules! declare_features {
             }
 
         }
+
+        use std::fmt;
+        impl fmt::Debug for Features {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "Features ")?;
+                let mut set = f.debug_set();
+                $(
+                    if self.$feature {
+                        set.entry(&stringify!($feature));
+                    }
+                )+
+                set.finish()
+            }
+        }
+
     };
 
     ($((removed, $feature: ident, $ver: expr, $issue: expr, None, $reason: expr),)+) => {
@@ -235,6 +250,7 @@ declare_features!((
 pub fn read_features<'a>(
     input_features: impl Iterator<Item = &'a str>,
 ) -> Result<Features, &'a str> {
+    // TODO: multiple errors here
     let mut features = Features::new();
     for kebab in input_features {
         let name = kebab.replace('-', "_");

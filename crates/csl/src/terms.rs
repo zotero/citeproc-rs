@@ -7,6 +7,8 @@
 use super::MonthForm;
 use crate::error::*;
 use crate::version::Features;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use super::attr::GetAttribute;
@@ -423,11 +425,10 @@ impl Default for OrdinalMatch {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#locators)
-#[derive(
-    Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash,
-)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 #[strum(serialize_all = "kebab_case")]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum LocatorType {
     Book,
     Chapter,
@@ -444,7 +445,7 @@ pub enum LocatorType {
     Section,
     // hyphenated is when it's a variable matcher, spaced is as a term name
     #[strum(serialize = "sub-verbo", serialize = "sub verbo")]
-    #[serde(rename = "sub-verbo", alias = "sub verbo")]
+    #[cfg_attr(feature = "serde", serde(rename = "sub-verbo", alias = "sub verbo"))]
     SubVerbo,
     Verse,
     Volume,
@@ -552,7 +553,9 @@ impl RoleTerm {
 /// here](https://docs.citationstyles.org/en/stable/specification.html#gender-specific-ordinals)
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[strum(serialize_all = "kebab_case")]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum Category {
     Anthropology,
     Astronomy,

@@ -1,0 +1,31 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<Info>(::indoc::indoc!(r#\"\n            <info>\n                <id>https://example.com/mystyle</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title>My Style</title>\n                <link rel=\"independent-parent\" href=\"parent-uri\" />\n            </info>\n        \"#)).expect(\"did not parse\")"
+---
+Info {
+    id: Url(
+        "https://example.com/mystyle",
+    ),
+    updated: 2020-01-01T00:00:00+00:00,
+    title: LocalizedString {
+        content: "My Style",
+        lang: None,
+    },
+    title_short: None,
+    rights: None,
+    summary: None,
+    parent: Some(
+        ParentLink {
+            href: Identifier(
+                "parent-uri",
+            ),
+            lang: None,
+        },
+    ),
+    links: [],
+    citation_format: None,
+    categories: [],
+    issn: None,
+    eissn: None,
+    issnl: None,
+}

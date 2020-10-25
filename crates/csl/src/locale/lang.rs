@@ -53,7 +53,7 @@ impl serde::Serialize for Lang {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_string(self.to_string())
+        serializer.serialize_str(&self.to_string())
     }
 }
 

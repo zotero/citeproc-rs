@@ -1,0 +1,14 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<Link>(::indoc::indoc!(r#\"<link href=\"should have rel\" />\"#)).expect_err(\"should have failed with errors\")"
+---
+CslError(
+    [
+        InvalidCsl {
+            severity: Error,
+            range: 0..31,
+            message: "Must have `rel` attribute",
+            hint: "",
+        },
+    ],
+)

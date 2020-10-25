@@ -10,15 +10,12 @@
 pub use string_cache::DefaultAtom as Atom;
 
 #[macro_use]
-extern crate serde_derive;
-#[macro_use]
 extern crate strum_macros;
 #[macro_use]
 extern crate log;
 
 use std::sync::Arc;
 
-#[macro_use]
 pub mod error;
 
 macro_rules! append_err {
@@ -33,6 +30,44 @@ macro_rules! append_err {
     };
 }
 
+mod from_node;
+use from_node::*;
+
+#[cfg(test)]
+macro_rules! assert_snapshot_parse {
+    ($ty:ty, $xml:literal) => {
+        ::insta::assert_debug_snapshot!(
+            $crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml)).expect("did not parse")
+        );
+    };
+}
+
+#[cfg(test)]
+macro_rules! assert_snapshot_err {
+    ($ty:ty, $xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml))
+            .expect_err("should have failed with errors"));
+    };
+}
+
+/// Easier version wherein
+#[cfg(test)]
+macro_rules! assert_snapshot_style_parse {
+    ($xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
+        .expect("should have failed with errors"));
+    };
+}
+
+#[allow(unused_macros)]
+#[cfg(test)]
+macro_rules! assert_snapshot_style_err {
+    ($xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
+        .expect_err("should have failed with errors"));
+    };
+}
+
 pub(crate) mod attr;
 pub use self::attr::GetAttribute;
 pub mod locale;
@@ -40,6 +75,9 @@ pub mod style;
 pub mod terms;
 pub mod variables;
 pub mod version;
+
+#[cfg(test)]
+mod test;
 
 pub use self::error::*;
 pub use self::locale::*;
@@ -54,110 +92,62 @@ use roxmltree::{Children, Node};
 use semver::VersionReq;
 use std::collections::HashMap;
 
+use roxmltree::Document;
+use std::str::FromStr;
+impl FromStr for Style {
+    type Err = StyleError;
+    fn from_str(xml: &str) -> Result<Self, Self::Err> {
+        Style::parse(xml)
+    }
+}
+
+impl Style {
+    /// Parses a style from an CSL string as XML.
+    pub fn parse(xml: &str) -> Result<Self, StyleError> {
+        let doc = Document::parse(xml)?;
+        // We don't know what features to enable yet, but Style will figure that out after is
+        // parses the features block.
+        let info = ParseInfo::default();
+        let style = Style::from_node(&doc.root_element(), &info)?;
+        Ok(style)
+    }
+    pub fn parse_with_opts(xml: &str, options: ParseOptions) -> Result<Self, StyleError> {
+        let doc = Document::parse(xml)?;
+        let info = ParseInfo {
+            options,
+            ..Default::default()
+        };
+        let style = Style::from_node(&doc.root_element(), &info)?;
+        Ok(style)
+    }
+    #[doc(hidden)]
+    pub fn parse_for_test(xml: &str) -> Result<Self, StyleError> {
+        Self::parse_with_opts(xml, ParseOptions { allow_no_info: true, ..Default::default() })
+    }
+    pub fn is_dependent(&self) -> bool {
+        self.info.parent.is_some()
+    }
+}
+
+impl Info {
+    pub fn parse_from_style(xml: &str) -> Result<Self, StyleError> {
+        let doc = Document::parse(xml)?;
+        let node = &doc.root_element();
+        let parse_info = ParseInfo::default();
+        let mut errors = Vec::new();
+        let info = exactly_one_child(node, &parse_info, &mut errors)
+            .map_err(|_| StyleError::Invalid(CslError(Vec::new())));
+        if !errors.is_empty() {
+            return Err(StyleError::Invalid(CslError(errors)));
+        }
+        Ok(info?)
+    }
+}
+
 /// Something is Independent if what it represents is computed during processing, based on a Cite
 /// and the rest of a document. That is, it is not sourced directly from a Reference.
 pub trait IsIndependent {
     fn is_independent(&self) -> bool;
-}
-
-#[derive(Default)]
-pub(crate) struct ParseInfo {
-    features: Features,
-}
-
-pub(crate) type FromNodeResult<T> = Result<T, CslError>;
-
-pub(crate) trait FromNode
-where
-    Self: Sized,
-{
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self>;
-    fn select_child(_node: &Node) -> bool {
-        false
-    }
-    const CHILD_DESC: &'static str = "unimplemented";
-}
-
-pub(crate) fn exactly_one_child<T: FromNode>(
-    node: &Node,
-    info: &ParseInfo,
-    errors: &mut Vec<InvalidCsl>,
-) -> ChildGetterResult<T> {
-    let mut iter = node.children().filter(T::select_child);
-    if let Some(child) = iter.next() {
-        if iter.next().is_some() {
-            errors.push(InvalidCsl::new(
-                node,
-                format!("Cannot have more than one <{}>", T::CHILD_DESC),
-            ));
-            return Err(ChildGetterError);
-        }
-        append_err!(T::from_node(&child, info), errors)
-    } else {
-        errors.push(InvalidCsl::new(
-            node,
-            format!("Must have exactly one <{}>", T::CHILD_DESC),
-        ));
-        Err(ChildGetterError)
-    }
-}
-
-pub(crate) fn max_one_child<T: FromNode>(
-    node: &Node,
-    info: &ParseInfo,
-    errors: &mut Vec<InvalidCsl>,
-) -> ChildGetterResult<Option<T>> {
-    let mut iter = node.children().filter(T::select_child);
-    if let Some(child) = iter.next() {
-        if iter.next().is_some() {
-            errors.push(InvalidCsl::new(
-                node,
-                format!("Cannot have more than one <{}>", T::CHILD_DESC),
-            ));
-            return Err(ChildGetterError);
-        }
-        append_err!(T::from_node(&child, info), errors).map(Some)
-    } else {
-        Ok(None)
-    }
-}
-
-pub(crate) fn many_children<T: FromNode>(
-    node: &Node,
-    info: &ParseInfo,
-    errors: &mut Vec<InvalidCsl>,
-) -> ChildGetterResult<Vec<T>> {
-    let mut iter = node.children().filter(T::select_child);
-    let mut results = Vec::new();
-    while let Some(child) = iter.next() {
-        if let Ok(ch) = append_err!(T::from_node(&child, info), errors) {
-            results.push(ch);
-        }
-    }
-    Ok(results)
-}
-
-trait AttrChecker
-where
-    Self: Sized,
-{
-    fn filter_attribute(attr: &str) -> bool;
-    fn filter_attribute_full(a: &roxmltree::Attribute) -> bool {
-        Self::filter_attribute(a.name())
-    }
-    fn is_on_node<'a>(node: &'a Node) -> bool {
-        node.attributes()
-            .iter()
-            .find(|a| Self::filter_attribute(a.name()))
-            != None
-    }
-    fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| Self::filter_attribute(a.name()))
-            .map(|a| String::from(a.name()))
-            .collect()
-    }
 }
 
 impl AttrChecker for Formatting {
@@ -167,19 +157,6 @@ impl AttrChecker for Formatting {
             || attr == "font-weight"
             || attr == "vertical-align"
             || attr == "text-decoration"
-    }
-}
-
-impl<T> FromNode for Option<T>
-where
-    T: AttrChecker + FromNode,
-{
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        if T::is_on_node(node) {
-            Ok(Some(T::from_node(node, info)?))
-        } else {
-            Ok(None)
-        }
     }
 }
 
@@ -1302,12 +1279,13 @@ impl FromNode for CslVersionReq {
         };
         if !req.matches(&supported) {
             return Err(InvalidCsl::new(
-                    node,
-                    &format!(
-                        "Unsupported version for variant {:?}: \"{}\". This engine supports {} and later.",
-                            variant,
-                            req,
-                            supported)).into());
+                node,
+                &format!(
+                    "Unsupported version for variant {:?}: \"{}\". This engine supports {}.",
+                    variant, req, supported
+                ),
+            )
+            .into());
         }
         Ok(CslVersionReq(variant, req))
     }
@@ -1332,11 +1310,11 @@ impl FromNode for Features {
 impl FromNode for Style {
     fn from_node(node: &Node, default_info: &ParseInfo) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
-        // let info_node = get_toplevel(&doc, "info")?;
         let mut macros = HashMap::default();
         let mut locale_overrides = FnvHashMap::default();
         let mut errors: Vec<InvalidCsl> = Vec::new();
 
+        // Parse features first so we know how to interpret the rest.
         let features = max_one_child::<Features>(node, default_info, &mut errors)
             .ok()
             .flatten()
@@ -1344,6 +1322,7 @@ impl FromNode for Style {
 
         // Create our own info struct, ignoring the one passed in.
         let parse_info = ParseInfo {
+            options: default_info.options.clone(),
             features: features.clone(),
         };
 
@@ -1361,7 +1340,11 @@ impl FromNode for Style {
             }
         }
 
-        let info = exactly_one_child::<Info>(node, &parse_info, &mut errors);
+        let info = if parse_info.options.allow_no_info {
+            max_one_child::<Info>(node, &parse_info, &mut errors).map(|x| x.unwrap_or_default())
+        } else {
+            exactly_one_child::<Info>(node, &parse_info, &mut errors)
+        };
         let (citation, bibliography) = if matches!(info, Ok(Info { parent: None, .. }) | Err(_)) {
             let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
             let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
@@ -1397,17 +1380,5 @@ impl FromNode for Style {
                 .map(Atom::from)
                 .map(Delimiter),
         })
-    }
-}
-
-use roxmltree::Document;
-use std::str::FromStr;
-impl FromStr for Style {
-    type Err = StyleError;
-    fn from_str(xml: &str) -> Result<Self, Self::Err> {
-        let doc = Document::parse(&xml)?;
-        let info = ParseInfo::default();
-        let style = Style::from_node(&doc.root_element(), &info)?;
-        Ok(style)
     }
 }

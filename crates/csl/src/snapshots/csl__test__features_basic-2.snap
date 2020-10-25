@@ -1,0 +1,8 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::from_node::parse_as::<Features>(::indoc::indoc!(r#\"\n        <features>\n            <feature name=\"condition-date-parts\" />\n            <feature name=\"edtf-dates\" />\n        </features>\n    \"#)).expect(\"did not parse\")"
+---
+Features {
+    "condition_date_parts",
+    "edtf_dates",
+}

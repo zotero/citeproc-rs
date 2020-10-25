@@ -24,8 +24,10 @@ impl UnknownAttributeValue {
     }
 }
 
-use serde::Serializer;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Serializer};
 
+#[cfg(feature = "serde")]
 fn rox_error_serialize<S>(x: &roxmltree::Error, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -33,19 +35,21 @@ where
     s.serialize_str(&ToString::to_string(x))
 }
 
-#[derive(thiserror::Error, Debug, Serialize)]
+#[derive(thiserror::Error, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum StyleError {
     #[error("invalid style: {0}")]
     Invalid(#[from] CslError),
     #[error("could not parse style")]
     ParseError(
         #[from]
-        #[serde(serialize_with = "rox_error_serialize")]
+        #[cfg_attr(feature = "serde", serde(serialize_with = "rox_error_serialize"))]
         roxmltree::Error,
     ),
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CslError(pub Vec<InvalidCsl>);
 
 impl std::error::Error for CslError {}
@@ -68,13 +72,15 @@ impl From<ChildGetterError> for CslError {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Severity {
     Error,
     Warning,
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize)]
+#[derive(thiserror::Error, Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[error("[{severity:?}] {message} ({hint})")]
 pub struct InvalidCsl {
     pub severity: Severity,

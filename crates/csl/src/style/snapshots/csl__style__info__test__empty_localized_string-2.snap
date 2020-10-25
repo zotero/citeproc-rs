@@ -1,0 +1,16 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "parse_as::<LSHelper<TitleHint>>(r#\"<str />\"#).map(|x| x.string)"
+---
+Err(
+    CslError(
+        [
+            InvalidCsl {
+                severity: Error,
+                range: 0..7,
+                message: "<str> empty, expected text",
+                hint: "enter a full title for this style, like \"My Example Citation Style, 3rd Edition\"",
+            },
+        ],
+    ),
+)

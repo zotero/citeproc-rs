@@ -14,6 +14,10 @@ description = "Parser and types for Citation Style Language"
 readme = "README.md"
 repository = "https://github.com/cormacrelf/citeproc-rs"
 
+[features]
+default = []
+serde1 = ["serde", "smartstring/serde", "chrono/serde", "url/serde"]
+
 [dependencies]
 roxmltree = "0.13.0"
 fnv = "1.0.7"
@@ -21,8 +25,6 @@ strum = "0.19.2"
 strum_macros = "0.19.2"
 # don't need lexical as it is only used to parse floats
 nom = { version = "5.1.2", default-features = false, features = ["std"] }
-serde = { version = "1.0.116", features = ["rc"] }
-serde_derive = "1.0.116"
 semver = "0.11.0"
 log = "0.4.11"
 thiserror = "1.0.20"
@@ -30,3 +32,12 @@ smartstring = "0.2.5"
 string_cache = "0.8.0"
 url = "2.1.1"
 chrono = "0.4.19"
+
+[dependencies.serde]
+version = "1.0"
+features = ["rc", "derive"]
+optional = true
+
+[dev-dependencies]
+insta = "1.1.0"
+indoc = "1.0.3"

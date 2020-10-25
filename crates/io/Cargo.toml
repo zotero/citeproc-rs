@@ -19,7 +19,7 @@ pandoc_types = { path = "../pandoc-types", optional = true }
 fnv = "1.0.7"
 # don't need lexical as it is only used to parse floats
 nom = { version = "5.1.2", default-features = false, features = ["std"] }
-csl = { path = "../csl" }
+csl = { path = "../csl", features = ["serde1"] }
 serde = { version = "1.0.116", features = ["rc"] }
 serde_derive = "1.0.116"
 itertools = "0.9.0"

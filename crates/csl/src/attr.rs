@@ -17,7 +17,7 @@ pub trait GetAttribute
 where
     Self: Sized,
 {
-    fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue>;
+    fn get_attr(attr_value: &str, features: &Features) -> Result<Self, UnknownAttributeValue>;
 }
 
 impl<T: FromStr + EnumProperty> GetAttribute for T {

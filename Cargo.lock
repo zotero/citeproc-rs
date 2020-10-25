@@ -246,6 +246,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time",
  "winapi",
 ]
@@ -402,9 +403,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0994e656bba7b922d8dd1245db90672ffb701e684e45be58f20719d69abc5a"
+checksum = "c0b1aacfaffdbff75be81c15a399b4bedf78aaefe840e8af1d299ac2ade885d2"
 dependencies = [
  "encode_unicode",
  "lazy_static",
@@ -529,12 +530,13 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "fnv",
+ "indoc",
+ "insta",
  "log",
  "nom 5.1.2",
  "roxmltree",
  "semver 0.11.0",
  "serde",
- "serde_derive",
  "smartstring",
  "string_cache",
  "strum",
@@ -879,10 +881,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "990980c3d268c9b99df35e813eca2b8d1ee08606f6d2bb325edbd0b0c68f9ffe"
 
 [[package]]
-name = "insta"
-version = "0.16.1"
+name = "indoc"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617e921abc813f96a3b00958c079e7bf1e2db998f8a04f1546dd967373a418ee"
+checksum = "e5a75aeaaef0ce18b58056d306c27b07436fbb34b8816c53094b76dd81803136"
+dependencies = [
+ "unindent",
+]
+
+[[package]]
+name = "insta"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e7528a20113cf7ca90eddfc2439c608188b6eafc0613964da2bd140c92acec"
 dependencies = [
  "console",
  "difference",
@@ -2273,6 +2284,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
 
 [[package]]
+name = "unindent"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f14ee04d9415b52b3aeab06258a3f07093182b88ba0f9b8d203f211a7a7d41c7"
+
+[[package]]
 name = "url"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2281,6 +2298,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

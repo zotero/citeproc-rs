@@ -1,0 +1,14 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<Info>(::indoc::indoc!(r#\"\n            <info>\n                <id>https://example.com/mystyle</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title>My Style</title>\n                <link rel=\"independent-parent\" href=\"parent-uri\" />\n                <link rel=\"template\" href=\"not-permitted\" />\n            </info>\n        \"#)).expect_err(\"should have failed with errors\")"
+---
+CslError(
+    [
+        InvalidCsl {
+            severity: Error,
+            range: 0..232,
+            message: "link rel=\"template\" not permitted in a dependent style",
+            hint: "",
+        },
+    ],
+)

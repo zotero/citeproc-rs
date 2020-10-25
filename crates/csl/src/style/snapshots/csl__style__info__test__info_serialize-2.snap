@@ -1,0 +1,50 @@
+---
+source: crates/csl/src/style/info.rs
+expression: info
+---
+{
+  "id": "https://example.com/kitchen-sink",
+  "updated": "2020-01-01T00:00:00+00:00",
+  "title": {
+    "content": "My Style",
+    "lang": "en-AU"
+  },
+  "titleShort": {
+    "content": "MS",
+    "lang": "en-AU"
+  },
+  "rights": {
+    "content": "Rights to use",
+    "lang": "en-AU",
+    "license": "license-uri"
+  },
+  "summary": {
+    "content": "Sum",
+    "lang": "en-AU"
+  },
+  "parent": null,
+  "links": [
+    {
+      "href": "https://example.com/self",
+      "rel": "rel-self",
+      "lang": "en-AU"
+    },
+    {
+      "href": "https://example.com/documentation",
+      "rel": "documentation",
+      "lang": "en-AU"
+    },
+    {
+      "href": "https://example.com/template",
+      "rel": "template",
+      "lang": "en-AU"
+    }
+  ],
+  "citationFormat": "author-date",
+  "categories": [
+    "medicine"
+  ],
+  "issn": "issn",
+  "eissn": "eissn",
+  "issnl": "issnl"
+}

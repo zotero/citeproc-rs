@@ -29,7 +29,7 @@ use crate::terms::Category;
 use crate::Lang;
 use chrono::{DateTime, FixedOffset};
 #[cfg(feature = "serde")]
-use serde_derive::{Deserialize, Serialize};
+use serde::Serialize;
 use std::marker::PhantomData;
 use url::Url;
 
@@ -74,6 +74,7 @@ impl<H: LSVariant> From<StringTag<H>> for String {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct LSHelper<H: LSVariant> {
     string: LocalizedString,
     _marker: PhantomData<H>,
@@ -208,50 +209,18 @@ pub struct Info {
 }
 
 use crate::attr::*;
+use crate::error::UnknownAttributeValue;
+use crate::from_node::{
+    exactly_one_child, many_children, max_one_child, FromNode, FromNodeResult, ParseInfo,
+};
 use crate::locale::LANG_ATTR;
 use crate::version::Features;
-use crate::{
-    exactly_one_child, many_children, max_one_child, FromNode, FromNodeResult, ParseInfo,
-    UnknownAttributeValue,
-};
 use roxmltree::Node;
-
-#[cfg(test)]
-use roxmltree::Document;
-
-#[cfg(test)]
-fn parse_as<T>(s: &str) -> FromNodeResult<T>
-where
-    T: FromNode,
-{
-    let doc = Document::parse(s).unwrap();
-    T::from_node(&doc.root_element(), &ParseInfo::default())
-}
 
 impl GetAttribute for Uri {
     fn get_attr(s: &str, _: &Features) -> Result<Self, UnknownAttributeValue> {
         Ok(Self::parse(s))
     }
-}
-
-#[test]
-fn test_link() {
-    assert_eq!(
-        parse_as(r#"<link rel="documentation" href="https://example.com" />"#),
-        Ok(Link {
-            rel: Rel::Documentation,
-            href: Uri::Url("https://example.com".parse().unwrap()),
-            lang: None
-        }),
-    );
-    assert_eq!(
-        parse_as(r#"<link rel="documentation" href="https://example.com" />"#),
-        Ok(Link {
-            rel: Rel::Documentation,
-            href: Uri::Url("https://example.com".parse().unwrap()),
-            lang: None
-        }),
-    );
 }
 
 impl<H: LSVariant> FromNode for LSHelper<H> {
@@ -470,156 +439,143 @@ impl Default for Info {
 }
 
 #[cfg(test)]
-use crate::error::Severity;
+mod test {
+    use super::*;
 
-#[test]
-fn test_info() {
-    assert_eq!(
-        parse_as(
-            r#"<info>
-                 <id>https://example.com/mystyle</id>
-                 <updated>2020-01-01T00:00:00Z</updated>
-                 <title>My Style</title>
-                 </info>"#
-        ),
-        Ok(Info {
-            id: "https://example.com/mystyle".into(),
-            updated: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").unwrap(),
-            title: "My Style".into(),
-            ..Default::default()
-        }),
-    );
-    assert_eq!(
-        parse_as(
-            r#"<info>
-                 <id>https://example.com/kitchen-sink</id>
-                 <updated>2020-01-01T00:00:00Z</updated>
-                 <title xml:lang="en-AU">My Style</title>
-                 <title-short xml:lang="en-AU">MS</title-short>
-                 <summary xml:lang="en-AU">Sum</summary>
-                 <rights license="license-uri" xml:lang="en-AU">Rights to use</rights>
-                 <link rel="self" href="https://example.com/self" xml:lang="en-AU" />
-                 <link rel="documentation" href="https://example.com/documentation" xml:lang="en-AU" />
-                 <link rel="template" href="https://example.com/template" xml:lang="en-AU" />
-                 <!-- link rel = independent-parent -->
-                 <category citation-format="author-date"/>
-                 <category field="medicine"/>
-                 <issn>issn</issn>
-                 <eissn>eissn</eissn>
-                 <issnl>issnl</issnl>
-                 </info>"#
-        ),
-        Ok(Info {
-            id: "https://example.com/kitchen-sink".into(),
-            updated: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").unwrap(),
-            title: LocalizedString {
-                content: "My Style".into(),
-                lang: Some(Lang::en_au())
-            },
-            title_short: Some(LocalizedString {
-                content: "MS".into(),
-                lang: Some(Lang::en_au())
-            }),
-            summary: Some(LocalizedString {
-                content: "Sum".into(),
-                lang: Some(Lang::en_au())
-            }),
-            citation_format: Some(CitationFormat::AuthorDate),
-            categories: vec![Category::Medicine],
-            rights: Some(Rights {
-                content: "Rights to use".into(),
-                lang: Some(Lang::en_au()),
-                license: Some(Uri::parse("license-uri")),
-            }),
-            parent: None,
-            links: vec![
-                Link {
-                    rel: Rel::RelSelf,
-                    href: Uri::parse("https://example.com/self"),
-                    lang: Some(Lang::en_au()),
-                },
-                Link {
-                    rel: Rel::Documentation,
-                    href: Uri::parse("https://example.com/documentation"),
-                    lang: Some(Lang::en_au()),
-                },
-                Link {
-                    rel: Rel::Template,
-                    href: Uri::parse("https://example.com/template"),
-                    lang: Some(Lang::en_au()),
-                },
-            ],
-            issn: Some("issn".into()),
-            eissn: Some("eissn".into()),
-            issnl: Some("issnl".into()),
-        }),
-    );
-}
+    #[test]
+    fn test_link() {
+        assert_snapshot_parse!(Link, r#"<link rel="self" href="https://example.com" />"#);
+        assert_snapshot_parse!(
+            Link,
+            r#"<link rel="documentation" href="literally any string here" />"#
+        );
+        assert_snapshot_err!(Link, r#"<link href="should have rel" />"#);
+    }
 
-#[test]
-fn test_dependent() {
-    assert_eq!(
-        parse_as(
-            r#"<info>
-               <id>https://example.com/mystyle</id>
-               <updated>2020-01-01T00:00:00Z</updated>
-               <title>My Style</title>
-               <link rel="independent-parent" href="parent-uri" />
-               </info>"#
-        ),
-        Ok(Info {
-            id: "https://example.com/mystyle".into(),
-            updated: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z").unwrap(),
-            title: "My Style".into(),
-            parent: Some(ParentLink {
-                href: Uri::parse("parent-uri"),
-                lang: None
-            }),
-            ..Default::default()
-        }),
-    );
-    assert_eq!(
-        parse_as::<Info>(
-            r#"<info>
-               <id>https://example.com/mystyle</id>
-               <updated>2020-01-01T00:00:00Z</updated>
-               <title>My Style</title>
-               <link rel="independent-parent" href="parent-uri" />
-               <link rel="template" href="not-permitted" />
-               </info>"#
-        ),
-        Err(CslError(vec![InvalidCsl {
-            severity: Severity::Error,
-            range: 0..302,
-            message: "link rel=\"template\" not permitted in a dependent style".into(),
-            hint: "".into()
-        },])),
-    );
-}
+    #[test]
+    fn localized_string() {
+        assert_snapshot_err!(LSHelper<TitleHint>, r#"<str></str>"#);
+        assert_snapshot_err!(LSHelper<TitleHint>, r#"<str />"#);
+        assert_snapshot_parse!(LSHelper<TitleHint>, r#"<str>content</str>"#);
+        assert_snapshot_parse!(
+            LSHelper<TitleHint>,
+            r#"<str xml:lang="en-AU">content</str>"#
+        );
+    }
 
-#[test]
-fn test_info_empty_is_error() {
-    assert_eq!(
-        parse_as::<Info>(r#"<info></info>"#),
-        Err(CslError(vec![
-            InvalidCsl {
-                severity: Severity::Error,
-                range: 0..13,
-                message: "Must have exactly one <id>".into(),
-                hint: "".into()
-            },
-            InvalidCsl {
-                severity: Severity::Error,
-                range: 0..13,
-                message: "Must have exactly one <updated>".into(),
-                hint: "".into()
-            },
-            InvalidCsl {
-                severity: Severity::Error,
-                range: 0..13,
-                message: "Must have exactly one <title>".into(),
-                hint: "".into()
-            }
-        ])),
-    );
+    #[test]
+    fn test_info() {
+        assert_snapshot_parse!(
+            Info,
+            r#"
+            <info>
+                <id>https://example.com/mystyle</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title>My CSL Style</title>
+            </info>
+        "#
+        );
+        assert_snapshot_parse!(
+            Info,
+            r#"
+            <info>
+                <id>https://example.com/kitchen-sink</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title xml:lang="en-AU">My Style</title>
+                <title-short xml:lang="en-AU">MS</title-short>
+                <summary xml:lang="en-AU">Sum</summary>
+                <rights license="license-uri" xml:lang="en-AU">Rights to use</rights>
+                <link rel="self" href="https://example.com/self" xml:lang="en-AU" />
+                <link rel="documentation" href="https://example.com/documentation" xml:lang="en-AU" />
+                <link rel="template" href="https://example.com/template" xml:lang="en-AU" />
+                <!-- link rel = independent-parent -->
+                <category citation-format="author-date"/>
+                <category field="medicine"/>
+                <issn>issn</issn>
+                <eissn>eissn</eissn>
+                <issnl>issnl</issnl>
+            </info>
+        "#
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn info_serialize() {
+        use crate::from_node::parse_as;
+
+        insta::assert_json_snapshot!(parse_as::<Info>(indoc::indoc! {r#"
+            <info>
+                <id>https://example.com/mystyle</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title>My CSL Style</title>
+            </info>
+        "#})
+        .unwrap());
+
+        insta::assert_json_snapshot!(parse_as::<Info>(indoc::indoc!{r#"
+            <info>
+                <id>https://example.com/kitchen-sink</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title xml:lang="en-AU">My Style</title>
+                <title-short xml:lang="en-AU">MS</title-short>
+                <summary xml:lang="en-AU">Sum</summary>
+                <rights license="license-uri" xml:lang="en-AU">Rights to use</rights>
+                <link rel="self" href="https://example.com/self" xml:lang="en-AU" />
+                <link rel="documentation" href="https://example.com/documentation" xml:lang="en-AU" />
+                <link rel="template" href="https://example.com/template" xml:lang="en-AU" />
+                <category citation-format="author-date"/>
+                <category field="medicine"/>
+                <issn>issn</issn>
+                <eissn>eissn</eissn>
+                <issnl>issnl</issnl>
+            </info>
+        "#}).unwrap());
+
+        insta::assert_json_snapshot!(parse_as::<Info>(indoc::indoc! {r#"
+            <info>
+                <id>dependent-style</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title>A Dependent Style</title>
+                <link rel="independent-parent" href="http://zotero.org/styles/parent-id" />
+            </info>
+        "#})
+        .unwrap());
+    }
+
+    #[test]
+    fn independent_parent() {
+        assert_snapshot_parse!(
+            Info,
+            r#"
+            <info>
+                <id>https://example.com/mystyle</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title>My Style</title>
+                <link rel="independent-parent" href="parent-uri" />
+            </info>
+        "#
+        );
+    }
+
+    #[test]
+    fn dependent_template_fail() {
+        assert_snapshot_err!(
+            Info,
+            r#"
+            <info>
+                <id>https://example.com/mystyle</id>
+                <updated>2020-01-01T00:00:00Z</updated>
+                <title>My Style</title>
+                <link rel="independent-parent" href="parent-uri" />
+                <link rel="template" href="not-permitted" />
+            </info>
+        "#
+        );
+    }
+
+    #[test]
+    fn info_empty_is_error() {
+        assert_snapshot_err!(Info, r#"<info></info>"#);
+    }
 }

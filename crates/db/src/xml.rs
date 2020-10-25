@@ -108,19 +108,6 @@ fn name_configurations_inner(
     }
 }
 
-#[cfg(test)]
-macro_rules! style_xml {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str(&format!(
-            r#"<?xml version="1.0" encoding="utf-8"?>
-            {}"#,
-            $ex
-        ))
-        .unwrap()
-    }};
-}
-
 fn name_configurations_middle(style: &Style) -> Vec<(NameVariable, Name)> {
     let base = style.name_citation();
     let mut vec = Vec::new();
@@ -137,7 +124,7 @@ fn name_configurations(db: &dyn StyleDatabase) -> Arc<Vec<(NameVariable, Name)>>
 
 #[test]
 fn test_name_configurations() {
-    let sty = style_xml!(
+    let sty = Style::parse_for_test(
         r#"<style class="note" version="1.0">
         <macro name="blah">
             <names variable="translator"/>
@@ -154,7 +141,7 @@ fn test_name_configurations() {
             </layout>
         </citation>
     </style>"#
-    );
+    ).unwrap();
     let confs = name_configurations_middle(&sty);
     let mut conf = Name::root_default();
     conf.et_al_min = Some(10);
