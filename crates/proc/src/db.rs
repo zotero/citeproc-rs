@@ -1431,7 +1431,7 @@ pub fn with_cite_context<T>(
     sort_key: Option<SortKey>,
     default_position: bool,
     year_suffix: Option<u32>,
-    f: impl Fn(CiteContext) -> T,
+    f: impl FnOnce(CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
     let locale = db.locale_by_cite(id);
@@ -1471,7 +1471,7 @@ pub fn with_bib_context<T>(
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     year_suffix: Option<u32>,
-    f: impl Fn(&Bibliography, CiteContext) -> T,
+    f: impl FnOnce(&Bibliography, CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
     let locale = db.locale_by_reference(ref_id.clone());
