@@ -17,11 +17,10 @@ pub enum NumericValue<'a> {
     Str(Cow<'a, str>),
 }
 
-type LeadingZeros = u32;
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum NumericToken {
-    Num(u32), // TODO: leading zeros
+    Num(u32),
     Roman(u32, /* uppercase */ bool),
     Affixed(String, u32, String),
     Str(String),

@@ -358,7 +358,9 @@ fn test_roman_lower() {
         NumericToken::Num(11),
         NumericToken::Comma,
         NumericToken::Affixed("".into(), 2, "E".into()),
+        NumericToken::Comma,
         NumericToken::Roman(3, false),
+        NumericToken::Comma,
         NumericToken::Roman(3, true),
     ];
     assert_eq!(
