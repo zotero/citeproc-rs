@@ -210,6 +210,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
     }
 
     fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str);
+    fn ends_with_full_stop(&self, build: &Self::Build) -> bool;
 
     fn apply_text_case(&self, mutable: &mut Self::Build, options: &IngestOptions);
 

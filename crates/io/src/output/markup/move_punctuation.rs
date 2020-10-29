@@ -919,3 +919,61 @@ static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map
     b"?," => None,
     b",," => Some(","),
 };
+
+use unic_segment::Words;
+
+pub fn ends_with_full_stop(els: &[InlineElement], top: bool) -> bool {
+    let last = match els.last() {
+        Some(l) => l,
+        None => return false,
+    };
+    let is_only = top && els.len() == 1;
+    match last {
+        InlineElement::Text(txt) if is_only => {
+            // bugreports_CapsAfterOneWordPrefix
+            let mut words = Words::new(txt, |s| s.chars().any(|c| c.is_alphanumeric()));
+            words.next();
+            let is_single_word = words.next().is_none();
+            (txt.is_empty() || txt.trim_end().ends_with(".")) && !is_single_word
+        }
+        InlineElement::Text(txt) => {
+            txt.trim_end().ends_with(".")
+        }
+        InlineElement::Formatted(inlines, _) |
+        InlineElement::Quoted { inlines, .. } => {
+            ends_with_full_stop(inlines, false)
+        }
+        InlineElement::Anchor { .. } |
+        InlineElement::Div(..) => true,
+
+        InlineElement::Micro(micros) => {
+            return micro_ends_fs(micros, top);
+
+            fn micro_ends_fs(micros: &[MicroNode], top: bool) -> bool {
+                let mlast = match micros.last() {
+                    Some(l) => l,
+                    None => return false,
+                };
+                let mis_only = top && micros.len() == 1;
+                match mlast {
+                    MicroNode::Text(txt) if mis_only => {
+                        // bugreports_CapsAfterOneWordPrefix
+                        let mut words = Words::new(txt, |s| s.chars().any(|c| c.is_alphanumeric()));
+                        words.next();
+                        let is_single_word = words.next().is_none();
+                        (txt.is_empty() || txt.trim_end().ends_with(".")) && !is_single_word
+                    }
+                    MicroNode::Text(txt) => {
+                        txt.trim_end().ends_with(".")
+                    }
+                    MicroNode::Formatted(children, _) |
+                    MicroNode::NoDecor(children) |
+                    MicroNode::NoCase(children) |
+                    MicroNode::Quoted { children, .. } => {
+                        micro_ends_fs(children, false)
+                    }
+                }
+            }
+        }
+    }
+}

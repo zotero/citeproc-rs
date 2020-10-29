@@ -134,6 +134,11 @@ impl OutputFormat for SortStringFormat {
         pre_and_content.push_str(suffix)
     }
 
+    fn ends_with_full_stop(&self, build: &Self::Build) -> bool {
+        // not needed
+        false
+    }
+
     #[inline]
     fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
         let is_uppercase = !build.chars().any(|c| c.is_lowercase());

@@ -417,10 +417,13 @@ fn range_collapse() {
     );
 }
 
+type MarkupBuild = <Markup as OutputFormat>::Build;
 pub struct Unnamed3<O: OutputFormat> {
     pub cite: Arc<Cite<O>>,
     pub cnum: Option<u32>,
     pub gen4: Arc<IrGen>,
+    /// So we can look for punctuation at the end and use the format's quoting abilities
+    pub prefix_parsed: Option<MarkupBuild>,
     /// First of a group of cites with the same name
     pub is_first: bool,
     /// Subsequent in a group of cites with the same name
@@ -459,6 +462,7 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
                 &IR::flatten(self.gen4.root, &self.gen4.arena, fmt, None)
                     .map(|x| fmt.output(x, false)),
             )
+            .field("prefix_parsed", &self.prefix_parsed)
             .field("has_locator", &self.has_locator)
             .field("is_first", &self.is_first)
             .field("should_collapse", &self.should_collapse)
@@ -473,13 +477,17 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
     }
 }
 
-impl<O: OutputFormat> Unnamed3<O> {
-    pub fn new(cite: Arc<Cite<O>>, cnum: Option<u32>, gen4: Arc<IrGen>) -> Self {
+impl Unnamed3<Markup> {
+    pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
+        let prefix_parsed = cite.prefix.as_opt_str() .map(|p| {
+            fmt.ingest(p, &IngestOptions::default())
+        });
         Unnamed3 {
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),
             cite,
             gen4,
+            prefix_parsed,
             cnum,
             is_first: false,
             should_collapse: false,

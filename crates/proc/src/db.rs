@@ -1175,7 +1175,7 @@ pub fn built_cluster_before_output(
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            Unnamed3::new(cite, cnum, gen4)
+            Unnamed3::new(cite, cnum, gen4, &fmt)
         })
         .collect();
 
@@ -1184,20 +1184,15 @@ pub fn built_cluster_before_output(
     }
 
     // Cite capitalization
-    // TODO: allow clients to pass a flag to prevent this when a cluster is in the middle of an
-    // existing footnote, and isn't preceded by a period (or however else a client wants to judge
-    // that).
-    if let Some(Unnamed3 { cite, gen4, .. }) = irs.first_mut() {
-        use unic_segment::Words;
+    // TODO: allow clients to pass a flag to prevent this (on ix==0) when a cluster is in the
+    // middle of an existing footnote, and isn't preceded by a period (or however else a client
+    // wants to judge that).
+    // We capitalize all cites whose prefixes end with full stops.
+    for (ix, Unnamed3 { gen4, prefix_parsed, .. }) in irs.iter_mut().enumerate() {
         if style.class != csl::StyleClass::InText
-            && cite.prefix.as_ref().map_or(true, |pre| {
-                // bugreports_CapsAfterOneWordPrefix
-                let mut words = Words::new(pre, |s| s.chars().any(|c| c.is_alphanumeric()));
-                words.next();
-                let is_single_word = words.next().is_none();
-                (pre.is_empty() || pre.trim_end().ends_with(".")) && !is_single_word
-            })
+            && prefix_parsed.as_ref().map_or(ix == 0, |pre| fmt.ends_with_full_stop(pre))
         {
+            // dbg!(ix, prefix_parsed);
             let gen_mut = Arc::make_mut(gen4);
             IR::capitalize_first_term_of_cluster(gen_mut.root, &mut gen_mut.arena, &fmt);
         }

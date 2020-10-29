@@ -259,6 +259,11 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
+    fn ends_with_full_stop(&self, build: &Self::Build) -> bool {
+        move_punctuation::ends_with_full_stop(build, true)
+    }
+
+    #[inline]
     fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
         if options.text_case == TextCase::None {
             return;
