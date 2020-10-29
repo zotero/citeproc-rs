@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use citeproc_db::{ClusterId, CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Reference, Cite};
+use citeproc_db::{CiteData, ClusterId, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_io::{output::markup::Markup, Cite, Reference};
 use csl::Atom;
 
 use csl::Style;
@@ -55,7 +55,10 @@ impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         Markup::html()
     }
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString> {
+    fn lookup_interned_string(
+        &self,
+        symbol: string_interner::DefaultSymbol,
+    ) -> Option<SmartString> {
         None
     }
 }

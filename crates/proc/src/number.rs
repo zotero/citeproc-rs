@@ -179,9 +179,7 @@ impl<'a> State<'a> {
                     (pfx, num, HyphenInsert::Simple, State::Normal)
                 }
             }
-            State::Hyphenating { prefix, last } => {
-                (pfx, num, HyphenInsert::Simple, State::Normal)
-            }
+            State::Hyphenating { prefix, last } => (pfx, num, HyphenInsert::Simple, State::Normal),
         }
     }
     fn see_hyphen(&self) -> Self {
@@ -200,11 +198,9 @@ impl<'a> State<'a> {
     fn non_num_should_push_hyphen(&self) -> HyphenInsert {
         match self {
             State::Hyphenating { last, .. } => match last {
-                NumBefore::SeenNumHyphen(_) | NumBefore::SeenRomanHyphen(_) => {
-                    HyphenInsert::Simple
-                }
+                NumBefore::SeenNumHyphen(_) | NumBefore::SeenRomanHyphen(_) => HyphenInsert::Simple,
                 _ => HyphenInsert::None,
-            }
+            },
             _ => HyphenInsert::None,
         }
     }
@@ -238,9 +234,7 @@ fn tokens_to_string(
     while let Some(t) = iter.next() {
         // eprintln!("{:?}\n -  {:?}", state, t);
         state = match *t {
-            Hyphen => {
-                state.see_hyphen()
-            }
+            Hyphen => state.see_hyphen(),
             Num(i) => {
                 let (_, cropped, hyphen, newstate) = state.crop(prf, i, false, "", "");
                 hyphen.write(&mut s, locale, variable);
@@ -267,24 +261,32 @@ fn tokens_to_string(
                 newstate
             }
             Str(ref str) => {
-                state.non_num_should_push_hyphen().write(&mut s, locale, variable);
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 s.push_str(&str);
                 State::Normal
             }
             Comma => {
-                state.non_num_should_push_hyphen().write(&mut s, locale, variable);
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 s.push_str(", ");
                 State::Normal
             }
             Ampersand => {
-                state.non_num_should_push_hyphen().write(&mut s, locale, variable);
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
                 State::Normal
             }
             And | CommaAnd => {
-                state.non_num_should_push_hyphen().write(&mut s, locale, variable);
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 if *t == CommaAnd {
                     s.push(',');
                 }

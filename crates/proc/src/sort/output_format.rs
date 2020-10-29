@@ -8,7 +8,7 @@ use crate::prelude::*;
 use citeproc_io::output::{
     micro_html::micro_html_to_string, FormatCmd, LocalizedQuotes, OutputFormat,
 };
-use citeproc_io::{IngestOptions, SmartString, lazy_char_transform_owned};
+use citeproc_io::{lazy_char_transform_owned, IngestOptions, SmartString};
 
 use csl::{DisplayMode, Formatting};
 

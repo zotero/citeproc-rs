@@ -102,7 +102,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
             label_var,
             ratchets,
             style,
-            locale.et_al_term(names_inheritance.et_al.as_ref()).map(|(a, b)| (SmartString::from(a), b) ),
+            locale
+                .et_al_term(names_inheritance.et_al.as_ref())
+                .map(|(a, b)| (SmartString::from(a), b)),
             locale.and_term(None).map(|x| x.into()),
         )
     };
@@ -779,7 +781,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<SmartString>>) {
+    pub(crate) fn person_name_sort_keys(
+        &self,
+        pn: &PersonName,
+        out: &mut Vec<UniCase<SmartString>>,
+    ) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
@@ -1012,18 +1018,17 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
                 NamePartToken::NonDroppingParticle => {
                     let family_part = &self.name_el.name_part_family;
-                    build.push(
-                        self.format_with_part(
-                            family_part,
-                            pn.non_dropping_particle.as_ref().unwrap().clone(),
-                        ),
-                    );
+                    build.push(self.format_with_part(
+                        family_part,
+                        pn.non_dropping_particle.as_ref().unwrap().clone(),
+                    ));
                 }
                 NamePartToken::DroppingParticle => {
                     let given_part = &self.name_el.name_part_given;
-                    build.push(
-                        self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap().clone()),
-                    );
+                    build.push(self.format_with_part(
+                        given_part,
+                        pn.dropping_particle.as_ref().unwrap().clone(),
+                    ));
                 }
                 NamePartToken::Suffix => {
                     build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
@@ -1097,12 +1102,16 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 
         let iterator = name_tokens.into_iter().filter_map(move |n| {
             Some(match n {
-                NameToken::Name(ratchet) => {
-                    NameTokenBuilt::Ratchet(ratchet)
-                }
-                NameToken::Delimiter => {
-                    NameTokenBuilt::Built(fmt.plain(self.name_el.delimiter.as_ref().map(|ss| ss.as_str()).unwrap_or(", ")))
-                }
+                NameToken::Name(ratchet) => NameTokenBuilt::Ratchet(ratchet),
+                NameToken::Delimiter => NameTokenBuilt::Built(
+                    fmt.plain(
+                        self.name_el
+                            .delimiter
+                            .as_ref()
+                            .map(|ss| ss.as_str())
+                            .unwrap_or(", "),
+                    ),
+                ),
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {
                         return None;

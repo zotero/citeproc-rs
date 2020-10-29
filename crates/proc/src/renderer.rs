@@ -211,13 +211,11 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let fmt = self.fmt();
         let prf = self.page_range_format(var);
         use crate::sort::natural_sort;
-        let affixes = Some(
-            if var == NumberVariable::CitationNumber {
-                natural_sort::citation_number_affixes()
-            } else {
-                natural_sort::num_affixes()
-            }
-        );
+        let affixes = Some(if var == NumberVariable::CitationNumber {
+            natural_sort::citation_number_affixes()
+        } else {
+            natural_sort::num_affixes()
+        });
         match (val, form) {
             (NumericValue::Tokens(_, ts, is_numeric), _) if *is_numeric => {
                 let mut s = SmartString::new();

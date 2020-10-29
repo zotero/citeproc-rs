@@ -2,7 +2,7 @@ use crate::choose::CondChecker;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
-use csl::{Name as NameEl, style::*, terms::*, variables::*, Locale, Features};
+use csl::{style::*, terms::*, variables::*, Features, Locale, Name as NameEl};
 use std::borrow::Cow;
 use std::sync::Arc;
 

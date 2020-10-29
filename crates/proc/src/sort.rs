@@ -2,7 +2,7 @@ use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_db::{ClusterData, ClusterId};
 use citeproc_io::DateOrRange;
-use csl::{Atom, style::*, variables::*, terms::*};
+use csl::{style::*, terms::*, variables::*, Atom};
 use fnv::FnvHashMap;
 use std::sync::Arc;
 use unicase::UniCase;
@@ -87,11 +87,22 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
     let refs = if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {
             let a_cnum = citation_numbers.get(a).unwrap();
-            let demoting = with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, mut a_ctx| {
-                ctx_sort_items(db, CiteOrBib::Bibliography, &mut a_ctx, *a_cnum, sort, max_cnum)
-            });
+            let demoting =
+                with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, mut a_ctx| {
+                    ctx_sort_items(
+                        db,
+                        CiteOrBib::Bibliography,
+                        &mut a_ctx,
+                        *a_cnum,
+                        sort,
+                        max_cnum,
+                    )
+                });
             log::debug!("(Bibliography) sort items for {:?}: {:?}", a_cnum, demoting);
-            if let Some(Demoting { fake_cnum: Some(_), .. }) = &demoting {
+            if let Some(Demoting {
+                fake_cnum: Some(_), ..
+            }) = &demoting
+            {
                 reverse = true;
             }
             demoting
@@ -157,7 +168,14 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
                         // Year suffix not available in sorting routines. Is that right?
                         None,
                         |mut a_ctx| {
-                            ctx_sort_items(db, CiteOrBib::Citation, &mut a_ctx, a_cnum, sort, max_cnum)
+                            ctx_sort_items(
+                                db,
+                                CiteOrBib::Citation,
+                                &mut a_ctx,
+                                a_cnum,
+                                sort,
+                                max_cnum,
+                            )
                         },
                     );
                     log::debug!("sort items for {:?}: {:?}", a_cnum, demoting);
@@ -274,17 +292,19 @@ fn ctx_sort_items(
     sort: &Sort,
     max_cnum: u32,
 ) -> Demoting {
-    let sort_string =
-        |ctx: &mut CiteContext<Markup, Markup>, macro_name: SmartString, key: SortKey, cnum: u32| {
-            ctx.bib_number = Some(cnum);
-            if cite_or_bib == CiteOrBib::Bibliography {
-                ctx.sort_key = Some(key);
-                ctx_sort_string(db, ctx, macro_name)
-            } else {
-                ctx.sort_key = Some(key);
-                ctx_sort_string(db, ctx, macro_name)
-            }
-        };
+    let sort_string = |ctx: &mut CiteContext<Markup, Markup>,
+                       macro_name: SmartString,
+                       key: SortKey,
+                       cnum: u32| {
+        ctx.bib_number = Some(cnum);
+        if cite_or_bib == CiteOrBib::Bibliography {
+            ctx.sort_key = Some(key);
+            ctx_sort_string(db, ctx, macro_name)
+        } else {
+            ctx.sort_key = Some(key);
+            ctx_sort_string(db, ctx, macro_name)
+        }
+    };
 
     use std::cell::Cell;
     let fake_cnum = Cell::new(None);
@@ -294,13 +314,15 @@ fn ctx_sort_items(
         if cite_or_bib == CiteOrBib::Bibliography {
             if let SortItem {
                 direction: Some(SortDirection::Descending),
-                value: SortValue::Cnum(Some(_))
-            } = item {
+                value: SortValue::Cnum(Some(_)),
+            } = item
+            {
                 fake_cnum.set(Some(max_cnum + 1 - a_cnum));
             } else if let SortItem {
                 direction: Some(SortDirection::Ascending),
-                value: SortValue::Cnum(Some(_))
-            } = item {
+                value: SortValue::Cnum(Some(_)),
+            } = item
+            {
                 fake_cnum.set(None);
             }
         }
@@ -363,7 +385,10 @@ fn ctx_sort_items(
         };
         push_item(item)
     }
-    Demoting { items, fake_cnum: fake_cnum.get() }
+    Demoting {
+        items,
+        fake_cnum: fake_cnum.get(),
+    }
 }
 
 /// A walker for producing sort strings. These are encoded with `natural_sort` components, so the
@@ -457,16 +482,13 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     ) -> Self::Output {
         let renderer = self.renderer();
         let res = match svar {
-            StandardVariable::Number(nvar) => self
-                .ctx
-                .get_number(nvar)
-                .map(|nval| {
-                    if nvar == NumberVariable::CitationNumber {
-                        renderer.number_sort_string(nvar, NumericForm::Numeric, &nval)
-                    } else {
-                        renderer.text_variable(text, svar, nval.verbatim())
-                    }
-                }),
+            StandardVariable::Number(nvar) => self.ctx.get_number(nvar).map(|nval| {
+                if nvar == NumberVariable::CitationNumber {
+                    renderer.number_sort_string(nvar, NumericForm::Numeric, &nval)
+                } else {
+                    renderer.text_variable(text, svar, nval.verbatim())
+                }
+            }),
             StandardVariable::Ordinary(var) => self
                 .ctx
                 .get_ordinary(var, form)
@@ -480,9 +502,10 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn number(&mut self, number: &NumberElement) -> Self::Output {
         let renderer = self.renderer();
         let var = number.variable;
-        let content = self.ctx.get_number(var).map(|val| {
-            renderer.number_sort_string(var, number.form, &val)
-        });
+        let content = self
+            .ctx
+            .get_number(var)
+            .map(|val| renderer.number_sort_string(var, number.form, &val));
         let gv = GroupVars::rendered_if(content.is_some());
         (content.unwrap_or_default(), gv)
     }
@@ -676,4 +699,3 @@ fn test_date_as_macro_strip_delims() {
         Some(Arc::new("anonymous".into()))
     );
 }
-
