@@ -429,6 +429,7 @@ impl Default for OrdinalMatch {
 #[cfg_attr(feature = "serde", derive(Deserialize))]
 #[strum(serialize_all = "kebab_case")]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[non_exhaustive]
 pub enum LocatorType {
     Book,
     Chapter,
@@ -501,6 +502,7 @@ pub enum SeasonTerm {
 /// It includes "editortranslator" for the names special case.
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum RoleTerm {
     Author,
     CollectionEditor,
@@ -556,6 +558,7 @@ impl RoleTerm {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[strum(serialize_all = "kebab_case")]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[non_exhaustive]
 pub enum Category {
     Anthropology,
     Astronomy,
@@ -592,6 +595,7 @@ pub enum Category {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum MiscTerm {
     Accessed,
     Ad,
@@ -637,6 +641,7 @@ pub enum MiscTerm {
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#months)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MonthTerm {
     #[strum(serialize = "month-01")]
     Month01,

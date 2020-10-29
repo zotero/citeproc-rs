@@ -8,7 +8,7 @@ Info {
     ),
     updated: 2020-01-01T00:00:00+00:00,
     title: LocalizedString {
-        content: "My Style",
+        value: "My Style",
         lang: None,
     },
     title_short: None,

@@ -32,26 +32,23 @@ fn features() {
 
 #[test]
 fn unsupported_version() {
-    assert_snapshot_err!(
-        Style,
+    assert_snapshot_style_err!(
         r#"
         <style version="999.0" class="in-text">
             <citation><layout></layout></citation>
         </style>
-    "#
-    );
+    "#);
 }
 
 #[test]
 fn missing_info() {
     // Externally, missing info should fail.
-    assert_snapshot_err!(
-        Style,
-        r#"
-        <style version="1.0.1" class="in-text">
-            <citation><layout></layout></citation>
-        </style>
-    "#
+    insta::assert_debug_snapshot!(
+        crate::Style::parse(::indoc::indoc!(r#"
+            <style version="1.0.1" class="in-text">
+                <citation><layout></layout></citation>
+            </style>
+        "#)).expect_err("should have failed with errors")
     );
     // But internally we can ignore it.
     assert_snapshot_style_parse!(

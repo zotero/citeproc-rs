@@ -26,7 +26,6 @@ use salsa::Durability;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
-use std::str::FromStr;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
@@ -120,6 +119,29 @@ impl Clone for Snap {
     }
 }
 
+impl Default for SupportedFormat {
+    fn default() -> Self {
+        SupportedFormat::Html
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct InitOptions<'a> {
+    pub format: SupportedFormat,
+    /// A full independent style.
+    pub style_xml: &'a str,
+    /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
+    pub locale_override: Option<Lang>,
+    /// Mechanism for fetching the locale you provide, if necessary.
+    pub fetcher: Option<Arc<dyn LocaleFetcher>>,
+
+    /// Disables some formalities for test suite operation
+    pub test_mode: bool,
+
+    #[doc(hidden)]
+    pub use_default_default: (),
+}
+
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut interner = Interner::with_capacity(40);
@@ -138,20 +160,35 @@ impl Processor {
         db
     }
 
-    pub fn new(
-        style_string: &str,
-        fetcher: Arc<dyn LocaleFetcher>,
-        format: SupportedFormat,
-    ) -> Result<Self, StyleError> {
+    pub fn new(options: InitOptions) -> Result<Self, StyleError> {
+        // The only thing you need from a dependent style is the override language, which may well
+        // be none.
+        let InitOptions {
+            style_xml,
+            locale_override,
+            fetcher,
+            format,
+            test_mode,
+            ..
+        } = options;
+
+        let fetcher = fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
         let mut db = Processor::safe_default(fetcher);
         db.formatter = format.make_markup();
-        let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style_with_durability(style, Durability::HIGH);
+        let style = Style::parse_with_opts(
+            &style_xml,
+            csl::ParseOptions {
+                allow_no_info: test_mode,
+                ..Default::default()
+            },
+        )?;
+        db.set_style_with_durability(Arc::new(style), Durability::HIGH);
+        db.set_default_lang_override_with_durability(locale_override, Durability::HIGH);
         Ok(db)
     }
 
     pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
-        let style = Style::from_str(style_text)?;
+        let style = Style::parse(style_text)?;
         self.set_style_with_durability(Arc::new(style), Durability::HIGH);
         Ok(())
     }
@@ -589,7 +626,9 @@ impl Processor {
             .filter_map(|refr| refr.language.clone())
             .collect();
         let style = self.style();
-        langs.insert(style.default_locale.clone());
+        if let Some(dl) = style.default_locale.as_ref() {
+            langs.insert(dl.clone());
+        }
         langs.into_iter().collect()
     }
 

@@ -20,6 +20,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 pub mod info;
+pub mod dependent;
 use info::Info;
 
 type TermPlural = bool;
@@ -1074,6 +1075,8 @@ pub struct MacroMap {
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 #[strum(serialize_all = "kebab_case")]
 pub enum StyleClass {
     InText,
@@ -1098,7 +1101,7 @@ pub struct Style {
     pub names_delimiter: Option<Delimiter>,
     /// `None` is the 'override everything' locale.
     pub locale_overrides: FnvHashMap<Option<Lang>, Locale>,
-    pub default_locale: Lang,
+    pub default_locale: Option<Lang>,
     pub version_req: CslVersionReq,
     pub page_range_format: Option<PageRangeFormat>,
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
@@ -1117,7 +1120,7 @@ impl Default for Style {
             name_inheritance: Default::default(),
             names_delimiter: None,
             locale_overrides: Default::default(),
-            default_locale: Default::default(),
+            default_locale: None,
             version_req: CslVersionReq::current_csl(),
             page_range_format: None,
             demote_non_dropping_particle: Default::default(),

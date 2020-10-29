@@ -37,6 +37,7 @@ where
 
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
+#[non_exhaustive]
 pub enum StyleError {
     #[error("invalid style: {0}")]
     Invalid(#[from] CslError),
@@ -46,6 +47,8 @@ pub enum StyleError {
         #[cfg_attr(feature = "serde", serde(serialize_with = "rox_error_serialize"))]
         roxmltree::Error,
     ),
+    #[error("incorrectly supplied a dependent style, which refers to a parent {required_parent:?}")]
+    DependentStyle { required_parent: String },
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,6 +72,12 @@ impl From<ChildGetterError> for CslError {
     fn from(_: ChildGetterError) -> Self {
         log::warn!("converting ChildGetterError to CslError (errors collector not checked)");
         CslError(Vec::new())
+    }
+}
+impl From<ChildGetterError> for StyleError {
+    fn from(_: ChildGetterError) -> Self {
+        log::warn!("converting ChildGetterError to CslError (errors collector not checked)");
+        StyleError::Invalid(CslError(Vec::new()))
     }
 }
 

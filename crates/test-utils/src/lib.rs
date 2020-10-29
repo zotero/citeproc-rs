@@ -76,7 +76,14 @@ impl Clone for TestCase {
     fn clone(&self) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
-            Processor::new(&self.csl, fet, self.format.0).expect("could not construct processor")
+            Processor::new(InitOptions {
+                style_xml: &self.csl,
+                fetcher: Some(fet),
+                format: self.format.0,
+                test_mode: true,
+                ..Default::default()
+            })
+            .expect("could not construct processor")
         };
         processor.reset_references(self.input.clone());
         Warmup::maximum().execute(&mut processor);
@@ -105,7 +112,14 @@ impl TestCase {
     ) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
-            Processor::new(&csl, fet, format.0).expect("could not construct processor")
+            Processor::new(InitOptions {
+                style_xml: &csl,
+                fetcher: Some(fet),
+                format: format.0,
+                test_mode: true,
+                ..Default::default()
+            })
+            .expect("could not construct processor")
         };
         let clusters = clusters
             .map(|vec| {

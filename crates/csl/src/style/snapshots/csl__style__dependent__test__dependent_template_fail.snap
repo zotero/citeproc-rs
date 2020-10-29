@@ -1,0 +1,65 @@
+---
+source: crates/csl/src/style/dependent.rs
+expression: "StyleMeta::parse(::indoc::indoc!(r#\"\n            <style version=\"1.0.1\" class=\"in-text\">\n                <info>\n                    <id>https://example.com/mystyle</id>\n                    <updated>2020-01-01T00:00:00Z</updated>\n                    <title>My Style</title>\n                    <link rel=\"independent-parent\" href=\"parent-uri\" />\n                </info>\n            </style>\n        \"#)).expect(\"should have parsed successfully\")"
+---
+StyleMeta {
+    info: Info {
+        id: Url(
+            "https://example.com/mystyle",
+        ),
+        updated: 2020-01-01T00:00:00+00:00,
+        title: LocalizedString {
+            value: "My Style",
+            lang: None,
+        },
+        title_short: None,
+        rights: None,
+        summary: None,
+        parent: Some(
+            ParentLink {
+                href: Identifier(
+                    "parent-uri",
+                ),
+                lang: None,
+            },
+        ),
+        links: [],
+        citation_format: None,
+        categories: [],
+        issn: None,
+        eissn: None,
+        issnl: None,
+    },
+    features: Features {},
+    default_locale: None,
+    class: Some(
+        InText,
+    ),
+    csl_version_required: CslVersionReq(
+        VersionReq {
+            ranges: [
+                Range {
+                    predicates: [
+                        Predicate {
+                            op: GtEq,
+                            major: 1,
+                            minor: 0,
+                            patch: 1,
+                            pre: [],
+                        },
+                        Predicate {
+                            op: Lt,
+                            major: 2,
+                            minor: 0,
+                            patch: 0,
+                            pre: [],
+                        },
+                    ],
+                    compat: Cargo,
+                },
+            ],
+            compat: Cargo,
+        },
+    ),
+    independent_meta: None,
+}

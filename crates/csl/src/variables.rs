@@ -98,6 +98,7 @@ impl IsIndependent for Variable {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum Variable {
     /// Not sure where this is from, but it appears sometimes.
     #[strum(serialize = "journalAbbreviation", serialize = "journal-abbreviation")]
@@ -269,6 +270,7 @@ impl IsIndependent for NumberVariable {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum NumberVariable {
     ChapterNumber,
     CollectionNumber,
@@ -330,6 +332,7 @@ impl NumberVariable {
     AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd,
 )]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum NameVariable {
     /// author
     Author,
@@ -385,6 +388,7 @@ impl Default for NameVariable {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum DateVariable {
     /// date the item has been accessed
     Accessed,

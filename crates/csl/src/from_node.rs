@@ -18,9 +18,10 @@ where
 }
 
 #[derive(Default, Clone)]
-#[non_exhaustive]
 pub struct ParseOptions {
     pub allow_no_info: bool,
+    #[doc(hidden)]
+    pub use_default_default: (),
 }
 
 #[derive(Default)]
@@ -114,13 +115,13 @@ where
     fn is_on_node<'a>(node: &'a Node) -> bool {
         node.attributes()
             .iter()
-            .find(|a| Self::filter_attribute(a.name()))
+            .find(|a| Self::filter_attribute_full(a))
             != None
     }
     fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
         node.attributes()
             .iter()
-            .filter(|a| Self::filter_attribute(a.name()))
+            .filter(|a| Self::filter_attribute_full(a))
             .map(|a| String::from(a.name()))
             .collect()
     }

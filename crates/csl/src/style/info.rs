@@ -31,6 +31,7 @@ use chrono::{DateTime, FixedOffset};
 #[cfg(feature = "serde")]
 use serde::Serialize;
 use std::marker::PhantomData;
+use std::fmt;
 use url::Url;
 
 /// The spec says URI in a great many places, but suggests that these be actual URLs. We attempt to parse them as URLs so we can emit warnings when they're not.
@@ -52,6 +53,15 @@ impl Uri {
     }
 }
 
+impl fmt::Display for Uri {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Uri::Url(u) => write!(f, "{}", u),
+            Uri::Identifier(u) => write!(f, "{}", u),
+        }
+    }
+}
+
 impl<'a> From<&'a str> for Uri {
     fn from(s: &'a str) -> Self {
         Self::parse(s)
@@ -62,7 +72,7 @@ impl<'a> From<&'a str> for Uri {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct LocalizedString {
-    pub content: String,
+    pub value: String,
     pub lang: Option<Lang>,
 }
 
@@ -121,7 +131,7 @@ mk_hint!(
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Rights {
-    pub content: String,
+    pub value: String,
     pub lang: Option<Lang>,
     pub license: Option<Uri>,
 }
@@ -129,7 +139,7 @@ pub struct Rights {
 impl FromNode for Rights {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(Rights {
-            content: node.text().unwrap_or("").to_owned(),
+            value: node.text().unwrap_or("").to_owned(),
             license: attribute_option(node, "license", info)?,
             lang: attribute_option(node, LANG_ATTR, info)?,
         })
@@ -225,13 +235,13 @@ impl GetAttribute for Uri {
 
 impl<H: LSVariant> FromNode for LSHelper<H> {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let content = node
+        let value = node
             .text()
             .filter(|x| !x.is_empty())
             .ok_or_else(|| InvalidCsl::no_content(node, "text", H::HINT))?;
         Ok(LSHelper {
             string: LocalizedString {
-                content: content.to_owned(),
+                value: value.to_owned(),
                 lang: attribute_option(node, LANG_ATTR, info)?,
             },
             _marker: PhantomData,
@@ -245,11 +255,11 @@ impl<H: LSVariant> FromNode for LSHelper<H> {
 
 impl<H: LSVariant> FromNode for StringTag<H> {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        let content = node
+        let value = node
             .text()
             .filter(|x| !x.is_empty())
             .ok_or_else(|| InvalidCsl::no_content(node, "text", H::HINT))?;
-        Ok(StringTag(content.to_owned(), PhantomData))
+        Ok(StringTag(value.to_owned(), PhantomData))
     }
     fn select_child(node: &Node) -> bool {
         node.has_tag_name(H::TAG)
@@ -309,7 +319,7 @@ impl FromNode for IdNode {
 impl<'a> From<&'a str> for LocalizedString {
     fn from(other: &'a str) -> Self {
         LocalizedString {
-            content: other.into(),
+            value: other.into(),
             lang: None,
         }
     }

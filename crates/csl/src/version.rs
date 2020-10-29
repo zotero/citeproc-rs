@@ -25,11 +25,25 @@ pub const COMPILED_VERSION_M: Version = Version {
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CslVersionReq(pub CslVariant, pub VersionReq);
+pub struct CslVersionReq(pub VersionReq);
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for CslVersionReq {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CslCslMVersionReq(pub CslVariant, pub VersionReq);
 
 impl CslVersionReq {
     pub(crate) fn current_csl() -> Self {
-        CslVersionReq(CslVariant::Csl, VersionReq::exact(&COMPILED_VERSION))
+        CslVersionReq(VersionReq::exact(&COMPILED_VERSION))
     }
 }
 
@@ -84,12 +98,23 @@ macro_rules! declare_features {
             &[(&str, &str, Option<u32>, Option<()>, fn(&mut Features))] =
             &[$((stringify!($feature), $ver, $issue, $edition, set!($feature))),+];
 
+        #[cfg(feature = "serde")]
+        fn is_false(b: &bool) -> bool {
+            !*b
+        }
+
         /// A set of features to be used by later passes.
         #[derive(Clone, Eq, PartialEq, Default)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+        #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
         pub struct Features {
             // `#![feature]` attrs for language features, for error reporting
+            #[cfg_attr(feature = "serde", serde(skip_serializing))]
             pub declared_lang_features: Vec<Atom>,
-            $(pub $feature: bool),+
+            $(
+                #[cfg_attr(feature = "serde", serde(skip_serializing_if = "is_false"))]
+                pub $feature: bool,
+            )+
         }
 
         impl Features {

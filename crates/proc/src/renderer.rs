@@ -37,11 +37,9 @@ impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
         let sty = self.style();
         let cite = self.cite_lang();
         // Bit messy but matches the spec wording
-        if sty.default_locale.is_english() {
-            cite.map_or(true, |l| l.is_english())
-        } else {
-            cite.map_or(false, |l| l.is_english())
-        }
+        // If a style doesn't have a default, it's en-US, which is English.
+        let default_is_english = sty.default_locale.as_ref().map_or(true, |x| x.is_english());
+        cite.map_or(default_is_english, |l| l.is_english())
     }
     pub fn style(&self) -> &Style {
         match self {

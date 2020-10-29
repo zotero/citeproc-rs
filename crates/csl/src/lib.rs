@@ -18,6 +18,18 @@ use std::sync::Arc;
 
 pub mod error;
 
+macro_rules! append_invalid_err {
+    ($res:expr, $errs:expr) => {
+        match $res {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                $errs.push(e);
+                Err($crate::error::ChildGetterError)
+            }
+        }
+    };
+}
+
 macro_rules! append_err {
     ($res:expr, $errs:expr) => {
         match $res {
@@ -55,7 +67,7 @@ macro_rules! assert_snapshot_err {
 macro_rules! assert_snapshot_style_parse {
     ($xml:literal) => {
         ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
-        .expect("should have failed with errors"));
+            .expect("should have parsed successfully"));
     };
 }
 
@@ -64,7 +76,7 @@ macro_rules! assert_snapshot_style_parse {
 macro_rules! assert_snapshot_style_err {
     ($xml:literal) => {
         ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
-        .expect_err("should have failed with errors"));
+            .expect_err("should have failed with errors"));
     };
 }
 
@@ -81,10 +93,11 @@ mod test;
 
 pub use self::error::*;
 pub use self::locale::*;
-pub use self::style::{info::*, *};
+pub use self::style::{dependent::*, info::*, *};
 pub use self::terms::*;
 pub use self::variables::*;
 pub use self::version::*;
+pub use self::from_node::ParseOptions;
 
 use self::attr::*;
 use fnv::FnvHashMap;
@@ -104,28 +117,57 @@ impl FromStr for Style {
 impl Style {
     /// Parses a style from an CSL string as XML.
     pub fn parse(xml: &str) -> Result<Self, StyleError> {
-        let doc = Document::parse(xml)?;
-        // We don't know what features to enable yet, but Style will figure that out after is
-        // parses the features block.
-        let info = ParseInfo::default();
-        let style = Style::from_node(&doc.root_element(), &info)?;
-        Ok(style)
+        Style::parse_with_opts(xml, ParseOptions::default())
     }
     pub fn parse_with_opts(xml: &str, options: ParseOptions) -> Result<Self, StyleError> {
         let doc = Document::parse(xml)?;
-        let info = ParseInfo {
+        let node = &doc.root_element();
+
+        // We don't know which features will be enabled yet, but we get that in
+        // Style::from_node_custom
+        let parse_info = ParseInfo {
             options,
             ..Default::default()
         };
-        let style = Style::from_node(&doc.root_element(), &info)?;
+
+        // If there is actually no info block (testing only!), it can't be a dependent style.
+        let mut errors = Vec::new();
+        let info = if parse_info.options.allow_no_info {
+            let mut throw_out = Vec::new();
+            Ok(max_one_child::<Info>(node, &parse_info, &mut throw_out)
+                .ok()
+                .flatten()
+                .unwrap_or_default())
+        } else {
+            exactly_one_child::<Info>(node, &parse_info, &mut errors)
+        };
+        if !errors.is_empty() {
+            return Err(StyleError::Invalid(CslError(errors)));
+        }
+        let info = info.map_err(|_| StyleError::Invalid(CslError(Vec::new())))?;
+
+        if let Some(parent_id) = info.independent_parent_id() {
+            return Err(StyleError::DependentStyle { required_parent: parent_id }.into())
+        }
+
+        let style = Style::from_node_custom(node, &parse_info, info)?;
         Ok(style)
     }
     #[doc(hidden)]
     pub fn parse_for_test(xml: &str) -> Result<Self, StyleError> {
-        Self::parse_with_opts(xml, ParseOptions { allow_no_info: true, ..Default::default() })
+        Self::parse_with_opts(
+            xml,
+            ParseOptions {
+                allow_no_info: true,
+                ..Default::default()
+            },
+        )
     }
     pub fn is_dependent(&self) -> bool {
         self.info.parent.is_some()
+    }
+    pub fn independent_parent(&self) -> Option<&ParentLink> {
+        self.info.parent.as_ref()
     }
 }
 
@@ -135,12 +177,14 @@ impl Info {
         let node = &doc.root_element();
         let parse_info = ParseInfo::default();
         let mut errors = Vec::new();
-        let info = exactly_one_child(node, &parse_info, &mut errors)
-            .map_err(|_| StyleError::Invalid(CslError(Vec::new())));
+        let info = exactly_one_child(node, &parse_info, &mut errors)?;
         if !errors.is_empty() {
             return Err(StyleError::Invalid(CslError(errors)));
         }
-        Ok(info?)
+        Ok(info)
+    }
+    pub fn independent_parent_id(&self) -> Option<String> {
+        self.parent.as_ref().map(|p| p.href.to_string())
     }
 }
 
@@ -1252,6 +1296,30 @@ impl FromNode for TermForm {
 }
 
 impl FromNode for CslVersionReq {
+    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+        let version = attribute_string(node, "version");
+        let req = VersionReq::parse(&version).map_err(|_| {
+            InvalidCsl::new(
+                node,
+                &format!("could not parse version string \"{}\"", &version),
+            )
+        })?;
+        let supported = COMPILED_VERSION;
+        if !req.matches(&supported) {
+            return Err(InvalidCsl::new(
+                node,
+                &format!(
+                    "Unsupported CSL version: \"{}\". This engine supports {}.",
+                    req, supported
+                ),
+            )
+            .into());
+        }
+        Ok(CslVersionReq(req))
+    }
+}
+
+impl FromNode for CslCslMVersionReq {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let version = attribute_string(node, "version");
         let variant: CslVariant;
@@ -1287,7 +1355,7 @@ impl FromNode for CslVersionReq {
             )
             .into());
         }
-        Ok(CslVersionReq(variant, req))
+        Ok(CslCslMVersionReq(variant, req))
     }
 }
 
@@ -1307,11 +1375,9 @@ impl FromNode for Features {
     const CHILD_DESC: &'static str = "features";
 }
 
-impl FromNode for Style {
-    fn from_node(node: &Node, default_info: &ParseInfo) -> FromNodeResult<Self> {
+impl Style {
+    fn from_node_custom(node: &Node, default_info: &ParseInfo, info_block: Info) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
-        let mut macros = HashMap::default();
-        let mut locale_overrides = FnvHashMap::default();
         let mut errors: Vec<InvalidCsl> = Vec::new();
 
         // Parse features first so we know how to interpret the rest.
@@ -1325,6 +1391,12 @@ impl FromNode for Style {
             options: default_info.options.clone(),
             features: features.clone(),
         };
+
+        let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
+        let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
+
+        let mut macros = HashMap::default();
+        let mut locale_overrides = FnvHashMap::default();
 
         let locales_res = many_children::<Locale>(node, &parse_info, &mut errors);
         if let Ok(locales) = locales_res {
@@ -1340,19 +1412,6 @@ impl FromNode for Style {
             }
         }
 
-        let info = if parse_info.options.allow_no_info {
-            max_one_child::<Info>(node, &parse_info, &mut errors).map(|x| x.unwrap_or_default())
-        } else {
-            exactly_one_child::<Info>(node, &parse_info, &mut errors)
-        };
-        let (citation, bibliography) = if matches!(info, Ok(Info { parent: None, .. }) | Err(_)) {
-            let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
-            let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
-            (citation, bibliography)
-        } else {
-            (Ok(Citation::default()), Ok(None))
-        };
-
         if !errors.is_empty() {
             return Err(CslError(errors));
         }
@@ -1362,11 +1421,11 @@ impl FromNode for Style {
             version_req,
             locale_overrides,
             features,
-            info: info?,
+            info: info_block,
             citation: citation?,
             bibliography: bibliography?,
             class: attribute_required(node, "class", &parse_info)?,
-            default_locale: attribute_optional(node, "default-locale", &parse_info)?,
+            default_locale: attribute_option(node, "default-locale", &parse_info)?,
             name_inheritance: Name::from_node(&node, &parse_info)?,
             page_range_format: attribute_option(node, "page-range-format", &parse_info)?,
             demote_non_dropping_particle: attribute_optional(

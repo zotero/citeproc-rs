@@ -48,6 +48,18 @@ impl fmt::Display for Lang {
 }
 
 #[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Lang {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize as _;
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
 impl serde::Serialize for Lang {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

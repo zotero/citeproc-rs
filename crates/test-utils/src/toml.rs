@@ -87,6 +87,7 @@ pub struct TomlTestCase {
     references: Vec<Reference>,
     result: Option<TomlResult>,
     instructions: Vec<TomlInstruction>,
+    format: Option<SupportedFormat>,
 }
 
 impl TomlTestCase {
@@ -95,8 +96,14 @@ impl TomlTestCase {
             panic!("bib tests not implemented");
         }
         let fet = Arc::new(Filesystem::project_dirs());
-        let mut proc =
-            Processor::new(&self.style.csl, fet).expect("could not construct processor");
+        let mut proc = Processor::new(InitOptions {
+            style_xml: &self.style.csl,
+            fetcher: fet,
+            format: self.format.unwrap_or(SupportedFormat::Html),
+            test_mode: true,
+            ..Default::default()
+        })
+        .expect("could not construct processor");
 
         proc.reset_references(self.references.clone());
         "".into()

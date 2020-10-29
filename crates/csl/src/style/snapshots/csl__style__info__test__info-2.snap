@@ -8,7 +8,7 @@ Info {
     ),
     updated: 2020-01-01T00:00:00+00:00,
     title: LocalizedString {
-        content: "My Style",
+        value: "My Style",
         lang: Some(
             Iso(
                 English,
@@ -20,7 +20,7 @@ Info {
     },
     title_short: Some(
         LocalizedString {
-            content: "MS",
+            value: "MS",
             lang: Some(
                 Iso(
                     English,
@@ -33,7 +33,7 @@ Info {
     ),
     rights: Some(
         Rights {
-            content: "Rights to use",
+            value: "Rights to use",
             lang: Some(
                 Iso(
                     English,
@@ -51,7 +51,7 @@ Info {
     ),
     summary: Some(
         LocalizedString {
-            content: "Sum",
+            value: "Sum",
             lang: Some(
                 Iso(
                     English,

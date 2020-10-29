@@ -1,6 +1,6 @@
 ---
 source: crates/csl/src/test.rs
-expression: "crate::Style::parse_with_opts(::indoc::indoc!(r#\"\n        <style version=\"1.0.1\" class=\"in-text\">\n            <citation><layout></layout></citation>\n        </style>\n    \"#),\n                              ParseOptions{ignore_info:\n                                               true,\n                                                       ..Default::default()}).expect(\"should have failed with errors\")"
+expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"\n        <style version=\"1.0.1\" class=\"in-text\">\n            <citation><layout></layout></citation>\n        </style>\n    \"#)).expect(\"should have parsed successfully\")"
 ---
 Style {
     class: InText,
@@ -54,7 +54,7 @@ Style {
         ),
         updated: 2000-01-01T00:00:00+00:00,
         title: LocalizedString {
-            content: "",
+            value: "",
             lang: None,
         },
         title_short: None,
@@ -91,14 +91,8 @@ Style {
     },
     names_delimiter: None,
     locale_overrides: {},
-    default_locale: Iso(
-        English,
-        Some(
-            US,
-        ),
-    ),
+    default_locale: None,
     version_req: CslVersionReq(
-        Csl,
         VersionReq {
             ranges: [
                 Range {

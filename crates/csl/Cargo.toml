@@ -16,7 +16,7 @@ repository = "https://github.com/cormacrelf/citeproc-rs"
 
 [features]
 default = []
-serde1 = ["serde", "smartstring/serde", "chrono/serde", "url/serde"]
+serde1 = ["serde", "smartstring/serde", "chrono/serde", "url/serde", "semver/serde"]
 
 [dependencies]
 roxmltree = "0.13.0"

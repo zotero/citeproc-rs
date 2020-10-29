@@ -17,11 +17,11 @@ mod test;
 
 pub use self::api::*;
 
-pub use self::processor::Processor;
+pub use self::processor::{Processor, InitOptions};
 
 pub mod prelude {
     pub use crate::api::*;
-    pub use crate::processor::Processor;
+    pub use crate::processor::{Processor, InitOptions};
     pub use citeproc_db::{
         CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
         IntraNote, ClusterNumber

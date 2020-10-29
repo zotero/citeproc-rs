@@ -4,7 +4,7 @@ expression: "crate::from_node::parse_as::<LSHelper<TitleHint>>(::indoc::indoc!(r
 ---
 LSHelper {
     string: LocalizedString {
-        content: "content",
+        value: "content",
         lang: Some(
             Iso(
                 English,

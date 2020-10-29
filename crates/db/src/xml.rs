@@ -165,6 +165,8 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
     fn locale_input_xml(&self, key: Lang) -> Arc<String>;
     #[salsa::input]
     fn locale_input_langs(&self) -> Arc<FnvHashSet<Lang>>;
+    #[salsa::input]
+    fn default_lang_override(&self) -> Option<Lang>;
 
     /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
@@ -187,7 +189,10 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
 }
 
 fn default_locale(db: &dyn LocaleDatabase) -> Arc<Locale> {
-    db.merged_locale(db.style().default_locale.clone())
+    let overrider = db
+        .default_lang_override()
+        .unwrap_or_else(|| db.style().default_locale.clone().unwrap_or_else(Default::default));
+    db.merged_locale(overrider)
 }
 
 fn locale_xml(db: &dyn LocaleDatabase, key: Lang) -> Option<Arc<String>> {

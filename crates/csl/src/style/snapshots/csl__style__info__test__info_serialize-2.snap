@@ -1,25 +1,25 @@
 ---
 source: crates/csl/src/style/info.rs
-expression: info
+expression: "parse_as::<Info>(indoc::indoc! {\n                     r#\"\n            <info>\n                <id>https://example.com/kitchen-sink</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title xml:lang=\"en-AU\">My Style</title>\n                <title-short xml:lang=\"en-AU\">MS</title-short>\n                <summary xml:lang=\"en-AU\">Sum</summary>\n                <rights license=\"license-uri\" xml:lang=\"en-AU\">Rights to use</rights>\n                <link rel=\"self\" href=\"https://example.com/self\" xml:lang=\"en-AU\" />\n                <link rel=\"documentation\" href=\"https://example.com/documentation\" xml:lang=\"en-AU\" />\n                <link rel=\"template\" href=\"https://example.com/template\" xml:lang=\"en-AU\" />\n                <category citation-format=\"author-date\"/>\n                <category field=\"medicine\"/>\n                <issn>issn</issn>\n                <eissn>eissn</eissn>\n                <issnl>issnl</issnl>\n            </info>\n        \"#\n                 }).unwrap()"
 ---
 {
   "id": "https://example.com/kitchen-sink",
   "updated": "2020-01-01T00:00:00+00:00",
   "title": {
-    "content": "My Style",
+    "value": "My Style",
     "lang": "en-AU"
   },
   "titleShort": {
-    "content": "MS",
+    "value": "MS",
     "lang": "en-AU"
   },
   "rights": {
-    "content": "Rights to use",
+    "value": "Rights to use",
     "lang": "en-AU",
     "license": "license-uri"
   },
   "summary": {
-    "content": "Sum",
+    "value": "Sum",
     "lang": "en-AU"
   },
   "parent": null,
