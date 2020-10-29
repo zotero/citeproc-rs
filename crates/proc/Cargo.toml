@@ -30,6 +30,7 @@ smallvec = "1.4.2"
 nom = { version = "5.1.2", default-features = false, features = ["std"] }
 unicase = "2.6.0"
 unic-segment = "0.9.0"
+unic-ucd-category = "0.9.0"
 indextree = "4.3.1"
 rayon = { version = "1.4.1", optional = true }
 string-interner = "0.12.0"

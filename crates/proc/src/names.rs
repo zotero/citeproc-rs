@@ -867,7 +867,9 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
-                out.push(UniCase::new(s));
+                let is_punc = |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
+                let filtered = citeproc_io::lazy_replace_char_if_owned(s, is_punc, "");
+                out.push(UniCase::new(filtered));
             }
         }
     }

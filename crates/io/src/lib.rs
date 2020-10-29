@@ -645,6 +645,26 @@ pub fn lazy_replace_char<'a>(s: &'a str, replace: char, with: &str) -> SmartCow<
     })
 }
 
+pub fn lazy_replace_char_if_owned(orig: String, pred: impl Fn(char) -> bool, with: &str) -> String {
+    let cow = lazy_replace_char_if(&orig, pred, with);
+    match cow {
+        SmartCow::Borrowed(_) => orig,
+        SmartCow::Owned(x) => x,
+    }
+}
+
+pub fn lazy_replace_char_if<'a>(s: &'a str, pred: impl Fn(char) -> bool, with: &str) -> SmartCow<'a> {
+    transform(s, |rest| {
+        let next = next_char(rest).expect("only called when there is remaining input");
+        if pred(next) {
+            let with = String::from(with);
+            TransformedPart::Changed(with)
+        } else {
+            TransformedPart::Unchanged
+        }
+    })
+}
+
 // Copied from lazy_transform_str
 enum TransformedPart {
     Unchanged,
