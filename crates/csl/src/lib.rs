@@ -1285,7 +1285,18 @@ struct TextContent(Option<String>);
 
 impl FromNode for TextContent {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        let opt_s = node.text().map(String::from);
+        let opt_s = node.text().and_then(|s| {
+            if s.trim().is_empty() {
+                None
+            } else {
+                let t = s.trim_matches('\n');
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(String::from(t))
+                }
+            }
+        });
         Ok(TextContent(opt_s))
     }
 }
