@@ -322,6 +322,11 @@ impl IrState {
         } else {
             if self.name_override.in_substitute {
                 self.suppressed.insert(AnyVariable::Ordinary(var));
+                if var == Variable::Title {
+                    self.suppressed.insert(AnyVariable::Ordinary(Variable::TitleShort));
+                } else if var == Variable::TitleShort {
+                    self.suppressed.insert(AnyVariable::Ordinary(Variable::Title));
+                }
             }
             f(self)
         }
