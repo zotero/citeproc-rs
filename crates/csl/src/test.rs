@@ -37,7 +37,8 @@ fn unsupported_version() {
         <style version="999.0" class="in-text">
             <citation><layout></layout></citation>
         </style>
-    "#);
+    "#
+    );
 }
 
 #[test]
@@ -51,7 +52,8 @@ fn unrecognised_macros() {
                 </layout>
             </citation>
         </style>
-    "#);
+    "#
+    );
     assert_snapshot_style_err!(
         r#"
         <style version="1.0" class="in-text">
@@ -62,7 +64,8 @@ fn unrecognised_macros() {
                 <layout></layout>
             </citation>
         </style>
-    "#);
+    "#
+    );
     assert_snapshot_style_err!(
         r#"
         <style version="1.0" class="in-text">
@@ -74,7 +77,8 @@ fn unrecognised_macros() {
                 <layout></layout>
             </bibliography>
         </style>
-    "#);
+    "#
+    );
     assert_snapshot_style_parse!(
         r#"
         <style version="1.0" class="in-text">
@@ -85,19 +89,21 @@ fn unrecognised_macros() {
                 </layout>
             </citation>
         </style>
-    "#);
+    "#
+    );
 }
 
 #[test]
 fn missing_info() {
     // Externally, missing info should fail.
-    insta::assert_debug_snapshot!(
-        crate::Style::parse(::indoc::indoc!(r#"
+    insta::assert_debug_snapshot!(crate::Style::parse(::indoc::indoc!(
+        r#"
             <style version="1.0.1" class="in-text">
                 <citation><layout></layout></citation>
             </style>
-        "#)).expect_err("should have failed with errors")
-    );
+        "#
+    ))
+    .expect_err("should have failed with errors"));
     // But internally we can ignore it.
     assert_snapshot_style_parse!(
         r#"

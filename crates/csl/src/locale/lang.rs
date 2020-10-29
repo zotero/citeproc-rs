@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::Atom;
+use crate::SmartString;
 use std::fmt;
 use std::str::FromStr;
 
@@ -24,10 +24,10 @@ pub enum Lang {
     /// i.e. `en` or `en-US`
     Iso(IsoLang, Option<IsoCountry>),
     /// IANA-assigned language codes
-    Iana(Atom),
+    Iana(SmartString),
     /// Agreed upon language ID (max 8 characters). You'll absolutely have to provide your own
     /// locale file.
-    Unofficial(Atom),
+    Unofficial(SmartString),
 }
 
 impl Default for Lang {
@@ -180,7 +180,7 @@ pub enum IsoLang {
     ///
     /// Also we save allocations for some popular languages!
     #[strum(default)]
-    Other(Atom),
+    Other(SmartString),
 }
 
 impl IsoLang {
@@ -243,7 +243,7 @@ pub enum IsoCountry {
     /// Canada
     CA,
     #[strum(default)]
-    Other(Atom),
+    Other(SmartString),
 }
 
 impl fmt::Display for IsoCountry {
@@ -355,14 +355,14 @@ fn iso_country(inp: &str) -> IResult<&str, IsoCountry> {
 
 fn parse_iana(inp: &str) -> IResult<&str, Lang> {
     map(preceded(tag("i-"), take_while(|_| true)), |lang| {
-        Lang::Iana(Atom::from(lang))
+        Lang::Iana(SmartString::from(lang))
     })(inp)
 }
 
 fn parse_unofficial(inp: &str) -> IResult<&str, Lang> {
     map(
         preceded(tag("x-"), take_while_m_n(1, 8, char::is_alphanumeric)),
-        |lang| Lang::Unofficial(Atom::from(lang)),
+        |lang| Lang::Unofficial(SmartString::from(lang)),
     )(inp)
 }
 

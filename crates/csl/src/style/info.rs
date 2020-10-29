@@ -30,8 +30,8 @@ use crate::Lang;
 use chrono::{DateTime, FixedOffset};
 #[cfg(feature = "serde")]
 use serde::Serialize;
-use std::marker::PhantomData;
 use std::fmt;
+use std::marker::PhantomData;
 use url::Url;
 
 /// The spec says URI in a great many places, but suggests that these be actual URLs. We attempt to parse them as URLs so we can emit warnings when they're not.
@@ -161,6 +161,7 @@ pub enum CitationFormat {
     Label,
     Note,
 }
+impl EnumGetAttribute for CitationFormat {}
 
 #[derive(AsRefStr, EnumString, EnumProperty, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab-case")]
@@ -173,6 +174,7 @@ pub enum Rel {
     /// Not allowed in dependent styles
     Template,
 }
+impl EnumGetAttribute for Rel {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize))]

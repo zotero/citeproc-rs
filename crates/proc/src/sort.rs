@@ -2,7 +2,7 @@ use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_db::{ClusterData, ClusterId};
 use citeproc_io::DateOrRange;
-use csl::*;
+use csl::{Atom, style::*, variables::*, terms::*};
 use fnv::FnvHashMap;
 use std::sync::Arc;
 use unicase::UniCase;
@@ -11,7 +11,7 @@ pub mod natural_sort;
 mod output_format;
 use output_format::SortStringFormat;
 
-fn plain_macro_element(macro_name: Atom) -> TextElement {
+fn plain_macro_element(macro_name: SmartString) -> TextElement {
     TextElement {
         source: TextSource::Macro(macro_name),
         formatting: None,
@@ -26,7 +26,7 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
 fn ctx_sort_string(
     db: &dyn IrDatabase,
     ctx: &CiteContext<Markup, Markup>,
-    macro_name: Atom,
+    macro_name: SmartString,
 ) -> SmartString {
     let mut walker = SortingWalker::new(db, &ctx);
     let text = plain_macro_element(macro_name.clone());
@@ -275,7 +275,7 @@ fn ctx_sort_items(
     max_cnum: u32,
 ) -> Demoting {
     let sort_string =
-        |ctx: &mut CiteContext<Markup, Markup>, macro_name: Atom, key: SortKey, cnum: u32| {
+        |ctx: &mut CiteContext<Markup, Markup>, macro_name: SmartString, key: SortKey, cnum: u32| {
             ctx.bib_number = Some(cnum);
             if cite_or_bib == CiteOrBib::Bibliography {
                 ctx.sort_key = Some(key);
@@ -287,19 +287,19 @@ fn ctx_sort_items(
         };
 
     use std::cell::Cell;
-    let mut fake_cnum = Cell::new(None);
+    let fake_cnum = Cell::new(None);
     let mut items = Vec::with_capacity(sort.keys.len());
     let mut push_item = |item: SortItem| {
         // Reverse direction after we have seen a descending / citation-number key
         if cite_or_bib == CiteOrBib::Bibliography {
             if let SortItem {
                 direction: Some(SortDirection::Descending),
-                value: SortValue::Cnum(Some(c))
+                value: SortValue::Cnum(Some(_))
             } = item {
                 fake_cnum.set(Some(max_cnum + 1 - a_cnum));
             } else if let SortItem {
                 direction: Some(SortDirection::Ascending),
-                value: SortValue::Cnum(Some(c))
+                value: SortValue::Cnum(Some(_))
             } = item {
                 fake_cnum.set(None);
             }
@@ -431,7 +431,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         }
     }
 
-    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+    fn text_value(&mut self, text: &TextElement, value: &SmartString) -> Self::Output {
         let renderer = self.renderer();
         let val = renderer.text_value(text, &value);
         (val.unwrap_or_default(), GroupVars::new())
@@ -527,7 +527,7 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
             crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
         let gv = self.arena.get(node).unwrap().get().1;
         (
-            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
             gv,
         )
     }
@@ -539,12 +539,12 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
         let gv = self.arena.get(node).unwrap().get().1;
         (
-            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
             gv,
         )
     }
 
-    fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
+    fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.ctx.style;
         let macro_elements = style

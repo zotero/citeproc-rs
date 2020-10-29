@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource, EN_US},
-    style::{Delimiter, Name, Style, TextElement, TextSource},
+    style::{Name, Style, TextElement, TextSource},
+    SmartString,
 };
 use fnv::FnvHashSet;
 
@@ -26,21 +27,21 @@ pub trait StyleDatabase {
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
     /// First one is the inherited names-delimiter
-    fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>);
+    fn name_info_citation(&self) -> (Option<SmartString>, Arc<Name>);
     /// Grabs the Name options from `<style>` + `<bibliography>` elements
     /// First one is the inherited names-delimiter
-    fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>);
+    fn name_info_bibliography(&self) -> (Option<SmartString>, Arc<Name>);
 
     /// Lists every <names> block in the style, with each name variable it is used for
     fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
 }
 
-fn name_info_citation(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_citation(db: &dyn StyleDatabase) -> (Option<SmartString>, Arc<Name>) {
     let style = db.style();
     style.name_info_citation()
 }
 
-fn name_info_bibliography(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_bibliography(db: &dyn StyleDatabase) -> (Option<SmartString>, Arc<Name>) {
     let style = db.style();
     style.name_info_bibliography()
 }

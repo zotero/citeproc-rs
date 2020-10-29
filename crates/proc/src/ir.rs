@@ -11,7 +11,6 @@ use csl::Atom;
 use csl::{Affixes, Choose, DateVariable, Formatting, GivenNameDisambiguationRule, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
 
-
 use std::sync::Arc;
 
 pub mod transforms;
@@ -57,12 +56,13 @@ pub enum IR<O: OutputFormat = Markup> {
 pub struct IrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
-    pub delimiter: Atom,
+    pub delimiter: Option<SmartString>,
     pub display: Option<DisplayMode>,
     pub quotes: Option<LocalizedQuotes>,
     pub text_case: TextCase,
     /// If this is None, this sequence is simply an implicit conditional
     pub dropped_gv: Option<GroupVars>,
+    pub should_inherit_delim: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -256,23 +256,34 @@ impl<O: OutputFormat> Default for IR<O> {
 impl<O: OutputFormat<Output = SmartString>> IR<O> {
     /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
     /// be rendered
-    pub fn flatten(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<O::Build> {
+    pub fn flatten(
+        node: NodeId,
+        arena: &IrArena<O>,
+        fmt: &O,
+        override_delim: Option<&str>,
+    ) -> Option<O::Build> {
         // must clone
         match arena.get(node)?.get().0 {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::YearSuffix(_) | IR::ConditionalDisamb(_) | IR::NameCounter(_) | IR::Name(_) => {
-                IR::flatten_children(node, arena, fmt)
+            IR::ConditionalDisamb(_) => IR::flatten_children(node, arena, fmt, override_delim),
+            IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) => {
+                IR::flatten_children(node, arena, fmt, None)
             }
-            IR::Seq(ref seq) => seq.flatten_seq(node, arena, fmt),
+            IR::Seq(ref seq) => seq.flatten_seq(node, arena, fmt, override_delim),
         }
     }
 
-    pub fn flatten_children(self_id: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<O::Build> {
+    pub fn flatten_children(
+        self_id: NodeId,
+        arena: &IrArena<O>,
+        fmt: &O,
+        override_delim: Option<&str>,
+    ) -> Option<O::Build> {
         let mut group = Vec::new();
         for child in self_id
             .children(arena)
-            .filter_map(|child| IR::flatten(child, arena, fmt))
+            .filter_map(|child| IR::flatten(child, arena, fmt, override_delim))
         {
             group.push(child)
         }
@@ -349,6 +360,7 @@ impl IR<Markup> {
         edges: &mut Vec<EdgeData>,
         fmt: &Markup,
         formatting: Formatting,
+        inherit_delim: Option<&str>,
     ) {
         let me = match arena.get(node) {
             Some(x) => x.get(),
@@ -356,23 +368,26 @@ impl IR<Markup> {
         };
         match &me.0 {
             IR::Rendered(None) => {}
-            IR::Rendered(Some(ed)) => {
-                edges.push(ed.to_edge_data(fmt, formatting))
-            }
+            IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
             IR::YearSuffix(_ys) => {
                 if !IR::is_empty(node, arena) {
                     edges.push(EdgeData::YearSuffix);
                 }
             }
-            IR::Name(_) |
-            IR::NameCounter(_) |
-            // TODO: choose inheriting parent group delimiters here as well
-            IR::ConditionalDisamb(_) => IR::append_child_edges(node, arena, edges, fmt, formatting),
+            IR::Name(_) | IR::NameCounter(_) => {
+                IR::append_child_edges(node, arena, edges, fmt, formatting, None)
+            }
+            // Inherit the delimiter here.
+            IR::ConditionalDisamb(_) => {
+                IR::append_child_edges(node, arena, edges, fmt, formatting, inherit_delim)
+            }
             IR::Seq(seq) => {
-                if IrSeq::overall_group_vars(seq.dropped_gv, node, arena).map_or(true, |x| x.should_render_tree()) {
-                    seq.append_edges(node, arena, edges, fmt, formatting)
+                if IrSeq::overall_group_vars(seq.dropped_gv, node, arena)
+                    .map_or(true, |x| x.should_render_tree())
+                {
+                    seq.append_edges(node, arena, edges, fmt, formatting, inherit_delim)
                 }
-            },
+            }
         }
     }
 
@@ -382,15 +397,16 @@ impl IR<Markup> {
         edges: &mut Vec<EdgeData>,
         fmt: &Markup,
         formatting: Formatting,
+        inherit_delim: Option<&str>,
     ) {
         for child in node.children(arena) {
-            IR::append_edges(child, arena, edges, fmt, formatting);
+            IR::append_edges(child, arena, edges, fmt, formatting, inherit_delim);
         }
     }
 
     pub fn to_edge_stream(root: NodeId, arena: &IrArena<Markup>, fmt: &Markup) -> Vec<EdgeData> {
         let mut edges = Vec::new();
-        IR::append_edges(root, arena, &mut edges, fmt, Formatting::default());
+        IR::append_edges(root, arena, &mut edges, fmt, Formatting::default(), None);
         edges
     }
 }
@@ -460,6 +476,7 @@ impl IrSeq {
         id: NodeId,
         arena: &IrArena<O>,
         fmt: &O,
+        override_delim: Option<&str>,
     ) -> Option<O::Build> {
         // Do this where it won't require mut access
         // self.recompute_group_vars();
@@ -476,15 +493,20 @@ impl IrSeq {
             display,
             text_case,
             dropped_gv: _,
+            should_inherit_delim,
         } = *self;
         let xs: Vec<_> = id
             .children(arena)
-            .filter_map(|child| IR::flatten(child, arena, fmt))
+            .filter_map(|child| IR::flatten(child, arena, fmt, delimiter.as_opt_str()))
             .collect();
         if xs.is_empty() {
             return None;
         }
-        let grp = fmt.group(xs, delimiter, formatting);
+        let delim = override_delim
+            .filter(|_| should_inherit_delim)
+            .or(delimiter.as_opt_str())
+            .unwrap_or("");
+        let grp = fmt.group(xs, delim, formatting);
         let grp = fmt.affixed_quoted(grp, affixes.as_ref(), quotes.clone());
         // TODO: pass in_bibliography from ctx
         let mut grp = fmt.with_display(grp, display, true);
@@ -505,6 +527,7 @@ impl IrSeq {
         edges: &mut Vec<EdgeData>,
         fmt: &Markup,
         format_context: Formatting,
+        override_delim: Option<&str>,
     ) {
         // Currently recreates the whole markup-formatting infrastructure, but keeps the same
         // granularity of edges that RefIR will produce.
@@ -521,7 +544,11 @@ impl IrSeq {
             quotes: _,
             text_case: _,
             dropped_gv: _,
+            should_inherit_delim,
         } = *self;
+        let delimiter = override_delim
+            .filter(|_| should_inherit_delim)
+            .or(delimiter.as_opt_str());
         let affixes = affixes.as_ref();
 
         // TODO: move display out of tag_stack, so that quotes can go inside it.
@@ -536,7 +563,7 @@ impl IrSeq {
         fmt.stack_postorder(&mut close_tags, &stack);
 
         if !affixes.map_or(true, |a| a.prefix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().prefix.as_ref().into()));
+            edges.push(EdgeData::Output(affixes.unwrap().prefix.as_str().into()));
         }
 
         if !open_tags.is_empty() {
@@ -547,12 +574,12 @@ impl IrSeq {
         let mut seen = false;
         let mut sub = Vec::new();
         for child in node.children(arena) {
-            IR::append_edges(child, arena, &mut sub, fmt, sub_formatting);
+            IR::append_edges(child, arena, &mut sub, fmt, sub_formatting, delimiter);
             if !sub.is_empty() {
                 if seen {
-                    if !delimiter.is_empty() {
+                    if let Some(delimiter) = delimiter {
                         edges.push(EdgeData::Output(fmt.output_in_context(
-                            fmt.plain(delimiter.as_ref()),
+                            fmt.plain(delimiter),
                             sub_formatting,
                             None,
                         )));
@@ -568,7 +595,7 @@ impl IrSeq {
         }
 
         if !affixes.map_or(true, |a| a.suffix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().suffix.as_ref().into()));
+            edges.push(EdgeData::Output(affixes.unwrap().suffix.as_str().into()));
         }
     }
 }

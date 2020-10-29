@@ -6,12 +6,13 @@
 
 use super::terms::{TermForm, TermFormExtended, TextTermSelector};
 use super::IsIndependent;
+use crate::attr::EnumGetAttribute;
 use crate::error::*;
 use crate::locale::{Lang, Locale};
 use crate::terms::LocatorType;
 use crate::variables::*;
 use crate::version::{CslVersionReq, Features};
-use crate::Atom;
+use crate::SmartString;
 use fnv::{FnvHashMap, FnvHashSet};
 #[cfg(feature = "serde")]
 use serde::Serialize;
@@ -19,8 +20,8 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub mod info;
 pub mod dependent;
+pub mod info;
 use info::Info;
 
 type TermPlural = bool;
@@ -29,8 +30,8 @@ type Quotes = bool;
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub enum TextSource {
-    Macro(Atom),
-    Value(Atom),
+    Macro(SmartString),
+    Value(SmartString),
     Variable(StandardVariable, VariableForm),
     Term(TextTermSelector, TermPlural),
 }
@@ -90,7 +91,7 @@ pub enum Element {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Group {
     pub formatting: Option<Formatting>,
-    pub delimiter: Delimiter,
+    pub delimiter: Option<SmartString>,
     pub affixes: Option<Affixes>,
     pub elements: Vec<Element>,
     pub display: Option<DisplayMode>,
@@ -121,6 +122,7 @@ pub enum VariableForm {
     Short,
 }
 
+impl EnumGetAttribute for VariableForm {}
 impl Default for VariableForm {
     fn default() -> Self {
         VariableForm::Long
@@ -136,6 +138,7 @@ pub enum NumericForm {
     LongOrdinal,
 }
 
+impl EnumGetAttribute for NumericForm {}
 impl Default for NumericForm {
     fn default() -> Self {
         NumericForm::Numeric
@@ -144,8 +147,8 @@ impl Default for NumericForm {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Affixes {
-    pub prefix: Atom,
-    pub suffix: Atom,
+    pub prefix: SmartString,
+    pub suffix: SmartString,
 }
 
 impl Default for Affixes {
@@ -245,6 +248,7 @@ pub enum DisplayMode {
     RightInline,
     Indent,
 }
+impl EnumGetAttribute for DisplayMode {}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
@@ -258,6 +262,7 @@ pub enum TextCase {
     Title,
 }
 
+impl EnumGetAttribute for TextCase {}
 impl Default for TextCase {
     fn default() -> Self {
         TextCase::None
@@ -273,6 +278,7 @@ pub enum FontStyle {
     Oblique,
 }
 
+impl EnumGetAttribute for FontStyle {}
 impl Default for FontStyle {
     fn default() -> Self {
         FontStyle::Normal
@@ -287,6 +293,7 @@ pub enum FontVariant {
     SmallCaps,
 }
 
+impl EnumGetAttribute for FontVariant {}
 impl Default for FontVariant {
     fn default() -> Self {
         FontVariant::Normal
@@ -302,6 +309,7 @@ pub enum FontWeight {
     Light,
 }
 
+impl EnumGetAttribute for FontWeight {}
 impl Default for FontWeight {
     fn default() -> Self {
         FontWeight::Normal
@@ -316,6 +324,7 @@ pub enum TextDecoration {
     Underline,
 }
 
+impl EnumGetAttribute for TextDecoration {}
 impl Default for TextDecoration {
     fn default() -> Self {
         TextDecoration::None
@@ -333,14 +342,12 @@ pub enum VerticalAlignment {
     Subscript,
 }
 
+impl EnumGetAttribute for VerticalAlignment {}
 impl Default for VerticalAlignment {
     fn default() -> Self {
         VerticalAlignment::Baseline
     }
 }
-
-#[derive(Default, Debug, Eq, Clone, PartialEq, Hash)]
-pub struct Delimiter(pub Atom);
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -349,6 +356,7 @@ pub enum Plural {
     Always,
     Never,
 }
+impl EnumGetAttribute for Plural {}
 
 impl Default for Plural {
     fn default() -> Self {
@@ -383,7 +391,7 @@ pub enum Cond {
     HasDay(DateVariable),
     Context(Context),
     IsPlural(NameVariable),
-    Jurisdiction(Atom),
+    Jurisdiction(SmartString),
     SubJurisdiction(u32),
 }
 
@@ -445,7 +453,7 @@ pub(crate) struct ConditionParser {
     pub is_uncertain_date: Vec<DateVariable>,
 
     // TODO: do not populate in plain CSL mode
-    pub jurisdiction: Option<Atom>,
+    pub jurisdiction: Option<SmartString>,
     pub subjurisdictions: Option<u32>,
 
     /// https://citeproc-js.readthedocs.io/en/latest/csl-m/index.html#has-year-only-extension
@@ -470,6 +478,7 @@ pub enum Context {
     Citation,
     Bibliography,
 }
+impl EnumGetAttribute for Context {}
 
 impl ConditionParser {
     pub fn is_empty(&self) -> bool {
@@ -501,6 +510,7 @@ pub enum Match {
     Nand,
 }
 
+impl EnumGetAttribute for Match {}
 impl Default for Match {
     fn default() -> Self {
         Match::Any
@@ -523,7 +533,7 @@ pub struct Choose(pub IfThen, pub Vec<IfThen>, pub Else);
 #[derive(Debug, Default, Eq, Clone, PartialEq)]
 pub struct Names {
     // inheritable.
-    pub delimiter: Option<Delimiter>,
+    pub delimiter: Option<SmartString>,
 
     // non-inheritable
     pub variables: Vec<NameVariable>,
@@ -554,6 +564,8 @@ pub enum NameAnd {
     Symbol,
 }
 
+impl EnumGetAttribute for NameAnd {}
+
 /// It is not entirely clear which attributes `<cs:with>` supports.
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct NameWith {
@@ -564,7 +576,7 @@ pub struct NameWith {
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Institution {
     pub and: Option<NameAnd>,
-    pub delimiter: Option<Delimiter>,
+    pub delimiter: Option<SmartString>,
     pub use_first: Option<InstitutionUseFirst>,
     /// This is different from the `*_use_last` on a Name, which is a boolean to activate `one,
     /// two,... last`.
@@ -601,6 +613,8 @@ pub enum InstitutionPartName {
     Short,
 }
 
+impl EnumGetAttribute for InstitutionPartName {}
+
 impl Default for InstitutionPartName {
     fn default() -> Self {
         InstitutionPartName::Long(false)
@@ -615,6 +629,8 @@ pub enum InstitutionParts {
     ShortLong,
     LongShort,
 }
+
+impl EnumGetAttribute for InstitutionParts {}
 
 impl Default for InstitutionParts {
     fn default() -> Self {
@@ -638,7 +654,7 @@ pub enum InstitutionUseFirst {
 pub struct Name {
     pub and: Option<NameAnd>,
     /// Between individual names for the same variable
-    pub delimiter: Option<Delimiter>,
+    pub delimiter: Option<SmartString>,
     pub delimiter_precedes_et_al: Option<DelimiterPrecedes>,
     pub delimiter_precedes_last: Option<DelimiterPrecedes>,
     pub et_al_min: Option<u32>,
@@ -648,9 +664,9 @@ pub struct Name {
     pub et_al_subsequent_use_first: Option<u32>,
     pub form: Option<NameForm>,
     pub initialize: Option<bool>, // default is true
-    pub initialize_with: Option<Atom>,
+    pub initialize_with: Option<SmartString>,
     pub name_as_sort_order: Option<NameAsSortOrder>,
-    pub sort_separator: Option<Atom>,
+    pub sort_separator: Option<SmartString>,
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
     pub name_part_given: Option<NamePart>,
@@ -699,7 +715,7 @@ impl Name {
     pub fn root_default() -> Self {
         Name {
             and: None,
-            delimiter: Some(Delimiter(", ".into())),
+            delimiter: Some(", ".into()),
             delimiter_precedes_et_al: Some(DelimiterPrecedes::Contextual),
             delimiter_precedes_last: Some(DelimiterPrecedes::Contextual),
             et_al_min: None,
@@ -841,6 +857,7 @@ pub enum DemoteNonDroppingParticle {
     SortOnly,
     DisplayAndSort,
 }
+impl EnumGetAttribute for DemoteNonDroppingParticle {}
 
 impl Default for DemoteNonDroppingParticle {
     fn default() -> Self {
@@ -857,6 +874,7 @@ pub enum DelimiterPrecedes {
     Never,
 }
 
+impl EnumGetAttribute for DelimiterPrecedes {}
 impl Default for DelimiterPrecedes {
     fn default() -> Self {
         DelimiterPrecedes::Contextual
@@ -870,6 +888,7 @@ pub enum NameForm {
     Short,
     Count,
 }
+impl EnumGetAttribute for NameForm {}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
@@ -877,6 +896,7 @@ pub enum NameAsSortOrder {
     First,
     All,
 }
+impl EnumGetAttribute for NameAsSortOrder {}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
@@ -884,6 +904,7 @@ pub enum NamePartName {
     Given,
     Family,
 }
+impl EnumGetAttribute for NamePartName {}
 
 #[derive(Debug, Eq, Clone, PartialEq, Hash)]
 pub struct NamePart {
@@ -906,6 +927,8 @@ pub enum GivenNameDisambiguationRule {
     ByCite,
 }
 
+impl EnumGetAttribute for GivenNameDisambiguationRule {}
+
 impl Default for GivenNameDisambiguationRule {
     fn default() -> Self {
         GivenNameDisambiguationRule::ByCite
@@ -920,6 +943,7 @@ pub enum Collapse {
     YearSuffix,
     YearSuffixRanged,
 }
+impl EnumGetAttribute for Collapse {}
 
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Citation {
@@ -929,12 +953,12 @@ pub struct Citation {
     pub disambiguate_add_year_suffix: bool,
     pub layout: Layout,
     pub name_inheritance: Name,
-    pub names_delimiter: Option<Delimiter>,
+    pub names_delimiter: Option<SmartString>,
     pub near_note_distance: u32,
     pub sort: Option<Sort>,
-    pub cite_group_delimiter: Option<Atom>,
-    pub year_suffix_delimiter: Option<Atom>,
-    pub after_collapse_delimiter: Option<Atom>,
+    pub cite_group_delimiter: Option<SmartString>,
+    pub year_suffix_delimiter: Option<SmartString>,
+    pub after_collapse_delimiter: Option<SmartString>,
     pub collapse: Option<Collapse>,
 }
 
@@ -977,9 +1001,9 @@ pub struct Bibliography {
     pub line_spaces: u32,   // >= 1 only. default is 1
     pub entry_spacing: u32, // >= 0. default is 1
     pub name_inheritance: Name,
-    pub subsequent_author_substitute: Option<Atom>,
+    pub subsequent_author_substitute: Option<SmartString>,
     pub subsequent_author_substitute_rule: SubsequentAuthorSubstituteRule,
-    pub names_delimiter: Option<Delimiter>,
+    pub names_delimiter: Option<SmartString>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
@@ -988,6 +1012,7 @@ pub enum SecondFieldAlign {
     Flush,
     Margin,
 }
+impl EnumGetAttribute for SecondFieldAlign {}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -997,6 +1022,7 @@ pub enum SubsequentAuthorSubstituteRule {
     PartialEach,
     PartialFirst,
 }
+impl EnumGetAttribute for SubsequentAuthorSubstituteRule {}
 
 impl Default for SubsequentAuthorSubstituteRule {
     fn default() -> Self {
@@ -1025,7 +1051,7 @@ impl SortKey {
             _ => false,
         }
     }
-    pub fn macro_named(name: impl Into<Atom>) -> Self {
+    pub fn macro_named(name: impl Into<SmartString>) -> Self {
         SortKey {
             sort_source: SortSource::Macro(name.into()),
             names_min: None,
@@ -1040,7 +1066,7 @@ impl SortKey {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SortSource {
     Variable(AnyVariable),
-    Macro(Atom),
+    Macro(SmartString),
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -1049,6 +1075,7 @@ pub enum SortDirection {
     Ascending,
     Descending,
 }
+impl EnumGetAttribute for SortDirection {}
 
 impl Default for SortDirection {
     fn default() -> Self {
@@ -1062,7 +1089,7 @@ pub struct Layout {
     pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
     // TODO: only allow delimiter inside <citation>
-    pub delimiter: Delimiter,
+    pub delimiter: Option<SmartString>,
     pub elements: Vec<Element>,
     pub locale: Vec<Lang>,
 }
@@ -1070,7 +1097,7 @@ pub struct Layout {
 // Not actually part of a style tree, just a useful place to implement FromNode.
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct MacroMap {
-    pub name: Atom,
+    pub name: SmartString,
     pub elements: Vec<Element>,
 }
 
@@ -1083,6 +1110,7 @@ pub enum StyleClass {
     Note,
 }
 
+impl EnumGetAttribute for StyleClass {}
 impl Default for StyleClass {
     fn default() -> Self {
         StyleClass::Note
@@ -1092,13 +1120,13 @@ impl Default for StyleClass {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct Style {
     pub class: StyleClass,
-    pub macros: FnvHashMap<Atom, Vec<Element>>,
+    pub macros: FnvHashMap<SmartString, Vec<Element>>,
     pub citation: Citation,
     pub bibliography: Option<Bibliography>,
     pub info: Info,
     pub features: Features,
     pub name_inheritance: Name,
-    pub names_delimiter: Option<Delimiter>,
+    pub names_delimiter: Option<SmartString>,
     /// `None` is the 'override everything' locale.
     pub locale_overrides: FnvHashMap<Option<Lang>, Locale>,
     pub default_locale: Option<Lang>,
@@ -1130,13 +1158,13 @@ impl Default for Style {
 }
 
 impl Style {
-    pub fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>) {
+    pub fn name_info_citation(&self) -> (Option<SmartString>, Arc<Name>) {
         let nc = Arc::new(self.name_citation());
         let nd = self.names_delimiter.clone();
         let citation_nd = self.citation.names_delimiter.clone();
         (citation_nd.or(nd), nc)
     }
-    pub fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>) {
+    pub fn name_info_bibliography(&self) -> (Option<SmartString>, Arc<Name>) {
         let nb = Arc::new(self.name_bibliography());
         let nd = self.names_delimiter.clone();
         let bib_nd = self
@@ -1164,7 +1192,7 @@ impl Style {
 }
 
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct RangeDelimiter(pub Atom);
+pub struct RangeDelimiter(pub SmartString);
 
 impl Default for RangeDelimiter {
     fn default() -> Self {
@@ -1193,6 +1221,7 @@ pub enum DateParts {
     Year,
 }
 
+impl EnumGetAttribute for DateParts {}
 impl Default for DateParts {
     fn default() -> Self {
         DateParts::YearMonthDay
@@ -1207,6 +1236,7 @@ pub(crate) enum DatePartName {
     Month,
     Year,
 }
+impl EnumGetAttribute for DatePartName {}
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
@@ -1215,6 +1245,7 @@ pub enum DayForm {
     NumericLeadingZeros,
     Ordinal,
 }
+impl EnumGetAttribute for DayForm {}
 impl Default for DayForm {
     fn default() -> Self {
         DayForm::Numeric
@@ -1229,6 +1260,7 @@ pub enum MonthForm {
     Numeric,
     NumericLeadingZeros,
 }
+impl EnumGetAttribute for MonthForm {}
 impl Default for MonthForm {
     fn default() -> Self {
         MonthForm::Long
@@ -1241,6 +1273,7 @@ pub enum YearForm {
     Long,
     Short,
 }
+impl EnumGetAttribute for YearForm {}
 impl Default for YearForm {
     fn default() -> Self {
         YearForm::Long
@@ -1253,6 +1286,7 @@ pub enum DateForm {
     Text,
     Numeric,
 }
+impl EnumGetAttribute for DateForm {}
 
 #[derive(Debug, Display, Eq, Copy, Clone, PartialEq)]
 pub enum DatePartForm {
@@ -1308,7 +1342,7 @@ pub struct IndependentDate {
     pub variable: DateVariable,
     // TODO: limit each <date-part name="XXX"> to one per?
     pub date_parts: Vec<DatePart>,
-    pub delimiter: Delimiter,
+    pub delimiter: Option<SmartString>,
     pub affixes: Option<Affixes>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
@@ -1353,6 +1387,7 @@ pub enum Position {
     FarNote,
 }
 
+impl EnumGetAttribute for Position {}
 impl Position {
     /// > "Whenever position=”ibid-with-locator” tests true, position=”ibid” also tests true.
     /// And whenever position=”ibid” or position=”near-note” test true, position=”subsequent”
@@ -1388,6 +1423,7 @@ pub enum PageRangeFormat {
     Minimal,
     MinimalTwo,
 }
+impl EnumGetAttribute for PageRangeFormat {}
 
 #[derive(AsRefStr, EnumProperty, EnumIter, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
@@ -1448,3 +1484,4 @@ pub enum CslType {
     #[strum(props(csl = "0", cslM = "1"))]
     Video,
 }
+impl EnumGetAttribute for CslType {}

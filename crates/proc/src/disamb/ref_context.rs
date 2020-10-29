@@ -2,7 +2,7 @@ use crate::choose::CondChecker;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
-use csl::{Name as NameEl, *};
+use csl::{Name as NameEl, style::*, terms::*, variables::*, Locale, Features};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ pub struct RefContext<'a, O: OutputFormat = Markup> {
     pub locator_type: Option<LocatorType>,
     pub position: Position,
     pub year_suffix: bool,
-    pub names_delimiter: Option<Delimiter>,
+    pub names_delimiter: Option<SmartString>,
     pub name_el: Arc<NameEl>,
     pub disamb_count: u32,
 }

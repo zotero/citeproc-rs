@@ -8,8 +8,8 @@ use super::Info;
 use crate::attr::*;
 use crate::error::{CslError, InvalidCsl, StyleError};
 use crate::from_node::*;
-use crate::{Bibliography, CslVersionReq, Features, Lang, Locale, StyleClass};
 use crate::info::ParentLink;
+use crate::{Bibliography, CslVersionReq, Features, Lang, Locale, StyleClass};
 use roxmltree::{Document, Node};
 
 /// A stripped-down version of `Style` that can also represent a dependent style.
@@ -59,8 +59,6 @@ impl StyleMeta {
     }
 }
 
-
-
 impl FromNode for StyleMeta {
     fn from_node(node: &Node, parse_info: &ParseInfo) -> FromNodeResult<Self> {
         let csl_version_required = CslVersionReq::from_node(node, parse_info)?;
@@ -87,7 +85,11 @@ impl FromNode for StyleMeta {
                 locale_overrides: node
                     .children()
                     .filter(Locale::select_child)
-                    .filter_map(|l| <Option<Lang> as FromNode>::from_node(&l, parse_info).ok().flatten())
+                    .filter_map(|l| {
+                        <Option<Lang> as FromNode>::from_node(&l, parse_info)
+                            .ok()
+                            .flatten()
+                    })
                     .collect(),
             })
         } else {
@@ -104,13 +106,15 @@ impl FromNode for StyleMeta {
     }
 }
 
+#[cfg(test)]
 mod test {
     use super::StyleMeta;
 
     macro_rules! assert_meta_parse {
         ($xml:literal) => {
-            ::insta::assert_debug_snapshot!(StyleMeta::parse(::indoc::indoc!($xml))
-                .expect("should have parsed successfully"));
+            ::insta::assert_debug_snapshot!(
+                StyleMeta::parse(::indoc::indoc!($xml)).expect("should have parsed successfully")
+            );
         };
     }
 
@@ -126,7 +130,8 @@ mod test {
                     <link rel="independent-parent" href="parent-uri" />
                 </info>
             </style>
-        "#);
+        "#
+        );
     }
 
     #[cfg(feature = "serde")]
@@ -154,7 +159,8 @@ mod test {
                     <title>My CSL Style</title>
                 </info>
             </style>
-        "#}).unwrap());
+        "#})
+        .unwrap());
 
         insta::assert_json_snapshot!(parse_as::<StyleMeta>(indoc::indoc! {r#"
             <style version="1.0.1" class="in-text" default-locale="en-AU">
@@ -170,7 +176,7 @@ mod test {
                 <citation><locale></locale></citation>
                 <bibliography><locale></locale></bibliography>
             </style>
-        "#}).unwrap());
-
+        "#})
+        .unwrap());
     }
 }

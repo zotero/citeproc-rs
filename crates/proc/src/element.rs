@@ -1,7 +1,6 @@
 use crate::helpers::plain_text_element;
 use crate::prelude::*;
-use csl::variables::*;
-use csl::*;
+use csl::{style::*, variables::*};
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -16,7 +15,7 @@ where
         arena: &mut IrArena<O>,
     ) -> NodeId {
         let layout = &self.citation.layout;
-        sequence_basic(db, state, ctx, arena, &layout.elements)
+        sequence(db, state, ctx, arena, &layout.elements, false, None)
     }
 }
 
@@ -41,14 +40,13 @@ where
             ctx,
             arena,
             &layout.elements,
+            false,
             // no such thing as layout delimiters in a bibliography
-            "".into(),
-            layout.formatting,
-            layout.affixes.as_ref(),
-            None,
-            None,
-            TextCase::None,
-            true,
+            Some(&|| IrSeq {
+                formatting: layout.formatting,
+                affixes: layout.affixes.clone(),
+                ..Default::default()
+            }),
         )
     }
 }
@@ -89,13 +87,17 @@ where
                             ctx,
                             arena,
                             &macro_elements,
-                            "".into(),
-                            text.formatting,
-                            text.affixes.as_ref(),
-                            text.display,
-                            renderer.quotes_if(text.quotes),
-                            text.text_case,
+                            // Not sure about this, but it acted like a group before...
                             true,
+                            Some(&|| IrSeq {
+                                formatting: text.formatting,
+                                affixes: text.affixes.clone(),
+                                display: text.display,
+                                quotes: renderer.quotes_if(text.quotes),
+                                text_case: text.text_case,
+                                should_inherit_delim: false,
+                                ..Default::default()
+                            }),
                         );
                         state.pop_macro(name);
                         ir_sum
@@ -135,10 +137,9 @@ where
                                         formatting: text.formatting,
                                         affixes: text.affixes.clone(),
                                         text_case: text.text_case,
-                                        delimiter: Atom::from(""),
                                         display: text.display,
                                         quotes: renderer.quotes_if(text.quotes),
-                                        dropped_gv: None,
+                                        ..Default::default()
                                     };
                                     // the citation-label is important, so so is the seq
                                     let seq_node =
@@ -212,23 +213,22 @@ where
 
             Element::Names(ref ns) => ns.intermediate(db, state, ctx, arena),
 
-            //
-            // You're going to have to replace sequence() with something more complicated.
-            // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => sequence(
                 db,
                 state,
                 ctx,
                 arena,
                 g.elements.as_ref(),
-                g.delimiter.0.clone(),
-                g.formatting,
-                g.affixes.as_ref(),
-                g.display,
-                None,
-                TextCase::None,
                 true,
+                Some(&|| IrSeq {
+                    delimiter: g.delimiter.clone(),
+                    formatting: g.formatting,
+                    affixes: g.affixes.clone(),
+                    display: g.display,
+                    ..Default::default()
+                }),
             ),
+
             Element::Date(ref dt) => {
                 let var = dt.variable();
                 let o: Option<NodeId> = state
@@ -293,13 +293,15 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 self.ctx,
                 self.arena,
                 &elements,
-                "".into(),
-                text.formatting,
-                text.affixes.as_ref(),
-                text.display,
-                renderer.quotes_if(text.quotes),
-                text.text_case,
                 true,
+                Some(&|| IrSeq {
+                    formatting: text.formatting,
+                    affixes: text.affixes.clone(),
+                    display: text.display,
+                    quotes: renderer.quotes_if(text.quotes),
+                    text_case: text.text_case,
+                    ..Default::default()
+                }),
             ),
             WalkerFoldType::Group(group) => sequence(
                 self.db,
@@ -307,24 +309,36 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 self.ctx,
                 self.arena,
                 group.elements.as_ref(),
-                group.delimiter.0.clone(),
-                group.formatting,
-                group.affixes.as_ref(),
-                group.display,
-                None,
-                TextCase::None,
                 true,
+                Some(&|| IrSeq {
+                    delimiter: group.delimiter.clone(),
+                    formatting: group.formatting,
+                    affixes: group.affixes.clone(),
+                    display: group.display,
+                    ..Default::default()
+                }),
             ),
-            WalkerFoldType::Layout(layout) => sequence_basic(
+            WalkerFoldType::Layout(layout) => sequence(
                 self.db,
                 &mut self.state,
                 self.ctx,
                 self.arena,
                 &layout.elements,
+                false,
+                None,
             ),
-            WalkerFoldType::IfThen | WalkerFoldType::Else => {
-                sequence_basic(self.db, &mut self.state, self.ctx, self.arena, elements)
-            }
+            WalkerFoldType::IfThen | WalkerFoldType::Else => sequence(
+                self.db,
+                &mut self.state,
+                self.ctx,
+                self.arena,
+                elements,
+                false,
+                Some(&|| IrSeq {
+                    should_inherit_delim: true,
+                    ..Default::default()
+                }),
+            ),
             WalkerFoldType::Substitute => {
                 todo!("use fold() to implement name element substitution")
             }
@@ -370,7 +384,7 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
         self.arena.new_node((IR::Rendered(content), gv))
     }
 
-    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+    fn text_value(&mut self, text: &TextElement, value: &SmartString) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
         self.arena

@@ -11,7 +11,7 @@ use crate::version::Features;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use super::attr::GetAttribute;
+use super::attr::{EnumGetAttribute, GetAttribute};
 use super::variables::{NameVariable, NumberVariable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -36,6 +36,20 @@ pub enum AnyTermName {
 
     Ordinal(OrdinalTerm),
 }
+
+impl EnumGetAttribute for MonthTerm {}
+impl EnumGetAttribute for LocatorType {}
+impl EnumGetAttribute for MiscTerm {}
+impl EnumGetAttribute for Category {}
+impl EnumGetAttribute for SeasonTerm {}
+impl EnumGetAttribute for QuoteTerm {}
+impl EnumGetAttribute for RoleTerm {}
+impl EnumGetAttribute for OrdinalTerm {}
+impl EnumGetAttribute for OrdinalMatch {}
+impl EnumGetAttribute for Gender {}
+impl EnumGetAttribute for TermForm {}
+impl EnumGetAttribute for TermFormExtended {}
+impl EnumGetAttribute for TermPlurality {}
 
 impl GetAttribute for AnyTermName {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {

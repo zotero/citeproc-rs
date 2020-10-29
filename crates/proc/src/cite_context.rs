@@ -8,12 +8,13 @@ use crate::prelude::*;
 
 use super::DisambPass;
 use crate::choose::CondChecker;
+use crate::SmartString;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::Features;
 use csl::Locale;
 use csl::*;
-use csl::{CslType, Delimiter, Name as NameEl, Position, SortKey, Style, VariableForm};
+use csl::{CslType, Name as NameEl, Position, SortKey, Style, VariableForm};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -29,7 +30,7 @@ pub struct CiteContext<
     pub style: &'c Style,
     pub locale: &'c Locale,
     pub name_citation: Arc<NameEl>,
-    pub names_delimiter: Option<Delimiter>,
+    pub names_delimiter: Option<SmartString>,
 
     pub position: (Position, Option<u32>),
 

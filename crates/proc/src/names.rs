@@ -358,9 +358,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     let seq = IrSeq {
         formatting: names_inheritance.formatting,
         affixes: names_inheritance.affixes.clone(),
-        delimiter: names_inheritance
-            .delimiter
-            .unwrap_or_else(|| Atom::from("")),
+        delimiter: names_inheritance.delimiter.clone(),
         display: if ctx.in_bibliography {
             names.display
         } else {
@@ -1103,11 +1101,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     NameTokenBuilt::Ratchet(ratchet)
                 }
                 NameToken::Delimiter => {
-                    NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
-                        fmt.plain(&delim.0)
-                    } else {
-                        fmt.plain(", ")
-                    })
+                    NameTokenBuilt::Built(fmt.plain(self.name_el.delimiter.as_ref().map(|ss| ss.as_str()).unwrap_or(", ")))
                 }
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {

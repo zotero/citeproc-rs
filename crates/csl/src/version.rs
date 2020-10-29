@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::attr::EnumGetAttribute;
 use crate::Atom;
 use semver::{Version, VersionReq};
 use strum::EnumProperty;
@@ -55,6 +56,7 @@ pub enum CslVariant {
     #[strum(serialize = "csl-m", serialize = "CSL-M")]
     CslM,
 }
+impl EnumGetAttribute for CslVariant {}
 
 impl Default for CslVariant {
     fn default() -> Self {

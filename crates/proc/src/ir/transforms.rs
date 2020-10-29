@@ -2,7 +2,6 @@ use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
-use csl::Atom;
 use std::mem;
 use std::sync::Arc;
 
@@ -79,10 +78,10 @@ impl<O: OutputFormat> IR<O> {
                     (
                         Some(Affixes {
                             prefix: mine.prefix,
-                            suffix: Atom::from(""),
+                            suffix: "".into(),
                         }),
                         Some(Affixes {
-                            prefix: Atom::from(""),
+                            prefix: "".into(),
                             suffix: mine.suffix,
                         }),
                     )
@@ -457,7 +456,8 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
             .field("cnum", &self.cnum)
             .field(
                 "gen4",
-                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt).map(|x| fmt.output(x, false)),
+                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt, None)
+                    .map(|x| fmt.output(x, false)),
             )
             .field("has_locator", &self.has_locator)
             .field("is_first", &self.is_first)
@@ -509,7 +509,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     for ix in 0..cites.len() {
         let gen4 = &cites[ix].gen4;
         let rendered = IR::first_name_block(gen4.root, &gen4.arena)
-            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt))
+            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt, None))
             .map(|flat| fmt.output(flat, false));
         same_names
             .entry(rendered)
@@ -554,7 +554,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                     let year_and_suf =
                         IR::find_first_year_and_suffix(cites[ix].gen4.root, &cites[ix].gen4.arena)
                             .and_then(|(ys_node, suf)| {
-                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt)?;
+                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt, None)?;
                                 Some((fmt.output(flat, false), suf))
                             });
                     if let Some((y, suf)) = year_and_suf {

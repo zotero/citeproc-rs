@@ -76,10 +76,10 @@ pub trait StyleWalker {
     ) -> Self::Output {
         self.default()
     }
-    fn text_value(&mut self, _text: &TextElement, _value: &Atom) -> Self::Output {
+    fn text_value(&mut self, _text: &TextElement, _value: &SmartString) -> Self::Output {
         self.default()
     }
-    fn text_macro(&mut self, _source: &TextElement, _name: &Atom) -> Self::Output {
+    fn text_macro(&mut self, _source: &TextElement, _name: &SmartString) -> Self::Output {
         self.default()
     }
     fn text_term(

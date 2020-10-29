@@ -4,11 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::error::ExpName;
-use crate::error::{InvalidCsl, NeedVarType, UnknownAttributeValue};
-use crate::version::Features;
-use crate::Atom;
-use crate::ParseInfo;
+use crate::error::{ExpName, InvalidCsl, NeedVarType, UnknownAttributeValue};
+use crate::{Features, ParseInfo, SmartString};
 use roxmltree::Node;
 use std::str::FromStr;
 use strum::EnumProperty;
@@ -20,7 +17,74 @@ where
     fn get_attr(attr_value: &str, features: &Features) -> Result<Self, UnknownAttributeValue>;
 }
 
-impl<T: FromStr + EnumProperty> GetAttribute for T {
+impl<T> GetAttributeExtensions for T where T: GetAttribute {}
+pub(crate) trait GetAttributeExtensions: GetAttribute {
+    fn attribute_option(
+        node: &Node,
+        attr: impl Into<ExpName>,
+        info: &ParseInfo,
+    ) -> Result<Option<Self>, InvalidCsl> {
+        let attr = attr.into();
+        match node.attribute(attr.clone()) {
+            Some(a) => match Self::get_attr(a, &info.features) {
+                Ok(val) => Ok(Some(val)),
+                Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
+            },
+            None => Ok(None),
+        }
+    }
+    fn attribute_default(
+        node: &Node,
+        attr: impl Into<ExpName>,
+        info: &ParseInfo,
+    ) -> Result<Self, InvalidCsl>
+    where
+        Self: Default,
+    {
+        let attr = attr.into();
+        Self::attribute_option(node, attr, info).map(|opt| opt.unwrap_or_else(Default::default))
+    }
+    fn attribute_default_val(
+        node: &Node,
+        attr: &'static str,
+        info: &ParseInfo,
+        default: Self,
+    ) -> Result<Self, InvalidCsl>
+    where
+        Self: Copy,
+    {
+        Self::attribute_option(node, attr, info).map(|opt| opt.unwrap_or(default))
+    }
+    fn attribute_default_with(
+        node: &Node,
+        attr: &'static str,
+        info: &ParseInfo,
+        default: impl FnOnce() -> Self,
+    ) -> Result<Self, InvalidCsl> {
+        Self::attribute_option(node, attr, info).map(|opt| opt.unwrap_or_else(default))
+    }
+}
+
+impl GetAttribute for bool {
+    fn get_attr(attr_value: &str, _features: &Features) -> Result<Self, UnknownAttributeValue> {
+        match attr_value {
+            "true" => Ok(true),
+            "false" => Ok(false),
+            s => Err(UnknownAttributeValue::new(s)),
+        }
+    }
+}
+
+impl GetAttribute for SmartString {
+    fn get_attr(attr_value: &str, _features: &Features) -> Result<Self, UnknownAttributeValue> {
+        Ok(attr_value.into())
+    }
+}
+
+#[doc(hidden)]
+pub trait EnumGetAttribute: FromStr + EnumProperty {}
+
+impl<T: EnumGetAttribute> GetAttribute for T {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
         match T::from_str(s) {
             Ok(a) => features
@@ -28,31 +92,6 @@ impl<T: FromStr + EnumProperty> GetAttribute for T {
                 .ok_or_else(|| UnknownAttributeValue::new(s)),
             Err(_) => Err(UnknownAttributeValue::new(s)),
         }
-    }
-}
-
-pub(crate) fn attribute_bool(
-    node: &Node,
-    attr: &'static str,
-    default: bool,
-) -> Result<bool, InvalidCsl> {
-    match node.attribute(attr) {
-        Some("true") => Ok(true),
-        Some("false") => Ok(false),
-        None => Ok(default),
-        Some(s) => Err(InvalidCsl::attr_val(node, attr, s)),
-    }
-}
-
-pub(crate) fn attribute_option_bool(
-    node: &Node,
-    attr: &'static str,
-) -> Result<Option<bool>, InvalidCsl> {
-    match node.attribute(attr) {
-        Some("true") => Ok(Some(true)),
-        Some("false") => Ok(Some(false)),
-        None => Ok(None),
-        Some(s) => Err(InvalidCsl::attr_val(node, attr, s)),
     }
 }
 
@@ -89,20 +128,6 @@ pub(crate) fn attribute_string(node: &Node, attr: &'static str) -> String {
     node.attribute(attr)
         .map(String::from)
         .unwrap_or_else(|| String::from(""))
-}
-
-pub(crate) fn attribute_atom(node: &Node, attr: &'static str) -> Atom {
-    node.attribute(attr)
-        .map(Atom::from)
-        .unwrap_or_else(|| Atom::from(""))
-}
-
-pub(crate) fn attribute_atom_default(node: &Node, attr: &'static str, default: Atom) -> Atom {
-    node.attribute(attr).map(Atom::from).unwrap_or(default)
-}
-
-pub(crate) fn attribute_option_atom(node: &Node, attr: &'static str) -> Option<Atom> {
-    node.attribute(attr).map(Atom::from)
 }
 
 pub(crate) fn attribute_required<T: GetAttribute>(
@@ -146,19 +171,13 @@ pub(crate) fn attribute_var_type<T: GetAttribute>(
     }
 }
 
+#[inline]
 pub(crate) fn attribute_option<T: GetAttribute>(
     node: &Node,
     attr: impl Into<ExpName>,
     info: &ParseInfo,
 ) -> Result<Option<T>, InvalidCsl> {
-    let attr = attr.into();
-    match node.attribute(attr.clone()) {
-        Some(a) => match T::get_attr(a, &info.features) {
-            Ok(val) => Ok(Some(val)),
-            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
-        },
-        None => Ok(None),
-    }
+    T::attribute_option(node, attr, info)
 }
 
 pub(crate) fn attribute_optional<T: Default + GetAttribute>(
@@ -166,14 +185,7 @@ pub(crate) fn attribute_optional<T: Default + GetAttribute>(
     attr: impl Into<ExpName>,
     info: &ParseInfo,
 ) -> Result<T, InvalidCsl> {
-    let attr = attr.into();
-    match node.attribute(attr) {
-        Some(a) => match T::get_attr(a, &info.features) {
-            Ok(val) => Ok(val),
-            Err(e) => Err(InvalidCsl::attr_val(node, attr, &e.value)),
-        },
-        None => Ok(T::default()),
-    }
+    T::attribute_default(node, attr, info)
 }
 
 pub(crate) fn attribute_array_var<T: GetAttribute>(

@@ -23,7 +23,8 @@ use indextree::NodeId;
 
 pub trait ImplementationDetails {
     fn get_formatter(&self) -> Markup;
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString>;
+    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol)
+        -> Option<SmartString>;
 }
 
 #[allow(dead_code)]
@@ -36,7 +37,9 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 // }
 
 #[salsa::query_group(IrDatabaseStorage)]
-pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails {
+pub trait IrDatabase:
+    CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails
+{
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
     fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
@@ -153,11 +156,10 @@ fn ref_dfa(db: &dyn IrDatabase, key: Atom) -> Option<Arc<Dfa>> {
 }
 
 fn all_ref_dfas(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<Dfa>>> {
-    let map = db.disamb_participants()
+    let map = db
+        .disamb_participants()
         .iter()
-        .filter_map(|key| {
-            db.ref_dfa(key.clone()).map(|v| (key.clone(), v))
-        })
+        .filter_map(|key| db.ref_dfa(key.clone()).map(|v| (key.clone(), v)))
         .collect();
     Arc::new(map)
 }
@@ -368,8 +370,8 @@ macro_rules! preamble {
         let cite_data = $id.lookup($db);
         // Avoid making bibliography ghosts all depend any positional / note num info
         let cite_stuff = match $db.lookup_cite($id) {
-                CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
-                CiteData::BibliographyGhost { cite, .. } => (cite, (Position::First, None)),
+            CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
+            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::First, None)),
         };
         $cite = cite_stuff.0;
         let position = cite_stuff.1;
@@ -399,33 +401,38 @@ macro_rules! preamble {
 }
 
 macro_rules! cfg_par_iter {
-    ($expr:expr) => {
+    ($expr:expr) => {{
+        #[cfg(feature = "rayon")]
         {
-            #[cfg(feature = "rayon")] {
-                use rayon::prelude::*;
-                ($expr).par_iter()
-            }
-            #[cfg(not(feature = "rayon"))] {
-                ($expr).iter()
-            }
+            use rayon::prelude::*;
+            ($expr).par_iter()
         }
-    };
+        #[cfg(not(feature = "rayon"))]
+        {
+            ($expr).iter()
+        }
+    }};
 }
 
 macro_rules! cfg_rayon {
-    ($rayon:expr, $not:expr) => {
+    ($rayon:expr, $not:expr) => {{
+        #[cfg(feature = "rayon")]
         {
-            #[cfg(feature = "rayon")] {
-                $rayon
-            }
-            #[cfg(not(feature = "rayon"))] {
-                $not
-            }
+            $rayon
         }
-    };
+        #[cfg(not(feature = "rayon"))]
+        {
+            $not
+        }
+    }};
 }
 
-fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, self_id: &Atom) -> bool {
+fn is_unambiguous(
+    db: &dyn IrDatabase,
+    root: NodeId,
+    arena: &IrArena<Markup>,
+    self_id: &Atom,
+) -> bool {
     struct OtherRef;
 
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
@@ -443,21 +450,17 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
     let mut iter = cfg_par_iter!(ref_dfas);
 
     // THe bool -> true means matched self
-    let res = iter
-        .try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
-            let accepts = dfa.accepts_data(&edges);
-            if accepts && k == self_id {
-                Ok(true)
-            } else if accepts {
-                Err(OtherRef)
-            } else {
-                Ok(false || accumulate)
-            }
-        });
-    let res = cfg_rayon!(
-        res.try_reduce(|| false, |a, b| Ok(a || b)),
-        res
-    );
+    let res = iter.try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
+        let accepts = dfa.accepts_data(&edges);
+        if accepts && k == self_id {
+            Ok(true)
+        } else if accepts {
+            Err(OtherRef)
+        } else {
+            Ok(false || accumulate)
+        }
+    });
+    let res = cfg_rayon!(res.try_reduce(|| false, |a, b| Ok(a || b)), res);
     res.is_ok()
 }
 
@@ -489,7 +492,8 @@ fn refs_accepting_cite(
 
     let iter = participants.iter();
 
-    let ret: Vec<Atom> = iter.filter_map(|k| {
+    let ret: Vec<Atom> = iter
+        .filter_map(|k| {
             let acc = db.edge_stream_matches_ref(edges.clone(), k.clone());
             if log_enabled!(log::Level::Trace) && k != ref_id && acc {
                 trace!(
@@ -674,10 +678,7 @@ fn disambiguate_add_names(
         let total_ambiguity_number = |arena: &IrArena<Markup>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
             let edges = IR::to_edge_stream(root, arena, fmt);
-            let count = dfas
-                .iter()
-                .filter(|dfa| dfa.accepts_data(&edges))
-                .count() as u16;
+            let count = dfas.iter().filter(|dfa| dfa.accepts_data(&edges)).count() as u16;
             if count == 0 {
                 warn!("should not get to zero matching refs");
             }
@@ -1235,7 +1236,7 @@ pub fn built_cluster_before_output(
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
-        let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt) {
+        let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt, None) {
             Some(x) => x,
             None => fmt.plain("[CSL STYLE ERROR: reference with no printed form.]"),
         };
@@ -1263,8 +1264,8 @@ pub fn built_cluster_before_output(
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
         let aff = Affixes {
-            prefix: Atom::from(pre),
-            suffix: Atom::from(suf),
+            prefix: pre.into(),
+            suffix: suf.into(),
         };
         Some(fmt.affixed(flattened, Some(&aff)))
     };
@@ -1272,22 +1273,21 @@ pub fn built_cluster_before_output(
     let cgroup_delim = style
         .citation
         .cite_group_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
+        .as_opt_str()
         .unwrap_or(", ");
     let ysuf_delim = style
         .citation
         .year_suffix_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
-        .unwrap_or(style.citation.layout.delimiter.0.as_ref());
+        .as_opt_str()
+        .or(style.citation.layout.delimiter.as_opt_str())
+        .unwrap_or("");
     let acol_delim = style
         .citation
         .after_collapse_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
-        .unwrap_or(style.citation.layout.delimiter.0.as_ref());
-    let layout_delim = style.citation.layout.delimiter.0.as_ref();
+        .as_opt_str()
+        .or(style.citation.layout.delimiter.as_opt_str())
+        .unwrap_or("");
+    let layout_delim = style.citation.layout.delimiter.as_ref();
 
     // returned usize is advance len
     let render_range =
@@ -1353,7 +1353,11 @@ pub fn built_cluster_before_output(
             continue;
         }
         if !collapsed_ranges.is_empty() {
-            let (built, advance_to) = render_range(collapsed_ranges, layout_delim, acol_delim);
+            let (built, advance_to) = render_range(
+                collapsed_ranges,
+                layout_delim.as_opt_str().unwrap_or(""),
+                acol_delim,
+            );
             built_cites.push(built);
             if !suppress_delimiter(&irs, ix) {
                 built_cites.push(fmt.plain(acol_delim));
@@ -1407,7 +1411,7 @@ pub fn built_cluster_before_output(
             if let Some(built) = build_cite(&irs, ix) {
                 built_cites.push(built);
                 if !suppress_delimiter(&irs, ix) {
-                    built_cites.push(fmt.plain(layout_delim));
+                    built_cites.push(fmt.plain(layout_delim.as_opt_str().unwrap_or("")));
                 } else {
                     built_cites.push(fmt.plain(""));
                 }
@@ -1544,7 +1548,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
-        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
+        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
         // in a bibliography, we do the affixes etc inside Layout, so they're not here
         let string = fmt.output(flat, get_piq(db));
         Arc::new(string)
@@ -1592,7 +1596,8 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     IR::recompute_group_vars(mutated.root, &mut mutated.arena);
                 }
             }
-            let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
+            let flat =
+                IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
             let string = fmt.output(flat, get_piq(db));
             if !string.is_empty() {
                 m.insert(key.clone(), Arc::new(string));
@@ -1681,9 +1686,9 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                                 .iter()
                                 .filter_map(|&cluster_id| db.cluster_cites_sorted(cluster_id))
                                 .all(|cites| {
-                                    cites.iter().all(|cite_id| {
-                                        cite_id.lookup(db).ref_id == cite.ref_id
-                                    })
+                                    cites
+                                        .iter()
+                                        .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
                                 })
                         } else {
                             prev_cluster

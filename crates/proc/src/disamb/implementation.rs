@@ -19,18 +19,7 @@ impl Disambiguation<Markup> for Style {
         stack: Formatting,
     ) -> (RefIR, GroupVars) {
         let els = &self.citation.layout.elements;
-        ref_sequence(
-            db,
-            state,
-            ctx,
-            &els,
-            "".into(),
-            Some(stack),
-            None,
-            None,
-            None,
-            TextCase::None,
-        )
+        ref_sequence(db, state, ctx, els, true, Some(stack), None)
     }
 }
 
@@ -50,12 +39,13 @@ impl Disambiguation<Markup> for Group {
             state,
             ctx,
             &els,
-            self.delimiter.0.clone(),
+            true,
             stack,
-            self.affixes.as_ref(),
-            self.display,
-            None,
-            TextCase::None,
+            Some(&|| RefIrSeq {
+                delimiter: self.delimiter.clone(),
+                affixes: self.affixes.clone(),
+                ..Default::default()
+            }),
         );
         group_vars.implicit_conditional(seq)
     }
@@ -159,9 +149,9 @@ impl Disambiguation<Markup> for Element {
                                     contents,
                                     affixes: text.affixes.clone(),
                                     formatting: text.formatting,
-                                    delimiter: Atom::from(""),
                                     text_case: text.text_case,
                                     quotes: renderer.quotes_if(text.quotes),
+                                    ..Default::default()
                                 };
                                 (RefIR::Seq(seq), GroupVars::Important)
                             })
@@ -220,12 +210,14 @@ impl Disambiguation<Markup> for Element {
                         state,
                         ctx,
                         &macro_elements,
-                        "".into(),
-                        text.formatting,
-                        text.affixes.as_ref(),
-                        text.display,
-                        renderer.quotes_if(text.quotes),
-                        text.text_case,
+                        true,
+                        None,
+                        Some(&|| RefIrSeq {
+                            affixes: text.affixes.clone(),
+                            quotes: renderer.quotes_if(text.quotes),
+                            text_case: text.text_case,
+                            ..Default::default()
+                        }),
                     );
                     state.pop_macro(name);
                     group_vars.implicit_conditional(seq)

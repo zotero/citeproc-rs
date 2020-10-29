@@ -13,8 +13,6 @@ extern crate log;
 extern crate citeproc_db;
 
 use citeproc_io::output::OutputFormat;
-use csl::Atom;
-
 use std::collections::HashSet;
 
 macro_rules! smart_format {
@@ -50,6 +48,19 @@ mod walker;
 pub use crate::db::built_cluster_before_output;
 
 pub(crate) mod prelude {
+    pub(crate) trait AsRefOptStr {
+        fn as_opt_str(&self) -> Option<&str>;
+    }
+    impl AsRefOptStr for Option<SmartString> {
+        fn as_opt_str(&self) -> Option<&str> {
+            self.as_ref().map(|x| x.as_str())
+        }
+    }
+    impl<'a> AsRefOptStr for Option<&'a SmartString> {
+        fn as_opt_str(&self) -> Option<&str> {
+            self.as_ref().map(|x| x.as_str())
+        }
+    }
     pub use crate::ir::IrSum;
     pub type IrArena<O = Markup> = indextree::Arena<IrSum<O>>;
     pub use indextree::{Node, NodeId};
@@ -66,7 +77,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
-    pub use citeproc_io::{SmartString, SmartCow};
+    pub use citeproc_io::{SmartCow, SmartString};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 
@@ -111,7 +122,7 @@ where
     ) -> NodeId;
 }
 
-use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
+use csl::{Affixes, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
 use csl::{AnyVariable, DateVariable, NameAsSortOrder, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -128,7 +139,7 @@ pub struct NamesInheritance {
     // So if you supply <name/> at all, you start from context.
     did_supply_name: DidSupplyName,
     pub label: Option<NameLabelInput>,
-    pub delimiter: Option<Atom>,
+    pub delimiter: Option<SmartString>,
     pub et_al: Option<NameEtAl>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
@@ -142,7 +153,7 @@ pub struct NamesInheritance {
 use csl::SortKey;
 
 impl NamesInheritance {
-    fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<Delimiter>, other: Self) -> Self {
+    fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<SmartString>, other: Self) -> Self {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
             // So if you supply <name/> at all, you start from context.
@@ -158,13 +169,13 @@ impl NamesInheritance {
             delimiter: other
                 .delimiter
                 .or_else(|| self.delimiter.clone())
-                .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
+                .or_else(|| ctx_delim.as_ref().map(|x| x.clone())),
             formatting: other.formatting.or(self.formatting),
             display: other.display.or(self.display),
             affixes: other.affixes.or_else(|| self.affixes.clone()),
         }
     }
-    fn from_names(ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
+    fn from_names(ctx_name: &Name, ctx_delim: &Option<SmartString>, names: &Names) -> Self {
         NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
             did_supply_name: if names.name.is_some() {
@@ -175,9 +186,9 @@ impl NamesInheritance {
             label: names.label.clone(),
             delimiter: names
                 .delimiter
-                .as_ref()
-                .map(|x| x.0.clone())
-                .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
+                .as_opt_str()
+                .or(ctx_delim.as_opt_str())
+                .map(Into::into),
             et_al: names.et_al.clone(),
             formatting: names.formatting,
             display: names.display,
@@ -214,7 +225,7 @@ pub struct IrState {
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.
-    macro_stack: HashSet<Atom>,
+    macro_stack: HashSet<SmartString>,
     pub name_override: NameOverrider,
     suppressed: FnvHashSet<AnyVariable>,
     pub disamb_count: u32,
@@ -230,7 +241,7 @@ impl NameOverrider {
     pub fn inherited_names_options(
         &self,
         ctx_name: &Name,
-        ctx_delim: &Option<Delimiter>,
+        ctx_delim: &Option<SmartString>,
         own_names: &Names,
     ) -> NamesInheritance {
         let over = NamesInheritance::from_names(ctx_name, ctx_delim, own_names);
@@ -243,7 +254,7 @@ impl NameOverrider {
     pub fn inherited_names_options_sort_key(
         &self,
         ctx_name: &Name,
-        ctx_delim: &Option<Delimiter>,
+        ctx_delim: &Option<SmartString>,
         sort_key: &SortKey,
     ) -> NamesInheritance {
         let over = NamesInheritance::from_sort_key(sort_key);
@@ -335,7 +346,7 @@ impl IrState {
         IrState::default()
     }
 
-    pub fn push_macro(&mut self, macro_name: &Atom) {
+    pub fn push_macro(&mut self, macro_name: &SmartString) {
         if self.macro_stack.contains(macro_name) {
             panic!(
                 "foiled macro recursion: {} called from within itself; exiting",
@@ -345,7 +356,7 @@ impl IrState {
         self.macro_stack.insert(macro_name.clone());
     }
 
-    pub fn pop_macro(&mut self, macro_name: &Atom) {
+    pub fn pop_macro(&mut self, macro_name: &SmartString) {
         self.macro_stack.remove(macro_name);
     }
 }

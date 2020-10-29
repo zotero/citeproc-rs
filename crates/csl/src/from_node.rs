@@ -6,9 +6,9 @@
 
 use crate::error::{ChildGetterError, ChildGetterResult, CslError, InvalidCsl};
 use crate::version::Features;
-use crate::{Atom, Element};
-use roxmltree::{Attribute, Node};
+use crate::SmartString;
 use fnv::FnvHashSet;
+use roxmltree::{Attribute, Node};
 
 #[cfg(test)]
 pub(crate) fn parse_as<T>(s: &str) -> FromNodeResult<T>
@@ -30,7 +30,7 @@ pub struct ParseOptions {
 pub(crate) struct ParseInfo {
     pub(crate) features: Features,
     pub(crate) options: ParseOptions,
-    pub(crate) macros: Option<FnvHashSet<Atom>>,
+    pub(crate) macros: Option<FnvHashSet<SmartString>>,
 }
 
 pub(crate) type FromNodeResult<T> = Result<T, CslError>;

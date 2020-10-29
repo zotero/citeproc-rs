@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::attr::GetAttribute;
+use super::attr::{EnumGetAttribute, GetAttribute};
 use super::error::*;
 use super::version::Features;
 use super::IsIndependent;
@@ -17,6 +17,11 @@ pub enum AnyVariable {
     Date(DateVariable),
     Number(NumberVariable),
 }
+
+impl EnumGetAttribute for Variable {}
+impl EnumGetAttribute for NameVariable {}
+impl EnumGetAttribute for NumberVariable {}
+impl EnumGetAttribute for DateVariable {}
 
 impl GetAttribute for AnyVariable {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {

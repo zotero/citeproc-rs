@@ -47,7 +47,9 @@ pub enum StyleError {
         #[cfg_attr(feature = "serde", serde(serialize_with = "rox_error_serialize"))]
         roxmltree::Error,
     ),
-    #[error("incorrectly supplied a dependent style, which refers to a parent {required_parent:?}")]
+    #[error(
+        "incorrectly supplied a dependent style, which refers to a parent {required_parent:?}"
+    )]
     DependentStyle { required_parent: String },
 }
 

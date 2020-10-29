@@ -6,10 +6,10 @@
 
 use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
-use crate::style::{DateForm, DatePart, Delimiter, Formatting, TextCase};
+use crate::style::{DateForm, DatePart, Formatting, TextCase};
 use crate::terms::*;
 use crate::variables::NumberVariable;
-use crate::{AttrChecker, FromNode, FromNodeResult, ParseInfo};
+use crate::{AttrChecker, FromNode, FromNodeResult, ParseInfo, SmartString};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
 use std::str::FromStr;
@@ -178,7 +178,7 @@ impl FromNode for Locale {
 pub struct LocaleDate {
     pub form: DateForm,
     pub date_parts: Vec<DatePart>,
-    pub delimiter: Delimiter,
+    pub delimiter: Option<SmartString>,
     pub text_case: TextCase,
     pub formatting: Option<Formatting>,
 }
@@ -194,7 +194,7 @@ impl FromNode for LocaleDate {
             form: attribute_required(node, "form", info)?,
             date_parts: elements,
             formatting: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
             text_case: TextCase::from_node(node, info)?,
         })
     }
@@ -262,13 +262,14 @@ impl FromNode for TermEl {
 }
 
 impl FromNode for LocaleOptionsNode {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(LocaleOptionsNode {
-            limit_day_ordinals_to_day_1: attribute_option_bool(
+            limit_day_ordinals_to_day_1: attribute_option(
                 node,
                 "limit-day-ordinals-to-day-1",
+                info,
             )?,
-            punctuation_in_quote: attribute_option_bool(node, "punctuation-in-quote")?,
+            punctuation_in_quote: attribute_option(node, "punctuation-in-quote", info)?,
         })
     }
 }

@@ -68,9 +68,10 @@ pub struct RefIrSeq {
     pub contents: Vec<RefIR>,
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
-    pub delimiter: Atom,
+    pub delimiter: Option<SmartString>,
     pub quotes: Option<LocalizedQuotes>,
     pub text_case: TextCase,
+    pub should_inherit_delim: bool,
 }
 
 impl RefIR {

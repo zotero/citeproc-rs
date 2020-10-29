@@ -9,7 +9,6 @@ use crate::prelude::*;
 use crate::number::render_ordinal;
 use citeproc_io::{Date, DateOrRange};
 use csl::terms::*;
-use csl::Atom;
 use csl::LocaleDate;
 #[cfg(test)]
 use csl::RangeDelimiter;
@@ -84,7 +83,10 @@ where
                     RefIR::Edge((scope.to_edge)(opt_build.as_ref(), scope.stack)),
                     GroupVars::Important,
                 ),
-                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge.clone())), GroupVars::Important),
+                IR::YearSuffix(_ys) => (
+                    RefIR::Edge(Some(scope.ys_edge.clone())),
+                    GroupVars::Important,
+                ),
                 IR::Seq(ir_seq) => {
                     let contents: Vec<RefIR> = node
                         .children(scope.arena)
@@ -96,8 +98,8 @@ where
                         formatting: ir_seq.formatting,
                         affixes: ir_seq.affixes.clone(),
                         delimiter: ir_seq.delimiter.clone(),
-                        quotes: None,
                         text_case: ir_seq.text_case,
+                        ..Default::default()
                     };
                     (RefIR::Seq(ref_seq), gv)
                 }
@@ -197,12 +199,7 @@ impl Disambiguation<Markup> for BodyDate {
             ),
         };
         if var == DateVariable::Accessed {
-            either.map(|_| {
-                (
-                    RefIR::Edge(Some(EdgeData::Accessed)),
-                    GroupVars::Important,
-                )
-            })
+            either.map(|_| (RefIR::Edge(Some(EdgeData::Accessed)), GroupVars::Important))
         } else {
             either.map(|e| e.into_ref_ir(db, ctx, &mut arena, stack))
         }
@@ -214,7 +211,7 @@ impl Disambiguation<Markup> for BodyDate {
 struct GenericDateBits<'a> {
     overall_formatting: Option<Formatting>,
     overall_affixes: Option<Affixes>,
-    overall_delimiter: Atom,
+    overall_delimiter: SmartString,
     overall_text_case: TextCase,
     display: Option<DisplayMode>,
     sorting: bool,
@@ -325,7 +322,7 @@ impl<'a, O: OutputFormat> PartBuilder<'a, O> {
 impl<'a> GenericDateBits<'a> {
     fn sorting(locale: &'a Locale) -> Self {
         GenericDateBits {
-            overall_delimiter: Atom::from(""),
+            overall_delimiter: "".into(),
             overall_formatting: None,
             overall_affixes: Some(crate::sort::natural_sort::date_affixes()),
             overall_text_case: TextCase::None,
@@ -352,7 +349,10 @@ where
         GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
-            overall_delimiter: locale_date.delimiter.0.clone(),
+            overall_delimiter: locale_date
+                .delimiter
+                .clone()
+                .unwrap_or_else(Default::default),
             overall_formatting: local.formatting,
             overall_affixes: local.affixes.clone(),
             overall_text_case: local.text_case,
@@ -410,7 +410,7 @@ where
         GenericDateBits::sorting(locale)
     } else {
         GenericDateBits {
-            overall_delimiter: indep.delimiter.0.clone(),
+            overall_delimiter: indep.delimiter.clone().unwrap_or_else(Default::default),
             overall_formatting: indep.formatting,
             overall_affixes: indep.affixes.clone(),
             overall_text_case: indep.text_case,
@@ -432,14 +432,7 @@ where
         parts.sort_by_key(|part| part.form);
         parts_slice = parts.as_slice();
     }
-    build_parts(
-        &ctx,
-        arena,
-        indep.variable,
-        gen_date,
-        parts_slice,
-        None,
-    )
+    build_parts(&ctx, arena, indep.variable, gen_date, parts_slice, None)
 }
 
 fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
@@ -672,17 +665,17 @@ fn test_range_dp_sequence() {
     let parts = vec![
         DatePart {
             form: DatePartForm::Day(DayForm::Numeric),
-            range_delimiter: Some(RangeDelimiter(Atom::from(".."))),
+            range_delimiter: Some(RangeDelimiter("..".into())),
             ..Default::default()
         },
         DatePart {
             form: DatePartForm::Month(MonthForm::Numeric, false),
-            range_delimiter: Some(RangeDelimiter(Atom::from("-"))),
+            range_delimiter: Some(RangeDelimiter("-".into())),
             ..Default::default()
         },
         DatePart {
             form: DatePartForm::Year(YearForm::Long),
-            range_delimiter: Some(RangeDelimiter(Atom::from(" to "))),
+            range_delimiter: Some(RangeDelimiter(" to ".into())),
             ..Default::default()
         },
     ];
@@ -749,7 +742,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
             let mut affixes = part.affixes.clone();
             if is_max_diff {
                 if let Some(ref mut aff) = affixes {
-                    aff.suffix = Atom::from("");
+                    aff.suffix = "".into();
                 }
             }
             if let DatePartForm::Year(_) = part.form {
@@ -804,9 +797,7 @@ fn dp_render_sort_string(
     is_filtered: bool,
 ) -> Option<SmartString> {
     match part.form {
-        DatePartForm::Year(_) => {
-            Some(smart_format!("{:04}_", date.year))
-        }
+        DatePartForm::Year(_) => Some(smart_format!("{:04}_", date.year)),
         DatePartForm::Month(..) => {
             if is_filtered {
                 return None;

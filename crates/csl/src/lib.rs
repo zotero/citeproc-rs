@@ -6,7 +6,7 @@
 
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
-// pub use smartstring::alias::String as Atom;
+pub use smartstring::alias::String as SmartString;
 pub use string_cache::DefaultAtom as Atom;
 
 #[macro_use]
@@ -92,12 +92,12 @@ pub mod version;
 mod test;
 
 pub use self::error::*;
+pub use self::from_node::ParseOptions;
 pub use self::locale::*;
 pub use self::style::{dependent::*, info::*, *};
 pub use self::terms::*;
 pub use self::variables::*;
 pub use self::version::*;
-pub use self::from_node::ParseOptions;
 
 use self::attr::*;
 use fnv::FnvHashMap;
@@ -147,7 +147,10 @@ impl Style {
         let info = info.map_err(|_| StyleError::Invalid(CslError(Vec::new())))?;
 
         if let Some(parent_id) = info.independent_parent_id() {
-            return Err(StyleError::DependentStyle { required_parent: parent_id }.into())
+            return Err(StyleError::DependentStyle {
+                required_parent: parent_id,
+            }
+            .into());
         }
 
         let style = Style::from_node_custom(node, &parse_info, info)?;
@@ -205,21 +208,22 @@ impl AttrChecker for Formatting {
 }
 
 impl FromNode for Affixes {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(Affixes {
-            prefix: attribute_atom(node, "prefix"),
-            suffix: attribute_atom(node, "suffix"),
+            prefix: SmartString::attribute_default(node, "prefix", info)?,
+            suffix: SmartString::attribute_default(node, "suffix", info)?,
         })
     }
 }
 
 impl FromNode for RangeDelimiter {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(RangeDelimiter(attribute_atom_default(
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(RangeDelimiter(SmartString::attribute_default_with(
             node,
             "range-delimiter",
-            "\u{2013}".into(),
-        )))
+            info,
+            || "\u{2013}".into(),
+        )?))
     }
 }
 
@@ -232,12 +236,6 @@ impl AttrChecker for RangeDelimiter {
 impl AttrChecker for Affixes {
     fn filter_attribute(attr: &str) -> bool {
         attr == "prefix" || attr == "suffix"
-    }
-}
-
-impl FromNode for Delimiter {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(Delimiter(attribute_atom(node, "delimiter")))
     }
 }
 
@@ -282,28 +280,36 @@ impl FromNode for Citation {
             Some(Sort::from_node(&sorts[0], info)?)
         };
         Ok(Citation {
-            disambiguate_add_names: attribute_bool(node, "disambiguate-add-names", false)?,
-            disambiguate_add_givenname: attribute_bool(node, "disambiguate-add-givenname", false)?,
+            disambiguate_add_names: bool::attribute_default_val(
+                node,
+                "disambiguate-add-names",
+                info,
+                false,
+            )?,
+            disambiguate_add_givenname: bool::attribute_default_val(
+                node,
+                "disambiguate-add-givenname",
+                info,
+                false,
+            )?,
             givenname_disambiguation_rule: attribute_optional(
                 node,
                 "givenname-disambiguation-rule",
                 info,
             )?,
-            disambiguate_add_year_suffix: attribute_bool(
+            disambiguate_add_year_suffix: bool::attribute_default_val(
                 node,
                 "disambiguate-add-year-suffix",
+                info,
                 false,
             )?,
             layout: Layout::from_node(&layout_node, info)?,
             name_inheritance: Name::from_node(&node, info)?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            names_delimiter: attribute_option(node, "names-delimiter", info)?,
             near_note_distance: attribute_option_int(node, "near-note-distance")?.unwrap_or(5),
-            cite_group_delimiter: attribute_option_atom(node, "cite-group-delimiter"),
-            year_suffix_delimiter: attribute_option_atom(node, "year-suffix-delimiter"),
-            after_collapse_delimiter: attribute_option_atom(node, "after-collapse-delimiter"),
+            cite_group_delimiter: attribute_option(node, "cite-group-delimiter", info)?,
+            year_suffix_delimiter: attribute_option(node, "year-suffix-delimiter", info)?,
+            after_collapse_delimiter: attribute_option(node, "after-collapse-delimiter", info)?,
             collapse: attribute_option(node, "collapse", info)?,
             sort,
         })
@@ -328,7 +334,7 @@ impl FromNode for SortKey {
             sort_source: SortSource::from_node(node, info)?,
             names_min: attribute_option_int(node, "names-min")?,
             names_use_first: attribute_option_int(node, "names-use-first")?,
-            names_use_last: attribute_option_bool(node, "names-use-last")?,
+            names_use_last: attribute_option(node, "names-use-last", info)?,
             direction: attribute_option(node, "sort", info)?,
         })
     }
@@ -341,9 +347,11 @@ impl FromNode for SortSource {
         let err = "<key> must have either a `macro` or `variable` attribute";
         match (macro_, variable) {
             (Some(mac), None) => {
-                let mac: Atom = mac.into();
+                let mac: SmartString = mac.into();
                 if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
-                    return Err(InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into());
+                    return Err(
+                        InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into(),
+                    );
                 }
                 Ok(SortSource::Macro(mac))
             }
@@ -394,24 +402,22 @@ impl FromNode for Bibliography {
         Ok(Bibliography {
             sort,
             layout: Layout::from_node(&layout_node, info)?,
-            hanging_indent: attribute_bool(node, "hanging-indent", false)?,
+            hanging_indent: bool::attribute_default_val(node, "hanging-indent", info, false)?,
             second_field_align: attribute_option(node, "second-field-align", info)?,
             line_spaces,
             entry_spacing,
             name_inheritance: Name::from_node(&node, info)?,
-            subsequent_author_substitute: attribute_option_atom(
+            subsequent_author_substitute: attribute_option(
                 node,
                 "subsequent-author-substitute",
-            ),
+                info,
+            )?,
             subsequent_author_substitute_rule: attribute_optional(
                 node,
                 "subsequent-author-substitute-rule",
                 info,
             )?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            names_delimiter: attribute_option(node, "names-delimiter", info)?,
         })
     }
 }
@@ -426,7 +432,7 @@ impl FromNode for Layout {
         Ok(Layout {
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
             locale: attribute_array(node, "locale", info)?,
             elements,
         })
@@ -527,7 +533,7 @@ impl FromNode for LabelElement {
             form: attribute_optional(node, "form", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            strip_periods: bool::attribute_default_val(node, "strip-periods", info, false)?,
             text_case: TextCase::from_node(node, info)?,
             plural: attribute_optional(node, "plural", info)?,
         })
@@ -544,9 +550,11 @@ impl FromNode for TextElement {
 
         let source = match (macro_, value, variable, term) {
             (Some(mac), None, None, None) => {
-                let mac: Atom = mac.into();
+                let mac: SmartString = mac.into();
                 if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
-                    return Err(InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into());
+                    return Err(
+                        InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into(),
+                    );
                 }
                 TextSource::Macro(mac)
             }
@@ -557,15 +565,15 @@ impl FromNode for TextElement {
             ),
             (None, None, None, Some(_tt)) => TextSource::Term(
                 TextTermSelector::from_node(node, info)?,
-                attribute_bool(node, "plural", false)?,
+                bool::attribute_default_val(node, "plural", info, false)?,
             ),
             _ => return Err(InvalidCsl::new(node, invalid).into()),
         };
 
         let formatting = Option::from_node(node, info)?;
         let affixes = Option::from_node(node, info)?;
-        let quotes = attribute_bool(node, "quotes", false)?;
-        let strip_periods = attribute_bool(node, "strip-periods", false)?;
+        let quotes = bool::attribute_default_val(node, "quotes", info, false)?;
+        let strip_periods = bool::attribute_default_val(node, "strip-periods", info, false)?;
         let text_case = TextCase::from_node(node, info)?;
         let display = attribute_option(node, "display", info)?;
 
@@ -604,11 +612,11 @@ impl FromNode for Group {
         Ok(Group {
             elements,
             formatting: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
             affixes: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             // TODO: CSL-M only
-            is_parallel: attribute_bool(node, "is-parallel", false)?,
+            is_parallel: bool::attribute_default_val(node, "is-parallel", info, false)?,
         })
     }
 }
@@ -676,10 +684,10 @@ impl ConditionParser {
         };
         let cond = ConditionParser {
             match_type: Match::from_node(node, info)?,
-            jurisdiction: attribute_option_atom(node, "jurisdiction"),
+            jurisdiction: attribute_option(node, "jurisdiction", info)?,
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
             context: attribute_option(node, "context", info)?,
-            disambiguate: attribute_option_bool(node, "disambiguate")?,
+            disambiguate: bool::attribute_option(node, "disambiguate", info)?,
             variable: attribute_array_var(node, "variable", NeedVarType::Any, info)?,
             position: attribute_array_var(node, "position", NeedVarType::CondPosition, info)?,
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural, info)?,
@@ -928,7 +936,7 @@ impl DatePart {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form", info)?),
             DatePartName::Month => DatePartForm::Month(
                 attribute_optional(node, "form", info)?,
-                attribute_bool(node, "strip-periods", false)?,
+                bool::attribute_default_val(node, "strip-periods", info, false)?,
             ),
             DatePartName::Day => DatePartForm::Day(attribute_optional(node, "form", info)?),
         };
@@ -957,7 +965,7 @@ impl FromNode for IndependentDate {
             affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
         })
     }
 }
@@ -1033,7 +1041,7 @@ impl FromNode for MacroMap {
 }
 
 struct MacroHeader {
-    name: Atom
+    name: SmartString,
 }
 
 impl FromNode for MacroHeader {
@@ -1044,9 +1052,7 @@ impl FromNode for MacroHeader {
                 return Err(InvalidCsl::new(node, "<macro> must have a `name` attribute.").into());
             }
         };
-        Ok(MacroHeader {
-            name: name.into(),
-        })
+        Ok(MacroHeader { name: name.into() })
     }
     fn select_child(node: &Node) -> bool {
         node.has_tag_name("macro")
@@ -1113,7 +1119,7 @@ impl FromNode for Names {
             affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
-            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, "delimiter", info)?,
         })
     }
 }
@@ -1139,10 +1145,10 @@ impl FromNode for Institution {
 
         Ok(Institution {
             and: attribute_option(node, "and", info)?,
-            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, "delimiter", info)?,
             use_first,
             use_last: attribute_option_int(node, "use-last")?,
-            reverse_order: attribute_bool(node, "reverse-order", false)?,
+            reverse_order: bool::attribute_default_val(node, "reverse-order", info, false)?,
             parts_selector: attribute_optional(node, "institution-parts", info)?,
             institution_parts,
         })
@@ -1155,16 +1161,16 @@ impl FromNode for InstitutionPart {
             name: InstitutionPartName::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            strip_periods: bool::attribute_default_val(node, "strip-periods", info, false)?,
         })
     }
 }
 
 impl FromNode for InstitutionPartName {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         match node.attribute("name") {
-            Some("long") => Ok(InstitutionPartName::Long(attribute_bool(
-                node, "if-short", false,
+            Some("long") => Ok(InstitutionPartName::Long(bool::attribute_default_val(
+                node, "if-short", info, false,
             )?)),
             Some("short") => Ok(InstitutionPartName::Short),
             Some(ref val) => Err(InvalidCsl::attr_val(node, "name", val).into()),
@@ -1199,19 +1205,19 @@ impl FromNode for Name {
         }
         Ok(Name {
             and: attribute_option(node, "and", info)?,
-            delimiter: node.attribute(delim_attr).map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, delim_attr, info)?,
             delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al", info)?,
             delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last", info)?,
             et_al_min: attribute_option_int(node, "et-al-min")?,
-            et_al_use_last: attribute_option_bool(node, "et-al-use-last")?,
+            et_al_use_last: bool::attribute_option(node, "et-al-use-last", info)?,
             et_al_use_first: attribute_option_int(node, "et-al-use-first")?,
             et_al_subsequent_min: attribute_option_int(node, "et-al-subsequent-min")?,
             et_al_subsequent_use_first: attribute_option_int(node, "et-al-subsequent-use-first")?,
             form: attribute_option(node, form_attr, info)?,
-            initialize: attribute_option_bool(node, "initialize")?,
-            initialize_with: attribute_option_atom(node, "initialize-with"),
+            initialize: bool::attribute_option(node, "initialize", info)?,
+            initialize_with: attribute_option(node, "initialize-with", info)?,
             name_as_sort_order: attribute_option(node, "name-as-sort-order", info)?,
-            sort_separator: attribute_option_atom(node, "sort-separator"),
+            sort_separator: attribute_option(node, "sort-separator", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
             name_part_given,
@@ -1254,7 +1260,7 @@ impl FromNode for NameLabelInput {
         Ok(NameLabelInput {
             form: attribute_option(node, "form", info)?,
             plural: attribute_option(node, "plural", info)?,
-            strip_periods: attribute_option_bool(node, "strip-periods")?,
+            strip_periods: bool::attribute_option(node, "strip-periods", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
             text_case: Option::from_node(node, info)?,
@@ -1362,7 +1368,7 @@ impl FromNode for CslCslMVersionReq {
                 InvalidCsl::new(
                     node,
                     &"unsupported \"1.1mlz1\"-style version string (use variant=\"csl-m\" version=\"1.x\", for example)".to_string(),
-                )
+                    )
             })?
         } else {
             // TODO: bootstrap attribute_optional with a dummy CslVariant::Csl
@@ -1408,27 +1414,15 @@ impl FromNode for Features {
     const CHILD_DESC: &'static str = "features";
 }
 
-// type MacroDict = HashMap<Atom, Vec<Element>>;
+// type MacroDict = HashMap<SmartString, Vec<Element>>;
 // fn check_recursion(macros: &MacroDict, layout: &Layout, cite_or_bib_node: &Node) -> FromNodeResult<()> {
-//     use std::fmt;
-//     struct DebugAtom(Atom);
-//     impl PartialEq<Atom> for DebugAtom {
-//         fn eq(&self, other: &Atom) -> {
-//             self.0 == *other
-//         }
-//     }
-//     impl fmt::Debug for DebugAtom {
-//         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//             write!(f, "{}", self.0)
-//         }
-//     }
-//     let mut stack: Vec<DebugAtom> = Vec::new();
+//     let mut stack: Vec<SmartString> = Vec::new();
 //     let mut check_element = |macros: &MacroDict, element: &Element| -> bool {
 //         if let Element::Text(TextElement { source: TextSource::Macro(m), .. }) = &element {
 //             if stack.contains(m) {
 //                 Err(InvalidCsl::new(cite_or_bib_node, format!("Macros cannot be mutually recursive {:?}", stack)))
 //             } else {
-//                 stack.push(DebugAtom(m.clone()));
+//                 stack.push(m.clone());
 //                 Ok(())
 //             }
 //         }
@@ -1436,7 +1430,11 @@ impl FromNode for Features {
 // }
 
 impl Style {
-    fn from_node_custom(node: &Node, default_info: &ParseInfo, info_block: Info) -> FromNodeResult<Self> {
+    fn from_node_custom(
+        node: &Node,
+        default_info: &ParseInfo,
+        info_block: Info,
+    ) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
         let mut errors: Vec<InvalidCsl> = Vec::new();
 
@@ -1450,7 +1448,10 @@ impl Style {
         let mut throwaway = Vec::new();
         let macro_headers = many_children::<MacroHeader>(node, default_info, &mut throwaway)
             .unwrap_or_else(|_| Vec::new());
-        let macro_names = macro_headers.into_iter().map(|header| header.name).collect();
+        let macro_names = macro_headers
+            .into_iter()
+            .map(|header| header.name)
+            .collect();
 
         // Create our own info struct, ignoring the one passed in.
         let parse_info = ParseInfo {
@@ -1500,11 +1501,13 @@ impl Style {
                 "demote-non-dropping-particle",
                 &parse_info,
             )?,
-            initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            initialize_with_hyphen: bool::attribute_default_val(
+                node,
+                "initialize-with-hyphen",
+                &parse_info,
+                true,
+            )?,
+            names_delimiter: attribute_option(node, "names-delimiter", &parse_info)?,
         })
     }
 }

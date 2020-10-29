@@ -7,36 +7,6 @@
 use crate::prelude::*;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::output::LocalizedQuotes;
-use csl::Atom;
-use csl::{Affixes, DisplayMode, Element, Formatting};
-
-pub fn sequence_basic<'c, O, I>(
-    db: &dyn IrDatabase,
-    state: &mut IrState,
-    ctx: &CiteContext<'c, O, I>,
-    arena: &mut IrArena<O>,
-    els: &[Element],
-) -> NodeId
-where
-    O: OutputFormat,
-    I: OutputFormat,
-{
-    sequence(
-        db,
-        state,
-        ctx,
-        arena,
-        els,
-        "".into(),
-        None,
-        None,
-        None,
-        None,
-        TextCase::None,
-        false,
-    )
-}
 
 pub fn sequence<'c, O, I>(
     db: &dyn IrDatabase,
@@ -44,14 +14,8 @@ pub fn sequence<'c, O, I>(
     ctx: &CiteContext<'c, O, I>,
     arena: &mut IrArena<O>,
     els: &[Element],
-    delimiter: Atom,
-    formatting: Option<Formatting>,
-    affixes: Option<&Affixes>,
-    display: Option<DisplayMode>,
-    // Only because <text macro="xxx" /> supports quotes.
-    quotes: Option<LocalizedQuotes>,
-    text_case: TextCase,
-    is_group: bool,
+    implicit_conditional: bool,
+    seq_template: Option<&dyn Fn() -> IrSeq>,
 ) -> NodeId
 where
     O: OutputFormat,
@@ -85,18 +49,25 @@ where
     let ir = if self_node.children(arena).next().is_none() {
         IR::Rendered(None)
     } else {
-        IR::Seq(IrSeq {
-            formatting,
-            affixes: affixes.cloned(),
-            delimiter,
-            display: if ctx.in_bibliography { display } else { None },
-            quotes,
-            text_case,
-            dropped_gv: if is_group { Some(dropped_gv) } else { None },
-        })
+        let mut seq = IrSeq {
+            dropped_gv: if implicit_conditional {
+                Some(dropped_gv)
+            } else {
+                None
+            },
+            ..if let Some(tmpl) = seq_template {
+                tmpl()
+            } else {
+                Default::default()
+            }
+        };
+        if !ctx.in_bibliography {
+            seq.display = None;
+        }
+        IR::Seq(seq)
     };
 
-    let (set_ir, set_gv) = if is_group {
+    let (set_ir, set_gv) = if implicit_conditional {
         overall_gv.implicit_conditional(ir)
     } else {
         (ir, overall_gv)
@@ -108,46 +79,23 @@ where
     self_node
 }
 
-pub fn ref_sequence_basic<'c>(
-    db: &dyn IrDatabase,
-    state: &mut IrState,
-    ctx: &RefContext<'c>,
-    els: &[Element],
-    stack: Formatting,
-) -> (RefIR, GroupVars) {
-    ref_sequence(
-        db,
-        state,
-        ctx,
-        els,
-        "".into(),
-        Some(stack),
-        None,
-        None,
-        None,
-        TextCase::None,
-    )
-}
-
 pub fn ref_sequence<'c>(
     db: &dyn IrDatabase,
     state: &mut IrState,
     ctx: &RefContext<'c, Markup>,
     els: &[Element],
-    delimiter: Atom,
+    implicit_conditional: bool,
     formatting: Option<Formatting>,
-    affixes: Option<&Affixes>,
-    _display: Option<DisplayMode>,
-    quotes: Option<LocalizedQuotes>,
-    text_case: TextCase,
+    seq_template: Option<&dyn Fn() -> RefIrSeq>,
 ) -> (RefIR, GroupVars) {
     let _fmt = &ctx.format;
 
     let mut contents = Vec::with_capacity(els.len());
     let mut overall_gv = GroupVars::new();
+    let fmting = formatting.unwrap_or_default();
 
     for el in els {
-        let (got_ir, gv) = el.ref_ir(db, ctx, state, formatting.unwrap_or_default());
+        let (got_ir, gv) = el.ref_ir(db, ctx, state, fmting);
         match got_ir {
             RefIR::Edge(None) => {
                 overall_gv = overall_gv.neighbour(gv);
@@ -159,21 +107,17 @@ pub fn ref_sequence<'c>(
         }
     }
 
-    if !contents.iter().any(|x| !matches!(x,  RefIR::Edge(None))) {
+    if !contents.iter().any(|x| !matches!(x, RefIR::Edge(None))) {
         (RefIR::Edge(None), overall_gv)
     } else {
-        (
-            RefIR::Seq(RefIrSeq {
-                contents,
-                formatting,
-                affixes: affixes.cloned(),
-                delimiter,
-                quotes,
-                text_case,
-                // dropped_gv,
-            }),
-            overall_gv,
-        )
+        let mut seq = if let Some(tmpl) = seq_template {
+            tmpl()
+        } else {
+            Default::default()
+        };
+        seq.contents = contents;
+        seq.formatting = formatting;
+        (RefIR::Seq(seq), overall_gv)
     }
 }
 

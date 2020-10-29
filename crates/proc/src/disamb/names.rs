@@ -49,10 +49,7 @@ impl Disambiguation<Markup> for Names {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
             affixes: self.affixes.clone(),
-            delimiter: names_inheritance
-                .delimiter
-                .clone()
-                .unwrap_or_else(|| Atom::from("")),
+            delimiter: names_inheritance.delimiter.clone(),
             ..Default::default()
         };
 
@@ -78,7 +75,10 @@ impl Disambiguation<Markup> for Names {
                     &self.et_al,
                     false,
                     and_term.as_ref(),
-                    etal_term.as_ref().map(|(a, b)| (a.as_str().into(), b.clone())).as_ref(),
+                    etal_term
+                        .as_ref()
+                        .map(|(a, b)| (a.as_str().into(), b.clone()))
+                        .as_ref(),
                 );
                 counted_tokens = ntb_len;
                 if counted_tokens <= max_counted_tokens {
@@ -100,7 +100,7 @@ impl Disambiguation<Markup> for Names {
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
                                         let e = EdgeData::Output(out);
                                         let ir = RefIR::Edge(Some(e));
-                                        spot = add_to_graph(fmt, nfa, &ir, spot);
+                                        spot = add_to_graph(fmt, nfa, &ir, spot, None);
                                     }
                                 }
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
@@ -110,7 +110,7 @@ impl Disambiguation<Markup> for Names {
                                                 fmt.output_in_context(b.clone(), child_stack, None);
                                             let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
-                                            spot = add_to_graph(fmt, nfa, &ir, spot);
+                                            spot = add_to_graph(fmt, nfa, &ir, spot, None);
                                         }
                                     }
                                     DisambNameRatchet::Person(ratchet) => {
@@ -401,14 +401,14 @@ fn add_expanded_name_to_graph(
     let fmt = &db.get_formatter();
     let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
-    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot, None);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     for pass in dn.disamb_iter(rule) {
         dn.apply_pass(pass);
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
         let edge = dn.single_name_edge(db, stack);
-        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot, None);
         nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     }
     next_spot
