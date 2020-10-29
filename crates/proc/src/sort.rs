@@ -1,12 +1,15 @@
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_db::{ClusterData, ClusterId};
-use citeproc_io::output::plain::PlainText;
 use citeproc_io::DateOrRange;
 use csl::*;
 use fnv::FnvHashMap;
 use std::sync::Arc;
 use unicase::UniCase;
+
+pub mod natural_sort;
+mod output_format;
+use output_format::SortStringFormat;
 
 fn plain_macro_element(macro_name: Atom) -> TextElement {
     TextElement {
@@ -18,30 +21,6 @@ fn plain_macro_element(macro_name: Atom) -> TextElement {
         text_case: TextCase::None,
         display: None,
     }
-}
-
-pub fn sort_string_citation(
-    db: &dyn IrDatabase,
-    cite_id: CiteId,
-    macro_name: Atom,
-    key: SortKey,
-) -> Option<Arc<SmartString>> {
-    let bib_num = db.bib_number(cite_id);
-    with_cite_context(db, cite_id, bib_num, Some(key), true, None, |ctx| {
-        Arc::new(ctx_sort_string(db, &ctx, macro_name))
-    })
-}
-
-// Cached by the DB because typically the output needs to be compared more than once
-pub fn sort_string_bibliography(
-    db: &dyn IrDatabase,
-    ref_id: Atom,
-    macro_name: Atom,
-    key: SortKey,
-) -> Option<Arc<SmartString>> {
-    with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
-        Arc::new(ctx_sort_string(db, &ctx, macro_name))
-    })
 }
 
 fn ctx_sort_string(
@@ -93,17 +72,29 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         citation_numbers.insert(id.clone(), i as u32);
         i += 1;
     }
-    // let mut sort_cache = FnvHashMap::default();
 
+    // let style = db.style();
+    // use std::borrow::Cow;
+    // let mut sort_keys: Cow<'_, [SortKey]> = Cow::Borrowed(style.citation.sort.as_ref().map(|s| &s.keys[..]).unwrap_or(&[]));
+    // let mut primary = None;
+    // if let Some(first) = sort_keys.first() {
+    //     primary = Some(first.clone());
+    //     sort_keys.as_mut().remove(0);
+    // }
+
+    let max_cnum = preordered.len() as u32;
+    let mut reverse = false;
     let refs = if let Some(ref sort) = bib {
-        // dbg!(sort);
-        // TODO: explore the sort_by_cached_key, but reimplement to have a closure sort function
-        // rather than Ord.
         preordered.sort_by_cached_key(|a| {
             let a_cnum = citation_numbers.get(a).unwrap();
-            with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, mut a_ctx| {
-                ctx_sort_items(db, CiteOrBib::Bibliography, &mut a_ctx, *a_cnum, sort)
-            })
+            let demoting = with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, mut a_ctx| {
+                ctx_sort_items(db, CiteOrBib::Bibliography, &mut a_ctx, *a_cnum, sort, max_cnum)
+            });
+            log::debug!("(Bibliography) sort items for {:?}: {:?}", a_cnum, demoting);
+            if let Some(Demoting { fake_cnum: Some(_), .. }) = &demoting {
+                reverse = true;
+            }
+            demoting
         });
         preordered
     } else {
@@ -112,7 +103,11 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         preordered
     };
     for (i, ref_id) in refs.iter().enumerate() {
-        citation_numbers.insert(ref_id.clone(), (i + 1) as u32);
+        let mut i = i as u32 + 1u32;
+        if reverse {
+            i = max_cnum + 1 - i;
+        }
+        citation_numbers.insert(ref_id.clone(), i);
     }
     Arc::new((refs, citation_numbers))
 }
@@ -137,6 +132,7 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
         let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
         let mut cites = db.cluster_cites(id);
         let style = db.style();
+        let max_cnum = citation_numbers_by_id.len() as u32;
         if let Some(sort) = style.citation.sort.as_ref() {
             let mut neu = (*cites).clone();
             let getter = |cite_id: &CiteId| -> Option<u32> {
@@ -148,39 +144,24 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
                 });
                 cnum
             };
-            #[derive(PartialEq, Eq)]
-            struct DemotingNone<T>(u32, Option<T>);
-            impl<T: Ord> PartialOrd for DemotingNone<T> {
-                fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                    Some(self.cmp(other))
-                }
-            }
-            impl<T: Ord> Ord for DemotingNone<T> {
-                fn cmp(&self, other: &Self) -> Ordering {
-                    if self.0 == other.0 {
-                        return Ordering::Equal;
-                    }
-                    match (self.1.as_ref(), other.1.as_ref()) {
-                        (Some(_), None) => Ordering::Less,
-                        (None, Some(_)) => Ordering::Greater,
-                        (None, None) => Ordering::Equal,
-                        (Some(a), Some(b)) => a.cmp(&b),
-                    }
-                }
-            }
             neu.sort_by_cached_key(|a| {
                 getter(a).map(|a_cnum| {
-                    with_cite_context(
+                    let demoting = with_cite_context(
                         db,
                         a.clone(),
                         Some(a_cnum),
+                        // not set because this is per-sort-key, which we will set in
+                        // ctx_sort_items
                         None,
                         true,
+                        // Year suffix not available in sorting routines. Is that right?
                         None,
                         |mut a_ctx| {
-                            ctx_sort_items(db, CiteOrBib::Citation, &mut a_ctx, a_cnum, sort)
+                            ctx_sort_items(db, CiteOrBib::Citation, &mut a_ctx, a_cnum, sort, max_cnum)
                         },
-                    )
+                    );
+                    log::debug!("sort items for {:?}: {:?}", a_cnum, demoting);
+                    demoting
                 })
             });
             cites = Arc::new(neu);
@@ -196,12 +177,12 @@ pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
     lookup_ref_ids.get(&cite.ref_id).cloned()
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 struct SortItem {
     direction: Option<SortDirection>,
     value: SortValue,
 }
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum SortValue {
     Macro(Option<NaturalCmp>),
     Cnum(Option<u32>),
@@ -220,8 +201,9 @@ enum Demoted {
 use natural_sort::NaturalCmp;
 
 /// This implements the part of the spec
-#[derive(Eq)]
+#[derive(Debug, Eq)]
 struct Demoting {
+    fake_cnum: Option<u32>,
     items: Vec<SortItem>,
 }
 
@@ -290,6 +272,7 @@ fn ctx_sort_items(
     a_ctx: &mut CiteContext<'_, Markup, Markup>,
     a_cnum: u32,
     sort: &Sort,
+    max_cnum: u32,
 ) -> Demoting {
     let sort_string =
         |ctx: &mut CiteContext<Markup, Markup>, macro_name: Atom, key: SortKey, cnum: u32| {
@@ -302,11 +285,39 @@ fn ctx_sort_items(
                 ctx_sort_string(db, ctx, macro_name)
             }
         };
+
+    use std::cell::Cell;
+    let mut fake_cnum = Cell::new(None);
     let mut items = Vec::with_capacity(sort.keys.len());
+    let mut push_item = |item: SortItem| {
+        // Reverse direction after we have seen a descending / citation-number key
+        if cite_or_bib == CiteOrBib::Bibliography {
+            if let SortItem {
+                direction: Some(SortDirection::Descending),
+                value: SortValue::Cnum(Some(c))
+            } = item {
+                fake_cnum.set(Some(max_cnum + 1 - a_cnum));
+            } else if let SortItem {
+                direction: Some(SortDirection::Ascending),
+                value: SortValue::Cnum(Some(c))
+            } = item {
+                fake_cnum.set(None);
+            }
+        }
+        items.push(item);
+    };
     for key in sort.keys.iter() {
         let value = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
                 let a_string = sort_string(a_ctx, macro_name.clone(), key.clone(), a_cnum);
+                if let Some(cnum) = natural_sort::extract_citation_number(&a_string) {
+                    // We found a <text value="citation-number"/> (or number)
+                    let cnum_item = SortItem {
+                        direction: key.direction,
+                        value: SortValue::Cnum(Some(cnum)),
+                    };
+                    push_item(cnum_item);
+                }
                 let a_nat = NaturalCmp::new(a_string);
                 SortValue::Macro(a_nat)
             }
@@ -326,7 +337,7 @@ fn ctx_sort_items(
                     SortValue::OrdinaryVariable(got)
                 }
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
-                    SortValue::Cnum(Some(a_cnum))
+                    SortValue::Cnum(fake_cnum.get().or(Some(a_cnum)))
                 }
                 AnyVariable::Number(v) => SortValue::Number(a_ctx.get_number(v).map(Into::into)),
                 AnyVariable::Name(v) => {
@@ -346,27 +357,33 @@ fn ctx_sort_items(
                 }
             },
         };
-        items.push(SortItem {
+        let item = SortItem {
             direction: key.direction,
             value,
-        });
+        };
+        push_item(item)
     }
-    Demoting { items }
+    Demoting { items, fake_cnum: fake_cnum.get() }
 }
 
-/// Currently only works where
+/// A walker for producing sort strings. These are encoded with `natural_sort` components, so the
+/// output is destined for comparing with the `NaturalCmp` wrapper.
+///
+/// The cite context has to produce text of a different format to usual, SortStringFormat.
+/// This does some extra normalisation / irrelevant character removal, and does not have formatting
+/// at all.
 struct SortingWalker<'a, I: OutputFormat> {
     db: &'a dyn IrDatabase,
     /// the cite is in its original format, but the formatter is PlainText
-    ctx: CiteContext<'a, PlainText, I>,
+    ctx: CiteContext<'a, SortStringFormat, I>,
     state: IrState,
     /// Use this for generating names and dates, and not creating a new one each time
-    arena: IrArena<PlainText>,
+    arena: IrArena<SortStringFormat>,
 }
 
 impl<'a, I: OutputFormat> SortingWalker<'a, I> {
     pub fn new<O: OutputFormat>(db: &'a dyn IrDatabase, ctx: &'a CiteContext<'a, O, I>) -> Self {
-        let plain_ctx = ctx.change_format(PlainText);
+        let plain_ctx = ctx.change_format(SortStringFormat);
         SortingWalker {
             db,
             ctx: plain_ctx,
@@ -375,9 +392,183 @@ impl<'a, I: OutputFormat> SortingWalker<'a, I> {
         }
     }
 
-    fn renderer(&'a self) -> Renderer<'a, PlainText, I> {
+    fn renderer(&'a self) -> Renderer<'a, SortStringFormat, I> {
         Renderer::gen(GenericContext::Cit(&self.ctx))
     }
+}
+
+impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
+    type Output = (SmartString, GroupVars);
+    type Checker = CiteContext<'a, SortStringFormat, O>;
+
+    fn default(&mut self) -> Self::Output {
+        Default::default()
+    }
+    fn get_checker(&self) -> Option<&Self::Checker> {
+        Some(&self.ctx)
+    }
+
+    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
+        let iter = elements.iter();
+        let mut output: Option<SmartString> = None;
+        // Avoid allocating one new string
+        let mut gv_acc = GroupVars::new();
+        for el in iter {
+            let (child, gv) = self.element(el);
+            gv_acc = gv_acc.neighbour(gv);
+            output = match output {
+                Some(ref mut s) => {
+                    s.push_str(&child);
+                    continue;
+                }
+                None => Some(child),
+            }
+        }
+        let out = output.unwrap_or_default();
+        match fold_type {
+            WalkerFoldType::Group(_g) => gv_acc.implicit_conditional(out),
+            _ => (out, gv_acc),
+        }
+    }
+
+    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+        let renderer = self.renderer();
+        let val = renderer.text_value(text, &value);
+        (val.unwrap_or_default(), GroupVars::new())
+    }
+
+    fn text_term(
+        &mut self,
+        text: &TextElement,
+        sel: TextTermSelector,
+        plural: bool,
+    ) -> Self::Output {
+        let renderer = self.renderer();
+        let val = renderer.text_term(text, sel, plural);
+        (val.unwrap_or_default(), GroupVars::new())
+    }
+
+    // TODO: reinstate variable suppression
+    fn text_variable(
+        &mut self,
+        text: &TextElement,
+        svar: StandardVariable,
+        form: VariableForm,
+    ) -> Self::Output {
+        let renderer = self.renderer();
+        let res = match svar {
+            StandardVariable::Number(nvar) => self
+                .ctx
+                .get_number(nvar)
+                .map(|nval| {
+                    if nvar == NumberVariable::CitationNumber {
+                        renderer.number_sort_string(nvar, NumericForm::Numeric, &nval)
+                    } else {
+                        renderer.text_variable(text, svar, nval.verbatim())
+                    }
+                }),
+            StandardVariable::Ordinary(var) => self
+                .ctx
+                .get_ordinary(var, form)
+                .map(|val| renderer.text_variable(text, svar, &val)),
+        };
+        let gv = GroupVars::rendered_if(res.is_some());
+        (res.unwrap_or_default(), gv)
+    }
+
+    // TODO: reinstate variable suppression
+    fn number(&mut self, number: &NumberElement) -> Self::Output {
+        let renderer = self.renderer();
+        let var = number.variable;
+        let content = self.ctx.get_number(var).map(|val| {
+            renderer.number_sort_string(var, number.form, &val)
+        });
+        let gv = GroupVars::rendered_if(content.is_some());
+        (content.unwrap_or_default(), gv)
+    }
+
+    fn label(&mut self, label: &LabelElement) -> Self::Output {
+        let renderer = self.renderer();
+        let var = label.variable;
+        let content = self
+            .ctx
+            .get_number(var)
+            .and_then(|val| renderer.numeric_label(label, &val));
+        (content.unwrap_or_default(), GroupVars::new())
+    }
+
+    // SPEC:
+    // For name sorting, there are four advantages in using the same macro rendering
+    // and sorting, instead of sorting directly on the name variable.
+    //
+    // 1.  First, substitution is available (e.g. the "editor" variable might
+    //     substitute for an empty "author" variable).
+    // 2.  Secondly, et-al abbreviation can be used (using either the
+    //     et-al-min/et-al-subsequent-min, et-al-use-first/et-al-subsequent-use-first,
+    //     and et-al-use-last options defined for the macro, or the overriding
+    //     names-min, names-use-first and names-use-last attributes set on cs:key).
+    //     When et-al abbreviation occurs, the "et-al" and "and others" terms are
+    //     excluded from the sort key values.
+    // 3.  Thirdly, names can be sorted by just the surname (using a macro for which
+    //     the form attribute on cs:name is set to "short").
+    // 4.  Finally, it is possible to sort by the number of names in a name list, by
+    //     calling a macro for which the form attribute on cs:name is set to "count".
+    //     As for names sorted via the variable attribute, names sorted via macro are
+    //     returned with the cs:name attribute name-as-sort-order set to "all".
+    //
+    //     So
+    //
+    //     1. Override naso = all,
+    //     2. Exclude et-al and & others terms,
+    //     3. Return count as a {:08} padded number
+
+    fn names(&mut self, names: &Names) -> Self::Output {
+        let node =
+            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
+        (
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
+    }
+
+    // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
+    // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
+    //
+    fn date(&mut self, date: &BodyDate) -> Self::Output {
+        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
+        let gv = self.arena.get(node).unwrap().get().1;
+        (
+            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
+            gv,
+        )
+    }
+
+    fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
+        // TODO: same todos as in Proc
+        let style = self.ctx.style;
+        let macro_elements = style
+            .macros
+            .get(name)
+            .expect("undefined macro should not be valid CSL");
+
+        self.state.push_macro(name);
+        let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
+        self.state.pop_macro(name);
+        ret
+    }
+}
+
+#[cfg(test)]
+fn sort_string_bibliography(
+    db: &dyn IrDatabase,
+    ref_id: Atom,
+    macro_name: Atom,
+    key: SortKey,
+) -> Option<Arc<SmartString>> {
+    with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
+        Arc::new(ctx_sort_string(db, &ctx, macro_name))
+    })
 }
 
 #[test]
@@ -486,483 +677,3 @@ fn test_date_as_macro_strip_delims() {
     );
 }
 
-impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
-    type Output = (SmartString, GroupVars);
-    type Checker = CiteContext<'a, PlainText, O>;
-
-    fn default(&mut self) -> Self::Output {
-        Default::default()
-    }
-    fn get_checker(&self) -> Option<&Self::Checker> {
-        Some(&self.ctx)
-    }
-
-    fn fold(&mut self, elements: &[Element], fold_type: WalkerFoldType) -> Self::Output {
-        let iter = elements.iter();
-        let mut output: Option<SmartString> = None;
-        // Avoid allocating one new string
-        let mut gv_acc = GroupVars::new();
-        for el in iter {
-            let (child, gv) = self.element(el);
-            gv_acc = gv_acc.neighbour(gv);
-            output = match output {
-                Some(ref mut s) => {
-                    s.push_str(&child);
-                    continue;
-                }
-                None => Some(child),
-            }
-        }
-        let out = output.unwrap_or_default();
-        match fold_type {
-            WalkerFoldType::Group(_g) => gv_acc.implicit_conditional(out),
-            _ => (out, gv_acc),
-        }
-    }
-
-    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
-        let renderer = self.renderer();
-        let val = renderer.text_value(text, &value);
-        (val.unwrap_or_default(), GroupVars::new())
-    }
-
-    fn text_term(
-        &mut self,
-        text: &TextElement,
-        sel: TextTermSelector,
-        plural: bool,
-    ) -> Self::Output {
-        let renderer = self.renderer();
-        let val = renderer.text_term(text, sel, plural);
-        (val.unwrap_or_default(), GroupVars::new())
-    }
-
-    // TODO: reinstate variable suppression
-    fn text_variable(
-        &mut self,
-        text: &TextElement,
-        svar: StandardVariable,
-        form: VariableForm,
-    ) -> Self::Output {
-        let renderer = self.renderer();
-        let res = match svar {
-            StandardVariable::Number(nvar) => self
-                .ctx
-                .get_number(nvar)
-                .map(|nval| renderer.text_variable(text, svar, nval.verbatim())),
-            StandardVariable::Ordinary(var) => self
-                .ctx
-                .get_ordinary(var, form)
-                .map(|val| renderer.text_variable(text, svar, &val)),
-        };
-        let gv = GroupVars::rendered_if(res.is_some());
-        (res.unwrap_or_default(), gv)
-    }
-
-    // TODO: reinstate variable suppression
-    fn number(&mut self, number: &NumberElement) -> Self::Output {
-        let renderer = self.renderer();
-        let var = number.variable;
-        let content = self.ctx.get_number(var).map(|val| {
-            renderer.number_sort_string(
-                var,
-                number.form,
-                &val,
-                number.affixes.as_ref(),
-                number.text_case,
-            )
-        });
-        let gv = GroupVars::rendered_if(content.is_some());
-        (content.unwrap_or_default(), gv)
-    }
-
-    fn label(&mut self, label: &LabelElement) -> Self::Output {
-        let renderer = self.renderer();
-        let var = label.variable;
-        let content = self
-            .ctx
-            .get_number(var)
-            .and_then(|val| renderer.numeric_label(label, &val));
-        (content.unwrap_or_default(), GroupVars::new())
-    }
-
-    // SPEC:
-    // For name sorting, there are four advantages in using the same macro rendering
-    // and sorting, instead of sorting directly on the name variable.
-    //
-    // 1.  First, substitution is available (e.g. the "editor" variable might
-    //     substitute for an empty "author" variable).
-    // 2.  Secondly, et-al abbreviation can be used (using either the
-    //     et-al-min/et-al-subsequent-min, et-al-use-first/et-al-subsequent-use-first,
-    //     and et-al-use-last options defined for the macro, or the overriding
-    //     names-min, names-use-first and names-use-last attributes set on cs:key).
-    //     When et-al abbreviation occurs, the "et-al" and "and others" terms are
-    //     excluded from the sort key values.
-    // 3.  Thirdly, names can be sorted by just the surname (using a macro for which
-    //     the form attribute on cs:name is set to "short").
-    // 4.  Finally, it is possible to sort by the number of names in a name list, by
-    //     calling a macro for which the form attribute on cs:name is set to "count".
-    //     As for names sorted via the variable attribute, names sorted via macro are
-    //     returned with the cs:name attribute name-as-sort-order set to "all".
-    //
-    //     So
-    //
-    //     1. Override naso = all,
-    //     2. Exclude et-al and & others terms,
-    //     3. Return count as a {:08} padded number
-
-    fn names(&mut self, names: &Names) -> Self::Output {
-        let node =
-            crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
-            gv,
-        )
-    }
-
-    // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
-    // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
-    //
-    fn date(&mut self, date: &BodyDate) -> Self::Output {
-        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format).unwrap_or_default(),
-            gv,
-        )
-    }
-
-    fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
-        // TODO: same todos as in Proc
-        let style = self.ctx.style;
-        let macro_elements = style
-            .macros
-            .get(name)
-            .expect("macro errors not implemented!");
-
-        self.state.push_macro(name);
-        let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
-        self.state.pop_macro(name);
-        ret
-    }
-}
-
-// dates: Date variables called via the variable attribute are returned in the YYYYMMDD format,
-// with zeros substituted for any missing date-parts (e.g. 20001200 for December 2000). As a
-// result, less specific dates precede more specific dates in ascending sorts, e.g. “2000, May
-// 2000, May 1st 2000”. Negative years are sorted inversely, e.g. “100BC, 50BC, 50AD, 100AD”.
-// Seasons are ignored for sorting, as the chronological order of the seasons differs between the
-// northern and southern hemispheres. In the case of date ranges, the start date is used for the
-// primary sort, and the end date is used for a secondary sort, e.g. “2000–2001, 2000–2005,
-// 2002–2003, 2002–2009”. Date ranges are placed after single dates when they share the same
-// (start) date, e.g. “2000, 2000–2002”.
-
-// Basically, everything would be very easy without the BC/AD sorting and the ranges coming later
-// parts. But given these, we have to parse dates again.
-pub mod natural_sort {
-
-    // From the BMP(0) unicode private use area
-    // Delimits a date so it can be parsed when doing a natural sort comparison
-    pub const DATE_START: char = '\u{E000}';
-    pub const DATE_START_STR: &str = "\u{E000}";
-    pub const DATE_END: char = '\u{E001}';
-    pub const DATE_END_STR: &str = "\u{E001}";
-
-    // Delimits a number so it can be compared
-    pub const NUM_START: char = '\u{E002}';
-    pub const NUM_START_STR: &str = "\u{E002}";
-    pub const NUM_END: char = '\u{E003}';
-    pub const NUM_END_STR: &str = "\u{E003}";
-
-    pub fn date_affixes() -> Affixes {
-        Affixes {
-            prefix: DATE_START_STR.into(),
-            suffix: DATE_END_STR.into(),
-        }
-    }
-
-    pub fn num_affixes() -> Affixes {
-        Affixes {
-            prefix: NUM_START_STR.into(),
-            suffix: NUM_END_STR.into(),
-        }
-    }
-
-    #[derive(PartialEq, Eq, Debug)]
-    struct CmpDate<'a> {
-        year: Option<i32>,
-        rest: &'a str,
-    }
-
-    impl<'a> Ord for CmpDate<'a> {
-        fn cmp(&self, other: &Self) -> Ordering {
-            self.year
-                .cmp(&other.year)
-                .then_with(|| self.rest.cmp(other.rest))
-        }
-    }
-
-    impl<'a> PartialOrd for CmpDate<'a> {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(
-                self.year
-                    .cmp(&other.year)
-                    .then_with(|| self.rest.cmp(other.rest)),
-            )
-        }
-    }
-
-    #[derive(PartialEq, Eq, Debug)]
-    enum CmpRange<'a> {
-        Single(CmpDate<'a>),
-        Range(CmpDate<'a>, CmpDate<'a>),
-    }
-
-    impl<'a> Ord for CmpRange<'a> {
-        fn cmp(&self, other: &Self) -> Ordering {
-            match (self, other) {
-                (CmpRange::Single(a), CmpRange::Single(b)) => a.cmp(b),
-                (CmpRange::Single(a), CmpRange::Range(b, _c)) => a.cmp(b),
-                (CmpRange::Range(a, _b), CmpRange::Single(c)) => a.cmp(c),
-                (CmpRange::Range(a, b), CmpRange::Range(c, d)) => a.cmp(c).then_with(|| b.cmp(d)),
-            }
-        }
-    }
-
-    impl<'a> PartialOrd for CmpRange<'a> {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(self.cmp(other))
-        }
-    }
-
-    use csl::Affixes;
-    use nom::{
-        branch::alt,
-        bytes::complete::{take_while, take_while1, take_while_m_n},
-        character::complete::char,
-        combinator::{map, opt},
-        sequence::delimited,
-        IResult,
-    };
-    use std::cmp::Ordering;
-    use std::str::FromStr;
-
-    fn to_u32(s: &str) -> u32 {
-        FromStr::from_str(s).unwrap()
-    }
-
-    fn to_i32(s: &str) -> i32 {
-        FromStr::from_str(s).unwrap()
-    }
-
-    fn take_8_digits(inp: &str) -> IResult<&str, &str> {
-        take_while_m_n(1, 8, |c: char| c.is_ascii_digit())(inp)
-    }
-
-    fn year_prefix(inp: &str) -> IResult<&str, char> {
-        alt((char('+'), char('-')))(inp)
-    }
-
-    fn year(inp: &str) -> IResult<&str, i32> {
-        let (rem1, pref) = opt(year_prefix)(inp)?;
-        let (rem2, y) = take_while1(|c: char| c.is_ascii_digit())(rem1)?;
-        let (rem3, _) = char('_')(rem2)?;
-        Ok((
-            rem3,
-            match pref {
-                Some('-') => -to_i32(y),
-                _ => to_i32(y),
-            },
-        ))
-    }
-
-    fn date(inp: &str) -> IResult<&str, CmpDate> {
-        let (rem1, year) = opt(year)(inp)?;
-        fn still_date(c: char) -> bool {
-            c != DATE_END && c != '/'
-        }
-        let (rem2, rest) = take_while(still_date)(rem1)?;
-        Ok((rem2, CmpDate { year, rest }))
-    }
-
-    fn range(inp: &str) -> IResult<&str, Token> {
-        let (rem1, _) = char(DATE_START)(inp)?;
-        let (rem2, first) = date(rem1)?;
-        fn and_ymd(inp: &str) -> IResult<&str, CmpDate> {
-            let (rem1, _) = char('/')(inp)?;
-            Ok(date(rem1)?)
-        }
-        let (rem3, d2) = opt(and_ymd)(rem2)?;
-        let (rem4, _) = char(DATE_END)(rem3)?;
-        Ok((
-            rem4,
-            Token::Date(match d2 {
-                None => CmpRange::Single(first),
-                Some(d) => CmpRange::Range(first, d),
-            }),
-        ))
-    }
-
-    fn num(inp: &str) -> IResult<&str, Token> {
-        delimited(
-            char(NUM_START),
-            map(take_8_digits, |x| Token::Num(to_u32(x))),
-            char(NUM_END),
-        )(inp)
-    }
-
-    fn str_token(inp: &str) -> IResult<&str, Token> {
-        fn normal(c: char) -> bool {
-            !(c == DATE_START || c == NUM_START)
-        }
-        map(take_while1(normal), Token::Str)(inp)
-    }
-
-    fn token(inp: &str) -> IResult<&str, Token> {
-        alt((str_token, num, range))(inp)
-    }
-
-    struct TokenIterator<'a> {
-        remain: &'a str,
-    }
-
-    #[derive(PartialEq, Debug)]
-    enum Token<'a> {
-        Str(&'a str),
-        Num(u32),
-        Date(CmpRange<'a>),
-    }
-
-    impl<'a> PartialOrd for Token<'a> {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            use unicase::UniCase;
-            match (self, other) {
-                (Token::Str(a), Token::Str(b)) => UniCase::new(a).partial_cmp(&UniCase::new(b)),
-                (Token::Date(a), Token::Date(b)) => a.partial_cmp(b),
-                (Token::Num(a), Token::Num(b)) => a.partial_cmp(b),
-                _ => None,
-            }
-        }
-    }
-
-    impl<'a> Iterator for TokenIterator<'a> {
-        type Item = Token<'a>;
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.remain.is_empty() {
-                return None;
-            }
-            if let Ok((remainder, token)) = token(self.remain) {
-                self.remain = remainder;
-                Some(token)
-            } else {
-                None
-            }
-        }
-    }
-
-    use citeproc_io::SmartString;
-
-    #[derive(PartialEq, Eq)]
-    pub struct NaturalCmp(SmartString);
-    impl NaturalCmp {
-        pub fn new(s: SmartString) -> Option<Self> {
-            if s.is_empty() {
-                None
-            } else {
-                Some(NaturalCmp(s))
-            }
-        }
-    }
-    impl PartialOrd for NaturalCmp {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            Some(self.cmp(other))
-        }
-    }
-    impl Ord for NaturalCmp {
-        fn cmp(&self, other: &Self) -> Ordering {
-            natural_cmp(&self.0, &other.0)
-        }
-    }
-
-    fn natural_cmp(a: &str, b: &str) -> Ordering {
-        let a_i = TokenIterator { remain: a };
-        let b_i = TokenIterator { remain: b };
-        let mut iter = a_i.zip(b_i);
-        let mut o = Ordering::Equal;
-        while let Some((a_t, b_t)) = iter.next() {
-            if o != Ordering::Equal {
-                return o;
-            }
-            if let Some(c) = a_t.partial_cmp(&b_t) {
-                o = c;
-            }
-        }
-        o
-    }
-
-    #[test]
-    fn natural_cmp_strings() {
-        assert_eq!(natural_cmp("a", "z"), Ordering::Less, "a - z");
-        assert_eq!(natural_cmp("z", "a"), Ordering::Greater, "z - a");
-        assert_eq!(
-            natural_cmp("a\u{E000}2009_0407\u{E001}", "a\u{E000}2008_0407\u{E001}"),
-            Ordering::Greater,
-            "2009 > 2008"
-        );
-        assert_eq!(
-            natural_cmp("a\u{E000}2009_0507\u{E001}", "a\u{E000}2009_0407\u{E001}"),
-            Ordering::Greater
-        );
-        assert_eq!(
-            natural_cmp("a\u{E000}-0100_\u{E001}", "a\u{E000}0100_\u{E001}"),
-            Ordering::Less,
-            "100BC < 100AD"
-        );
-
-        // 2000, May 2000, May 1st 2000
-        assert_eq!(
-            natural_cmp("a\u{E000}2000_\u{E001}", "a\u{E000}2000_04\u{E001}"),
-            Ordering::Less,
-            "2000 < May 2000"
-        );
-        assert_eq!(
-            natural_cmp("a\u{E000}2000_04\u{E001}", "a\u{E000}2000_0401\u{E001}"),
-            Ordering::Less,
-            "May 2000 < May 1st 2000"
-        );
-
-        assert_eq!(
-            natural_cmp(
-                "a\u{E000}2009_0407/0000_0000\u{E001}",
-                "a\u{E000}2009_0407/2010_0509\u{E001}"
-            ),
-            Ordering::Less,
-            "2009 < 2009/2010"
-        );
-
-        assert_eq!(
-            natural_cmp(
-                "\u{e000}-044_0315/0000_00\u{e001}",
-                "\u{e000}-100_0713/0000_00\u{e001}"
-            ),
-            Ordering::Greater,
-            "44BC > 100BC"
-        );
-
-        // Numbers
-        assert_eq!(
-            natural_cmp("\u{E002}1000\u{E003}", "\u{E002}1000\u{E003}"),
-            Ordering::Equal,
-            "1000 == 1000"
-        );
-        assert_eq!(
-            natural_cmp("\u{E002}1000\u{E003}", "\u{E002}2000\u{E003}"),
-            Ordering::Less,
-            "1000 < 2000"
-        );
-
-        // Case insensitive
-        assert_eq!(natural_cmp("aaa", "AAA"), Ordering::Equal);
-    }
-}

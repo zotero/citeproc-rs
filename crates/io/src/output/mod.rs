@@ -15,8 +15,6 @@ pub mod markup;
 pub mod micro_html;
 #[cfg(feature = "pandoc")]
 pub mod pandoc;
-#[cfg(feature = "plain")]
-pub mod plain;
 mod superscript;
 
 // pub use self::pandoc::Pandoc;

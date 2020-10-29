@@ -208,12 +208,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: NumberVariable,
         form: NumericForm,
         val: &NumericValue,
-        _af: Option<&Affixes>,
-        _text_case: TextCase,
     ) -> O::Build {
         let locale = self.ctx.locale();
         let fmt = self.fmt();
         let prf = self.page_range_format(var);
+        use crate::sort::natural_sort;
+        let affixes = Some(
+            if var == NumberVariable::CitationNumber {
+                natural_sort::citation_number_affixes()
+            } else {
+                natural_sort::num_affixes()
+            }
+        );
         match (val, form) {
             (NumericValue::Tokens(_, ts, is_numeric), _) if *is_numeric => {
                 let mut s = SmartString::new();
@@ -225,18 +231,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                         s.push_str(&format!("{:08}", n));
                     }
                 }
-                fmt.affixed_text(
-                    s,
-                    None,
-                    Some(crate::sort::natural_sort::num_affixes()).as_ref(),
-                )
+                fmt.affixed_text(s, None, affixes.as_ref())
             }
-            // TODO: text-case
-            _ => fmt.affixed_text(
-                arabic_number(val, locale, var, prf),
-                None,
-                Some(crate::sort::natural_sort::num_affixes()).as_ref(),
-            ),
+            _ => fmt.affixed_text(arabic_number(val, locale, var, prf), None, affixes.as_ref()),
         }
     }
 

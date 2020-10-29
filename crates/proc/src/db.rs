@@ -102,20 +102,6 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + Implementa
     #[salsa::invoke(crate::sort::sorted_refs)]
     fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
 
-    #[salsa::invoke(crate::sort::sort_string_citation)]
-    fn sort_string_citation(
-        &self,
-        cite_id: CiteId,
-        macro_name: Atom,
-        sort_key: SortKey,
-    ) -> Option<Arc<SmartString>>;
-    #[salsa::invoke(crate::sort::sort_string_bibliography)]
-    fn sort_string_bibliography(
-        &self,
-        ref_id: Atom,
-        macro_name: Atom,
-        sort_key: SortKey,
-    ) -> Option<Arc<SmartString>>;
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<u32>;
 }
