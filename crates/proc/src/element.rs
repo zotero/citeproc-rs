@@ -77,7 +77,7 @@ where
                             .style
                             .macros
                             .get(name)
-                            .expect("macro errors not implemented!");
+                            .expect("undefined macro should not be valid CSL");
                         // Technically, if re-running a style with a fresh IrState, you might
                         // get an extra level of recursion before it panics. BUT, then it will
                         // already have panicked when it was run the first time! So we're OK.

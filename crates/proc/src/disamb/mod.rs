@@ -133,7 +133,7 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
         let macro_elements = style
             .macros
             .get(name)
-            .expect("macro errors not implemented!");
+            .expect("undefined macro should not be valid CSL");
 
         self.state.push_macro(name);
         let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));

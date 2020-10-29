@@ -53,7 +53,6 @@ impl<'de> serde::Deserialize<'de> for Lang {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::Deserialize as _;
         let s = String::deserialize(deserializer)?;
         FromStr::from_str(&s).map_err(serde::de::Error::custom)
     }

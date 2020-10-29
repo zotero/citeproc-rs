@@ -212,7 +212,7 @@ impl Disambiguation<Markup> for Element {
                         .style
                         .macros
                         .get(name)
-                        .expect("macro errors not implemented!");
+                        .expect("undefined macro should not be valid CSL");
                     state.push_macro(name);
                     let els = macro_elements;
                     let (seq, group_vars) = ref_sequence(

@@ -41,6 +41,54 @@ fn unsupported_version() {
 }
 
 #[test]
+fn unrecognised_macros() {
+    assert_snapshot_style_err!(
+        r#"
+        <style version="1.0" class="in-text">
+            <citation>
+                <layout>
+                    <text macro="unknown" />
+                </layout>
+            </citation>
+        </style>
+    "#);
+    assert_snapshot_style_err!(
+        r#"
+        <style version="1.0" class="in-text">
+            <citation>
+                <sort>
+                    <key macro="unknown" />
+                </sort>
+                <layout></layout>
+            </citation>
+        </style>
+    "#);
+    assert_snapshot_style_err!(
+        r#"
+        <style version="1.0" class="in-text">
+            <citation><layout></layout></citation>
+            <bibliography>
+                <sort>
+                    <key macro="unknown" />
+                </sort>
+                <layout></layout>
+            </bibliography>
+        </style>
+    "#);
+    assert_snapshot_style_parse!(
+        r#"
+        <style version="1.0" class="in-text">
+            <macro name="known" />
+            <citation>
+                <layout>
+                    <text macro="known" />
+                </layout>
+            </citation>
+        </style>
+    "#);
+}
+
+#[test]
 fn missing_info() {
     // Externally, missing info should fail.
     insta::assert_debug_snapshot!(

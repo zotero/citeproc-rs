@@ -340,7 +340,13 @@ impl FromNode for SortSource {
         let variable = node.attribute("variable");
         let err = "<key> must have either a `macro` or `variable` attribute";
         match (macro_, variable) {
-            (Some(mac), None) => Ok(SortSource::Macro(mac.into())),
+            (Some(mac), None) => {
+                let mac: Atom = mac.into();
+                if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
+                    return Err(InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into());
+                }
+                Ok(SortSource::Macro(mac))
+            }
             (None, Some(_)) => Ok(SortSource::Variable(attribute_var_type(
                 node,
                 "variable",
@@ -537,7 +543,13 @@ impl FromNode for TextElement {
         let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
 
         let source = match (macro_, value, variable, term) {
-            (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
+            (Some(mac), None, None, None) => {
+                let mac: Atom = mac.into();
+                if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
+                    return Err(InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into());
+                }
+                TextSource::Macro(mac)
+            }
             (None, Some(val), None, None) => TextSource::Value(val.into()),
             (None, None, Some(_vv), None) => TextSource::Variable(
                 attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
@@ -998,7 +1010,6 @@ impl FromNode for Element {
 
 impl FromNode for MacroMap {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        // TODO: remove collect()
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
@@ -1007,12 +1018,34 @@ impl FromNode for MacroMap {
         let name = match node.attribute("name") {
             Some(n) => n,
             None => {
-                return Err(InvalidCsl::new(node, "Macro must have a 'name' attribute.").into());
+                return Err(InvalidCsl::new(node, "<macro> must have a `name` attribute.").into());
             }
         };
         Ok(MacroMap {
             name: name.into(),
             elements: elements?,
+        })
+    }
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("macro")
+    }
+    const CHILD_DESC: &'static str = "macro";
+}
+
+struct MacroHeader {
+    name: Atom
+}
+
+impl FromNode for MacroHeader {
+    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+        let name = match node.attribute("name") {
+            Some(n) => n,
+            None => {
+                return Err(InvalidCsl::new(node, "<macro> must have a `name` attribute.").into());
+            }
+        };
+        Ok(MacroHeader {
+            name: name.into(),
         })
     }
     fn select_child(node: &Node) -> bool {
@@ -1375,6 +1408,33 @@ impl FromNode for Features {
     const CHILD_DESC: &'static str = "features";
 }
 
+// type MacroDict = HashMap<Atom, Vec<Element>>;
+// fn check_recursion(macros: &MacroDict, layout: &Layout, cite_or_bib_node: &Node) -> FromNodeResult<()> {
+//     use std::fmt;
+//     struct DebugAtom(Atom);
+//     impl PartialEq<Atom> for DebugAtom {
+//         fn eq(&self, other: &Atom) -> {
+//             self.0 == *other
+//         }
+//     }
+//     impl fmt::Debug for DebugAtom {
+//         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//             write!(f, "{}", self.0)
+//         }
+//     }
+//     let mut stack: Vec<DebugAtom> = Vec::new();
+//     let mut check_element = |macros: &MacroDict, element: &Element| -> bool {
+//         if let Element::Text(TextElement { source: TextSource::Macro(m), .. }) = &element {
+//             if stack.contains(m) {
+//                 Err(InvalidCsl::new(cite_or_bib_node, format!("Macros cannot be mutually recursive {:?}", stack)))
+//             } else {
+//                 stack.push(DebugAtom(m.clone()));
+//                 Ok(())
+//             }
+//         }
+//     };
+// }
+
 impl Style {
     fn from_node_custom(node: &Node, default_info: &ParseInfo, info_block: Info) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
@@ -1386,10 +1446,17 @@ impl Style {
             .flatten()
             .unwrap_or_else(|| Features::new());
 
+        // We will check again later (for MacroMap) if there are macros without names.
+        let mut throwaway = Vec::new();
+        let macro_headers = many_children::<MacroHeader>(node, default_info, &mut throwaway)
+            .unwrap_or_else(|_| Vec::new());
+        let macro_names = macro_headers.into_iter().map(|header| header.name).collect();
+
         // Create our own info struct, ignoring the one passed in.
         let parse_info = ParseInfo {
             options: default_info.options.clone(),
             features: features.clone(),
+            macros: Some(macro_names),
         };
 
         let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
