@@ -20,34 +20,41 @@ fn normalise() {
 
 fn smash_string_push(base: &mut String, mut suff: &str) {
     trace!("smash_string_push {:?} <- {:?}", base, suff);
-    let suff_trimmed = suff.trim_start();
-    if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
-        && suff_trimmed.chars().nth(0).map_or(false, is_punc)
-    {
-        suff = suff_trimmed;
-        let trimmed = base.trim_end();
-        if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            let trimmed_len = trimmed.len();
-            base.truncate(trimmed_len);
-        }
+    let btrim = base.trim_end_matches(smash_trim);
+    let b_spaces = base.len() - btrim.len();
+    let mut trimmed_len = btrim.len();
+    let strim = suff.trim_start_matches(smash_trim);
+    let s_spaces = suff.len() - strim.len();
+    let b_ends_punc = btrim.chars().rev().nth(0).map_or(false, is_punc);
+    let s_starts_punc = strim.chars().nth(0).map_or(false, is_punc);
+    if !b_ends_punc || !s_starts_punc {
+        base.truncate(trimmed_len + std::cmp::max(b_spaces, 1));
+        let suff = if b_spaces > 0 {
+            strim
+        } else {
+            suff
+        };
+        base.push_str(suff);
+        return;
     }
 
     // Place the last char of base, and the first char of suff, into an array.
     let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
     let mut work = &mut work_area[..];
     let mut total = 0;
-    if let Some(base_last) = base.chars().rev().nth(0) {
+    if let Some(base_last) = btrim.chars().rev().nth(0) {
         let len = base_last.len_utf8();
         base_last.encode_utf8(work);
+        trimmed_len -= len;
         work = &mut work[len..];
         total += len;
     }
-    let mut suff_rest = suff;
-    if let Some(suff_first) = suff.chars().nth(0) {
+    let mut suff_rest = strim;
+    if let Some(suff_first) = strim.chars().nth(0) {
         let len = suff_first.len_utf8();
         suff_first.encode_utf8(work);
-        work = &mut work[len..];
-        suff_rest = &suff[len..];
+        // work = &mut work[len..];
+        suff_rest = &strim[len..];
         total += len;
     }
     let last_and_first = &work_area[..total];
@@ -60,8 +67,7 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
                 std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            // We never removed it from base, so pop() == base_first at this point
-            base.pop();
+            base.truncate(trimmed_len);
             base.push_str(replacement);
             base.push_str(suff_rest);
         } else {
@@ -70,35 +76,43 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
     }
 }
 
+fn smash_trim(c: char) -> bool {
+    c == ' ' || c == '\u{a0}'
+}
+
 fn smash_just_punc(base: &mut String, suff: &mut String) {
     trace!("smash_just_punc {:?} <- {:?}", base, suff);
-    let mut suff_append: &str = suff.as_ref();
-    let suff_trimmed = suff_append.trim_start();
-    if base.trim_end().chars().rev().nth(0).map_or(false, is_punc)
-        && suff_trimmed.chars().nth(0).map_or(false, is_punc)
-    {
-        suff_append = suff_trimmed;
-        let trimmed = base.trim_end();
-        if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            let trimmed_len = trimmed.len();
-            base.truncate(trimmed_len)
+    let btrim = base.trim_end_matches(smash_trim);
+    let mut trimmed_len = btrim.len();
+    let b_spaces = base.len() - trimmed_len;
+    let mut strim_len = suff.chars().take_while(|&c| smash_trim(c)).map(|c| c.len_utf8()).sum();
+    let strim = &suff[strim_len..];
+    let b_ends_punc = btrim.chars().rev().nth(0).map_or(false, is_punc);
+    let s_starts_punc = strim.chars().nth(0).map_or(false, is_punc);
+    if !b_ends_punc || !s_starts_punc {
+        base.truncate(trimmed_len + std::cmp::max(b_spaces, 1));
+        if b_spaces > 0 && strim_len > 0 {
+            *suff = strim.into();
         }
+        return;
     }
 
     // Place the last char of base, and the first char of suff, into an array.
-    let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
+    let mut work_area = [0u8; 8]; // Enough for two utf-8 scalar value
     let mut work = &mut work_area[..];
     let mut total = 0;
-    if let Some(base_last) = base.chars().rev().nth(0) {
+    if let Some(base_last) = btrim.chars().rev().nth(0) {
         let len = base_last.len_utf8();
         base_last.encode_utf8(work);
         work = &mut work[len..];
+        trimmed_len -= len;
         total += len;
     }
-    if let Some(suff_first) = suff.chars().nth(0) {
+    if let Some(suff_first) = strim.chars().nth(0) {
         let len = suff_first.len_utf8();
         suff_first.encode_utf8(work);
-        work = &mut work[len..];
+        // work = &mut work[len..];
+        strim_len += len;
         total += len;
     }
     let last_and_first = &work_area[..total];
@@ -107,14 +121,13 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
         // Smash across the boundary
         if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(last_and_first) {
             trace!(
-                "smash_string_push REPLACING {:?} with {:?}",
+                "smash_just_punc REPLACING {:?} with {:?}",
                 std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            // We never removed it from base, so pop() == base_first at this point
-            base.pop();
+            base.truncate(trimmed_len);
             base.push_str(replacement);
-            suff.remove(0);
+            *suff = strim[strim_len..].into();
         }
     }
 }
@@ -910,7 +923,7 @@ static FULL_MONTY_PLAIN: phf::Map<&'static [u8], Option<&'static str>> = phf_map
     b";?" => Some("?"),
     b"!?" => None,
     b"??" => Some("?"),
-    b",?" => Some(",?"),
+    // b",?" => Some(",?"),
     // Comma
     b":," => None,
     b".," => None,

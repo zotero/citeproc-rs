@@ -296,9 +296,9 @@ impl Markup {
         move_punctuation(&mut flipped, punctuation_in_quote);
         let mut dest = String::new();
         match *self {
-            Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped),
-            Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped),
-            Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped),
+            Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped, false),
+            Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped, false),
+            Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped, false),
         }
         dest
     }
@@ -318,22 +318,26 @@ pub trait MarkupWriter {
     ) {
         let stack = tag_stack(formatting, display);
         self.stack_preorder(&stack);
-        self.write_inlines(inlines);
+        self.write_inlines(inlines, display == Some(DisplayMode::LeftMargin));
         self.stack_postorder(&stack);
     }
 
-    fn write_micro(&mut self, micro: &MicroNode);
+    fn write_micro(&mut self, micro: &MicroNode, trim_start: bool);
     /// Returned boolean = true if it used the peeked element to move some punctuation inside, and
     /// hence should skip it.
-    fn write_micros(&mut self, micros: &[MicroNode]) {
+    fn write_micros(&mut self, micros: &[MicroNode], trim_start: bool) {
+        let mut seen = false;
         for micro in micros {
-            self.write_micro(micro);
+            self.write_micro(micro, trim_start && !seen);
+            seen = true;
         }
     }
-    fn write_inline(&mut self, inline: &InlineElement);
-    fn write_inlines(&mut self, inlines: &[InlineElement]) {
+    fn write_inline(&mut self, inline: &InlineElement, trim_start: bool);
+    fn write_inlines(&mut self, inlines: &[InlineElement], trim_start: bool) {
+        let mut seen = false;
         for inline in inlines {
-            self.write_inline(inline);
+            self.write_inline(inline, trim_start && !seen);
+            seen = true;
         }
     }
 }
@@ -378,3 +382,17 @@ fn tag_stack(formatting: Formatting, display: Option<DisplayMode>) -> Vec<Format
     }
     stack
 }
+
+trait MaybeTrimStart {
+    fn trim_start_if<'a>(&'a self, trim_if: bool) -> &'a Self;
+}
+impl MaybeTrimStart for str {
+    fn trim_start_if<'a>(&'a self, trim_if: bool) -> &'a Self {
+        if trim_if {
+            self.trim_start()
+        } else {
+            self
+        }
+    }
+}
+

@@ -4,7 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::prelude::*;
 use citeproc_io::output::{
     micro_html::micro_html_to_string, FormatCmd, LocalizedQuotes, OutputFormat,
 };

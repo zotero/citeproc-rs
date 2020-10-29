@@ -10,6 +10,7 @@ use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::Formatting;
+use super::MaybeTrimStart;
 
 #[derive(Debug)]
 pub struct RtfWriter<'a> {
@@ -35,53 +36,57 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
     }
 
     fn stack_postorder(&mut self, stack: &[FormatCmd]) {
-        for _cmd in stack.iter() {
+        for cmd in stack.iter() {
+            if *cmd == FormatCmd::DisplayRightInline {
+                let tlen = self.dest.trim_end_matches(' ').len();
+                self.dest.truncate(tlen);
+            }
             self.dest.push('}');
         }
     }
 
-    fn write_micro(&mut self, micro: &MicroNode) {
+    fn write_micro(&mut self, micro: &MicroNode, trim_start: bool) {
         use MicroNode::*;
         match micro {
             Text(text) => {
-                self.write_escaped(text);
+                self.write_escaped(text.trim_start_if(trim_start));
             }
             Quoted {
                 is_inner,
                 localized,
                 children,
             } => {
-                self.write_escaped(localized.opening(*is_inner));
-                self.write_micros(children);
+                self.write_escaped(localized.opening(*is_inner).trim_start_if(trim_start));
+                self.write_micros(children, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
             Formatted(nodes, cmd) => {
                 let tag = cmd.rtf_tag();
                 self.dest.push('{');
                 self.dest.push_str(tag);
-                self.write_micros(nodes);
+                self.write_micros(nodes, trim_start);
                 self.dest.push('}');
             }
             NoCase(inners) => {
-                self.write_micros(inners);
+                self.write_micros(inners, trim_start);
             }
             NoDecor(inners) => {
-                self.write_micros(inners);
+                self.write_micros(inners, trim_start);
             }
         }
     }
 
-    fn write_inline(&mut self, inline: &InlineElement) {
+    fn write_inline(&mut self, inline: &InlineElement, trim_start: bool) {
         use super::InlineElement::*;
         match inline {
             Text(text) => {
-                rtf_escape_into(text, self.dest);
+                rtf_escape_into(text.trim_start_if(trim_start), self.dest);
             }
             Div(display, inlines) => {
                 self.stack_formats(inlines, Formatting::default(), Some(*display))
             }
             Micro(micros) => {
-                self.write_micros(micros);
+                self.write_micros(micros, trim_start);
             }
             Formatted(inlines, formatting) => {
                 self.stack_formats(inlines, *formatting, None);
@@ -91,8 +96,8 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 localized,
                 inlines,
             } => {
-                self.write_escaped(localized.opening(*is_inner));
-                self.write_inlines(inlines);
+                self.write_escaped(localized.opening(*is_inner).trim_start_if(trim_start));
+                self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
@@ -101,7 +106,7 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 self.dest.push_str(r#"<a href=""#);
                 self.dest.push_str(&url);
                 self.dest.push_str(r#"">"#);
-                self.write_inlines(content);
+                self.write_inlines(content, true);
                 self.dest.push_str("</a>");
             }
         }

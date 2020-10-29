@@ -7,7 +7,6 @@
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::output::LocalizedQuotes;
-use csl::Atom;
 use csl::{Affixes, Choose, DateVariable, Formatting, GivenNameDisambiguationRule, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
 

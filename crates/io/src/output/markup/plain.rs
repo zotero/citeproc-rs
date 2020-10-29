@@ -10,6 +10,7 @@ use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::Formatting;
+use super::MaybeTrimStart;
 
 #[derive(Debug)]
 pub struct PlainWriter<'a> {
@@ -30,44 +31,44 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
 
     fn stack_postorder(&mut self, _stack: &[FormatCmd]) {}
 
-    fn write_micro(&mut self, micro: &MicroNode) {
+    fn write_micro(&mut self, micro: &MicroNode, trim_start: bool) {
         use MicroNode::*;
         match micro {
             Text(text) => {
-                self.write_escaped(text);
+                self.write_escaped(text.trim_start_if(trim_start));
             }
             Quoted {
                 is_inner,
                 localized,
                 children,
             } => {
-                self.dest.push_str(localized.opening(*is_inner));
-                self.write_micros(children);
+                self.dest.push_str(localized.opening(*is_inner).trim_start_if(trim_start));
+                self.write_micros(children, false);
                 self.dest.push_str(localized.closing(*is_inner));
             }
             Formatted(nodes, _cmd) => {
-                self.write_micros(nodes);
+                self.write_micros(nodes, trim_start);
             }
             NoCase(inners) => {
-                self.write_micros(inners);
+                self.write_micros(inners, trim_start);
             }
             NoDecor(inners) => {
-                self.write_micros(inners);
+                self.write_micros(inners, trim_start);
             }
         }
     }
 
-    fn write_inline(&mut self, inline: &InlineElement) {
+    fn write_inline(&mut self, inline: &InlineElement, trim_start: bool) {
         use super::InlineElement::*;
         match inline {
             Text(text) => {
-                self.write_escaped(text);
+                self.write_escaped(text.trim_start_if(trim_start));
             }
             Div(display, inlines) => {
                 self.stack_formats(inlines, Formatting::default(), Some(*display));
             }
             Micro(micros) => {
-                self.write_micros(micros);
+                self.write_micros(micros, trim_start);
             }
             Formatted(inlines, formatting) => {
                 self.stack_formats(inlines, *formatting, None);
@@ -78,12 +79,12 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 inlines,
             } => {
                 // TODO: move punctuation
-                self.write_escaped(localized.opening(*is_inner));
-                self.write_inlines(inlines);
+                self.write_escaped(localized.opening(*is_inner).trim_start_if(trim_start));
+                self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { content, .. } => {
-                self.write_inlines(content);
+                self.write_inlines(content, trim_start);
             }
         }
     }
