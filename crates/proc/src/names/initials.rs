@@ -46,7 +46,27 @@ pub fn initialize<'n>(
                             build.truncate(build.trim_end().len());
                             build.push(' ');
                         }
-                        build.push(n.chars().nth(0).unwrap());
+                        // name_LongAbbreviation.txt i.e. GIven => Gi.
+                        if n.chars().any(|c| c.is_lowercase()) {
+                            let mut iter = n.chars();
+                            let mut seen_one = false;
+                            while let Some(c) = iter.next() {
+                                let upper = c.is_uppercase();
+                                if upper && seen_one {
+                                    build.extend(c.to_lowercase());
+                                    continue;
+                                } else if upper {
+                                    build.push(c);
+                                    seen_one = true;
+                                    continue;
+                                } else if !seen_one {
+                                    build.push(c);
+                                }
+                                break;
+                            }
+                        } else {
+                            build.push(n.chars().nth(0).unwrap());
+                        }
                         build.push_str(with);
                         State::AfterInitial
                     } else {
