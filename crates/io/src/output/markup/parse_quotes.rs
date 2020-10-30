@@ -175,6 +175,8 @@ fn stamp<'a>(
                         if let Some((SFQuoteKind::FrenchOpen, _)) = stack.stack.last() {
                             let (_, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
+                                // The french locale uses guillemets as the outer quotes, so we'll
+                                // do the same.
                                 is_inner: false,
                                 localized: options.quotes.clone(),
                                 children,
