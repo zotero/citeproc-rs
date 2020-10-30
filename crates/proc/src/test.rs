@@ -77,6 +77,7 @@ impl MockProcessor {
             fetcher,
         };
         citeproc_db::safe_default(&mut db);
+        crate::safe_default(&mut db);
         db
     }
 

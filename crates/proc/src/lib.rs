@@ -45,7 +45,7 @@ mod sort;
 mod unicode;
 mod walker;
 
-pub use crate::db::built_cluster_before_output;
+pub use crate::db::{built_cluster_before_output, safe_default};
 
 pub(crate) mod prelude {
     pub(crate) trait AsRefOptStr {
@@ -70,7 +70,7 @@ pub(crate) mod prelude {
         Bibliography,
     }
     pub use crate::cite_context::RenderContext;
-    pub use crate::db::{ImplementationDetails, IrDatabase};
+    pub use crate::db::{safe_default, ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
     pub use crate::walker::{StyleWalker, WalkerFoldType};
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};

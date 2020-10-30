@@ -84,7 +84,9 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
 
     let max_cnum = preordered.len() as u32;
     let mut reverse = false;
-    let refs = if let Some(ref sort) = bib {
+    let refs = if db.bibliography_nosort() {
+        preordered
+    } else if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {
             let a_cnum = citation_numbers.get(a).unwrap();
             let demoting =

@@ -107,9 +107,15 @@ pub trait IrDatabase:
 
     #[salsa::invoke(crate::sort::sorted_refs)]
     fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
+    #[salsa::input]
+    fn bibliography_nosort(&self) -> bool;
 
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<u32>;
+}
+
+pub fn safe_default(db: &mut dyn IrDatabase) {
+    db.set_bibliography_nosort_with_durability(false, salsa::Durability::HIGH);
 }
 
 fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {

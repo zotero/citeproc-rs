@@ -138,6 +138,9 @@ pub struct InitOptions<'a> {
     /// Disables some formalities for test suite operation
     pub test_mode: bool,
 
+    /// Disables sorting on the bibliography
+    pub bibliography_nosort: bool,
+
     #[doc(hidden)]
     pub use_default_default: (),
 }
@@ -157,6 +160,7 @@ impl Processor {
             preview_cluster_id,
         };
         citeproc_db::safe_default(&mut db);
+        citeproc_proc::safe_default(&mut db);
         db
     }
 
@@ -169,7 +173,8 @@ impl Processor {
             fetcher,
             format,
             test_mode,
-            ..
+            bibliography_nosort,
+            use_default_default: _,
         } = options;
 
         let fetcher = fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
@@ -184,6 +189,7 @@ impl Processor {
         )?;
         db.set_style_with_durability(Arc::new(style), Durability::HIGH);
         db.set_default_lang_override_with_durability(locale_override, Durability::HIGH);
+        db.set_bibliography_nosort_with_durability(bibliography_nosort, Durability::HIGH);
         Ok(db)
     }
 

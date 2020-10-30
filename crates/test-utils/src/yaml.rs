@@ -25,6 +25,8 @@ pub struct YamlTestCase {
     pub result: String,
     pub clusters: Option<Vec<CitationItem>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
+    #[serde(default)]
+    pub bibliography_nosort: bool,
 }
 
 impl From<YamlTestCase> for TestCase {
@@ -32,6 +34,7 @@ impl From<YamlTestCase> for TestCase {
         TestCase::new(
             yaml.mode,
             yaml.format,
+            yaml.bibliography_nosort,
             yaml.csl,
             yaml.input,
             crate::normalise_html(&yaml.result),
