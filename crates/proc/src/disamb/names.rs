@@ -370,7 +370,7 @@ fn test_name_disamb_iter() {
         test(&name, GivenNameDisambiguationRule::PrimaryName, false),
         vec![]
     );
-    name.initialize_with = Some(Atom::from("."));
+    name.initialize_with = Some(".".into());
     assert_eq!(
         test(&name, GivenNameDisambiguationRule::AllNames, true),
         vec![

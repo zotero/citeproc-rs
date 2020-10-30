@@ -63,12 +63,6 @@ pub(crate) mod prelude {
     }
     pub use crate::ir::IrSum;
     pub type IrArena<O = Markup> = indextree::Arena<IrSum<O>>;
-    pub use indextree::{Node, NodeId};
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub enum CiteOrBib {
-        Citation,
-        Bibliography,
-    }
     pub use crate::cite_context::RenderContext;
     pub use crate::db::{safe_default, ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
@@ -79,6 +73,8 @@ pub(crate) mod prelude {
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
     pub use citeproc_io::{SmartCow, SmartString};
+    pub use csl::CiteOrBib;
+    pub use indextree::{Node, NodeId};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 
@@ -323,9 +319,11 @@ impl IrState {
             if self.name_override.in_substitute {
                 self.suppressed.insert(AnyVariable::Ordinary(var));
                 if var == Variable::Title {
-                    self.suppressed.insert(AnyVariable::Ordinary(Variable::TitleShort));
+                    self.suppressed
+                        .insert(AnyVariable::Ordinary(Variable::TitleShort));
                 } else if var == Variable::TitleShort {
-                    self.suppressed.insert(AnyVariable::Ordinary(Variable::Title));
+                    self.suppressed
+                        .insert(AnyVariable::Ordinary(Variable::Title));
                 }
             }
             f(self)

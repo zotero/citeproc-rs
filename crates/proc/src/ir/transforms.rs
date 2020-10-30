@@ -479,9 +479,10 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
 
 impl Unnamed3<Markup> {
     pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
-        let prefix_parsed = cite.prefix.as_opt_str() .map(|p| {
-            fmt.ingest(p, &IngestOptions::default())
-        });
+        let prefix_parsed = cite
+            .prefix
+            .as_opt_str()
+            .map(|p| fmt.ingest(p, &IngestOptions::default()));
         Unnamed3 {
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),
@@ -948,4 +949,134 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
         }
     }
     false
+}
+
+///////////////////////
+// MixedNumericStyle //
+///////////////////////
+
+// pub fn style_mixed_num_empty_error(style: &csl::Style, fmt: &Markup) -> Option<MarkupBuild> {
+//     style_is_mixed_numeric(style, CiteOrBib::Bibliography)
+//         .map(|(el_ref, maybe_delim)| {
+//         })
+// }
+pub fn style_is_mixed_numeric(
+    style: &csl::Style,
+    cite_or_bib: CiteOrBib,
+) -> Option<(&Element, Option<&str>)> {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    fn cnum_renders_first<'a>(
+        els: &'a [El],
+        maybe_delim: Option<&'a str>,
+    ) -> Option<(&'a Element, Option<&'a str>)> {
+        for el in els {
+            match el {
+                El::Text(TextElement {
+                    source: TS::Variable(SV::Number(CitationNumber), _),
+                    ..
+                }) => return Some((el, maybe_delim)),
+                El::Number(NumberElement {
+                    variable: CitationNumber,
+                    ..
+                }) => return Some((el, maybe_delim)),
+                El::Group(Group {
+                    elements,
+                    delimiter,
+                    ..
+                }) => {
+                    return cnum_renders_first(elements, delimiter.as_opt_str());
+                }
+                El::Choose(c) => {
+                    let Choose(if_, ifthens_, else_) = c.as_ref();
+
+                    // You could have a citation number appear first in the bibliography in an else
+                    // block. You wouldn't, but you could.
+                    let either = cnum_renders_first(&if_.1, maybe_delim).or_else(|| {
+                        ifthens_
+                            .iter()
+                            .find_map(|ifthen| cnum_renders_first(&ifthen.1, maybe_delim))
+                    });
+                    if either.is_some() {
+                        return either;
+                    } else if else_.0.is_empty() {
+                        // No else block? The choose could be empty.
+                        continue;
+                    } else {
+                        let else_found = cnum_renders_first(&else_.0, maybe_delim);
+                        if else_found.is_some() {
+                            return else_found;
+                        }
+                    }
+                }
+                _ => break,
+            }
+        }
+        None
+    }
+    style
+        .get_layout(cite_or_bib)
+        .and_then(|layout| cnum_renders_first(&layout.elements, None))
+}
+
+#[test]
+fn test_mixed_numeric() {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    let mk = |layout: &str| {
+        let txt = format!(
+            r#"
+            <style class="in-text" version="1.0">
+                <citation><layout></layout></citation>
+                <bibliography><layout>
+                    {}
+                </layout></bibliography>
+            </style>
+        "#,
+            layout
+        );
+        Style::parse_for_test(&txt).unwrap()
+    };
+    let style = mk(r#"<group delimiter=". "> <text variable="citation-number" /> </group>"#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    let model_el = El::Text(TextElement {
+        source: TS::Variable(SV::Number(CitationNumber), VariableForm::Long),
+        ..Default::default()
+    });
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <group delimiter=". ">
+           <choose>
+               <if type="book">
+                   <text variable="citation-number" />
+                   <text variable="title" />
+               </if>
+           </choose>
+       </group>"#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <choose>
+           <if type="book">
+               <group delimiter=". ">
+                   <text variable="citation-number" />
+               </group>
+           </if>
+       </choose>
+       <text variable="title" />
+       "#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <choose>
+           <if type="book">
+               <group delimiter=". ">
+                   <number variable="citation-number" />
+                   <text variable="title" />
+               </group>
+           </if>
+       </choose>
+       "#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert!(matches!(found, Some((_, Some(". ")))));
 }

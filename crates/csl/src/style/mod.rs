@@ -35,8 +35,13 @@ pub enum TextSource {
     Variable(StandardVariable, VariableForm),
     Term(TextTermSelector, TermPlural),
 }
+impl Default for TextSource {
+    fn default() -> Self {
+        TextSource::Value("".into())
+    }
+}
 
-#[derive(Debug, Eq, Clone, PartialEq)]
+#[derive(Default, Debug, Eq, Clone, PartialEq)]
 pub struct TextElement {
     pub source: TextSource,
     pub formatting: Option<Formatting>,

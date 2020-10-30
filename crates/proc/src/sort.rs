@@ -89,17 +89,24 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
     } else if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {
             let a_cnum = citation_numbers.get(a).unwrap();
-            let demoting =
-                with_bib_context(db, a.clone(), Some(*a_cnum), None, None, |_, mut a_ctx| {
-                    ctx_sort_items(
+            let demoting = with_bib_context(
+                db,
+                a.clone(),
+                Some(*a_cnum),
+                None,
+                None,
+                |_, mut a_ctx| {
+                    Some(ctx_sort_items(
                         db,
                         CiteOrBib::Bibliography,
                         &mut a_ctx,
                         *a_cnum,
                         sort,
                         max_cnum,
-                    )
-                });
+                    ))
+                },
+                |_, _, _| None,
+            );
             log::debug!("(Bibliography) sort items for {:?}: {:?}", a_cnum, demoting);
             if let Some(Demoting {
                 fake_cnum: Some(_), ..
@@ -588,12 +595,18 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
 fn sort_string_bibliography(
     db: &dyn IrDatabase,
     ref_id: Atom,
-    macro_name: Atom,
+    macro_name: SmartString,
     key: SortKey,
 ) -> Option<Arc<SmartString>> {
-    with_bib_context(db, ref_id.clone(), None, Some(key), None, |_bib, ctx| {
-        Arc::new(ctx_sort_string(db, &ctx, macro_name))
-    })
+    with_bib_context(
+        db,
+        ref_id.clone(),
+        None,
+        Some(key),
+        None,
+        |_bib, ctx| Some(Arc::new(ctx_sort_string(db, &ctx, macro_name))),
+        |_, _, _| None,
+    )
 }
 
 #[test]

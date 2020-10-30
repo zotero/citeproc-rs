@@ -7,6 +7,8 @@
 // For the query group macro expansion
 #![allow(clippy::large_enum_variant)]
 
+const CSL_STYLE_ERROR: &'static str = "[CSL STYLE ERROR: reference with no printed form.]";
+
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
@@ -1156,6 +1158,8 @@ fn cluster_cites_sorted(db: &dyn IrDatabase, cluster_id: ClusterId) -> Option<Ar
         .map(|data| data.cites.clone())
 }
 
+use crate::ir::transforms;
+
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,
@@ -1169,7 +1173,7 @@ pub fn built_cluster_before_output(
     let style = db.style();
     let layout = &style.citation.layout;
     let sorted_refs_arc = db.sorted_refs();
-    use crate::ir::transforms::{group_and_collapse, CnumIx, RangePiece, Unnamed3};
+    use transforms::{CnumIx, RangePiece, Unnamed3};
     let mut irs: Vec<_> = cite_ids
         .iter()
         .map(|&id| {
@@ -1182,7 +1186,7 @@ pub fn built_cluster_before_output(
         .collect();
 
     if let Some((_cgd, collapse)) = style.citation.group_collapsing() {
-        group_and_collapse(&fmt, collapse, &mut irs);
+        transforms::group_and_collapse(&fmt, collapse, &mut irs);
     }
 
     // Cite capitalization
@@ -1190,9 +1194,19 @@ pub fn built_cluster_before_output(
     // middle of an existing footnote, and isn't preceded by a period (or however else a client
     // wants to judge that).
     // We capitalize all cites whose prefixes end with full stops.
-    for (ix, Unnamed3 { gen4, prefix_parsed, .. }) in irs.iter_mut().enumerate() {
+    for (
+        ix,
+        Unnamed3 {
+            gen4,
+            prefix_parsed,
+            ..
+        },
+    ) in irs.iter_mut().enumerate()
+    {
         if style.class != csl::StyleClass::InText
-            && prefix_parsed.as_ref().map_or(ix == 0, |pre| fmt.ends_with_full_stop(pre))
+            && prefix_parsed
+                .as_ref()
+                .map_or(ix == 0, |pre| fmt.ends_with_full_stop(pre))
         {
             // dbg!(ix, prefix_parsed);
             let gen_mut = Arc::make_mut(gen4);
@@ -1235,7 +1249,7 @@ pub fn built_cluster_before_output(
         use std::borrow::Cow;
         let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt, None) {
             Some(x) => x,
-            None => fmt.plain("[CSL STYLE ERROR: reference with no printed form.]"),
+            None => fmt.plain(CSL_STYLE_ERROR),
         };
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
@@ -1472,14 +1486,21 @@ pub fn with_bib_context<T>(
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     year_suffix: Option<u32>,
-    f: impl FnOnce(&Bibliography, CiteContext) -> T,
+    ref_present: impl FnOnce(&Bibliography, CiteContext) -> Option<T>,
+    ref_missing: impl FnOnce(&Bibliography, CiteContext, bool) -> Option<T>,
 ) -> Option<T> {
     let style = db.style();
+    let bib = style.bibliography.as_ref()?;
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
-    let refr = db.reference(ref_id)?;
+    let refr_arc = db.reference(ref_id);
+    let null_ref = citeproc_io::Reference::empty("empty_ref".into(), csl::CslType::Article);
+    let (refr, is_ref_missing) = if let Some(arc) = refr_arc.as_ref() {
+        (arc.as_ref(), false)
+    } else {
+        (&null_ref, true)
+    };
     let (names_delimiter, name_el) = db.name_info_bibliography();
-    let bib = style.bibliography.as_ref()?;
     let ctx = CiteContext {
         reference: &refr,
         format: db.get_formatter(),
@@ -1497,7 +1518,11 @@ pub fn with_bib_context<T>(
         sort_key,
         year_suffix,
     };
-    Some(f(bib, ctx))
+    if is_ref_missing {
+        ref_missing(bib, ctx, false)
+    } else {
+        ref_present(bib, ctx.clone()).or_else(|| ref_missing(bib, ctx, true))
+    }
 }
 
 fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
@@ -1537,7 +1562,45 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 }
             }
 
-            Arc::new(IrGen::new(root, arena, state))
+            if IR::is_empty(root, &arena) {
+                None
+            } else {
+                Some(Arc::new(IrGen::new(root, arena, state)))
+            }
+        },
+        |bib, ctx, _just_empty_output| {
+            let mut state = IrState::new();
+            let mut arena = IrArena::new();
+
+            // Re the ? operator here: sort_omittedBibRefMixedNonNumericStyle.txt
+            // If no citation-number found, simply exclude it from the bibliography.
+            let (el_ref, maybe_delim) =
+                transforms::style_is_mixed_numeric(ctx.style, CiteOrBib::Bibliography)?;
+            // Render it as "1. [CSL STYLE ERROR ...]"
+            let mut root = {
+                let msg = ctx.format.plain(CSL_STYLE_ERROR);
+                let msg_node = arena.new_node((
+                    IR::Rendered(Some(CiteEdgeData::Output(msg))),
+                    GroupVars::Important,
+                ));
+                let n = el_ref.intermediate(db, &mut state, &ctx, &mut arena);
+                let seq = IrSeq {
+                    delimiter: maybe_delim.map(Into::into),
+                    ..Default::default()
+                };
+                let seq_node = arena.new_node((IR::Seq(seq), GroupVars::Important));
+                seq_node.append(n, &mut arena);
+                seq_node.append(msg_node, &mut arena);
+                seq_node
+            };
+
+            if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
+                if let Some(new_root) = IR::split_first_field(root, &mut arena) {
+                    root = new_root;
+                }
+            }
+
+            Some(Arc::new(IrGen::new(root, arena, state)))
         },
     )
 }
@@ -1579,7 +1642,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                 sas,
             ) {
                 let mutated = Arc::make_mut(&mut gen0);
-                let did = crate::transforms::subsequent_author_substitute(
+                let did = transforms::subsequent_author_substitute(
                     &fmt,
                     // In order to unwrap this here, you must only replace the NameIR node's
                     // children, not the IR.

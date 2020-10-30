@@ -114,6 +114,12 @@ impl FromStr for Style {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CiteOrBib {
+    Citation,
+    Bibliography,
+}
+
 impl Style {
     /// Parses a style from an CSL string as XML.
     pub fn parse(xml: &str) -> Result<Self, StyleError> {
@@ -171,6 +177,12 @@ impl Style {
     }
     pub fn independent_parent(&self) -> Option<&ParentLink> {
         self.info.parent.as_ref()
+    }
+    pub fn get_layout(&self, loc: CiteOrBib) -> Option<&Layout> {
+        match loc {
+            CiteOrBib::Citation => Some(&self.citation.layout),
+            CiteOrBib::Bibliography => self.bibliography.as_ref().map(|b| &b.layout),
+        }
     }
 }
 
