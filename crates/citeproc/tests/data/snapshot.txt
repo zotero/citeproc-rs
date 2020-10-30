@@ -1,10 +1,6 @@
 # vim: set ft=sh :
 # that's for comments
 
-# this behaviour happens if you have actually have a subsequent reference, but
-# without one, the cites are already unambiguous.
-disambiguate_BasedOnEtAlSubsequent.txt
-
 # The HTML parser in citeproc-rs is a real HTML5 parser, which will strip
 # floating half-tags according to that specification.
 flipflop_ItalicsSimple.txt

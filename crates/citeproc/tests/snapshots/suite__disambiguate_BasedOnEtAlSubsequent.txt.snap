@@ -1,5 +1,0 @@
----
-source: crates/citeproc/tests/suite.rs
-expression: res
----
-(Baur, Fröberg, Baur, et al. 2000; Baur, Schileyko &amp; Baur 2000; Doe 2000)

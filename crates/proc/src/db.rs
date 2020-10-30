@@ -367,11 +367,11 @@ macro_rules! preamble {
     ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
         $style = $db.style();
         $locale = $db.locale_by_cite($id);
-        let cite_data = $id.lookup($db);
         // Avoid making bibliography ghosts all depend any positional / note num info
         let cite_stuff = match $db.lookup_cite($id) {
             CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
-            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::First, None)),
+            // Subsequent because: disambiguate_BasedOnEtAlSubsequent.txt
+            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::Subsequent, None)),
         };
         $cite = cite_stuff.0;
         let position = cite_stuff.1;
@@ -1107,10 +1107,6 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     // Start with the given names done.
     let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
-    let gen2_matching_refs = db.ir_gen2_matching_refs(id);
-    if gen2_matching_refs.len() <= 1 {
-        return irgen.into_arc();
-    }
     let successful = irgen.disambiguate_add_year_suffix(db, &mut ctx);
     if successful {
         return irgen.into_arc();
@@ -1832,6 +1828,6 @@ fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
         *x
     } else {
         // Assume this cite is a ghost cite.
-        (Position::First, None)
+        (Position::Subsequent, None)
     }
 }
