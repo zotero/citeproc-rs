@@ -1,10 +1,10 @@
-use crate::String;
 use crate::output::micro_html::MicroNode;
-use crate::IngestOptions;
 #[cfg(test)]
 use crate::output::FormatCmd;
+use crate::IngestOptions;
 #[cfg(test)]
 use crate::LocalizedQuotes;
+use crate::String;
 #[cfg(test)]
 use pretty_assertions::assert_eq;
 
@@ -59,7 +59,6 @@ struct QuotedStack {
     dest: Vec<MicroNode>,
     stack: Vec<(SFQuoteKind, Vec<MicroNode>)>,
 }
-
 impl QuotedStack {
     fn with_capacity(n: usize) -> Self {
         QuotedStack {
@@ -167,6 +166,21 @@ fn stamp<'a>(
                             });
                         } else {
                             stack.push_str(SFQuoteKind::Double.unmatched_str());
+                        }
+                    }
+                    EventOwned::SmartQuoteFrenchOpen => {
+                        stack.stack.push((SFQuoteKind::FrenchOpen, Vec::new()));
+                    }
+                    EventOwned::SmartQuoteFrenchClose => {
+                        if let Some((SFQuoteKind::FrenchOpen, _)) = stack.stack.last() {
+                            let (_, children) = stack.stack.pop().unwrap();
+                            stack.push(MicroNode::Quoted {
+                                is_inner: false,
+                                localized: options.quotes.clone(),
+                                children,
+                            });
+                        } else {
+                            stack.push_str(SFQuoteKind::FrenchClose.unmatched_str());
                         }
                     }
                 }
@@ -327,7 +341,7 @@ impl<'a> QuoteMatcher<'a> {
                         .original
                         .get(ix + 1)
                         .and_then(|n| leaning_text(n, false));
-                    let splitter = QuoteSplitter::new(&string, prev, next).events();
+                    let splitter = new_quote_splitter(&string, prev, next).events();
                     EachSplitter::Splitter {
                         index: ix,
                         splitter,
@@ -346,6 +360,8 @@ enum Event<'a> {
     SmartQuoteDoubleOpen,
     SmartQuoteSingleClose,
     SmartQuoteDoubleClose,
+    SmartQuoteFrenchOpen,
+    SmartQuoteFrenchClose,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -356,6 +372,8 @@ enum EventOwned {
     SmartQuoteDoubleOpen,
     SmartQuoteSingleClose,
     SmartQuoteDoubleClose,
+    SmartQuoteFrenchOpen,
+    SmartQuoteFrenchClose,
 }
 
 impl<'a> From<Event<'a>> for EventOwned {
@@ -367,6 +385,8 @@ impl<'a> From<Event<'a>> for EventOwned {
             Event::SmartQuoteDoubleOpen => EventOwned::SmartQuoteDoubleOpen,
             Event::SmartQuoteSingleClose => EventOwned::SmartQuoteSingleClose,
             Event::SmartQuoteDoubleClose => EventOwned::SmartQuoteDoubleClose,
+            Event::SmartQuoteFrenchOpen => EventOwned::SmartQuoteFrenchOpen,
+            Event::SmartQuoteFrenchClose => EventOwned::SmartQuoteFrenchClose,
         }
     }
 }
@@ -383,6 +403,8 @@ fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
         (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose,
         (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma,
         (SmartQuoteKind::Midword, '\u{2019}') => Event::SmartMidwordInvertedComma,
+        (SmartQuoteKind::OpenFrench, _) => Event::SmartQuoteFrenchOpen,
+        (SmartQuoteKind::CloseFrench, _) => Event::SmartQuoteFrenchClose,
         // Don't parse this as a quote at all
         _ => {
             debug!("quote_event doesn't want a quote: {:?}", ch);
@@ -398,15 +420,7 @@ struct Thingo<'a> {
     upto: Option<Event<'a>>,
     post: Option<Option<Event<'a>>>,
 }
-impl<'a> Thingo<'a> {
-    fn post(s: &'a str) -> Self {
-        Thingo {
-            quote_event: None,
-            upto: None,
-            post: Some(Some(Event::Text(s))),
-        }
-    }
-}
+
 impl<'a> Iterator for Thingo<'a> {
     type Item = Event<'a>;
     fn next(&mut self) -> Option<Self::Item> {
@@ -420,11 +434,10 @@ impl<'a> Iterator for Thingo<'a> {
     }
 }
 
-impl<'a> Iterator for QuoteSplitter<'a> {
+impl<'a, I: Iterator<Item = SplitPoint>> Iterator for QuoteSplitter<'a, I> {
     type Item = Thingo<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((ix, quote_char)) = self.possibles.next() {
-            // next_char is either ' or "
             let mut prefix = &self.string[..ix];
             let mut suffix = &self.string[ix + quote_char.len_utf8()..];
             if prefix.is_empty() {
@@ -437,21 +450,34 @@ impl<'a> Iterator for QuoteSplitter<'a> {
                     suffix = next;
                 }
             }
-            let upto = Some(Event::Text(&self.string[self.text_start..ix]));
+            let mut upto = &self.string[self.text_start..ix];
             let quote_event = quote_kind(quote_char, prefix, suffix)
                 .and_then(|kind| quote_event((kind, quote_char)));
             if quote_event.is_some() {
                 self.text_start = ix + quote_char.len_utf8();
+                // Strip leading spaces after opening guillemets
+                if quote_char == FRENCH_OPEN {
+                    let slice = &self.string[self.text_start..];
+                    self.text_start += slice.len() - slice.trim_start().len();
+                }
+                // Strip trailing spaces before closing guillemets
+                if quote_char == FRENCH_CLOSE {
+                    upto = upto.trim_end();
+                }
             }
             Some(Thingo {
                 quote_event,
-                upto,
+                upto: Some(Event::Text(upto)),
                 post: None,
             })
         } else if !self.emitted_last && self.text_start > 0 {
             // the remainder, after the last quote char
             self.emitted_last = true;
-            Some(Thingo::post(&self.string[self.text_start..]))
+            Some(Thingo {
+                quote_event: None,
+                upto: None,
+                post: Some(Some(Event::Text(&self.string[self.text_start..]))),
+            })
         } else {
             None
         }
@@ -460,39 +486,44 @@ impl<'a> Iterator for QuoteSplitter<'a> {
 
 fn quote_is_possible(ch: char) -> bool {
     match ch {
-        SINGLE_OPEN | SINGLE_CLOSE | DOUBLE_OPEN | DOUBLE_CLOSE | '\'' | '"' => true,
+        '\'' | '"' | SINGLE_OPEN | SINGLE_CLOSE | DOUBLE_OPEN | DOUBLE_CLOSE | FRENCH_OPEN
+        | FRENCH_CLOSE => true,
         _ => false,
     }
 }
 
+type SplitPoint = (usize, char);
+
 #[derive(Debug)]
-struct QuoteSplitter<'a> {
+struct QuoteSplitter<'a, I: Iterator<Item = SplitPoint> + 'a> {
     string: &'a str,
     previous_text_node: Option<&'a str>,
     subsequent_text_node: Option<&'a str>,
     text_start: usize,
-    possibles: std::iter::Filter<std::str::CharIndices<'a>, IsPossible>,
+    possibles: I,
     emitted_last: bool,
 }
 
-type IsPossible = fn(c: &(usize, char)) -> bool;
-
-impl<'a> QuoteSplitter<'a> {
-    fn new(string: &'a str, prev: Option<&'a str>, next: Option<&'a str>) -> Self {
-        QuoteSplitter {
-            string,
-            previous_text_node: prev,
-            subsequent_text_node: next,
-            text_start: 0,
-            possibles: string
-                .char_indices()
-                .filter(|&(_, ch)| quote_is_possible(ch)),
-            emitted_last: false,
-        }
+fn new_quote_splitter<'a>(
+    string: &'a str,
+    prev: Option<&'a str>,
+    next: Option<&'a str>,
+) -> QuoteSplitter<'a, impl Iterator<Item = SplitPoint> + 'a> {
+    QuoteSplitter {
+        string,
+        previous_text_node: prev,
+        subsequent_text_node: next,
+        text_start: 0,
+        possibles: string
+            .char_indices()
+            .filter(|&(_, ch)| quote_is_possible(ch)),
+        emitted_last: false,
     }
+}
 
+impl<'a, I: Iterator<Item = SplitPoint>> QuoteSplitter<'a, I> {
     fn events(self) -> impl Iterator<Item = Event<'a>> {
-        self.flat_map(|x| x).filter(|ev| match ev {
+        self.flat_map(|x: Thingo| x).filter(|ev| match ev {
             Event::Text("") => false,
             _ => true,
         })
@@ -502,7 +533,7 @@ impl<'a> QuoteSplitter<'a> {
 #[test]
 fn test_quote_splitter_simple() {
     let string = "hello, I'm a man with a plan, \"Canal Panama\".";
-    let splitter = QuoteSplitter::new(string, None, None);
+    let splitter = new_quote_splitter(string, None, None);
     let mut events = Vec::new();
     for event in splitter.events() {
         events.push(event);
@@ -521,6 +552,50 @@ fn test_quote_splitter_simple() {
     );
 }
 
+#[test]
+fn test_quote_splitter_french() {
+    let string = "hello, I'm a man with a plan, \u{ab}Canal Panama\u{bb}.";
+    let splitter = new_quote_splitter(string, None, None);
+    let mut events = Vec::new();
+    for event in splitter.events() {
+        events.push(event);
+    }
+    assert_eq!(
+        events,
+        vec![
+            Event::Text("hello, I"),
+            Event::SmartMidwordInvertedComma,
+            Event::Text("m a man with a plan, "),
+            Event::SmartQuoteFrenchOpen,
+            Event::Text("Canal Panama"),
+            Event::SmartQuoteFrenchClose,
+            Event::Text("."),
+        ]
+    );
+}
+
+#[test]
+fn test_quote_splitter_french_with_spaces() {
+    let string = "hello, I'm a man with a plan, \u{ab} Canal Panama \u{bb}.";
+    let splitter = new_quote_splitter(string, None, None);
+    let mut events = Vec::new();
+    for event in splitter.events() {
+        events.push(event);
+    }
+    assert_eq!(
+        events,
+        vec![
+            Event::Text("hello, I"),
+            Event::SmartMidwordInvertedComma,
+            Event::Text("m a man with a plan, "),
+            Event::SmartQuoteFrenchOpen,
+            Event::Text("Canal Panama"),
+            Event::SmartQuoteFrenchClose,
+            Event::Text("."),
+        ]
+    );
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum SmartQuoteKind {
     Open,
@@ -530,6 +605,8 @@ enum SmartQuoteKind {
     OpenDouble,
     CloseSingle,
     CloseDouble,
+    OpenFrench,
+    CloseFrench,
 }
 
 impl SmartQuoteKind {
@@ -542,6 +619,10 @@ impl SmartQuoteKind {
             Some(SmartQuoteKind::OpenDouble)
         } else if ch == DOUBLE_CLOSE {
             Some(SmartQuoteKind::CloseDouble)
+        } else if ch == FRENCH_OPEN {
+            Some(SmartQuoteKind::OpenFrench)
+        } else if ch == FRENCH_CLOSE {
+            Some(SmartQuoteKind::CloseFrench)
         } else {
             None
         }
@@ -607,6 +688,8 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
 enum SFQuoteKind {
     Single,
     Double,
+    FrenchOpen,
+    FrenchClose,
     // no midword
 }
 
@@ -615,6 +698,8 @@ impl SFQuoteKind {
         match self {
             SFQuoteKind::Single => "'",
             SFQuoteKind::Double => "\"",
+            SFQuoteKind::FrenchOpen => "\u{ab}",
+            SFQuoteKind::FrenchClose => "\u{bb}",
         }
     }
 }
@@ -623,3 +708,15 @@ const SINGLE_OPEN: char = '\u{2018}';
 const SINGLE_CLOSE: char = '\u{2019}';
 const DOUBLE_OPEN: char = '\u{201c}';
 const DOUBLE_CLOSE: char = '\u{201d}';
+const FRENCH_OPEN: char = '\u{ab}';
+const FRENCH_CLOSE: char = '\u{bb}';
+
+// const fn make_first_byte_lut(chars: &[char]) -> [bool; 256] {
+//     let mut lut = [bool; 256];
+//     let mut scratch = [u8; 4];
+//     for c in chars {
+//         let bs = c.encode_utf8(&mut scratcb)
+//         lut[bs[0]] = true;
+//     }
+//     lut
+// }

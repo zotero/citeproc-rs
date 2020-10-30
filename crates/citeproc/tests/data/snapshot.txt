@@ -58,6 +58,13 @@ bugreports_NoCaseEscape.txt
 # decided this is wrong.
 flipflop_NumericField.txt
 
+# The french locale itself does not use half-width nbsps, so not sure why the
+# bruteforce find-and-replace method should.
+# In any case citeproc-rs actually parses French guillemets and renders using
+# the French locale file or converts them to whatever other locale.
+# So this snapshot has full-width nbsp (\u{a0}/&#8203;/&#x160;) instead.
+punctuation_FrenchOrthography.txt
+
 # Test implies i.e. month = 17 means Spring, implying 17-20 are also valid seasons,
 # i.e. if month > 12 && month < 25 { season = (month - 12) % 4 }
 # There is no reason for this to be the case. There's CSL-JSON's 13..=16 range,
