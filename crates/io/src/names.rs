@@ -183,7 +183,9 @@ impl PersonName {
             return;
         }
         if let Some(family) = family {
-            if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
+            if family.starts_with('"') && family.ends_with('"') {
+                *family = replace_apostrophes(&family);
+            } else if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
                 trim_last(&mut nondrops);
                 *non_dropping_particle = Some(replace_apostrophes(nondrops));
                 *family = remain;
@@ -192,6 +194,10 @@ impl PersonName {
             }
         }
         if let Some(given) = given {
+            if given.starts_with('"') && given.ends_with('"') {
+                *given = replace_apostrophes(&given);
+                return;
+            }
             if let Some((suff, force_comma)) = parse_suffix(given, dropping_particle.is_some()) {
                 *suffix = Some(suff);
                 *comma_suffix = force_comma;
@@ -309,6 +315,21 @@ fn parse_particles() {
             ..Default::default()
         }
     );
+
+    let mut init = PersonName {
+        given: Some("Dick".into()),
+        family: Some("\"Van Dyke\"".into()),
+        ..Default::default()
+    };
+    init.parse_particles();
+    assert_eq!(
+        init,
+        PersonName {
+            given: Some("Dick".into()),
+            family: Some("Van Dyke".into()),
+            ..Default::default()
+        }
+    );
 }
 
 /// https://users.rust-lang.org/t/trim-string-in-place/15809/8
@@ -323,34 +344,47 @@ impl TrimInPlace for String {
             let self_trimmed: &str = self.trim();
             (self_trimmed.as_ptr(), self_trimmed.len())
         };
+        if len == self.len() {
+            return;
+        }
+        // Safety: src and dst here are both valid for len * size_of::<u8>() bytes.
+        // Logic-wise, this copy allows copying between overlapping regions.
+        // It's essentially libc's memmove.
         unsafe {
             core::ptr::copy(
                 start,
-                self.as_bytes_mut().as_mut_ptr(), // no str::as_mut_ptr() in std ...
+                self.as_bytes_mut().as_mut_ptr(),
                 len,
             );
         }
-        self.truncate(len); // no String::set_len() in std ...
+        self.truncate(len);
     }
     fn trim_start_in_place(self: &'_ mut Self) {
         let (start, len): (*const u8, usize) = {
             let self_trimmed: &str = self.trim_start();
             (self_trimmed.as_ptr(), self_trimmed.len())
         };
+        if len == self.len() {
+            return;
+        }
+        // See trim_in_place's unsafe block
         unsafe {
             core::ptr::copy(
                 start,
-                self.as_bytes_mut().as_mut_ptr(), // no str::as_mut_ptr() in std ...
+                self.as_bytes_mut().as_mut_ptr(),
                 len,
             );
         }
-        self.truncate(len); // no String::set_len() in std ...
+        self.truncate(len);
     }
     fn trim_end_in_place(self: &'_ mut Self) {
+        // Nothing special here.
         self.truncate(self.trim_end().len());
     }
 }
 
 fn replace_apostrophes(s: impl AsRef<str>) -> String {
-    crate::lazy_replace_char(s.as_ref(), '\'', "\u{2019}").into_owned()
+    let s = s.as_ref();
+    let trim_quoted = s.trim_matches('\"');
+    crate::lazy_replace_char(trim_quoted, '\'', "\u{2019}").into_owned()
 }
