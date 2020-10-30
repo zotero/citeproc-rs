@@ -12,7 +12,7 @@ pub mod roman;
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum NumericValue<'a> {
-    Tokens(Cow<'a, str>, Vec<NumericToken>, bool),
+    Tokens(Cow<'a, str>, Vec<NumericToken>, /* is_num i.e. parsed perfectly */ bool),
     /// For values that could not be parsed.
     Str(Cow<'a, str>),
 }
@@ -436,7 +436,7 @@ macro_rules! test_parse {
     ($inp:literal, [ $($x:expr),+ ]) => {
         assert_eq!(
             NumericValue::parse($inp),
-            NumericValue::Tokens($inp.into(), vec![ $($x),* ])
+            NumericValue::Tokens($inp.into(), vec![ $($x),* ], true)
         )
     };
 }
