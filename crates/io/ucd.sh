@@ -1,6 +1,6 @@
 set -euxo pipefail
 
-VERSION=12.1.0
+VERSION=13.0.0
 
 mkdir -p /tmp/ucd && \
 cd /tmp/ucd && \
