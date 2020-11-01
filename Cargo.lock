@@ -331,6 +331,7 @@ dependencies = [
  "serde_json",
  "smartstring",
  "stringreader",
+ "ucd-trie",
  "unic-segment",
  "v_htmlescape",
 ]
@@ -360,7 +361,6 @@ dependencies = [
  "smallvec",
  "string-interner",
  "strum",
- "ucd-trie",
  "unic-segment",
  "unic-ucd-category",
  "unicase",
