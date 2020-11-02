@@ -2,11 +2,11 @@ use crate::cite_context::RenderContext;
 use crate::number::{arabic_number, render_ordinal, roman_lower, roman_representable};
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
+use citeproc_io::{Name, NumericToken, NumericValue, Reference};
 use csl::{
     Features, GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel,
     NameVariable, NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural,
-    RoleTermSelector, SortKey, StandardVariable, Style, TextCase, TextElement, TextTermSelector,
+    RoleTermSelector, SortKey, StandardVariable, Style, TextElement, TextTermSelector,
     Variable, VariableForm,
 };
 

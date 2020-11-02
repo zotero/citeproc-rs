@@ -6,7 +6,6 @@
 
 use self::initials::initialize;
 
-use super::unicode::is_latin_cyrillic;
 use crate::disamb::names::{
     DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
 };
@@ -88,9 +87,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                         primary,
                         should_start_with_global,
                     ),
-                    Name::Literal { literal } => {
-                        warn!("literal names should be normalised");
-                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
+                    Name::Literal { literal, is_latin_cyrillic } => {
+                        warn!("literal names should be normalised into family-only");
+                        DisambNameRatchet::Literal { literal: fmt.text_node(literal, None), is_latin_cyrillic }
                     }
                 }
             })
@@ -210,7 +209,7 @@ pub fn sort_strings_for_names(
                 Name::Person(pn) => {
                     runner.person_name_sort_keys(pn, &mut out);
                 }
-                Name::Literal { literal } => {
+                Name::Literal { literal, .. } => {
                     if !literal.is_empty() {
                         out.push(UniCase::new(literal.clone()));
                     }
@@ -481,22 +480,42 @@ impl<'c, O: OutputFormat> NameIR<O> {
         self.name_counter.max_recorded = self.name_counter.current;
 
         let mut cloned_runner = runner.clone();
-        let rendered = ntbs
-            .filter_map(|ntb| match ntb {
-                NameTokenBuilt::Built(b) => Some(b),
+        let mut rendered = Vec::new();
+        let mut iter = ntbs.into_iter().peekable();
+        while let Some(ntb) = iter.next() {
+            let renderable = match ntb {
+                NameTokenBuilt::Built(b, lat_cy) => {
+                    Some(b)
+                }
                 NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
-                    DisambNameRatchet::Literal(b) => Some(maybe_subst(b.clone())),
+                    DisambNameRatchet::Literal { literal, is_latin_cyrillic } => {
+                        if fmt.is_empty(literal) {
+                            None
+                        } else {
+                            Some(maybe_subst(literal.clone()))
+                        }
+                    },
                     DisambNameRatchet::Person(pn) => {
                         cloned_runner.name_el = &pn.data.el;
                         let ret =
                             cloned_runner.render_person_name(&pn.data.value, !pn.data.primary);
                         cloned_runner.name_el = &self.names_inheritance.name;
-                        Some(maybe_subst(ret))
+                        Some(maybe_subst(ret)).filter(|x| !fmt.is_empty(&x))
                     }
                 },
-            })
-            .filter(|x| !fmt.is_empty(&x))
-            .collect();
+                NameTokenBuilt::Space => {
+                    let next_is_latin = iter.peek().map_or(None, |x| x.is_latin(&self.disamb_names)).unwrap_or(false);
+                    if next_is_latin {
+                        Some(fmt.plain(" "))
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(r) = renderable { 
+                rendered.push(r);
+            }
+        }
         Some(rendered)
     }
 
@@ -538,33 +557,6 @@ impl<'c, O: OutputFormat> NameIR<O> {
             seq_node
         }
     }
-}
-
-fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
-    pn.family
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
-        && pn
-            .given
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .suffix
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .non_dropping_particle
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .dropping_particle
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
 }
 
 /// For a given display order, not all the name parts will have data in them at the end. So for
@@ -787,7 +779,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         out: &mut Vec<UniCase<SmartString>>,
     ) {
         let order = get_sort_order(
-            pn_is_latin_cyrillic(pn),
+            pn.is_latin_cyrillic,
             self.name_el.form == Some(NameForm::Long),
             self.demote_non_dropping_particle,
         );
@@ -844,13 +836,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                                 .filter(|_| token != NamePartToken::Family);
                             if let Some(dp) = dp {
                                 s.push_str(dp);
-                                if should_append_space(dp) {
+                                if dp_should_append_space(dp) {
                                     s.push_str(" ");
                                 }
                             }
                             if let Some(ndp) = ndp {
                                 s.push_str(ndp);
-                                if should_append_space(ndp) {
+                                if dp_should_append_space(ndp) {
                                     s.push_str(" ");
                                 }
                             }
@@ -907,7 +899,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let fmt = self.fmt;
 
         let order = get_display_order(
-            pn_is_latin_cyrillic(pn),
+            pn.is_latin_cyrillic,
             self.name_el.form == Some(NameForm::Long),
             self.naso(seen_one),
             self.demote_non_dropping_particle,
@@ -981,7 +973,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(dp) = dp {
                         let string = dp.clone();
                         parts.push(self.format_with_part(given_part, string));
-                        if should_append_space(dp) {
+                        if dp_should_append_space(dp) {
                             parts.push(fmt.plain(" "));
                         }
                     }
@@ -989,7 +981,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(ndp) = ndp {
                         let string = ndp.clone();
                         casing.push(self.format_with_part(family_part, string));
-                        if should_append_space(ndp) {
+                        if dp_should_append_space(ndp) {
                             casing.push(fmt.plain(" "));
                         }
                     }
@@ -1103,17 +1095,22 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let iterator = name_tokens.into_iter().filter_map(move |n| {
             Some(match n {
                 NameToken::Name(ratchet) => NameTokenBuilt::Ratchet(ratchet),
-                NameToken::Delimiter => NameTokenBuilt::Built(
-                    fmt.plain(self.name_el.delimiter.as_opt_str().unwrap_or(", ")),
-                ),
+                NameToken::Delimiter => {
+                    let s = self.name_el.delimiter.as_opt_str().unwrap_or(", ");
+                    NameTokenBuilt::Built(
+                        fmt.plain(s),
+                        citeproc_io::unicode::is_latin_cyrillic(s),
+                    )
+                },
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {
                         return None;
                     }
-                    NameTokenBuilt::Built(fmt.text_node(text.into(), formatting))
+                    let lat_cy = citeproc_io::unicode::is_latin_cyrillic(&text);
+                    NameTokenBuilt::Built(fmt.text_node(text.into(), formatting), lat_cy)
                 }
-                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
-                NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
+                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…"), true),
+                NameToken::Space => NameTokenBuilt::Space,
                 NameToken::And => {
                     // If an And token shows up, we already know self.name_el.and is Some.
                     let form = match self.name_el.and {
@@ -1121,8 +1118,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         _ => and_term.as_ref().map(|x| x.as_ref()).unwrap_or("and"),
                     };
                     let mut string: SmartString = form.into();
-                    string.push(' ');
-                    NameTokenBuilt::Built(fmt.text_node(string, None))
+                    let lat_cy = citeproc_io::unicode::is_latin_cyrillic(form);
+                    if lat_cy {
+                        string.push(' ');
+                    }
+                    NameTokenBuilt::Built(fmt.text_node(string, None), lat_cy)
                 }
             })
         });
@@ -1130,9 +1130,27 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     }
 }
 
+#[derive(Debug)]
 pub enum NameTokenBuilt<B> {
     Ratchet(usize),
-    Built(B),
+    Built(B, bool /* is_latin_cyrillic */),
+    // So we can refuse to insert it after a non-latin-cyrillic name
+    Space,
+}
+
+impl<B> NameTokenBuilt<B> {
+    pub(crate) fn is_latin(&self, ratchets: &[DisambNameRatchet<B>]) -> Option<bool> {
+        match self {
+            NameTokenBuilt::Built(_, lat_cy) => Some(*lat_cy),
+            NameTokenBuilt::Space => None,
+            NameTokenBuilt::Ratchet(index) => match &ratchets[*index] {
+                DisambNameRatchet::Literal { is_latin_cyrillic, .. } => Some(*is_latin_cyrillic),
+                DisambNameRatchet::Person(ratchet) => {
+                    Some(ratchet.data.value.is_latin_cyrillic)
+                }
+            }
+        }
+    }
 }
 
 use self::ord::{get_display_order, get_sort_order, DisplayOrdering, NamePartToken};
@@ -1260,7 +1278,7 @@ mod ord {
     static NON_LATIN_SORT_SHORT: SortOrdering = &[&[Family]];
 }
 
-fn should_append_space(s: &str) -> bool {
+fn dp_should_append_space(s: &str) -> bool {
     !s.chars()
         .rev()
         .nth(0)

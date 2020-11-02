@@ -35,7 +35,7 @@ impl Trigraph {
                     _ => None,
                 }) {
                     let name_to_write = match &authors[prog] {
-                        Name::Literal { literal } => literal,
+                        Name::Literal { literal, .. } => literal,
                         Name::Person(PersonName {
                             family: Some(family),
                             ..

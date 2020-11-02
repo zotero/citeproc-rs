@@ -18,7 +18,7 @@ fn normalise() {
     assert_eq!(&nodes[..], &[InlineElement::Text("ab".into())][..]);
 }
 
-fn smash_string_push(base: &mut String, mut suff: &str) {
+fn smash_string_push(base: &mut String, suff: &str) {
     trace!("smash_string_push {:?} <- {:?}", base, suff);
     let btrim = base.trim_end_matches(smash_trim);
     let b_spaces = base.len() - btrim.len();

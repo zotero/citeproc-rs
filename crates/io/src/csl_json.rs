@@ -8,7 +8,7 @@
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
 
-use crate::names::{Name, PersonName};
+use crate::names::Name;
 use serde::de::Error;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::borrow::Cow;
@@ -231,28 +231,7 @@ impl<'de> Deserialize<'de> for Reference {
                                     return Err(de::Error::duplicate_field("dunno"));
                                 }
                                 Entry::Vacant(ve) => {
-                                    let mut names: Vec<Name> = map.next_value()?;
-                                    for name in names.iter_mut() {
-                                        *name = match name {
-                                            Name::Person(pn) => {
-                                                pn.parse_particles();
-                                                continue;
-                                            }
-                                            Name::Literal { literal } => {
-                                                // Normalise literal names into lone family names.
-                                                //
-                                                // There is no special case for literal names in
-                                                // CSL, so this just helps do the formatting
-                                                // uniformly. They can still be created by using
-                                                // the Rust API directly, so this has to be
-                                                // removed at some point.
-                                                Name::Person(PersonName {
-                                                    family: Some(std::mem::take(literal)),
-                                                    ..Default::default()
-                                                })
-                                            }
-                                        }
-                                    }
+                                    let names: Vec<Name> = map.next_value()?;
                                     ve.insert(names);
                                 }
                             }

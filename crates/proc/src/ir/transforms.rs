@@ -768,7 +768,7 @@ impl<'a, T> ReducedNameToken<'a, T> {
         match token {
             NameToken::Name(dnr_index) => match &names[*dnr_index] {
                 DisambNameRatchet::Person(p) => ReducedNameToken::Name(&p.data.value),
-                DisambNameRatchet::Literal(b) => ReducedNameToken::Literal(b),
+                DisambNameRatchet::Literal { literal, .. } => ReducedNameToken::Literal(literal),
             },
             NameToken::Ellipsis => ReducedNameToken::Ellipsis,
             NameToken::EtAl(..) => ReducedNameToken::EtAl,

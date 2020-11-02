@@ -42,7 +42,6 @@ mod page_range;
 mod ref_ir;
 mod renderer;
 mod sort;
-mod unicode;
 mod walker;
 
 pub use crate::db::{built_cluster_before_output, safe_default};

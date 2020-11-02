@@ -92,9 +92,11 @@ impl Disambiguation<Markup> for Names {
                     runner.name_el.affixes.as_ref(),
                     start,
                     |nfa, mut spot| {
-                        for ntb in ntbs {
+
+                        let mut iter = ntbs.into_iter().peekable();
+                        while let Some(ntb) = iter.next() {
                             match ntb {
-                                NameTokenBuilt::Built(b) => {
+                                NameTokenBuilt::Built(b, lat_cy) => {
                                     if !fmt.is_empty(&b) {
                                         let out =
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
@@ -103,11 +105,19 @@ impl Disambiguation<Markup> for Names {
                                         spot = add_to_graph(fmt, nfa, &ir, spot, None);
                                     }
                                 }
+                                NameTokenBuilt::Space => {
+                                    let next_is_latin = iter.peek().map_or(None, |x| x.is_latin(&nir.disamb_names)).unwrap_or(false);
+                                    if next_is_latin {
+                                        let e = EdgeData::Output(" ".into());
+                                        let ir = RefIR::Edge(Some(e));
+                                        spot = add_to_graph(fmt, nfa, &ir, spot, None);
+                                    }
+                                }
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
-                                    DisambNameRatchet::Literal(b) => {
-                                        if !fmt.is_empty(b) {
+                                    DisambNameRatchet::Literal { literal, is_latin_cyrillic } => {
+                                        if !fmt.is_empty(literal) {
                                             let out =
-                                                fmt.output_in_context(b.clone(), child_stack, None);
+                                                fmt.output_in_context(literal.clone(), child_stack, None);
                                             let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
                                             spot = add_to_graph(fmt, nfa, &ir, spot, None);
@@ -522,7 +532,7 @@ impl RefNameIR {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DisambNameRatchet<B> {
-    Literal(B),
+    Literal { literal: B, is_latin_cyrillic: bool },
     Person(PersonDisambNameRatchet),
 }
 

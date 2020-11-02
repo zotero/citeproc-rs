@@ -7,10 +7,26 @@
 use crate::String;
 use crate::SmartCow;
 
+#[derive(Default, Debug, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+struct PersonNameInput {
+    pub family: Option<String>,
+    pub given: Option<String>,
+    pub non_dropping_particle: Option<String>,
+    pub dropping_particle: Option<String>,
+    pub suffix: Option<String>,
+    #[serde(default)]
+    pub static_particles: bool,
+    // TODO: support "string", "number", "boolean"
+    #[serde(default)]
+    pub comma_suffix: bool,
+}
+
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
-#[derive(Default, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
+#[derive(Default, Debug, Eq, PartialEq, Hash, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case")]
+#[serde(from = "PersonNameInput")]
 pub struct PersonName {
     pub family: Option<String>,
     pub given: Option<String>,
@@ -21,20 +37,61 @@ pub struct PersonName {
     pub static_particles: bool,
     #[serde(default)]
     pub comma_suffix: bool,
+    #[serde(default, skip_serializing)]
+    pub is_latin_cyrillic: bool,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
+#[derive(Deserialize)]
 #[serde(untagged, rename_all = "kebab-case")]
-pub enum Name {
+enum NameInput {
     // Put literal first, because PersonName's properties are all Options and derived
     // Deserialize impls run in order.
     Literal {
         // the untagged macro uses the field names on Literal { literal } instead of the discriminant, so don't change that
         literal: String,
     },
+    Person(PersonNameInput),
+    // TODO: represent an institution in CSL-M?
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Deserialize, Serialize, Clone)]
+#[serde(from = "NameInput")]
+pub enum Name {
+    // Put literal first, because PersonName's properties are all Options and derived
+    // Deserialize impls run in order.
+    Literal {
+        // the untagged macro uses the field names on Literal { literal } instead of the discriminant, so don't change that
+        literal: String,
+        #[serde(skip_serializing)]
+        is_latin_cyrillic: bool,
+    },
     Person(PersonName),
     // TODO: represent an institution in CSL-M?
 }
+
+impl From<NameInput> for Name {
+    fn from(input: NameInput) -> Self {
+        match input {
+            // Normalise literal names into lone family names.
+            //
+            // There is no special case for literal names in
+            // CSL, so this just helps do the formatting
+            // uniformly. They can still be created by using
+            // the Rust API directly, so this has to be
+            // removed at some point.
+            NameInput::Literal { literal } => {
+                Name::Person(PersonName {
+                    is_latin_cyrillic: is_latin_cyrillic(&literal),
+                    family: Some(literal),
+                    ..Default::default()
+                })
+            }
+            NameInput::Person(pn) => Name::Person(pn.into()),
+        }
+    }
+}
+
+// Now we implement From<PersonNameInput> for PersonName
 
 // Parsing particles
 // Ported from https://github.com/Juris-M/citeproc-js/blob/1aa49dd2ab9a1c85d3060073780d65c86754a438/src/util_name_particles.js
@@ -157,8 +214,32 @@ fn trim_last(string: &mut String) {
     }
 }
 
-impl PersonName {
-    pub fn parse_particles(&mut self) {
+impl From<PersonNameInput> for PersonName {
+    fn from(input: PersonNameInput) -> Self {
+
+        let is_latin_cyrillic = pn_is_latin_cyrillic(&input);
+
+        let PersonNameInput {
+            family,
+            given,
+            non_dropping_particle,
+            dropping_particle,
+            suffix,
+            static_particles,
+            comma_suffix,
+        } = input;
+
+        let mut pn = PersonName {
+            family,
+            given,
+            non_dropping_particle,
+            dropping_particle,
+            suffix,
+            static_particles,
+            comma_suffix,
+            is_latin_cyrillic,
+        };
+
         let PersonName {
             family,
             given,
@@ -167,7 +248,9 @@ impl PersonName {
             suffix,
             static_particles,
             comma_suffix,
-        } = self;
+            is_latin_cyrillic: _,
+        } = &mut pn;
+
         // Don't parse if these are supplied
         if *static_particles
             || non_dropping_particle.is_some()
@@ -180,7 +263,7 @@ impl PersonName {
                 .as_ref()
                 .map(|x| replace_apostrophes(x));
             *dropping_particle = dropping_particle.as_ref().map(|x| replace_apostrophes(x));
-            return;
+            return pn;
         }
         if let Some(family) = family {
             if family.starts_with('"') && family.ends_with('"') {
@@ -196,7 +279,7 @@ impl PersonName {
         if let Some(given) = given {
             if given.starts_with('"') && given.ends_with('"') {
                 *given = replace_apostrophes(&given);
-                return;
+                return pn;
             }
             if let Some((suff, force_comma)) = parse_suffix(given, dropping_particle.is_some()) {
                 *suffix = Some(suff);
@@ -209,8 +292,17 @@ impl PersonName {
                 *given = replace_apostrophes(&given);
             }
         }
+
+        pn
     }
 }
+
+impl PersonNameInput {
+    fn parse_particles(self) -> PersonName {
+        self.into()
+    }
+}
+
 
 #[test]
 fn parse_particles() {
@@ -220,113 +312,127 @@ fn parse_particles() {
     hi.trim_in_place();
     assert_eq!(&hi, "hi");
 
-    let mut init = PersonName {
+    let mut init = PersonNameInput {
         given: Some("Schnitzel".into()),
         family: Some("von Crumb".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("Schnitzel".into()),
             non_dropping_particle: Some("von".into()),
             family: Some("Crumb".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         given: Some("Eric".into()),
         family: Some("van der Vlist".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("Eric".into()),
             non_dropping_particle: Some("van der".into()),
             family: Some("Vlist".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         given: Some("Eric".into()),
         family: Some("del Familyname".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("Eric".into()),
             non_dropping_particle: Some("del".into()),
             family: Some("Familyname".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         given: Some("Givenname d'".into()),
         family: Some("Familyname".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("Givenname".into()),
             dropping_particle: Some("d\u{2019}".into()),
             family: Some("Familyname".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         family: Some("Aubignac".into()),
         given: Some("François Hédelin d’".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("François Hédelin".into()),
             dropping_particle: Some("d\u{2019}".into()),
             family: Some("Aubignac".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         family: Some("d’Aubignac".into()),
         given: Some("François Hédelin".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("François Hédelin".into()),
             non_dropping_particle: Some("d\u{2019}".into()),
             family: Some("Aubignac".into()),
+            is_latin_cyrillic: true,
             ..Default::default()
         }
     );
 
-    let mut init = PersonName {
+    let init = PersonNameInput {
         given: Some("Dick".into()),
         family: Some("\"Van Dyke\"".into()),
         ..Default::default()
     };
-    init.parse_particles();
     assert_eq!(
-        init,
+        init.parse_particles(),
         PersonName {
             given: Some("Dick".into()),
             family: Some("Van Dyke".into()),
+            is_latin_cyrillic: true,
+            ..Default::default()
+        }
+    );
+    let init = PersonNameInput {
+        family: Some("강".into()),
+        given: Some("소라".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        init.parse_particles(),
+        PersonName {
+            family: Some("강".into()),
+            given: Some("소라".into()),
+            is_latin_cyrillic: false,
             ..Default::default()
         }
     );
@@ -388,3 +494,36 @@ fn replace_apostrophes(s: impl AsRef<str>) -> String {
     let trim_quoted = s.trim_matches('\"');
     crate::lazy_replace_char(trim_quoted, '\'', "\u{2019}").into_owned()
 }
+
+use crate::unicode::is_latin_cyrillic;
+
+fn pn_is_latin_cyrillic(pn: &PersonNameInput) -> bool {
+    pn.family.as_ref().map_or(true, |s| is_latin_cyrillic(s))
+        && pn.given.as_ref().map_or(true, |s| is_latin_cyrillic(s))
+        && pn.suffix.as_ref().map_or(true, |s| is_latin_cyrillic(s))
+        && pn
+            .non_dropping_particle
+            .as_ref()
+            .map_or(true, |s| is_latin_cyrillic(s))
+        && pn
+            .dropping_particle
+            .as_ref()
+            .map_or(true, |s| is_latin_cyrillic(s))
+}
+
+#[test]
+fn test_is_latin() {
+    let pn = PersonNameInput {
+        family: Some("강".into()),
+        given: Some("소라".into()),
+        ..Default::default()
+    };
+    assert!(!pn_is_latin_cyrillic(&pn));
+    let pn = PersonNameInput {
+        family: Some("Kang".into()),
+        given: Some("So-ra".into()),
+        ..Default::default()
+    };
+    assert!(pn_is_latin_cyrillic(&pn));
+}
+

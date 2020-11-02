@@ -29,7 +29,7 @@ pub use names::TrimInPlace;
 mod numeric;
 pub mod output;
 mod reference;
-pub(crate) mod unicode;
+pub mod unicode;
 pub mod utils;
 
 pub use csl_json::NumberLike;

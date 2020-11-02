@@ -414,15 +414,13 @@ fn test_num_token_parser() {
     assert_eq!(
         num_tokens("et")("2 - 5, 9, edition"),
         Ok((
-            "",
+            ", edition",
             vec![
                 nn(2),
                 Hyphen,
                 nn(5),
                 Comma,
                 nn(9),
-                Comma,
-                Str("edition".into())
             ]
         ))
     );
@@ -452,6 +450,12 @@ macro_rules! test_parse {
             NumericValue::Tokens($inp.into(), vec![ $($x),* ], true)
         )
     };
+    ($inp:literal, [ $($x:expr),+ ], false) => {
+        assert_eq!(
+            NumericValue::parse($inp),
+            NumericValue::Tokens($inp.into(), vec![ $($x),* ], false)
+        )
+    };
 }
 
 #[test]
@@ -478,11 +482,9 @@ fn test_numeric_value() {
             nn(5),
             Comma,
             nn(9),
-            Comma,
-            Str("edition".into()),
-            Comma,
-            Roman(4, false)
-        ]
+            Str(", edition, iv".into())
+        ],
+        false
     );
 }
 
