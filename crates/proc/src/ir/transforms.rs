@@ -955,11 +955,6 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
 // MixedNumericStyle //
 ///////////////////////
 
-// pub fn style_mixed_num_empty_error(style: &csl::Style, fmt: &Markup) -> Option<MarkupBuild> {
-//     style_is_mixed_numeric(style, CiteOrBib::Bibliography)
-//         .map(|(el_ref, maybe_delim)| {
-//         })
-// }
 pub fn style_is_mixed_numeric(
     style: &csl::Style,
     cite_or_bib: CiteOrBib,
@@ -1079,4 +1074,229 @@ fn test_mixed_numeric() {
        "#);
     let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
     assert!(matches!(found, Some((_, Some(". ")))));
+}
+
+////////////////////////////////////////////////////
+// Layout affixes inside left-margin/right-inline //
+////////////////////////////////////////////////////
+
+#[derive(Debug, PartialEq)]
+struct LeftRightLayout {
+    left: Option<NodeId>,
+    right: Option<NodeId>,
+    layout: NodeId,
+}
+
+fn find_left_right_layout<O: OutputFormat>(
+    root: NodeId,
+    arena: &IrArena<O>,
+) -> Option<LeftRightLayout> {
+    let node = arena.get(root)?;
+    match &node.get().0 {
+        IR::Seq(seq)
+            if seq.is_layout
+                && seq
+                    .affixes
+                    .as_ref()
+                    .map_or(false, |af| !af.prefix.is_empty() || !af.suffix.is_empty()) =>
+        {
+            let left = node.first_child()
+                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::LeftMargin), .. }))));
+            let right = node.last_child()
+                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::RightInline), .. }))));
+            Some(LeftRightLayout {
+                left,
+                right,
+                layout: root,
+            })
+        }
+        _ => None,
+    }
+}
+
+pub fn fix_left_right_layout_affixes<O: OutputFormat>(
+    root: NodeId,
+    arena: &mut IrArena<O>,
+    fmt: &O,
+) {
+    let LeftRightLayout {
+        left,
+        right,
+        layout,
+    } = match find_left_right_layout(root, arena) {
+        Some(lrl) => lrl,
+        None => return,
+    };
+
+    fn get_af<O: OutputFormat>(node_id: NodeId, suf: bool, arena: &IrArena<O>) -> &str {
+        match &arena[node_id].get().0 {
+            IR::Seq(s) => s
+                .affixes
+                .as_ref()
+                .map(|af| if suf { &af.suffix } else { &af.prefix })
+                .map_or("", |af| af.as_str()),
+            _ => "",
+        }
+    }
+    fn write_af<O: OutputFormat>(
+        node_id: NodeId,
+        suf: bool,
+        content: SmartString,
+        arena: &mut IrArena<O>,
+    ) {
+        match &mut arena[node_id].get_mut().0 {
+            IR::Seq(s) => {
+                match &mut s.affixes {
+                    Some(af) => {
+                        let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                        *which = content;
+                        if af.prefix.is_empty() && af.suffix.is_empty() {
+                            s.affixes = None;
+                        }
+                    }
+                    None if !content.is_empty() => {
+                        let mut af = Affixes::default();
+                        let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                        *which = content;
+                        s.affixes = Some(af);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(left) = left {
+        let layout_prefix = get_af(layout, false, arena);
+        if !layout_prefix.is_empty() {
+            let left_prefix = get_af(left, false, arena);
+            let mut new_prefix = SmartString::new();
+            new_prefix.push_str(layout_prefix);
+            new_prefix.push_str(left_prefix);
+            write_af(left, false, new_prefix, arena);
+            write_af(layout, false, "".into(), arena);
+        }
+    }
+    if let Some(right) = right {
+        let layout_suffix = get_af(layout, true, arena);
+        if !layout_suffix.is_empty() {
+            let right_suffix = get_af(right, true, arena);
+            let mut new_suffix = SmartString::new();
+            new_suffix.push_str(right_suffix);
+            new_suffix.push_str(layout_suffix);
+            write_af(right, true, new_suffix, arena);
+            write_af(layout, true, "".into(), arena);
+        }
+    }
+}
+
+#[test]
+fn test_left_right_layout() {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    let mut arena = IrArena::<Markup>::new();
+    let fmt = Markup::html();
+
+    let left = arena.seq(
+        IrSeq {
+            display: Some(DisplayMode::LeftMargin),
+            ..Default::default()
+        },
+        |arena, seq| {
+            let cnum = arena.blob(
+                CiteEdgeData::CitationNumber(fmt.plain("2. ")),
+                GroupVars::Important,
+            );
+            seq.append(cnum, arena);
+        },
+    );
+    let right = arena.seq(
+        IrSeq {
+            display: Some(DisplayMode::RightInline),
+            ..Default::default()
+        },
+        |arena, seq| {
+            let title = arena.blob(
+                CiteEdgeData::Output(fmt.plain("title")),
+                GroupVars::Important,
+            );
+            seq.append(title, arena);
+        },
+    );
+    let layout = arena.seq(
+        IrSeq {
+            is_layout: true,
+            affixes: Some(Affixes {
+                prefix: "".into(),
+                suffix: ".".into(),
+            }),
+            ..Default::default()
+        },
+        |arena, seq| {
+            seq.append(left, arena);
+            seq.append(right, arena);
+        },
+    );
+
+    let mut irgen = IrGen {
+        root: layout,
+        arena,
+        state: IrState::new(),
+    };
+    dbg!(&irgen);
+
+    let found = find_left_right_layout(layout, &mut irgen.arena);
+    assert_eq!(
+        found,
+        Some(LeftRightLayout {
+            left: Some(left),
+            right: Some(right),
+            layout
+        })
+    );
+
+    let blob = irgen
+        .arena
+        .blob(CiteEdgeData::Output(fmt.plain("blob")), GroupVars::Plain);
+    right.insert_before(blob, &mut irgen.arena);
+
+    dbg!(&irgen);
+
+    let found = find_left_right_layout(layout, &mut irgen.arena);
+    assert_eq!(
+        found,
+        Some(LeftRightLayout {
+            left: Some(left),
+            right: Some(right),
+            layout
+        })
+    );
+
+    fix_left_right_layout_affixes(layout, &mut irgen.arena, &fmt);
+
+    let flat = IR::flatten(layout, &irgen.arena, &fmt, None).unwrap();
+    let s = fmt.output(flat, false);
+    assert_eq!(
+        &s,
+        r#"<div class="csl-left-margin">2. </div>blob<div class="csl-right-inline">title.</div>"#
+    );
+}
+
+#[cfg(test)]
+trait ArenaExtensions<O: OutputFormat> {
+    fn blob(&mut self, edge: CiteEdgeData<O>, gv: GroupVars) -> NodeId;
+    fn seq<F: FnOnce(&mut Self, NodeId)>(&mut self, seq_tmpl: IrSeq, f: F) -> NodeId;
+}
+
+#[cfg(test)]
+impl<O: OutputFormat> ArenaExtensions<O> for IrArena<O> {
+    fn blob(&mut self, edge: CiteEdgeData<O>, gv: GroupVars) -> NodeId {
+        self.new_node((IR::Rendered(Some(edge)), gv))
+    }
+    fn seq<F: FnOnce(&mut Self, NodeId)>(&mut self, seq_tmpl: IrSeq, f: F) -> NodeId {
+        let seq_node = self.new_node((IR::Seq(seq_tmpl), GroupVars::Important));
+        f(self, seq_node);
+        seq_node
+    }
 }

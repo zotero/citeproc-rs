@@ -1562,6 +1562,10 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 }
             }
 
+            // Pull affixes off layout into the right-inlines etc, after we may have created those
+            // divs in split_first_field
+            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
+
             if IR::is_empty(root, &arena) {
                 None
             } else {
@@ -1599,6 +1603,10 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                     root = new_root;
                 }
             }
+
+            // Pull affixes off layout into the right-inlines etc, after we may have created those
+            // divs in split_first_field
+            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
 
             Some(Arc::new(IrGen::new(root, arena, state)))
         },

@@ -62,6 +62,7 @@ pub struct IrSeq {
     /// If this is None, this sequence is simply an implicit conditional
     pub dropped_gv: Option<GroupVars>,
     pub should_inherit_delim: bool,
+    pub is_layout: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -493,6 +494,7 @@ impl IrSeq {
             text_case,
             dropped_gv: _,
             should_inherit_delim,
+            is_layout: _,
         } = *self;
         let xs: Vec<_> = id
             .children(arena)
@@ -544,6 +546,7 @@ impl IrSeq {
             text_case: _,
             dropped_gv: _,
             should_inherit_delim,
+            is_layout: _,
         } = *self;
         let delimiter = override_delim
             .filter(|_| should_inherit_delim)

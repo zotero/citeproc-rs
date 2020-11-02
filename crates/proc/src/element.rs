@@ -45,6 +45,7 @@ where
             Some(&|| IrSeq {
                 formatting: layout.formatting,
                 affixes: layout.affixes.clone(),
+                is_layout: true,
                 ..Default::default()
             }),
         )
