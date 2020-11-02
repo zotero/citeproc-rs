@@ -172,15 +172,15 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
 
 use crate::NameOverrider;
 use csl::SortKey;
-use unicase::UniCase;
+use crate::sort::Lexical;
 
-pub fn sort_strings_for_names(
+pub(crate) fn sort_strings_for_names(
     db: &dyn IrDatabase,
     refr: &Reference,
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<UniCase<SmartString>>> {
+) -> Option<Vec<Lexical<SmartString>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -211,7 +211,7 @@ pub fn sort_strings_for_names(
                 }
                 Name::Literal { literal, .. } => {
                     if !literal.is_empty() {
-                        out.push(UniCase::new(literal.clone()));
+                        out.push(Lexical::new(literal.clone()));
                     }
                 }
             }
@@ -776,7 +776,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     pub(crate) fn person_name_sort_keys(
         &self,
         pn: &PersonName,
-        out: &mut Vec<UniCase<SmartString>>,
+        out: &mut Vec<Lexical<SmartString>>,
     ) {
         let order = get_sort_order(
             pn.is_latin_cyrillic,
@@ -863,9 +863,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
+                // UCD category is to catch \u{2019} etc.
                 let is_punc = |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
-                let filtered = citeproc_io::lazy_replace_char_if_owned(s, is_punc, "");
-                out.push(UniCase::new(filtered));
+                let mut filtered = s;
+                if filtered.starts_with(is_punc) {
+                    filtered = SmartString::from(filtered.trim_start_matches(is_punc));
+                }
+                out.push(crate::sort::Lexical::new(filtered));
             }
         }
     }

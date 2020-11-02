@@ -5,9 +5,10 @@ use citeproc_io::DateOrRange;
 use csl::{style::*, terms::*, variables::*, Atom};
 use fnv::FnvHashMap;
 use std::sync::Arc;
-use unicase::UniCase;
 
 pub mod natural_sort;
+mod lexical;
+pub(crate) use lexical::Lexical;
 mod output_format;
 use output_format::SortStringFormat;
 
@@ -213,9 +214,9 @@ struct SortItem {
 enum SortValue {
     Macro(Option<NaturalCmp>),
     Cnum(Option<u32>),
-    OrdinaryVariable(Option<UniCase<SmartString>>),
+    OrdinaryVariable(Option<Lexical<SmartString>>),
     Number(Option<citeproc_io::NumericValueOwned>),
-    Names(Option<Vec<UniCase<SmartString>>>),
+    Names(Option<Vec<Lexical<SmartString>>>),
     Date(Option<DateOrRange>),
 }
 
@@ -364,7 +365,7 @@ fn ctx_sort_items(
                     let got = a_ctx
                         .get_ordinary(v, VariableForm::default())
                         .map(strip_markup)
-                        .map(UniCase::new);
+                        .map(Lexical::new);
                     SortValue::OrdinaryVariable(got)
                 }
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
