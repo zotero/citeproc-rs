@@ -7,7 +7,7 @@
 use citeproc_io::output::{
     micro_html::micro_html_to_string, FormatCmd, LocalizedQuotes, OutputFormat,
 };
-use citeproc_io::{lazy_char_transform_owned, IngestOptions, SmartString};
+use citeproc_io::{lazy, IngestOptions, SmartString};
 
 use csl::{DisplayMode, Formatting};
 
@@ -22,7 +22,7 @@ impl Default for SortStringFormat {
 
 // We don't want these characters in a sort string
 fn remove_quotes(s: SmartString) -> SmartString {
-    lazy_char_transform_owned(s, |c: char| {
+    lazy::lazy_char_transform_owned(s, |c: char| {
         if c == '\'' || c == '"' || c == ',' {
             None
         } else {

@@ -7,7 +7,7 @@
 use crate::prelude::*;
 
 use crate::number::render_ordinal;
-use citeproc_io::{Date, DateOrRange};
+use citeproc_io::{Date, DateOrRange, lazy};
 use csl::terms::*;
 use csl::LocaleDate;
 #[cfg(test)]
@@ -891,7 +891,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                         fallback[date.month as usize].into()
                     });
                 Some(if strip_periods {
-                    citeproc_io::lazy_replace_char_owned(string, '.', "")
+                    lazy::lazy_replace_char_owned(string, '.', "")
                 } else {
                     string
                 })

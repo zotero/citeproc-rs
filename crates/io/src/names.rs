@@ -4,8 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::String;
-use crate::SmartCow;
+use crate::{String, SmartCow, lazy};
 
 #[derive(Default, Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -492,7 +491,7 @@ impl TrimInPlace for String {
 fn replace_apostrophes(s: impl AsRef<str>) -> String {
     let s = s.as_ref();
     let trim_quoted = s.trim_matches('\"');
-    crate::lazy_replace_char(trim_quoted, '\'', "\u{2019}").into_owned()
+    lazy::lazy_replace_char(trim_quoted, '\'', "\u{2019}").into_owned()
 }
 
 use crate::unicode::is_latin_cyrillic;
