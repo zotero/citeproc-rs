@@ -1,4 +1,4 @@
-use crate::{SmartCow, String, lazy};
+use crate::{SmartCow, String};
 
 fn next_char(mutable: &mut &str) -> Option<char> {
     let c = mutable.chars().next()?;

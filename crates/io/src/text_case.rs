@@ -1,8 +1,8 @@
-use crate::{IngestOptions, SmartCow, String, lazy};
 use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use crate::output::LocalizedQuotes;
-use csl::{FontVariant, VerticalAlignment, TextCase};
+use crate::{lazy, IngestOptions, SmartCow, String};
+use csl::{FontVariant, TextCase, VerticalAlignment};
 use unic_segment::{GraphemeIndices, WordBoundIndices, Words};
 
 // from the unic_segment example code
@@ -235,12 +235,7 @@ fn upper_word_to_title(word: &str) -> Option<String> {
     None
 }
 
-fn transform_sentence_case(
-    s: String,
-    seen_one: bool,
-    is_last: bool,
-    is_uppercase: bool,
-) -> String {
+fn transform_sentence_case(s: String, seen_one: bool, is_last: bool, is_uppercase: bool) -> String {
     if is_uppercase {
         transform_each_word(
             &s,
@@ -266,12 +261,10 @@ fn title_case_word<'a>(
     entire_is_uppercase: bool,
     no_stopword: bool,
 ) -> (SmartCow<'a>, Option<usize>) {
-    log::debug!("title_case_word({:?}, {:?}, {:?}, {:?})", word, word_and_rest, entire_is_uppercase, no_stopword);
     if !no_stopword {
         if let Some(mut match_len) = is_stopword(word_and_rest) {
             // drop the trailing whitespace
             let matched = &word_and_rest[..match_len];
-            debug!("title_case_word -- is_stopword: {}", matched);
             let last_char = matched.chars().rev().nth(0).map_or(0, |c| {
                 if c == '-' || c.is_whitespace() {
                     c.len_utf8()
@@ -321,10 +314,20 @@ where
     let mut is_first = !seen_one;
     let mut bounds = WordBoundIndices::new(s);
     while let Some((ix, substr)) = bounds.next() {
-        let before = &s[..ix].chars().rev().filter(|c| !c.is_whitespace()).nth(0);
+        let immediate_before = &s[..ix].chars().rev().nth(0);
         // 7.x; 7-x, do not title-case the x.
-        let wordy = is_word(substr) && !(before.map_or(false, |b| b == '-' || b == '.') && substr.len() == 1);
+        let wordy = is_word(substr)
+            && !(immediate_before.map_or(false, |b| b == '-' || b == '.') && substr.len() == 1)
+            // textcase_NoSpaceBeforeApostrophe.txt
+            // This is pretty iffy. Backticks are word boundaries. This is our big chance to force
+            // people to kick bad typographic habits, and we're blowing it.
+            && !(immediate_before.map_or(false, |b| b == '`') && {
+                let immediate_before_that = s[..ix].chars().rev().nth(1);
+                immediate_before_that
+                    .map_or(false, |bt| unic_ucd_category::GeneralCategory::of(bt).is_letter())
+               });
         if wordy {
+            let before = &s[..ix].chars().rev().filter(|c| !c.is_whitespace()).nth(0);
             let follows_colon = *before == Some(':')
                 || *before == Some('?')
                 || *before == Some('!')
@@ -562,5 +565,3 @@ fn test_any_micros() {
     assert_eq!(upper("HELLOSUPERSCRIPT"), true);
     assert_eq!(upper("HELLO, <sup>SUPERSCRIPT</sup>"), true);
 }
-
-
