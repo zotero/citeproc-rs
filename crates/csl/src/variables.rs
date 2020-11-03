@@ -130,6 +130,8 @@ pub enum Variable {
     CitationLabel,
     /// title of the collection holding the item (e.g. the series title for a book)
     CollectionTitle,
+    /// Not technically part of the spec, but https://forums.zotero.org/discussion/75366/accommodating-both-full-series-names-and-series-abbreviations
+    CollectionTitleShort,
     /// title of the container holding the item (e.g. the book title for a book chapter, the journal title for a journal article)
     ContainerTitle,
     /// short/abbreviated form of “container-title” (also accessible through the “short” form of the “container-title” variable)
