@@ -314,6 +314,7 @@ pub struct IrGen {
     pub(crate) arena: IrArena<Markup>,
     pub(crate) root: NodeId,
     pub(crate) state: IrState,
+    pub(crate) used_disambiguate_true: bool,
 }
 
 use std::fmt;
@@ -340,13 +341,7 @@ impl fmt::Debug for IrGen {
 
 impl IrGen {
     fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
-        IrGen { root, arena, state }
-    }
-    fn fresh_copy(&self) -> (NodeId, IrArena<Markup>, IrState) {
-        let root = self.root;
-        let arena = self.arena.clone();
-        let state = self.state.clone();
-        (root, arena, state)
+        IrGen { root, arena, state, used_disambiguate_true: false }
     }
 }
 
@@ -998,8 +993,8 @@ impl IrGenCow {
     fn to_mut(&mut self) -> &mut IrGen {
         *self = match self {
             IrGenCow::Arc(arc) => {
-                let (root, arena, state) = arc.as_ref().fresh_copy();
-                IrGenCow::Cloned(IrGen { root, arena, state })
+                let cloned = arc.as_ref().clone();
+                IrGenCow::Cloned(cloned)
             }
             IrGenCow::Cloned(gen) => return gen,
         };
@@ -1080,6 +1075,7 @@ impl IrGenCow {
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         let cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
+        cloned.used_disambiguate_true = true;
         disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
     }
 }
@@ -1556,6 +1552,11 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 disambiguate_add_year_suffix(db, root, &mut arena, &mut state, &ctx, suffix);
             }
 
+            if first_cite_used_disambiguate_true(db, ref_id.clone()) {
+                ctx.disamb_pass = Some(DisambPass::Conditionals);
+                disambiguate_true(db, root, &mut arena, &mut state, &ctx);
+            }
+
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
                 if let Some(new_root) = IR::split_first_field(root, &mut arena) {
                     root = new_root;
@@ -1611,6 +1612,18 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             Some(Arc::new(IrGen::new(root, arena, state)))
         },
     )
+}
+
+fn first_cite_used_disambiguate_true(db: &dyn IrDatabase, ref_id: Atom) -> bool {
+    let all_cites = db.all_cite_ids();
+    let first = all_cites.iter().find(|cite_id| {
+        let cite = cite_id.lookup(db);
+        cite.ref_id == ref_id
+    });
+    first.map_or(false, |&id| {
+        let gen4 = db.ir_fully_disambiguated(id);
+        gen4.used_disambiguate_true
+    })
 }
 
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {

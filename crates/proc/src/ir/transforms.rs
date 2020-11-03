@@ -1239,11 +1239,7 @@ fn test_left_right_layout() {
         },
     );
 
-    let mut irgen = IrGen {
-        root: layout,
-        arena,
-        state: IrState::new(),
-    };
+    let mut irgen = IrGen::new(layout, arena, IrState::new());
     dbg!(&irgen);
 
     let found = find_left_right_layout(layout, &mut irgen.arena);
