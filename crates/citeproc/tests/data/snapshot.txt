@@ -11,18 +11,9 @@ bugreports_AccidentalAllCaps.txt
 bugreports_DoubleEncodedAngleBraces.txt
 bugreports_NoTitle.txt
 
-# Unmatched single quote characters are not all converted to \u{2019} (close
-# curly single). Unclear what the best choice for that is yet.
-bugreports_FourAndFour.txt
-bugreports_SingleQuote.txt
-
 # citeproc-rs picks a slightly more compact RTF format. Instead of {} as a
 # command-terminator, it uses a single space. That includes the '\uc0\u160 '.
 bugreports_NonBreakingSpaceJoinFail.txt
-
-# citeproc-rs manages to smarten these quotes. Unrelated to the test in any
-# case, which regards using single quotes for all XML attributes in a style.
-bugreports_SingleQuoteXml.txt
 
 # The issue variable is not mentioned in the spec as needing its hyphens replaced.
 # The underlying problem is that cs:number is dramatically underused, mostly

@@ -1268,13 +1268,13 @@ pub fn built_cluster_before_output(
             let suf_mut = suf.to_mut();
             suf_mut.push(' ');
         }
+        let opts = IngestOptions { is_external: true, ..Default::default() };
+        let prefix_parsed = fmt.ingest(&pre, &opts);
+        let suffix_parsed = fmt.ingest(&suf, &opts);
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
-        let aff = Affixes {
-            prefix: pre.into(),
-            suffix: suf.into(),
-        };
-        Some(fmt.affixed(flattened, Some(&aff)))
+        use std::iter::once;
+        Some(fmt.seq(once(prefix_parsed).chain(once(flattened)).chain(once(suffix_parsed))))
     };
 
     let cgroup_delim = style

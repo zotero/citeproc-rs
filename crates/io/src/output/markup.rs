@@ -253,7 +253,7 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str) {
-        let suffix = MicroNode::parse(suffix, &IngestOptions::default());
+        let suffix = MicroNode::parse(suffix, &IngestOptions::for_affixes());
         use self::move_punctuation::append_suffix;
         append_suffix(pre_and_content, suffix);
     }

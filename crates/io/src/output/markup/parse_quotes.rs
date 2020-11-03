@@ -2,7 +2,6 @@ use crate::output::micro_html::MicroNode;
 #[cfg(test)]
 use crate::output::FormatCmd;
 use crate::IngestOptions;
-#[cfg(test)]
 use crate::LocalizedQuotes;
 use crate::String;
 #[cfg(test)]
@@ -15,6 +14,30 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
     };
     let inters: Vec<_> = matcher.intermediates().collect();
     stamp(inters.len(), inters.into_iter(), &mut original, options)
+}
+
+impl LocalizedQuotes {
+    fn force(kind: SFQuoteKind, punctuation_in_quote: bool) -> Self {
+        let only_one = match kind {
+            SFQuoteKind::SingleOpen | SFQuoteKind::SingleClose => ("\u{2018}".into(), "\u{2019}".into()),
+            SFQuoteKind::DoubleOpen | SFQuoteKind::DoubleClose => ("\u{201C}".into(), "\u{201D}".into()),
+            SFQuoteKind::FrenchClose | SFQuoteKind::FrenchOpen => ("\u{ab}".into(), "\u{bb}".into()),
+        };
+        LocalizedQuotes {
+            outer: only_one.clone(),
+            inner: only_one,
+            punctuation_in_quote,
+        }
+    }
+}
+
+/// For `flipflop_LeadingMarkupWithApostrophe.txt`
+fn override_if_external(options: &IngestOptions, kind: SFQuoteKind, shape: Shape) -> LocalizedQuotes {
+    if !options.is_external || shape == Shape::Straight {
+        options.quotes.clone()
+    } else {
+        LocalizedQuotes::force(kind, options.quotes.punctuation_in_quote)
+    }
 }
 
 #[test]
@@ -48,6 +71,40 @@ fn test_parse_quotes() {
     );
 }
 
+#[test]
+fn test_parse_external() {
+    let mut options = IngestOptions::default();
+    options.is_external = true;
+    assert_eq!(
+        parse_quotes(
+            vec![MicroNode::Text("Hello'a, 'hello'".into())],
+            &options
+        ),
+        vec![
+            MicroNode::Text("Hello\u{2019}a, ".into()),
+            MicroNode::Quoted {
+                is_inner: false,
+                localized: LocalizedQuotes::force(SFQuoteKind::Single, false),
+                children: vec![MicroNode::Text("hello".into()),]
+            }
+        ]
+    );
+    assert_eq!(
+        parse_quotes(
+            vec![MicroNode::Text("Hello'a, \"hello\"".into())],
+            &options
+        ),
+        vec![
+            MicroNode::Text("Hello\u{2019}a, ".into()),
+            MicroNode::Quoted {
+                is_inner: false,
+                localized: LocalizedQuotes::force(SFQuoteKind::Double, false),
+                children: vec![MicroNode::Text("hello".into()),]
+            }
+        ]
+    );
+}
+
 #[derive(Debug)]
 enum Intermediate {
     Event(EventOwned),
@@ -57,7 +114,7 @@ enum Intermediate {
 #[derive(Debug)]
 struct QuotedStack {
     dest: Vec<MicroNode>,
-    stack: Vec<(SFQuoteKind, Vec<MicroNode>)>,
+    stack: Vec<(SFQuoteKind, Shape, Vec<MicroNode>)>,
 }
 impl QuotedStack {
     fn with_capacity(n: usize) -> Self {
@@ -67,7 +124,7 @@ impl QuotedStack {
         }
     }
     fn mut_ref(&mut self) -> &mut Vec<MicroNode> {
-        if let Some((_kind, top)) = self.stack.last_mut() {
+        if let Some((_kind, _shape, top)) = self.stack.last_mut() {
             top
         } else {
             &mut self.dest
@@ -93,8 +150,8 @@ impl QuotedStack {
         }
     }
     fn collapse_hanging(mut self) -> Vec<MicroNode> {
-        while let Some((kind, quoted)) = self.stack.pop() {
-            self.push_str(kind.unmatched_str());
+        while let Some((kind, shape, quoted)) = self.stack.pop() {
+            self.push_str(kind.unmatched_str(shape));
             for node in quoted {
                 match node {
                     MicroNode::Text(txt) => self.push_string(txt),
@@ -137,52 +194,52 @@ fn stamp<'a>(
                 }
                 match ev {
                     EventOwned::Text(txt) => stack.push_string(txt),
-                    EventOwned::SmartMidwordInvertedComma => stack.push_str("\u{2019}"),
-                    EventOwned::SmartQuoteSingleOpen => {
-                        stack.stack.push((SFQuoteKind::Single, Vec::new()));
+                    EventOwned::SmartMidwordInvertedComma(_) => stack.push_str("\u{2019}"),
+                    EventOwned::SmartQuoteSingleOpen(shape) => {
+                        stack.stack.push((SFQuoteKind::SingleOpen, shape, Vec::new()));
                     }
-                    EventOwned::SmartQuoteDoubleOpen => {
-                        stack.stack.push((SFQuoteKind::Double, Vec::new()));
+                    EventOwned::SmartQuoteDoubleOpen(shape) => {
+                        stack.stack.push((SFQuoteKind::DoubleOpen, shape, Vec::new()));
                     }
-                    EventOwned::SmartQuoteSingleClose => {
-                        if let Some((SFQuoteKind::Single, _)) = stack.stack.last() {
-                            let (_, children) = stack.stack.pop().unwrap();
+                    EventOwned::SmartQuoteSingleClose(shape) => {
+                        if let Some((SFQuoteKind::SingleOpen, _, _)) = stack.stack.last() {
+                            let (_, _, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: options.quotes.clone(),
+                                localized: override_if_external(options, SFQuoteKind::SingleClose, shape),
                                 children,
                             });
                         } else {
-                            stack.push_str(SFQuoteKind::Single.unmatched_str());
+                            stack.push_str(SFQuoteKind::SingleClose.unmatched_str(shape));
                         }
                     }
-                    EventOwned::SmartQuoteDoubleClose => {
-                        if let Some((SFQuoteKind::Double, _)) = stack.stack.last() {
-                            let (_, children) = stack.stack.pop().unwrap();
+                    EventOwned::SmartQuoteDoubleClose(shape) => {
+                        if let Some((SFQuoteKind::DoubleOpen, _, _)) = stack.stack.last() {
+                            let (_, _, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: options.quotes.clone(),
+                                localized: override_if_external(options, SFQuoteKind::DoubleClose, shape),
                                 children,
                             });
                         } else {
-                            stack.push_str(SFQuoteKind::Double.unmatched_str());
+                            stack.push_str(SFQuoteKind::DoubleClose.unmatched_str(shape));
                         }
                     }
                     EventOwned::SmartQuoteFrenchOpen => {
-                        stack.stack.push((SFQuoteKind::FrenchOpen, Vec::new()));
+                        stack.stack.push((SFQuoteKind::FrenchOpen, Shape::Curly, Vec::new()));
                     }
                     EventOwned::SmartQuoteFrenchClose => {
-                        if let Some((SFQuoteKind::FrenchOpen, _)) = stack.stack.last() {
-                            let (_, children) = stack.stack.pop().unwrap();
+                        if let Some((SFQuoteKind::FrenchOpen, _, _)) = stack.stack.last() {
+                            let (_, _, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 // The french locale uses guillemets as the outer quotes, so we'll
                                 // do the same.
                                 is_inner: false,
-                                localized: options.quotes.clone(),
+                                localized: override_if_external(options, SFQuoteKind::FrenchClose, Shape::Curly),
                                 children,
                             });
                         } else {
-                            stack.push_str(SFQuoteKind::FrenchClose.unmatched_str());
+                            stack.push_str(SFQuoteKind::FrenchClose.unmatched_str(Shape::Curly));
                         }
                     }
                 }
@@ -355,13 +412,19 @@ impl<'a> QuoteMatcher<'a> {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Shape {
+    Straight,
+    Curly,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Event<'a> {
     Text(&'a str),
-    SmartMidwordInvertedComma,
-    SmartQuoteSingleOpen,
-    SmartQuoteDoubleOpen,
-    SmartQuoteSingleClose,
-    SmartQuoteDoubleClose,
+    SmartMidwordInvertedComma(Shape),
+    SmartQuoteSingleOpen(Shape),
+    SmartQuoteDoubleOpen(Shape),
+    SmartQuoteSingleClose(Shape),
+    SmartQuoteDoubleClose(Shape),
     SmartQuoteFrenchOpen,
     SmartQuoteFrenchClose,
 }
@@ -369,11 +432,11 @@ enum Event<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum EventOwned {
     Text(String),
-    SmartMidwordInvertedComma,
-    SmartQuoteSingleOpen,
-    SmartQuoteDoubleOpen,
-    SmartQuoteSingleClose,
-    SmartQuoteDoubleClose,
+    SmartMidwordInvertedComma(Shape),
+    SmartQuoteSingleOpen(Shape),
+    SmartQuoteDoubleOpen(Shape),
+    SmartQuoteSingleClose(Shape),
+    SmartQuoteDoubleClose(Shape),
     SmartQuoteFrenchOpen,
     SmartQuoteFrenchClose,
 }
@@ -382,11 +445,11 @@ impl<'a> From<Event<'a>> for EventOwned {
     fn from(ev: Event<'a>) -> Self {
         match ev {
             Event::Text(s) => EventOwned::Text(s.into()),
-            Event::SmartMidwordInvertedComma => EventOwned::SmartMidwordInvertedComma,
-            Event::SmartQuoteSingleOpen => EventOwned::SmartQuoteSingleOpen,
-            Event::SmartQuoteDoubleOpen => EventOwned::SmartQuoteDoubleOpen,
-            Event::SmartQuoteSingleClose => EventOwned::SmartQuoteSingleClose,
-            Event::SmartQuoteDoubleClose => EventOwned::SmartQuoteDoubleClose,
+            Event::SmartMidwordInvertedComma(c) => EventOwned::SmartMidwordInvertedComma(c),
+            Event::SmartQuoteSingleOpen(c) => EventOwned::SmartQuoteSingleOpen(c),
+            Event::SmartQuoteDoubleOpen(c) => EventOwned::SmartQuoteDoubleOpen(c),
+            Event::SmartQuoteSingleClose(c) => EventOwned::SmartQuoteSingleClose(c),
+            Event::SmartQuoteDoubleClose(c) => EventOwned::SmartQuoteDoubleClose(c),
             Event::SmartQuoteFrenchOpen => EventOwned::SmartQuoteFrenchOpen,
             Event::SmartQuoteFrenchClose => EventOwned::SmartQuoteFrenchClose,
         }
@@ -395,16 +458,16 @@ impl<'a> From<Event<'a>> for EventOwned {
 
 fn quote_event<'a>(ch: (SmartQuoteKind, char)) -> Option<Event<'a>> {
     let ev = match ch {
-        (SmartQuoteKind::OpenSingle, _) => Event::SmartQuoteSingleOpen,
-        (SmartQuoteKind::CloseSingle, _) => Event::SmartQuoteSingleClose,
-        (SmartQuoteKind::OpenDouble, _) => Event::SmartQuoteDoubleOpen,
-        (SmartQuoteKind::CloseDouble, _) => Event::SmartQuoteDoubleClose,
-        (SmartQuoteKind::Open, '\'') => Event::SmartQuoteSingleOpen,
-        (SmartQuoteKind::Close, '\'') => Event::SmartQuoteSingleClose,
-        (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen,
-        (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose,
-        (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma,
-        (SmartQuoteKind::Midword, '\u{2019}') => Event::SmartMidwordInvertedComma,
+        (SmartQuoteKind::OpenSingleCurly, _) => Event::SmartQuoteSingleOpen(Shape::Curly),
+        (SmartQuoteKind::CloseSingleCurly, _) => Event::SmartQuoteSingleClose(Shape::Curly),
+        (SmartQuoteKind::OpenDoubleCurly, _) => Event::SmartQuoteDoubleOpen(Shape::Curly),
+        (SmartQuoteKind::CloseDoubleCurly, _) => Event::SmartQuoteDoubleClose(Shape::Curly),
+        (SmartQuoteKind::Open, '\'') => Event::SmartQuoteSingleOpen(Shape::Straight),
+        (SmartQuoteKind::Close, '\'') => Event::SmartQuoteSingleClose(Shape::Straight),
+        (SmartQuoteKind::Open, '"') => Event::SmartQuoteDoubleOpen(Shape::Straight),
+        (SmartQuoteKind::Close, '"') => Event::SmartQuoteDoubleClose(Shape::Straight),
+        (SmartQuoteKind::Midword, '\'') => Event::SmartMidwordInvertedComma(Shape::Straight),
+        (SmartQuoteKind::Midword, '\u{2019}') => Event::SmartMidwordInvertedComma(Shape::Curly),
         (SmartQuoteKind::OpenFrench, _) => Event::SmartQuoteFrenchOpen,
         (SmartQuoteKind::CloseFrench, _) => Event::SmartQuoteFrenchClose,
         // Don't parse this as a quote at all
@@ -603,10 +666,10 @@ enum SmartQuoteKind {
     Open,
     Close,
     Midword,
-    OpenSingle,
-    OpenDouble,
-    CloseSingle,
-    CloseDouble,
+    OpenSingleCurly,
+    OpenDoubleCurly,
+    CloseSingleCurly,
+    CloseDoubleCurly,
     OpenFrench,
     CloseFrench,
 }
@@ -614,13 +677,13 @@ enum SmartQuoteKind {
 impl SmartQuoteKind {
     fn from_curly(ch: char) -> Option<Self> {
         if ch == SINGLE_OPEN {
-            Some(SmartQuoteKind::OpenSingle)
+            Some(SmartQuoteKind::OpenSingleCurly)
         } else if ch == SINGLE_CLOSE {
-            Some(SmartQuoteKind::CloseSingle)
+            Some(SmartQuoteKind::CloseSingleCurly)
         } else if ch == DOUBLE_OPEN {
-            Some(SmartQuoteKind::OpenDouble)
+            Some(SmartQuoteKind::OpenDoubleCurly)
         } else if ch == DOUBLE_CLOSE {
-            Some(SmartQuoteKind::CloseDouble)
+            Some(SmartQuoteKind::CloseDoubleCurly)
         } else if ch == FRENCH_OPEN {
             Some(SmartQuoteKind::OpenFrench)
         } else if ch == FRENCH_CLOSE {
@@ -638,38 +701,40 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
     let not_italic_ish = |c: &char| *c != '*' && *c != '~' && *c != '_' && *c != '\'' && *c != '"';
 
     // Beginning and end of line == whitespace.
-    let next_char = suffix.chars().filter(not_italic_ish).nth(0).unwrap_or(' ');
+    let next_char = suffix.chars().filter(not_italic_ish).nth(0);
     let prev_char = prefix
         .chars()
         .rev()
         .filter(not_italic_ish)
-        .nth(0)
-        .unwrap_or(' ');
+        .nth(0);
 
-    let next_white = next_char.is_whitespace();
-    let prev_white = prev_char.is_whitespace();
+    let next_white = next_char.map(|x| x.is_whitespace());
+    let prev_white = prev_char.map(|x| x.is_whitespace());
+    let next_char = next_char.unwrap_or(' ');
+    let prev_char = prev_char.unwrap_or(' ');
     // i.e. braces and the like
     let not_term_punc = |c: char| is_punctuation(c) && c != '.' && c != ',';
     let wordy = |c: char| !is_punctuation(c) && !c.is_whitespace() && !c.is_control();
 
     let curly = SmartQuoteKind::from_curly(character);
     if let Some(curly) = curly {
-        if let SmartQuoteKind::CloseSingle = curly {
+        if let SmartQuoteKind::CloseSingleCurly = curly {
             if wordy(prev_char) && wordy(next_char) {
                 return Some(SmartQuoteKind::Midword);
             }
         }
         return Some(curly);
-    } else if prev_white && next_white {
-        None
-    } else if prev_white && next_char.is_numeric() && character == '\'' {
+    } else if prev_white.unwrap_or(false) && next_white.unwrap_or(false) {
+        // l ' eau glaceé shouldn't cause an open or close, it's just weird.
+        Some(SmartQuoteKind::Midword)
+    } else if prev_white.unwrap_or(true) && next_char.is_numeric() && character == '\'' {
         // '09 -- force a close quote
         Some(SmartQuoteKind::Midword)
-    } else if !prev_white && next_white {
+    } else if !prev_white.unwrap_or(true) && next_white.unwrap_or(true) {
         Some(SmartQuoteKind::Close)
-    } else if prev_white && !next_white {
+    } else if prev_white.unwrap_or(true) && !next_white.unwrap_or(true) {
         Some(SmartQuoteKind::Open)
-    } else if next_white && (prev_char == '.' || prev_char == ',' || prev_char == '!') {
+    } else if next_white.unwrap_or(true) && (prev_char == '.' || prev_char == ',' || prev_char == '!') {
         Some(SmartQuoteKind::Close)
     } else if is_punctuation(prev_char) && not_term_punc(next_char) {
         Some(SmartQuoteKind::Close)
@@ -688,20 +753,28 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
 
 #[derive(Debug)]
 enum SFQuoteKind {
-    Single,
-    Double,
+    SingleOpen,
+    SingleClose,
+    DoubleOpen,
+    DoubleClose,
     FrenchOpen,
     FrenchClose,
     // no midword
 }
 
 impl SFQuoteKind {
-    fn unmatched_str(&self) -> &'static str {
-        match self {
-            SFQuoteKind::Single => "'",
-            SFQuoteKind::Double => "\"",
-            SFQuoteKind::FrenchOpen => "\u{ab}",
-            SFQuoteKind::FrenchClose => "\u{bb}",
+    fn unmatched_str(&self, shape: Shape) -> &'static str {
+        match (self, shape) {
+            (SFQuoteKind::SingleOpen, Shape::Straight) => "'",
+            (SFQuoteKind::SingleOpen, Shape::Curly) => "\u{2018}",
+            // The United Nations' decision -> curly.
+            (SFQuoteKind::SingleClose, _) => "\u{2019}",
+            (SFQuoteKind::DoubleOpen, Shape::Straight) => "\"",
+            (SFQuoteKind::DoubleOpen, Shape::Curly) => "\u{201c}",
+            (SFQuoteKind::DoubleClose, Shape::Straight) => "\"",
+            (SFQuoteKind::DoubleClose, Shape::Curly) => "\u{201d}",
+            (SFQuoteKind::FrenchOpen, _) => "\u{ab}",
+            (SFQuoteKind::FrenchClose, _) => "\u{bb}",
         }
     }
 }

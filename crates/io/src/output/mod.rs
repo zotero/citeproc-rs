@@ -194,7 +194,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         let mut pre_and_content = if let Some(prefix) = affixes.as_ref().map(|a| &a.prefix) {
             if !prefix.is_empty() {
                 // TODO: use the localized quotes.
-                self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
+                self.seq(once(self.ingest(prefix, &IngestOptions::for_affixes())).chain(once(b)))
             } else {
                 b
             }

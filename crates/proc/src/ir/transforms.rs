@@ -482,7 +482,7 @@ impl Unnamed3<Markup> {
         let prefix_parsed = cite
             .prefix
             .as_opt_str()
-            .map(|p| fmt.ingest(p, &IngestOptions::default()));
+            .map(|p| fmt.ingest(p, &IngestOptions { is_external: true, ..Default::default() }));
         Unnamed3 {
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),

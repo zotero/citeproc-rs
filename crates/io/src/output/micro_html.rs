@@ -37,7 +37,11 @@ impl MicroNode {
     pub fn parse(fragment: &str, options: &IngestOptions) -> Vec<MicroNode> {
         let mut tag_parser = TagParser::new(&fragment);
         let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
-        parse_quotes(result, options)
+        if !options.no_parse_quotes {
+            parse_quotes(result, options)
+        } else {
+            result
+        }
     }
 }
 

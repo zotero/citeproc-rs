@@ -59,6 +59,25 @@ pub struct IngestOptions {
     pub quotes: LocalizedQuotes,
     pub strip_periods: bool,
     pub is_english: bool,
+
+    /// For `flipflop_LeadingMarkupWithApostrophe.txt`
+    ///
+    /// Set this for an affix on a whole cluster. You don't want to mess with people's quoting just
+    /// because they put it in a cluster prefix. They know their style better than we do. For
+    /// fields on a reference it's very different.
+    pub is_external: bool,
+
+    /// For affixes.
+    pub no_parse_quotes: bool,
+}
+
+impl IngestOptions {
+    pub(crate) fn for_affixes() -> Self {
+        IngestOptions {
+            no_parse_quotes: true,
+            ..Default::default() 
+        }
+    }
 }
 
 mod text_case;
