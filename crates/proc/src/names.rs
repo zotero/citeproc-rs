@@ -783,6 +783,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
+    // TODO: strip html/markup for sort keys.
     pub(crate) fn person_name_sort_keys(
         &self,
         pn: &PersonName,
@@ -875,19 +876,31 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             if !s.is_empty() {
                 // UCD category is to catch \u{2019} etc.
                 let is_punc = |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
-                let mut filtered = s;
-                if filtered.starts_with(is_punc) {
-                    filtered = SmartString::from(filtered.trim_start_matches(is_punc));
+                let options = IngestOptions {
+                    no_parse_quotes: true,
+                    ..Default::default()
+                };
+                let fmt = crate::sort::SortStringFormat;
+                let strip_it = fmt.ingest(&s, &options);
+                let mut stripped = fmt.output(strip_it, false);
+                if stripped.starts_with(is_punc) {
+                    stripped = SmartString::from(stripped.trim_start_matches(is_punc));
                 }
-                out.push(crate::sort::Lexical::new(filtered));
+                out.push(crate::sort::Lexical::new(stripped));
             }
         }
     }
 
-    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl Into<SmartString>) -> O::Build {
+    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl AsRef<str>) -> O::Build {
         let fmt = self.fmt;
+        // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
+        // want InlineElement::Text but with text-casing applied.
+        let mut options = IngestOptions {
+            no_parse_quotes: true,
+            ..Default::default()
+        };
         match o_part {
-            None => fmt.text_node(s.into(), None),
+            None => fmt.ingest(s.as_ref(), &options),
             Some(ref part) => {
                 let NamePart {
                     text_case,
@@ -896,13 +909,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     // name-part-formatting part of the spec.
                     ..
                 } = *part;
-                // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
-                // want InlineElement::Text but with text-casing applied.
-                let options = IngestOptions {
-                    text_case,
-                    ..Default::default()
-                };
-                let mut b = fmt.text_node(s.into(), None);
+                options.text_case = text_case;
+                let mut b = fmt.ingest(s.as_ref(), &options);
                 fmt.apply_text_case(&mut b, &options);
                 fmt.with_format(b, formatting)
             }
@@ -1002,6 +1010,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     casing.push(self.format_with_part(family_part, fam.clone()));
                     let mut casing = fmt.group(casing, "", None);
                     let options = IngestOptions {
+                        no_parse_quotes: true,
                         text_case: family_part.as_ref().map_or(TextCase::None, |p| p.text_case),
                         ..Default::default()
                     };
@@ -1118,7 +1127,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         return None;
                     }
                     let lat_cy = citeproc_io::unicode::is_latin_cyrillic(&text);
-                    NameTokenBuilt::Built(fmt.text_node(text.into(), formatting), lat_cy)
+                    NameTokenBuilt::Built(fmt.text_node(text, formatting), lat_cy)
                 }
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…"), true),
                 NameToken::Space => NameTokenBuilt::Space,

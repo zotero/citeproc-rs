@@ -10,7 +10,7 @@ mod lexical;
 pub mod natural_sort;
 pub(crate) use lexical::Lexical;
 mod output_format;
-use output_format::SortStringFormat;
+pub(crate) use output_format::SortStringFormat;
 
 fn plain_macro_element(macro_name: SmartString) -> TextElement {
     TextElement {

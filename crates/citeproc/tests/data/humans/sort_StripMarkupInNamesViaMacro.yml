@@ -1,0 +1,32 @@
+# The tags should make zero difference.
+mode: citation
+result: <sup>AA</sup>; <i>AB</i>; BA; <i>BB</i>
+input:
+  - id: 1
+    author:
+    - family: <i>BB</i>
+  - id: 2
+    author:
+    - family: BA
+  - id: 3
+    author:
+    - family: <i>AB</i>
+  - id: 4
+    author:
+    - family: <sup>AA</sup>
+csl:
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+    <info><title>sort_StripMarkupInNames</title><id>id</id><updated>2010-01-27T20:08:03+00:00</updated>
+    </info>
+    <macro name="author">
+      <names variable="author"></names>
+    </macro>
+    <citation>
+      <sort>
+        <key macro="author" />
+      </sort>
+      <layout delimiter="; ">
+        <names variable="author"></names>
+      </layout>
+    </citation>
+  </style>
