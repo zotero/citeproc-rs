@@ -7,7 +7,7 @@
 use crate::prelude::*;
 
 use crate::number::render_ordinal;
-use citeproc_io::{Date, DateOrRange, lazy};
+use citeproc_io::{lazy, Date, DateOrRange};
 use csl::terms::*;
 use csl::LocaleDate;
 #[cfg(test)]

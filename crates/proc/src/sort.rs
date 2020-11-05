@@ -6,8 +6,8 @@ use csl::{style::*, terms::*, variables::*, Atom};
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
-pub mod natural_sort;
 mod lexical;
+pub mod natural_sort;
 pub(crate) use lexical::Lexical;
 mod output_format;
 use output_format::SortStringFormat;

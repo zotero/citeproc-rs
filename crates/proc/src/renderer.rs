@@ -6,8 +6,8 @@ use citeproc_io::{Name, NumericToken, NumericValue, Reference};
 use csl::{
     Features, GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel,
     NameVariable, NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural,
-    RoleTermSelector, SortKey, StandardVariable, Style, TextElement, TextTermSelector,
-    Variable, VariableForm,
+    RoleTermSelector, SortKey, StandardVariable, Style, TextElement, TextTermSelector, Variable,
+    VariableForm,
 };
 
 use crate::choose::CondChecker;

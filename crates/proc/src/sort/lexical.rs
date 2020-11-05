@@ -30,6 +30,8 @@ impl<S: AsRef<str>> Ord for Lexical<S> {
 
 #[test]
 fn test_lexical_d_wander() {
-    assert_eq!(Lexical("d'Wander").cmp(&Lexical("de'Wander")), Ordering::Less);
+    assert_eq!(
+        Lexical("d'Wander").cmp(&Lexical("de'Wander")),
+        Ordering::Less
+    );
 }
-

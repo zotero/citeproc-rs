@@ -19,8 +19,8 @@ use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Name};
-use csl::{Atom, Bibliography, Position, SortKey};
 use csl::GivenNameDisambiguationRule as GNDR;
+use csl::{Atom, Bibliography, Position, SortKey};
 
 use indextree::NodeId;
 
@@ -349,7 +349,12 @@ impl fmt::Debug for IrGen {
 
 impl IrGen {
     pub(crate) fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
-        IrGen { root, arena, state, used_disambiguate_true: false }
+        IrGen {
+            root,
+            arena,
+            state,
+            used_disambiguate_true: false,
+        }
     }
 }
 
@@ -1282,13 +1287,22 @@ pub fn built_cluster_before_output(
             let suf_mut = suf.to_mut();
             suf_mut.push(' ');
         }
-        let opts = IngestOptions { is_external: true, ..Default::default() };
+        let opts = IngestOptions {
+            is_external: true,
+            ..Default::default()
+        };
         let prefix_parsed = fmt.ingest(&pre, &opts);
         let suffix_parsed = fmt.ingest(&suf, &opts);
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
         use std::iter::once;
-        Some(fmt.seq(once(prefix_parsed).chain(once(flattened)).chain(once(suffix_parsed))))
+        Some(
+            fmt.seq(
+                once(prefix_parsed)
+                    .chain(once(flattened))
+                    .chain(once(suffix_parsed)),
+            ),
+        )
     };
 
     let cgroup_delim = style

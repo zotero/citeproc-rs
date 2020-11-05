@@ -479,10 +479,15 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
 
 impl Unnamed3<Markup> {
     pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
-        let prefix_parsed = cite
-            .prefix
-            .as_opt_str()
-            .map(|p| fmt.ingest(p, &IngestOptions { is_external: true, ..Default::default() }));
+        let prefix_parsed = cite.prefix.as_opt_str().map(|p| {
+            fmt.ingest(
+                p,
+                &IngestOptions {
+                    is_external: true,
+                    ..Default::default()
+                },
+            )
+        });
         Unnamed3 {
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),
@@ -1145,24 +1150,22 @@ pub fn fix_left_right_layout_affixes<O: OutputFormat>(
         arena: &mut IrArena<O>,
     ) {
         match &mut arena[node_id].get_mut().0 {
-            IR::Seq(s) => {
-                match &mut s.affixes {
-                    Some(af) => {
-                        let which = if suf { &mut af.suffix } else { &mut af.prefix };
-                        *which = content;
-                        if af.prefix.is_empty() && af.suffix.is_empty() {
-                            s.affixes = None;
-                        }
+            IR::Seq(s) => match &mut s.affixes {
+                Some(af) => {
+                    let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                    *which = content;
+                    if af.prefix.is_empty() && af.suffix.is_empty() {
+                        s.affixes = None;
                     }
-                    None if !content.is_empty() => {
-                        let mut af = Affixes::default();
-                        let which = if suf { &mut af.suffix } else { &mut af.prefix };
-                        *which = content;
-                        s.affixes = Some(af);
-                    }
-                    _ => {}
                 }
-            }
+                None if !content.is_empty() => {
+                    let mut af = Affixes::default();
+                    let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                    *which = content;
+                    s.affixes = Some(af);
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
