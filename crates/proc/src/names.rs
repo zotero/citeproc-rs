@@ -7,7 +7,7 @@
 use self::initials::initialize;
 
 use crate::disamb::names::{
-    DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
+    self as disamb, DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
 };
 use crate::prelude::*;
 use crate::NamesInheritance;
@@ -20,20 +20,6 @@ use csl::{
 
 mod initials;
 
-impl DisambNameData {
-    fn lookup_id(&mut self, db: &dyn IrDatabase, advance_to_global: bool) -> DisambName {
-        let id = db.disamb_name(self.clone());
-        // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
-        if advance_to_global {
-            let globally_disambiguated = db.disambiguated_person_names();
-            if let Some(my_data) = globally_disambiguated.get(&id) {
-                *self = my_data.clone()
-            }
-        }
-        id
-    }
-}
-
 impl<B> DisambNameRatchet<B> {
     fn for_person(
         db: &dyn IrDatabase,
@@ -42,7 +28,8 @@ impl<B> DisambNameRatchet<B> {
         ref_id: &Atom,
         name_el: &NameEl,
         primary: bool,
-        global: bool,
+        all_same_family_name: bool,
+        advance_to_global: bool,
     ) -> Self {
         let mut data = DisambNameData {
             var,
@@ -50,8 +37,18 @@ impl<B> DisambNameRatchet<B> {
             ref_id: ref_id.clone(),
             el: name_el.clone(),
             primary,
+            all_same_family_name: all_same_family_name && name_el.form == Some(NameForm::Short),
         };
-        let id = data.lookup_id(db, global);
+        let id = db.disamb_name(data.clone());
+        // test disambiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
+        //
+        if advance_to_global {
+            let globally_disambiguated = db.disambiguated_person_names();
+            if let Some(&global_pass) = globally_disambiguated.get(&id) {
+                data.apply_upto_pass(global_pass);
+                // optimise: should apply pass to the ratchet's iterator as well
+            }
+        }
         let ratchet = PersonDisambNameRatchet::new(&db.style(), id, data);
         DisambNameRatchet::Person(ratchet)
     }
@@ -64,13 +61,15 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     names_inheritance: &'a NamesInheritance,
     db: &'a dyn IrDatabase,
     state: &'a IrState,
-    should_start_with_global: bool,
+    advance_to_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a + Clone {
     let fmt = ctx.format();
     let style = ctx.style();
     let locale = ctx.locale();
     let refr = ctx.reference();
     let get_name_ir = move |(var, label_var, value): (NameVariable, NameVariable, Vec<Name>)| {
+        // fullstyles_APA.txt
+        let all_same_family_name = disamb::all_same_family_name(&value);
         let ratchets = value
             .into_iter()
             .enumerate()
@@ -85,11 +84,18 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                         &refr.id,
                         &names_inheritance.name,
                         primary,
-                        should_start_with_global,
+                        all_same_family_name,
+                        advance_to_global,
                     ),
-                    Name::Literal { literal, is_latin_cyrillic } => {
+                    Name::Literal {
+                        literal,
+                        is_latin_cyrillic,
+                    } => {
                         warn!("literal names should be normalised into family-only");
-                        DisambNameRatchet::Literal { literal: fmt.text_node(literal, None), is_latin_cyrillic }
+                        DisambNameRatchet::Literal {
+                            literal: fmt.text_node(literal, None),
+                            is_latin_cyrillic,
+                        }
                     }
                 }
             })
@@ -170,9 +176,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         .map(get_name_ir)
 }
 
+use crate::sort::Lexical;
 use crate::NameOverrider;
 use csl::SortKey;
-use crate::sort::Lexical;
 
 pub(crate) fn sort_strings_for_names(
     db: &dyn IrDatabase,
@@ -484,17 +490,18 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let mut iter = ntbs.into_iter().peekable();
         while let Some(ntb) = iter.next() {
             let renderable = match ntb {
-                NameTokenBuilt::Built(b, lat_cy) => {
-                    Some(b)
-                }
+                NameTokenBuilt::Built(b, lat_cy) => Some(b),
                 NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
-                    DisambNameRatchet::Literal { literal, is_latin_cyrillic } => {
+                    DisambNameRatchet::Literal {
+                        literal,
+                        is_latin_cyrillic,
+                    } => {
                         if fmt.is_empty(literal) {
                             None
                         } else {
                             Some(maybe_subst(literal.clone()))
                         }
-                    },
+                    }
                     DisambNameRatchet::Person(pn) => {
                         cloned_runner.name_el = &pn.data.el;
                         let ret =
@@ -504,7 +511,10 @@ impl<'c, O: OutputFormat> NameIR<O> {
                     }
                 },
                 NameTokenBuilt::Space => {
-                    let next_is_latin = iter.peek().map_or(None, |x| x.is_latin(&self.disamb_names)).unwrap_or(false);
+                    let next_is_latin = iter
+                        .peek()
+                        .map_or(None, |x| x.is_latin(&self.disamb_names))
+                        .unwrap_or(false);
                     if next_is_latin {
                         Some(fmt.plain(" "))
                     } else {
@@ -512,7 +522,7 @@ impl<'c, O: OutputFormat> NameIR<O> {
                     }
                 }
             };
-            if let Some(r) = renderable { 
+            if let Some(r) = renderable {
                 rendered.push(r);
             }
         }
@@ -1101,11 +1111,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 NameToken::Name(ratchet) => NameTokenBuilt::Ratchet(ratchet),
                 NameToken::Delimiter => {
                     let s = self.name_el.delimiter.as_opt_str().unwrap_or(", ");
-                    NameTokenBuilt::Built(
-                        fmt.plain(s),
-                        citeproc_io::unicode::is_latin_cyrillic(s),
-                    )
-                },
+                    NameTokenBuilt::Built(fmt.plain(s), citeproc_io::unicode::is_latin_cyrillic(s))
+                }
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {
                         return None;
@@ -1148,11 +1155,11 @@ impl<B> NameTokenBuilt<B> {
             NameTokenBuilt::Built(_, lat_cy) => Some(*lat_cy),
             NameTokenBuilt::Space => None,
             NameTokenBuilt::Ratchet(index) => match &ratchets[*index] {
-                DisambNameRatchet::Literal { is_latin_cyrillic, .. } => Some(*is_latin_cyrillic),
-                DisambNameRatchet::Person(ratchet) => {
-                    Some(ratchet.data.value.is_latin_cyrillic)
-                }
-            }
+                DisambNameRatchet::Literal {
+                    is_latin_cyrillic, ..
+                } => Some(*is_latin_cyrillic),
+                DisambNameRatchet::Person(ratchet) => Some(ratchet.data.value.is_latin_cyrillic),
+            },
         }
     }
 }

@@ -12,7 +12,7 @@ const CSL_STYLE_ERROR: &'static str = "[CSL STYLE ERROR: reference with no print
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
-use crate::disamb::names::replace_single_child;
+use crate::disamb::names::{replace_single_child, NameDisambPass};
 use crate::disamb::{Dfa, DisambName, DisambNameData, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
@@ -20,6 +20,7 @@ use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Name};
 use csl::{Atom, Bibliography, Position, SortKey};
+use csl::GivenNameDisambiguationRule as GNDR;
 
 use indextree::NodeId;
 
@@ -68,12 +69,12 @@ pub trait IrDatabase:
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
-    fn all_person_names(&self) -> Arc<Vec<DisambName>>;
+    fn all_person_names(&self) -> Arc<Vec<DisambNameData>>;
 
     /// The *Data indexed here are ratcheted as far as was required to do global name
     /// disambiguation.
     #[salsa::invoke(crate::disamb::names::disambiguated_person_names)]
-    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, DisambNameData>>;
+    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, NameDisambPass>>;
 
     /// The DisambNameData here correspond to "global identity" -- so each DisambName points to
     /// exactly one Ref/NameEl/Variable/PersonName. Even if there are two identical NameEls
@@ -120,8 +121,9 @@ pub fn safe_default(db: &mut dyn IrDatabase) {
     db.set_bibliography_nosort_with_durability(false, salsa::Durability::HIGH);
 }
 
-fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {
-    let _style = db.style();
+fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambNameData>> {
+    let style = db.style();
+    let rule = style.citation.givenname_disambiguation_rule;
     let name_configurations = db.name_configurations();
     let refs = db.disamb_participants();
     let mut collector = Vec::new();
@@ -134,15 +136,21 @@ fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {
             for (var, el) in name_configurations.iter() {
                 if let Some(names) = refr.name.get(&var) {
                     let mut seen_one = false;
+                    // fullstyles_APA.txt
+                    let all_same_family_name = (rule == GNDR::PrimaryName
+                        || rule == GNDR::PrimaryNameWithInitials)
+                        && el.form == Some(csl::NameForm::Short)
+                        && crate::disamb::names::all_same_family_name(names);
                     for name in names {
                         if let Name::Person(val) = name {
-                            collector.push(db.disamb_name(DisambNameData {
+                            collector.push(DisambNameData {
                                 ref_id: ref_id.clone(),
                                 var: *var,
                                 el: el.clone(),
                                 value: val.clone(),
                                 primary: !seen_one,
-                            }))
+                                all_same_family_name,
+                            })
                         }
                         seen_one = true;
                     }
@@ -340,7 +348,7 @@ impl fmt::Debug for IrGen {
 }
 
 impl IrGen {
-    fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
+    pub(crate) fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
         IrGen { root, arena, state, used_disambiguate_true: false }
     }
 }
@@ -770,7 +778,10 @@ fn expand_one_name_ir(
                 double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
             }
             for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                let matcher = NameVariantMatcher::from_disamb_name(db, id);
+                // This is ad-hoc RefIR, so we don't want it to have global disamb applied already.
+                // disambiguage_AndreaEg2
+                let dn = id.lookup(db);
+                let matcher = NameVariantMatcher::from_disamb_name(db, dn);
                 if let Some(slot) = double_vec.get_mut(n) {
                     slot.push(matcher);
                 }
@@ -779,7 +790,9 @@ fn expand_one_name_ir(
     }
 
     let name_ambiguity_number = |edge: &EdgeData, slot: &[NameVariantMatcher]| -> u32 {
-        slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
+        slot.iter()
+            .filter(|matcher| matcher.accepts(edge, None))
+            .count() as u32
     };
 
     let mut n = 0usize;
@@ -796,7 +809,7 @@ fn expand_one_name_ir(
                 let mut iter = ratchet.iter;
                 while min > 1 {
                     if let Some(next) = iter.next() {
-                        stage_dn.apply_pass(next);
+                        stage_dn.apply_upto_pass(next);
                         edge = stage_dn.single_name_edge(db, Formatting::default());
                         let new_count = name_ambiguity_number(&edge, slot);
                         if new_count < min {
@@ -1009,7 +1022,8 @@ impl IrGenCow {
     }
 }
 
-impl std::ops::Deref for IrGenCow {
+use std::ops::Deref;
+impl Deref for IrGenCow {
     type Target = IrGen;
     fn deref(&self) -> &Self::Target {
         match self {
