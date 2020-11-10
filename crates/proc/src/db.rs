@@ -328,22 +328,9 @@ pub struct IrGen {
 use std::fmt;
 impl fmt::Debug for IrGen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn go(
-            indent: u32,
-            node: NodeId,
-            arena: &IrArena<Markup>,
-            f: &mut fmt::Formatter<'_>,
-        ) -> fmt::Result {
-            let pair = arena.get(node).unwrap().get();
-            for _ in 0..indent {
-                write!(f, "    ")?;
-            }
-            writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
-            node.children(arena)
-                .try_for_each(|ch| go(indent + 1, ch, arena, f))
-        }
-        write!(f, "\n")?;
-        go(0, self.root, &self.arena, f)
+        use crate::ir::IrDebug;
+        let dbg = IrDebug::new(self.root, &self.arena);
+        write!(f, "state: {:?}, contents: {:?}", self.state, dbg)
     }
 }
 
@@ -387,7 +374,10 @@ macro_rules! preamble {
         let cite_stuff = match $db.lookup_cite($id) {
             CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
             // Subsequent because: disambiguate_BasedOnEtAlSubsequent.txt
-            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::Subsequent, None)),
+            // The position being Some(1) is so the ghost entries don't emit nothing where every
+            // normal reference would emit a first-reference-note-number. You'll never see this
+            // value as output.
+            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::Subsequent, Some(1))),
         };
         $cite = cite_stuff.0;
         let position = cite_stuff.1;
@@ -657,9 +647,11 @@ fn disambiguate_add_names(
     db: &dyn IrDatabase,
     root: NodeId,
     arena: &mut IrArena<Markup>,
-    ctx: &CiteContext<'_, Markup>,
+    ctx: &mut CiteContext<'_, Markup>,
     also_expand: bool,
 ) -> bool {
+    ctx.disamb_pass = Some(DisambPass::AddNames);
+
     let fmt = &db.get_formatter();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
@@ -793,8 +785,9 @@ fn expand_one_name_ir(
             }
         }
     }
+    use crate::disamb::names::MatchKey;
 
-    let name_ambiguity_number = |edge: &EdgeData, slot: &[NameVariantMatcher]| -> u32 {
+    let name_ambiguity_number = |edge: &EdgeData, match_key: Option<&MatchKey>, slot: &[NameVariantMatcher]| -> u32 {
         slot.iter()
             .filter(|matcher| matcher.accepts(edge, None))
             .count() as u32
@@ -807,8 +800,9 @@ fn expand_one_name_ir(
                 // First, get the initial count
                 /* TODO: store format stack */
                 let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
-                let mut min = name_ambiguity_number(&edge, slot);
-                debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
+                let key = ratchet.data.family_match_key();
+                let mut min = name_ambiguity_number(&edge, key.as_ref(), slot);
+                trace!("nan for {}-th ({:?}) initially {}", n, edge, min);
                 let mut stage_dn = ratchet.data.clone();
                 // Then, try to improve it
                 let mut iter = ratchet.iter;
@@ -816,14 +810,14 @@ fn expand_one_name_ir(
                     if let Some(next) = iter.next() {
                         stage_dn.apply_upto_pass(next);
                         edge = stage_dn.single_name_edge(db, Formatting::default());
-                        let new_count = name_ambiguity_number(&edge, slot);
+                        let new_count = name_ambiguity_number(&edge, key.as_ref(), slot);
                         if new_count < min {
                             // save the improvement
                             min = new_count;
                             ratchet.data = stage_dn.clone();
                             ratchet.iter = iter;
                         }
-                        debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
+                        trace!("nan for {}-th ({:?}) got to {}", n, edge, min);
                     } else {
                         break;
                     }
@@ -851,9 +845,10 @@ fn disambiguate_add_givennames(
     db: &dyn IrDatabase,
     root: NodeId,
     arena: &mut IrArena<Markup>,
-    ctx: &CiteContext<'_, Markup>,
+    ctx: &mut CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
+    ctx.disamb_pass = Some(DisambPass::AddGivenName(ctx.style.citation.givenname_disambiguation_rule));
     let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(
         db,
@@ -990,15 +985,16 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut state = IrState::new();
     let mut arena = IrArena::new();
     let root = style.intermediate(db, &mut state, &ctx, &mut arena);
-    let _fmt = db.get_formatter();
     let irgen = IrGen::new(root, arena, state);
     Arc::new(irgen)
 }
 
 fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
+    let style = db.style();
+    let gndr = style.citation.givenname_disambiguation_rule;
     let cite = id.lookup(db);
     let gen2 = db.ir_gen2_add_given_name(id);
-    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, None);
+    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, Some(DisambPass::AddGivenName(gndr)));
     Arc::new(refs)
 }
 
@@ -1046,11 +1042,10 @@ impl IrGenCow {
         ctx: &mut CiteContext<Markup>,
     ) -> bool {
         if ctx.style.citation.disambiguate_add_names {
-            ctx.disamb_pass = Some(DisambPass::AddNames);
             // Clone ir0; disambiguate by adding names
             let cloned = self.to_mut();
             let unambiguous =
-                disambiguate_add_names(db, cloned.root, &mut cloned.arena, &ctx, false);
+                disambiguate_add_names(db, cloned.root, &mut cloned.arena, ctx, false);
             unambiguous
         } else {
             false
@@ -1060,10 +1055,8 @@ impl IrGenCow {
     fn disambiguate_add_given_name(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         if ctx.style.citation.disambiguate_add_givenname {
             let cloned = self.to_mut();
-            let gndr = ctx.style.citation.givenname_disambiguation_rule;
-            ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
             let also_add_names = ctx.style.citation.disambiguate_add_names;
-            disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, &ctx, also_add_names);
+            disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, ctx, also_add_names);
         }
     }
     fn disambiguate_add_year_suffix(

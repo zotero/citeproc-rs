@@ -59,6 +59,23 @@ pub struct CiteContext<
     pub year_suffix: Option<u32>,
 }
 
+use std::fmt;
+impl<'c, O: OutputFormat, I: OutputFormat> std::fmt::Debug for CiteContext<'c, O, I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("CiteContext")
+            .field("ref_id", &AsRef::<str>::as_ref(&self.reference.id))
+            .field("position", &self.position)
+            .field("citation_number", &self.citation_number)
+            .field("bib_number", &self.bib_number)
+            .field("in_bibliography", &self.in_bibliography)
+            .field("sort_key", &self.sort_key)
+            .field("disamb_pass", &self.disamb_pass)
+            .field("sort_key", &self.sort_key)
+            .field("year_suffix", &self.year_suffix)
+            .finish()
+    }
+}
+
 // helper methods to access both cite and reference properties via Variables
 
 impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {

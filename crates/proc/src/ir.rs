@@ -601,3 +601,34 @@ impl IrSeq {
         }
     }
 }
+
+pub(crate) struct IrDebug<'a, O: OutputFormat> {
+    root: NodeId,
+    arena: &'a IrArena<O>,
+}
+impl<'a, O: OutputFormat> IrDebug<'a, O> {
+    pub(crate) fn new(root: NodeId, arena: &'a IrArena<O>) -> Self {
+        IrDebug { root, arena }
+    }
+}
+impl<'a, O: OutputFormat> std::fmt::Debug for IrDebug<'a, O> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn go<O2: OutputFormat>(
+            indent: u32,
+            node: NodeId,
+            arena: &IrArena<O2>,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
+            let pair = arena.get(node).unwrap().get();
+            for _ in 0..indent {
+                write!(f, "    ")?;
+            }
+            writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
+            node.children(arena)
+                .try_for_each(|ch| go(indent + 1, ch, arena, f))
+        }
+        write!(f, "\n")?;
+        go(0, self.root, &self.arena, f)
+    }
+}
+

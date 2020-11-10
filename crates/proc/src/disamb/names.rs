@@ -465,12 +465,12 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
-type MatchKey = (Atom, NameVariable, bool);
+pub(crate) type MatchKey = (Atom, NameVariable, bool);
 
 impl DisambNameData {
     /// fullstyles_APA.txt
     /// The bool means 'is_primary'
-    fn family_match_key(&self) -> Option<MatchKey> {
+    pub(crate) fn family_match_key(&self) -> Option<MatchKey> {
         if self.primary && self.all_same_family_name {
             Some((self.ref_id.clone(), self.var, true))
         } else {
