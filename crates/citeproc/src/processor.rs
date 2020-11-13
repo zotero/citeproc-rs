@@ -21,6 +21,7 @@ use citeproc_db::{
     CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
 use citeproc_proc::db::IrDatabaseStorage;
+use citeproc_proc::BibNumber;
 
 use salsa::Durability;
 #[cfg(feature = "rayon")]
@@ -45,7 +46,7 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 use fnv::FnvHashMap;
 
 struct SavedBib {
-    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>,
+    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)>,
     bib_entries: Arc<FnvHashMap<Atom, Arc<MarkupOutput>>>,
 }
 

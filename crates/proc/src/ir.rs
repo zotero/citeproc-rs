@@ -631,4 +631,3 @@ impl<'a, O: OutputFormat> std::fmt::Debug for IrDebug<'a, O> {
         go(0, self.root, &self.arena, f)
     }
 }
-

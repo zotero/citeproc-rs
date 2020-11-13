@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 mod lexical;
 pub mod natural_sort;
-pub(crate) use lexical::Lexical;
+pub(crate) use lexical::Natural;
 mod output_format;
 pub(crate) use output_format::SortStringFormat;
 
@@ -35,7 +35,40 @@ fn ctx_sort_string(
     string
 }
 
-pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)> {
+/// Distinguish between uncited and cited items for sorting the `citation-number` variable or
+/// macro.
+///
+/// In sorting routines, we use BibNumber::cited_only() because we want (a) uncited items to be
+/// mixed into a bibliography only if people literally specify a sort key that would do that, but
+/// we also (b) want the 'demoting none' behaviour to apply to citation-number when it is used, and
+/// for those uncited items to be very much last; finally (c) any time we actually *render* a
+/// citation-number, it is still the position in the bibliography.
+///
+/// No sort keys at all                 =>  uncited items go last
+/// key variable="title"                =>  uncited items mixed into bibliography
+/// key variable="citation-number"      =>  uncited items go last
+/// key variable="citation-number" desc =>  uncited items STILL go last
+/// citation-number, title              =>  uncited items AT END are sorted by title among themselves
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BibNumber {
+    Cited(u32),
+    Uncited(u32),
+}
+impl BibNumber {
+    pub fn get(&self) -> u32 {
+        match *self {
+            BibNumber::Cited(b) | BibNumber::Uncited(b) => b,
+        }
+    }
+    pub fn cited_only(&self) -> Option<u32> {
+        match *self {
+            BibNumber::Cited(b) => Some(b),
+            _ => None,
+        }
+    }
+}
+
+pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)> {
     let style = db.style();
     let bib = match style.bibliography {
         None => None,
@@ -61,39 +94,34 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         let ref_id = &id.lookup(db).ref_id;
         if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
             preordered.push(ref_id.clone());
-            citation_numbers.insert(ref_id.clone(), i as u32);
+            citation_numbers.insert(ref_id.clone(), BibNumber::Cited(i as u32));
             i += 1;
         }
     }
+
     // Then all the uncited ones
     for id in uncited_ordered.iter() {
         // guaranteed to be a valid reference id already.
         // but may have duplicated an actual cite.
         preordered.push(id.clone());
-        citation_numbers.insert(id.clone(), i as u32);
+        citation_numbers.insert(id.clone(), BibNumber::Uncited(i as u32));
         i += 1;
     }
 
-    // let style = db.style();
-    // use std::borrow::Cow;
-    // let mut sort_keys: Cow<'_, [SortKey]> = Cow::Borrowed(style.citation.sort.as_ref().map(|s| &s.keys[..]).unwrap_or(&[]));
-    // let mut primary = None;
-    // if let Some(first) = sort_keys.first() {
-    //     primary = Some(first.clone());
-    //     sort_keys.as_mut().remove(0);
-    // }
-
     let max_cnum = preordered.len() as u32;
     let mut reverse = false;
-    let refs = if db.bibliography_nosort() {
+    let now_sorted = if db.bibliography_nosort() {
         preordered
     } else if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {
-            let a_cnum = citation_numbers.get(a).unwrap();
+            let a_cnum = citation_numbers
+                .get(a)
+                .expect("must have an citation_number entry for every bibliography item")
+                .clone();
             let demoting = with_bib_context(
                 db,
                 a.clone(),
-                Some(*a_cnum),
+                a_cnum.cited_only(),
                 None,
                 None,
                 |_, mut a_ctx| {
@@ -101,7 +129,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
                         db,
                         CiteOrBib::Bibliography,
                         &mut a_ctx,
-                        *a_cnum,
+                        a_cnum,
                         sort,
                         max_cnum,
                     ))
@@ -123,14 +151,19 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>
         // they are cited. The uncited ones come last.
         preordered
     };
-    for (i, ref_id) in refs.iter().enumerate() {
+    for (i, ref_id) in now_sorted.iter().enumerate() {
         let mut i = i as u32 + 1u32;
         if reverse {
             i = max_cnum + 1 - i;
         }
-        citation_numbers.insert(ref_id.clone(), i);
+        if let Some(bn) = citation_numbers.get_mut(&ref_id) {
+            match bn {
+                BibNumber::Cited(x) => *x = i,
+                BibNumber::Uncited(x) => *x = i,
+            }
+        }
     }
-    Arc::new((refs, citation_numbers))
+    Arc::new((now_sorted, citation_numbers))
 }
 
 pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
@@ -156,12 +189,13 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
         let max_cnum = citation_numbers_by_id.len() as u32;
         if let Some(sort) = style.citation.sort.as_ref() {
             let mut neu = (*cites).clone();
-            let getter = |cite_id: &CiteId| -> Option<u32> {
+            let getter = |cite_id: &CiteId| -> Option<BibNumber> {
                 let cite = cite_id.lookup(db);
                 let cnum = db.reference(cite.ref_id.clone()).map(|refr| {
-                    *citation_numbers_by_id
+                    citation_numbers_by_id
                         .get(&refr.id)
-                        .expect("sorted_refs should contain a bib_item key")
+                        .expect("every cited reference should appear in sorted_refs")
+                        .clone()
                 });
                 cnum
             };
@@ -170,7 +204,7 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
                     let demoting = with_cite_context(
                         db,
                         a.clone(),
-                        Some(a_cnum),
+                        a_cnum.cited_only(),
                         // not set because this is per-sort-key, which we will set in
                         // ctx_sort_items
                         None,
@@ -198,7 +232,8 @@ pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<Cluster
     })
 }
 
-pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<u32> {
+/// May be None if the cite's reference does not exist.
+pub fn bib_number(db: &dyn IrDatabase, id: CiteId) -> Option<BibNumber> {
     let cite = id.lookup(db);
     let arc = db.sorted_refs();
     let (_, ref lookup_ref_ids) = &*arc;
@@ -214,9 +249,9 @@ struct SortItem {
 enum SortValue {
     Macro(Option<NaturalCmp>),
     Cnum(Option<u32>),
-    OrdinaryVariable(Option<Lexical<SmartString>>),
+    OrdinaryVariable(Option<Natural<SmartString>>),
     Number(Option<citeproc_io::NumericValueOwned>),
-    Names(Option<Vec<Lexical<SmartString>>>),
+    Names(Option<Vec<Natural<SmartString>>>),
     Date(Option<DateOrRange>),
 }
 
@@ -298,15 +333,15 @@ fn ctx_sort_items(
     // Cached lookup from (id, macro name, sort key) -> a comparable string
     cite_or_bib: CiteOrBib,
     a_ctx: &mut CiteContext<'_, Markup, Markup>,
-    a_cnum: u32,
+    a_cnum: BibNumber,
     sort: &Sort,
     max_cnum: u32,
 ) -> Demoting {
     let sort_string = |ctx: &mut CiteContext<Markup, Markup>,
                        macro_name: SmartString,
                        key: SortKey,
-                       cnum: u32| {
-        ctx.bib_number = Some(cnum);
+                       cnum: Option<u32>| {
+        ctx.bib_number = cnum;
         if cite_or_bib == CiteOrBib::Bibliography {
             ctx.sort_key = Some(key);
             ctx_sort_string(db, ctx, macro_name)
@@ -327,7 +362,7 @@ fn ctx_sort_items(
                 value: SortValue::Cnum(Some(_)),
             } = item
             {
-                fake_cnum.set(Some(max_cnum + 1 - a_cnum));
+                fake_cnum.set(a_cnum.cited_only().map(|a| max_cnum + 1 - a));
             } else if let SortItem {
                 direction: Some(SortDirection::Ascending),
                 value: SortValue::Cnum(Some(_)),
@@ -341,7 +376,8 @@ fn ctx_sort_items(
     for key in sort.keys.iter() {
         let value = match key.sort_source {
             SortSource::Macro(ref macro_name) => {
-                let a_string = sort_string(a_ctx, macro_name.clone(), key.clone(), a_cnum);
+                let a_string =
+                    sort_string(a_ctx, macro_name.clone(), key.clone(), a_cnum.cited_only());
                 if let Some(cnum) = natural_sort::extract_citation_number(&a_string) {
                     // We found a <text value="citation-number"/> (or number)
                     let cnum_item = SortItem {
@@ -365,11 +401,11 @@ fn ctx_sort_items(
                     let got = a_ctx
                         .get_ordinary(v, VariableForm::default())
                         .map(strip_markup)
-                        .map(Lexical::new);
+                        .map(Natural::new);
                     SortValue::OrdinaryVariable(got)
                 }
                 AnyVariable::Number(NumberVariable::CitationNumber) => {
-                    SortValue::Cnum(fake_cnum.get().or(Some(a_cnum)))
+                    SortValue::Cnum(fake_cnum.get().or(a_cnum.cited_only()))
                 }
                 AnyVariable::Number(v) => SortValue::Number(a_ctx.get_number(v).map(Into::into)),
                 AnyVariable::Name(v) => {

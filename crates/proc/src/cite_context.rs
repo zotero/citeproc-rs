@@ -38,7 +38,6 @@ pub struct CiteContext<
 
     // These fields are synchronised with fields on EdgeData and IR.
     pub cite: &'c Cite<Input>,
-    pub citation_number: u32,
     pub bib_number: Option<u32>,
 
     pub in_bibliography: bool,
@@ -65,7 +64,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> std::fmt::Debug for CiteContext<'c, O
         f.debug_struct("CiteContext")
             .field("ref_id", &AsRef::<str>::as_ref(&self.reference.id))
             .field("position", &self.position)
-            .field("citation_number", &self.citation_number)
             .field("bib_number", &self.bib_number)
             .field("in_bibliography", &self.in_bibliography)
             .field("sort_key", &self.sort_key)
@@ -91,7 +89,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
             names_delimiter: self.names_delimiter.clone(),
             position: self.position,
             disamb_pass: self.disamb_pass,
-            citation_number: self.citation_number,
             bib_number: self.bib_number,
             in_bibliography: self.in_bibliography,
             sort_key: self.sort_key.clone(),

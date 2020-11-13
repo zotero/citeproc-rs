@@ -176,7 +176,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         .map(get_name_ir)
 }
 
-use crate::sort::Lexical;
+use crate::sort::Natural;
 use crate::NameOverrider;
 use csl::SortKey;
 
@@ -186,7 +186,7 @@ pub(crate) fn sort_strings_for_names(
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<Lexical<SmartString>>> {
+) -> Option<Vec<Natural<SmartString>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -217,7 +217,7 @@ pub(crate) fn sort_strings_for_names(
                 }
                 Name::Literal { literal, .. } => {
                     if !literal.is_empty() {
-                        out.push(Lexical::new(literal.clone()));
+                        out.push(Natural::new(literal.clone()));
                     }
                 }
             }
@@ -787,7 +787,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     pub(crate) fn person_name_sort_keys(
         &self,
         pn: &PersonName,
-        out: &mut Vec<Lexical<SmartString>>,
+        out: &mut Vec<Natural<SmartString>>,
     ) {
         let order = get_sort_order(
             pn.is_latin_cyrillic,
@@ -886,7 +886,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 if stripped.starts_with(is_punc) {
                     stripped = SmartString::from(stripped.trim_start_matches(is_punc));
                 }
-                out.push(crate::sort::Lexical::new(stripped));
+                out.push(crate::sort::Natural::new(stripped));
             }
         }
     }

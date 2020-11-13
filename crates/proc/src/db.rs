@@ -15,6 +15,7 @@ use std::sync::Arc;
 use crate::disamb::names::{replace_single_child, NameDisambPass};
 use crate::disamb::{Dfa, DisambName, DisambNameData, EdgeData, FreeCondSets};
 use crate::prelude::*;
+use crate::sort::BibNumber;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
@@ -109,12 +110,12 @@ pub trait IrDatabase:
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     #[salsa::invoke(crate::sort::sorted_refs)]
-    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
+    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)>;
     #[salsa::input]
     fn bibliography_nosort(&self) -> bool;
 
     #[salsa::invoke(crate::sort::bib_number)]
-    fn bib_number(&self, id: CiteId) -> Option<u32>;
+    fn bib_number(&self, id: CiteId) -> Option<BibNumber>;
 }
 
 pub fn safe_default(db: &mut dyn IrDatabase) {
@@ -240,7 +241,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     // disamb_participants that by default reflects the order they were cited and the uncited
     // ones last.
     let sorted_refs = db.sorted_refs();
-    let (refs, _citation_numbers) = &*sorted_refs;
+    let (refs, bib_numbers) = &*sorted_refs;
     refs.iter()
         .map(|id| {
             let cite = db.ghost_cite(id.clone());
@@ -288,7 +289,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         for atom in group {
             vec.push(atom);
         }
-        vec.sort_by_key(|ref_id| ref_bib_number(db, ref_id));
+        vec.sort_by_key(|ref_id| ref_bib_number(bib_numbers, ref_id));
         let mut i = 1; // "a" = 1
         for ref_id in &vec {
             if !suffixes.contains_key(ref_id) {
@@ -301,12 +302,10 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 }
 
 // Not cached
-fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
-    let srs = db.sorted_refs();
-    let (_, ref lookup_ref_ids) = &*srs;
-    let ret = lookup_ref_ids.get(ref_id).cloned();
+fn ref_bib_number(bib_numbers: &FnvHashMap<Atom, BibNumber>, ref_id: &Atom) -> u32 {
+    let ret = bib_numbers.get(ref_id).cloned();
     if let Some(ret) = ret {
-        ret
+        ret.get()
     } else {
         error!(
             "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
@@ -392,11 +391,10 @@ macro_rules! preamble {
             cite_id: Some($id),
             cite: &$cite,
             position,
-            citation_number: 0,
             disamb_pass: $pass,
             style: &$style,
             locale: &$locale,
-            bib_number: $db.bib_number($id),
+            bib_number: $db.bib_number($id).map(|x| x.get()),
             in_bibliography: false,
             names_delimiter,
             name_citation: name_el,
@@ -1189,7 +1187,7 @@ pub fn built_cluster_before_output(
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            Unnamed3::new(cite, cnum, gen4, &fmt)
+            Unnamed3::new(cite, cnum.map(|x| x.get()), gen4, &fmt)
         })
         .collect();
 
@@ -1480,7 +1478,6 @@ pub fn with_cite_context<T>(
         } else {
             db.cite_position(id)
         },
-        citation_number: 0,
         disamb_pass: None,
         style: &style,
         locale: &locale,
@@ -1524,7 +1521,6 @@ pub fn with_bib_context<T>(
         cite_id: None,
         cite: &cite,
         position: (Position::First, None),
-        citation_number: 0,
         disamb_pass: None,
         style: &style,
         locale: &locale,
@@ -1545,9 +1541,10 @@ pub fn with_bib_context<T>(
 fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let sorted_refs_arc = db.sorted_refs();
     let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-    let bib_number = *citation_numbers_by_id
+    let bib_number = citation_numbers_by_id
         .get(&ref_id)
-        .expect("sorted_refs should contain a bib_item key");
+        .expect("sorted_refs should contain a bib_item key")
+        .get();
 
     with_bib_context(
         db,

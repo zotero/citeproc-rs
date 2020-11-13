@@ -45,6 +45,7 @@ mod sort;
 mod walker;
 
 pub use crate::db::{built_cluster_before_output, safe_default};
+pub use crate::sort::BibNumber;
 
 pub(crate) mod prelude {
     pub(crate) trait AsRefOptStr {
@@ -81,6 +82,7 @@ pub(crate) mod prelude {
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
     pub use crate::ref_ir::*;
+    pub use crate::sort::BibNumber;
 
     pub(crate) use crate::disamb::{Disambiguation, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;

@@ -236,9 +236,9 @@ enum Token<'a> {
 
 impl<'a> PartialOrd for Token<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        use super::Lexical;
+        use super::Natural;
         match (self, other) {
-            (Token::Str(a), Token::Str(b)) => Lexical::new(a).partial_cmp(&Lexical::new(b)),
+            (Token::Str(a), Token::Str(b)) => Natural::new(a).partial_cmp(&Natural::new(b)),
             (Token::Date(a), Token::Date(b)) => a.partial_cmp(b),
             (Token::Num(a), Token::Num(b)) => a.partial_cmp(b),
             // Don't compare cnums here. If we've extracted it and it goes first, then it's already
