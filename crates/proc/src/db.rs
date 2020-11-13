@@ -45,6 +45,7 @@ pub trait IrDatabase:
     CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails
 {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
+    #[salsa::transparent]
     fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
     // TODO: cache this

@@ -20,13 +20,13 @@ use citeproc_db::{
     ClusterId as ClusterIdInternal,
     CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
+use indexmap::set::IndexSet;
 use citeproc_proc::db::IrDatabaseStorage;
 use citeproc_proc::BibNumber;
 
-use salsa::Durability;
+use salsa::{Database, Durability, SweepStrategy};
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
-use std::collections::HashSet;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
@@ -75,7 +75,7 @@ pub struct Processor {
     preview_cluster_id: ClusterId,
 }
 
-impl salsa::Database for Processor {}
+impl Database for Processor {}
 
 #[cfg(feature = "rayon")]
 impl ParallelDatabase for Processor {
@@ -229,17 +229,9 @@ impl Processor {
         let clusters = self.clusters_cites_sorted();
 
         #[cfg(feature = "rayon")]
-        {
+        let result = {
             use rayon::prelude::*;
             use std::ops::DerefMut;
-
-            // Prefetch the DFAs
-            let participants = self.disamb_participants();
-            participants
-                .par_iter()
-                .for_each_with(self.snap(), |snap, ref_id| {
-                    snap.0.ref_dfa(ref_id.clone());
-                });
 
             let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
@@ -259,9 +251,9 @@ impl Processor {
                 })
             .filter_map(|x| x)
                 .collect()
-        }
+        };
         #[cfg(not(feature = "rayon"))]
-        {
+        let result = {
             let mut into_hashmap = self.last_clusters.lock();
             clusters
                 .iter()
@@ -270,7 +262,11 @@ impl Processor {
                     upsert_diff(&mut into_hashmap, ClusterId::new(cluster.id), built)
                 })
             .collect()
-        }
+        };
+
+        // Run salsa GC.
+        self.sweep_all(SweepStrategy::discard_outdated());
+        result
     }
 
     pub fn batched_updates(&self) -> UpdateSummary {
@@ -301,7 +297,7 @@ impl Processor {
     }
 
     pub fn clear_references(&mut self) {
-        self.set_all_keys_with_durability(Arc::new(HashSet::new()), Durability::MEDIUM);
+        self.set_all_keys_with_durability(Arc::new(IndexSet::new()), Durability::MEDIUM);
     }
 
     fn intern_cluster_id(&self, string: impl AsRef<str>) -> ClusterId {
@@ -350,7 +346,7 @@ impl Processor {
     }
 
     pub fn reset_references(&mut self, refs: Vec<Reference>) {
-        let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
+        let keys: IndexSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
             self.set_reference_input_with_durability(r.id.clone(), Arc::new(r), Durability::MEDIUM);
         }
@@ -359,7 +355,7 @@ impl Processor {
 
     pub fn extend_references(&mut self, refs: Vec<Reference>) {
         let keys = self.all_keys();
-        let mut keys = HashSet::clone(&keys);
+        let mut keys = IndexSet::clone(&keys);
         for r in refs {
             keys.insert(r.id.clone());
             self.set_reference_input_with_durability(r.id.clone(), Arc::new(r), Durability::MEDIUM);
@@ -369,7 +365,7 @@ impl Processor {
 
     pub fn insert_reference(&mut self, refr: Reference) {
         let keys = self.all_keys();
-        let mut keys = HashSet::clone(&keys);
+        let mut keys = IndexSet::clone(&keys);
         keys.insert(refr.id.clone());
         self.set_reference_input_with_durability(refr.id.clone(), Arc::new(refr), Durability::MEDIUM);
         self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
@@ -377,7 +373,7 @@ impl Processor {
 
     pub fn remove_reference(&mut self, id: Atom) {
         let keys = self.all_keys();
-        let mut keys = HashSet::clone(&keys);
+        let mut keys = IndexSet::clone(&keys);
         keys.remove(&id);
         self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }

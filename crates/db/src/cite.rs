@@ -4,8 +4,8 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::xml::{LocaleDatabase, StyleDatabase};
 use super::cluster::*;
+use super::xml::{LocaleDatabase, StyleDatabase};
 
 use csl::Locale;
 use std::collections::HashSet;
@@ -15,6 +15,8 @@ use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, Reference};
 use csl::Atom;
 
+use indexmap::set::IndexSet;
+
 #[salsa::query_group(CiteDatabaseStorage)]
 pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
@@ -22,21 +24,11 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     fn reference(&self, key: Atom) -> Option<Arc<Reference>>;
 
     #[salsa::input]
-    fn all_keys(&self) -> Arc<HashSet<Atom>>;
+    fn all_keys(&self) -> Arc<IndexSet<Atom>>;
 
     #[salsa::input]
     fn all_uncited(&self) -> Arc<Uncited>;
-    fn uncited_ordered(&self) -> Arc<Vec<Atom>>;
-
-    /// Filters out keys not in the library
-    fn cited_keys(&self) -> Arc<HashSet<Atom>>;
-
-    /// Equal to `all.intersection(cited U uncited)`
-    /// Also represents "the refs that will be in the bibliography if we generate one"
-    fn disamb_participants(&self) -> Arc<HashSet<Atom>>;
-
-    /// All the names that may need to be disambiguated among themselves
-    fn names_to_disambiguate(&self) -> Arc<Vec<Name>>;
+    // fn uncited_ordered(&self) -> Arc<IndexSet<Atom>>;
 
     #[salsa::input]
     fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
@@ -44,18 +36,25 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     #[salsa::input]
     fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
 
-    // All cite ids, in the order they are cited in the document
-    fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
+    #[salsa::input]
+    fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
+
+    #[salsa::interned]
+    fn cite(&self, data: CiteData) -> CiteId;
 
     /// Create ghost cites for disambiguation only as needed.
     /// These are subsequently interned into CiteIds.
     fn ghost_cite(&self, ref_id: Atom) -> Arc<Cite<Markup>>;
 
-    #[salsa::interned]
-    fn cite(&self, data: CiteData) -> CiteId;
+    /// Filters out keys not in the library
+    fn cited_keys(&self) -> Arc<IndexSet<Atom>>;
 
-    #[salsa::input]
-    fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
+    /// Equal to `all.intersection(cited U uncited)`
+    /// Also represents "the refs that will be in the bibliography if we generate one"
+    fn disamb_participants(&self) -> Arc<IndexSet<Atom>>;
+
+    // All cite ids, in the order they are cited in the document
+    fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
 
     fn clusters_sorted(&self) -> Arc<Vec<ClusterData>>;
 }
@@ -128,90 +127,53 @@ pub enum Uncited {
     All,
     /// A set of reference IDs, merged with the known references, to appear in the bibliography no
     /// matter what.
-    Enumerated(Vec<Atom>),
+    Enumerated(IndexSet<Atom>),
 }
 
 /// Default is to have no uncited references present in bibliography.
 impl Default for Uncited {
     fn default() -> Self {
-        Uncited::Enumerated(Vec::new())
+        Uncited::Enumerated(IndexSet::new())
     }
 }
 
-fn uncited_ordered(db: &dyn CiteDatabase) -> Arc<Vec<Atom>> {
+fn cited_keys(db: &dyn CiteDatabase) -> Arc<IndexSet<Atom>> {
     let all = db.all_keys();
-    let cited = db.cited_keys();
-    let uncited = db.all_uncited();
-    match &*uncited {
-        Uncited::All => {
-            // Determinism for year suffixes: sort by key id.
-            let remainder = all.difference(&cited).cloned();
-            let mut list: Vec<_> = remainder.collect();
-            list.sort();
-            Arc::new(list)
-        }
-        Uncited::Enumerated(list) => {
-            let list = list
-                .iter()
-                .filter(|&x| !cited.contains(x) && all.contains(x))
-                .cloned()
-                .collect();
-            Arc::new(list)
-        }
-    }
-}
-
-fn cited_keys(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
-    let all = db.all_keys();
-    let mut keys = HashSet::new();
+    let mut keys = IndexSet::new();
     let all_cite_ids = db.all_cite_ids();
     for &id in all_cite_ids.iter() {
-        keys.insert(id.lookup(db).ref_id.clone());
+        let ref_id = &id.lookup(db).ref_id;
+        // make sure there are no keys we wouldn't recognise
+        if all.contains(ref_id) {
+            keys.insert(ref_id.clone());
+        }
     }
-    // make sure there are no keys we wouldn't recognise
-    let merged = all.intersection(&keys).cloned().collect();
-    Arc::new(merged)
+    Arc::new(keys)
 }
 
-fn disamb_participants(db: &dyn CiteDatabase) -> Arc<HashSet<Atom>> {
+fn disamb_participants(db: &dyn CiteDatabase) -> Arc<IndexSet<Atom>> {
     let cited = db.cited_keys();
     let all = db.all_keys();
     let uncited = db.all_uncited();
     match &*uncited {
-        Uncited::All => all.clone(),
+        Uncited::All => Arc::new(cited.union(&all).cloned().collect()),
         Uncited::Enumerated(specific) => {
-            let mut merged = HashSet::with_capacity(cited.len() + specific.len());
+            let mut merged = IndexSet::with_capacity(cited.len() + specific.len());
             merged.extend(cited.iter().cloned());
-            for key in specific {
-                // make sure there are no keys we wouldn't recognise
-                if all.contains(key) {
-                    merged.insert(key.clone());
-                }
-            }
+            // make sure there are no keys we wouldn't recognise
+            merged.extend(specific.intersection(&all).cloned());
             Arc::new(merged)
         }
     }
 }
 
-use citeproc_io::Name;
-use csl::GivenNameDisambiguationRule;
-fn names_to_disambiguate(db: &dyn CiteDatabase) -> Arc<Vec<Name>> {
-    let style = db.style();
-    if GivenNameDisambiguationRule::ByCite == style.citation.givenname_disambiguation_rule {
-        return Arc::new(Vec::new());
+fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
+    let clusters = db.clusters_sorted();
+    let mut ids = Vec::with_capacity(clusters.len());
+    for cluster in clusters.iter() {
+        ids.extend(cluster.cites.iter().cloned());
     }
-    let uncited = db.disamb_participants();
-    let mut v = Vec::new();
-    for atom in uncited.iter() {
-        if let Some(refr) = db.reference(atom.clone()) {
-            for (_var, names) in refr.name.iter() {
-                for name in names.iter() {
-                    v.push(name.clone());
-                }
-            }
-        }
-    }
-    Arc::new(v)
+    Arc::new(ids)
 }
 
 fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
@@ -224,15 +186,6 @@ fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
         .collect();
     clusters.sort_by_key(|cluster| cluster.number);
     Arc::new(clusters)
-}
-
-fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
-    let clusters = db.clusters_sorted();
-    let mut ids = Vec::with_capacity(clusters.len());
-    for cluster in clusters.iter() {
-        ids.extend(cluster.cites.iter().cloned());
-    }
-    Arc::new(ids)
 }
 
 pub fn get_cluster_data(db: &dyn CiteDatabase, id: ClusterId) -> Option<ClusterData> {
