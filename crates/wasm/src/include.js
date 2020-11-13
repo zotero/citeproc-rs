@@ -67,9 +67,13 @@ export class CslStyleError extends CiteprocRsError {
 }
 
 // For use in no-modules builds for the browser, which have no linking
+// Also because wasm-bindgen is not yet capable of exporting JS items defined here
+// to the wasm library consumer.
 let env_global;
 if (typeof self !== "undefined") {
   env_global = self;
+} else if (typeof global !== "undefined") {
+  env_global = global;
 } else if (typeof window !== "undefined") {
   env_global = window;
 }
