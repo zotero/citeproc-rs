@@ -4,6 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+#![feature(rustc_attrs)]
+
 #[macro_use]
 extern crate log;
 
@@ -14,6 +16,17 @@ use citeproc_io::output::OutputFormat;
 use csl::Atom;
 
 use std::collections::HashSet;
+
+macro_rules! smart_format {
+    ($lit:literal, $($expr:expr),*) => {
+        {
+            use std::fmt::Write;
+            let mut smart = $crate::prelude::SmartString::new();
+            write!(&mut smart, $lit, $($expr),*).expect("a formatting trait implementation returned an error");
+            smart
+        }
+    }
+}
 
 mod choose;
 mod citation_label;
@@ -53,6 +66,7 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
+    pub use citeproc_io::{SmartString, SmartCow};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 
@@ -61,7 +75,7 @@ pub(crate) mod prelude {
     pub use crate::ir::*;
     pub use crate::ref_ir::*;
 
-    pub(crate) use crate::disamb::{Disambiguation, Edge, EdgeData, RefContext};
+    pub(crate) use crate::disamb::{Disambiguation, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};

@@ -24,7 +24,7 @@ use criterion::{Bencher, Criterion};
 use std::sync::Arc;
 
 use citeproc::prelude::*;
-use citeproc_io::{DateOrRange, NumberLike};
+use citeproc_io::{DateOrRange, NumberLike, SmartString};
 use csl::variables::*;
 use csl::CslType;
 // use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
@@ -77,7 +77,7 @@ fn basic_cluster_get_cite_id(proc: &mut Processor, cluster_id: u32, id: &str) ->
     id
 }
 
-fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) -> Arc<String> {
+fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) -> Arc<SmartString> {
     use citeproc_proc::db;
     db::IrGen0Query.in_db_mut(proc).invalidate(&cite_id);
     db::IrGen2AddGivenNameQuery
@@ -91,7 +91,7 @@ fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) ->
 }
 
 fn bench_build_cluster(b: &mut Bencher, style: &str) {
-    let mut proc = Processor::new(style, fetcher(), false, SupportedFormat::Html).unwrap();
+    let mut proc = Processor::new(style, fetcher(), SupportedFormat::Html).unwrap();
     proc.insert_reference(common_reference(1));
     let cite_id = basic_cluster_get_cite_id(&mut proc, 1, "id_1");
     proc.set_cluster_order(&[ClusterPosition {

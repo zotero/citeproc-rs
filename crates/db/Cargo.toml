@@ -11,8 +11,8 @@ parallel = []
 
 [dependencies]
 salsa = "0.15.2"
-fnv = "1.0.6"
+fnv = "1.0.7"
 csl = { path = "../csl" }
 citeproc-io = { path = "../io" }
-log = "0.4.8"
-cfg-if = "0.1.9"
+log = "0.4.11"
+cfg-if = "0.1.10"

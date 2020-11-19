@@ -4,6 +4,9 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::String;
+use crate::SmartCow;
+
 // kebab-case here is the same as Strum's "kebab_case",
 // but with a more accurate name
 #[derive(Default, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Clone)]
@@ -43,19 +46,17 @@ macro_rules! regex {
     }};
 }
 
-use std::borrow::Cow;
-
-fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
+fn split_particles(orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
     let givenn_particles_re = regex!("^(?:\u{02bb}\\s|\u{2019}\\s|\\s|'\\s)?\\S+\\s*");
     let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
     debug!("split_particles: {:?}", orig_name_str);
     let (splitter, name_str) = if is_given {
         (
             givenn_particles_re,
-            Cow::Owned(orig_name_str.chars().rev().collect()),
+            SmartCow::Owned(orig_name_str.chars().rev().collect()),
         )
     } else {
-        (family_particles_re, Cow::Borrowed(orig_name_str))
+        (family_particles_re, SmartCow::Borrowed(orig_name_str))
     };
     let mut particles = Vec::new();
 
@@ -64,9 +65,9 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
     while let Some(mat) = splitter.find(slice) {
         let matched_particle = mat.as_str();
         let particle = if is_given {
-            Cow::Owned(matched_particle.chars().rev().collect())
+            SmartCow::Owned(matched_particle.chars().rev().collect())
         } else {
-            Cow::Borrowed(matched_particle)
+            SmartCow::Borrowed(matched_particle)
         };
         debug!("found particle? {:?}", &particle);
         // first sign of an uppercase word -- break out
@@ -88,13 +89,13 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
         if particles.len() > 1 {
             for i in 1..particles.len() {
                 if particles[i].chars().nth(0) == Some(' ') {
-                    particles[i - 1].to_mut().push(' ');
+                    particles[i - 1].make_mut().push(' ');
                 }
             }
         }
         for i in 0..particles.len() {
             if particles[i].chars().nth(0) == Some(' ') {
-                particles[i].to_mut().remove(0);
+                particles[i].make_mut().remove(0);
             }
         }
         &orig_name_str[..orig_name_str.len() - eaten]
@@ -106,7 +107,7 @@ fn split_particles(mut orig_name_str: &str, is_given: bool) -> Option<(String, S
     } else {
         use itertools::Itertools;
         Some((
-            particles.iter().map(|cow| cow.as_ref()).join(""),
+            String::from(particles.iter().map(|cow| cow.as_ref()).join("")),
             replace_apostrophes(remain),
         ))
     }
@@ -124,7 +125,7 @@ fn parse_suffix(given: &mut String, has_dropping_particle: bool) -> Option<(Stri
             return None;
         } else {
             let force_comma = possible_comma.len() == 2;
-            suff = Some((possible_suffix.to_owned(), force_comma))
+            suff = Some((possible_suffix.into(), force_comma))
         }
         Some(mat.start())
     } else {
@@ -209,102 +210,102 @@ impl PersonName {
 fn parse_particles() {
     env_logger::init();
 
-    let mut hi = " hi ".to_owned();
+    let mut hi: String = " hi ".into();
     hi.trim_in_place();
-    assert_eq!(hi, "hi");
+    assert_eq!(&hi, "hi");
 
     let mut init = PersonName {
-        given: Some("Schnitzel".to_owned()),
-        family: Some("von Crumb".to_owned()),
+        given: Some("Schnitzel".into()),
+        family: Some("von Crumb".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("Schnitzel".to_owned()),
-            non_dropping_particle: Some("von".to_owned()),
-            family: Some("Crumb".to_owned()),
+            given: Some("Schnitzel".into()),
+            non_dropping_particle: Some("von".into()),
+            family: Some("Crumb".into()),
             ..Default::default()
         }
     );
 
     let mut init = PersonName {
-        given: Some("Eric".to_owned()),
-        family: Some("van der Vlist".to_owned()),
+        given: Some("Eric".into()),
+        family: Some("van der Vlist".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("Eric".to_owned()),
-            non_dropping_particle: Some("van der".to_owned()),
-            family: Some("Vlist".to_owned()),
+            given: Some("Eric".into()),
+            non_dropping_particle: Some("van der".into()),
+            family: Some("Vlist".into()),
             ..Default::default()
         }
     );
 
     let mut init = PersonName {
-        given: Some("Eric".to_owned()),
-        family: Some("del Familyname".to_owned()),
+        given: Some("Eric".into()),
+        family: Some("del Familyname".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("Eric".to_owned()),
-            non_dropping_particle: Some("del".to_owned()),
-            family: Some("Familyname".to_owned()),
+            given: Some("Eric".into()),
+            non_dropping_particle: Some("del".into()),
+            family: Some("Familyname".into()),
             ..Default::default()
         }
     );
 
     let mut init = PersonName {
-        given: Some("Givenname d'".to_owned()),
-        family: Some("Familyname".to_owned()),
+        given: Some("Givenname d'".into()),
+        family: Some("Familyname".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("Givenname".to_owned()),
-            dropping_particle: Some("d\u{2019}".to_owned()),
-            family: Some("Familyname".to_owned()),
+            given: Some("Givenname".into()),
+            dropping_particle: Some("d\u{2019}".into()),
+            family: Some("Familyname".into()),
             ..Default::default()
         }
     );
 
     let mut init = PersonName {
-        family: Some("Aubignac".to_owned()),
-        given: Some("François Hédelin d’".to_owned()),
+        family: Some("Aubignac".into()),
+        given: Some("François Hédelin d’".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("François Hédelin".to_owned()),
-            dropping_particle: Some("d\u{2019}".to_owned()),
-            family: Some("Aubignac".to_owned()),
+            given: Some("François Hédelin".into()),
+            dropping_particle: Some("d\u{2019}".into()),
+            family: Some("Aubignac".into()),
             ..Default::default()
         }
     );
 
     let mut init = PersonName {
-        family: Some("d’Aubignac".to_owned()),
-        given: Some("François Hédelin".to_owned()),
+        family: Some("d’Aubignac".into()),
+        given: Some("François Hédelin".into()),
         ..Default::default()
     };
     init.parse_particles();
     assert_eq!(
         init,
         PersonName {
-            given: Some("François Hédelin".to_owned()),
-            non_dropping_particle: Some("d\u{2019}".to_owned()),
-            family: Some("Aubignac".to_owned()),
+            given: Some("François Hédelin".into()),
+            non_dropping_particle: Some("d\u{2019}".into()),
+            family: Some("Aubignac".into()),
             ..Default::default()
         }
     );
@@ -351,5 +352,5 @@ impl TrimInPlace for String {
 }
 
 fn replace_apostrophes(s: impl AsRef<str>) -> String {
-    s.as_ref().replace("\'", "\u{2019}")
+    crate::lazy_replace_char(s.as_ref(), '\'', "\u{2019}").into_owned()
 }

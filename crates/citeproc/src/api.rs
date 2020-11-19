@@ -8,7 +8,7 @@
 
 use super::Processor;
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::ClusterId;
+use citeproc_io::{ClusterId, SmartString};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -111,7 +111,7 @@ pub struct BibEntry<O: OutputFormat = Markup> {
 #[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FullRender {
-    pub all_clusters: FnvHashMap<ClusterId, Arc<String>>,
+    pub all_clusters: FnvHashMap<ClusterId, Arc<SmartString>>,
     pub bib_entries: Vec<BibEntry<Markup>>,
 }
 

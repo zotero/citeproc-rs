@@ -102,8 +102,8 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
             label_var,
             ratchets,
             style,
-            locale.et_al_term(names_inheritance.et_al.as_ref()),
-            locale.and_term(None).map(|x| x.to_owned()),
+            locale.et_al_term(names_inheritance.et_al.as_ref()).map(|(a, b)| (SmartString::from(a), b) ),
+            locale.and_term(None).map(|x| x.into()),
         )
     };
 
@@ -140,13 +140,12 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     if is_editor_translator && !editortranslator_term_empty {
         let ed_val = refr.name.get(&NameVariable::Editor);
         let tr_val = refr.name.get(&NameVariable::Translator);
-        let _x = 5;
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
             // identical
             if ed == tr {
                 let ed_sup = state.is_name_suppressed(NameVariable::Editor);
                 let tran_sup = state.is_name_suppressed(NameVariable::Translator);
-                let to_use = if ed_sup && tran_sup {
+                if ed_sup && tran_sup {
                     slice_override = Some(&[][..]);
                 } else if ed_sup {
                     var_override = Some(NameVariable::EditorTranslator);
@@ -154,7 +153,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                 } else {
                     var_override = Some(NameVariable::EditorTranslator);
                     slice_override = Some(&[NameVariable::Editor][..]);
-                };
+                }
             }
         }
     }
@@ -180,7 +179,7 @@ pub fn sort_strings_for_names(
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<UniCase<String>>> {
+) -> Option<Vec<UniCase<SmartString>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -231,7 +230,6 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     ctx: &CiteContext<'c, O, I>,
     arena: &mut IrArena<O>,
 ) -> NodeId {
-    let fmt = &ctx.format;
     let mut names_inheritance = state.name_override.inherited_names_options(
         &ctx.name_citation,
         &ctx.names_delimiter,
@@ -392,8 +390,6 @@ where
 
 impl<'c, O: OutputFormat> NameIR<O> {
     pub fn count<I: OutputFormat>(&self, ctx: &CiteContext<'c, O, I>) -> u32 {
-        let style = ctx.style;
-        let locale = ctx.locale;
         let fmt = &ctx.format;
         let position = ctx.position.0;
 
@@ -664,7 +660,7 @@ pub enum NameToken {
     /// Index of a DisambNameRatchet in the disamb_names array
     Name(usize),
     // Name(&'a DisambNameRatchet<B>),
-    EtAl(String, Option<Formatting>),
+    EtAl(SmartString, Option<Formatting>),
     Ellipsis,
     Delimiter,
     And,
@@ -720,7 +716,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         position: Position,
         name_count: usize,
         is_sort_key: bool,
-        etal_term: Option<&(String, Option<Formatting>)>,
+        etal_term: Option<&(SmartString, Option<Formatting>)>,
     ) -> Vec<NameToken> {
         let ea_min = self.ea_min(position);
         let ea_use_first = self.ea_use_first(position);
@@ -785,14 +781,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<String>>) {
+    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<SmartString>>) {
         let order = get_sort_order(
             pn_is_latin_cyrillic(pn),
             self.name_el.form == Some(NameForm::Long),
             self.demote_non_dropping_particle,
         );
         for sort_token in order {
-            let mut s = String::new();
+            let mut s = SmartString::new();
             for token in sort_token
                 .iter()
                 .cloned()
@@ -833,7 +829,6 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     NamePartToken::Family
                     | NamePartToken::FamilyDropped
                     | NamePartToken::FamilyFull => {
-                        let name_part = &self.name_el.name_part_family;
                         if let Some(fam) = pn.family.as_ref() {
                             let dp = pn
                                 .dropping_particle
@@ -877,7 +872,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl Into<String>) -> O::Build {
+    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl Into<SmartString>) -> O::Build {
         let fmt = self.fmt;
         match o_part {
             None => fmt.text_node(s.into(), None),
@@ -936,17 +931,17 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                             },
                             self.initialize_with_hyphen,
                         );
-                        parts.push(self.format_with_part(given_part, initialized));
+                        parts.push(self.format_with_part(given_part, initialized.as_ref()));
                         if token != NamePartToken::Given {
                             if let Some(dp) = pn.dropping_particle.as_ref() {
                                 parts.push(fmt.plain(" "));
-                                parts.push(self.format_with_part(given_part, dp));
+                                parts.push(self.format_with_part(given_part, dp.clone()));
                             }
                         }
                         if token == NamePartToken::GivenAndBoth {
                             if let Some(ndp) = pn.non_dropping_particle.as_ref() {
                                 parts.push(fmt.plain(" "));
-                                parts.push(self.format_with_part(family_part, ndp));
+                                parts.push(self.format_with_part(family_part, ndp.clone()));
                             }
                         }
                         let b = fmt.group(parts, "", None);
@@ -1001,7 +996,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     fmt.apply_text_case(&mut casing, &options);
                     parts.push(casing);
                     if let Some(suffix) = suffix {
-                        let mut string = String::with_capacity(suffix.len() + 2);
+                        let mut string = SmartString::new();
                         if pn.comma_suffix {
                             string.push_str(", ");
                         } else {
@@ -1020,14 +1015,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     build.push(
                         self.format_with_part(
                             family_part,
-                            pn.non_dropping_particle.as_ref().unwrap(),
+                            pn.non_dropping_particle.as_ref().unwrap().clone(),
                         ),
                     );
                 }
                 NamePartToken::DroppingParticle => {
                     let given_part = &self.name_el.name_part_given;
                     build.push(
-                        self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap()),
+                        self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap().clone()),
                     );
                 }
                 NamePartToken::Suffix => {
@@ -1057,7 +1052,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         names_slice: &[DisambNameRatchet<O::Build>],
         position: Position,
         is_sort_key: bool,
-        etal_term: Option<&(String, Option<Formatting>)>,
+        etal_term: Option<&(SmartString, Option<Formatting>)>,
     ) -> Option<Vec<O::Build>> {
         if self.name_el.form == Some(NameForm::Count) {
             let name_tokens = self.name_tokens(position, names_slice.len(), is_sort_key, etal_term);
@@ -1067,14 +1062,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             });
             if is_sort_key {
                 let b = self.fmt.affixed_text(
-                    format!("{:08}", count),
+                    smart_format!("{:08}", count),
                     None,
                     Some(&crate::sort::natural_sort::num_affixes()),
                 );
                 return Some(vec![b]);
             } else {
                 // This isn't sort-mode, you can render NameForm::Count as text.
-                return Some(vec![self.fmt.text_node(format!("{}", count), None)]);
+                return Some(vec![self.fmt.text_node(smart_format!("{}", count), None)]);
             }
         }
         None
@@ -1085,13 +1080,12 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         &'a self,
         names_slice: &[DisambNameRatchet<O::Build>],
         position: Position,
-        et_al: &Option<NameEtAl>,
+        _et_al: &Option<NameEtAl>,
         is_sort_key: bool,
-        and_term: Option<&String>,
-        etal_term: Option<&(String, Option<Formatting>)>,
+        and_term: Option<&SmartString>,
+        etal_term: Option<&(SmartString, Option<Formatting>)>,
     ) -> (impl Iterator<Item = NameTokenBuilt<O::Build>> + 'a, u16) {
         let fmt = self.fmt.clone();
-        let mut seen_one = false;
         let name_tokens = self.name_tokens(position, names_slice.len(), is_sort_key, etal_term);
 
         let ntb_len = name_tokens.iter().fold(0, |acc, n| match n {
@@ -1100,12 +1094,10 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         });
 
         let and_term = and_term.cloned();
-        let etal_term = etal_term.cloned();
 
         let iterator = name_tokens.into_iter().filter_map(move |n| {
             Some(match n {
                 NameToken::Name(ratchet) => {
-                    seen_one = true;
                     NameTokenBuilt::Ratchet(ratchet)
                 }
                 NameToken::Delimiter => {
@@ -1119,24 +1111,17 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if is_sort_key {
                         return None;
                     }
-                    NameTokenBuilt::Built(fmt.text_node(text.to_string(), formatting))
+                    NameTokenBuilt::Built(fmt.text_node(text.into(), formatting))
                 }
                 NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
                 NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
                 NameToken::And => {
-                    use csl::terms::*;
-                    let select = |form: TermFormExtended| {
-                        TextTermSelector::Simple(SimpleTermSelector::Misc(MiscTerm::And, form))
-                    };
                     // If an And token shows up, we already know self.name_el.and is Some.
                     let form = match self.name_el.and {
                         Some(NameAnd::Symbol) => "&",
-                        // locale
-                        //     .get_text_term(select(TermFormExtended::Symbol), false)
-                        //     .unwrap_or("&"),
                         _ => and_term.as_ref().map(|x| x.as_ref()).unwrap_or("and"),
                     };
-                    let mut string = form.to_owned();
+                    let mut string: SmartString = form.into();
                     string.push(' ');
                     NameTokenBuilt::Built(fmt.text_node(string, None))
                 }

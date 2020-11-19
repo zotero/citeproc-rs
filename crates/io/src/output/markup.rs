@@ -33,6 +33,8 @@ pub use self::move_punctuation::is_punc;
 pub use self::parse_quotes::parse_quotes;
 pub(self) mod puncttable;
 
+use crate::String;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {
     Html(HtmlOptions),
@@ -105,8 +107,8 @@ impl OutputFormat for Markup {
             Markup::Plain => ("", ""),
         };
         MarkupBibMeta {
-            markup_pre: pre.to_string(),
-            markup_post: post.to_string(),
+            markup_pre: pre.into(),
+            markup_post: post.into(),
         }
     }
 
@@ -122,7 +124,7 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {
-        self.text_node(s.to_owned(), None)
+        self.text_node(s.into(), None)
     }
 
     #[inline]

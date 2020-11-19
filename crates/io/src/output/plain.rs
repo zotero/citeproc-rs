@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::String;
 use super::micro_html::micro_html_to_string;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::IngestOptions;
@@ -19,6 +20,20 @@ impl Default for PlainText {
     }
 }
 
+use crate::lazy_char_transform_owned;
+
+// We don't want these characters in a sort string
+fn remove_quotes(s: String) -> String {
+    lazy_char_transform_owned(s, |c: char| {
+        if c == '\'' || c == '"' || c == ',' {
+            None
+        } else {
+            Some(c)
+        }
+        .into_iter()
+    })
+}
+
 impl OutputFormat for PlainText {
     type Input = String;
     type Build = String;
@@ -29,12 +44,12 @@ impl OutputFormat for PlainText {
 
     #[inline]
     fn ingest(&self, input: &str, options: &IngestOptions) -> Self::Build {
-        micro_html_to_string(input, options).replace(|c| c == '\'' || c == '"' || c == ',', "")
+        remove_quotes(micro_html_to_string(input, options))
     }
 
     #[inline]
     fn plain(&self, s: &str) -> Self::Build {
-        s.to_owned()
+        s.into()
     }
 
     #[inline]
@@ -65,7 +80,8 @@ impl OutputFormat for PlainText {
         delimiter: &str,
         _f: Option<Formatting>,
     ) -> Self::Build {
-        nodes.join(delimiter)
+        let std_string = nodes.join(delimiter);
+        String::from(std_string)
     }
 
     fn quoted(&self, b: Self::Build, _quotes: LocalizedQuotes) -> Self::Build {

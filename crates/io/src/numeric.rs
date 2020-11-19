@@ -196,7 +196,7 @@ fn sep_from(input: char) -> NumericToken {
 fn sep_and<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericToken> + 'a {
     move |inp| {
         let (inp, comma) = opt(tag(", "))(inp)?;
-        let (inp, and) = alt((tag(and_term), tag("and")))(inp)?;
+        let (inp, _and) = alt((tag(and_term), tag("and")))(inp)?;
         Ok((inp, if comma.is_some() { CommaAnd } else { And }))
     }
 }
@@ -301,8 +301,9 @@ impl<'a> NumericValue<'a> {
             NumericValue::Str(input.into())
         }
     }
+    #[cfg(test)]
     fn parse(input: &'a str) -> Self {
-        NumericValue::parse_full(input, "and")
+        Self::parse_full(input, "and")
     }
     pub fn from_localized(and_term: &'a str) -> impl Fn(&'a NumberLike) -> NumericValue<'a> + 'a {
         move |like| match like {

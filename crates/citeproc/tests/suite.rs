@@ -9,10 +9,13 @@
 
 use cfg_if::cfg_if;
 cfg_if! {
-    if #[cfg(feature="jemalloc")] {
+    if #[cfg(feature="test-jemalloc")] {
         use jemallocator::Jemalloc;
         #[global_allocator]
         static A: Jemalloc = Jemalloc;
+    } else if #[cfg(feature="test-dlmalloc")] {
+        #[global_allocator]
+        static A: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
     } else {
         use std::alloc::System;
         #[global_allocator]
@@ -60,8 +63,9 @@ fn ignore_file(file: &str) -> HashSet<String> {
 lazy_static! {
     static ref IGNORES: HashSet<String> = {
         // cargo test -- 2>/dev/null | rg 'bib tests' |  rg suite | cut -d' ' -f2 | cut -d: -f3 | cut -d\' -f1 > bibtests.txt
-        let ignores = include_str!("./data/ignore.txt");
-        ignore_file(ignores)
+        let ignores = read_to_string("./tests/data/ignore.txt").unwrap();
+        // let ignores = include_str!("./data/ignore.txt");
+        ignore_file(&ignores)
     };
 }
 
@@ -101,7 +105,8 @@ fn csl_test_suite(path: &Path) {
     if let Some(res) = test_case.execute() {
         let pass = res == test_case.result;
         if !pass && is_snapshot(path) {
-            insta::assert_snapshot!(res);
+            let name = path.file_name().unwrap().to_string_lossy();
+            insta::assert_snapshot!(name.as_ref(), res);
         } else {
             assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
         }

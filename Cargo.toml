@@ -23,14 +23,7 @@ debug = true
 
 [profile.release]
 lto = "thin"
-
-[patch.crates-io.parking_lot_core]
-git = "https://github.com/cormacrelf/parking_lot.git"
-branch = "wasm32"
-
-[patch.crates-io.parking_lot]
-git = "https://github.com/cormacrelf/parking_lot.git"
-branch = "wasm32"
+debug = true
 
 # [profile.dev]
 # rpath = true

@@ -162,15 +162,14 @@ fn test() {
     let get_stream = |ind: usize| {
         let id = cite_ids[ind];
         let gen0 = db.ir_gen0(id);
-        let fmt = db.get_formatter();
         IR::to_edge_stream(gen0.root, &gen0.arena, &db.get_formatter())
     };
 
     let cite_edges = get_stream(0);
     dbg!(&cite_edges);
-    assert!(dfa.accepts_data(db, &cite_edges));
+    assert!(dfa.accepts_data(&cite_edges));
     println!("dfa2?");
-    assert!(dfa2.accepts_data(db, &cite_edges));
+    assert!(dfa2.accepts_data(&cite_edges));
 }
 
 // #[test(ignore)]
@@ -189,7 +188,7 @@ fn test() {
 //     let mut state = DisambiguationState::new();
 //     group.construct_nfa(&db, &mut state);
 //     let dfa = state.nfa.brzozowski_minimise();
-//     let value = db.edge(EdgeData("value".to_string()));
-//     let italic = db.edge(EdgeData("<i>italic</i>".to_string()));
+//     let value = EdgeData("value".into());
+//     let italic = EdgeData("<i>italic</i>".to_string());
 //     assert!(dfa.accepts(&[value, italic]));
 // }

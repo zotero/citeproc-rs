@@ -209,15 +209,14 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         form: NumericForm,
         val: &NumericValue,
         _af: Option<&Affixes>,
-        text_case: TextCase,
+        _text_case: TextCase,
     ) -> O::Build {
         let locale = self.ctx.locale();
-        let style = self.ctx.style();
         let fmt = self.fmt();
         let prf = self.page_range_format(var);
         match (val, form) {
             (NumericValue::Tokens(_, ts), _) => {
-                let mut s = String::new();
+                let mut s = SmartString::new();
                 for t in ts {
                     if !s.is_empty() {
                         s.push(',');
@@ -226,13 +225,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                         s.push_str(&format!("{:08}", n));
                     }
                 }
-                let _options = IngestOptions {
-                    replace_hyphens: false,
-                    text_case,
-                    quotes: self.quotes(),
-                    is_english: self.ctx.is_english(),
-                    ..Default::default()
-                };
                 fmt.affixed_text(
                     s,
                     None,
@@ -309,7 +301,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         val: &NumericValue<'_>,
     ) -> O::Build {
         let style = self.ctx.style();
-        let mod_page = style.page_range_format.is_some();
+        let _mod_page = style.page_range_format.is_some();
         if variable == NumberVariable::Locator || variable == NumberVariable::Page {
             let number = csl::NumberElement {
                 variable,

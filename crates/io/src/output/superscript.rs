@@ -1,3 +1,5 @@
+use crate::String;
+use super::micro_html::MicroNode;
 use super::FormatCmd;
 
 #[derive(Debug, Copy, Clone)]
@@ -6,8 +8,6 @@ enum SupSub {
     Sub(&'static str),
     Normal,
 }
-
-use super::micro_html::MicroNode;
 
 /// Takes a string slice with unicode superscript or subscript characters in it, and turns each subslice of them
 /// into an superscript or subscript tag, with the contents being the decomposed characters without the sup/sub
@@ -26,7 +26,7 @@ pub fn parse_sup_sub(slice: &str) -> Vec<MicroNode> {
     }
 
     let mut eject = |cur: Current| {
-        let s = |start, len| slice[start..start + len].to_owned();
+        let s = |start, len| slice[start..start + len].into();
         let node = match cur {
             Current::Normal(start, len) => MicroNode::Text(s(start, len)),
             Current::Super(sup) => MicroNode::Formatted(

@@ -89,7 +89,7 @@ impl Disambiguation<Markup> for Element {
                     state.maybe_suppress_num(var);
                     match var {
                         NumberVariable::Locator => {
-                            let e = ctx.locator_type.map(|_| db.edge(EdgeData::Locator));
+                            let e = ctx.locator_type.map(|_| EdgeData::Locator);
                             return (RefIR::Edge(e), GroupVars::Important);
                         }
                         v => ctx.get_number(v).map(|val| renderer.number(number, &val)),
@@ -97,8 +97,8 @@ impl Disambiguation<Markup> for Element {
                 };
                 let content = content
                     .map(|x| fmt.output_in_context(x, stack, None))
-                    .map(EdgeData::<Markup>::Output)
-                    .map(|label| db.edge(label));
+                    .map(EdgeData::Output)
+                    .map(|label| label);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
             }
@@ -106,13 +106,13 @@ impl Disambiguation<Markup> for Element {
                 TextSource::Variable(var, form) => {
                     if var == StandardVariable::Number(NumberVariable::Locator) {
                         if let Some(_loctype) = ctx.locator_type {
-                            let edge = db.edge(EdgeData::Locator);
+                            let edge = EdgeData::Locator;
                             return (RefIR::Edge(Some(edge)), GroupVars::Important);
                         }
                     }
                     if var == StandardVariable::Ordinary(Variable::YearSuffix) {
                         if ctx.year_suffix {
-                            let edge = db.edge(EdgeData::YearSuffixExplicit);
+                            let edge = EdgeData::YearSuffixExplicit;
                             return (RefIR::Edge(Some(edge)), GroupVars::Important);
                         } else {
                             return (RefIR::Edge(None), GroupVars::Plain);
@@ -121,17 +121,16 @@ impl Disambiguation<Markup> for Element {
                     if var == StandardVariable::Number(NumberVariable::FirstReferenceNoteNumber)
                         && ctx.position == Position::Subsequent
                     {
-                        let edge = db.edge(EdgeData::Frnn);
+                        let edge = EdgeData::Frnn;
                         return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
                     if var == StandardVariable::Number(NumberVariable::CitationNumber)
                         && ctx.style.bibliography.is_some()
                     {
-                        let edge = db.edge(EdgeData::CitationNumber);
+                        let edge = EdgeData::CitationNumber;
                         return (RefIR::Edge(Some(edge)), GroupVars::Important);
                     }
                     if var == StandardVariable::Ordinary(Variable::CitationLabel) {
-                        let edge = db.edge(EdgeData::CitationNumber);
                         let v = Variable::CitationLabel;
                         let vario = if state.is_suppressed_ordinary(v) {
                             None
@@ -147,12 +146,10 @@ impl Disambiguation<Markup> for Element {
                         };
                         return vario
                             .map(|x| fmt.output_in_context(x, stack, None))
-                            .map(EdgeData::<Markup>::Output)
-                            .map(|label| db.edge(label))
+                            .map(EdgeData::Output)
                             .map(|edge| {
                                 let label = RefIR::Edge(Some(edge));
-                                let suffix_edge =
-                                    RefIR::Edge(Some(db.edge(EdgeData::YearSuffixPlain)));
+                                let suffix_edge = RefIR::Edge(Some(EdgeData::YearSuffixPlain));
                                 let mut contents = Vec::new();
                                 contents.push(label);
                                 if ctx.year_suffix {
@@ -192,8 +189,7 @@ impl Disambiguation<Markup> for Element {
                     };
                     let content = content
                         .map(|x| fmt.output_in_context(x, stack, None))
-                        .map(EdgeData::<Markup>::Output)
-                        .map(|label| db.edge(label));
+                        .map(EdgeData::Output);
                     let gv = GroupVars::rendered_if(content.is_some());
                     (RefIR::Edge(content), gv)
                 }
@@ -201,30 +197,29 @@ impl Disambiguation<Markup> for Element {
                     let content = renderer
                         .text_value(text, &val)
                         .map(|x| fmt.output_in_context(x, stack, None))
-                        .map(EdgeData::<Markup>::Output)
-                        .map(|label| db.edge(label));
+                        .map(EdgeData::Output);
                     (RefIR::Edge(content), GroupVars::new())
                 }
                 TextSource::Term(term_selector, plural) => {
                     let content = renderer
                         .text_term(text, term_selector, plural)
                         .map(|x| fmt.output_in_context(x, stack, None))
-                        .map(EdgeData::<Markup>::Output)
-                        .map(|label| db.edge(label));
+                        .map(EdgeData::Output);
                     (RefIR::Edge(content), GroupVars::new())
                 }
                 TextSource::Macro(ref name) => {
-                    let macro_unsafe = ctx
+                    let macro_elements = ctx
                         .style
                         .macros
                         .get(name)
                         .expect("macro errors not implemented!");
                     state.push_macro(name);
+                    let els = macro_elements;
                     let (seq, group_vars) = ref_sequence(
                         db,
                         state,
                         ctx,
-                        &macro_unsafe,
+                        &macro_elements,
                         "".into(),
                         text.formatting,
                         text.affixes.as_ref(),
@@ -259,15 +254,15 @@ impl Disambiguation<Markup> for Element {
                     _ => None,
                 };
                 if let Some(edge_data) = custom {
-                    let edge = db.edge(edge_data);
+                    let edge = edge_data;
                     return (RefIR::Edge(Some(edge)), GroupVars::Important);
                 }
                 let content = ctx
                     .get_number(var)
                     .and_then(|val| renderer.numeric_label(label, &val))
                     .map(|x| fmt.output_in_context(x, stack, None))
-                    .map(EdgeData::<Markup>::Output)
-                    .map(|label| db.edge(label));
+                    .map(EdgeData::Output)
+                    .map(|label| label);
                 let gv = GroupVars::rendered_if(content.is_some());
                 (RefIR::Edge(content), gv)
             }

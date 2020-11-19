@@ -166,7 +166,7 @@ impl<O: OutputFormat> IR<O> {
 
     fn find_first_year(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
         match &arena.get(node)?.get().0 {
-            IR::Rendered(Some(CiteEdgeData::Year(b))) => Some(node),
+            IR::Rendered(Some(CiteEdgeData::Year(_b))) => Some(node),
             IR::Seq(_) | IR::ConditionalDisamb(_) => node
                 .children(arena)
                 .find_map(|child| IR::find_first_year(child, arena)),
@@ -297,7 +297,7 @@ impl<O: OutputFormat> IR<O> {
     }
 }
 
-impl<O: OutputFormat<Output = String>> IR<O> {
+impl<O: OutputFormat<Output = SmartString>> IR<O> {
     pub fn collapse_to_cnum(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<u32> {
         match &arena.get(node)?.get().0 {
             IR::Rendered(Some(CiteEdgeData::CitationNumber(build))) => {
@@ -449,7 +449,7 @@ pub struct Unnamed3<O: OutputFormat> {
 
 use std::fmt::{Debug, Formatter};
 
-impl<O: OutputFormat<Output = String>> Debug for Unnamed3<O> {
+impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let fmt = &Markup::default();
         f.debug_struct("Unnamed3")
@@ -493,11 +493,8 @@ impl<O: OutputFormat> Unnamed3<O> {
     }
 }
 
-// pub fn group_and_collapse<O: OutputFormat<Output = String>>(
-pub fn group_and_collapse<O: OutputFormat<Output = String>>(
-    db: &dyn IrDatabase,
+pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     fmt: &Markup,
-    delim: &str,
     collapse: Option<Collapse>,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
@@ -505,8 +502,8 @@ pub fn group_and_collapse<O: OutputFormat<Output = String>>(
     // that only include a year. (What kind of style is that?
     // magic_ImplicitYearSuffixExplicitDelimiter.txt, I guess that's the only possible reason, but
     // ok.)
-    let mut same_names: HashMap<Option<String>, (usize, bool)> = HashMap::new();
-    let mut same_years: HashMap<String, (usize, bool)> = HashMap::new();
+    let mut same_names: HashMap<Option<SmartString>, (usize, bool)> = HashMap::new();
+    let mut same_years: HashMap<SmartString, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     for ix in 0..cites.len() {
@@ -854,8 +851,7 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
     match sas_rule {
         SasRule::CompleteAll | SasRule::CompleteEach => {
             if Iterator::eq(pre_reduced, cur_reduced) {
-                let (current_ir, current_gv) = arena.get_mut(current_id).unwrap().get_mut();
-                let current_nir = current_ir.unwrap_name_ir_mut();
+                let (current_ir, _current_gv) = arena.get_mut(current_id).unwrap().get_mut();
                 if sas_rule == SasRule::CompleteEach {
                     let current_nir = current_ir.unwrap_name_ir_mut();
                     // let nir handle it

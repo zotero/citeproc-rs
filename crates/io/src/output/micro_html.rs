@@ -1,9 +1,7 @@
+use crate::String;
 use super::FormatCmd;
 use crate::output::LocalizedQuotes;
 use crate::IngestOptions;
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct MicroHtml(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum MicroNode {
@@ -105,7 +103,7 @@ impl HtmlReader<String> for PlainHtmlReader {
 
     fn plain(&self, s: &str) -> Option<Vec<String>> {
         let plain = self.options.plain(s);
-        Some(vec![plain.into_owned()])
+        Some(vec![plain.as_ref().into()])
     }
 }
 
@@ -155,12 +153,12 @@ fn test_sanitize() {
         result,
         &[
             NoCase(vec![Formatted(
-                vec![Text("Italic".to_string())],
+                vec![Text("Italic".into())],
                 FontStyleItalic
             ),]),
-            Text(" ".to_string()),
-            Text(" ".to_string()),
-            Formatted(vec![Text("Bold".to_string())], FontWeightBold)
+            Text(" ".into()),
+            Text(" ".into()),
+            Formatted(vec![Text("Bold".into())], FontWeightBold)
         ]
     );
 }
@@ -172,7 +170,7 @@ fn test_sanitize() {
 
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
-use html5ever::rcdom::{Handle, NodeData, RcDom};
+use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::{local_name, parse_fragment, Namespace};

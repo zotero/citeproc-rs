@@ -4,6 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
+use crate::String;
 use super::InlineElement;
 use super::MarkupWriter;
 use crate::output::micro_html::MicroNode;

@@ -11,7 +11,7 @@
 use crate::prelude::*;
 
 use crate::api::{
-    BibEntry, BibliographyMeta, BibliographyUpdate, DocUpdate, IncludeUncited, SecondFieldAlign,
+    BibEntry, BibliographyMeta, BibliographyUpdate, IncludeUncited, SecondFieldAlign,
     UpdateSummary,
 };
 use citeproc_db::{
@@ -32,7 +32,7 @@ use csl::Style;
 use csl::StyleError;
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference};
+use citeproc_io::{Cite, Cluster, ClusterId, ClusterNumber, Reference, SmartString};
 use csl::Atom;
 
 #[allow(dead_code)]
@@ -55,9 +55,6 @@ impl SavedBib {
     }
 }
 
-// Need to keep this index in sync with the order in which the group storage structs appear below
-const IR_GROUP_INDEX: u16 = 3;
-
 #[salsa::database(
     StyleDatabaseStorage,
     LocaleDatabaseStorage,
@@ -68,49 +65,11 @@ pub struct Processor {
     storage: salsa::Storage<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
     pub formatter: Markup,
-    queue: Arc<Mutex<Vec<DocUpdate>>>,
-    save_updates: bool,
     last_bibliography: Arc<Mutex<SavedBib>>,
+    last_clusters: Arc<Mutex<FnvHashMap<ClusterId, Arc<SmartString>>>>,
 }
 
-/// This impl tells salsa where to find the salsa runtime.
-impl salsa::Database for Processor {
-    /// A way to extract imperative update sequences from a "here's the entire world" API. An
-    /// editor might require simple instructions to update a document; modify this footnote,
-    /// replace that bibliography entry. We will use Salsa WillExecute events to determine which
-    /// things were recomputed, and assume a recomputation means re-rendering is necessary.
-    fn salsa_event(&self, event: salsa::Event) {
-        if !self.save_updates {
-            return;
-        }
-        use salsa::EventKind::*;
-        if let WillExecute {
-            database_key: db_key,
-        } = event.kind
-        {
-            use citeproc_proc::db::BuiltClusterQuery;
-            if db_key.group_index() == IR_GROUP_INDEX
-                && db_key.query_index() == <BuiltClusterQuery as salsa::Query>::QUERY_INDEX
-            {
-                // TODO: this is a massive hack. Get a key index lookup function into Salsa.
-                let formatted = format!("{:?}", db_key.debug(self));
-                // The format is "built_cluster(123)".
-                // log::error!("{:?}", db_key.debug(self));
-                let id: u32 = formatted
-                    .strip_prefix("built_cluster(")
-                    .expect("Format of debug string for salsa events could not be parsed")
-                    .trim_end_matches(')')
-                    .parse()
-                    .unwrap();
-
-                let mut q = self.queue.lock().unwrap();
-                let upd = DocUpdate::Cluster(id);
-                // info!("produced update, {:?}", upd);
-                q.push(upd);
-            }
-        }
-    }
-}
+impl salsa::Database for Processor {}
 
 #[cfg(feature = "rayon")]
 impl ParallelDatabase for Processor {
@@ -118,10 +77,9 @@ impl ParallelDatabase for Processor {
         Snapshot::new(Processor {
             storage: self.storage.snapshot(),
             fetcher: self.fetcher.clone(),
-            queue: self.queue.clone(),
-            save_updates: self.save_updates,
             formatter: self.formatter.clone(),
             last_bibliography: self.last_bibliography.clone(),
+            last_clusters: self.last_clusters.clone(),
         })
     }
 }
@@ -163,10 +121,9 @@ impl Processor {
         let mut db = Processor {
             storage: Default::default(),
             fetcher,
-            queue: Arc::new(Mutex::new(Default::default())),
-            save_updates: false,
             formatter: Markup::default(),
             last_bibliography: Arc::new(Mutex::new(SavedBib::new())),
+            last_clusters: Arc::new(Mutex::new(Default::default())),
         };
         citeproc_db::safe_default(&mut db);
         db
@@ -175,11 +132,9 @@ impl Processor {
     pub fn new(
         style_string: &str,
         fetcher: Arc<dyn LocaleFetcher>,
-        save_updates: bool,
         format: SupportedFormat,
     ) -> Result<Self, StyleError> {
         let mut db = Processor::safe_default(fetcher);
-        db.save_updates = save_updates;
         db.formatter = markup_supported(format);
         let style = Arc::new(Style::from_str(style_string)?);
         db.set_style_with_durability(style, Durability::MEDIUM);
@@ -208,11 +163,39 @@ impl Processor {
     // TODO: This might not play extremely well with Salsa's garbage collector,
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
-    pub fn compute(&self) {
+    pub fn compute(&self) -> Vec<(ClusterId, Arc<SmartString>)> {
+        fn upsert_diff(into_h: &mut FnvHashMap<ClusterId, Arc<SmartString>>, id: ClusterId, built: Arc<SmartString>) -> Option<(ClusterId, Arc<SmartString>)> {
+            let mut diff = None;
+            into_h
+                .entry(id)
+                .and_modify(|existing| {
+                    if built != *existing {
+                        diff = Some((id, built.clone()));
+                    }
+                    *existing = built.clone();
+                })
+                .or_insert_with(|| {
+                    diff = Some((id, built.clone()));
+                    built
+                });
+            diff
+        }
+
         let clusters = self.clusters_cites_sorted();
+
         #[cfg(feature = "rayon")]
         {
             use rayon::prelude::*;
+            use std::ops::DerefMut;
+
+            // Prefetch the DFAs
+            let participants = self.disamb_participants();
+            participants
+                .par_iter()
+                .for_each_with(self.snap(), |snap, ref_id| {
+                    snap.0.ref_dfa(ref_id.clone());
+                });
+
             let cite_ids = self.all_cite_ids();
             // compute ir2s, so the first year_suffixes call doesn't trigger all ir2s on a
             // single rayon thread
@@ -224,66 +207,38 @@ impl Processor {
             self.year_suffixes();
             clusters
                 .par_iter()
-                .for_each_with(self.snap(), |snap, cluster| {
-                    snap.0.built_cluster(cluster.id);
-                });
+                .map_with(self.snap(), |snap, cluster| {
+                    let built = snap.0.built_cluster(cluster.id);
+                    let mut into_hashmap = snap.0.last_clusters.lock().unwrap();
+                    upsert_diff(into_hashmap.deref_mut(), cluster.id, built)
+                })
+                .filter_map(|x| x)
+                .collect()
         }
         #[cfg(not(feature = "rayon"))]
         {
-            for cluster in clusters.iter() {
-                self.built_cluster(cluster.id);
-            }
+            let mut into_hashmap = self.last_clusters.lock().unwrap();
+            clusters
+                .iter()
+                .filter_map(|cluster| {
+                    let built = self.built_cluster(cluster.id);
+                    upsert_diff(&mut into_hashmap, cluster.id, built)
+                })
+                .collect()
         }
     }
 
     pub fn batched_updates(&self) -> UpdateSummary {
-        if !self.save_updates {
-            return UpdateSummary::default();
+        let delta = self.compute();
+        UpdateSummary {
+            clusters: delta,
+            bibliography: self.save_and_diff_bibliography(),
         }
-        self.compute();
-        let mut queue = self.queue.lock().unwrap();
-        let mut summary = UpdateSummary::summarize(self, &*queue);
-        queue.clear();
-        // Technically, you should probably have a lock over save_and_diff_bibliography as well, so
-        // you get a point-in-time shapshot, but at the moment, that would mean recursively locking
-        // queue as computing the bibliography will also create salsa events.
-        drop(queue);
-        if self.get_style().bibliography.is_some() {
-            let bib = self.save_and_diff_bibliography();
-            summary.bibliography = bib;
-        }
-        summary
     }
 
     pub fn drain(&mut self) {
-        self.compute();
-        let mut queue = self.queue.lock().unwrap();
-        queue.clear();
+        let _ = self.compute();
     }
-
-    // // TODO: make this use a function exported from citeproc_proc
-    // pub fn single(&self, ref_id: &Atom) -> <Markup as OutputFormat>::Output {
-    //     let fmt = Markup::default();
-    //     let refr = match self.reference(ref_id.clone()) {
-    //         None => return fmt.output(fmt.plain("Reference not found")),
-    //         Some(r) => r,
-    //     };
-    //     let ctx = CiteContext {
-    //         reference: &refr,
-    //         cite: &Cite::basic("ok"),
-    //         position: Position::First,
-    //         format: Markup::default(),
-    //         citation_number: 1,
-    //         disamb_pass: None,
-    //     };
-    //     let style = self.style();
-    //     let mut state = IrState::new();
-    //     use crate::proc::Proc;
-    //     let ir = style.intermediate(self, &mut state, &ctx).0;
-    //     ir.flatten(&fmt)
-    //         .map(|flat| fmt.output(flat))
-    //         .unwrap_or(<Markup as OutputFormat>::Output::default())
-    // }
 
     pub fn clear_references(&mut self) {
         self.set_all_keys(Arc::new(HashSet::new()));
@@ -443,6 +398,9 @@ impl Processor {
     }
 
     fn save_and_diff_bibliography(&self) -> Option<BibliographyUpdate> {
+        if self.get_style().bibliography.is_none() {
+            return None;
+        }
         let mut last_bibliography = self.last_bibliography.lock().unwrap();
         let new = self.get_bibliography_map();
         let old = std::mem::replace(&mut *last_bibliography, SavedBib::new());
@@ -483,8 +441,8 @@ impl Processor {
         self.sorted_refs()
             .0
             .iter()
-            .filter_map(|k| bib_map.get(&k).map(|v| (k, v)))
-            .filter(|(k, v)| !v.is_empty())
+            .filter_map(|k| bib_map.get(k).map(|v| (k, v)))
+            .filter(|(_, v)| !v.is_empty())
             .map(|(k, v)| BibEntry {
                 id: k.clone(),
                 value: v.clone(),

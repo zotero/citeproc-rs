@@ -49,7 +49,7 @@ fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
 
 mod position {
     use super::*;
-    use crate::prelude::*;
+    
     use csl::Position;
 
     fn test_ibid_1_2(
@@ -158,7 +158,7 @@ mod position {
 
 mod preview {
     use super::*;
-    use crate::prelude::*;
+    
 
     const STYLE: &'static str = r##"
     <style class="note" version="1.0.1">

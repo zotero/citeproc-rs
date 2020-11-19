@@ -12,7 +12,7 @@ use csl::Atom;
 use csl::{Affixes, Formatting};
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RefIR {
     /// A piece of output that a cite can match in the final DFA.
     /// e.g.
@@ -22,9 +22,7 @@ pub enum RefIR {
     /// EdgeData::Output("Some title, <i>23/4/1969</i>")
     /// EdgeData::Locator
     /// ```
-    ///
-    /// Each is interned into an `Edge` newtype referencing the salsa database.
-    Edge(Option<Edge>),
+    Edge(Option<EdgeData>),
 
     /// When constructing RefIR, we know whether the names variables exist or not.
     /// So we don't have to handle 'substitute' any special way -- just drill down into the
@@ -59,19 +57,13 @@ pub enum RefIR {
     // Branch(Arc<Conditions>, Box<IR<O>>),
 }
 
-impl Eq for RefIR {}
-impl PartialEq for RefIR {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
 impl Default for RefIR {
     fn default() -> Self {
         RefIR::Edge(None)
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct RefIrSeq {
     pub contents: Vec<RefIR>,
     pub formatting: Option<Formatting>,
@@ -84,7 +76,7 @@ pub struct RefIrSeq {
 impl RefIR {
     pub fn debug(&self, db: &dyn IrDatabase) -> String {
         match self {
-            RefIR::Edge(Some(e)) => format!("{:?}", db.lookup_edge(*e)),
+            RefIR::Edge(Some(e)) => format!("{:?}", e),
             RefIR::Edge(None) => "None".into(),
             RefIR::Seq(seq) => {
                 let mut s = String::new();
@@ -115,16 +107,16 @@ impl RefIR {
 
     pub(crate) fn keep_first_ysh(
         &mut self,
-        ysh_explicit_edge: Edge,
-        ysh_plain_edge: Edge,
-        ysh_edge: Edge,
+        ysh_explicit_edge: EdgeData,
+        ysh_plain_edge: EdgeData,
+        ysh_edge: EdgeData,
     ) {
         let found = &mut false;
         self.visit_ysh(ysh_explicit_edge, &mut |opt_e| {
             if !*found {
                 // first time
                 *found = true;
-                *opt_e = Some(ysh_edge);
+                *opt_e = Some(ysh_edge.clone());
             } else {
                 // subsequent ones are extraneous, so make them disappear
                 *opt_e = None;
@@ -134,7 +126,7 @@ impl RefIR {
         self.visit_ysh(ysh_plain_edge, &mut |opt_e| {
             if !*found {
                 *found = true;
-                *opt_e = Some(ysh_edge);
+                *opt_e = Some(ysh_edge.clone());
             } else {
                 *opt_e = None;
             }
@@ -142,15 +134,15 @@ impl RefIR {
         });
     }
 
-    pub(crate) fn visit_ysh<F>(&mut self, ysh_edge: Edge, callback: &mut F) -> bool
+    pub(crate) fn visit_ysh<F>(&mut self, ysh_edge: EdgeData, callback: &mut F) -> bool
     where
-        F: (FnMut(&mut Option<Edge>) -> bool),
+        F: (FnMut(&mut Option<EdgeData>) -> bool),
     {
         match self {
-            RefIR::Edge(ref mut opt_e) if *opt_e == Some(ysh_edge) => callback(opt_e),
+            RefIR::Edge(ref mut opt_e) if opt_e.as_ref() == Some(&ysh_edge) => callback(opt_e),
             RefIR::Seq(seq) => {
                 for ir in seq.contents.iter_mut() {
-                    let done = ir.visit_ysh(ysh_edge, callback);
+                    let done = ir.visit_ysh(ysh_edge.clone(), callback);
                     if done {
                         return true;
                     }

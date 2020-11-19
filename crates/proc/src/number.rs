@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use citeproc_io::NumericToken::{self, *};
 use citeproc_io::NumericValue;
 use csl::{
@@ -10,11 +11,11 @@ pub fn render_ordinal(
     ts: &[NumericToken],
     locale: &Locale,
     variable: NumberVariable,
-    prf: Option<PageRangeFormat>,
+    _prf: Option<PageRangeFormat>,
     gender: Gender,
     long: bool,
-) -> String {
-    let mut s = String::new();
+) -> SmartString {
+    let mut s = SmartString::new();
     for token in ts {
         match *token {
             NumericToken::Num(n) => {
@@ -91,11 +92,11 @@ pub fn arabic_number(
     locale: &Locale,
     variable: NumberVariable,
     prf: Option<PageRangeFormat>,
-) -> String {
-    debug!("{:?}", num);
+) -> SmartString {
+    debug!("arabic_number {:?}", num);
     match num {
         NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, variable, prf),
-        NumericValue::Str(s) => s.as_ref().to_owned(),
+        NumericValue::Str(s) => s.as_ref().into(),
     }
 }
 
@@ -104,8 +105,8 @@ fn tokens_to_string(
     locale: &Locale,
     variable: NumberVariable,
     prf: Option<PageRangeFormat>,
-) -> String {
-    let mut s = String::with_capacity(ts.len());
+) -> SmartString {
+    let mut s = SmartString::new();
     #[derive(Copy, Clone)]
     enum NumBefore {
         SeenNum(u32),
@@ -177,9 +178,9 @@ pub fn roman_lower(
     ts: &[NumericToken],
     locale: &Locale,
     variable: NumberVariable,
-    prf: Option<PageRangeFormat>,
-) -> String {
-    let mut s = String::with_capacity(ts.len() * 2); // estimate
+    _prf: Option<PageRangeFormat>,
+) -> SmartString {
+    let mut s = SmartString::new();
     use std::convert::TryInto;
     for t in ts {
         match t {

@@ -48,7 +48,7 @@ impl<'de> Visitor<'de> for LanguageVisitor {
         match Lang::parse(key) {
             Ok(lang) => Ok(lang),
             Err((_garbage, Some(half_parsed))) => Ok(half_parsed),
-            Err((remain, _)) => Err(de::Error::invalid_value(de::Unexpected::Str(key), &self)),
+            Err((_remain, _)) => Err(de::Error::invalid_value(de::Unexpected::Str(key), &self)),
         }
     }
 }
@@ -127,12 +127,6 @@ pub enum NumberLikeSigned {
 }
 
 impl NumberLikeSigned {
-    pub fn into_string(self) -> String {
-        match self {
-            NumberLikeSigned::Str(s) => s,
-            NumberLikeSigned::Num(i) => i.to_string(),
-        }
-    }
     pub fn to_number(&self) -> Result<i32, std::num::ParseIntError> {
         match self {
             NumberLikeSigned::Str(s) => s.parse(),
@@ -501,7 +495,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                 E: de::Error,
             {
                 FromStr::from_str(value)
-                    .or_else(|_| Ok(DateOrRange::Literal(value.to_string())))
+                    .or_else(|_| Ok(DateOrRange::Literal(value.into())))
                     .map(|x| MaybeDate(Some(x)))
             }
 
@@ -510,7 +504,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                 E: de::Error,
             {
                 FromStr::from_str(&value)
-                    .or_else(|_| Ok(DateOrRange::Literal(value)))
+                    .or_else(|_| Ok(DateOrRange::Literal(value.into())))
                     .map(|x| MaybeDate(Some(x)))
             }
 
@@ -528,7 +522,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                             if found.is_none() {
                                 found = Some(
                                     DateOrRange::from_str(&v)
-                                        .unwrap_or_else(|_| DateOrRange::Literal(v.into_owned())),
+                                        .unwrap_or_else(|_| DateOrRange::Literal(v.as_ref().into())),
                                 )
                             }
                         }

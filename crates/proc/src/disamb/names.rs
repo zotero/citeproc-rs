@@ -35,7 +35,7 @@ impl Disambiguation<Markup> for Names {
         // TODO: resolve which parts of name_el's Formatting are irrelevant due to 'stack'
         // and get a reduced formatting to work with
 
-        let and_term = locale.and_term(None).map(|x| x.to_owned());
+        let and_term = locale.and_term(None).map(SmartString::from);
         let etal_term = locale.et_al_term(names_inheritance.et_al.as_ref());
         let mut runner = OneNameVar {
             name_el: &names_inheritance.name,
@@ -64,7 +64,7 @@ impl Disambiguation<Markup> for Names {
             let start = nfa.graph.add_node(());
             nfa.start.insert(start);
             let mut max_counted_tokens = 0u16;
-            let mut counted_tokens = 0;
+            let mut counted_tokens;
 
             let mut once = false;
             loop {
@@ -78,7 +78,7 @@ impl Disambiguation<Markup> for Names {
                     &self.et_al,
                     false,
                     and_term.as_ref(),
-                    etal_term.as_ref(),
+                    etal_term.as_ref().map(|(a, b)| (a.as_str().into(), b.clone())).as_ref(),
                 );
                 counted_tokens = ntb_len;
                 if counted_tokens <= max_counted_tokens {
@@ -86,7 +86,6 @@ impl Disambiguation<Markup> for Names {
                 }
 
                 let one_run = graph_with_stack(
-                    db,
                     fmt,
                     &mut nfa,
                     runner.name_el.formatting,
@@ -99,9 +98,9 @@ impl Disambiguation<Markup> for Names {
                                     if !fmt.is_empty(&b) {
                                         let out =
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
-                                        let e = db.edge(EdgeData::Output(out));
+                                        let e = EdgeData::Output(out);
                                         let ir = RefIR::Edge(Some(e));
-                                        spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                        spot = add_to_graph(fmt, nfa, &ir, spot);
                                     }
                                 }
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
@@ -109,9 +108,9 @@ impl Disambiguation<Markup> for Names {
                                         if !fmt.is_empty(b) {
                                             let out =
                                                 fmt.output_in_context(b.clone(), child_stack, None);
-                                            let e = db.edge(EdgeData::Output(out));
+                                            let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
-                                            spot = add_to_graph(db, fmt, nfa, &ir, spot);
+                                            spot = add_to_graph(fmt, nfa, &ir, spot);
                                         }
                                     }
                                     DisambNameRatchet::Person(ratchet) => {
@@ -194,7 +193,7 @@ impl DisambNameData {
     }
 
     /// This is used directly for *global name disambiguation*
-    pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> Edge {
+    pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> EdgeData {
         let fmt = &db.get_formatter();
         let style = db.style();
         let builder = OneNameVar {
@@ -206,7 +205,7 @@ impl DisambNameData {
         };
         let built = builder.render_person_name(&self.value, !self.primary);
         let o = fmt.output_in_context(built, stack, None);
-        db.edge(EdgeData::Output(o))
+        EdgeData::Output(o)
     }
 
     pub fn disamb_iter(&self, rule: GivenNameDisambiguationRule) -> SingleNameDisambIter {
@@ -402,25 +401,25 @@ fn add_expanded_name_to_graph(
     let fmt = &db.get_formatter();
     let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
-    let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     for pass in dn.disamb_iter(rule) {
         dn.apply_pass(pass);
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
         let edge = dn.single_name_edge(db, stack);
-        let last = add_to_graph(db, fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
         nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     }
     next_spot
 }
 
 use smallvec::SmallVec;
-pub struct NameVariantMatcher(SmallVec<[Edge; 3]>);
+pub struct NameVariantMatcher(SmallVec<[EdgeData; 3]>);
 
 impl NameVariantMatcher {
-    pub fn accepts(&self, edge: Edge) -> bool {
-        self.0.contains(&edge)
+    pub fn accepts(&self, edge: &EdgeData) -> bool {
+        self.0.contains(edge)
     }
 
     pub fn from_disamb_name(db: &dyn IrDatabase, dn: DisambName) -> Self {
@@ -463,7 +462,7 @@ pub fn disambiguated_person_names(
     for &dn in dns.iter() {
         matchers.push(NameVariantMatcher::from_disamb_name(db, dn));
     }
-    let is_ambiguous = |edge: Edge| -> bool {
+    let is_ambiguous = |edge: &EdgeData| -> bool {
         let mut n = 0;
         for m in &matchers {
             let acc = m.accepts(edge);
@@ -481,7 +480,7 @@ pub fn disambiguated_person_names(
         let mut dn: DisambNameData = dn_id.lookup(db);
         let mut edge = dn.single_name_edge(db, Formatting::default());
         let mut iter = dn.disamb_iter(rule);
-        while is_ambiguous(edge) {
+        while is_ambiguous(&edge) {
             if let Some(pass) = iter.next() {
                 dn.apply_pass(pass);
                 edge = dn.single_name_edge(db, Formatting::default());
@@ -578,8 +577,8 @@ pub struct NameIR<O: OutputFormat> {
     // or make name tokens.
     pub demote_non_dropping_particle: DemoteNonDroppingParticle,
     pub initialize_with_hyphen: bool,
-    pub etal_term: Option<(String, Option<Formatting>)>,
-    pub and_term: Option<String>,
+    pub etal_term: Option<(SmartString, Option<Formatting>)>,
+    pub and_term: Option<SmartString>,
 }
 
 impl<O> NameIR<O>
@@ -593,8 +592,8 @@ where
         label_variable: NameVariable,
         ratchets: Vec<DisambNameRatchet<O::Build>>,
         style: &Style,
-        etal_term: Option<(String, Option<Formatting>)>,
-        and_term: Option<String>,
+        etal_term: Option<(SmartString, Option<Formatting>)>,
+        and_term: Option<SmartString>,
     ) -> Self {
         let built_label = names_inheritance.label.as_ref().and_then(|label| {
             let renderer = Renderer::gen(gen_ctx.clone());
@@ -623,7 +622,7 @@ where
     }
     pub fn rollback(
         &mut self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &CiteContext<'_, O>,
     ) -> Option<Vec<O::Build>> {
         let (_prev_best, at) = self.achieved_at;
@@ -643,7 +642,7 @@ where
     // returns false if couldn't add any more names
     pub fn add_name(
         &mut self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &CiteContext<'_, O>,
     ) -> Option<Vec<O::Build>> {
         self.name_counter.bump += 1;

@@ -51,18 +51,18 @@ fn to_ref_ir<F>(
     root: NodeId,
     arena: &IrArena<Markup>,
     stack: Formatting,
-    ys_edge: Edge,
+    ys_edge: EdgeData,
     to_edge: &F,
 ) -> (RefIR, GroupVars)
 where
-    F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+    F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
 {
     struct Scope<'a, F>
     where
-        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
     {
         stack: Formatting,
-        ys_edge: Edge,
+        ys_edge: EdgeData,
         to_edge: &'a F,
         arena: &'a IrArena<Markup>,
     }
@@ -74,7 +74,7 @@ where
     };
     fn walk<F>(node: NodeId, arena: &IrArena<Markup>, scope: &Scope<'_, F>) -> (RefIR, GroupVars)
     where
-        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<Edge>,
+        F: Fn(Option<&CiteEdgeData<Markup>>, Formatting) -> Option<EdgeData>,
     {
         arena
             .get(node)
@@ -84,7 +84,7 @@ where
                     RefIR::Edge((scope.to_edge)(opt_build.as_ref(), scope.stack)),
                     GroupVars::Important,
                 ),
-                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge)), GroupVars::Important),
+                IR::YearSuffix(_ys) => (RefIR::Edge(Some(scope.ys_edge.clone())), GroupVars::Important),
                 IR::Seq(ir_seq) => {
                     let contents: Vec<RefIR> = node
                         .children(scope.arena)
@@ -120,10 +120,10 @@ impl Either<Markup> {
     ) -> (RefIR, GroupVars) {
         let fmt = ctx.format;
         let to_edge =
-            |opt_cite_edge: Option<&CiteEdgeData<Markup>>, stack: Formatting| -> Option<Edge> {
-                opt_cite_edge.map(|cite_edge| db.edge(cite_edge.to_edge_data(fmt, stack)))
+            |opt_cite_edge: Option<&CiteEdgeData<Markup>>, stack: Formatting| -> Option<EdgeData> {
+                opt_cite_edge.map(|cite_edge| cite_edge.to_edge_data(fmt, stack))
             };
-        let ys_edge = db.edge(EdgeData::YearSuffixPlain);
+        let ys_edge = EdgeData::YearSuffixPlain;
         match self {
             Either::Build(opt) => {
                 let content = opt.map(CiteEdgeData::Output);
@@ -199,7 +199,7 @@ impl Disambiguation<Markup> for BodyDate {
         if var == DateVariable::Accessed {
             either.map(|_| {
                 (
-                    RefIR::Edge(Some(db.edge(EdgeData::Accessed))),
+                    RefIR::Edge(Some(EdgeData::Accessed)),
                     GroupVars::Important,
                 )
             })
@@ -348,7 +348,6 @@ where
     let locale = ctx.locale();
     // TODO: handle missing
     let locale_date: &LocaleDate = locale.dates.get(&local.form).unwrap();
-    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
         GenericDateBits::sorting(locale)
     } else {
@@ -407,7 +406,6 @@ where
     I: OutputFormat,
 {
     let locale = ctx.locale();
-    let natural_affix = Some(crate::sort::natural_sort::date_affixes());
     let gen_date = if ctx.sort_key().is_some() {
         GenericDateBits::sorting(locale)
     } else {
@@ -426,7 +424,7 @@ where
         }
     };
     let mut parts_slice = indep.date_parts.as_slice();
-    let mut parts = Vec::new();
+    let mut parts;
     if gen_date.sorting {
         parts = indep.date_parts.clone();
         // The parts are filtered, but we're not going to be able to parse out the year if they are
@@ -439,7 +437,7 @@ where
         arena,
         indep.variable,
         gen_date,
-        &indep.date_parts,
+        parts_slice,
         None,
     )
 }
@@ -465,7 +463,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
         };
     }
     let cloned_gen = gen_date.clone();
-    let mut do_single =
+    let do_single =
         |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
             if single.circa {
                 let circa = cloned_gen
@@ -802,20 +800,22 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
 fn dp_render_sort_string(
     part: &DatePart,
     date: &Date,
-    key: &SortKey,
+    _key: &SortKey,
     is_filtered: bool,
-) -> Option<String> {
+) -> Option<SmartString> {
     match part.form {
-        DatePartForm::Year(_) => Some(format!("{:04}_", date.year)),
+        DatePartForm::Year(_) => {
+            Some(smart_format!("{:04}_", date.year))
+        }
         DatePartForm::Month(..) => {
             if is_filtered {
                 return None;
             }
             // Sort strings do not compare seasons
             if date.month > 0 && date.month <= 12 {
-                Some(format!("{:02}", date.month))
+                Some(smart_format!("{:02}", date.month))
             } else {
-                Some("00".to_owned())
+                Some("00".into())
             }
         }
         DatePartForm::Day(_) => {
@@ -823,16 +823,16 @@ fn dp_render_sort_string(
                 return None;
             }
             if date.day > 0 {
-                Some(format!("{:02}", date.day))
+                Some(smart_format!("{:02}", date.day))
             } else {
-                Some("00".to_owned())
+                Some("00".into())
             }
         }
     }
 }
 
-fn render_year(year: i32, form: YearForm, locale: &Locale) -> String {
-    let mut s = String::new();
+fn render_year(year: i32, form: YearForm, locale: &Locale) -> SmartString {
+    let mut s = SmartString::new();
     if year == 0 {
         // Open year range
         return s;
@@ -866,7 +866,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: &GenericContext<'c, O, I>,
     date: &Date,
-) -> Option<String> {
+) -> Option<SmartString> {
     let locale = ctx.locale();
     match part.form {
         DatePartForm::Year(form) => Some(render_year(date.year, form, ctx.locale())),
@@ -875,32 +875,32 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                 if date.month == 0 || date.month > 12 {
                     None
                 } else {
-                    Some(format!("{}", date.month))
+                    Some(smart_format!("{}", date.month))
                 }
             }
             MonthForm::NumericLeadingZeros => {
                 if date.month == 0 || date.month > 12 {
                     None
                 } else {
-                    Some(format!("{:02}", date.month))
+                    Some(smart_format!("{:02}", date.month))
                 }
             }
             _ => {
                 let sel = GenderedTermSelector::from_month_u32(date.month, form)?;
-                let string = locale
+                let string: SmartString = locale
                     .gendered_terms
                     .get(&sel)
-                    .map(|gt| gt.0.singular().to_string())
+                    .map(|gt| gt.0.singular().into())
                     .unwrap_or_else(|| {
                         let fallback = if form == MonthForm::Short {
                             MONTHS_SHORT
                         } else {
                             MONTHS_LONG
                         };
-                        fallback[date.month as usize].to_string()
+                        fallback[date.month as usize].into()
                     });
                 Some(if strip_periods {
-                    string.replace('.', "")
+                    citeproc_io::lazy_replace_char_owned(string, '.', "")
                 } else {
                     string
                 })
@@ -908,7 +908,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
         },
         DatePartForm::Day(form) => match form {
             _ if date.day == 0 => None,
-            DayForm::NumericLeadingZeros => Some(format!("{:02}", date.day)),
+            DayForm::NumericLeadingZeros => Some(smart_format!("{:02}", date.day)),
             DayForm::Ordinal
                 if !locale
                     .options_node
@@ -934,7 +934,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                     })
             }
             // Numeric or ordinal with limit-day-ordinals-to-day-1
-            _ => Some(format!("{}", date.day)),
+            _ => Some(smart_format!("{}", date.day)),
         },
     }
 }

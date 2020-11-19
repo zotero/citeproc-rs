@@ -46,7 +46,6 @@ pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
 where
     D: Deserializer<'de>,
 {
-    use super::csl_json::NumberLike;
     let s = NumberLike::deserialize(d)?;
     Ok(Atom::from(s.into_string()))
 }

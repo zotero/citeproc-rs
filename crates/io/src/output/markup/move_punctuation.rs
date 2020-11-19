@@ -1,20 +1,21 @@
+use crate::String;
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
 
 #[test]
 fn normalise() {
     let mut nodes = vec![
-        InlineElement::Text("a".to_owned()),
-        InlineElement::Text("b".to_owned()),
+        InlineElement::Text("a".into()),
+        InlineElement::Text("b".into()),
     ];
     normalise_text_elements(&mut nodes);
-    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".into())][..]);
     let mut nodes = vec![
         InlineElement::Micro(MicroNode::parse("a", &Default::default())),
         InlineElement::Micro(MicroNode::parse("b", &Default::default())),
     ];
     normalise_text_elements(&mut nodes);
-    assert_eq!(&nodes[..], &[InlineElement::Text("ab".to_owned())][..]);
+    assert_eq!(&nodes[..], &[InlineElement::Text("ab".into())][..]);
 }
 
 fn smash_string_push(base: &mut String, mut suff: &str) {
@@ -26,26 +27,45 @@ fn smash_string_push(base: &mut String, mut suff: &str) {
         suff = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            base.truncate(trimmed.len());
+            let trimmed_len = trimmed.len();
+            base.truncate(trimmed_len);
         }
     }
-    let base_len = base.len();
-    let suff_len = suff.len();
-    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
-    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
-    let width = last_width + first_width;
-    base.push_str(suff);
-    // Smash across the boundary
-    if base_len > 0 && suff_len > 0 {
-        let start = base_len - last_width;
-        let range = start..start + width;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+
+    // Place the last char of base, and the first char of suff, into an array.
+    let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
+    let mut work = &mut work_area[..];
+    let mut total = 0;
+    if let Some(base_last) = base.chars().rev().nth(0) {
+        let len = base_last.len_utf8();
+        base_last.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    let mut suff_rest = suff;
+    if let Some(suff_first) = suff.chars().nth(0) {
+        let len = suff_first.len_utf8();
+        suff_first.encode_utf8(work);
+        work = &mut work[len..];
+        suff_rest = &suff[len..];
+        total += len;
+    }
+    let last_and_first = &work_area[..total];
+
+    if last_and_first.len() > 0 {
+        // Smash across the boundary
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(last_and_first) {
             trace!(
                 "smash_string_push REPLACING {:?} with {:?}",
-                &base[range.clone()],
+                std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            base.replace_range(range, *replacement);
+            // We never removed it from base, so pop() == base_first at this point
+            base.pop();
+            base.push_str(replacement);
+            base.push_str(suff_rest);
+        } else {
+            base.push_str(suff);
         }
     }
 }
@@ -60,29 +80,41 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
         suff_append = suff_trimmed;
         let trimmed = base.trim_end();
         if trimmed.chars().rev().nth(0).map_or(false, is_punc) {
-            base.truncate(trimmed.len())
+            let trimmed_len = trimmed.len();
+            base.truncate(trimmed_len)
         }
     }
-    let base_len = base.len();
-    let suff_len = suff.len();
-    let last_width = base.chars().rev().nth(0).map_or(0, |x| x.len_utf8());
-    let first_width = suff.chars().nth(0).map_or(0, |x| x.len_utf8());
-    let width = last_width + first_width;
-    base.push_str(&suff[..first_width]);
-    // Smash across the boundary
-    if base_len > 0 && suff_len > 0 {
-        let start = base_len - last_width;
-        let range = start..start + width;
-        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(&base.as_bytes()[range.clone()]) {
+
+    // Place the last char of base, and the first char of suff, into an array.
+    let mut work_area = [0u8; 8]; // Enough for two utf-8 characters
+    let mut work = &mut work_area[..];
+    let mut total = 0;
+    if let Some(base_last) = base.chars().rev().nth(0) {
+        let len = base_last.len_utf8();
+        base_last.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    if let Some(suff_first) = suff.chars().nth(0) {
+        let len = suff_first.len_utf8();
+        suff_first.encode_utf8(work);
+        work = &mut work[len..];
+        total += len;
+    }
+    let last_and_first = &work_area[..total];
+
+    if last_and_first.len() > 0 {
+        // Smash across the boundary
+        if let Some(Some(replacement)) = FULL_MONTY_PLAIN.get(last_and_first) {
             trace!(
-                "smash_just_punc REPLACING {:?} with {:?}",
-                &base[range.clone()],
+                "smash_string_push REPLACING {:?} with {:?}",
+                std::str::from_utf8(last_and_first).unwrap(),
                 *replacement
             );
-            base.replace_range(range, *replacement);
-            suff.replace_range(..first_width, "");
-        } else {
-            base.truncate(base_len);
+            // We never removed it from base, so pop() == base_first at this point
+            base.pop();
+            base.push_str(replacement);
+            suff.remove(0);
         }
     }
 }
@@ -268,9 +300,6 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-            | InlineElement::Anchor {
-                content: inlines, ..
-            }
             | InlineElement::Anchor {
                 content: inlines, ..
             }
@@ -502,7 +531,7 @@ fn find_string_right_f_micro(m: &mut MicroNode) -> Option<&mut String> {
     }
 }
 
-fn remove_empty_left(els: &mut Vec<InlineElement>, mut ix: usize) -> usize {
+fn remove_empty_left(els: &mut Vec<InlineElement>, ix: usize) -> usize {
     fn should_remove(node: &mut InlineElement) -> bool {
         match node {
             InlineElement::Text(s) => s.is_empty(),
@@ -613,7 +642,6 @@ fn find_right_quote_inside_micro<'b>(
 ) -> Option<RightQuoteInsertionPoint<'b>> {
     match micro {
         MicroNode::Quoted {
-            localized,
             children,
             ..
         } => {
@@ -678,10 +706,10 @@ impl RightQuoteInsertionPoint<'_> {
                 // if let Some(next) = self.next_string_mut() {
                 //     next.insert_str(0, smushed)
                 // }
-                list.insert(*quoted_index + 1, InlineElement::Text(smushed.to_owned()));
+                list.insert(*quoted_index + 1, InlineElement::Text(smushed.into()));
             }
             RightQuoteInsertionPoint::OutsideMicro { list, quoted_index } => {
-                list.insert(*quoted_index + 1, MicroNode::Text(smushed.to_owned()));
+                list.insert(*quoted_index + 1, MicroNode::Text(smushed.into()));
             }
         }
     }
@@ -734,14 +762,6 @@ fn last_string_micro(ms: &mut [MicroNode]) -> Option<&mut String> {
         | MicroNode::Formatted(children, _) => last_string_micro(children),
         MicroNode::Text(string) => Some(string),
     })
-}
-
-fn punc_some(c: char) -> Option<char> {
-    if is_punc(c) {
-        Some(c)
-    } else {
-        None
-    }
 }
 
 pub fn append_suffix(pre_and_content: &mut Vec<InlineElement>, suffix: Vec<MicroNode>) {

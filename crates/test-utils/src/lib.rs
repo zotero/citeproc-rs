@@ -105,7 +105,7 @@ impl TestCase {
     ) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
-            Processor::new(&csl, fet, true, format.0).expect("could not construct processor")
+            Processor::new(&csl, fet, format.0).expect("could not construct processor")
         };
         processor.reset_references(input.clone());
         Warmup::maximum().execute(&mut processor);
@@ -147,7 +147,7 @@ impl TestCase {
                 let mut cites = Vec::new();
                 // TODO: assemble cites/clusters the other few available ways
                 for refr in self.input.iter() {
-                    cites.push(Cite::basic(&refr.id));
+                    cites.push(Cite::basic(&*refr.id));
                 }
                 clusters_auto.push(Cluster { id: 1, cites });
                 &clusters_auto

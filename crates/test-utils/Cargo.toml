@@ -11,15 +11,15 @@ citeproc = { path = "../citeproc" }
 citeproc-io = { path = "../io" }
 citeproc-proc = { path = "../proc" }
 csl = { path = "../csl" }
-directories = "2.0.2"
+directories = "3.0.1"
 lazy_static = "1.4.0"
-serde_derive = "1.0.100"
-serde = "1.0.100"
-serde_json = "1.0.40"
-serde_yaml = "0.8.9"
+serde_derive = "1.0.116"
+serde = "1.0.116"
+serde_json = "1.0.57"
+serde_yaml = "0.8.13"
 # don't need lexical as it is only used to parse floats
-nom = { version = "5.0.1", default-features = false, features = ["std"] }
-regex = "1.3.1"
-anyhow = "1.0.25"
-once_cell = "1.2.0"
-log = "0.4.8"
+nom = { version = "5.1.2", default-features = false, features = ["std"] }
+regex = "1.3.9"
+anyhow = "1.0.32"
+once_cell = "1.4.1"
+log = "0.4.11"

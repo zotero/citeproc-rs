@@ -198,7 +198,7 @@ fn main() {
 
         let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
 
-        match Processor::new(&text, filesystem_fetcher, false) {
+        match Processor::new(&text, filesystem_fetcher) {
             Ok(mut db) => {
                 let refs = if let Some(library_path) = matches.value_of("library") {
                     expect_refs(library_path)
@@ -261,7 +261,7 @@ fn do_pandoc() {
     let csl_path = pandoc_meta_str(&doc, "csl").expect("No csl path provided through metadata");
     let text = fs::read_to_string(&csl_path).expect("No CSL file found at that path");
 
-    match Processor::new(&text, Arc::new(Filesystem::default()), false) {
+    match Processor::new(&text, Arc::new(Filesystem::default())) {
         Ok(mut db) => {
             if let Some(library_path) = pandoc_meta_str(&doc, "bibliography") {
                 db.reset_references(expect_refs(library_path));

@@ -26,7 +26,11 @@ module.exports = {
       {
         test: /\.css$/,
         use: ['style-loader', 'css-loader']
-      }
+      },
+      {
+        test: /\.(xml|csl)$/,
+        use: 'raw-loader',
+      },
     ]
   },
   resolve: {

@@ -340,7 +340,7 @@ impl Locale {
         if txt.is_empty() {
             return None;
         }
-        Some((txt.to_owned(), formatting))
+        Some((txt.into(), formatting))
     }
 
     pub fn get_month_gender(&self, month: MonthTerm) -> Gender {

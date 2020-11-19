@@ -9,21 +9,18 @@ use citeproc_io::output::{markup::Markup, OutputFormat};
 use petgraph::dot::Dot;
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use salsa::{InternId, InternKey};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Edge(u32);
-
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EdgeData<O: OutputFormat = Markup> {
-    Output(O::Output),
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum EdgeData<O = <Markup as OutputFormat>::Output> {
+    Output(O),
 
     // The rest are synchronised with fields on CiteContext and IR.
     Locator,
+    NotUsed,
     LocatorLabel,
 
     /// TODO: add a parameter to Dfa::accepts_data to supply the actual year suffix for the particular reference.
@@ -45,60 +42,20 @@ pub enum EdgeData<O: OutputFormat = Markup> {
     Accessed,
 }
 
-use std::hash::{Hash, Hasher};
-
-/// Have to implement Hash ourselves because of the blanket O on EdgeData<O>>. This is basically
-/// what the derive macro spits out.
-impl Hash for EdgeData {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        use std::mem::discriminant;
-        match self {
-            EdgeData::Output(ref outp) => {
-                ::core::hash::Hash::hash(&discriminant(self), state);
-                ::core::hash::Hash::hash(&(*outp), state)
-            }
-            _ => ::core::hash::Hash::hash(&discriminant(self), state),
-        }
-    }
-}
-
-impl Edge {
-    // Adding this method is often convenient, since you can then
-    // write `path.lookup(db)` to access the data, which reads a bit better.
-    pub fn lookup(self, db: &dyn IrDatabase) -> EdgeData {
-        IrDatabase::lookup_edge(db, self)
-    }
-}
-
-impl InternKey for Edge {
-    fn from_intern_id(v: InternId) -> Self {
-        Edge(u32::from(v))
-    }
-    fn as_intern_id(&self) -> InternId {
-        InternId::from(self.0)
-    }
-}
-
-// impl Debug for EdgeData {
-//     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NfaEdge {
     Epsilon,
-    Token(Edge),
+    Token(EdgeData),
 }
 
-impl From<Edge> for NfaEdge {
-    fn from(edge: Edge) -> Self {
+impl From<EdgeData> for NfaEdge {
+    fn from(edge: EdgeData) -> Self {
         NfaEdge::Token(edge)
     }
 }
 
 pub type NfaGraph = Graph<(), NfaEdge>;
-pub type DfaGraph = Graph<(), Edge>;
+pub type DfaGraph = Graph<(), EdgeData>;
 
 fn epsilon_closure(nfa: &NfaGraph, closure: &mut BTreeSet<NodeIndex>) {
     let mut work: Vec<_> = closure.iter().cloned().collect();
@@ -134,6 +91,33 @@ impl Default for Nfa {
     }
 }
 
+/// https://github.com/petgraph/petgraph/issues/199#issuecomment-484077775
+fn graph_eq<N, E, Ty, Ix>(
+    a: &petgraph::graph::Graph<N, E, Ty, Ix>,
+    b: &petgraph::graph::Graph<N, E, Ty, Ix>,
+) -> bool
+where
+    N: PartialEq,
+    E: PartialEq,
+    Ty: petgraph::EdgeType,
+    Ix: petgraph::graph::IndexType + PartialEq,
+{
+    let a_ns = a.raw_nodes().iter().map(|n| &n.weight);
+    let b_ns = b.raw_nodes().iter().map(|n| &n.weight);
+    let a_es = a.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+    let b_es = b.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+    a_ns.eq(b_ns) && a_es.eq(b_es)
+}
+
+/// We have to have an Eq impl for Nfa so RefIR can have one
+impl std::cmp::PartialEq for Nfa {
+    fn eq(&self, other: &Self) -> bool {
+        self.accepting == other.accepting
+            && self.start == other.start
+            && graph_eq(&self.graph, &other.graph)
+    }
+}
+
 #[derive(Clone)]
 pub struct Dfa {
     pub graph: DfaGraph,
@@ -141,12 +125,14 @@ pub struct Dfa {
     pub start: NodeIndex,
 }
 
-// This is not especially useful for comparing Dfas, but it allows Salsa to cache it as opposed to
-// not at all.
-impl Eq for Dfa {}
-impl PartialEq for Dfa {
-    fn eq(&self, _other: &Self) -> bool {
-        false
+/// We have to have an Eq impl so Dfa can be returned from a salsa query.
+/// this compares each graph bit-for-bit.
+impl std::cmp::Eq for Dfa {}
+impl std::cmp::PartialEq for Dfa {
+    fn eq(&self, other: &Self) -> bool {
+        self.accepting == other.accepting
+            && self.start == other.start
+            && graph_eq(&self.graph, &other.graph)
     }
 }
 
@@ -173,7 +159,7 @@ impl Dfa {
                     DebugNode::Node
                 }
             },
-            |_, edge| db.lookup_edge(*edge),
+            |_, edge| edge,
         );
         format!("{:?}", Dot::with_config(&g, &[]))
     }
@@ -188,7 +174,7 @@ impl Nfa {
         self.start == self.accepting
     }
 
-    pub fn add_complete_sequence(&mut self, tokens: Vec<Edge>) {
+    pub fn add_complete_sequence(&mut self, tokens: Vec<EdgeData>) {
         let mut cursor = self.graph.add_node(());
         self.start.insert(cursor);
         for token in tokens {
@@ -201,7 +187,7 @@ impl Nfa {
 
     /// A Names block, for instance, is given start & end nodes, and simply fills in a segment a
     /// few times with increasing given-name counts etc.
-    pub fn add_sequence_between(&mut self, a: NodeIndex, b: NodeIndex, tokens: Vec<Edge>) {
+    pub fn add_sequence_between(&mut self, a: NodeIndex, b: NodeIndex, tokens: Vec<EdgeData>) {
         let mut cursor = self.graph.add_node(());
         self.graph.add_edge(a, cursor, NfaEdge::Epsilon);
         for token in tokens {
@@ -226,7 +212,9 @@ impl Nfa {
             let mut start_set = BTreeSet::new();
             start_set.insert(dfa1.start);
             Nfa {
-                graph: dfa1.graph.map(|_, _| (), |_, e| NfaEdge::Token(*e)),
+                // TODO: implement into_map, so this doesn't need to clone all the edges and
+                // simply throw dfa1 away
+                graph: dfa1.graph.map(|_, _| (), |_, e| NfaEdge::Token(e.clone())),
                 accepting: start_set,
                 start: dfa1.accepting,
             }
@@ -270,22 +258,22 @@ pub fn to_dfa(nfa: &Nfa) -> Dfa {
 
     while !work.is_empty() {
         let (dfa_state, current_node) = work.pop().unwrap();
-        let mut by_edge_weight = HashMap::<Edge, BTreeSet<NodeIndex>>::new();
+        let mut by_edge_weight = HashMap::<EdgeData, BTreeSet<NodeIndex>>::new();
         for nfa_node in dfa_state {
             for edge in nfa.graph.edges(nfa_node) {
-                let &weight = edge.weight();
+                let weight = edge.weight();
                 let target = edge.target();
                 if let NfaEdge::Token(t) = weight {
-                    by_edge_weight
-                        .entry(t)
-                        .and_modify(|set| {
-                            set.insert(target);
-                        })
-                        .or_insert_with(|| {
+                    match by_edge_weight.get_mut(t) {
+                        None => {
                             let mut set = BTreeSet::new();
                             set.insert(target);
-                            set
-                        });
+                            by_edge_weight.insert(t.clone(), set);
+                        }
+                        Some(set) => {
+                            set.insert(target);
+                        }
+                    }
                 }
             }
         }
@@ -316,7 +304,7 @@ pub fn to_dfa(nfa: &Nfa) -> Dfa {
 }
 
 impl Dfa {
-    pub fn accepts_data(&self, db: &dyn IrDatabase, data: &[EdgeData]) -> bool {
+    pub fn accepts_data(&self, data: &[EdgeData]) -> bool {
         let mut cursors = Vec::new();
         cursors.push((self.start, None, data));
         while !cursors.is_empty() {
@@ -328,10 +316,10 @@ impl Dfa {
             }
             if let Some(token) = first {
                 for edge in self.graph.edges(cursor) {
-                    let weight = db.lookup_edge(*edge.weight());
+                    let weight = edge.weight();
                     let target = edge.target();
                     use std::cmp::min;
-                    match (&weight, token) {
+                    match (weight, token) {
                         // TODO: add an output check that EdgeData::YearSuffix contains the RIGHT
                         (w, t) if w == t => {
                             cursors.push((target, None, &chunk[min(1, chunk.len())..]));
@@ -339,7 +327,7 @@ impl Dfa {
                         (EdgeData::Output(w), EdgeData::Output(t)) => {
                             if w == t {
                                 cursors.push((target, None, &chunk[min(1, chunk.len())..]));
-                            } else if t.starts_with(w) {
+                            } else if t.starts_with(w.as_str()) {
                                 let next = if prepended.is_some() {
                                     // already have split this one
                                     0
@@ -363,7 +351,7 @@ impl Dfa {
         false
     }
 
-    pub fn accepts(&self, tokens: &[Edge]) -> bool {
+    pub fn accepts(&self, tokens: &[EdgeData]) -> bool {
         let mut cursor = self.start;
         for token in tokens {
             let mut found = false;
@@ -389,11 +377,11 @@ impl Dfa {
 
 #[test]
 fn nfa() {
-    let andy = Edge(1);
-    let reuben = Edge(2);
-    let peters = Edge(3);
-    let comma = Edge(4);
-    let twenty = Edge(5);
+    let andy = || EdgeData::Output("andy".into());
+    let reuben = || EdgeData::Output("reuben".into());
+    let peters = || EdgeData::Output("peters".into());
+    let comma = || EdgeData::Output(", ".into());
+    let twenty = || EdgeData::Output("20".into());
 
     let nfa = {
         let mut nfa = NfaGraph::new();
@@ -404,14 +392,14 @@ fn nfa() {
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, reuben.into());
-        nfa.add_edge(forwards1, target, peters.into());
-        nfa.add_edge(initial, backwards1, peters.into());
-        nfa.add_edge(backwards1, backwards2, comma.into());
-        nfa.add_edge(backwards2, target, reuben.into());
-        nfa.add_edge(initial, target, peters.into());
-        nfa.add_edge(target, abc, comma.into());
-        nfa.add_edge(abc, acc, twenty.into());
+        nfa.add_edge(initial, forwards1, reuben().into());
+        nfa.add_edge(forwards1, target, peters().into());
+        nfa.add_edge(initial, backwards1, peters().into());
+        nfa.add_edge(backwards1, backwards2, comma().into());
+        nfa.add_edge(backwards2, target, reuben().into());
+        nfa.add_edge(initial, target, peters().into());
+        nfa.add_edge(target, abc, comma().into());
+        nfa.add_edge(abc, acc, twenty().into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -432,14 +420,14 @@ fn nfa() {
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, andy.into());
-        nfa.add_edge(forwards1, target, peters.into());
-        nfa.add_edge(initial, backwards1, peters.into());
-        nfa.add_edge(backwards1, backwards2, comma.into());
-        nfa.add_edge(backwards2, target, andy.into());
-        nfa.add_edge(initial, target, peters.into());
-        nfa.add_edge(target, abc, comma.into());
-        nfa.add_edge(abc, acc, twenty.into());
+        nfa.add_edge(initial, forwards1, andy().into());
+        nfa.add_edge(forwards1, target, peters().into());
+        nfa.add_edge(initial, backwards1, peters().into());
+        nfa.add_edge(backwards1, backwards2, comma().into());
+        nfa.add_edge(backwards2, target, andy().into());
+        nfa.add_edge(initial, target, peters().into());
+        nfa.add_edge(target, abc, comma().into());
+        nfa.add_edge(abc, acc, twenty().into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -464,18 +452,18 @@ fn nfa() {
     println!("dfa2_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
 
     let test_dfa = |dfa: &Dfa| {
-        assert!(dfa.accepts(&[peters, comma, twenty]));
-        assert!(dfa.accepts(&[reuben, peters, comma, twenty]));
-        assert!(dfa.accepts(&[peters, comma, reuben, comma, twenty]));
-        assert!(!dfa.accepts(&[peters, comma, andy, comma, twenty]));
-        assert!(!dfa.accepts(&[andy, comma, peters, comma, twenty]));
+        assert!(dfa.accepts(&[peters(), comma(), twenty()]));
+        assert!(dfa.accepts(&[reuben(), peters(), comma(), twenty()]));
+        assert!(dfa.accepts(&[peters(), comma(), reuben(), comma(), twenty()]));
+        assert!(!dfa.accepts(&[peters(), comma(), andy(), comma(), twenty()]));
+        assert!(!dfa.accepts(&[andy(), comma(), peters(), comma(), twenty()]));
     };
 
     let test_dfa2 = |dfa2: &Dfa| {
-        assert!(dfa2.accepts(&[peters, comma, twenty]));
-        assert!(dfa2.accepts(&[andy, peters, comma, twenty]));
-        assert!(!dfa2.accepts(&[peters, comma, reuben, comma, twenty]));
-        assert!(!dfa2.accepts(&[reuben, peters, comma, twenty]));
+        assert!(dfa2.accepts(&[peters(), comma(), twenty()]));
+        assert!(dfa2.accepts(&[andy(), peters(), comma(), twenty()]));
+        assert!(!dfa2.accepts(&[peters(), comma(), reuben(), comma(), twenty()]));
+        assert!(!dfa2.accepts(&[reuben(), peters(), comma(), twenty()]));
     };
 
     test_dfa(&dfa);
@@ -486,23 +474,23 @@ fn nfa() {
 
 #[test]
 fn test_brzozowski_minimise() {
-    let a = Edge(1);
-    let b = Edge(2);
-    let c = Edge(3);
-    let d = Edge(4);
-    let e = Edge(5);
+    let a = || EdgeData::Output("a".into());
+    let b = || EdgeData::Output("b".into());
+    let c = || EdgeData::Output("c".into());
+    let d = || EdgeData::Output("d".into());
+    let e = || EdgeData::Output("e".into());
     let nfa = {
         let mut nfa = Nfa::new();
-        nfa.add_complete_sequence(vec![a, b, c, e]);
-        nfa.add_complete_sequence(vec![a, b, e]);
-        nfa.add_complete_sequence(vec![b, c, d, e]);
-        nfa.add_complete_sequence(vec![b, d, e]);
+        nfa.add_complete_sequence(vec![a(), b(), c(), e()]);
+        nfa.add_complete_sequence(vec![a(), b(), e()]);
+        nfa.add_complete_sequence(vec![b(), c(), d(), e()]);
+        nfa.add_complete_sequence(vec![b(), d(), e()]);
         nfa
     };
 
     let dfa = nfa.brzozowski_minimise();
     println!("abcde {:?}", Dot::with_config(&dfa.graph, &[]));
 
-    assert!(dfa.accepts(&[a, b, e]));
-    assert!(!dfa.accepts(&[a, b, c, d, e]));
+    assert!(dfa.accepts(&[a(), b(), e()]));
+    assert!(!dfa.accepts(&[a(), b(), c(), d(), e()]));
 }

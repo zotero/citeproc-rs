@@ -78,7 +78,7 @@ pub use free::{FreeCond, FreeCondSets};
 pub use names::{DisambName, DisambNameData};
 pub use ref_context::RefContext;
 
-pub use finite_automata::{Dfa, Edge, EdgeData, Nfa, NfaEdge};
+pub use finite_automata::{Dfa, EdgeData, Nfa, NfaEdge};
 
 use csl::*;
 use csl::{Atom, IsIndependent};
@@ -130,13 +130,13 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
     fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.db.style();
-        let macro_unsafe = style
+        let macro_elements = style
             .macros
             .get(name)
             .expect("macro errors not implemented!");
 
         self.state.push_macro(name);
-        let ret = self.fold(macro_unsafe, WalkerFoldType::Macro(text));
+        let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
         self.state.pop_macro(name);
         ret
     }
@@ -254,7 +254,7 @@ pub fn create_dfa<O: OutputFormat>(db: &dyn IrDatabase, refr: &Reference) -> Dfa
     for (_fc, ir) in runs {
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
-        let last = add_to_graph(db, &fmt, &mut nfa, &ir, first);
+        let last = add_to_graph(&fmt, &mut nfa, &ir, first);
         nfa.accepting.insert(last);
     }
     nfa.brzozowski_minimise()
@@ -276,9 +276,9 @@ pub fn create_ref_ir<O: OutputFormat>(
 ) -> Vec<(FreeCond, RefIR)> {
     let style = db.style();
     let locale = db.locale_by_reference(refr.id.clone());
-    let ysh_explicit_edge = db.edge(EdgeData::YearSuffixExplicit);
-    let ysh_plain_edge = db.edge(EdgeData::YearSuffixPlain);
-    let ysh_edge = db.edge(EdgeData::YearSuffix);
+    let ysh_explicit_edge = EdgeData::YearSuffixExplicit;
+    let ysh_plain_edge = EdgeData::YearSuffixPlain;
+    let ysh_edge = EdgeData::YearSuffix;
     let fcs = db.branch_runs();
     let fmt = db.get_formatter();
     let mut vec: Vec<(FreeCond, RefIR)> = fcs
@@ -308,7 +308,7 @@ pub fn create_ref_ir<O: OutputFormat>(
                 &mut state,
                 Formatting::default(),
             );
-            ir.keep_first_ysh(ysh_explicit_edge, ysh_plain_edge, ysh_edge);
+            ir.keep_first_ysh(ysh_explicit_edge.clone(), ysh_plain_edge.clone(), ysh_edge.clone());
             (fc, ir)
         })
         .collect();
@@ -319,7 +319,6 @@ pub fn create_ref_ir<O: OutputFormat>(
 use petgraph::graph::NodeIndex;
 
 pub fn graph_with_stack(
-    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     formatting: Option<Formatting>,
@@ -328,23 +327,23 @@ pub fn graph_with_stack(
     f: impl FnOnce(&mut Nfa, NodeIndex) -> NodeIndex,
 ) -> NodeIndex {
     let stack = fmt.tag_stack(formatting.unwrap_or_else(Default::default), None);
-    let mut open_tags = String::new();
-    let mut close_tags = String::new();
+    let mut open_tags = SmartString::new();
+    let mut close_tags = SmartString::new();
     fmt.stack_preorder(&mut open_tags, &stack);
     fmt.stack_postorder(&mut close_tags, &stack);
-    let mkedge = |s: String| {
+    let mkedge = |s: SmartString| {
         RefIR::Edge(if !s.is_empty() {
-            Some(db.edge(EdgeData::Output(s)))
+            Some(EdgeData::Output(s))
         } else {
             None
         })
     };
     let mkedge_esc = |s: &str| {
         RefIR::Edge(if !s.is_empty() {
-            Some(db.edge(EdgeData::Output(
+            Some(EdgeData::Output(
                 // TODO: fmt.ingest
                 fmt.output_in_context(fmt.plain(s), Default::default(), None),
-            )))
+            ))
         } else {
             None
         })
@@ -352,19 +351,18 @@ pub fn graph_with_stack(
     let open_tags = &mkedge(open_tags);
     let close_tags = &mkedge(close_tags);
     if let Some(pre) = affixes.as_ref().map(|a| mkedge_esc(&*a.prefix)) {
-        spot = add_to_graph(db, fmt, nfa, &pre, spot);
+        spot = add_to_graph(fmt, nfa, &pre, spot);
     }
-    spot = add_to_graph(db, fmt, nfa, open_tags, spot);
+    spot = add_to_graph(fmt, nfa, open_tags, spot);
     spot = f(nfa, spot);
-    spot = add_to_graph(db, fmt, nfa, close_tags, spot);
+    spot = add_to_graph(fmt, nfa, close_tags, spot);
     if let Some(suf) = affixes.as_ref().map(|a| mkedge_esc(&*a.suffix)) {
-        spot = add_to_graph(db, fmt, nfa, &suf, spot);
+        spot = add_to_graph(fmt, nfa, &suf, spot);
     }
     spot
 }
 
 pub fn add_to_graph(
-    db: &dyn IrDatabase,
     fmt: &Markup,
     nfa: &mut Nfa,
     ir: &RefIR,
@@ -374,7 +372,7 @@ pub fn add_to_graph(
         RefIR::Edge(None) => spot,
         RefIR::Edge(Some(e)) => {
             let to = nfa.graph.add_node(());
-            nfa.graph.add_edge(spot, to, NfaEdge::Token(*e));
+            nfa.graph.add_edge(spot, to, NfaEdge::Token(e.clone()));
             to
         }
         RefIR::Seq(ref seq) => {
@@ -384,32 +382,32 @@ pub fn add_to_graph(
                 ref affixes,
                 ref delimiter,
                 // TODO: use these
-                ref quotes,
-                text_case,
+                quotes: _,
+                text_case: _,
             } = *seq;
             let affixes = affixes.as_ref();
             let mkedge = |s: &str| {
                 RefIR::Edge(if !s.is_empty() {
-                    Some(db.edge(EdgeData::Output(fmt.output_in_context(
+                    Some(EdgeData::Output(fmt.output_in_context(
                         fmt.plain(s),
                         Default::default(),
                         None,
-                    ))))
+                    )))
                 } else {
                     None
                 })
             };
             let delim = &mkedge(&*delimiter);
-            graph_with_stack(db, fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
+            graph_with_stack(fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
                 let mut seen = false;
                 for x in contents {
-                    if x != &RefIR::Edge(None) {
+                    if !matches!(x, RefIR::Edge(None)) {
                         if seen {
-                            spot = add_to_graph(db, fmt, nfa, delim, spot);
+                            spot = add_to_graph(fmt, nfa, delim, spot);
                         }
                         seen = true;
                     }
-                    spot = add_to_graph(db, fmt, nfa, x, spot);
+                    spot = add_to_graph(fmt, nfa, x, spot);
                 }
                 spot
             })
@@ -456,15 +454,15 @@ fn test_determinism() {
     use crate::test::MockProcessor;
     let db = MockProcessor::new();
     let fmt = db.get_formatter();
-    let aa = db.edge(EdgeData::Output("aa".into()));
-    let bb = db.edge(EdgeData::Output("bb".into()));
+    let aa = || EdgeData::Output("aa".into());
+    let bb = || EdgeData::Output("bb".into());
 
     let make_dfa = || {
         let mut nfa = Nfa::new();
-        for ir in &[RefIR::Edge(Some(aa)), RefIR::Edge(Some(bb))] {
+        for ir in &[RefIR::Edge(Some(aa())), RefIR::Edge(Some(bb()))] {
             let first = nfa.graph.add_node(());
             nfa.start.insert(first);
-            let last = add_to_graph(&db, &fmt, &mut nfa, ir, first);
+            let last = add_to_graph(&fmt, &mut nfa, ir, first);
             nfa.accepting.insert(last);
         }
         nfa.brzozowski_minimise()
@@ -474,7 +472,7 @@ fn test_determinism() {
     for _ in 0..100 {
         let dfa = make_dfa();
         debug!("{}", dfa.debug_graph(&db));
-        if dfa.accepts_data(&db, &[aa.lookup(&db)]) {
+        if dfa.accepts_data(&[aa()]) {
             count += 1;
         }
     }
