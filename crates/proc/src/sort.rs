@@ -405,7 +405,7 @@ fn test_date_as_macro_strip_delims() {
             "indep".into(),
             SortKey::macro_named("indep")
         ),
-        Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".to_owned()))
+        Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".into()))
     );
 
     assert_eq!(
@@ -415,7 +415,7 @@ fn test_date_as_macro_strip_delims() {
             "local".into(),
             SortKey::macro_named("local")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
     );
 
     assert_eq!(
@@ -425,7 +425,7 @@ fn test_date_as_macro_strip_delims() {
             "year-date".into(),
             SortKey::macro_named("year-date")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
     );
 
     assert_eq!(
@@ -435,7 +435,7 @@ fn test_date_as_macro_strip_delims() {
             "year-date-choose".into(),
             SortKey::macro_named("year-date-choose")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".to_owned()))
+        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
     );
 
     assert_eq!(
@@ -445,7 +445,7 @@ fn test_date_as_macro_strip_delims() {
             "term".into(),
             SortKey::macro_named("term")
         ),
-        Some(Arc::new("anonymous".to_owned()))
+        Some(Arc::new("anonymous".into()))
     );
 }
 

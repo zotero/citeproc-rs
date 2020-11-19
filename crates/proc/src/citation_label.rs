@@ -89,7 +89,7 @@ fn test_write_label() {
     refr.name.insert(
         NameVariable::Author,
         vec![Name::Person(PersonName {
-            family: Some("Jobs".to_owned()),
+            family: Some("Jobs".into()),
             ..Default::default()
         })],
     );
@@ -102,11 +102,11 @@ fn test_write_label() {
         NameVariable::Author,
         vec![
             Name::Person(PersonName {
-                family: Some("Boris".to_owned()),
+                family: Some("Boris".into()),
                 ..Default::default()
             }),
             Name::Person(PersonName {
-                family: Some("Johnson".to_owned()),
+                family: Some("Johnson".into()),
                 ..Default::default()
             }),
         ],

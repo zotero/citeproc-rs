@@ -465,12 +465,12 @@ fn test_determinism() {
     use crate::test::MockProcessor;
     let db = MockProcessor::new();
     let fmt = db.get_formatter();
-    let aa = EdgeData::Output("aa".into());
-    let bb = EdgeData::Output("bb".into());
+    let aa = || EdgeData::Output("aa".into());
+    let bb = || EdgeData::Output("bb".into());
 
     let make_dfa = || {
         let mut nfa = Nfa::new();
-        for ir in &[RefIR::Edge(Some(aa)), RefIR::Edge(Some(bb))] {
+        for ir in &[RefIR::Edge(Some(aa())), RefIR::Edge(Some(bb()))] {
             let first = nfa.graph.add_node(());
             nfa.start.insert(first);
             let last = add_to_graph(&fmt, &mut nfa, ir, first);
@@ -483,7 +483,7 @@ fn test_determinism() {
     for _ in 0..100 {
         let dfa = make_dfa();
         debug!("{}", dfa.debug_graph(&db));
-        if dfa.accepts_data(&[aa]) {
+        if dfa.accepts_data(&[aa()]) {
             count += 1;
         }
     }

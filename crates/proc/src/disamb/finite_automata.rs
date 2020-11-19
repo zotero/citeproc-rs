@@ -377,11 +377,11 @@ impl Dfa {
 
 #[test]
 fn nfa() {
-    let andy = EdgeData::Output("andy".into());
-    let reuben = EdgeData::Output("reuben".into());
-    let peters = EdgeData::Output("peters".into());
-    let comma = EdgeData::Output(", ".into());
-    let twenty = EdgeData::Output("20".into());
+    let andy = || EdgeData::Output("andy".into());
+    let reuben = || EdgeData::Output("reuben".into());
+    let peters = || EdgeData::Output("peters".into());
+    let comma = || EdgeData::Output(", ".into());
+    let twenty = || EdgeData::Output("20".into());
 
     let nfa = {
         let mut nfa = NfaGraph::new();
@@ -392,14 +392,14 @@ fn nfa() {
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, reuben.into());
-        nfa.add_edge(forwards1, target, peters.into());
-        nfa.add_edge(initial, backwards1, peters.into());
-        nfa.add_edge(backwards1, backwards2, comma.into());
-        nfa.add_edge(backwards2, target, reuben.into());
-        nfa.add_edge(initial, target, peters.into());
-        nfa.add_edge(target, abc, comma.into());
-        nfa.add_edge(abc, acc, twenty.into());
+        nfa.add_edge(initial, forwards1, reuben().into());
+        nfa.add_edge(forwards1, target, peters().into());
+        nfa.add_edge(initial, backwards1, peters().into());
+        nfa.add_edge(backwards1, backwards2, comma().into());
+        nfa.add_edge(backwards2, target, reuben().into());
+        nfa.add_edge(initial, target, peters().into());
+        nfa.add_edge(target, abc, comma().into());
+        nfa.add_edge(abc, acc, twenty().into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -420,14 +420,14 @@ fn nfa() {
         let target = nfa.add_node(());
         let abc = nfa.add_node(());
         let acc = nfa.add_node(());
-        nfa.add_edge(initial, forwards1, andy.into());
-        nfa.add_edge(forwards1, target, peters.into());
-        nfa.add_edge(initial, backwards1, peters.into());
-        nfa.add_edge(backwards1, backwards2, comma.into());
-        nfa.add_edge(backwards2, target, andy.into());
-        nfa.add_edge(initial, target, peters.into());
-        nfa.add_edge(target, abc, comma.into());
-        nfa.add_edge(abc, acc, twenty.into());
+        nfa.add_edge(initial, forwards1, andy().into());
+        nfa.add_edge(forwards1, target, peters().into());
+        nfa.add_edge(initial, backwards1, peters().into());
+        nfa.add_edge(backwards1, backwards2, comma().into());
+        nfa.add_edge(backwards2, target, andy().into());
+        nfa.add_edge(initial, target, peters().into());
+        nfa.add_edge(target, abc, comma().into());
+        nfa.add_edge(abc, acc, twenty().into());
         let mut accepting = BTreeSet::new();
         accepting.insert(acc);
         let mut start = BTreeSet::new();
@@ -452,18 +452,18 @@ fn nfa() {
     println!("dfa2_brz {:?}", Dot::with_config(&dfa2_brz.graph, &[]));
 
     let test_dfa = |dfa: &Dfa| {
-        assert!(dfa.accepts(&[peters, comma, twenty]));
-        assert!(dfa.accepts(&[reuben, peters, comma, twenty]));
-        assert!(dfa.accepts(&[peters, comma, reuben, comma, twenty]));
-        assert!(!dfa.accepts(&[peters, comma, andy, comma, twenty]));
-        assert!(!dfa.accepts(&[andy, comma, peters, comma, twenty]));
+        assert!(dfa.accepts(&[peters(), comma(), twenty()]));
+        assert!(dfa.accepts(&[reuben(), peters(), comma(), twenty()]));
+        assert!(dfa.accepts(&[peters(), comma(), reuben(), comma(), twenty()]));
+        assert!(!dfa.accepts(&[peters(), comma(), andy(), comma(), twenty()]));
+        assert!(!dfa.accepts(&[andy(), comma(), peters(), comma(), twenty()]));
     };
 
     let test_dfa2 = |dfa2: &Dfa| {
-        assert!(dfa2.accepts(&[peters, comma, twenty]));
-        assert!(dfa2.accepts(&[andy, peters, comma, twenty]));
-        assert!(!dfa2.accepts(&[peters, comma, reuben, comma, twenty]));
-        assert!(!dfa2.accepts(&[reuben, peters, comma, twenty]));
+        assert!(dfa2.accepts(&[peters(), comma(), twenty()]));
+        assert!(dfa2.accepts(&[andy(), peters(), comma(), twenty()]));
+        assert!(!dfa2.accepts(&[peters(), comma(), reuben(), comma(), twenty()]));
+        assert!(!dfa2.accepts(&[reuben(), peters(), comma(), twenty()]));
     };
 
     test_dfa(&dfa);
@@ -474,23 +474,23 @@ fn nfa() {
 
 #[test]
 fn test_brzozowski_minimise() {
-    let a = EdgeData::Output("a".into());
-    let b = EdgeData::Output("b".into());
-    let c = EdgeData::Output("c".into());
-    let d = EdgeData::Output("d".into());
-    let e = EdgeData::Output("e".into());
+    let a = || EdgeData::Output("a".into());
+    let b = || EdgeData::Output("b".into());
+    let c = || EdgeData::Output("c".into());
+    let d = || EdgeData::Output("d".into());
+    let e = || EdgeData::Output("e".into());
     let nfa = {
         let mut nfa = Nfa::new();
-        nfa.add_complete_sequence(vec![a, b, c, e]);
-        nfa.add_complete_sequence(vec![a, b, e]);
-        nfa.add_complete_sequence(vec![b, c, d, e]);
-        nfa.add_complete_sequence(vec![b, d, e]);
+        nfa.add_complete_sequence(vec![a(), b(), c(), e()]);
+        nfa.add_complete_sequence(vec![a(), b(), e()]);
+        nfa.add_complete_sequence(vec![b(), c(), d(), e()]);
+        nfa.add_complete_sequence(vec![b(), d(), e()]);
         nfa
     };
 
     let dfa = nfa.brzozowski_minimise();
     println!("abcde {:?}", Dot::with_config(&dfa.graph, &[]));
 
-    assert!(dfa.accepts(&[a, b, e]));
-    assert!(!dfa.accepts(&[a, b, c, d, e]));
+    assert!(dfa.accepts(&[a(), b(), e()]));
+    assert!(!dfa.accepts(&[a(), b(), c(), d(), e()]));
 }

@@ -170,7 +170,7 @@ fn rtf_escape_into(s: &str, buf: &mut String) {
 
 #[cfg(test)]
 fn rtf_escape(s: &str) -> String {
-    let mut buf = String::with_capacity(s.len());
+    let mut buf = String::new();
     rtf_escape_into(s, &mut buf);
     buf
 }
@@ -178,11 +178,11 @@ fn rtf_escape(s: &str) -> String {
 #[test]
 fn test_rtf_escape_unicode() {
     let tab = "Hello \t";
-    assert_eq!(rtf_escape(tab), r"Hello \tab ");
+    assert_eq!(&rtf_escape(tab), r"Hello \tab ");
 
     let heart = "Hello \u{2764}";
-    assert_eq!(rtf_escape(heart), r"Hello \uc0\u10084 ");
+    assert_eq!(&rtf_escape(heart), r"Hello \uc0\u10084 ");
 
     let poop = "Hello 💩";
-    assert_eq!(rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
+    assert_eq!(&rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
 }

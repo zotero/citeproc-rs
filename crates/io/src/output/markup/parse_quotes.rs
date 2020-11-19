@@ -17,6 +17,7 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
 
 #[test]
 fn test_parse_quotes() {
+    use crate::output::FormatCmd;
     assert_eq!(
         parse_quotes(
             vec![MicroNode::Text("'hello'".into())],

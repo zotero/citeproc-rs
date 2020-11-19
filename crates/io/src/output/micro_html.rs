@@ -153,12 +153,12 @@ fn test_sanitize() {
         result,
         &[
             NoCase(vec![Formatted(
-                vec![Text("Italic".to_string())],
+                vec![Text("Italic".into())],
                 FontStyleItalic
             ),]),
-            Text(" ".to_string()),
-            Text(" ".to_string()),
-            Formatted(vec![Text("Bold".to_string())], FontWeightBold)
+            Text(" ".into()),
+            Text(" ".into()),
+            Formatted(vec![Text("Bold".into())], FontWeightBold)
         ]
     );
 }

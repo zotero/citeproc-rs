@@ -210,9 +210,9 @@ impl PersonName {
 fn parse_particles() {
     env_logger::init();
 
-    let mut hi = " hi ".into();
+    let mut hi: String = " hi ".into();
     hi.trim_in_place();
-    assert_eq!(hi, "hi");
+    assert_eq!(&hi, "hi");
 
     let mut init = PersonName {
         given: Some("Schnitzel".into()),

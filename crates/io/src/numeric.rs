@@ -301,6 +301,10 @@ impl<'a> NumericValue<'a> {
             NumericValue::Str(input.into())
         }
     }
+    #[cfg(test)]
+    fn parse(input: &'a str) -> Self {
+        Self::parse_full(input, "and")
+    }
     pub fn from_localized(and_term: &'a str) -> impl Fn(&'a NumberLike) -> NumericValue<'a> + 'a {
         move |like| match like {
             // locator_WithLeadingSpace
