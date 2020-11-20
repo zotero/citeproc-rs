@@ -248,17 +248,19 @@ await driver.fetchAll();
 #### Citation Clusters and their Cites
 
 A document consists of a series of clusters, each with a series of cites. Each 
-cluster has an `id`, which is any integer except zero.
+cluster has an `id`, which is any old string.
 
 ```javascript
 // initClusters is like booting up an existing document and getting up to speed
 driver.initClusters([
-    { id: 1, cites: [ {id: "citekey"} ] },
-    { id: 2, cites: [ {id: "citekey", locator: "56", label: "page" } ] },
+    { id: "one", cites: [ {id: "citekey"} ] },
+    { id: "two", cites: [ {id: "citekey", locator: "56", label: "page" } ] },
 ]);
 // Update or insert any one of them like so
-driver.insertCluster({ id: 1, cites: [ { id: "updated_citekey" } ] });
-driver.insertCluster({ id: 3, cites: [ { id: "new_cluster_here" } ] });
+driver.insertCluster({ id: "one", cites: [ { id: "updated_citekey" } ] });
+// (You can use `driver.randomClusterId()` to generate a new one at random.)
+let three = driver.randomClusterId();
+driver.insertCluster({ id: three, cites: [ { id: "new_cluster_here" } ] });
 ```
 
 These clusters do not contain position information, so reordering is a separate 
@@ -272,7 +274,7 @@ note numbers, which means there were non-citing footnotes in between. Omitting
 can have more than one cluster in the same footnote.
 
 ```javascript
-driver.setClusterOrder([ { id: 1, note: 1 }, { id: 2, note: 4 } ]);
+driver.setClusterOrder([ { id: "one", note: 1 }, { id: "two", note: 4 } ]);
 ```
 
 You will notice that if an interactive user cuts and pastes a paragraph 
@@ -359,12 +361,12 @@ it, before confirming the change.
 
 ```javascript
 let cites = [ { id: "citekey", locator: "45" }, { ... } ];
-let positions = [ ... before, { id: 0, note: 34 }, ... after ];
+let positions = [ ... before, { note: 34 }, ... after ];
 let preview = driver.previewCitationCluster(cites, positions, "html");
 ```
 
 The positions array is exactly like a call to `setClusterOrder`, except exactly 
-one of the positions has an id of 0. This could either:
+one of the positions omits the id field. This could either:
 
 - Replace an existing cluster's position, and preview a cluster replacement; or
 - Represent the position a cluster is hypothetically inserted.
