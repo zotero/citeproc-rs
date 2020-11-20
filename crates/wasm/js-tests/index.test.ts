@@ -12,9 +12,9 @@ test('returns a single cluster, single cite, single ref', () => {
         expect(driver).not.toBeNull();
         oneOneOne(driver);
         driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE" });
-        driver.initClusters([{id: 1, cites: [{id: "citekey"}]}]);
-        driver.setClusterOrder([{ id: 1 }]);
-        let res = driver.builtCluster(1);
+        driver.initClusters([{id: "one", cites: [{id: "citekey"}]}]);
+        driver.setClusterOrder([{ id: "one" }]);
+        let res = driver.builtCluster("one");
         expect(res).toBe("TEST_TITLE");
     });
 });
@@ -23,10 +23,10 @@ test('gets an update when ref changes', () => {
     withDriver({}, driver => {
         oneOneOne(driver);
         let updates = driver.batchedUpdates();
-        expect(updates.clusters).toContainEqual([1, "TEST_TITLE"]);
+        expect(updates.clusters).toContainEqual(["one", "TEST_TITLE"]);
         driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE_2" });
         updates = driver.batchedUpdates();
-        expect(updates.clusters).toContainEqual([1, "TEST_TITLE_2"]);
+        expect(updates.clusters).toContainEqual(["one", "TEST_TITLE_2"]);
     });
 });
 
@@ -43,7 +43,7 @@ test('fullRender works', () => {
     withDriver({style: bibStyle}, driver => {
         oneOneOne(driver);
         let full = driver.fullRender();
-        expect(full.allClusters).toHaveProperty("1", "TEST_TITLE");
+        expect(full.allClusters).toHaveProperty("one", "TEST_TITLE");
         expect(full.bibEntries).toContainEqual({ id: "citekey", value: "TEST_TITLE" });
     })
 });
@@ -68,7 +68,7 @@ test('update queue generally', () => {
         let up = driver.batchedUpdates();
         checkUpdatesLen(up, 1, 1);
         expect(up.bibliography?.entryIds).toEqual(null);
-        expect(driver.builtCluster(1)).toBe("ALTERED");
+        expect(driver.builtCluster("one")).toBe("ALTERED");
 
         // Should have no updates, as we just called batchedUpdates.
         once = driver.batchedUpdates(); twice = driver.batchedUpdates();
@@ -82,15 +82,15 @@ test('update queue generally', () => {
         expect(once).toEqual(twice);
 
         // Only inserting a cluster not in the document does nothing
-        driver.insertCluster({ id: 123, cites: [{ id: "added" }] });
+        driver.insertCluster({ id: "123", cites: [{ id: "added" }] });
         once = driver.batchedUpdates(); twice = driver.batchedUpdates();
         expect(once).toEqual(twice); checkUpdatesLen(once, 0, 0);
 
         // Add it to the document, and it's a different story
-        driver.setClusterOrder([ {id:1},{id:123} ]);
+        driver.setClusterOrder([ {id:"one"},{id:"123"} ]);
         once = driver.batchedUpdates(); twice = driver.batchedUpdates();
         expect(once).not.toEqual(twice); checkUpdatesLen(twice, 0, 0);
-        expect(once.clusters).toContainEqual([123, "ADDED"]);
+        expect(once.clusters).toContainEqual(["123", "ADDED"]);
         expect(once.bibliography?.entryIds).toEqual(["citekey", "added"]);
         expect(once.bibliography?.updatedEntries).toHaveProperty("added", "ADDED");
     })
