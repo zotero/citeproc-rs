@@ -273,7 +273,7 @@ impl Processor {
         ClusterId::new(w.get_or_intern(string))
     }
 
-    fn preview_cluster_id(&self) -> ClusterId {
+    pub fn preview_cluster_id(&self) -> ClusterId {
         self.preview_cluster_id
     }
 

@@ -9,7 +9,8 @@ use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{ClusterNumber, Reference};
+use citeproc_io::{Reference, Cite};
+use citeproc_db::{ClusterId, ClusterNumber, IntraNote};
 
 use csl::CslType;
 use csl::Variable;
@@ -27,39 +28,6 @@ macro_rules! style_text_layout {
     </style>"#,
             $ex
         )
-    }};
-}
-
-macro_rules! style_layout {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str(&format!(
-            r#"<?xml version="1.0" encoding="utf-8"?>
-    <style class="in-text" version="1.0.1">
-        <citation>
-            <layout>
-                {}
-            </layout>
-        </citation>
-    </style>"#,
-            $ex
-        ))
-        .unwrap()
-    }};
-}
-
-macro_rules! style_xml {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str(&format!(r#"<?xml version="1.0" encoding="utf-8"?>{}"#, $ex))
-            .unwrap()
-    }};
-}
-
-macro_rules! style {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str($ex).unwrap()
     }};
 }
 
@@ -148,16 +116,12 @@ fn test() {
     let dfa2 = create_dfa::<Markup>(db, &refr2);
     println!("{}", dfa2.debug_graph(db));
 
-    use citeproc_io::{Cite, Cluster, IntraNote};
-
     db.insert_references(vec![refr, refr2]);
-    let cluster = Cluster {
-        id: 1,
-        cites: vec![Cite::basic("ref_id")],
-    };
-    db.init_clusters(vec![cluster]);
-    db.set_cluster_note_number(1, Some(ClusterNumber::Note(IntraNote::Single(1))));
-    let cite_ids = db.cluster_cites(1);
+    let mut interner = string_interner::StringInterner::default();
+    let id = interner.get_or_intern("1");
+    db.init_clusters(vec![(id, vec![Cite::basic("ref_id")])]);
+    db.set_cluster_note_number(id, Some(ClusterNumber::Note(IntraNote::Single(1))));
+    let cite_ids = db.cluster_cites(id);
 
     let get_stream = |ind: usize| {
         let id = cite_ids[ind];
