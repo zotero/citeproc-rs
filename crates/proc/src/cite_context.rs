@@ -14,7 +14,7 @@ use citeproc_io::{Cite, DateOrRange, Locator, Name, NumericValue, Reference};
 use csl::Features;
 use csl::Locale;
 use csl::*;
-use csl::{CslType, Name as NameEl, Position, SortKey, Style, VariableForm};
+use csl::{CslType, LocatorType, Name as NameEl, Position, SortKey, Style, VariableForm};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -83,66 +83,26 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
     }
 }
 
-impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
-    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
-        let get = |v: Variable| self.reference.ordinary.get(&v).map(|s| s.as_str()).map(Cow::Borrowed);
-        match (var, form) {
-            (Variable::Title, VariableForm::Short) => get(Variable::TitleShort).or_else(|| get(Variable::Title)),
-            (Variable::ContainerTitleShort, _) => get(Variable::ContainerTitleShort).or_else(|| get(Variable::JournalAbbreviation)),
-            (Variable::ContainerTitle, VariableForm::Short) => get(Variable::ContainerTitleShort)
-                .or_else(|| get(Variable::JournalAbbreviation))
-                .or_else(|| get(Variable::ContainerTitle)),
-            (Variable::CitationLabel, _) if self.reference.ordinary.get(&var).is_none() => {
-                let tri = crate::citation_label::Trigraph::default();
-                Some(Cow::Owned(tri.make_label(self.reference)))
-            }
-            _ => get(var),
-        }
+impl<'a, O: OutputFormat, I: OutputFormat> RenderContext for CiteContext<'a, O, I> {
+    fn style(&self) -> &Style {
+        self.style
+    }
+    fn reference(&self) -> &Reference {
+        self.reference
+    }
+    fn locale(&self) -> &Locale {
+        self.locale
     }
 
-    pub fn has_variable(&self, var: AnyVariable) -> bool {
-        match var {
-            AnyVariable::Name(NameVariable::Dummy) => false,
-            // TODO: finish this list
-            AnyVariable::Number(NumberVariable::Locator) => self.cite.locators.is_some(),
-            // we need Page to exist and be numeric
-            AnyVariable::Number(NumberVariable::PageFirst) => {
-                self.is_numeric(AnyVariable::Number(NumberVariable::Page))
-            }
-            AnyVariable::Number(NumberVariable::FirstReferenceNoteNumber) => {
-                self.position.1.is_some()
-            }
-            AnyVariable::Number(NumberVariable::CitationNumber) => self.bib_number.is_some(),
-            // Generated on demand
-            AnyVariable::Ordinary(Variable::CitationLabel) => true,
-            _ => ref_has_variable(self.reference, var),
-        }
-    }
-
-    /// Tests whether a variable is numeric.
-    ///
-    /// There are a few deviations in other implementations, notably:
-    ///
-    /// * `citeproc-js` always returns `false` for "page-first", even if "page" is numeric
-    /// * `citeproc-js` represents version numbers as numerics, which differs from the spec. I'm
-    ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
-    ///   are literal hyphens, not number ranges.
-    ///   By not representing them as numbers, `is-numeric="version"` won't work.
-    pub fn is_numeric(&self, var: AnyVariable) -> bool {
-        match var {
-            AnyVariable::Number(num) => self
-                .get_number(num)
-                .map(|r| r.is_numeric())
-                .unwrap_or(false),
-
-            // TODO: this isn't very useful
-            _ => false,
-        }
-    }
-
-    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
         // TODO: always use the default locale
         let and_term = self.locale.and_term(None).unwrap_or("and");
+        let get = |v: NumberVariable| {
+            self.reference()
+                .number
+                .get(&v)
+                .map(NumericValue::from_localized(and_term))
+        };
         match var {
             NumberVariable::Locator => self
                 .cite
@@ -155,24 +115,50 @@ impl<'c, O: OutputFormat, I: OutputFormat> CiteContext<'c, O, I> {
                 .map(NumericValue::from_localized(and_term)),
             NumberVariable::FirstReferenceNoteNumber => self.position.1.map(NumericValue::num),
             NumberVariable::CitationNumber => self.bib_number.map(NumericValue::num),
-            NumberVariable::PageFirst => self
-                .reference
-                .number
-                .get(&NumberVariable::Page)
-                .map(NumericValue::from_localized(and_term))
-                .and_then(|pp| pp.page_first()),
-            _ => self
-                .reference
-                .number
-                .get(&var)
-                .map(NumericValue::from_localized(and_term)),
+            NumberVariable::PageFirst => get(NumberVariable::Page).and_then(|pp| pp.page_first()),
+            _ => get(var),
+        }
+    }
+}
+
+pub trait RenderContext {
+    fn style(&self) -> &Style;
+    fn reference(&self) -> &Reference;
+    fn locale(&self) -> &Locale;
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>>;
+
+    fn cite_lang(&self) -> Option<&Lang> {
+        let refr = self.reference();
+        refr.language.as_ref()
+    }
+
+    /// Common functionality between CiteContext and RefContext.
+    fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
+        let refr = self.reference();
+        let get = |v: Variable| refr.ordinary.get(&v).map(|s| s.as_str()).map(Cow::Borrowed);
+        match (var, form) {
+            (Variable::Title, VariableForm::Short) => {
+                get(Variable::TitleShort).or_else(|| get(Variable::Title))
+            }
+            (Variable::ContainerTitleShort, _) => {
+                get(Variable::ContainerTitleShort).or_else(|| get(Variable::JournalAbbreviation))
+            }
+            (Variable::ContainerTitle, VariableForm::Short) => get(Variable::ContainerTitleShort)
+                .or_else(|| get(Variable::JournalAbbreviation))
+                .or_else(|| get(Variable::ContainerTitle)),
+            (Variable::CitationLabel, _) if refr.ordinary.get(&var).is_none() => {
+                let tri = crate::citation_label::Trigraph::default();
+                Some(Cow::Owned(tri.make_label(self.reference())))
+            }
+            _ => get(var),
         }
     }
 
-    pub fn get_name(&self, var: NameVariable) -> Option<&Vec<Name>> {
+    /// Just makes sure NameVariable::Dummy can't produce anything
+    fn get_name(&self, var: NameVariable) -> Option<&[Name]> {
         match var {
             NameVariable::Dummy => None,
-            _ => self.reference.name.get(&var),
+            _ => self.reference().name.get(&var).map(|x| x.as_slice()),
         }
     }
 }
@@ -189,19 +175,49 @@ fn ref_has_variable(refr: &Reference, var: AnyVariable) -> bool {
     }
 }
 
-use csl::LocatorType;
-
-impl<'c, O, I> CondChecker for CiteContext<'c, O, I>
+impl<'a, O, I> CondChecker for CiteContext<'a, O, I>
 where
     O: OutputFormat,
     I: OutputFormat,
 {
     fn has_variable(&self, var: AnyVariable) -> bool {
-        CiteContext::has_variable(self, var)
+        match var {
+            AnyVariable::Name(NameVariable::Dummy) => false,
+            // TODO: finish this list
+            AnyVariable::Number(v) => match v {
+                NumberVariable::Locator => self.cite.locators.is_some(),
+                NumberVariable::FirstReferenceNoteNumber => self.position.1.is_some(),
+                NumberVariable::CitationNumber => self.bib_number.is_some(),
+                // PageFirst is covered in get_number
+                _ => self.get_number(v).is_some(),
+            },
+            // Generated on demand
+            AnyVariable::Ordinary(Variable::CitationLabel) => true,
+            _ => ref_has_variable(self.reference, var),
+        }
     }
+
+    /// Tests whether a variable is numeric.
+    ///
+    /// There are a few deviations in other implementations, notably:
+    ///
+    /// * `citeproc-js` always returns `false` for "page-first", even if "page" is numeric
+    /// * `citeproc-js` represents version numbers as numerics, which differs from the spec. I'm
+    ///   not aware of any version numbers that actually are numbers. Semver hyphens, for example,
+    ///   are literal hyphens, not number ranges.
+    ///   By not representing them as numbers, `is-numeric="version"` won't work.
     fn is_numeric(&self, var: AnyVariable) -> bool {
-        CiteContext::is_numeric(self, var)
+        match var {
+            AnyVariable::Number(num) => self
+                .get_number(num)
+                .map(|r| r.is_numeric())
+                .unwrap_or(false),
+
+            // TODO: this isn't very useful
+            _ => false,
+        }
     }
+
     fn csl_type(&self) -> CslType {
         self.reference.csl_type
     }

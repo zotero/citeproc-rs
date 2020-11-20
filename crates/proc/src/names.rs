@@ -145,8 +145,8 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
             // identical
             if ed == tr {
-                let ed_sup = state.is_name_suppressed(NameVariable::Editor);
-                let tran_sup = state.is_name_suppressed(NameVariable::Translator);
+                let ed_sup = state.is_suppressed_name(NameVariable::Editor);
+                let tran_sup = state.is_suppressed_name(NameVariable::Translator);
                 if ed_sup && tran_sup {
                     slice_override = Some(&[][..]);
                 } else if ed_sup {
@@ -163,7 +163,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     slice_override
         .unwrap_or(&names.variables[..])
         .iter()
-        .filter(move |var| !state.is_name_suppressed(**var))
+        .filter(move |var| !state.is_suppressed_name(**var))
         .filter_map(move |var| {
             let ovar = var_override.as_ref().unwrap_or(var);
             refr.name.get(var).map(|val| (*var, *ovar, val.clone()))
@@ -1104,13 +1104,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
             Some(match n {
                 NameToken::Name(ratchet) => NameTokenBuilt::Ratchet(ratchet),
                 NameToken::Delimiter => NameTokenBuilt::Built(
-                    fmt.plain(
-                        self.name_el
-                            .delimiter
-                            .as_ref()
-                            .map(|ss| ss.as_str())
-                            .unwrap_or(", "),
-                    ),
+                    fmt.plain(self.name_el.delimiter.as_opt_str().unwrap_or(", ")),
                 ),
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {

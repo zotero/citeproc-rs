@@ -313,6 +313,7 @@ impl CondChecker for UselessCondChecker {
 }
 
 pub trait CondChecker {
+    /// Note this will be subtly different from `RenderContext::get_ordinary().is_some()`
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
     /// Count is for references only, so IRs can slowly increase the disamb count and incrementally

@@ -118,14 +118,11 @@ where
                         if var == StandardVariable::Ordinary(Variable::CitationLabel) {
                             let hook = IR::year_suffix(YearSuffixHook::Plain);
                             let v = Variable::CitationLabel;
-                            let vario = if state.is_suppressed_ordinary(v) {
-                                None
-                            } else {
-                                state.maybe_suppress_ordinary(v);
+                            let vario = state.maybe_suppress(v, |_| {
                                 ctx.get_ordinary(v, form).map(|val| {
                                     renderer.text_variable(&plain_text_element(v), var, &val)
                                 })
-                            };
+                            });
                             return vario
                                 .map(|label| {
                                     let label_node = arena.new_node((
@@ -153,24 +150,14 @@ where
                                 });
                         }
                         let content = match var {
-                            StandardVariable::Ordinary(v) => {
-                                if state.is_suppressed_ordinary(v) {
-                                    None
-                                } else {
-                                    state.maybe_suppress_ordinary(v);
-                                    ctx.get_ordinary(v, form)
-                                        .map(|val| renderer.text_variable(text, var, &val))
-                                }
-                            }
-                            StandardVariable::Number(v) => {
-                                if state.is_suppressed_num(v) {
-                                    None
-                                } else {
-                                    state.maybe_suppress_num(v);
-                                    ctx.get_number(v)
-                                        .map(|val| renderer.text_number_variable(text, v, &val))
-                                }
-                            }
+                            StandardVariable::Ordinary(v) => state.maybe_suppress(v, |_| {
+                                ctx.get_ordinary(v, form)
+                                    .map(|val| renderer.text_variable(text, var, &val))
+                            }),
+                            StandardVariable::Number(v) => state.maybe_suppress_num(v, |_| {
+                                ctx.get_number(v)
+                                    .map(|val| renderer.text_number_variable(text, v, &val))
+                            }),
                         };
                         let content = content.map(CiteEdgeData::from_standard_variable(var, false));
                         let gv = GroupVars::rendered_if(content.is_some());
@@ -199,14 +186,11 @@ where
 
             Element::Number(ref number) => {
                 let var = number.variable;
-                let content = if state.is_suppressed_num(var) {
-                    None
-                } else {
-                    state.maybe_suppress_num(var);
+                let content = state.maybe_suppress_num(var, |_| {
                     ctx.get_number(var)
                         .map(|val| renderer.number(number, &val))
                         .map(CiteEdgeData::Output)
-                };
+                });
                 let gv = GroupVars::rendered_if(content.is_some());
                 arena.new_node((IR::Rendered(content), gv))
             }
@@ -369,19 +353,17 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
 
     fn number(&mut self, number: &NumberElement) -> Self::Output {
         let var = number.variable;
-        let renderer = Renderer::cite(&self.ctx);
-        let state = &mut self.state;
-        let content = if state.is_suppressed_num(var) {
-            None
-        } else {
-            state.maybe_suppress_num(var);
-            self.ctx
-                .get_number(var)
+        let Self {
+            ctx, state, arena, ..
+        } = self;
+        let renderer = Renderer::cite(&ctx);
+        let content = state.maybe_suppress_num(var, |_| {
+            ctx.get_number(var)
                 .map(|val| renderer.number(number, &val))
                 .map(CiteEdgeData::Output)
-        };
+        });
         let gv = GroupVars::rendered_if(content.is_some());
-        self.arena.new_node((IR::Rendered(content), gv))
+        arena.new_node((IR::Rendered(content), gv))
     }
 
     fn text_value(&mut self, text: &TextElement, value: &SmartString) -> Self::Output {

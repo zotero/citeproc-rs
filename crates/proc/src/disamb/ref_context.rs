@@ -1,4 +1,5 @@
 use crate::choose::CondChecker;
+use crate::cite_context::RenderContext;
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{DateOrRange, NumericValue, Reference};
@@ -108,44 +109,50 @@ where
         };
         self.disamb_count = count;
     }
+}
 
-    pub fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>> {
-        let get = |v: Variable| self.reference.ordinary.get(&v).map(|s| s.as_str()).map(Cow::Borrowed);
-        match (var, form) {
-            (Variable::Title, VariableForm::Short) => get(Variable::TitleShort).or_else(|| get(Variable::Title)),
-            (Variable::ContainerTitleShort, _) => get(Variable::ContainerTitleShort).or_else(|| get(Variable::JournalAbbreviation)),
-            (Variable::ContainerTitle, VariableForm::Short) => get(Variable::ContainerTitleShort)
-                .or_else(|| get(Variable::JournalAbbreviation))
-                .or_else(|| get(Variable::ContainerTitle)),
-            (Variable::CitationLabel, _) if self.reference.ordinary.get(&var).is_none() => {
-                let tri = crate::citation_label::Trigraph::default();
-                Some(Cow::Owned(tri.make_label(self.reference)))
-            }
+impl<'c, O: OutputFormat> RenderContext for RefContext<'c, O> {
+    fn style(&self) -> &Style {
+        self.style
+    }
+    fn reference(&self) -> &Reference {
+        self.reference
+    }
+    fn locale(&self) -> &Locale {
+        self.locale
+    }
+    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
+        let and_term = self.locale.and_term(None).unwrap_or("and");
+        let get = |v: NumberVariable| {
+            self.reference()
+                .number
+                .get(&v)
+                .map(NumericValue::from_localized(and_term))
+        };
+        match var {
+            NumberVariable::PageFirst => get(NumberVariable::Page).and_then(|pp| pp.page_first()),
+
+            // Should never be accessed, handled without using the actual NumericValue
+            NumberVariable::FirstReferenceNoteNumber
+            | NumberVariable::CitationNumber
+            | NumberVariable::Locator => None,
+
             _ => get(var),
         }
     }
+}
 
-    pub fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
-        let and_term = self.locale.and_term(None).unwrap_or("and");
-        match var {
-            NumberVariable::PageFirst => self
-                .reference
-                .number
-                .get(&NumberVariable::Page)
-                .map(NumericValue::from_localized(and_term))
-                .and_then(|pp| pp.page_first()),
-            _ => self
-                .reference
-                .number
-                .get(&var)
-                .map(NumericValue::from_localized(and_term)),
-        }
-    }
-
-    pub fn has_variable(&self, var: AnyVariable) -> bool {
+impl<'c, O> CondChecker for RefContext<'c, O>
+where
+    O: OutputFormat,
+{
+    fn has_variable(&self, var: AnyVariable) -> bool {
         match var {
             AnyVariable::Number(v) => match v {
                 NumberVariable::Locator => self.locator_type.is_some(),
+                NumberVariable::PageFirst => {
+                    self.is_numeric(AnyVariable::Number(NumberVariable::Page))
+                }
                 NumberVariable::FirstReferenceNoteNumber => {
                     self.position.matches(Position::Subsequent)
                 }
@@ -161,18 +168,11 @@ where
                 _ => self.get_ordinary(v, VariableForm::Long).is_some(),
             },
             AnyVariable::Date(v) => self.reference.date.contains_key(&v),
+            AnyVariable::Name(NameVariable::Dummy) => false,
             AnyVariable::Name(v) => self.reference.name.contains_key(&v),
         }
     }
-}
 
-impl<'c, O> CondChecker for RefContext<'c, O>
-where
-    O: OutputFormat,
-{
-    fn has_variable(&self, var: AnyVariable) -> bool {
-        RefContext::has_variable(self, var)
-    }
     fn is_numeric(&self, var: AnyVariable) -> bool {
         match &var {
             AnyVariable::Number(num) => self.get_number(*num).map_or(false, |r| r.is_numeric()),

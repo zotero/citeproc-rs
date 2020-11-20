@@ -69,6 +69,7 @@ pub(crate) mod prelude {
         Citation,
         Bibliography,
     }
+    pub use crate::cite_context::RenderContext;
     pub use crate::db::{ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
     pub use crate::walker::{StyleWalker, WalkerFoldType};
@@ -288,10 +289,6 @@ impl NameOverrider {
 }
 
 impl IrState {
-    pub fn is_name_suppressed(&self, var: NameVariable) -> bool {
-        self.suppressed.contains(&AnyVariable::Name(var))
-    }
-
     pub fn maybe_suppress_name_vars(&mut self, vars: &[NameVariable]) {
         if self.name_override.in_substitute {
             for &var in vars {
@@ -300,13 +297,6 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_num(&mut self, var: NumberVariable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Number(var));
-        }
-    }
-
-    #[inline]
     pub fn maybe_suppress_date<T: Default>(
         &mut self,
         var: DateVariable,
@@ -322,10 +312,38 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_ordinary(&mut self, var: Variable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Ordinary(var));
+    pub fn maybe_suppress<T>(
+        &mut self,
+        var: Variable,
+        mut f: impl FnMut(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        if self.is_suppressed_ordinary(var) {
+            None
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Ordinary(var));
+            }
+            f(self)
         }
+    }
+
+    pub fn maybe_suppress_num<T>(
+        &mut self,
+        var: NumberVariable,
+        mut f: impl FnMut(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        if self.is_suppressed_num(var) {
+            None
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Number(var));
+            }
+            f(self)
+        }
+    }
+
+    pub fn is_suppressed_name(&self, var: NameVariable) -> bool {
+        self.suppressed.contains(&AnyVariable::Name(var))
     }
 
     pub fn is_suppressed_ordinary(&self, var: Variable) -> bool {
