@@ -100,7 +100,7 @@ pub struct InvalidCsl {
     // TODO: serialize_with or otherwise get this into the output
     pub range: Range<usize>,
     pub message: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "String::is_empty"))]
     pub hint: String,
 }
 
