@@ -365,6 +365,10 @@ fn natural_cmp_strings() {
         "1000 < 2000"
     );
 
-    // Case insensitive
-    assert_eq!(natural_cmp("aaa", "AAA"), Ordering::Equal);
+    // Case insensitive only means that "a" is before "B" even though it appears later in ascii,
+    // i.e. both "A" and "a" sort the same relative to "B" and "b".
+    // Tie-breakers between "A" and "a" are deterministically caps-first
+    // You still never get Ordering::Equal unless they are identical
+    assert_eq!(natural_cmp("Aaa", "ABC"), Ordering::Less);
+    assert_eq!(natural_cmp("AAA", "Aaa"), Ordering::Less);
 }
