@@ -103,8 +103,6 @@ export class Document {
 
     private refCounts: RefCounter;
 
-    private nextClusterId = 100;
-
     constructor(clusters: Cluster[], driver?: Driver) {
         this.refCounts = new RefCounter(
             key => {
@@ -181,7 +179,7 @@ export class Document {
 
     createCluster(cites: Cite[]): Cluster {
         return {
-            id: this.nextClusterId++,
+            id: this.driver.randomClusterId(),
             cites: cites,
         };
     }

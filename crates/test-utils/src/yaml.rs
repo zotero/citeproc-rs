@@ -38,7 +38,9 @@ impl From<YamlTestCase> for TestCase {
             yaml.clusters.map(|cls| {
                 cls.into_iter()
                     .enumerate()
-                    .map(|(n, c_item)| c_item.to_note_cluster(n as u32 + 1u32))
+                    .map(|(n, c_item)| {
+                        c_item.to_note_cluster(n as u32 + 1u32)
+                    })
                     .collect()
             }),
             yaml.process_citation_clusters,

@@ -8,53 +8,53 @@ import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { useDocument } from './useDocument';
 
 import initialStyle from './style.csl';
-import { initialReferences } from './initialReferences.ts';
+import { initialReferences } from './initialReferences';
 
 const initialClusters: Cluster[] = [
     {
-        id: 1,
+        id: "cluster-1",
         cites: [
             { id: "citekey" }
         ],
     },
     {
-        id: 2,
+        id: "cluster-2",
         cites: [
             { id: "citekey2" }
         ],
     },
     {
-        id: 3,
+        id: "cluster-3",
         cites: [
             { id: "citekey", locator: "56" }
         ],
     },
     {
-        id: 4,
+        id: "cluster-4",
         cites: [
             { id: "r1" }
         ]
     },
     {
-        id: 5,
+        id: "cluster-5",
         cites: [
             { id: "ysuf1" }
         ]
     },
     {
-        id: 6,
+        id: "cluster-6",
         cites: [
             { id: "ysuf2" }
         ]
     },
     {
-        id: 7,
+        id: "cluster-7",
         cites: [
             { id: "ysuf1" }
         ]
     },
     {
-        id: 8,
+        id: "cluster-8",
         cites: [
             { id: "r7" }
         ]

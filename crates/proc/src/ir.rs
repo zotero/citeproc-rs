@@ -536,7 +536,7 @@ impl IrSeq {
         fmt.stack_postorder(&mut close_tags, &stack);
 
         if !affixes.map_or(true, |a| a.prefix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().prefix.as_str().into()));
+            edges.push(EdgeData::Output(affixes.unwrap().prefix.as_ref().into()));
         }
 
         if !open_tags.is_empty() {
@@ -568,7 +568,7 @@ impl IrSeq {
         }
 
         if !affixes.map_or(true, |a| a.suffix.is_empty()) {
-            edges.push(EdgeData::Output(affixes.unwrap().suffix.as_str().into()));
+            edges.push(EdgeData::Output(affixes.unwrap().suffix.as_ref().into()));
         }
     }
 }

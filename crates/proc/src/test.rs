@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use citeproc_db::{CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Cluster, Reference};
+use citeproc_db::{ClusterId, CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_io::{output::markup::Markup, Reference, Cite};
 use csl::Atom;
 
 use csl::Style;
@@ -51,9 +51,12 @@ pub struct MockProcessor {
 
 impl salsa::Database for MockProcessor {}
 
-impl HasFormatter for MockProcessor {
+impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         Markup::html()
+    }
+    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString> {
+        None
     }
 }
 
@@ -81,13 +84,10 @@ impl MockProcessor {
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<(ClusterId, Vec<Cite<Markup>>)>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let Cluster {
-                id: cluster_id,
-                cites,
-            } = cluster;
+            let (cluster_id, cites) = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
                 let cite_id = self.cite(CiteData::RealCite {
@@ -110,5 +110,25 @@ impl MockProcessor {
             self.set_reference_input(r.id.clone(), Arc::new(r));
         }
         self.set_all_keys(Arc::new(keys));
+    }
+    pub fn insert_cites(&mut self, cluster_id: ClusterId, cites: &[Cite<Markup>]) {
+        let cluster_ids = self.cluster_ids();
+        if !cluster_ids.contains(&cluster_id) {
+            let mut new_cluster_ids = (*cluster_ids).clone();
+            new_cluster_ids.push(cluster_id);
+            self.set_cluster_ids(Arc::new(new_cluster_ids));
+            self.set_cluster_note_number(cluster_id, None);
+        }
+
+        let mut ids = Vec::new();
+        for (index, cite) in cites.iter().enumerate() {
+            let cite_id = self.cite(CiteData::RealCite {
+                cluster: cluster_id,
+                index: index as u32,
+                cite: Arc::new(cite.clone()),
+            });
+            ids.push(cite_id);
+        }
+        self.set_cluster_cites(cluster_id, Arc::new(ids));
     }
 }

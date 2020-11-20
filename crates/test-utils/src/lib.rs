@@ -11,7 +11,7 @@ pub use citeproc;
 pub use citeproc_proc;
 
 use citeproc::prelude::*;
-use citeproc_io::{Cite, Cluster, Reference};
+use citeproc::prelude::string_id::{Cluster as ClusterStr};
 use csl::Lang;
 
 use directories::ProjectDirs;
@@ -61,35 +61,35 @@ impl Default for Format {
     }
 }
 
-#[derive(Deserialize)]
 pub struct TestCase {
     pub mode: Mode,
-    #[serde(default)]
     pub format: Format,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
     pub clusters: Option<Vec<Cluster<Markup>>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
-    #[serde(skip, default = "unreach")]
     pub processor: Processor,
-}
-
-fn unreach() -> Processor {
-    unreachable!()
 }
 
 impl Clone for TestCase {
     fn clone(&self) -> Self {
-        TestCase::new(
-            self.mode.clone(),
-            self.format.clone(),
-            self.csl.clone(),
-            self.input.clone(),
-            self.result.clone(),
-            self.clusters.clone(),
-            self.process_citation_clusters.clone(),
-        )
+        let mut processor = {
+            let fet = Arc::new(Filesystem::project_dirs());
+            Processor::new(&self.csl, fet, self.format.0).expect("could not construct processor")
+        };
+        processor.reset_references(self.input.clone());
+        Warmup::maximum().execute(&mut processor);
+        TestCase {
+            processor,
+            mode: self.mode.clone(),
+            format: self.format.clone(),
+            csl: self.csl.clone(),
+            input: self.input.clone(),
+            result: self.result.clone(),
+            clusters: self.clusters.clone(),
+            process_citation_clusters: self.process_citation_clusters.clone(),
+        }
     }
 }
 
@@ -100,13 +100,22 @@ impl TestCase {
         csl: String,
         input: Vec<Reference>,
         result: String,
-        clusters: Option<Vec<Cluster<Markup>>>,
+        clusters: Option<Vec<ClusterStr<Markup>>>,
         process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     ) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
             Processor::new(&csl, fet, format.0).expect("could not construct processor")
         };
+        let clusters = clusters
+            .map(|vec| {
+                vec.iter()
+                    .map(|str_cluster| Cluster {
+                        id: processor.new_cluster(&str_cluster.id),
+                        cites: str_cluster.cites.clone()
+                    })
+                    .collect()
+            });
         processor.reset_references(input.clone());
         Warmup::maximum().execute(&mut processor);
         TestCase {
@@ -149,7 +158,7 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&*refr.id));
                 }
-                clusters_auto.push(Cluster { id: 1, cites });
+                clusters_auto.push(Cluster { id: self.processor.random_cluster_id(), cites });
                 &clusters_auto
             };
 
@@ -166,7 +175,7 @@ impl TestCase {
             self.processor.set_cluster_order(&positions).unwrap();
             let mut pushed = false;
             for cluster in clusters.iter() {
-                if let Some(html) = self.processor.get_cluster(cluster.id()) {
+                if let Some(html) = self.processor.get_cluster(cluster.id) {
                     if pushed {
                         res.push_str("\n");
                     }

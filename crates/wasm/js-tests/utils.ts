@@ -53,8 +53,8 @@ export const oneOneOne = (driver: Driver, r?: any) => {
         id: "citekey"
     }
     driver.insertReference(refr);
-    driver.insertCluster({id: 1, cites: [{id: "citekey"}]});
-    driver.setClusterOrder([{ id: 1 }]);
+    driver.insertCluster({id: "one", cites: [{id: "citekey"}]});
+    driver.setClusterOrder([{ id: "one" }]);
 };
 
 export const checkUpdatesLen = (up: UpdateSummary, clusterCount: number, bibCount: number) => {

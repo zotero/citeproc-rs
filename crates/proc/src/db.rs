@@ -14,16 +14,16 @@ use crate::disamb::names::replace_single_child;
 use crate::disamb::{Dfa, DisambName, DisambNameData, EdgeData, FreeCondSets};
 use crate::prelude::*;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
-use citeproc_db::{CiteData, ClusterData};
+use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, ClusterId, Name};
-use citeproc_io::{ClusterNumber, IntraNote};
+use citeproc_io::{Cite, Name};
 use csl::{Atom, Bibliography, Position, SortKey};
 
 use indextree::NodeId;
 
-pub trait HasFormatter {
+pub trait ImplementationDetails {
     fn get_formatter(&self) -> Markup;
+    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString>;
 }
 
 #[allow(dead_code)]
@@ -36,7 +36,7 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 // }
 
 #[salsa::query_group(IrDatabaseStorage)]
-pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + HasFormatter {
+pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
     fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
@@ -1616,7 +1616,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
     let mut first_seen: FnvHashMap<Atom, ClusterNumber> = FnvHashMap::default();
 
     let mut last_note_num = None;
-    let mut clusters_in_last_note: Vec<u32> = Vec::new();
+    let mut clusters_in_last_note: Vec<ClusterId> = Vec::new();
 
     let mut prev_in_text: Option<&ClusterData> = None;
     let mut prev_note: Option<&ClusterData> = None;

@@ -21,6 +21,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 
 use citeproc::prelude::*;
+use citeproc::string_id;
 use csl::Lang;
 
 #[wasm_bindgen]
@@ -129,20 +130,28 @@ impl Driver {
         Ok(js_err!(JsValue::from_serde(&langs)))
     }
 
+
+    /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
+    #[wasm_bindgen(js_name = "randomClusterId")]
+    pub fn random_cluster_id(&self) -> String {
+        let eng = self.engine.borrow();
+        eng.random_cluster_id_str().into()
+    }
+
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(&mut self, cluster: JsValue) -> Result<(), JsValue> {
-        let cluster = js_err!(cluster.into_serde());
+        let cluster: string_id::Cluster<Markup> = js_err!(cluster.into_serde());
         let mut eng = self.engine.borrow_mut();
-        eng.insert_cluster(cluster);
+        eng.insert_cites_str(&cluster.id, &cluster.cites);
         Ok(())
     }
 
     /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
-    pub fn remove_cluster(&mut self, cluster_id: u32) -> Result<(), JsValue> {
+    pub fn remove_cluster(&mut self, cluster_id: &str) -> Result<(), JsValue> {
         let mut eng = self.engine.borrow_mut();
-        eng.remove_cluster(cluster_id);
+        eng.remove_cluster_str(cluster_id);
         Ok(())
     }
 
@@ -151,8 +160,8 @@ impl Driver {
     /// * `clusters` is a Cluster[]
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&mut self, clusters: Box<[JsValue]>) -> Result<(), JsValue> {
-        let clusters = utils::read_js_array(clusters)?;
-        self.engine.borrow_mut().init_clusters(clusters);
+        let clusters: Vec<_> = utils::read_js_array(clusters)?;
+        self.engine.borrow_mut().init_clusters_str(clusters);
         Ok(())
     }
 
@@ -161,9 +170,9 @@ impl Driver {
     /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
     /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]
-    pub fn built_cluster(&self, id: ClusterId) -> Result<JsValue, JsValue> {
+    pub fn built_cluster(&self, id: &str) -> Result<JsValue, JsValue> {
         let eng = self.engine.borrow();
-        let built = js_err!(eng.get_cluster(id).ok_or_else(|| anyhow::anyhow!(
+        let built = js_err!(eng.get_cluster_str(id).ok_or_else(|| anyhow::anyhow!(
             "cluster {} either does not exist, or has not been assigned a position in the document",
             id
         )));
@@ -187,11 +196,11 @@ impl Driver {
         format: &str,
     ) -> Result<JsValue, JsValue> {
         let cites: Vec<Cite<Markup>> = utils::read_js_array(cites)?;
-        let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
+        let positions: Vec<string_id::ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
         let preview = eng.preview_citation_cluster(
-            cites,
-            PreviewPosition::MarkWithZero(&positions),
+            &cites,
+            PreviewPosition::MarkWithZeroStr(&positions),
             SupportedFormat::from_str(format).ok(),
         );
         preview
@@ -214,34 +223,6 @@ impl Driver {
         Ok(js_err!(
             JsValue::from_serde(&eng.get_bibliography_meta()).map(TBibliographyMeta::from)
         ))
-    }
-
-    /// Replaces cluster numberings in one go.
-    ///
-    /// * `mappings` is an `Array<[ ClusterId, ClusterNumber ]>` where `ClusterNumber`
-    ///   is, e.g. `{ note: 1 }`, `{ note: [3, 1] }` or `{ inText: 5 }` in the same way a
-    ///   Cluster must contain one of those three numberings.
-    ///
-    /// Not every ClusterId must appear in the array, just the ones you wish to renumber.
-    ///
-    /// The library consumer is responsible for ensuring that clusters are well-ordered. Clusters
-    /// are sorted for determining cite positions (ibid, subsequent, etc). If a footnote is
-    /// deleted, you will likely need to shift all cluster numbers after it back by one.
-    ///
-    /// The second note numbering, `{note: [3, 1]}`, is for having multiple clusters in a single
-    /// footnote. This is possible in many editors. The second number acts as a second sorting
-    /// key.
-    ///
-    /// The third note numbering, `{ inText: 5 }`, is for ordering in-text references that appear
-    /// within the body of a document. These will be sorted but won't cause
-    /// `first-reference-note-number` to become available.
-    ///
-    #[wasm_bindgen(js_name = "renumberClusters")]
-    pub fn renumber_clusters(&mut self, mappings: Box<[JsValue]>) -> Result<(), JsValue> {
-        let mappings: Vec<(ClusterId, ClusterNumber)> = utils::read_js_array(mappings)?;
-        let mut eng = self.engine.borrow_mut();
-        eng.renumber_clusters(&mappings);
-        Ok(())
     }
 
     /// Specifies which clusters are actually considered to be in the document, and sets their
@@ -269,9 +250,9 @@ impl Driver {
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     #[wasm_bindgen(js_name = "setClusterOrder")]
     pub fn set_cluster_order(&mut self, positions: Box<[JsValue]>) -> Result<(), JsValue> {
-        let positions: Vec<ClusterPosition> = utils::read_js_array(positions)?;
+        let positions: Vec<string_id::ClusterPosition> = utils::read_js_array(positions)?;
         let mut eng = self.engine.borrow_mut();
-        js_err!(eng.set_cluster_order(&positions));
+        js_err!(eng.set_cluster_order_str(&positions));
         Ok(())
     }
 
@@ -285,7 +266,7 @@ impl Driver {
     #[wasm_bindgen(js_name = "batchedUpdates")]
     pub fn batched_updates(&self) -> Result<TUpdateSummary, JsValue> {
         let eng = self.engine.borrow();
-        let summary = eng.batched_updates();
+        let summary = eng.batched_updates_str();
         Ok(js_err!(
             JsValue::from_serde(&summary).map(TUpdateSummary::from)
         ))
@@ -297,9 +278,9 @@ impl Driver {
     #[wasm_bindgen(js_name = "fullRender")]
     pub fn full_render(&self) -> Result<TFullRender, JsValue> {
         let mut eng = self.engine.borrow_mut();
-        let all_clusters = eng.all_clusters();
+        let all_clusters = eng.all_clusters_str();
         let bib_entries = eng.get_bibliography();
-        let all = citeproc::FullRender {
+        let all = string_id::FullRender {
             all_clusters,
             bib_entries,
         };
@@ -413,12 +394,12 @@ export type ClusterNumber = {
 };
 
 export type Cluster = {
-    id: number;
+    id: string;
     cites: Cite[];
 };
 
 export type ClusterPosition = {
-    id: number;
+    id: string;
     /** Leaving off this field means this cluster is in-text. */
     note?: number;
 }
@@ -437,7 +418,7 @@ export interface BibliographyUpdate {
 }
 
 export type UpdateSummary<Output = string> = {
-    clusters: [number, Output][];
+    clusters: [string, Output][];
     bibliography?: BibliographyUpdate;
 };
 

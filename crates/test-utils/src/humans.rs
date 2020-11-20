@@ -7,10 +7,8 @@
 use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
-use citeproc_io::{
-    Cite, Cluster, ClusterId, ClusterNumber, ClusterPosition, IntraNote, Locators, Reference,
-    Suppression, SmartString,
-};
+use citeproc::string_id::{Cluster as ClusterStr};
+use citeproc_io::{Cite, Locators, Reference, Suppression, SmartString};
 
 use lazy_static::lazy_static;
 use std::mem;
@@ -34,14 +32,14 @@ pub enum CitationItem {
 }
 
 impl CitationItem {
-    pub fn to_note_cluster(self, index: u32) -> Cluster<Markup> {
+    pub fn to_note_cluster(self, index: u32) -> ClusterStr<Markup> {
         let v = match self {
             CitationItem::Array(v) => v,
             CitationItem::Map { cites } => cites,
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
-        Cluster {
-            id: index + 1,
+        ClusterStr {
+            id: index.to_string().into(),
             cites,
         }
     }
@@ -91,7 +89,7 @@ enum ResultKind {
 #[derive(Debug, PartialEq)]
 pub struct CiteResult {
     kind: ResultKind,
-    id: u32,
+    // id: u32,
     note: ClusterNumber,
     text: String,
 }
@@ -149,7 +147,7 @@ impl FromStr for Results {
         fn total(inp: &str) -> IResult<&str, CiteResult> {
             map(tuple((dots, num, formatted)), |(k, n, f)| CiteResult {
                 kind: k,
-                id: n,
+                // id: n,
                 // incorrect, but we don't actually know except by looking at the instructions what
                 // the right note number is
                 note: ClusterNumber::Note(IntraNote::Single(n)),
@@ -209,14 +207,14 @@ struct Properties {
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct ClusterInstruction {
     #[serde(rename = "citationID", alias = "id")]
-    cluster_id: String,
+    cluster_id: SmartString,
     #[serde(rename = "citationItems", alias = "cites")]
     citation_items: Vec<CiteprocJsCite>,
     properties: Properties,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
-pub struct PrePost(String, u32);
+pub struct PrePost(SmartString, u32);
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct CiteprocJsInstruction {
@@ -244,31 +242,19 @@ impl From<Instruction2> for CiteprocJsInstruction {
 use std::collections::HashMap;
 
 pub struct JsExecutor<'a> {
-    cluster_ids_mapping: HashMap<String, ClusterId>,
     current_note_numbers: HashMap<ClusterId, ClusterNumber>,
     proc: &'a mut Processor,
-    next_id: ClusterId,
 }
 
 impl JsExecutor<'_> {
     pub fn new<'a>(proc: &'a mut Processor) -> JsExecutor<'a> {
         JsExecutor {
-            cluster_ids_mapping: HashMap::new(),
             current_note_numbers: HashMap::new(),
             proc,
-            next_id: 1,
         }
     }
     fn get_id(&mut self, string_id: &str) -> ClusterId {
-        if self.cluster_ids_mapping.contains_key(string_id) {
-            return *self.cluster_ids_mapping.get(string_id).unwrap();
-        } else {
-            self.cluster_ids_mapping
-                .insert(string_id.to_string(), self.next_id);
-            let id = self.next_id;
-            self.next_id += 1;
-            return id;
-        }
+        self.proc.new_cluster(string_id)
     }
 
     pub fn get_results(&self) -> Results {
@@ -281,7 +267,7 @@ impl JsExecutor<'_> {
             let text = (*text).clone();
             results.push(CiteResult {
                 kind: ResultKind::Arrows,
-                id,
+                // id,
                 note,
                 text: crate::normalise_html(&text),
             })
@@ -305,8 +291,8 @@ impl JsExecutor<'_> {
     }
 
     fn to_renumbering(&mut self, renum: &mut Vec<ClusterPosition>, prepost: &[PrePost]) {
-        for &PrePost(ref string, note_number) in prepost.iter() {
-            let id = self.get_id(&string);
+        for &PrePost(ref string_id, note_number) in prepost.iter() {
+            let id = self.get_id(string_id);
             let note = if note_number == 0 {
                 None
             } else {
@@ -320,7 +306,7 @@ impl JsExecutor<'_> {
         self.proc.drain();
         let mut renum = Vec::new();
         for CiteprocJsInstruction { cluster, pre, post } in instructions {
-            let id = self.get_id(&*cluster.cluster_id);
+            let id = &cluster.cluster_id;
             let note = cluster.properties.note_index;
 
             let mut cites = Vec::new();
@@ -332,11 +318,10 @@ impl JsExecutor<'_> {
             self.to_renumbering(&mut renum, pre);
             self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
             self.to_renumbering(&mut renum, post);
-            self.proc.insert_cluster(Cluster { id, cites });
+            self.proc.insert_cites_str(id, &cites);
             self.proc.set_cluster_order(&renum).unwrap();
-            for ClusterPosition { id, .. } in &renum {
-                let id = id.clone();
-                if let Some(actual_note) = self.proc.cluster_note_number(id) {
+            for &ClusterPosition { id, .. } in &renum {
+                if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
                     self.current_note_numbers.insert(id, actual_note);
                 }
             }
