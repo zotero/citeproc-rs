@@ -2,6 +2,8 @@ use crate::String;
 use crate::output::micro_html::MicroNode;
 use crate::IngestOptions;
 #[cfg(test)]
+use crate::output::FormatCmd;
+#[cfg(test)]
 use crate::LocalizedQuotes;
 #[cfg(test)]
 use pretty_assertions::assert_eq;

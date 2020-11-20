@@ -434,7 +434,10 @@ fn string_contains_word(s: &str) -> bool {
 impl IngestOptions {
     pub fn plain<'s>(&self, s: &'s str) -> SmartCow<'s> {
         if self.replace_hyphens && self.strip_periods {
-            lazy_replace_char(s, '-', "\u{2013}")
+            let cow = lazy_replace_char(s, '-', "\u{2013}");
+            // For whatever reason you can't borrow from SmartCow with the original lifetime, only
+            // a scoped one.
+            SmartCow::Owned(lazy_replace_char(&cow, '.', "").into_owned())
         } else if self.replace_hyphens {
             lazy_replace_char(s, '-', "\u{2013}")
         } else if self.strip_periods {
