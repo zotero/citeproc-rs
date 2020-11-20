@@ -14,6 +14,7 @@
     "_cjs/*",
     "_esm/*",
     "_web/*",
+    "_no_modules/*",
     "README.md"
   ],
   "main": "_cjs/citeproc_rs_wasm.js",
