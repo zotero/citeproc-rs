@@ -77,28 +77,28 @@ fn test_parse_external() {
     options.is_external = true;
     assert_eq!(
         parse_quotes(
-            vec![MicroNode::Text("Hello'a, 'hello'".into())],
+            vec![MicroNode::Text("Hello'a, \u{2018}hello\u{2019}".into())],
             &options
         ),
         vec![
             MicroNode::Text("Hello\u{2019}a, ".into()),
             MicroNode::Quoted {
                 is_inner: false,
-                localized: LocalizedQuotes::force(SFQuoteKind::Single, false),
+                localized: LocalizedQuotes::force(SFQuoteKind::SingleClose, false),
                 children: vec![MicroNode::Text("hello".into()),]
             }
         ]
     );
     assert_eq!(
         parse_quotes(
-            vec![MicroNode::Text("Hello'a, \"hello\"".into())],
+            vec![MicroNode::Text("Hello'a, \u{201c}hello\u{201d}".into())],
             &options
         ),
         vec![
             MicroNode::Text("Hello\u{2019}a, ".into()),
             MicroNode::Quoted {
                 is_inner: false,
-                localized: LocalizedQuotes::force(SFQuoteKind::Double, false),
+                localized: LocalizedQuotes::force(SFQuoteKind::DoubleClose, false),
                 children: vec![MicroNode::Text("hello".into()),]
             }
         ]
@@ -284,7 +284,7 @@ fn test_stamp() {
     let options = IngestOptions::default_with_quotes(LocalizedQuotes::simple());
     let inters = vec![
         Intermediate::Event(EventOwned::Text("prefix, ".into())),
-        Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
+        Intermediate::Event(EventOwned::SmartQuoteSingleOpen(Shape::Straight)),
         Intermediate::Index(0),
         Intermediate::Index(1),
         Intermediate::Event(EventOwned::Text("suffix".into())),
@@ -296,10 +296,10 @@ fn test_stamp() {
     let mut orig = vec![MicroNode::Text("hi".into()), MicroNode::Text("ho".into())];
     let inters = vec![
         Intermediate::Event(EventOwned::Text("prefix, ".into())),
-        Intermediate::Event(EventOwned::SmartQuoteSingleOpen),
+        Intermediate::Event(EventOwned::SmartQuoteSingleOpen(Shape::Straight)),
         Intermediate::Index(0),
         Intermediate::Index(1),
-        Intermediate::Event(EventOwned::SmartQuoteSingleClose),
+        Intermediate::Event(EventOwned::SmartQuoteSingleClose(Shape::Straight)),
         Intermediate::Event(EventOwned::Text(", suffix".into())),
     ];
     assert_eq!(
@@ -607,11 +607,29 @@ fn test_quote_splitter_simple() {
         events,
         vec![
             Event::Text("hello, I"),
-            Event::SmartMidwordInvertedComma,
+            Event::SmartMidwordInvertedComma(Shape::Straight),
             Event::Text("m a man with a plan, "),
-            Event::SmartQuoteDoubleOpen,
+            Event::SmartQuoteDoubleOpen(Shape::Straight),
             Event::Text("Canal Panama"),
-            Event::SmartQuoteDoubleClose,
+            Event::SmartQuoteDoubleClose(Shape::Straight),
+            Event::Text("."),
+        ]
+    );
+    let string = "hello, I'm a man with a plan, \u{201c}Canal Panama\u{201d}.";
+    let splitter = new_quote_splitter(string, None, None);
+    let mut events = Vec::new();
+    for event in splitter.events() {
+        events.push(event);
+    }
+    assert_eq!(
+        events,
+        vec![
+            Event::Text("hello, I"),
+            Event::SmartMidwordInvertedComma(Shape::Straight),
+            Event::Text("m a man with a plan, "),
+            Event::SmartQuoteDoubleOpen(Shape::Curly),
+            Event::Text("Canal Panama"),
+            Event::SmartQuoteDoubleClose(Shape::Curly),
             Event::Text("."),
         ]
     );
@@ -629,7 +647,7 @@ fn test_quote_splitter_french() {
         events,
         vec![
             Event::Text("hello, I"),
-            Event::SmartMidwordInvertedComma,
+            Event::SmartMidwordInvertedComma(Shape::Straight),
             Event::Text("m a man with a plan, "),
             Event::SmartQuoteFrenchOpen,
             Event::Text("Canal Panama"),
@@ -651,7 +669,7 @@ fn test_quote_splitter_french_with_spaces() {
         events,
         vec![
             Event::Text("hello, I"),
-            Event::SmartMidwordInvertedComma,
+            Event::SmartMidwordInvertedComma(Shape::Straight),
             Event::Text("m a man with a plan, "),
             Event::SmartQuoteFrenchOpen,
             Event::Text("Canal Panama"),
