@@ -5,7 +5,7 @@ expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"\n        <style v
 Style {
     class: InText,
     macros: {
-        Atom('known' type=inline): [],
+        "known": [],
     },
     citation: Citation {
         disambiguate_add_names: false,
@@ -22,7 +22,7 @@ Style {
                 Text(
                     TextElement {
                         source: Macro(
-                            Atom('known' type=inline),
+                            "known",
                         ),
                         formatting: None,
                         affixes: None,
