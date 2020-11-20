@@ -15,9 +15,7 @@ Style {
         layout: Layout {
             affixes: None,
             formatting: None,
-            delimiter: Delimiter(
-                Atom('' type=static),
-            ),
+            delimiter: None,
             elements: [
                 Text(
                     TextElement {
