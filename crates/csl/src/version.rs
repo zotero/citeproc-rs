@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::attr::EnumGetAttribute;
 use crate::Atom;
 use semver::{Version, VersionReq};
 use strum::EnumProperty;
@@ -25,11 +26,25 @@ pub const COMPILED_VERSION_M: Version = Version {
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CslVersionReq(pub CslVariant, pub VersionReq);
+pub struct CslVersionReq(pub VersionReq);
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for CslVersionReq {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CslCslMVersionReq(pub CslVariant, pub VersionReq);
 
 impl CslVersionReq {
     pub(crate) fn current_csl() -> Self {
-        CslVersionReq(CslVariant::Csl, VersionReq::exact(&COMPILED_VERSION))
+        CslVersionReq(VersionReq::exact(&COMPILED_VERSION))
     }
 }
 
@@ -41,6 +56,7 @@ pub enum CslVariant {
     #[strum(serialize = "csl-m", serialize = "CSL-M")]
     CslM,
 }
+impl EnumGetAttribute for CslVariant {}
 
 impl Default for CslVariant {
     fn default() -> Self {
@@ -84,12 +100,23 @@ macro_rules! declare_features {
             &[(&str, &str, Option<u32>, Option<()>, fn(&mut Features))] =
             &[$((stringify!($feature), $ver, $issue, $edition, set!($feature))),+];
 
+        #[cfg(feature = "serde")]
+        fn is_false(b: &bool) -> bool {
+            !*b
+        }
+
         /// A set of features to be used by later passes.
-        #[derive(Clone, Eq, PartialEq, Debug, Default)]
+        #[derive(Clone, Eq, PartialEq, Default)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+        #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
         pub struct Features {
             // `#![feature]` attrs for language features, for error reporting
+            #[cfg_attr(feature = "serde", serde(skip_serializing))]
             pub declared_lang_features: Vec<Atom>,
-            $(pub $feature: bool),+
+            $(
+                #[cfg_attr(feature = "serde", serde(skip_serializing_if = "is_false"))]
+                pub $feature: bool,
+            )+
         }
 
         impl Features {
@@ -125,6 +152,21 @@ macro_rules! declare_features {
             }
 
         }
+
+        use std::fmt;
+        impl fmt::Debug for Features {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "Features ")?;
+                let mut set = f.debug_set();
+                $(
+                    if self.$feature {
+                        set.entry(&stringify!($feature));
+                    }
+                )+
+                set.finish()
+            }
+        }
+
     };
 
     ($((removed, $feature: ident, $ver: expr, $issue: expr, None, $reason: expr),)+) => {
@@ -235,6 +277,7 @@ declare_features!((
 pub fn read_features<'a>(
     input_features: impl Iterator<Item = &'a str>,
 ) -> Result<Features, &'a str> {
+    // TODO: multiple errors here
     let mut features = Features::new();
     for kebab in input_features {
         let name = kebab.replace('-', "_");

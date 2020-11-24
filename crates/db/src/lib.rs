@@ -18,4 +18,5 @@ pub fn safe_default(db: &mut (impl cite::CiteDatabase + xml::LocaleDatabase + xm
     db.set_all_uncited(Default::default());
     db.set_cluster_ids(Arc::new(Default::default()));
     db.set_locale_input_langs(Default::default());
+    db.set_default_lang_override(Default::default());
 }

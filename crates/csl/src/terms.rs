@@ -7,9 +7,11 @@
 use super::MonthForm;
 use crate::error::*;
 use crate::version::Features;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use super::attr::GetAttribute;
+use super::attr::{EnumGetAttribute, GetAttribute};
 use super::variables::{NameVariable, NumberVariable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -34,6 +36,20 @@ pub enum AnyTermName {
 
     Ordinal(OrdinalTerm),
 }
+
+impl EnumGetAttribute for MonthTerm {}
+impl EnumGetAttribute for LocatorType {}
+impl EnumGetAttribute for MiscTerm {}
+impl EnumGetAttribute for Category {}
+impl EnumGetAttribute for SeasonTerm {}
+impl EnumGetAttribute for QuoteTerm {}
+impl EnumGetAttribute for RoleTerm {}
+impl EnumGetAttribute for OrdinalTerm {}
+impl EnumGetAttribute for OrdinalMatch {}
+impl EnumGetAttribute for Gender {}
+impl EnumGetAttribute for TermForm {}
+impl EnumGetAttribute for TermFormExtended {}
+impl EnumGetAttribute for TermPlurality {}
 
 impl GetAttribute for AnyTermName {
     fn get_attr(s: &str, features: &Features) -> Result<Self, UnknownAttributeValue> {
@@ -423,11 +439,11 @@ impl Default for OrdinalMatch {
 }
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#locators)
-#[derive(
-    Deserialize, AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash,
-)]
+#[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Deserialize))]
 #[strum(serialize_all = "kebab_case")]
-#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[non_exhaustive]
 pub enum LocatorType {
     Book,
     Chapter,
@@ -444,7 +460,7 @@ pub enum LocatorType {
     Section,
     // hyphenated is when it's a variable matcher, spaced is as a term name
     #[strum(serialize = "sub-verbo", serialize = "sub verbo")]
-    #[serde(rename = "sub-verbo", alias = "sub verbo")]
+    #[cfg_attr(feature = "serde", serde(rename = "sub-verbo", alias = "sub verbo"))]
     SubVerbo,
     Verse,
     Volume,
@@ -500,6 +516,7 @@ pub enum SeasonTerm {
 /// It includes "editortranslator" for the names special case.
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum RoleTerm {
     Author,
     CollectionEditor,
@@ -552,7 +569,10 @@ impl RoleTerm {
 /// here](https://docs.citationstyles.org/en/stable/specification.html#gender-specific-ordinals)
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[strum(serialize_all = "kebab_case")]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[non_exhaustive]
 pub enum Category {
     Anthropology,
     Astronomy,
@@ -589,6 +609,7 @@ pub enum Category {
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[strum(serialize_all = "kebab_case")]
+#[non_exhaustive]
 pub enum MiscTerm {
     Accessed,
     Ad,
@@ -634,6 +655,7 @@ pub enum MiscTerm {
 
 /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#months)
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MonthTerm {
     #[strum(serialize = "month-01")]
     Month01,

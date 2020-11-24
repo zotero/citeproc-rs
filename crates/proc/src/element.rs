@@ -1,7 +1,6 @@
 use crate::helpers::plain_text_element;
 use crate::prelude::*;
-use csl::variables::*;
-use csl::*;
+use csl::{style::*, variables::*};
 
 impl<'c, O, I> Proc<'c, O, I> for Style
 where
@@ -16,7 +15,7 @@ where
         arena: &mut IrArena<O>,
     ) -> NodeId {
         let layout = &self.citation.layout;
-        sequence_basic(db, state, ctx, arena, &layout.elements)
+        sequence(db, state, ctx, arena, &layout.elements, false, None)
     }
 }
 
@@ -41,14 +40,14 @@ where
             ctx,
             arena,
             &layout.elements,
+            false,
             // no such thing as layout delimiters in a bibliography
-            "".into(),
-            layout.formatting,
-            layout.affixes.as_ref(),
-            None,
-            None,
-            TextCase::None,
-            true,
+            Some(&|| IrSeq {
+                formatting: layout.formatting,
+                affixes: layout.affixes.clone(),
+                is_layout: true,
+                ..Default::default()
+            }),
         )
     }
 }
@@ -77,7 +76,7 @@ where
                             .style
                             .macros
                             .get(name)
-                            .expect("macro errors not implemented!");
+                            .expect("undefined macro should not be valid CSL");
                         // Technically, if re-running a style with a fresh IrState, you might
                         // get an extra level of recursion before it panics. BUT, then it will
                         // already have panicked when it was run the first time! So we're OK.
@@ -89,13 +88,17 @@ where
                             ctx,
                             arena,
                             &macro_elements,
-                            "".into(),
-                            text.formatting,
-                            text.affixes.as_ref(),
-                            text.display,
-                            renderer.quotes_if(text.quotes),
-                            text.text_case,
+                            // Not sure about this, but it acted like a group before...
                             true,
+                            Some(&|| IrSeq {
+                                formatting: text.formatting,
+                                affixes: text.affixes.clone(),
+                                display: text.display,
+                                quotes: renderer.quotes_if(text.quotes),
+                                text_case: text.text_case,
+                                should_inherit_delim: false,
+                                ..Default::default()
+                            }),
                         );
                         state.pop_macro(name);
                         ir_sum
@@ -116,14 +119,11 @@ where
                         if var == StandardVariable::Ordinary(Variable::CitationLabel) {
                             let hook = IR::year_suffix(YearSuffixHook::Plain);
                             let v = Variable::CitationLabel;
-                            let vario = if state.is_suppressed_ordinary(v) {
-                                None
-                            } else {
-                                state.maybe_suppress_ordinary(v);
+                            let vario = state.maybe_suppress(v, |_| {
                                 ctx.get_ordinary(v, form).map(|val| {
                                     renderer.text_variable(&plain_text_element(v), var, &val)
                                 })
-                            };
+                            });
                             return vario
                                 .map(|label| {
                                     let label_node = arena.new_node((
@@ -135,10 +135,9 @@ where
                                         formatting: text.formatting,
                                         affixes: text.affixes.clone(),
                                         text_case: text.text_case,
-                                        delimiter: Atom::from(""),
                                         display: text.display,
                                         quotes: renderer.quotes_if(text.quotes),
-                                        dropped_gv: None,
+                                        ..Default::default()
                                     };
                                     // the citation-label is important, so so is the seq
                                     let seq_node =
@@ -152,24 +151,14 @@ where
                                 });
                         }
                         let content = match var {
-                            StandardVariable::Ordinary(v) => {
-                                if state.is_suppressed_ordinary(v) {
-                                    None
-                                } else {
-                                    state.maybe_suppress_ordinary(v);
-                                    ctx.get_ordinary(v, form)
-                                        .map(|val| renderer.text_variable(text, var, &val))
-                                }
-                            }
-                            StandardVariable::Number(v) => {
-                                if state.is_suppressed_num(v) {
-                                    None
-                                } else {
-                                    state.maybe_suppress_num(v);
-                                    ctx.get_number(v)
-                                        .map(|val| renderer.text_number_variable(text, v, &val))
-                                }
-                            }
+                            StandardVariable::Ordinary(v) => state.maybe_suppress(v, |_| {
+                                ctx.get_ordinary(v, form)
+                                    .map(|val| renderer.text_variable(text, var, &val))
+                            }),
+                            StandardVariable::Number(v) => state.maybe_suppress_num(v, |_| {
+                                ctx.get_number(v)
+                                    .map(|val| renderer.text_number_variable(text, v, &val))
+                            }),
                         };
                         let content = content.map(CiteEdgeData::from_standard_variable(var, false));
                         let gv = GroupVars::rendered_if(content.is_some());
@@ -198,37 +187,33 @@ where
 
             Element::Number(ref number) => {
                 let var = number.variable;
-                let content = if state.is_suppressed_num(var) {
-                    None
-                } else {
-                    state.maybe_suppress_num(var);
+                let content = state.maybe_suppress_num(var, |_| {
                     ctx.get_number(var)
                         .map(|val| renderer.number(number, &val))
                         .map(CiteEdgeData::Output)
-                };
+                });
                 let gv = GroupVars::rendered_if(content.is_some());
                 arena.new_node((IR::Rendered(content), gv))
             }
 
             Element::Names(ref ns) => ns.intermediate(db, state, ctx, arena),
 
-            //
-            // You're going to have to replace sequence() with something more complicated.
-            // And pass up information about .any(|v| used variables).
             Element::Group(ref g) => sequence(
                 db,
                 state,
                 ctx,
                 arena,
                 g.elements.as_ref(),
-                g.delimiter.0.clone(),
-                g.formatting,
-                g.affixes.as_ref(),
-                g.display,
-                None,
-                TextCase::None,
                 true,
+                Some(&|| IrSeq {
+                    delimiter: g.delimiter.clone(),
+                    formatting: g.formatting,
+                    affixes: g.affixes.clone(),
+                    display: g.display,
+                    ..Default::default()
+                }),
             ),
+
             Element::Date(ref dt) => {
                 let var = dt.variable();
                 let o: Option<NodeId> = state
@@ -293,13 +278,15 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 self.ctx,
                 self.arena,
                 &elements,
-                "".into(),
-                text.formatting,
-                text.affixes.as_ref(),
-                text.display,
-                renderer.quotes_if(text.quotes),
-                text.text_case,
                 true,
+                Some(&|| IrSeq {
+                    formatting: text.formatting,
+                    affixes: text.affixes.clone(),
+                    display: text.display,
+                    quotes: renderer.quotes_if(text.quotes),
+                    text_case: text.text_case,
+                    ..Default::default()
+                }),
             ),
             WalkerFoldType::Group(group) => sequence(
                 self.db,
@@ -307,24 +294,36 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
                 self.ctx,
                 self.arena,
                 group.elements.as_ref(),
-                group.delimiter.0.clone(),
-                group.formatting,
-                group.affixes.as_ref(),
-                group.display,
-                None,
-                TextCase::None,
                 true,
+                Some(&|| IrSeq {
+                    delimiter: group.delimiter.clone(),
+                    formatting: group.formatting,
+                    affixes: group.affixes.clone(),
+                    display: group.display,
+                    ..Default::default()
+                }),
             ),
-            WalkerFoldType::Layout(layout) => sequence_basic(
+            WalkerFoldType::Layout(layout) => sequence(
                 self.db,
                 &mut self.state,
                 self.ctx,
                 self.arena,
                 &layout.elements,
+                false,
+                None,
             ),
-            WalkerFoldType::IfThen | WalkerFoldType::Else => {
-                sequence_basic(self.db, &mut self.state, self.ctx, self.arena, elements)
-            }
+            WalkerFoldType::IfThen | WalkerFoldType::Else => sequence(
+                self.db,
+                &mut self.state,
+                self.ctx,
+                self.arena,
+                elements,
+                false,
+                Some(&|| IrSeq {
+                    should_inherit_delim: true,
+                    ..Default::default()
+                }),
+            ),
             WalkerFoldType::Substitute => {
                 todo!("use fold() to implement name element substitution")
             }
@@ -355,22 +354,20 @@ impl<'a, O: OutputFormat, I: OutputFormat> StyleWalker for ProcWalker<'a, O, I> 
 
     fn number(&mut self, number: &NumberElement) -> Self::Output {
         let var = number.variable;
-        let renderer = Renderer::cite(&self.ctx);
-        let state = &mut self.state;
-        let content = if state.is_suppressed_num(var) {
-            None
-        } else {
-            state.maybe_suppress_num(var);
-            self.ctx
-                .get_number(var)
+        let Self {
+            ctx, state, arena, ..
+        } = self;
+        let renderer = Renderer::cite(&ctx);
+        let content = state.maybe_suppress_num(var, |_| {
+            ctx.get_number(var)
                 .map(|val| renderer.number(number, &val))
                 .map(CiteEdgeData::Output)
-        };
+        });
         let gv = GroupVars::rendered_if(content.is_some());
-        self.arena.new_node((IR::Rendered(content), gv))
+        arena.new_node((IR::Rendered(content), gv))
     }
 
-    fn text_value(&mut self, text: &TextElement, value: &Atom) -> Self::Output {
+    fn text_value(&mut self, text: &TextElement, value: &SmartString) -> Self::Output {
         let renderer = Renderer::cite(&self.ctx);
         let content = renderer.text_value(text, value).map(CiteEdgeData::Output);
         self.arena

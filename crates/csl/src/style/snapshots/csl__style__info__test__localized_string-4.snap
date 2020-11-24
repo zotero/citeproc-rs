@@ -1,0 +1,18 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<LSHelper<TitleHint>>(::indoc::indoc!(r#\"<str xml:lang=\"en-AU\">content</str>\"#)).expect(\"did not parse\")"
+---
+LSHelper {
+    string: LocalizedString {
+        value: "content",
+        lang: Some(
+            Iso(
+                English,
+                Some(
+                    AU,
+                ),
+            ),
+        ),
+    },
+    _marker: PhantomData,
+}

@@ -242,8 +242,8 @@ fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
 }
 
 fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
-    let mut ids = Vec::new();
     let clusters = db.clusters_sorted();
+    let mut ids = Vec::with_capacity(clusters.len());
     for cluster in clusters.iter() {
         ids.extend(cluster.cites.iter().cloned());
     }

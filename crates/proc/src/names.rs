@@ -6,9 +6,8 @@
 
 use self::initials::initialize;
 
-use super::unicode::is_latin_cyrillic;
 use crate::disamb::names::{
-    DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
+    self as disamb, DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
 };
 use crate::prelude::*;
 use crate::NamesInheritance;
@@ -21,20 +20,6 @@ use csl::{
 
 mod initials;
 
-impl DisambNameData {
-    fn lookup_id(&mut self, db: &dyn IrDatabase, advance_to_global: bool) -> DisambName {
-        let id = db.disamb_name(self.clone());
-        // test dismabiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
-        if advance_to_global {
-            let globally_disambiguated = db.disambiguated_person_names();
-            if let Some(my_data) = globally_disambiguated.get(&id) {
-                *self = my_data.clone()
-            }
-        }
-        id
-    }
-}
-
 impl<B> DisambNameRatchet<B> {
     fn for_person(
         db: &dyn IrDatabase,
@@ -43,7 +28,8 @@ impl<B> DisambNameRatchet<B> {
         ref_id: &Atom,
         name_el: &NameEl,
         primary: bool,
-        global: bool,
+        all_same_family_name: bool,
+        advance_to_global: bool,
     ) -> Self {
         let mut data = DisambNameData {
             var,
@@ -51,8 +37,18 @@ impl<B> DisambNameRatchet<B> {
             ref_id: ref_id.clone(),
             el: name_el.clone(),
             primary,
+            all_same_family_name: all_same_family_name && name_el.form == Some(NameForm::Short),
         };
-        let id = data.lookup_id(db, global);
+        let id = db.disamb_name(data.clone());
+        // test disambiguate_AndreaEg2 decided that we shouldn't do this in RefIR mode.
+        //
+        if advance_to_global {
+            let globally_disambiguated = db.disambiguated_person_names();
+            if let Some(&global_pass) = globally_disambiguated.get(&id) {
+                data.apply_upto_pass(global_pass);
+                // optimise: should apply pass to the ratchet's iterator as well
+            }
+        }
         let ratchet = PersonDisambNameRatchet::new(&db.style(), id, data);
         DisambNameRatchet::Person(ratchet)
     }
@@ -65,13 +61,15 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     names_inheritance: &'a NamesInheritance,
     db: &'a dyn IrDatabase,
     state: &'a IrState,
-    should_start_with_global: bool,
+    advance_to_global: bool,
 ) -> impl Iterator<Item = NameIR<O>> + 'a + Clone {
     let fmt = ctx.format();
     let style = ctx.style();
     let locale = ctx.locale();
     let refr = ctx.reference();
     let get_name_ir = move |(var, label_var, value): (NameVariable, NameVariable, Vec<Name>)| {
+        // fullstyles_APA.txt
+        let all_same_family_name = disamb::all_same_family_name(&value);
         let ratchets = value
             .into_iter()
             .enumerate()
@@ -86,11 +84,18 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
                         &refr.id,
                         &names_inheritance.name,
                         primary,
-                        should_start_with_global,
+                        all_same_family_name,
+                        advance_to_global,
                     ),
-                    Name::Literal { literal } => {
-                        warn!("literal names should be normalised");
-                        DisambNameRatchet::Literal(fmt.text_node(literal, None))
+                    Name::Literal {
+                        literal,
+                        is_latin_cyrillic,
+                    } => {
+                        warn!("literal names should be normalised into family-only");
+                        DisambNameRatchet::Literal {
+                            literal: fmt.text_node(literal, None),
+                            is_latin_cyrillic,
+                        }
                     }
                 }
             })
@@ -102,7 +107,9 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
             label_var,
             ratchets,
             style,
-            locale.et_al_term(names_inheritance.et_al.as_ref()).map(|(a, b)| (SmartString::from(a), b) ),
+            locale
+                .et_al_term(names_inheritance.et_al.as_ref())
+                .map(|(a, b)| (SmartString::from(a), b)),
             locale.and_term(None).map(|x| x.into()),
         )
     };
@@ -143,8 +150,8 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         if let (Some(ed), Some(tr)) = (ed_val, tr_val) {
             // identical
             if ed == tr {
-                let ed_sup = state.is_name_suppressed(NameVariable::Editor);
-                let tran_sup = state.is_name_suppressed(NameVariable::Translator);
+                let ed_sup = state.is_suppressed_name(NameVariable::Editor);
+                let tran_sup = state.is_suppressed_name(NameVariable::Translator);
                 if ed_sup && tran_sup {
                     slice_override = Some(&[][..]);
                 } else if ed_sup {
@@ -161,7 +168,7 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
     slice_override
         .unwrap_or(&names.variables[..])
         .iter()
-        .filter(move |var| !state.is_name_suppressed(**var))
+        .filter(move |var| !state.is_suppressed_name(**var))
         .filter_map(move |var| {
             let ovar = var_override.as_ref().unwrap_or(var);
             refr.name.get(var).map(|val| (*var, *ovar, val.clone()))
@@ -169,17 +176,17 @@ pub fn to_individual_name_irs<'a, O: OutputFormat, I: OutputFormat>(
         .map(get_name_ir)
 }
 
+use crate::sort::Natural;
 use crate::NameOverrider;
 use csl::SortKey;
-use unicase::UniCase;
 
-pub fn sort_strings_for_names(
+pub(crate) fn sort_strings_for_names(
     db: &dyn IrDatabase,
     refr: &Reference,
     var: NameVariable,
     sort_key: &SortKey,
     loc: CiteOrBib,
-) -> Option<Vec<UniCase<SmartString>>> {
+) -> Option<Vec<Natural<SmartString>>> {
     let style = db.style();
     let fmt = db.get_formatter();
     let (delim, arc_name_el) = match loc {
@@ -208,9 +215,9 @@ pub fn sort_strings_for_names(
                 Name::Person(pn) => {
                     runner.person_name_sort_keys(pn, &mut out);
                 }
-                Name::Literal { literal } => {
+                Name::Literal { literal, .. } => {
                     if !literal.is_empty() {
-                        out.push(UniCase::new(literal.clone()));
+                        out.push(Natural::new(literal.clone()));
                     }
                 }
             }
@@ -358,9 +365,7 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
     let seq = IrSeq {
         formatting: names_inheritance.formatting,
         affixes: names_inheritance.affixes.clone(),
-        delimiter: names_inheritance
-            .delimiter
-            .unwrap_or_else(|| Atom::from("")),
+        delimiter: names_inheritance.delimiter.clone(),
         display: if ctx.in_bibliography {
             names.display
         } else {
@@ -481,22 +486,46 @@ impl<'c, O: OutputFormat> NameIR<O> {
         self.name_counter.max_recorded = self.name_counter.current;
 
         let mut cloned_runner = runner.clone();
-        let rendered = ntbs
-            .filter_map(|ntb| match ntb {
-                NameTokenBuilt::Built(b) => Some(b),
+        let mut rendered = Vec::new();
+        let mut iter = ntbs.into_iter().peekable();
+        while let Some(ntb) = iter.next() {
+            let renderable = match ntb {
+                NameTokenBuilt::Built(b, lat_cy) => Some(b),
                 NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
-                    DisambNameRatchet::Literal(b) => Some(maybe_subst(b.clone())),
+                    DisambNameRatchet::Literal {
+                        literal,
+                        is_latin_cyrillic,
+                    } => {
+                        if fmt.is_empty(literal) {
+                            None
+                        } else {
+                            Some(maybe_subst(literal.clone()))
+                        }
+                    }
                     DisambNameRatchet::Person(pn) => {
                         cloned_runner.name_el = &pn.data.el;
                         let ret =
                             cloned_runner.render_person_name(&pn.data.value, !pn.data.primary);
                         cloned_runner.name_el = &self.names_inheritance.name;
-                        Some(maybe_subst(ret))
+                        Some(maybe_subst(ret)).filter(|x| !fmt.is_empty(&x))
                     }
                 },
-            })
-            .filter(|x| !fmt.is_empty(&x))
-            .collect();
+                NameTokenBuilt::Space => {
+                    let next_is_latin = iter
+                        .peek()
+                        .map_or(None, |x| x.is_latin(&self.disamb_names))
+                        .unwrap_or(false);
+                    if next_is_latin {
+                        Some(fmt.plain(" "))
+                    } else {
+                        None
+                    }
+                }
+            };
+            if let Some(r) = renderable {
+                rendered.push(r);
+            }
+        }
         Some(rendered)
     }
 
@@ -538,33 +567,6 @@ impl<'c, O: OutputFormat> NameIR<O> {
             seq_node
         }
     }
-}
-
-fn pn_is_latin_cyrillic(pn: &PersonName) -> bool {
-    pn.family
-        .as_ref()
-        .map(|s| is_latin_cyrillic(s))
-        .unwrap_or(true)
-        && pn
-            .given
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .suffix
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .non_dropping_particle
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
-        && pn
-            .dropping_particle
-            .as_ref()
-            .map(|s| is_latin_cyrillic(s))
-            .unwrap_or(true)
 }
 
 /// For a given display order, not all the name parts will have data in them at the end. So for
@@ -781,9 +783,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         }
     }
 
-    pub(crate) fn person_name_sort_keys(&self, pn: &PersonName, out: &mut Vec<UniCase<SmartString>>) {
+    // TODO: strip html/markup for sort keys.
+    pub(crate) fn person_name_sort_keys(
+        &self,
+        pn: &PersonName,
+        out: &mut Vec<Natural<SmartString>>,
+    ) {
         let order = get_sort_order(
-            pn_is_latin_cyrillic(pn),
+            pn.is_latin_cyrillic,
             self.name_el.form == Some(NameForm::Long),
             self.demote_non_dropping_particle,
         );
@@ -840,13 +847,13 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                                 .filter(|_| token != NamePartToken::Family);
                             if let Some(dp) = dp {
                                 s.push_str(dp);
-                                if should_append_space(dp) {
+                                if dp_should_append_space(dp) {
                                     s.push_str(" ");
                                 }
                             }
                             if let Some(ndp) = ndp {
                                 s.push_str(ndp);
-                                if should_append_space(ndp) {
+                                if dp_should_append_space(ndp) {
                                     s.push_str(" ");
                                 }
                             }
@@ -867,15 +874,33 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
             }
             if !s.is_empty() {
-                out.push(UniCase::new(s));
+                // UCD category is to catch \u{2019} etc.
+                let is_punc = |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
+                let options = IngestOptions {
+                    no_parse_quotes: true,
+                    ..Default::default()
+                };
+                let fmt = crate::sort::SortStringFormat;
+                let strip_it = fmt.ingest(&s, &options);
+                let mut stripped = fmt.output(strip_it, false);
+                if stripped.starts_with(is_punc) {
+                    stripped = SmartString::from(stripped.trim_start_matches(is_punc));
+                }
+                out.push(crate::sort::Natural::new(stripped));
             }
         }
     }
 
-    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl Into<SmartString>) -> O::Build {
+    fn format_with_part(&self, o_part: &Option<NamePart>, s: impl AsRef<str>) -> O::Build {
         let fmt = self.fmt;
+        // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
+        // want InlineElement::Text but with text-casing applied.
+        let mut options = IngestOptions {
+            no_parse_quotes: true,
+            ..Default::default()
+        };
         match o_part {
-            None => fmt.text_node(s.into(), None),
+            None => fmt.ingest(s.as_ref(), &options),
             Some(ref part) => {
                 let NamePart {
                     text_case,
@@ -884,13 +909,8 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     // name-part-formatting part of the spec.
                     ..
                 } = *part;
-                // We don't want quotes to be parsed in names, so don't leave MicroNodes; we just
-                // want InlineElement::Text but with text-casing applied.
-                let options = IngestOptions {
-                    text_case,
-                    ..Default::default()
-                };
-                let mut b = fmt.text_node(s.into(), None);
+                options.text_case = text_case;
+                let mut b = fmt.ingest(s.as_ref(), &options);
                 fmt.apply_text_case(&mut b, &options);
                 fmt.with_format(b, formatting)
             }
@@ -901,7 +921,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
         let fmt = self.fmt;
 
         let order = get_display_order(
-            pn_is_latin_cyrillic(pn),
+            pn.is_latin_cyrillic,
             self.name_el.form == Some(NameForm::Long),
             self.naso(seen_one),
             self.demote_non_dropping_particle,
@@ -975,7 +995,7 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(dp) = dp {
                         let string = dp.clone();
                         parts.push(self.format_with_part(given_part, string));
-                        if should_append_space(dp) {
+                        if dp_should_append_space(dp) {
                             parts.push(fmt.plain(" "));
                         }
                     }
@@ -983,13 +1003,14 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                     if let Some(ndp) = ndp {
                         let string = ndp.clone();
                         casing.push(self.format_with_part(family_part, string));
-                        if should_append_space(ndp) {
+                        if dp_should_append_space(ndp) {
                             casing.push(fmt.plain(" "));
                         }
                     }
                     casing.push(self.format_with_part(family_part, fam.clone()));
                     let mut casing = fmt.group(casing, "", None);
                     let options = IngestOptions {
+                        no_parse_quotes: true,
                         text_case: family_part.as_ref().map_or(TextCase::None, |p| p.text_case),
                         ..Default::default()
                     };
@@ -1012,18 +1033,17 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                 }
                 NamePartToken::NonDroppingParticle => {
                     let family_part = &self.name_el.name_part_family;
-                    build.push(
-                        self.format_with_part(
-                            family_part,
-                            pn.non_dropping_particle.as_ref().unwrap().clone(),
-                        ),
-                    );
+                    build.push(self.format_with_part(
+                        family_part,
+                        pn.non_dropping_particle.as_ref().unwrap().clone(),
+                    ));
                 }
                 NamePartToken::DroppingParticle => {
                     let given_part = &self.name_el.name_part_given;
-                    build.push(
-                        self.format_with_part(given_part, pn.dropping_particle.as_ref().unwrap().clone()),
-                    );
+                    build.push(self.format_with_part(
+                        given_part,
+                        pn.dropping_particle.as_ref().unwrap().clone(),
+                    ));
                 }
                 NamePartToken::Suffix => {
                     build.push(fmt.plain(pn.suffix.as_ref().unwrap()));
@@ -1097,24 +1117,20 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
 
         let iterator = name_tokens.into_iter().filter_map(move |n| {
             Some(match n {
-                NameToken::Name(ratchet) => {
-                    NameTokenBuilt::Ratchet(ratchet)
-                }
+                NameToken::Name(ratchet) => NameTokenBuilt::Ratchet(ratchet),
                 NameToken::Delimiter => {
-                    NameTokenBuilt::Built(if let Some(delim) = &self.name_el.delimiter {
-                        fmt.plain(&delim.0)
-                    } else {
-                        fmt.plain(", ")
-                    })
+                    let s = self.name_el.delimiter.as_opt_str().unwrap_or(", ");
+                    NameTokenBuilt::Built(fmt.plain(s), citeproc_io::unicode::is_latin_cyrillic(s))
                 }
                 NameToken::EtAl(text, formatting) => {
                     if is_sort_key {
                         return None;
                     }
-                    NameTokenBuilt::Built(fmt.text_node(text.into(), formatting))
+                    let lat_cy = citeproc_io::unicode::is_latin_cyrillic(&text);
+                    NameTokenBuilt::Built(fmt.text_node(text, formatting), lat_cy)
                 }
-                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…")),
-                NameToken::Space => NameTokenBuilt::Built(fmt.plain(" ")),
+                NameToken::Ellipsis => NameTokenBuilt::Built(fmt.plain("…"), true),
+                NameToken::Space => NameTokenBuilt::Space,
                 NameToken::And => {
                     // If an And token shows up, we already know self.name_el.and is Some.
                     let form = match self.name_el.and {
@@ -1122,8 +1138,11 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
                         _ => and_term.as_ref().map(|x| x.as_ref()).unwrap_or("and"),
                     };
                     let mut string: SmartString = form.into();
-                    string.push(' ');
-                    NameTokenBuilt::Built(fmt.text_node(string, None))
+                    let lat_cy = citeproc_io::unicode::is_latin_cyrillic(form);
+                    if lat_cy {
+                        string.push(' ');
+                    }
+                    NameTokenBuilt::Built(fmt.text_node(string, None), lat_cy)
                 }
             })
         });
@@ -1131,9 +1150,27 @@ impl<'a, O: OutputFormat> OneNameVar<'a, O> {
     }
 }
 
+#[derive(Debug)]
 pub enum NameTokenBuilt<B> {
     Ratchet(usize),
-    Built(B),
+    Built(B, bool /* is_latin_cyrillic */),
+    // So we can refuse to insert it after a non-latin-cyrillic name
+    Space,
+}
+
+impl<B> NameTokenBuilt<B> {
+    pub(crate) fn is_latin(&self, ratchets: &[DisambNameRatchet<B>]) -> Option<bool> {
+        match self {
+            NameTokenBuilt::Built(_, lat_cy) => Some(*lat_cy),
+            NameTokenBuilt::Space => None,
+            NameTokenBuilt::Ratchet(index) => match &ratchets[*index] {
+                DisambNameRatchet::Literal {
+                    is_latin_cyrillic, ..
+                } => Some(*is_latin_cyrillic),
+                DisambNameRatchet::Person(ratchet) => Some(ratchet.data.value.is_latin_cyrillic),
+            },
+        }
+    }
 }
 
 use self::ord::{get_display_order, get_sort_order, DisplayOrdering, NamePartToken};
@@ -1261,7 +1298,7 @@ mod ord {
     static NON_LATIN_SORT_SHORT: SortOrdering = &[&[Family]];
 }
 
-fn should_append_space(s: &str) -> bool {
+fn dp_should_append_space(s: &str) -> bool {
     !s.chars()
         .rev()
         .nth(0)

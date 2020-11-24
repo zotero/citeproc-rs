@@ -3,6 +3,11 @@ import { Driver, UpdateSummary } from "@citeproc-rs/wasm";
 export const mkStyle = (inner: string, bibliography?: string) => {
     return `
     <style class="note">
+      <info>
+        <id>https://github.com/cormacrelf/citeproc-rs/test-style</id>
+        <title>test-style</title>
+        <updated>2000-01-01T00:00:00Z</updated>
+      </info>
       <citation>
         <layout>
           ${inner}

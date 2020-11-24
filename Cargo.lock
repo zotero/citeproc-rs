@@ -40,6 +40,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "any_ascii"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70033777eb8b5124a81a1889416543dddef2de240019b674c81285a2635a7e1e"
+
+[[package]]
 name = "anyhow"
 version = "1.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -238,6 +244,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 
 [[package]]
+name = "chrono"
+version = "0.4.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "670ad68c9088c2a963aaa298cb369688cf3f9465ce5e2d4ca10e6e0098a1ce73"
+dependencies = [
+ "libc",
+ "num-integer",
+ "num-traits",
+ "serde",
+ "time",
+ "winapi",
+]
+
+[[package]]
 name = "citeproc"
 version = "0.0.1"
 dependencies = [
@@ -317,7 +337,9 @@ dependencies = [
  "serde_json",
  "smartstring",
  "stringreader",
+ "ucd-trie",
  "unic-segment",
+ "unic-ucd-category",
  "v_htmlescape",
 ]
 
@@ -335,6 +357,7 @@ dependencies = [
  "indextree",
  "itertools 0.9.0",
  "lazy_static",
+ "lexical-sort",
  "log",
  "nom 5.1.2",
  "petgraph",
@@ -346,9 +369,8 @@ dependencies = [
  "smallvec",
  "string-interner",
  "strum",
- "ucd-trie",
  "unic-segment",
- "unicase",
+ "unic-ucd-category",
 ]
 
 [[package]]
@@ -388,9 +410,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0994e656bba7b922d8dd1245db90672ffb701e684e45be58f20719d69abc5a"
+checksum = "c0b1aacfaffdbff75be81c15a399b4bedf78aaefe840e8af1d299ac2ade885d2"
 dependencies = [
  "encode_unicode",
  "lazy_static",
@@ -513,18 +535,21 @@ dependencies = [
 name = "csl"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "fnv",
+ "indoc",
+ "insta",
  "log",
  "nom 5.1.2",
  "roxmltree",
  "semver 0.11.0",
  "serde",
- "serde_derive",
  "smartstring",
  "string_cache",
  "strum",
  "strum_macros",
  "thiserror",
+ "url",
 ]
 
 [[package]]
@@ -863,10 +888,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "990980c3d268c9b99df35e813eca2b8d1ee08606f6d2bb325edbd0b0c68f9ffe"
 
 [[package]]
-name = "insta"
-version = "0.16.1"
+name = "indoc"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617e921abc813f96a3b00958c079e7bf1e2db998f8a04f1546dd967373a418ee"
+checksum = "e5a75aeaaef0ce18b58056d306c27b07436fbb34b8816c53094b76dd81803136"
+dependencies = [
+ "unindent",
+]
+
+[[package]]
+name = "insta"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e7528a20113cf7ca90eddfc2439c608188b6eafc0613964da2bd140c92acec"
 dependencies = [
  "console",
  "difference",
@@ -973,6 +1007,15 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "lexical-sort"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c09e4591611e231daf4d4c685a66cb0410cc1e502027a20ae55f2bb9e997207a"
+dependencies = [
+ "any_ascii",
+]
 
 [[package]]
 name = "libc"
@@ -1146,6 +1189,16 @@ checksum = "ffb4262d26ed83a1c0a33a38fe2bb15797329c85770da05e6b828ddb782627af"
 dependencies = [
  "memchr",
  "version_check 0.9.2",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d59457e662d541ba17869cf51cf177c0b5f0cbf476c66bdc90bf1edac4f875b"
+dependencies = [
+ "autocfg",
+ "num-traits",
 ]
 
 [[package]]
@@ -1717,6 +1770,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
 dependencies = [
  "semver-parser 0.10.0",
+ "serde",
 ]
 
 [[package]]
@@ -2170,6 +2224,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "unic-ucd-category"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b8d4591f5fcfe1bd4453baaf803c40e1b1e69ff8455c47620440b46efef91c0"
+dependencies = [
+ "matches",
+ "unic-char-property",
+ "unic-char-range",
+ "unic-ucd-version",
+]
+
+[[package]]
 name = "unic-ucd-segment"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2187,15 +2253,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96bd2f2237fe450fcd0a1d2f5f4e91711124f7857ba2e964247776ebeeb7b0c4"
 dependencies = [
  "unic-common",
-]
-
-[[package]]
-name = "unicase"
-version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
-dependencies = [
- "version_check 0.9.2",
 ]
 
 [[package]]
@@ -2235,6 +2292,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
 
 [[package]]
+name = "unindent"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f14ee04d9415b52b3aeab06258a3f07093182b88ba0f9b8d203f211a7a7d41c7"
+
+[[package]]
 name = "url"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2243,6 +2306,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

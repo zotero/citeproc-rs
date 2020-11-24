@@ -1,0 +1,16 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"\n        <style version=\"1.0\" class=\"in-text\">\n            <citation>\n                <layout>\n                    <text macro=\"unknown\" />\n                </layout>\n            </citation>\n        </style>\n    \"#)).expect_err(\"should have failed with errors\")"
+---
+Invalid(
+    CslError(
+        [
+            InvalidCsl {
+                severity: Error,
+                range: 82..106,
+                message: "macro `unknown` not defined",
+                hint: "",
+            },
+        ],
+    ),
+)

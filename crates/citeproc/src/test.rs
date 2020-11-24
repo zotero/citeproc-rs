@@ -20,6 +20,17 @@ macro_rules! assert_cluster {
     };
 }
 
+fn test_db(style: Option<&str>) -> Processor {
+    Processor::new(InitOptions {
+        style: style.unwrap_or(r#"<style version="1.0" class="in-text">
+                                    <citation><layout></layout></citation>
+                                  </style>"#),
+        format: SupportedFormat::Plain,
+        test_mode: true,
+        ..Default::default()
+    }).unwrap()
+}
+
 fn insert_basic_refs(db: &mut Processor, ref_ids: &[&str]) {
     for &id in ref_ids {
         let mut refr = Reference::empty(Atom::from(id), CslType::Book);
@@ -62,7 +73,7 @@ mod position {
         pos1: (Position, Option<u32>),
         pos2: (Position, Option<u32>),
     ) {
-        let mut db = Processor::test_db();
+        let mut db = test_db(None);
         let one = cid(&mut db, 1);
         let two = cid(&mut db, 2);
         db.init_clusters(vec![
@@ -151,7 +162,7 @@ mod position {
 
     #[test]
     fn cite_positions_near_note() {
-        let mut db = Processor::test_db();
+        let mut db = test_db(None);
         insert_ascending_notes(&mut db, &["one", "other", "one"]);
         let one = cid(&mut db, 1);
         let two = cid(&mut db, 2);
@@ -187,8 +198,7 @@ mod preview {
 "##;
 
     fn mk_db() -> Processor {
-        let mut db = Processor::test_db();
-        db.set_style_text(STYLE).unwrap();
+        let mut db = test_db(Some(STYLE));
         insert_basic_refs(&mut db, &["one", "two", "three"]);
         insert_ascending_notes(&mut db, &["one", "two"]);
         db

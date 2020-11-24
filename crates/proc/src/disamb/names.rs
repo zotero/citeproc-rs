@@ -3,11 +3,11 @@ use super::finite_automata::{Nfa, NfaEdge};
 use super::graph_with_stack;
 use crate::names::{NameTokenBuilt, OneNameVar};
 use crate::prelude::*;
-use citeproc_io::PersonName;
+use citeproc_io::{Name, PersonName};
 use csl::variables::*;
 use csl::{
-    Atom, DemoteNonDroppingParticle, GivenNameDisambiguationRule, Name as NameEl, NameForm, Names,
-    Position, Style,
+    Atom, DemoteNonDroppingParticle, GivenNameDisambiguationRule as GNDR, Name as NameEl, NameForm,
+    Names, Position, Style,
 };
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
@@ -49,10 +49,7 @@ impl Disambiguation<Markup> for Names {
             contents: Vec::with_capacity(self.variables.len()),
             formatting: self.formatting,
             affixes: self.affixes.clone(),
-            delimiter: names_inheritance
-                .delimiter
-                .clone()
-                .unwrap_or_else(|| Atom::from("")),
+            delimiter: names_inheritance.delimiter.clone(),
             ..Default::default()
         };
 
@@ -78,7 +75,10 @@ impl Disambiguation<Markup> for Names {
                     &self.et_al,
                     false,
                     and_term.as_ref(),
-                    etal_term.as_ref().map(|(a, b)| (a.as_str().into(), b.clone())).as_ref(),
+                    etal_term
+                        .as_ref()
+                        .map(|(a, b)| (a.as_str().into(), b.clone()))
+                        .as_ref(),
                 );
                 counted_tokens = ntb_len;
                 if counted_tokens <= max_counted_tokens {
@@ -92,25 +92,43 @@ impl Disambiguation<Markup> for Names {
                     runner.name_el.affixes.as_ref(),
                     start,
                     |nfa, mut spot| {
-                        for ntb in ntbs {
+                        let mut iter = ntbs.into_iter().peekable();
+                        while let Some(ntb) = iter.next() {
                             match ntb {
-                                NameTokenBuilt::Built(b) => {
+                                NameTokenBuilt::Built(b, lat_cy) => {
                                     if !fmt.is_empty(&b) {
                                         let out =
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
                                         let e = EdgeData::Output(out);
                                         let ir = RefIR::Edge(Some(e));
-                                        spot = add_to_graph(fmt, nfa, &ir, spot);
+                                        spot = add_to_graph(fmt, nfa, &ir, spot, None);
+                                    }
+                                }
+                                NameTokenBuilt::Space => {
+                                    let next_is_latin = iter
+                                        .peek()
+                                        .map_or(None, |x| x.is_latin(&nir.disamb_names))
+                                        .unwrap_or(false);
+                                    if next_is_latin {
+                                        let e = EdgeData::Output(" ".into());
+                                        let ir = RefIR::Edge(Some(e));
+                                        spot = add_to_graph(fmt, nfa, &ir, spot, None);
                                     }
                                 }
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
-                                    DisambNameRatchet::Literal(b) => {
-                                        if !fmt.is_empty(b) {
-                                            let out =
-                                                fmt.output_in_context(b.clone(), child_stack, None);
+                                    DisambNameRatchet::Literal {
+                                        literal,
+                                        is_latin_cyrillic,
+                                    } => {
+                                        if !fmt.is_empty(literal) {
+                                            let out = fmt.output_in_context(
+                                                literal.clone(),
+                                                child_stack,
+                                                None,
+                                            );
                                             let e = EdgeData::Output(out);
                                             let ir = RefIR::Edge(Some(e));
-                                            spot = add_to_graph(fmt, nfa, &ir, spot);
+                                            spot = add_to_graph(fmt, nfa, &ir, spot, None);
                                         }
                                     }
                                     DisambNameRatchet::Person(ratchet) => {
@@ -175,20 +193,69 @@ impl DisambName {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisambNameData {
-    pub ref_id: Atom,
-    pub var: NameVariable,
-    pub el: NameEl,
-    pub value: PersonName,
-    pub primary: bool,
+    pub(crate) ref_id: Atom,
+    pub(crate) var: NameVariable,
+    pub(crate) el: NameEl,
+    pub(crate) value: PersonName,
+    pub(crate) primary: bool,
+    /// Hack for fullstyles_APA.txt
+    /// This is something of an APA-specific hack, but it's OK to apply everywhere
+    /// as the APA rule is sane enough. We want to avoid adding initials to a the
+    /// first of a bunch of the same last names.
+    pub(crate) all_same_family_name: bool,
+}
+
+/// fullstyles_APA.txt
+/// An optimisation of "do all these names render the same under NameForm::Short"
+pub(crate) fn all_same_family_name(names: &[Name]) -> bool {
+    if names.len() <= 1 {
+        return false;
+    }
+    let mut family_names = names.iter().map(|name| match name {
+        Name::Person(PersonName {
+            family: Some(f), ..
+        }) => Some(f),
+        _ => None,
+    });
+    if let Some(Some(first)) = family_names.next() {
+        !family_names.any(|x| x.map(|x| x != first).unwrap_or(true))
+    } else {
+        false
+    }
+}
+
+#[test]
+fn test_all_same_family_name() {
+    let n1 = Name::Person(PersonName {
+        family: Some("Oblinger".into()),
+        ..Default::default()
+    });
+    let n2 = Name::Person(PersonName {
+        family: Some("Oblinger".into()),
+        ..Default::default()
+    });
+    let n3 = Name::Person(PersonName {
+        family: Some("Other".into()),
+        ..Default::default()
+    });
+    assert!(all_same_family_name(&[n1.clone(), n2.clone()]));
+    assert!(!all_same_family_name(&[n1.clone()]));
+    // fullstyles_APA.txt
+    assert!(!all_same_family_name(&[n1, n2, n3]));
 }
 
 impl DisambNameData {
-    pub fn apply_pass(&mut self, pass: NameDisambPass) {
-        match pass {
-            NameDisambPass::WithFormLong => self.el.form = Some(NameForm::Long),
-            NameDisambPass::WithInitializeFalse => self.el.initialize = Some(false),
+    pub fn apply_upto_pass(&mut self, pass: NameDisambPass) {
+        if pass == NameDisambPass::Initial {
+            // noop, but also won't reverse higher settings.
+        }
+        if pass >= NameDisambPass::WithFormLong {
+            self.el.form = Some(NameForm::Long);
+        }
+        if pass >= NameDisambPass::WithInitializeFalse {
+            self.el.initialize = Some(false);
         }
     }
 
@@ -208,17 +275,17 @@ impl DisambNameData {
         EdgeData::Output(o)
     }
 
-    pub fn disamb_iter(&self, rule: GivenNameDisambiguationRule) -> SingleNameDisambIter {
+    fn disamb_iter(&self, rule: GNDR) -> SingleNameDisambIter {
         let method = SingleNameDisambMethod::from_rule(rule, self.primary);
         SingleNameDisambIter::new(method, &self.el)
     }
 }
 
-/// The GivenNameDisambiguationRule variants are poorly worded. "-with-initials" doesn't *add*
+/// The GNDR variants are poorly worded. "-with-initials" doesn't *add*
 /// steps, it removes steps / limits the expansion. This is a bit clearer to work with, and mixes
 /// in the information about whether a name is primary or not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SingleNameDisambMethod {
+enum SingleNameDisambMethod {
     None,
     AddInitials,
     AddInitialsThenGivenName,
@@ -226,21 +293,14 @@ pub enum SingleNameDisambMethod {
 
 impl SingleNameDisambMethod {
     /// `is_primary` refers to whether this is the first name to be rendered in a Names element.
-    pub fn from_rule(rule: GivenNameDisambiguationRule, is_primary: bool) -> Self {
+    fn from_rule(rule: GNDR, is_primary: bool) -> Self {
         match (rule, is_primary) {
-            (GivenNameDisambiguationRule::ByCite, _)
-            | (GivenNameDisambiguationRule::AllNames, _) => {
+            (GNDR::ByCite, _) | (GNDR::AllNames, _) => {
                 SingleNameDisambMethod::AddInitialsThenGivenName
             }
-            (GivenNameDisambiguationRule::AllNamesWithInitials, _) => {
-                SingleNameDisambMethod::AddInitials
-            }
-            (GivenNameDisambiguationRule::PrimaryName, true) => {
-                SingleNameDisambMethod::AddInitialsThenGivenName
-            }
-            (GivenNameDisambiguationRule::PrimaryNameWithInitials, true) => {
-                SingleNameDisambMethod::AddInitials
-            }
+            (GNDR::AllNamesWithInitials, _) => SingleNameDisambMethod::AddInitials,
+            (GNDR::PrimaryName, true) => SingleNameDisambMethod::AddInitialsThenGivenName,
+            (GNDR::PrimaryNameWithInitials, true) => SingleNameDisambMethod::AddInitials,
             _ => SingleNameDisambMethod::None,
         }
     }
@@ -266,7 +326,7 @@ enum NameDisambState {
 }
 
 impl SingleNameDisambIter {
-    pub fn new(method: SingleNameDisambMethod, name_el: &NameEl) -> Self {
+    fn new(method: SingleNameDisambMethod, name_el: &NameEl) -> Self {
         SingleNameDisambIter {
             method,
             initialize_with: name_el.initialize_with.is_some() && name_el.initialize == Some(true),
@@ -331,14 +391,15 @@ impl Iterator for SingleNameDisambIter {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NameDisambPass {
+    Initial,
     WithFormLong,
     WithInitializeFalse,
 }
 
 #[cfg(test)]
-fn test(name: &NameEl, rule: GivenNameDisambiguationRule, primary: bool) -> Vec<NameDisambPass> {
+fn test(name: &NameEl, rule: GNDR, primary: bool) -> Vec<NameDisambPass> {
     let method = SingleNameDisambMethod::from_rule(rule, primary);
     let iter = SingleNameDisambIter::new(method, name);
     let passes: Vec<_> = iter.collect();
@@ -350,40 +411,30 @@ fn test_name_disamb_iter() {
     let mut name = NameEl::root_default();
     name.form = Some(NameForm::Long); // default
     name.initialize = Some(true); // default
-    assert_eq!(
-        test(&name, GivenNameDisambiguationRule::AllNames, true),
-        vec![]
-    );
+    assert_eq!(test(&name, GNDR::AllNames, true), vec![]);
 
     name.form = Some(NameForm::Short);
     assert_eq!(
-        test(&name, GivenNameDisambiguationRule::AllNames, true),
+        test(&name, GNDR::AllNames, true),
         vec![NameDisambPass::WithFormLong]
     );
 
     name.form = Some(NameForm::Short);
     assert_eq!(
-        test(&name, GivenNameDisambiguationRule::PrimaryName, true),
+        test(&name, GNDR::PrimaryName, true),
         vec![NameDisambPass::WithFormLong]
     );
+    assert_eq!(test(&name, GNDR::PrimaryName, false), vec![]);
+    name.initialize_with = Some(".".into());
     assert_eq!(
-        test(&name, GivenNameDisambiguationRule::PrimaryName, false),
-        vec![]
-    );
-    name.initialize_with = Some(Atom::from("."));
-    assert_eq!(
-        test(&name, GivenNameDisambiguationRule::AllNames, true),
+        test(&name, GNDR::AllNames, true),
         vec![
             NameDisambPass::WithFormLong,
             NameDisambPass::WithInitializeFalse
         ]
     );
     assert_eq!(
-        test(
-            &name,
-            GivenNameDisambiguationRule::AllNamesWithInitials,
-            true
-        ),
+        test(&name, GNDR::AllNamesWithInitials, true),
         vec![NameDisambPass::WithFormLong]
     );
 }
@@ -401,55 +452,96 @@ fn add_expanded_name_to_graph(
     let fmt = &db.get_formatter();
     let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
-    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+    let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot, None);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     for pass in dn.disamb_iter(rule) {
-        dn.apply_pass(pass);
+        dn.apply_upto_pass(pass);
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
         let edge = dn.single_name_edge(db, stack);
-        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot);
+        let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot, None);
         nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
     }
     next_spot
 }
 
+pub(crate) type MatchKey = (Atom, NameVariable, bool);
+
+impl DisambNameData {
+    /// fullstyles_APA.txt
+    /// The bool means 'is_primary'
+    pub(crate) fn family_match_key(&self) -> Option<MatchKey> {
+        if self.primary && self.all_same_family_name {
+            Some((self.ref_id.clone(), self.var, true))
+        } else {
+            None
+        }
+    }
+}
+
 use smallvec::SmallVec;
-pub struct NameVariantMatcher(SmallVec<[EdgeData; 3]>);
+#[derive(Debug)]
+pub struct NameVariantMatcher {
+    edges: SmallVec<[EdgeData; 3]>,
+    /// The bool means 'is_primary'
+    family_match_key: Option<MatchKey>,
+}
 
 impl NameVariantMatcher {
-    pub fn accepts(&self, edge: &EdgeData) -> bool {
-        self.0.contains(edge)
+    pub fn accepts(&self, edge: &EdgeData, match_key: Option<&MatchKey>) -> bool {
+        let result = self.edges.contains(edge);
+        if result
+            && match_key
+                .and_then(|m| self.family_match_key.as_ref().map(|me| (m, me)))
+                .map_or(false, |(key, self_key)| {
+                    key.0 == self_key.0
+                    && key.1 == self_key.1
+                    // Can't have the primary name falsely not matching itself.
+                    // That would ruin primary name disambiguation in general, by under-reporting the
+                    // number of matches (should be >=1!)
+                    && key.2 == true
+                    && self_key.2 == false
+                })
+        {
+            log::debug!(
+                "Ignored primary name clash between primary and secondary name ({:?})",
+                edge
+            );
+            return false;
+        }
+        result
     }
 
-    pub fn from_disamb_name(db: &dyn IrDatabase, dn: DisambName) -> Self {
+    pub fn from_disamb_name(db: &dyn IrDatabase, mut data: DisambNameData) -> Self {
         let style = db.style();
         let _fmt = &db.get_formatter();
         let rule = style.citation.givenname_disambiguation_rule;
 
-        let mut data: DisambNameData = dn.lookup(db);
         let iter = data.disamb_iter(rule);
         let mut edges = SmallVec::new();
         let edge = data.single_name_edge(db, Formatting::default());
         edges.push(edge);
         for pass in iter {
-            data.apply_pass(pass);
+            data.apply_upto_pass(pass);
             let edge = data.single_name_edge(db, Formatting::default());
             edges.push(edge);
         }
-        NameVariantMatcher(edges)
+        NameVariantMatcher {
+            edges,
+            family_match_key: Some((data.ref_id.clone(), data.var, data.primary)),
+        }
     }
 }
 
 /// Performs 'global name disambiguation'
 pub fn disambiguated_person_names(
     db: &dyn IrDatabase,
-) -> Arc<FnvHashMap<DisambName, DisambNameData>> {
+) -> Arc<FnvHashMap<DisambName, NameDisambPass>> {
     let style = db.style();
     let rule = style.citation.givenname_disambiguation_rule;
     let dagn = style.citation.disambiguate_add_givenname;
 
-    if !dagn || rule == GivenNameDisambiguationRule::ByCite {
+    if !dagn || rule == GNDR::ByCite {
         return Arc::new(Default::default());
     }
 
@@ -459,13 +551,13 @@ pub fn disambiguated_person_names(
     let mut results = FnvHashMap::default();
 
     // preamble: build all the names
-    for &dn in dns.iter() {
+    for dn in dns.iter().cloned() {
         matchers.push(NameVariantMatcher::from_disamb_name(db, dn));
     }
-    let is_ambiguous = |edge: &EdgeData| -> bool {
+    let is_ambiguous = |edge: &EdgeData, same: Option<&MatchKey>| -> bool {
         let mut n = 0;
         for m in &matchers {
-            let acc = m.accepts(edge);
+            let acc = m.accepts(edge, same);
             if acc {
                 n += 1;
             }
@@ -476,21 +568,28 @@ pub fn disambiguated_person_names(
         n > 1
     };
 
-    for &dn_id in dns.iter() {
-        let mut dn: DisambNameData = dn_id.lookup(db);
+    for orig in dns.iter() {
+        let dn_id = db.disamb_name(orig.clone());
+        let mut dn = orig.clone();
         let mut edge = dn.single_name_edge(db, Formatting::default());
         let mut iter = dn.disamb_iter(rule);
-        while is_ambiguous(&edge) {
+        let key = dn.family_match_key();
+        let mut max_pass = NameDisambPass::Initial;
+        while is_ambiguous(&edge, key.as_ref()) {
             if let Some(pass) = iter.next() {
-                dn.apply_pass(pass);
+                dn.apply_upto_pass(pass);
+                max_pass = pass;
                 edge = dn.single_name_edge(db, Formatting::default());
             } else {
                 // failed, so we must reset
-                dn = dn_id.lookup(db);
+                dn = orig.clone();
+                max_pass = NameDisambPass::Initial;
                 break;
             }
         }
-        results.insert(dn_id, dn);
+        if max_pass > NameDisambPass::Initial {
+            results.insert(dn_id, max_pass);
+        }
     }
     Arc::new(results)
 }
@@ -522,7 +621,7 @@ impl RefNameIR {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DisambNameRatchet<B> {
-    Literal(B),
+    Literal { literal: B, is_latin_cyrillic: bool },
     Person(PersonDisambNameRatchet),
 }
 
@@ -536,8 +635,7 @@ pub struct PersonDisambNameRatchet {
 impl PersonDisambNameRatchet {
     pub fn new(style: &Style, id: DisambName, data: DisambNameData) -> Self {
         let rule = style.citation.givenname_disambiguation_rule;
-        let method = SingleNameDisambMethod::from_rule(rule, data.primary);
-        let iter = SingleNameDisambIter::new(method, &data.el);
+        let iter = data.disamb_iter(rule);
         // debug!("{} ratchet started with state {:?}", &data.ref_id, iter);
         PersonDisambNameRatchet { id, iter, data }
     }

@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::Atom;
+use crate::SmartString;
 use std::fmt;
 use std::str::FromStr;
 
@@ -24,15 +24,47 @@ pub enum Lang {
     /// i.e. `en` or `en-US`
     Iso(IsoLang, Option<IsoCountry>),
     /// IANA-assigned language codes
-    Iana(Atom),
+    Iana(SmartString),
     /// Agreed upon language ID (max 8 characters). You'll absolutely have to provide your own
     /// locale file.
-    Unofficial(Atom),
+    Unofficial(SmartString),
 }
 
 impl Default for Lang {
     fn default() -> Self {
         Lang::en_us()
+    }
+}
+
+impl fmt::Display for Lang {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Lang::Iso(l, None) => write!(f, "{}", l),
+            Lang::Iso(l, Some(c)) => write!(f, "{}-{}", l, c),
+            Lang::Iana(u) => write!(f, "i-{}", u),
+            Lang::Unofficial(u) => write!(f, "x-{}", u),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Lang {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Lang {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -119,17 +151,6 @@ fn test_french() {
     );
 }
 
-impl fmt::Display for Lang {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Lang::Iso(l, None) => write!(f, "{}", l),
-            Lang::Iso(l, Some(c)) => write!(f, "{}-{}", l, c),
-            Lang::Iana(u) => write!(f, "i-{}", u),
-            Lang::Unofficial(u) => write!(f, "x-{}", u),
-        }
-    }
-}
-
 /// Language codes for `Lang::Iso`.
 ///
 /// The 3-character codes are ISO 639-3.
@@ -159,7 +180,7 @@ pub enum IsoLang {
     ///
     /// Also we save allocations for some popular languages!
     #[strum(default)]
-    Other(Atom),
+    Other(SmartString),
 }
 
 impl IsoLang {
@@ -222,7 +243,7 @@ pub enum IsoCountry {
     /// Canada
     CA,
     #[strum(default)]
-    Other(Atom),
+    Other(SmartString),
 }
 
 impl fmt::Display for IsoCountry {
@@ -334,14 +355,14 @@ fn iso_country(inp: &str) -> IResult<&str, IsoCountry> {
 
 fn parse_iana(inp: &str) -> IResult<&str, Lang> {
     map(preceded(tag("i-"), take_while(|_| true)), |lang| {
-        Lang::Iana(Atom::from(lang))
+        Lang::Iana(SmartString::from(lang))
     })(inp)
 }
 
 fn parse_unofficial(inp: &str) -> IResult<&str, Lang> {
     map(
         preceded(tag("x-"), take_while_m_n(1, 8, char::is_alphanumeric)),
-        |lang| Lang::Unofficial(Atom::from(lang)),
+        |lang| Lang::Unofficial(SmartString::from(lang)),
     )(inp)
 }
 

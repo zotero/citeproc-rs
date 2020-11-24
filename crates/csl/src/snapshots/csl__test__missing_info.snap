@@ -1,0 +1,16 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::Style::parse(::indoc::indoc!(r#\"\n            <style version=\"1.0.1\" class=\"in-text\">\n                <citation><layout></layout></citation>\n            </style>\n        \"#)).expect_err(\"should have failed with errors\")"
+---
+Invalid(
+    CslError(
+        [
+            InvalidCsl {
+                severity: Error,
+                range: 0..91,
+                message: "Must have exactly one <info>",
+                hint: "",
+            },
+        ],
+    ),
+)

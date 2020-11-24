@@ -160,23 +160,22 @@ mod util {
 pub fn build_superscript_trie() -> Result<()> {
     let mut path = workspace_root();
     path.push("crates");
-    path.push("proc");
-    env::set_current_dir(&path)?;
-    Command::new("sh")
-        .arg("ucd.sh")
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?
-        .wait()?;
-    path.pop();
     path.push("io");
+    path.push("src");
+    path.push("unicode");
+    env::set_var("UCD_RUST_OUT_DIR", &path);
+    path.pop();
+    path.pop();
     env::set_current_dir(&path)?;
-    Command::new("sh")
+    let status = Command::new("sh")
         .arg("ucd.sh")
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()?
         .wait()?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("failed to execute ucd.sh"))
+    }
     let ucd = parse_ucd_file("/tmp/ucd/Superscript.txt")?;
     let mut membership = BTreeSet::new();
     let mut lookup = BTreeMap::new();

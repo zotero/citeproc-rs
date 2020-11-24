@@ -48,9 +48,15 @@ impl Driver {
         let format = SupportedFormat::from_str(format)
             .map_err(|_| anyhow::anyhow!("unknown format `{}`", format));
         let format = js_err!(format);
-        let engine = js_err!(Processor::new(style, us_fetcher, format));
-        let engine = Rc::new(RefCell::new(engine));
 
+        let init = InitOptions {
+            style,
+            fetcher: Some(us_fetcher),
+            format,
+            ..Default::default()
+        };
+        let engine = js_err!(Processor::new(init));
+        let engine = Rc::new(RefCell::new(engine));
         // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
         // asynchronously.
         Ok(Driver {

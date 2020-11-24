@@ -1,0 +1,32 @@
+---
+source: crates/csl/src/style/dependent.rs
+expression: "parse_as::<StyleMeta>(indoc::indoc! {\n                          r#\"\n            <style version=\"1.0.1\" class=\"in-text\" default-locale=\"en-AU\">\n                <info>\n                    <id>https://example.com/mystyle</id>\n                    <updated>2020-01-01T00:00:00Z</updated>\n                    <title>My CSL Style</title>\n                </info>\n            </style>\n        \"#\n                      }).unwrap()"
+---
+{
+  "info": {
+    "id": "https://example.com/mystyle",
+    "updated": "2020-01-01T00:00:00+00:00",
+    "title": {
+      "value": "My CSL Style",
+      "lang": null
+    },
+    "titleShort": null,
+    "rights": null,
+    "summary": null,
+    "parent": null,
+    "links": [],
+    "citationFormat": null,
+    "categories": [],
+    "issn": null,
+    "eissn": null,
+    "issnl": null
+  },
+  "features": {},
+  "defaultLocale": "en-AU",
+  "class": "in-text",
+  "cslVersionRequired": ">=1.0.1, <2.0.0",
+  "independentMeta": {
+    "localeOverrides": [],
+    "hasBibliography": false
+  }
+}

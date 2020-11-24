@@ -1,4 +1,4 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
+// This Source Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
@@ -7,23 +7,28 @@
 // For the query group macro expansion
 #![allow(clippy::large_enum_variant)]
 
+const CSL_STYLE_ERROR: &'static str = "[CSL STYLE ERROR: reference with no printed form.]";
+
 use fnv::FnvHashMap;
 use std::sync::Arc;
 
-use crate::disamb::names::replace_single_child;
+use crate::disamb::names::{replace_single_child, NameDisambPass};
 use crate::disamb::{Dfa, DisambName, DisambNameData, EdgeData, FreeCondSets};
 use crate::prelude::*;
+use crate::sort::BibNumber;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, Name};
+use csl::GivenNameDisambiguationRule as GNDR;
 use csl::{Atom, Bibliography, Position, SortKey};
 
 use indextree::NodeId;
 
 pub trait ImplementationDetails {
     fn get_formatter(&self) -> Markup;
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString>;
+    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol)
+        -> Option<SmartString>;
 }
 
 #[allow(dead_code)]
@@ -36,13 +41,18 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 // }
 
 #[salsa::query_group(IrDatabaseStorage)]
-pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails {
+pub trait IrDatabase:
+    CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails
+{
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
     fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
     // TODO: cache this
     // #[salsa::invoke(crate::disamb::create_ref_ir)]
     // fn ref_ir(&self, key: Atom) -> Arc<Vec<(FreeCond, RefIR)>>;
+
+    // Cache the most expensive thing, dfa.accepts_data() on the same edge streams over and over
+    fn edge_stream_matches_ref(&self, edges: Vec<EdgeData>, ref_id: Atom) -> bool;
 
     // If these don't run any additional disambiguation, they just clone the
     // previous ir's Arc.
@@ -60,12 +70,12 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + Implementa
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
-    fn all_person_names(&self) -> Arc<Vec<DisambName>>;
+    fn all_person_names(&self) -> Arc<Vec<DisambNameData>>;
 
     /// The *Data indexed here are ratcheted as far as was required to do global name
     /// disambiguation.
     #[salsa::invoke(crate::disamb::names::disambiguated_person_names)]
-    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, DisambNameData>>;
+    fn disambiguated_person_names(&self) -> Arc<FnvHashMap<DisambName, NameDisambPass>>;
 
     /// The DisambNameData here correspond to "global identity" -- so each DisambName points to
     /// exactly one Ref/NameEl/Variable/PersonName. Even if there are two identical NameEls
@@ -100,28 +110,21 @@ pub trait IrDatabase: CiteDatabase + LocaleDatabase + StyleDatabase + Implementa
     fn cite_position(&self, key: CiteId) -> (Position, Option<u32>);
 
     #[salsa::invoke(crate::sort::sorted_refs)]
-    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>;
+    fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)>;
+    #[salsa::input]
+    fn bibliography_nosort(&self) -> bool;
 
-    #[salsa::invoke(crate::sort::sort_string_citation)]
-    fn sort_string_citation(
-        &self,
-        cite_id: CiteId,
-        macro_name: Atom,
-        sort_key: SortKey,
-    ) -> Option<Arc<SmartString>>;
-    #[salsa::invoke(crate::sort::sort_string_bibliography)]
-    fn sort_string_bibliography(
-        &self,
-        ref_id: Atom,
-        macro_name: Atom,
-        sort_key: SortKey,
-    ) -> Option<Arc<SmartString>>;
     #[salsa::invoke(crate::sort::bib_number)]
-    fn bib_number(&self, id: CiteId) -> Option<u32>;
+    fn bib_number(&self, id: CiteId) -> Option<BibNumber>;
 }
 
-fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {
-    let _style = db.style();
+pub fn safe_default(db: &mut dyn IrDatabase) {
+    db.set_bibliography_nosort_with_durability(false, salsa::Durability::HIGH);
+}
+
+fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambNameData>> {
+    let style = db.style();
+    let rule = style.citation.givenname_disambiguation_rule;
     let name_configurations = db.name_configurations();
     let refs = db.disamb_participants();
     let mut collector = Vec::new();
@@ -134,15 +137,21 @@ fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambName>> {
             for (var, el) in name_configurations.iter() {
                 if let Some(names) = refr.name.get(&var) {
                     let mut seen_one = false;
+                    // fullstyles_APA.txt
+                    let all_same_family_name = (rule == GNDR::PrimaryName
+                        || rule == GNDR::PrimaryNameWithInitials)
+                        && el.form == Some(csl::NameForm::Short)
+                        && crate::disamb::names::all_same_family_name(names);
                     for name in names {
                         if let Name::Person(val) = name {
-                            collector.push(db.disamb_name(DisambNameData {
+                            collector.push(DisambNameData {
                                 ref_id: ref_id.clone(),
                                 var: *var,
                                 el: el.clone(),
                                 value: val.clone(),
                                 primary: !seen_one,
-                            }))
+                                all_same_family_name,
+                            })
                         }
                         seen_one = true;
                     }
@@ -164,11 +173,10 @@ fn ref_dfa(db: &dyn IrDatabase, key: Atom) -> Option<Arc<Dfa>> {
 }
 
 fn all_ref_dfas(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<Dfa>>> {
-    let map = db.disamb_participants()
+    let map = db
+        .disamb_participants()
         .iter()
-        .filter_map(|key| {
-            db.ref_dfa(key.clone()).map(|v| (key.clone(), v))
-        })
+        .filter_map(|key| db.ref_dfa(key.clone()).map(|v| (key.clone(), v)))
         .collect();
     Arc::new(map)
 }
@@ -233,7 +241,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
     // disamb_participants that by default reflects the order they were cited and the uncited
     // ones last.
     let sorted_refs = db.sorted_refs();
-    let (refs, _citation_numbers) = &*sorted_refs;
+    let (refs, bib_numbers) = &*sorted_refs;
     refs.iter()
         .map(|id| {
             let cite = db.ghost_cite(id.clone());
@@ -281,7 +289,7 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
         for atom in group {
             vec.push(atom);
         }
-        vec.sort_by_key(|ref_id| ref_bib_number(db, ref_id));
+        vec.sort_by_key(|ref_id| ref_bib_number(bib_numbers, ref_id));
         let mut i = 1; // "a" = 1
         for ref_id in &vec {
             if !suffixes.contains_key(ref_id) {
@@ -294,12 +302,10 @@ fn year_suffixes(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, u32>> {
 }
 
 // Not cached
-fn ref_bib_number(db: &dyn IrDatabase, ref_id: &Atom) -> u32 {
-    let srs = db.sorted_refs();
-    let (_, ref lookup_ref_ids) = &*srs;
-    let ret = lookup_ref_ids.get(ref_id).cloned();
+fn ref_bib_number(bib_numbers: &FnvHashMap<Atom, BibNumber>, ref_id: &Atom) -> u32 {
+    let ret = bib_numbers.get(ref_id).cloned();
     if let Some(ret) = ret {
-        ret
+        ret.get()
     } else {
         error!(
             "called ref_bib_number on a ref_id {} that is unknown/not in the bibliography",
@@ -315,39 +321,26 @@ pub struct IrGen {
     pub(crate) arena: IrArena<Markup>,
     pub(crate) root: NodeId,
     pub(crate) state: IrState,
+    pub(crate) used_disambiguate_true: bool,
 }
 
 use std::fmt;
 impl fmt::Debug for IrGen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn go(
-            indent: u32,
-            node: NodeId,
-            arena: &IrArena<Markup>,
-            f: &mut fmt::Formatter<'_>,
-        ) -> fmt::Result {
-            let pair = arena.get(node).unwrap().get();
-            for _ in 0..indent {
-                write!(f, "    ")?;
-            }
-            writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
-            node.children(arena)
-                .try_for_each(|ch| go(indent + 1, ch, arena, f))
-        }
-        write!(f, "\n")?;
-        go(0, self.root, &self.arena, f)
+        use crate::ir::IrDebug;
+        let dbg = IrDebug::new(self.root, &self.arena);
+        write!(f, "state: {:?}, contents: {:?}", self.state, dbg)
     }
 }
 
 impl IrGen {
-    fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
-        IrGen { root, arena, state }
-    }
-    fn fresh_copy(&self) -> (NodeId, IrArena<Markup>, IrState) {
-        let root = self.root;
-        let arena = self.arena.clone();
-        let state = self.state.clone();
-        (root, arena, state)
+    pub(crate) fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
+        IrGen {
+            root,
+            arena,
+            state,
+            used_disambiguate_true: false,
+        }
     }
 }
 
@@ -376,7 +369,17 @@ macro_rules! preamble {
     ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
         $style = $db.style();
         $locale = $db.locale_by_cite($id);
-        $cite = $id.lookup($db);
+        // Avoid making bibliography ghosts all depend any positional / note num info
+        let cite_stuff = match $db.lookup_cite($id) {
+            CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
+            // Subsequent because: disambiguate_BasedOnEtAlSubsequent.txt
+            // The position being Some(1) is so the ghost entries don't emit nothing where every
+            // normal reference would emit a first-reference-note-number. You'll never see this
+            // value as output.
+            CiteData::BibliographyGhost { cite, .. } => (cite, (Position::Subsequent, Some(1))),
+        };
+        $cite = cite_stuff.0;
+        let position = cite_stuff.1;
         $refr = match $db.reference($cite.ref_id.clone()) {
             None => return ref_not_found($db, &$cite.ref_id, true),
             Some(r) => r,
@@ -387,12 +390,11 @@ macro_rules! preamble {
             format: $db.get_formatter(),
             cite_id: Some($id),
             cite: &$cite,
-            position: $db.cite_position($id),
-            citation_number: 0,
+            position,
             disamb_pass: $pass,
             style: &$style,
             locale: &$locale,
-            bib_number: $db.bib_number($id),
+            bib_number: $db.bib_number($id).map(|x| x.get()),
             in_bibliography: false,
             names_delimiter,
             name_citation: name_el,
@@ -403,33 +405,38 @@ macro_rules! preamble {
 }
 
 macro_rules! cfg_par_iter {
-    ($expr:expr) => {
+    ($expr:expr) => {{
+        #[cfg(feature = "rayon")]
         {
-            #[cfg(feature = "rayon")] {
-                use rayon::prelude::*;
-                ($expr).par_iter()
-            }
-            #[cfg(not(feature = "rayon"))] {
-                ($expr).iter()
-            }
+            use rayon::prelude::*;
+            ($expr).par_iter()
         }
-    };
+        #[cfg(not(feature = "rayon"))]
+        {
+            ($expr).iter()
+        }
+    }};
 }
 
 macro_rules! cfg_rayon {
-    ($rayon:expr, $not:expr) => {
+    ($rayon:expr, $not:expr) => {{
+        #[cfg(feature = "rayon")]
         {
-            #[cfg(feature = "rayon")] {
-                $rayon
-            }
-            #[cfg(not(feature = "rayon"))] {
-                $not
-            }
+            $rayon
         }
-    };
+        #[cfg(not(feature = "rayon"))]
+        {
+            $not
+        }
+    }};
 }
 
-fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, self_id: &Atom) -> bool {
+fn is_unambiguous(
+    db: &dyn IrDatabase,
+    root: NodeId,
+    arena: &IrArena<Markup>,
+    self_id: &Atom,
+) -> bool {
     struct OtherRef;
 
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
@@ -447,22 +454,26 @@ fn is_unambiguous(db: &dyn IrDatabase, root: NodeId, arena: &IrArena<Markup>, se
     let mut iter = cfg_par_iter!(ref_dfas);
 
     // THe bool -> true means matched self
-    let res = iter
-        .try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
-            let accepts = dfa.accepts_data(&edges);
-            if accepts && k == self_id {
-                Ok(true)
-            } else if accepts {
-                Err(OtherRef)
-            } else {
-                Ok(false || accumulate)
-            }
-        });
-    let res = cfg_rayon!(
-        res.try_reduce(|| false, |a, b| Ok(a || b)),
-        res
-    );
+    let res = iter.try_fold(cfg_rayon!(|| false, false), |accumulate: bool, (k, dfa)| {
+        let accepts = dfa.accepts_data(&edges);
+        if accepts && k == self_id {
+            Ok(true)
+        } else if accepts {
+            Err(OtherRef)
+        } else {
+            Ok(false || accumulate)
+        }
+    });
+    let res = cfg_rayon!(res.try_reduce(|| false, |a, b| Ok(a || b)), res);
     res.is_ok()
+}
+
+fn edge_stream_matches_ref(db: &dyn IrDatabase, edges: Vec<EdgeData>, ref_id: Atom) -> bool {
+    if let Some(dfa) = db.ref_dfa(ref_id) {
+        dfa.accepts_data(&edges)
+    } else {
+        false
+    }
 }
 
 /// Returns the set of Reference IDs that could have produced a cite's IR
@@ -480,17 +491,14 @@ fn refs_accepting_cite(
     // - disamb_pass (for debug)
     let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
     let participants = db.disamb_participants();
-    #[cfg(feature = "rayon")]
-    use rayon::prelude::*;
+    // #[cfg(feature = "rayon")]
+    // use rayon::prelude::*;
 
-    let ref_dfas = db.all_ref_dfas();
+    let iter = participants.iter();
 
-    let iter = cfg_par_iter!(ref_dfas);
-
-    let mut own_ref_nonmatch = true;
-
-    let ret: Vec<Atom> = iter.filter_map(|(k, dfa)| {
-            let acc = dfa.accepts_data(&edges);
+    let ret: Vec<Atom> = iter
+        .filter_map(|k| {
+            let acc = db.edge_stream_matches_ref(edges.clone(), k.clone());
             if log_enabled!(log::Level::Trace) && k != ref_id && acc {
                 trace!(
                     "{:?}: matched other reference {} during pass {:?}",
@@ -508,7 +516,7 @@ fn refs_accepting_cite(
         .collect();
 
     if log_enabled!(log::Level::Warn) && !ret.contains(ref_id) {
-        let dfa = ref_dfas.get(ref_id).unwrap();
+        let dfa = db.ref_dfa(ref_id.clone()).unwrap();
         warn!(
             "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
             cite_id,
@@ -637,9 +645,11 @@ fn disambiguate_add_names(
     db: &dyn IrDatabase,
     root: NodeId,
     arena: &mut IrArena<Markup>,
-    ctx: &CiteContext<'_, Markup>,
+    ctx: &mut CiteContext<'_, Markup>,
     also_expand: bool,
 ) -> bool {
+    ctx.disamb_pass = Some(DisambPass::AddNames);
+
     let fmt = &db.get_formatter();
     // We're going to assume, for a bit of a boost, that you can't ever match a ref not in
     // initial_refs after adding names. We'll see how that holds up.
@@ -674,10 +684,7 @@ fn disambiguate_add_names(
         let total_ambiguity_number = |arena: &IrArena<Markup>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
             let edges = IR::to_edge_stream(root, arena, fmt);
-            let count = dfas
-                .iter()
-                .filter(|dfa| dfa.accepts_data(&edges))
-                .count() as u16;
+            let count = dfas.iter().filter(|dfa| dfa.accepts_data(&edges)).count() as u16;
             if count == 0 {
                 warn!("should not get to zero matching refs");
             }
@@ -766,16 +773,22 @@ fn expand_one_name_ir(
                 double_vec.resize_with(len, || Vec::with_capacity(nir.disamb_names.len()));
             }
             for (n, id) in rnir.disamb_name_ids.into_iter().enumerate() {
-                let matcher = NameVariantMatcher::from_disamb_name(db, id);
+                // This is ad-hoc RefIR, so we don't want it to have global disamb applied already.
+                // disambiguage_AndreaEg2
+                let dn = id.lookup(db);
+                let matcher = NameVariantMatcher::from_disamb_name(db, dn);
                 if let Some(slot) = double_vec.get_mut(n) {
                     slot.push(matcher);
                 }
             }
         }
     }
+    use crate::disamb::names::MatchKey;
 
-    let name_ambiguity_number = |edge: &EdgeData, slot: &[NameVariantMatcher]| -> u32 {
-        slot.iter().filter(|matcher| matcher.accepts(edge)).count() as u32
+    let name_ambiguity_number = |edge: &EdgeData, match_key: Option<&MatchKey>, slot: &[NameVariantMatcher]| -> u32 {
+        slot.iter()
+            .filter(|matcher| matcher.accepts(edge, None))
+            .count() as u32
     };
 
     let mut n = 0usize;
@@ -785,23 +798,24 @@ fn expand_one_name_ir(
                 // First, get the initial count
                 /* TODO: store format stack */
                 let mut edge = ratchet.data.single_name_edge(db, Formatting::default());
-                let mut min = name_ambiguity_number(&edge, slot);
-                debug!("nan for {}-th ({:?}) initially {}", n, edge, min);
+                let key = ratchet.data.family_match_key();
+                let mut min = name_ambiguity_number(&edge, key.as_ref(), slot);
+                trace!("nan for {}-th ({:?}) initially {}", n, edge, min);
                 let mut stage_dn = ratchet.data.clone();
                 // Then, try to improve it
                 let mut iter = ratchet.iter;
                 while min > 1 {
                     if let Some(next) = iter.next() {
-                        stage_dn.apply_pass(next);
+                        stage_dn.apply_upto_pass(next);
                         edge = stage_dn.single_name_edge(db, Formatting::default());
-                        let new_count = name_ambiguity_number(&edge, slot);
+                        let new_count = name_ambiguity_number(&edge, key.as_ref(), slot);
                         if new_count < min {
                             // save the improvement
                             min = new_count;
                             ratchet.data = stage_dn.clone();
                             ratchet.iter = iter;
                         }
-                        debug!("nan for {}-th ({:?}) got to {}", n, edge, min);
+                        trace!("nan for {}-th ({:?}) got to {}", n, edge, min);
                     } else {
                         break;
                     }
@@ -829,9 +843,10 @@ fn disambiguate_add_givennames(
     db: &dyn IrDatabase,
     root: NodeId,
     arena: &mut IrArena<Markup>,
-    ctx: &CiteContext<'_, Markup>,
+    ctx: &mut CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
+    ctx.disamb_pass = Some(DisambPass::AddGivenName(ctx.style.citation.givenname_disambiguation_rule));
     let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(
         db,
@@ -968,15 +983,16 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut state = IrState::new();
     let mut arena = IrArena::new();
     let root = style.intermediate(db, &mut state, &ctx, &mut arena);
-    let _fmt = db.get_formatter();
     let irgen = IrGen::new(root, arena, state);
     Arc::new(irgen)
 }
 
 fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
+    let style = db.style();
+    let gndr = style.citation.givenname_disambiguation_rule;
     let cite = id.lookup(db);
     let gen2 = db.ir_gen2_add_given_name(id);
-    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, None);
+    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, Some(DisambPass::AddGivenName(gndr)));
     Arc::new(refs)
 }
 
@@ -989,8 +1005,8 @@ impl IrGenCow {
     fn to_mut(&mut self) -> &mut IrGen {
         *self = match self {
             IrGenCow::Arc(arc) => {
-                let (root, arena, state) = arc.as_ref().fresh_copy();
-                IrGenCow::Cloned(IrGen { root, arena, state })
+                let cloned = arc.as_ref().clone();
+                IrGenCow::Cloned(cloned)
             }
             IrGenCow::Cloned(gen) => return gen,
         };
@@ -1005,7 +1021,8 @@ impl IrGenCow {
     }
 }
 
-impl std::ops::Deref for IrGenCow {
+use std::ops::Deref;
+impl Deref for IrGenCow {
     type Target = IrGen;
     fn deref(&self) -> &Self::Target {
         match self {
@@ -1023,11 +1040,10 @@ impl IrGenCow {
         ctx: &mut CiteContext<Markup>,
     ) -> bool {
         if ctx.style.citation.disambiguate_add_names {
-            ctx.disamb_pass = Some(DisambPass::AddNames);
             // Clone ir0; disambiguate by adding names
             let cloned = self.to_mut();
             let unambiguous =
-                disambiguate_add_names(db, cloned.root, &mut cloned.arena, &ctx, false);
+                disambiguate_add_names(db, cloned.root, &mut cloned.arena, ctx, false);
             unambiguous
         } else {
             false
@@ -1037,10 +1053,8 @@ impl IrGenCow {
     fn disambiguate_add_given_name(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         if ctx.style.citation.disambiguate_add_givenname {
             let cloned = self.to_mut();
-            let gndr = ctx.style.citation.givenname_disambiguation_rule;
-            ctx.disamb_pass = Some(DisambPass::AddGivenName(gndr));
             let also_add_names = ctx.style.citation.disambiguate_add_names;
-            disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, &ctx, also_add_names);
+            disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, ctx, also_add_names);
         }
     }
     fn disambiguate_add_year_suffix(
@@ -1071,6 +1085,7 @@ impl IrGenCow {
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
         let cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
+        cloned.used_disambiguate_true = true;
         disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
     }
 }
@@ -1106,10 +1121,6 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
 
     // Start with the given names done.
     let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
-    let gen2_matching_refs = db.ir_gen2_matching_refs(id);
-    if gen2_matching_refs.len() <= 1 {
-        return irgen.into_arc();
-    }
     let successful = irgen.disambiguate_add_year_suffix(db, &mut ctx);
     if successful {
         return irgen.into_arc();
@@ -1153,6 +1164,8 @@ fn cluster_cites_sorted(db: &dyn IrDatabase, cluster_id: ClusterId) -> Option<Ar
         .map(|data| data.cites.clone())
 }
 
+use crate::ir::transforms;
+
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,
@@ -1166,7 +1179,7 @@ pub fn built_cluster_before_output(
     let style = db.style();
     let layout = &style.citation.layout;
     let sorted_refs_arc = db.sorted_refs();
-    use crate::ir::transforms::{group_and_collapse, CnumIx, RangePiece, Unnamed3};
+    use transforms::{CnumIx, RangePiece, Unnamed3};
     let mut irs: Vec<_> = cite_ids
         .iter()
         .map(|&id| {
@@ -1174,29 +1187,34 @@ pub fn built_cluster_before_output(
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            Unnamed3::new(cite, cnum, gen4)
+            Unnamed3::new(cite, cnum.map(|x| x.get()), gen4, &fmt)
         })
         .collect();
 
     if let Some((_cgd, collapse)) = style.citation.group_collapsing() {
-        group_and_collapse(&fmt, collapse, &mut irs);
+        transforms::group_and_collapse(&fmt, collapse, &mut irs);
     }
 
     // Cite capitalization
-    // TODO: allow clients to pass a flag to prevent this when a cluster is in the middle of an
-    // existing footnote, and isn't preceded by a period (or however else a client wants to judge
-    // that).
-    if let Some(Unnamed3 { cite, gen4, .. }) = irs.first_mut() {
-        use unic_segment::Words;
+    // TODO: allow clients to pass a flag to prevent this (on ix==0) when a cluster is in the
+    // middle of an existing footnote, and isn't preceded by a period (or however else a client
+    // wants to judge that).
+    // We capitalize all cites whose prefixes end with full stops.
+    for (
+        ix,
+        Unnamed3 {
+            gen4,
+            prefix_parsed,
+            ..
+        },
+    ) in irs.iter_mut().enumerate()
+    {
         if style.class != csl::StyleClass::InText
-            && cite.prefix.as_ref().map_or(true, |pre| {
-                // bugreports_CapsAfterOneWordPrefix
-                let mut words = Words::new(pre, |s| s.chars().any(|c| c.is_alphanumeric()));
-                words.next();
-                let is_single_word = words.next().is_none();
-                (pre.is_empty() || pre.trim_end().ends_with(".")) && !is_single_word
-            })
+            && prefix_parsed
+                .as_ref()
+                .map_or(ix == 0, |pre| fmt.ends_with_full_stop(pre))
         {
+            // dbg!(ix, prefix_parsed);
             let gen_mut = Arc::make_mut(gen4);
             IR::capitalize_first_term_of_cluster(gen_mut.root, &mut gen_mut.arena, &fmt);
         }
@@ -1235,7 +1253,10 @@ pub fn built_cluster_before_output(
     let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
-        let flattened = IR::flatten(gen4.root, &gen4.arena, &fmt)?;
+        let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt, None) {
+            Some(x) => x,
+            None => fmt.plain(CSL_STYLE_ERROR),
+        };
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         if !pre.is_empty() && !pre.ends_with(' ') {
@@ -1257,34 +1278,42 @@ pub fn built_cluster_before_output(
             let suf_mut = suf.to_mut();
             suf_mut.push(' ');
         }
+        let opts = IngestOptions {
+            is_external: true,
+            ..Default::default()
+        };
+        let prefix_parsed = fmt.ingest(&pre, &opts);
+        let suffix_parsed = fmt.ingest(&suf, &opts);
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
-        let aff = Affixes {
-            prefix: Atom::from(pre),
-            suffix: Atom::from(suf),
-        };
-        Some(fmt.affixed(flattened, Some(&aff)))
+        use std::iter::once;
+        Some(
+            fmt.seq(
+                once(prefix_parsed)
+                    .chain(once(flattened))
+                    .chain(once(suffix_parsed)),
+            ),
+        )
     };
 
     let cgroup_delim = style
         .citation
         .cite_group_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
+        .as_opt_str()
         .unwrap_or(", ");
     let ysuf_delim = style
         .citation
         .year_suffix_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
-        .unwrap_or(style.citation.layout.delimiter.0.as_ref());
+        .as_opt_str()
+        .or(style.citation.layout.delimiter.as_opt_str())
+        .unwrap_or("");
     let acol_delim = style
         .citation
         .after_collapse_delimiter
-        .as_ref()
-        .map(|atom| atom.as_ref())
-        .unwrap_or(style.citation.layout.delimiter.0.as_ref());
-    let layout_delim = style.citation.layout.delimiter.0.as_ref();
+        .as_opt_str()
+        .or(style.citation.layout.delimiter.as_opt_str())
+        .unwrap_or("");
+    let layout_delim = style.citation.layout.delimiter.as_ref();
 
     // returned usize is advance len
     let render_range =
@@ -1350,7 +1379,11 @@ pub fn built_cluster_before_output(
             continue;
         }
         if !collapsed_ranges.is_empty() {
-            let (built, advance_to) = render_range(collapsed_ranges, layout_delim, acol_delim);
+            let (built, advance_to) = render_range(
+                collapsed_ranges,
+                layout_delim.as_opt_str().unwrap_or(""),
+                acol_delim,
+            );
             built_cites.push(built);
             if !suppress_delimiter(&irs, ix) {
                 built_cites.push(fmt.plain(acol_delim));
@@ -1404,7 +1437,7 @@ pub fn built_cluster_before_output(
             if let Some(built) = build_cite(&irs, ix) {
                 built_cites.push(built);
                 if !suppress_delimiter(&irs, ix) {
-                    built_cites.push(fmt.plain(layout_delim));
+                    built_cites.push(fmt.plain(layout_delim.as_opt_str().unwrap_or("")));
                 } else {
                     built_cites.push(fmt.plain(""));
                 }
@@ -1428,7 +1461,7 @@ pub fn with_cite_context<T>(
     sort_key: Option<SortKey>,
     default_position: bool,
     year_suffix: Option<u32>,
-    f: impl Fn(CiteContext) -> T,
+    f: impl FnOnce(CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
     let locale = db.locale_by_cite(id);
@@ -1445,7 +1478,6 @@ pub fn with_cite_context<T>(
         } else {
             db.cite_position(id)
         },
-        citation_number: 0,
         disamb_pass: None,
         style: &style,
         locale: &locale,
@@ -1468,21 +1500,27 @@ pub fn with_bib_context<T>(
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     year_suffix: Option<u32>,
-    f: impl Fn(&Bibliography, CiteContext) -> T,
+    ref_present: impl FnOnce(&Bibliography, CiteContext) -> Option<T>,
+    ref_missing: impl FnOnce(&Bibliography, CiteContext, bool) -> Option<T>,
 ) -> Option<T> {
     let style = db.style();
+    let bib = style.bibliography.as_ref()?;
     let locale = db.locale_by_reference(ref_id.clone());
     let cite = Cite::basic(ref_id.clone());
-    let refr = db.reference(ref_id)?;
+    let refr_arc = db.reference(ref_id);
+    let null_ref = citeproc_io::Reference::empty("empty_ref".into(), csl::CslType::Article);
+    let (refr, is_ref_missing) = if let Some(arc) = refr_arc.as_ref() {
+        (arc.as_ref(), false)
+    } else {
+        (&null_ref, true)
+    };
     let (names_delimiter, name_el) = db.name_info_bibliography();
-    let bib = style.bibliography.as_ref()?;
     let ctx = CiteContext {
         reference: &refr,
         format: db.get_formatter(),
         cite_id: None,
         cite: &cite,
         position: (Position::First, None),
-        citation_number: 0,
         disamb_pass: None,
         style: &style,
         locale: &locale,
@@ -1493,15 +1531,20 @@ pub fn with_bib_context<T>(
         sort_key,
         year_suffix,
     };
-    Some(f(bib, ctx))
+    if is_ref_missing {
+        ref_missing(bib, ctx, false)
+    } else {
+        ref_present(bib, ctx.clone()).or_else(|| ref_missing(bib, ctx, true))
+    }
 }
 
 fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
     let sorted_refs_arc = db.sorted_refs();
     let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
-    let bib_number = *citation_numbers_by_id
+    let bib_number = citation_numbers_by_id
         .get(&ref_id)
-        .expect("sorted_refs should contain a bib_item key");
+        .expect("sorted_refs should contain a bib_item key")
+        .get();
 
     with_bib_context(
         db,
@@ -1527,21 +1570,84 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 disambiguate_add_year_suffix(db, root, &mut arena, &mut state, &ctx, suffix);
             }
 
+            if first_cite_used_disambiguate_true(db, ref_id.clone()) {
+                ctx.disamb_pass = Some(DisambPass::Conditionals);
+                disambiguate_true(db, root, &mut arena, &mut state, &ctx);
+            }
+
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
                 if let Some(new_root) = IR::split_first_field(root, &mut arena) {
                     root = new_root;
                 }
             }
 
-            Arc::new(IrGen::new(root, arena, state))
+            // Pull affixes off layout into the right-inlines etc, after we may have created those
+            // divs in split_first_field
+            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
+
+            if IR::is_empty(root, &arena) {
+                None
+            } else {
+                Some(Arc::new(IrGen::new(root, arena, state)))
+            }
+        },
+        |bib, ctx, _just_empty_output| {
+            let mut state = IrState::new();
+            let mut arena = IrArena::new();
+
+            // Re the ? operator here: sort_omittedBibRefMixedNonNumericStyle.txt
+            // If no citation-number found, simply exclude it from the bibliography.
+            let (el_ref, maybe_delim) =
+                transforms::style_is_mixed_numeric(ctx.style, CiteOrBib::Bibliography)?;
+            // Render it as "1. [CSL STYLE ERROR ...]"
+            let mut root = {
+                let msg = ctx.format.plain(CSL_STYLE_ERROR);
+                let msg_node = arena.new_node((
+                    IR::Rendered(Some(CiteEdgeData::Output(msg))),
+                    GroupVars::Important,
+                ));
+                let n = el_ref.intermediate(db, &mut state, &ctx, &mut arena);
+                let seq = IrSeq {
+                    delimiter: maybe_delim.map(Into::into),
+                    ..Default::default()
+                };
+                let seq_node = arena.new_node((IR::Seq(seq), GroupVars::Important));
+                seq_node.append(n, &mut arena);
+                seq_node.append(msg_node, &mut arena);
+                seq_node
+            };
+
+            if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
+                if let Some(new_root) = IR::split_first_field(root, &mut arena) {
+                    root = new_root;
+                }
+            }
+
+            // Pull affixes off layout into the right-inlines etc, after we may have created those
+            // divs in split_first_field
+            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
+
+            Some(Arc::new(IrGen::new(root, arena, state)))
         },
     )
+}
+
+fn first_cite_used_disambiguate_true(db: &dyn IrDatabase, ref_id: Atom) -> bool {
+    let all_cites = db.all_cite_ids();
+    let first = all_cites.iter().find(|cite_id| {
+        let cite = cite_id.lookup(db);
+        cite.ref_id == ref_id
+    });
+    first.map_or(false, |&id| {
+        let gen4 = db.ir_fully_disambiguated(id);
+        gen4.used_disambiguate_true
+    })
 }
 
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
-        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
+        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
         // in a bibliography, we do the affixes etc inside Layout, so they're not here
         let string = fmt.output(flat, get_piq(db));
         Arc::new(string)
@@ -1575,7 +1681,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                 sas,
             ) {
                 let mutated = Arc::make_mut(&mut gen0);
-                let did = crate::transforms::subsequent_author_substitute(
+                let did = transforms::subsequent_author_substitute(
                     &fmt,
                     // In order to unwrap this here, you must only replace the NameIR node's
                     // children, not the IR.
@@ -1589,7 +1695,8 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     IR::recompute_group_vars(mutated.root, &mut mutated.arena);
                 }
             }
-            let flat = IR::flatten(gen0.root, &gen0.arena, &fmt).unwrap_or_else(|| fmt.plain(""));
+            let flat =
+                IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
             let string = fmt.output(flat, get_piq(db));
             if !string.is_empty() {
                 m.insert(key.clone(), Arc::new(string));
@@ -1678,9 +1785,9 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                                 .iter()
                                 .filter_map(|&cluster_id| db.cluster_cites_sorted(cluster_id))
                                 .all(|cites| {
-                                    cites.iter().all(|cite_id| {
-                                        cite_id.lookup(db).ref_id == cite.ref_id
-                                    })
+                                    cites
+                                        .iter()
+                                        .all(|cite_id| cite_id.lookup(db).ref_id == cite.ref_id)
                                 })
                         } else {
                             prev_cluster
@@ -1829,6 +1936,6 @@ fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
         *x
     } else {
         // Assume this cite is a ghost cite.
-        (Position::First, None)
+        (Position::Subsequent, None)
     }
 }

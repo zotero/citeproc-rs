@@ -1,0 +1,22 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "parse_as::<Info>(indoc::indoc! {\n                     r#\"\n            <info>\n                <id>https://example.com/mystyle</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title>My CSL Style</title>\n            </info>\n        \"#\n                 }).unwrap()"
+---
+{
+  "id": "https://example.com/mystyle",
+  "updated": "2020-01-01T00:00:00+00:00",
+  "title": {
+    "value": "My CSL Style",
+    "lang": null
+  },
+  "titleShort": null,
+  "rights": null,
+  "summary": null,
+  "parent": null,
+  "links": [],
+  "citationFormat": null,
+  "categories": [],
+  "issn": null,
+  "eissn": null,
+  "issnl": null
+}

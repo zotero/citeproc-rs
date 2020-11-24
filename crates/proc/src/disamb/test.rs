@@ -8,9 +8,9 @@ use super::free::{FreeCond, FreeCondSets};
 use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
-use citeproc_io::output::markup::Markup;
-use citeproc_io::{Reference, Cite};
 use citeproc_db::{ClusterId, ClusterNumber, IntraNote};
+use citeproc_io::output::markup::Markup;
+use citeproc_io::{Cite, Reference};
 
 use csl::CslType;
 use csl::Variable;

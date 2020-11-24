@@ -13,8 +13,6 @@ extern crate log;
 extern crate citeproc_db;
 
 use citeproc_io::output::OutputFormat;
-use csl::Atom;
-
 use std::collections::HashSet;
 
 macro_rules! smart_format {
@@ -44,21 +42,29 @@ mod page_range;
 mod ref_ir;
 mod renderer;
 mod sort;
-mod unicode;
 mod walker;
 
-pub use crate::db::built_cluster_before_output;
+pub use crate::db::{built_cluster_before_output, safe_default};
+pub use crate::sort::BibNumber;
 
 pub(crate) mod prelude {
+    pub(crate) trait AsRefOptStr {
+        fn as_opt_str(&self) -> Option<&str>;
+    }
+    impl AsRefOptStr for Option<SmartString> {
+        fn as_opt_str(&self) -> Option<&str> {
+            self.as_ref().map(|x| x.as_str())
+        }
+    }
+    impl<'a> AsRefOptStr for Option<&'a SmartString> {
+        fn as_opt_str(&self) -> Option<&str> {
+            self.as_ref().map(|x| x.as_str())
+        }
+    }
     pub use crate::ir::IrSum;
     pub type IrArena<O = Markup> = indextree::Arena<IrSum<O>>;
-    pub use indextree::{Node, NodeId};
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub enum CiteOrBib {
-        Citation,
-        Bibliography,
-    }
-    pub use crate::db::{ImplementationDetails, IrDatabase};
+    pub use crate::cite_context::RenderContext;
+    pub use crate::db::{safe_default, ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
     pub use crate::walker::{StyleWalker, WalkerFoldType};
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
@@ -66,7 +72,9 @@ pub(crate) mod prelude {
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
-    pub use citeproc_io::{SmartString, SmartCow};
+    pub use citeproc_io::{SmartCow, SmartString};
+    pub use csl::CiteOrBib;
+    pub use indextree::{Node, NodeId};
 
     pub use csl::{Affixes, DisplayMode, Element, Formatting, TextCase};
 
@@ -74,6 +82,7 @@ pub(crate) mod prelude {
     pub use crate::group::GroupVars;
     pub use crate::ir::*;
     pub use crate::ref_ir::*;
+    pub use crate::sort::BibNumber;
 
     pub(crate) use crate::disamb::{Disambiguation, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
@@ -111,7 +120,7 @@ where
     ) -> NodeId;
 }
 
-use csl::{Affixes, Delimiter, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
+use csl::{Affixes, DisplayMode, Formatting, Name, NameEtAl, NameLabelInput, Names};
 use csl::{AnyVariable, DateVariable, NameAsSortOrder, NameVariable, NumberVariable, Variable};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -128,7 +137,7 @@ pub struct NamesInheritance {
     // So if you supply <name/> at all, you start from context.
     did_supply_name: DidSupplyName,
     pub label: Option<NameLabelInput>,
-    pub delimiter: Option<Atom>,
+    pub delimiter: Option<SmartString>,
     pub et_al: Option<NameEtAl>,
     pub formatting: Option<Formatting>,
     pub display: Option<DisplayMode>,
@@ -142,7 +151,7 @@ pub struct NamesInheritance {
 use csl::SortKey;
 
 impl NamesInheritance {
-    fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<Delimiter>, other: Self) -> Self {
+    fn override_with(&self, ctx_name: &Name, ctx_delim: &Option<SmartString>, other: Self) -> Self {
         NamesInheritance {
             // Name gets merged from context, starting from scratch
             // So if you supply <name/> at all, you start from context.
@@ -158,13 +167,13 @@ impl NamesInheritance {
             delimiter: other
                 .delimiter
                 .or_else(|| self.delimiter.clone())
-                .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
+                .or_else(|| ctx_delim.as_ref().map(|x| x.clone())),
             formatting: other.formatting.or(self.formatting),
             display: other.display.or(self.display),
             affixes: other.affixes.or_else(|| self.affixes.clone()),
         }
     }
-    fn from_names(ctx_name: &Name, ctx_delim: &Option<Delimiter>, names: &Names) -> Self {
+    fn from_names(ctx_name: &Name, ctx_delim: &Option<SmartString>, names: &Names) -> Self {
         NamesInheritance {
             name: ctx_name.merge(names.name.as_ref().unwrap_or(&Name::empty())),
             did_supply_name: if names.name.is_some() {
@@ -175,9 +184,9 @@ impl NamesInheritance {
             label: names.label.clone(),
             delimiter: names
                 .delimiter
-                .as_ref()
-                .map(|x| x.0.clone())
-                .or_else(|| ctx_delim.as_ref().map(|x| x.0.clone())),
+                .as_opt_str()
+                .or(ctx_delim.as_opt_str())
+                .map(Into::into),
             et_al: names.et_al.clone(),
             formatting: names.formatting,
             display: names.display,
@@ -214,7 +223,7 @@ pub struct IrState {
     /// This can be a set because macros are strictly non-recursive.
     /// So the same macro name anywhere above indicates attempted recursion.
     /// When you exit a frame, delete from the set.
-    macro_stack: HashSet<Atom>,
+    macro_stack: HashSet<SmartString>,
     pub name_override: NameOverrider,
     suppressed: FnvHashSet<AnyVariable>,
     pub disamb_count: u32,
@@ -230,7 +239,7 @@ impl NameOverrider {
     pub fn inherited_names_options(
         &self,
         ctx_name: &Name,
-        ctx_delim: &Option<Delimiter>,
+        ctx_delim: &Option<SmartString>,
         own_names: &Names,
     ) -> NamesInheritance {
         let over = NamesInheritance::from_names(ctx_name, ctx_delim, own_names);
@@ -243,7 +252,7 @@ impl NameOverrider {
     pub fn inherited_names_options_sort_key(
         &self,
         ctx_name: &Name,
-        ctx_delim: &Option<Delimiter>,
+        ctx_delim: &Option<SmartString>,
         sort_key: &SortKey,
     ) -> NamesInheritance {
         let over = NamesInheritance::from_sort_key(sort_key);
@@ -277,10 +286,6 @@ impl NameOverrider {
 }
 
 impl IrState {
-    pub fn is_name_suppressed(&self, var: NameVariable) -> bool {
-        self.suppressed.contains(&AnyVariable::Name(var))
-    }
-
     pub fn maybe_suppress_name_vars(&mut self, vars: &[NameVariable]) {
         if self.name_override.in_substitute {
             for &var in vars {
@@ -289,13 +294,6 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_num(&mut self, var: NumberVariable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Number(var));
-        }
-    }
-
-    #[inline]
     pub fn maybe_suppress_date<T: Default>(
         &mut self,
         var: DateVariable,
@@ -311,10 +309,45 @@ impl IrState {
         }
     }
 
-    pub fn maybe_suppress_ordinary(&mut self, var: Variable) {
-        if self.name_override.in_substitute {
-            self.suppressed.insert(AnyVariable::Ordinary(var));
+    pub fn maybe_suppress<T>(
+        &mut self,
+        var: Variable,
+        mut f: impl FnMut(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        if self.is_suppressed_ordinary(var) {
+            None
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Ordinary(var));
+                if var == Variable::Title {
+                    self.suppressed
+                        .insert(AnyVariable::Ordinary(Variable::TitleShort));
+                } else if var == Variable::TitleShort {
+                    self.suppressed
+                        .insert(AnyVariable::Ordinary(Variable::Title));
+                }
+            }
+            f(self)
         }
+    }
+
+    pub fn maybe_suppress_num<T>(
+        &mut self,
+        var: NumberVariable,
+        mut f: impl FnMut(&mut Self) -> Option<T>,
+    ) -> Option<T> {
+        if self.is_suppressed_num(var) {
+            None
+        } else {
+            if self.name_override.in_substitute {
+                self.suppressed.insert(AnyVariable::Number(var));
+            }
+            f(self)
+        }
+    }
+
+    pub fn is_suppressed_name(&self, var: NameVariable) -> bool {
+        self.suppressed.contains(&AnyVariable::Name(var))
     }
 
     pub fn is_suppressed_ordinary(&self, var: Variable) -> bool {
@@ -335,7 +368,7 @@ impl IrState {
         IrState::default()
     }
 
-    pub fn push_macro(&mut self, macro_name: &Atom) {
+    pub fn push_macro(&mut self, macro_name: &SmartString) {
         if self.macro_stack.contains(macro_name) {
             panic!(
                 "foiled macro recursion: {} called from within itself; exiting",
@@ -345,7 +378,7 @@ impl IrState {
         self.macro_stack.insert(macro_name.clone());
     }
 
-    pub fn pop_macro(&mut self, macro_name: &Atom) {
+    pub fn pop_macro(&mut self, macro_name: &SmartString) {
         self.macro_stack.remove(macro_name);
     }
 }

@@ -80,11 +80,9 @@ pub use ref_context::RefContext;
 
 pub use finite_automata::{Dfa, EdgeData, Nfa, NfaEdge};
 
-use csl::*;
-use csl::{Atom, IsIndependent};
 use csl::{
-    BodyDate, Choose, Cond, Conditions, IfThen, LabelElement, Match, Names, NumberElement,
-    Position, TextElement, VariableForm,
+    variables::*, BodyDate, Choose, Cond, Conditions, IfThen, IsIndependent, LabelElement, Match,
+    Names, NumberElement, Position, TextElement, VariableForm,
 };
 
 pub fn get_free_conds(db: &dyn IrDatabase) -> FreeCondSets {
@@ -127,13 +125,13 @@ impl<'a> StyleWalker for FreeCondWalker<'a> {
         f
     }
 
-    fn text_macro(&mut self, text: &TextElement, name: &Atom) -> Self::Output {
+    fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {
         // TODO: same todos as in Proc
         let style = self.db.style();
         let macro_elements = style
             .macros
             .get(name)
-            .expect("macro errors not implemented!");
+            .expect("undefined macro should not be valid CSL");
 
         self.state.push_macro(name);
         let ret = self.fold(macro_elements, WalkerFoldType::Macro(text));
@@ -254,7 +252,7 @@ pub fn create_dfa<O: OutputFormat>(db: &dyn IrDatabase, refr: &Reference) -> Dfa
     for (_fc, ir) in runs {
         let first = nfa.graph.add_node(());
         nfa.start.insert(first);
-        let last = add_to_graph(&fmt, &mut nfa, &ir, first);
+        let last = add_to_graph(&fmt, &mut nfa, &ir, first, None);
         nfa.accepting.insert(last);
     }
     nfa.brzozowski_minimise()
@@ -308,7 +306,11 @@ pub fn create_ref_ir<O: OutputFormat>(
                 &mut state,
                 Formatting::default(),
             );
-            ir.keep_first_ysh(ysh_explicit_edge.clone(), ysh_plain_edge.clone(), ysh_edge.clone());
+            ir.keep_first_ysh(
+                ysh_explicit_edge.clone(),
+                ysh_plain_edge.clone(),
+                ysh_edge.clone(),
+            );
             (fc, ir)
         })
         .collect();
@@ -351,13 +353,13 @@ pub fn graph_with_stack(
     let open_tags = &mkedge(open_tags);
     let close_tags = &mkedge(close_tags);
     if let Some(pre) = affixes.as_ref().map(|a| mkedge_esc(&*a.prefix)) {
-        spot = add_to_graph(fmt, nfa, &pre, spot);
+        spot = add_to_graph(fmt, nfa, &pre, spot, None);
     }
-    spot = add_to_graph(fmt, nfa, open_tags, spot);
+    spot = add_to_graph(fmt, nfa, open_tags, spot, None);
     spot = f(nfa, spot);
-    spot = add_to_graph(fmt, nfa, close_tags, spot);
+    spot = add_to_graph(fmt, nfa, close_tags, spot, None);
     if let Some(suf) = affixes.as_ref().map(|a| mkedge_esc(&*a.suffix)) {
-        spot = add_to_graph(fmt, nfa, &suf, spot);
+        spot = add_to_graph(fmt, nfa, &suf, spot, None);
     }
     spot
 }
@@ -367,6 +369,7 @@ pub fn add_to_graph(
     nfa: &mut Nfa,
     ir: &RefIR,
     spot: NodeIndex,
+    override_delim: Option<&str>,
 ) -> NodeIndex {
     match ir {
         RefIR::Edge(None) => spot,
@@ -381,6 +384,7 @@ pub fn add_to_graph(
                 ref contents,
                 ref affixes,
                 ref delimiter,
+                should_inherit_delim,
                 // TODO: use these
                 quotes: _,
                 text_case: _,
@@ -397,17 +401,22 @@ pub fn add_to_graph(
                     None
                 })
             };
-            let delim = &mkedge(&*delimiter);
+            let delim = override_delim
+                .filter(|_| should_inherit_delim)
+                .or(delimiter.as_opt_str())
+                .map(|d| mkedge(d));
             graph_with_stack(fmt, nfa, formatting, affixes, spot, |nfa, mut spot| {
                 let mut seen = false;
                 for x in contents {
                     if !matches!(x, RefIR::Edge(None)) {
                         if seen {
-                            spot = add_to_graph(fmt, nfa, delim, spot);
+                            if let Some(d) = &delim {
+                                spot = add_to_graph(fmt, nfa, d, spot, None);
+                            }
                         }
                         seen = true;
                     }
-                    spot = add_to_graph(fmt, nfa, x, spot);
+                    spot = add_to_graph(fmt, nfa, x, spot, delimiter.as_opt_str());
                 }
                 spot
             })
@@ -462,7 +471,7 @@ fn test_determinism() {
         for ir in &[RefIR::Edge(Some(aa())), RefIR::Edge(Some(bb()))] {
             let first = nfa.graph.add_node(());
             nfa.start.insert(first);
-            let last = add_to_graph(&fmt, &mut nfa, ir, first);
+            let last = add_to_graph(&fmt, &mut nfa, ir, first, None);
             nfa.accepting.insert(last);
         }
         nfa.brzozowski_minimise()

@@ -9,6 +9,8 @@ use roxmltree::Node;
 use std::num::ParseIntError;
 use std::ops::Range;
 
+pub(crate) type ExpName = roxmltree::ExpandedName<'static, 'static>;
+
 #[derive(Debug, PartialEq)]
 pub struct UnknownAttributeValue {
     pub value: String,
@@ -22,8 +24,10 @@ impl UnknownAttributeValue {
     }
 }
 
-use serde::Serializer;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Serializer};
 
+#[cfg(feature = "serde")]
 fn rox_error_serialize<S>(x: &roxmltree::Error, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -31,15 +35,26 @@ where
     s.serialize_str(&ToString::to_string(x))
 }
 
-#[derive(thiserror::Error, Debug, Serialize)]
+#[derive(thiserror::Error, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[non_exhaustive]
 pub enum StyleError {
     #[error("invalid style: {0}")]
     Invalid(#[from] CslError),
     #[error("could not parse style")]
-    ParseError(#[from] #[serde(serialize_with = "rox_error_serialize")] roxmltree::Error),
+    ParseError(
+        #[from]
+        #[cfg_attr(feature = "serde", serde(serialize_with = "rox_error_serialize"))]
+        roxmltree::Error,
+    ),
+    #[error(
+        "incorrectly supplied a dependent style, which refers to a parent {required_parent:?}"
+    )]
+    DependentStyle { required_parent: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct CslError(pub Vec<InvalidCsl>);
 
 impl std::error::Error for CslError {}
@@ -53,13 +68,30 @@ impl fmt::Display for CslError {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone, Serialize)]
+pub(crate) struct ChildGetterError;
+pub(crate) type ChildGetterResult<T> = Result<T, ChildGetterError>;
+impl From<ChildGetterError> for CslError {
+    fn from(_: ChildGetterError) -> Self {
+        log::warn!("converting ChildGetterError to CslError (errors collector not checked)");
+        CslError(Vec::new())
+    }
+}
+impl From<ChildGetterError> for StyleError {
+    fn from(_: ChildGetterError) -> Self {
+        log::warn!("converting ChildGetterError to CslError (errors collector not checked)");
+        StyleError::Invalid(CslError(Vec::new()))
+    }
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Severity {
     Error,
     Warning,
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Clone, Serialize)]
+#[derive(thiserror::Error, Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 #[error("[{severity:?}] {message} ({hint})")]
 pub struct InvalidCsl {
     pub severity: Severity,
@@ -151,13 +183,23 @@ impl NeedVarType {
 }
 
 impl InvalidCsl {
-    pub fn new(node: &Node, message: &str) -> Self {
+    pub fn new(node: &Node, message: impl Into<String>) -> Self {
         let range = node.range();
         InvalidCsl {
             range,
             severity: Severity::Error,
             hint: "".to_string(),
-            message: message.to_owned(),
+            message: message.into(),
+        }
+    }
+
+    pub fn no_content(node: &Node, datatype: &str, hint: Option<&str>) -> Self {
+        let range = node.range();
+        InvalidCsl {
+            range,
+            severity: Severity::Error,
+            hint: hint.unwrap_or("").to_owned(),
+            message: format!("<{}> empty, expected {}", node.tag_name().name(), datatype),
         }
     }
 
@@ -172,16 +214,17 @@ impl InvalidCsl {
         }
     }
 
-    pub fn missing(node: &Node, attr: &str) -> Self {
-        InvalidCsl::new(node, &format!("Must have `{}` attribute", attr))
+    pub fn missing(node: &Node, attr: impl Into<ExpName>) -> Self {
+        InvalidCsl::new(node, &format!("Must have `{:?}` attribute", attr.into()))
     }
 
-    pub fn attr_val(node: &Node, attr: &str, uav: &str) -> Self {
+    pub fn attr_val(node: &Node, attr: impl Into<ExpName>, uav: &str) -> Self {
+        let attr = attr.into();
         let at = node.attribute_node(attr).unwrap();
         let range = at.range();
         InvalidCsl {
             range,
-            message: format!("Unknown attribute value for `{}`: \"{}\"", attr, uav),
+            message: format!("Unknown attribute value for `{:?}`: \"{}\"", attr, uav),
             hint: "".to_string(),
             severity: Severity::Error,
         }

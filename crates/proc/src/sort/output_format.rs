@@ -4,27 +4,25 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::String;
-use super::micro_html::micro_html_to_string;
-use super::{FormatCmd, LocalizedQuotes, OutputFormat};
-use crate::IngestOptions;
+use citeproc_io::output::{
+    micro_html::micro_html_to_string, FormatCmd, LocalizedQuotes, OutputFormat,
+};
+use citeproc_io::{lazy, IngestOptions, SmartString};
 
 use csl::{DisplayMode, Formatting};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PlainText;
+pub struct SortStringFormat;
 
-impl Default for PlainText {
+impl Default for SortStringFormat {
     fn default() -> Self {
-        PlainText {}
+        SortStringFormat
     }
 }
 
-use crate::lazy_char_transform_owned;
-
 // We don't want these characters in a sort string
-fn remove_quotes(s: String) -> String {
-    lazy_char_transform_owned(s, |c: char| {
+fn remove_quotes(s: SmartString) -> SmartString {
+    lazy::lazy_char_transform_owned(s, |c: char| {
         if c == '\'' || c == '"' || c == ',' {
             None
         } else {
@@ -34,10 +32,10 @@ fn remove_quotes(s: String) -> String {
     })
 }
 
-impl OutputFormat for PlainText {
-    type Input = String;
-    type Build = String;
-    type Output = String;
+impl OutputFormat for SortStringFormat {
+    type Input = SmartString;
+    type Build = SmartString;
+    type Output = SmartString;
     type BibMeta = ();
 
     fn meta(&self) -> Self::BibMeta {}
@@ -53,7 +51,7 @@ impl OutputFormat for PlainText {
     }
 
     #[inline]
-    fn text_node(&self, s: String, _: Option<Formatting>) -> Self::Build {
+    fn text_node(&self, s: SmartString, _: Option<Formatting>) -> Self::Build {
         s
     }
 
@@ -70,7 +68,7 @@ impl OutputFormat for PlainText {
                 a
             })
         } else {
-            String::new()
+            SmartString::new()
         }
     }
 
@@ -81,7 +79,7 @@ impl OutputFormat for PlainText {
         _f: Option<Formatting>,
     ) -> Self::Build {
         let std_string = nodes.join(delimiter);
-        String::from(std_string)
+        SmartString::from(std_string)
     }
 
     fn quoted(&self, b: Self::Build, _quotes: LocalizedQuotes) -> Self::Build {
@@ -121,9 +119,9 @@ impl OutputFormat for PlainText {
     }
 
     #[inline]
-    fn stack_preorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
+    fn stack_preorder(&self, _s: &mut SmartString, _stack: &[FormatCmd]) {}
     #[inline]
-    fn stack_postorder(&self, _s: &mut String, _stack: &[FormatCmd]) {}
+    fn stack_postorder(&self, _s: &mut SmartString, _stack: &[FormatCmd]) {}
     #[inline]
     fn tag_stack(&self, _formatting: Formatting, _: Option<DisplayMode>) -> Vec<FormatCmd> {
         Vec::new()
@@ -135,10 +133,15 @@ impl OutputFormat for PlainText {
         pre_and_content.push_str(suffix)
     }
 
+    fn ends_with_full_stop(&self, build: &Self::Build) -> bool {
+        // not needed
+        false
+    }
+
     #[inline]
     fn apply_text_case(&self, build: &mut Self::Build, options: &IngestOptions) {
         let is_uppercase = !build.chars().any(|c| c.is_lowercase());
-        let string = std::mem::replace(build, String::new());
+        let string = std::mem::replace(build, SmartString::new());
         *build = options.transform_case(string, false, true, is_uppercase);
     }
 }

@@ -1,0 +1,25 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "parse_as::<Info>(indoc::indoc! {\n                     r#\"\n            <info>\n                <id>dependent-style</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title>A Dependent Style</title>\n                <link rel=\"independent-parent\" href=\"http://zotero.org/styles/parent-id\" />\n            </info>\n        \"#\n                 }).unwrap()"
+---
+{
+  "id": "dependent-style",
+  "updated": "2020-01-01T00:00:00+00:00",
+  "title": {
+    "value": "A Dependent Style",
+    "lang": null
+  },
+  "titleShort": null,
+  "rights": null,
+  "summary": null,
+  "parent": {
+    "href": "http://zotero.org/styles/parent-id",
+    "lang": null
+  },
+  "links": [],
+  "citationFormat": null,
+  "categories": [],
+  "issn": null,
+  "eissn": null,
+  "issnl": null
+}

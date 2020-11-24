@@ -104,8 +104,14 @@ where
 {
     let a_ns = a.raw_nodes().iter().map(|n| &n.weight);
     let b_ns = b.raw_nodes().iter().map(|n| &n.weight);
-    let a_es = a.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
-    let b_es = b.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+    let a_es = a
+        .raw_edges()
+        .iter()
+        .map(|e| (e.source(), e.target(), &e.weight));
+    let b_es = b
+        .raw_edges()
+        .iter()
+        .map(|e| (e.source(), e.target(), &e.weight));
     a_ns.eq(b_ns) && a_es.eq(b_es)
 }
 

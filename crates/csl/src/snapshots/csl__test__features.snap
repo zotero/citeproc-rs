@@ -1,0 +1,5 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::from_node::parse_as::<Features>(::indoc::indoc!(r#\"<features></features>\"#)).expect(\"did not parse\")"
+---
+Features {}

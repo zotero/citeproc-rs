@@ -1,0 +1,14 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::from_node::parse_as::<Features>(::indoc::indoc!(r#\"\n        <features>\n            <feature name=\"edtf-dates\" />\n            <feature name=\"UNRECOGNIZED-FEATURE\" />\n            <feature name=\"SECOND-UNRECOGNIZED-FEATURE\" />\n        </features>\n    \"#)).expect_err(\"should have failed with errors\")"
+---
+CslError(
+    [
+        InvalidCsl {
+            severity: Error,
+            range: 0..151,
+            message: "Unrecognised feature flag `UNRECOGNIZED-FEATURE`",
+            hint: "",
+        },
+    ],
+)

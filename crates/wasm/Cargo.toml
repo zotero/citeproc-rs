@@ -36,7 +36,7 @@ dot = []
 
 [dependencies]
 citeproc = { path = "../citeproc", default-features = false, features=[] }
-csl = { path = "../csl" }
+csl = { path = "../csl", features = ["serde1"] }
 citeproc-io = { path = "../io" }
 cfg-if = "0.1.10"
 console_log = { version = "0.2.0", optional = true }

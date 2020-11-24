@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use citeproc_io::NumericToken::{self, *};
-use citeproc_io::NumericValue;
+use citeproc_io::{roman, NumericValue};
 use csl::{
     Gender, Locale, MiscTerm, NumberVariable, OrdinalTerm, OrdinalTermSelector, PageRangeFormat,
     SimpleTermSelector, TermFormExtended,
@@ -18,7 +18,7 @@ pub fn render_ordinal(
     let mut s = SmartString::new();
     for token in ts {
         match *token {
-            NumericToken::Num(n) => {
+            Num(n) | Roman(n, _) => {
                 if !long || n == 0 || n > 10 {
                     write!(s, "{}", n).unwrap();
                 }
@@ -27,7 +27,12 @@ pub fn render_ordinal(
                     s.push_str(suffix);
                 }
             }
-            Affixed(ref a) => s.push_str(&a),
+            Affixed(ref pre, num, ref suf) => {
+                write!(s, "{}{}{}", pre, num, suf).unwrap();
+            }
+            Str(ref str) => {
+                s.push_str(&str);
+            }
             Comma => s.push_str(", "),
             // en-dash
             Hyphen => s.push_str(get_hyphen(locale, variable)),
@@ -95,8 +100,125 @@ pub fn arabic_number(
 ) -> SmartString {
     debug!("arabic_number {:?}", num);
     match num {
-        NumericValue::Tokens(_, ts) => tokens_to_string(ts, locale, variable, prf),
+        NumericValue::Tokens(_, ts, _) => tokens_to_string(ts, locale, variable, prf),
         NumericValue::Str(s) => s.as_ref().into(),
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+enum NumBefore {
+    SeenNum(u32),
+    SeenNumHyphen(u32),
+    SeenRoman(u32),
+    SeenRomanHyphen(u32),
+}
+impl NumBefore {
+    fn matching_for_crop(&self, _is_roman: bool) -> Option<u32> {
+        match *self {
+            NumBefore::SeenNumHyphen(n) => Some(n),
+            NumBefore::SeenRomanHyphen(n) => Some(n),
+            _ => None,
+        }
+    }
+    fn see_num(num: u32, is_roman: bool) -> Self {
+        if is_roman {
+            NumBefore::SeenRoman(num)
+        } else {
+            NumBefore::SeenNum(num)
+        }
+    }
+}
+#[derive(Debug, Copy, Clone)]
+enum State<'a> {
+    Normal,
+    Hyphenating { prefix: &'a str, last: NumBefore },
+}
+#[derive(Debug, Copy, Clone)]
+enum HyphenInsert {
+    None,
+    Simple,
+    Locale,
+}
+impl<'a> State<'a> {
+    fn crop(
+        &self,
+        prf: Option<PageRangeFormat>,
+        num: u32,
+        is_roman: bool,
+        pfx: &'a str,
+        sfx: &'a str,
+    ) -> (&'a str, u32, HyphenInsert, Self) {
+        use crate::page_range::truncate_prf;
+        match *self {
+            State::Normal if sfx.is_empty() => (
+                pfx,
+                num,
+                HyphenInsert::None,
+                State::Hyphenating {
+                    prefix: pfx,
+                    last: NumBefore::see_num(num, is_roman),
+                },
+            ),
+            State::Normal => (pfx, num, HyphenInsert::None, State::Normal),
+            State::Hyphenating { prefix, last } if pfx == prefix => {
+                // Prefixes match, we're going to crop it
+                if let Some(last_num) = last.matching_for_crop(is_roman) {
+                    if let Some(prf) = prf {
+                        let cropped = truncate_prf(prf, last_num, num);
+                        let crop_prefix = match prf {
+                            PageRangeFormat::Expanded => pfx,
+                            _ => "",
+                        };
+                        (crop_prefix, cropped, HyphenInsert::Locale, State::Normal)
+                    } else {
+                        // The spec says this should be HyphenInsert::Simple, but it breaks
+                        // ~ a hundred CSL tests, so the spec is to be ignored...
+                        (pfx, num, HyphenInsert::Locale, State::Normal)
+                    }
+                } else {
+                    (pfx, num, HyphenInsert::Simple, State::Normal)
+                }
+            }
+            State::Hyphenating { prefix, last } => (pfx, num, HyphenInsert::Simple, State::Normal),
+        }
+    }
+    fn see_hyphen(&self) -> Self {
+        match self {
+            State::Normal => State::Normal,
+            State::Hyphenating { last, prefix } => {
+                let neu = match *last {
+                    NumBefore::SeenNum(n) => NumBefore::SeenNumHyphen(n),
+                    NumBefore::SeenRoman(n) => NumBefore::SeenRomanHyphen(n),
+                    a => a,
+                };
+                State::Hyphenating { last: neu, prefix }
+            }
+        }
+    }
+    fn non_num_should_push_hyphen(&self) -> HyphenInsert {
+        match self {
+            State::Hyphenating { last, .. } => match last {
+                NumBefore::SeenNumHyphen(_) | NumBefore::SeenRomanHyphen(_) => HyphenInsert::Simple,
+                _ => HyphenInsert::None,
+            },
+            _ => HyphenInsert::None,
+        }
+    }
+}
+
+impl HyphenInsert {
+    fn write(&self, s: &mut SmartString, locale: &Locale, variable: NumberVariable) {
+        // eprintln!(" => {:?}", self);
+        match self {
+            HyphenInsert::Locale => {
+                let hyphen = get_hyphen(locale, variable);
+                s.push_str(hyphen);
+            }
+            HyphenInsert::Simple => {
+                s.push('-');
+            }
+            HyphenInsert::None => {}
+        }
     }
 }
 
@@ -107,69 +229,85 @@ fn tokens_to_string(
     prf: Option<PageRangeFormat>,
 ) -> SmartString {
     let mut s = SmartString::new();
-    #[derive(Copy, Clone)]
-    enum NumBefore {
-        SeenNum(u32),
-        SeenNumHyphen(u32),
-    }
-    let mut state = None;
+    let mut state = State::Normal;
     let mut iter = ts.iter().peekable();
     while let Some(t) = iter.next() {
+        // eprintln!("{:?}\n -  {:?}", state, t);
         state = match *t {
-            // TODO: ordinals, etc
+            Hyphen => state.see_hyphen(),
             Num(i) => {
-                let (cropped, newstate) = match (prf, state) {
-                    (Some(prf), Some(NumBefore::SeenNumHyphen(prev))) => {
-                        (crate::page_range::truncate_prf(prf, prev, i), None)
-                    }
-                    _ => (i, Some(NumBefore::SeenNum(i))),
-                };
+                let (_, cropped, hyphen, newstate) = state.crop(prf, i, false, "", "");
+                hyphen.write(&mut s, locale, variable);
                 write!(s, "{}", cropped).unwrap();
                 newstate
             }
-            Affixed(ref a) => {
-                s.push_str(&a);
-                None
+            Affixed(ref pre, num, ref suf) => {
+                let (prefix, cropped, hyphen, newstate) = state.crop(prf, num, false, pre, suf);
+                hyphen.write(&mut s, locale, variable);
+                write!(s, "{}{}{}", prefix, cropped, suf).unwrap();
+                newstate
+            }
+            Roman(i, upper) => {
+                let (_, _, hyphen, newstate) = state.crop(prf, i, true, "", "");
+                hyphen.write(&mut s, locale, variable);
+                // Prefer to print roman as roman, because usually roman means a preamble page.
+                if let Some(x) = roman::to(i) {
+                    if upper {
+                        s.push_str(&x.to_ascii_uppercase());
+                    } else {
+                        s.push_str(&x);
+                    }
+                }
+                newstate
+            }
+            Str(ref str) => {
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
+                s.push_str(&str);
+                State::Normal
             }
             Comma => {
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 s.push_str(", ");
-                None
-            }
-            Hyphen => {
-                let hyphen = get_hyphen(locale, variable);
-                s.push_str(hyphen);
-                match state {
-                    Some(NumBefore::SeenNum(i)) => Some(NumBefore::SeenNumHyphen(i)),
-                    _ => None,
-                }
+                State::Normal
             }
             Ampersand => {
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 s.push(' ');
                 s.push_str(get_ampersand(locale));
                 s.push(' ');
-                None
+                State::Normal
             }
             And | CommaAnd => {
+                state
+                    .non_num_should_push_hyphen()
+                    .write(&mut s, locale, variable);
                 if *t == CommaAnd {
                     s.push(',');
                 }
                 s.push(' ');
                 s.push_str(locale.and_term(None).unwrap_or("and"));
                 s.push(' ');
-                None
+                State::Normal
             }
         }
     }
+    // eprintln!("... Final state: {:?}   =>   {:?}", state, s);
     s
 }
 
 /// Numbers bigger than 3999 are too cumbersome anyway
 pub fn roman_representable(val: &NumericValue) -> bool {
     match val {
-        NumericValue::Tokens(_, ts) => ts
+        NumericValue::Tokens(_, ts, _) => ts
             .iter()
             .filter_map(NumericToken::get_num)
-            .all(|t| t <= 3999),
+            .all(|t| t <= roman::MAX),
         _ => false,
     }
 }
@@ -184,13 +322,15 @@ pub fn roman_lower(
     use std::convert::TryInto;
     for t in ts {
         match t {
-            // TODO: ordinals, etc
-            Num(i) => {
-                if let Some(x) = roman::to((*i).try_into().unwrap()) {
+            Roman(i, _) | Num(i) => {
+                if let Some(x) = roman::to(*i) {
                     s.push_str(&x);
                 }
             }
-            Affixed(a) => s.push_str(&a),
+            Affixed(ref pre, num, ref suf) => {
+                write!(s, "{}{}{}", pre, num, suf).unwrap();
+            }
+            Str(ref str) => s.push_str(&str),
             Comma => s.push_str(", "),
             // en-dash
             Hyphen => s.push_str(get_hyphen(locale, variable)),
@@ -219,124 +359,14 @@ fn test_roman_lower() {
         NumericToken::Hyphen,
         NumericToken::Num(11),
         NumericToken::Comma,
-        NumericToken::Affixed("2E".into()),
+        NumericToken::Affixed("".into(), 2, "E".into()),
+        NumericToken::Comma,
+        NumericToken::Roman(3, false),
+        NumericToken::Comma,
+        NumericToken::Roman(3, true),
     ];
     assert_eq!(
         &roman_lower(&ts[..], &Locale::default(), NumberVariable::Locator, None),
-        "iii\u{2013}xi, 2E"
+        "iii\u{2013}xi, 2E, iii, iii"
     );
-}
-
-#[allow(dead_code)]
-mod roman {
-    //! Conversion between integers and roman numerals.
-    //!
-    //! Duplicated because we want lowercase by default to work with text-casing.
-    //! Original, 'unlicensed': https://github.com/linfir/roman.rs
-
-    static ROMAN: &[(char, i32)] = &[
-        ('i', 1),
-        ('v', 5),
-        ('x', 10),
-        ('l', 50),
-        ('c', 100),
-        ('d', 500),
-        ('m', 1000),
-    ];
-    static ROMAN_PAIRS: &[(&str, i32)] = &[
-        ("m", 1000),
-        ("cm", 900),
-        ("d", 500),
-        ("cd", 400),
-        ("c", 100),
-        ("xc", 90),
-        ("l", 50),
-        ("xl", 40),
-        ("x", 10),
-        ("ix", 9),
-        ("v", 5),
-        ("iv", 4),
-        ("i", 1),
-    ];
-
-    /// The largest number representable as a roman numeral.
-    pub static MAX: i32 = 3999;
-
-    /// Converts an integer into a roman numeral.
-    ///
-    /// Works for integer between 1 and 3999 inclusive, returns None otherwise.
-    ///
-    ///
-    pub fn to(n: i32) -> Option<String> {
-        if n <= 0 || n > MAX {
-            return None;
-        }
-        let mut out = String::new();
-        let mut n = n;
-        for &(name, value) in ROMAN_PAIRS.iter() {
-            while n >= value {
-                n -= value;
-                out.push_str(name);
-            }
-        }
-        assert!(n == 0);
-        Some(out)
-    }
-
-    #[test]
-    fn test_to_roman() {
-        let roman =
-            "i ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi xvii xviii xix xx xxi xxii"
-                .split(' ');
-        for (i, x) in roman.enumerate() {
-            let n = (i + 1) as i32;
-            assert_eq!(to(n).unwrap(), x);
-        }
-        assert_eq!(to(1984).unwrap(), "mcmlxxxiv");
-    }
-
-    /// Converts a roman numeral to an integer.
-    ///
-    /// Works for integer between 1 and 3999 inclusive, returns None otherwise.
-    ///
-    ///
-    pub fn from(txt: &str) -> Option<i32> {
-        let n = match from_lax(txt) {
-            Some(n) => n,
-            None => return None,
-        };
-        match to(n) {
-            Some(ref x) if *x == txt => Some(n),
-            _ => None,
-        }
-    }
-
-    fn from_lax(txt: &str) -> Option<i32> {
-        let (mut n, mut max) = (0, 0);
-        for c in txt.chars().rev() {
-            let &(_, val) = ROMAN.iter().find(|x| {
-                let &(ch, _) = *x;
-                ch == c
-            })?;
-            if val < max {
-                n -= val;
-            } else {
-                n += val;
-                max = val;
-            }
-        }
-        Some(n)
-    }
-
-    #[test]
-    fn test_from() {
-        assert!(from("I").is_none());
-    }
-
-    #[test]
-    fn test_to_from() {
-        for n in 1..MAX {
-            assert_eq!(from(&to(n).unwrap()).unwrap(), n);
-        }
-    }
 }

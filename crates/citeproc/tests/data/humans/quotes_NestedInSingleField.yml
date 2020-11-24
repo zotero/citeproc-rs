@@ -1,0 +1,26 @@
+mode: citation
+result: Test [should {pass} instead] of failing
+format: html
+
+input:
+  - id: ITEM-1
+    type: book
+    title: 'Test "should "pass" instead" of failing'
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <locale>
+      <terms>
+        <term name="open-quote">[</term>
+        <term name="close-quote">]</term>
+        <term name="open-inner-quote">{</term>
+        <term name="close-inner-quote">}</term>
+      </terms>
+    </locale>
+    <citation>
+      <layout>
+        <text variable="title" />
+      </layout>
+    </citation>
+  </style>

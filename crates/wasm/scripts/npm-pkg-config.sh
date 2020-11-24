@@ -131,10 +131,10 @@ if [ -n "$GITHUB_PACKAGES_DEF" ]; then
   SCO=${NO_AT%%/*/$PKG}
   NAME="@$SCO/$PKG"
 
-  append '' '.publishConfig = { repository: "https://npm.pkg.github.com" }'
+  append '' '.publishConfig = { registry: "https://npm.pkg.github.com/cormacrelf" }'
 
-  append "--arg url ssh://git@github.com/$REPO.git --arg pkg packages/$PKG" \
-         '.repository = { type: "git", url: $url, directory: $pkg }'
+  append "--arg url ssh://git@github.com/$REPO.git --arg directory packages/$PKG" \
+         '.repository = { type: "git", url: $url, directory: $directory }'
 
   append "--arg name $NAME" '.name = $name'
 

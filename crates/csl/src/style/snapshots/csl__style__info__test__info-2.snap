@@ -1,0 +1,125 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<Info>(::indoc::indoc!(r#\"\n            <info>\n                <id>https://example.com/kitchen-sink</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title xml:lang=\"en-AU\">My Style</title>\n                <title-short xml:lang=\"en-AU\">MS</title-short>\n                <summary xml:lang=\"en-AU\">Sum</summary>\n                <rights license=\"license-uri\" xml:lang=\"en-AU\">Rights to use</rights>\n                <link rel=\"self\" href=\"https://example.com/self\" xml:lang=\"en-AU\" />\n                <link rel=\"documentation\" href=\"https://example.com/documentation\" xml:lang=\"en-AU\" />\n                <link rel=\"template\" href=\"https://example.com/template\" xml:lang=\"en-AU\" />\n                <!-- link rel = independent-parent -->\n                <category citation-format=\"author-date\"/>\n                <category field=\"medicine\"/>\n                <issn>issn</issn>\n                <eissn>eissn</eissn>\n                <issnl>issnl</issnl>\n            </info>\n        \"#)).expect(\"did not parse\")"
+---
+Info {
+    id: Url(
+        "https://example.com/kitchen-sink",
+    ),
+    updated: 2020-01-01T00:00:00+00:00,
+    title: LocalizedString {
+        value: "My Style",
+        lang: Some(
+            Iso(
+                English,
+                Some(
+                    AU,
+                ),
+            ),
+        ),
+    },
+    title_short: Some(
+        LocalizedString {
+            value: "MS",
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+        },
+    ),
+    rights: Some(
+        Rights {
+            value: "Rights to use",
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+            license: Some(
+                Identifier(
+                    "license-uri",
+                ),
+            ),
+        },
+    ),
+    summary: Some(
+        LocalizedString {
+            value: "Sum",
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+        },
+    ),
+    parent: None,
+    links: [
+        Link {
+            href: Url(
+                "https://example.com/self",
+            ),
+            rel: RelSelf,
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+        },
+        Link {
+            href: Url(
+                "https://example.com/documentation",
+            ),
+            rel: Documentation,
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+        },
+        Link {
+            href: Url(
+                "https://example.com/template",
+            ),
+            rel: Template,
+            lang: Some(
+                Iso(
+                    English,
+                    Some(
+                        AU,
+                    ),
+                ),
+            ),
+        },
+    ],
+    citation_format: Some(
+        AuthorDate,
+    ),
+    categories: [
+        Medicine,
+    ],
+    issn: Some(
+        "issn",
+    ),
+    eissn: Some(
+        "eissn",
+    ),
+    issnl: Some(
+        "issnl",
+    ),
+}

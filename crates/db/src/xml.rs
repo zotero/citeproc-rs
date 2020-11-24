@@ -10,7 +10,8 @@ use std::sync::Arc;
 
 use csl::{
     locale::{Lang, Locale, LocaleOptions, LocaleSource, EN_US},
-    style::{Delimiter, Name, Style, TextElement, TextSource},
+    style::{Name, Style, TextElement, TextSource},
+    SmartString,
 };
 use fnv::FnvHashSet;
 
@@ -26,21 +27,21 @@ pub trait StyleDatabase {
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
     /// First one is the inherited names-delimiter
-    fn name_info_citation(&self) -> (Option<Delimiter>, Arc<Name>);
+    fn name_info_citation(&self) -> (Option<SmartString>, Arc<Name>);
     /// Grabs the Name options from `<style>` + `<bibliography>` elements
     /// First one is the inherited names-delimiter
-    fn name_info_bibliography(&self) -> (Option<Delimiter>, Arc<Name>);
+    fn name_info_bibliography(&self) -> (Option<SmartString>, Arc<Name>);
 
     /// Lists every <names> block in the style, with each name variable it is used for
     fn name_configurations(&self) -> Arc<Vec<(NameVariable, Name)>>;
 }
 
-fn name_info_citation(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_citation(db: &dyn StyleDatabase) -> (Option<SmartString>, Arc<Name>) {
     let style = db.style();
     style.name_info_citation()
 }
 
-fn name_info_bibliography(db: &dyn StyleDatabase) -> (Option<Delimiter>, Arc<Name>) {
+fn name_info_bibliography(db: &dyn StyleDatabase) -> (Option<SmartString>, Arc<Name>) {
     let style = db.style();
     style.name_info_bibliography()
 }
@@ -108,19 +109,6 @@ fn name_configurations_inner(
     }
 }
 
-#[cfg(test)]
-macro_rules! style_xml {
-    ($ex:expr) => {{
-        use std::str::FromStr;
-        ::csl::style::Style::from_str(&format!(
-            r#"<?xml version="1.0" encoding="utf-8"?>
-            {}"#,
-            $ex
-        ))
-        .unwrap()
-    }};
-}
-
 fn name_configurations_middle(style: &Style) -> Vec<(NameVariable, Name)> {
     let base = style.name_citation();
     let mut vec = Vec::new();
@@ -137,7 +125,7 @@ fn name_configurations(db: &dyn StyleDatabase) -> Arc<Vec<(NameVariable, Name)>>
 
 #[test]
 fn test_name_configurations() {
-    let sty = style_xml!(
+    let sty = Style::parse_for_test(
         r#"<style class="note" version="1.0">
         <macro name="blah">
             <names variable="translator"/>
@@ -154,7 +142,7 @@ fn test_name_configurations() {
             </layout>
         </citation>
     </style>"#
-    );
+    ).unwrap();
     let confs = name_configurations_middle(&sty);
     let mut conf = Name::root_default();
     conf.et_al_min = Some(10);
@@ -178,6 +166,8 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
     fn locale_input_xml(&self, key: Lang) -> Arc<String>;
     #[salsa::input]
     fn locale_input_langs(&self) -> Arc<FnvHashSet<Lang>>;
+    #[salsa::input]
+    fn default_lang_override(&self) -> Option<Lang>;
 
     /// Backed by the LocaleFetcher implementation
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
@@ -200,7 +190,10 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
 }
 
 fn default_locale(db: &dyn LocaleDatabase) -> Arc<Locale> {
-    db.merged_locale(db.style().default_locale.clone())
+    let overrider = db
+        .default_lang_override()
+        .unwrap_or_else(|| db.style().default_locale.clone().unwrap_or_else(Default::default));
+    db.merged_locale(overrider)
 }
 
 fn locale_xml(db: &dyn LocaleDatabase, key: Lang) -> Option<Arc<String>> {

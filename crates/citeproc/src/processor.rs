@@ -21,12 +21,12 @@ use citeproc_db::{
     CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
 use citeproc_proc::db::IrDatabaseStorage;
+use citeproc_proc::BibNumber;
 
 use salsa::Durability;
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::collections::HashSet;
-use std::str::FromStr;
 use std::sync::Arc;
 use parking_lot::{RwLock, Mutex};
 
@@ -46,7 +46,7 @@ type MarkupOutput = <Markup as OutputFormat>::Output;
 use fnv::FnvHashMap;
 
 struct SavedBib {
-    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, u32>)>,
+    sorted_refs: Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)>,
     bib_entries: Arc<FnvHashMap<Atom, Arc<MarkupOutput>>>,
 }
 
@@ -120,6 +120,32 @@ impl Clone for Snap {
     }
 }
 
+impl Default for SupportedFormat {
+    fn default() -> Self {
+        SupportedFormat::Html
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct InitOptions<'a> {
+    pub format: SupportedFormat,
+    /// A full independent style.
+    pub style: &'a str,
+    /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
+    pub locale_override: Option<Lang>,
+    /// Mechanism for fetching the locale you provide, if necessary.
+    pub fetcher: Option<Arc<dyn LocaleFetcher>>,
+
+    /// Disables some formalities for test suite operation
+    pub test_mode: bool,
+
+    /// Disables sorting on the bibliography
+    pub bibliography_nosort: bool,
+
+    #[doc(hidden)]
+    pub use_default_default: (),
+}
+
 impl Processor {
     pub(crate) fn safe_default(fetcher: Arc<dyn LocaleFetcher>) -> Self {
         let mut interner = Interner::with_capacity(40);
@@ -135,33 +161,43 @@ impl Processor {
             preview_cluster_id,
         };
         citeproc_db::safe_default(&mut db);
+        citeproc_proc::safe_default(&mut db);
         db
     }
 
-    pub fn new(
-        style_string: &str,
-        fetcher: Arc<dyn LocaleFetcher>,
-        format: SupportedFormat,
-    ) -> Result<Self, StyleError> {
+    pub fn new(options: InitOptions) -> Result<Self, StyleError> {
+        // The only thing you need from a dependent style is the override language, which may well
+        // be none.
+        let InitOptions {
+            style,
+            locale_override,
+            fetcher,
+            format,
+            test_mode,
+            bibliography_nosort,
+            use_default_default: _,
+        } = options;
+
+        let fetcher = fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
         let mut db = Processor::safe_default(fetcher);
         db.formatter = format.make_markup();
-        let style = Arc::new(Style::from_str(style_string)?);
-        db.set_style_with_durability(style, Durability::HIGH);
+        let style = Style::parse_with_opts(
+            &style,
+            csl::ParseOptions {
+                allow_no_info: test_mode,
+                ..Default::default()
+            },
+        )?;
+        db.set_style_with_durability(Arc::new(style), Durability::HIGH);
+        db.set_default_lang_override_with_durability(locale_override, Durability::HIGH);
+        db.set_bibliography_nosort_with_durability(bibliography_nosort, Durability::HIGH);
         Ok(db)
     }
 
     pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
-        let style = Style::from_str(style_text)?;
+        let style = Style::parse(style_text)?;
         self.set_style_with_durability(Arc::new(style), Durability::HIGH);
         Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn test_db() -> Self {
-        use citeproc_db::PredefinedLocales;
-        let mut db = Processor::safe_default(Arc::new(PredefinedLocales::bundled_en_us()));
-        db.formatter = Markup::plain();
-        db
     }
 
     #[cfg(feature = "rayon")]
@@ -553,10 +589,13 @@ impl Processor {
             .0
             .iter()
             .filter_map(|k| bib_map.get(k).map(|v| (k, v)))
-            .filter(|(_, v)| !v.is_empty())
             .map(|(k, v)| BibEntry {
                 id: k.clone(),
-                value: v.clone(),
+                value: if v.is_empty() {
+                    Arc::new(SmartString::from("[CSL STYLE ERROR: reference with no printed form.]"))
+                } else {
+                    v.clone()
+                },
             })
         .collect()
     }
@@ -586,7 +625,9 @@ impl Processor {
             .filter_map(|refr| refr.language.clone())
             .collect();
         let style = self.style();
-        langs.insert(style.default_locale.clone());
+        if let Some(dl) = style.default_locale.as_ref() {
+            langs.insert(dl.clone());
+        }
         langs.into_iter().collect()
     }
 

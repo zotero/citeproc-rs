@@ -15,8 +15,6 @@ pub mod markup;
 pub mod micro_html;
 #[cfg(feature = "pandoc")]
 pub mod pandoc;
-#[cfg(feature = "plain")]
-pub mod plain;
 mod superscript;
 
 // pub use self::pandoc::Pandoc;
@@ -193,17 +191,17 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         } else {
             b
         };
-        let mut pre_and_content = if let Some(prefix) = affixes.map(|a| a.prefix.as_ref()) {
+        let mut pre_and_content = if let Some(prefix) = affixes.as_ref().map(|a| &a.prefix) {
             if !prefix.is_empty() {
                 // TODO: use the localized quotes.
-                self.seq(once(self.ingest(prefix, &IngestOptions::default())).chain(once(b)))
+                self.seq(once(self.ingest(prefix, &IngestOptions::for_affixes())).chain(once(b)))
             } else {
                 b
             }
         } else {
             b
         };
-        if let Some(suffix) = affixes.map(|a| a.suffix.as_ref()) {
+        if let Some(suffix) = affixes.as_ref().map(|a| &a.suffix) {
             if !suffix.is_empty() {
                 self.append_suffix(&mut pre_and_content, suffix);
             }
@@ -212,6 +210,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
     }
 
     fn append_suffix(&self, pre_and_content: &mut Self::Build, suffix: &str);
+    fn ends_with_full_stop(&self, build: &Self::Build) -> bool;
 
     fn apply_text_case(&self, mutable: &mut Self::Build, options: &IngestOptions);
 

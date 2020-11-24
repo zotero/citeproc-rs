@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use citeproc_db::{ClusterId, CiteData, LocaleFetcher, PredefinedLocales, StyleDatabase};
-use citeproc_io::{output::markup::Markup, Reference, Cite};
+use citeproc_db::{CiteData, ClusterId, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_io::{output::markup::Markup, Cite, Reference};
 use csl::Atom;
 
 use csl::Style;
@@ -9,8 +9,7 @@ use std::sync::Arc;
 
 #[allow(dead_code)]
 pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
-    use std::str::FromStr;
-    let sty = Style::from_str(&format!(
+    let sty = Style::parse_for_test(&format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 {}"#,
         s
@@ -20,8 +19,7 @@ pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
 }
 
 pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
-    use std::str::FromStr;
-    let sty = Style::from_str(&format!(
+    let sty = Style::parse_for_test(&format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
     <style class="note" version="1.0.1">
         <citation>
@@ -55,7 +53,10 @@ impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         Markup::html()
     }
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString> {
+    fn lookup_interned_string(
+        &self,
+        symbol: string_interner::DefaultSymbol,
+    ) -> Option<SmartString> {
         None
     }
 }
@@ -74,12 +75,12 @@ impl MockProcessor {
             fetcher,
         };
         citeproc_db::safe_default(&mut db);
+        crate::safe_default(&mut db);
         db
     }
 
     pub fn set_style_text(&mut self, style_text: &str) {
-        use std::str::FromStr;
-        let style = Style::from_str(style_text).unwrap();
+        let style = Style::parse_for_test(style_text).unwrap();
         use salsa::Durability;
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
@@ -105,7 +106,7 @@ impl MockProcessor {
     }
 
     pub fn insert_references(&mut self, refs: Vec<Reference>) {
-        let keys: HashSet<Atom> = refs.iter().map(|r| r.id.clone()).collect();
+        let keys = refs.iter().map(|r| r.id.clone()).collect();
         for r in refs {
             self.set_reference_input(r.id.clone(), Arc::new(r));
         }

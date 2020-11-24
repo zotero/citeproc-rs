@@ -76,7 +76,19 @@ where
         } else {
             // if not, <else>
             let Else(ref els) = last;
-            let content = sequence_basic(db, state, ctx, arena, &els);
+            let content = sequence(
+                db,
+                state,
+                ctx,
+                arena,
+                els,
+                false,
+                Some(&|| IrSeq {
+                    // Crucial: choose DOES inherit delimiters.
+                    should_inherit_delim: true,
+                    ..Default::default()
+                }),
+            );
             maybe_leave_unresolved(disamb, content, arena)
         }
     }
@@ -92,14 +104,47 @@ impl Disambiguation<Markup> for Choose {
     ) -> (RefIR, GroupVars) {
         let Choose(head, rest, last) = self;
         if let Some(els) = eval_ifthen_ref(head, ctx, &mut state.disamb_count).0 {
-            return ref_sequence_basic(db, state, ctx, els, stack);
+            return ref_sequence(
+                db,
+                state,
+                ctx,
+                els,
+                false,
+                Some(stack),
+                Some(&|| RefIrSeq {
+                    should_inherit_delim: true,
+                    ..Default::default()
+                }),
+            );
         }
         for branch in rest {
             if let Some(els) = eval_ifthen_ref(branch, ctx, &mut state.disamb_count).0 {
-                return ref_sequence_basic(db, state, ctx, els, stack);
+                return ref_sequence(
+                    db,
+                    state,
+                    ctx,
+                    els,
+                    false,
+                    Some(stack),
+                    Some(&|| RefIrSeq {
+                        should_inherit_delim: true,
+                        ..Default::default()
+                    }),
+                );
             }
         }
-        ref_sequence_basic(db, state, ctx, &last.0, stack)
+        ref_sequence(
+            db,
+            state,
+            ctx,
+            &last.0,
+            false,
+            Some(stack),
+            Some(&|| RefIrSeq {
+                should_inherit_delim: true,
+                ..Default::default()
+            }),
+        )
     }
 }
 
@@ -123,7 +168,19 @@ where
     let IfThen(ref conditions, ref elements) = *branch;
     let (matched, disambiguate) = eval_conditions(conditions, ctx, /* phony, not used */ 0);
     let content = if matched {
-        Some(sequence_basic(db, state, ctx, arena, &elements))
+        Some(sequence(
+            db,
+            state,
+            ctx,
+            arena,
+            elements,
+            false,
+            Some(&|| IrSeq {
+                // Crucial: choose DOES inherit delimiters.
+                should_inherit_delim: true,
+                ..Default::default()
+            }),
+        ))
     } else {
         None
     };
@@ -256,6 +313,7 @@ impl CondChecker for UselessCondChecker {
 }
 
 pub trait CondChecker {
+    /// Note this will be subtly different from `RenderContext::get_ordinary().is_some()`
     fn has_variable(&self, var: AnyVariable) -> bool;
     fn is_numeric(&self, var: AnyVariable) -> bool;
     /// Count is for references only, so IRs can slowly increase the disamb count and incrementally

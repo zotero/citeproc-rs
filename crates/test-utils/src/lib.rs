@@ -64,6 +64,7 @@ impl Default for Format {
 pub struct TestCase {
     pub mode: Mode,
     pub format: Format,
+    pub bibliography_nosort: bool,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -76,7 +77,15 @@ impl Clone for TestCase {
     fn clone(&self) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
-            Processor::new(&self.csl, fet, self.format.0).expect("could not construct processor")
+            Processor::new(InitOptions {
+                style: &self.csl,
+                fetcher: Some(fet),
+                format: self.format.0,
+                test_mode: true,
+                bibliography_nosort: self.bibliography_nosort,
+                ..Default::default()
+            })
+            .expect("could not construct processor")
         };
         processor.reset_references(self.input.clone());
         Warmup::maximum().execute(&mut processor);
@@ -84,6 +93,7 @@ impl Clone for TestCase {
             processor,
             mode: self.mode.clone(),
             format: self.format.clone(),
+            bibliography_nosort: self.bibliography_nosort,
             csl: self.csl.clone(),
             input: self.input.clone(),
             result: self.result.clone(),
@@ -97,6 +107,7 @@ impl TestCase {
     pub fn new(
         mode: Mode,
         format: Format,
+        bibliography_nosort: bool,
         csl: String,
         input: Vec<Reference>,
         result: String,
@@ -105,7 +116,15 @@ impl TestCase {
     ) -> Self {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
-            Processor::new(&csl, fet, format.0).expect("could not construct processor")
+            Processor::new(InitOptions {
+                style: &csl,
+                fetcher: Some(fet),
+                format: format.0,
+                test_mode: true,
+                bibliography_nosort,
+                ..Default::default()
+            })
+            .expect("could not construct processor")
         };
         let clusters = clusters
             .map(|vec| {
@@ -121,6 +140,7 @@ impl TestCase {
         TestCase {
             mode,
             format,
+            bibliography_nosort,
             csl,
             input,
             result,
@@ -185,9 +205,6 @@ impl TestCase {
             }
             match self.mode {
                 Mode::Citation => {
-                    if self.result == "[CSL STYLE ERROR: reference with no printed form.]" {
-                        self.result = String::new()
-                    }
                     // Because citeproc-rs is a bit keen to escape things
                     // Slashes are fine if they're not next to angle braces
                     // let's hope they're not

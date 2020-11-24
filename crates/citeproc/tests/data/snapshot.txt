@@ -1,10 +1,6 @@
 # vim: set ft=sh :
 # that's for comments
 
-# this behaviour happens if you have actually have a subsequent reference, but
-# without one, the cites are already unambiguous.
-disambiguate_BasedOnEtAlSubsequent.txt
-
 # The HTML parser in citeproc-rs is a real HTML5 parser, which will strip
 # floating half-tags according to that specification.
 flipflop_ItalicsSimple.txt
@@ -15,18 +11,9 @@ bugreports_AccidentalAllCaps.txt
 bugreports_DoubleEncodedAngleBraces.txt
 bugreports_NoTitle.txt
 
-# Unmatched single quote characters are not all converted to \u{2019} (close
-# curly single). Unclear what the best choice for that is yet.
-bugreports_FourAndFour.txt
-bugreports_SingleQuote.txt
-
 # citeproc-rs picks a slightly more compact RTF format. Instead of {} as a
 # command-terminator, it uses a single space. That includes the '\uc0\u160 '.
 bugreports_NonBreakingSpaceJoinFail.txt
-
-# citeproc-rs manages to smarten these quotes. Unrelated to the test in any
-# case, which regards using single quotes for all XML attributes in a style.
-bugreports_SingleQuoteXml.txt
 
 # The issue variable is not mentioned in the spec as needing its hyphens replaced.
 # The underlying problem is that cs:number is dramatically underused, mostly
@@ -50,17 +37,28 @@ magic_SuperscriptChars.txt
 # The order of in-text items is different; citeproc-rs outputs them first.
 position_IbidInText.txt
 
-# This style appears to depend on implicit suppression of title-short when
-# title has already been rendered. citeproc-rs gets the editortranslator label
-# right though.
-label_EditorTranslator1.txt
+# Only difference is some normalised spaces that citeproc-rs after the name
+# is suppressed
+bugreports_NoCaseEscape.txt
+bugreports_SmallCapsEscape.txt
 
 # citeproc-js chooses to parse rich text in numeric fields. The test hasn't #
 # decided this is wrong.
 flipflop_NumericField.txt
+
+# The french locale itself does not use half-width nbsps, so not sure why the
+# bruteforce find-and-replace method should.
+# In any case citeproc-rs actually parses French guillemets and renders using
+# the French locale file or converts them to whatever other locale.
+# So this snapshot has full-width nbsp (\u{a0}/&#8203;/&#x160;) instead.
+punctuation_FrenchOrthography.txt
 
 # Test implies i.e. month = 17 means Spring, implying 17-20 are also valid seasons,
 # i.e. if month > 12 && month < 25 { season = (month - 12) % 4 }
 # There is no reason for this to be the case. There's CSL-JSON's 13..=16 range,
 # and also EDTF's 21..=24 range, but no usage of the range in between.
 date_VariousInvalidDates.txt
+
+# The spec says "The 'locator' variable is always rendered with an en-dash replacing any hyphens."
+# The test suite doesn't do this for one of them here.
+label_CollapsedPageNumberPluralDetection.txt

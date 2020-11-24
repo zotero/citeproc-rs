@@ -2,7 +2,6 @@ use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::Cite;
-use csl::Atom;
 use std::mem;
 use std::sync::Arc;
 
@@ -79,10 +78,10 @@ impl<O: OutputFormat> IR<O> {
                     (
                         Some(Affixes {
                             prefix: mine.prefix,
-                            suffix: Atom::from(""),
+                            suffix: "".into(),
                         }),
                         Some(Affixes {
-                            prefix: Atom::from(""),
+                            prefix: "".into(),
                             suffix: mine.suffix,
                         }),
                     )
@@ -418,10 +417,13 @@ fn range_collapse() {
     );
 }
 
+type MarkupBuild = <Markup as OutputFormat>::Build;
 pub struct Unnamed3<O: OutputFormat> {
     pub cite: Arc<Cite<O>>,
     pub cnum: Option<u32>,
     pub gen4: Arc<IrGen>,
+    /// So we can look for punctuation at the end and use the format's quoting abilities
+    pub prefix_parsed: Option<MarkupBuild>,
     /// First of a group of cites with the same name
     pub is_first: bool,
     /// Subsequent in a group of cites with the same name
@@ -457,8 +459,10 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
             .field("cnum", &self.cnum)
             .field(
                 "gen4",
-                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt).map(|x| fmt.output(x, false)),
+                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt, None)
+                    .map(|x| fmt.output(x, false)),
             )
+            .field("prefix_parsed", &self.prefix_parsed)
             .field("has_locator", &self.has_locator)
             .field("is_first", &self.is_first)
             .field("should_collapse", &self.should_collapse)
@@ -473,13 +477,23 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
     }
 }
 
-impl<O: OutputFormat> Unnamed3<O> {
-    pub fn new(cite: Arc<Cite<O>>, cnum: Option<u32>, gen4: Arc<IrGen>) -> Self {
+impl Unnamed3<Markup> {
+    pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
+        let prefix_parsed = cite.prefix.as_opt_str().map(|p| {
+            fmt.ingest(
+                p,
+                &IngestOptions {
+                    is_external: true,
+                    ..Default::default()
+                },
+            )
+        });
         Unnamed3 {
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),
             cite,
             gen4,
+            prefix_parsed,
             cnum,
             is_first: false,
             should_collapse: false,
@@ -509,7 +523,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     for ix in 0..cites.len() {
         let gen4 = &cites[ix].gen4;
         let rendered = IR::first_name_block(gen4.root, &gen4.arena)
-            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt))
+            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt, None))
             .map(|flat| fmt.output(flat, false));
         same_names
             .entry(rendered)
@@ -554,7 +568,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                     let year_and_suf =
                         IR::find_first_year_and_suffix(cites[ix].gen4.root, &cites[ix].gen4.arena)
                             .and_then(|(ys_node, suf)| {
-                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt)?;
+                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt, None)?;
                                 Some((fmt.output(flat, false), suf))
                             });
                     if let Some((y, suf)) = year_and_suf {
@@ -759,7 +773,7 @@ impl<'a, T> ReducedNameToken<'a, T> {
         match token {
             NameToken::Name(dnr_index) => match &names[*dnr_index] {
                 DisambNameRatchet::Person(p) => ReducedNameToken::Name(&p.data.value),
-                DisambNameRatchet::Literal(b) => ReducedNameToken::Literal(b),
+                DisambNameRatchet::Literal { literal, .. } => ReducedNameToken::Literal(literal),
             },
             NameToken::Ellipsis => ReducedNameToken::Ellipsis,
             NameToken::EtAl(..) => ReducedNameToken::EtAl,
@@ -940,4 +954,348 @@ pub fn subsequent_author_substitute<O: OutputFormat>(
         }
     }
     false
+}
+
+///////////////////////
+// MixedNumericStyle //
+///////////////////////
+
+pub fn style_is_mixed_numeric(
+    style: &csl::Style,
+    cite_or_bib: CiteOrBib,
+) -> Option<(&Element, Option<&str>)> {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    fn cnum_renders_first<'a>(
+        els: &'a [El],
+        maybe_delim: Option<&'a str>,
+    ) -> Option<(&'a Element, Option<&'a str>)> {
+        for el in els {
+            match el {
+                El::Text(TextElement {
+                    source: TS::Variable(SV::Number(CitationNumber), _),
+                    ..
+                }) => return Some((el, maybe_delim)),
+                El::Number(NumberElement {
+                    variable: CitationNumber,
+                    ..
+                }) => return Some((el, maybe_delim)),
+                El::Group(Group {
+                    elements,
+                    delimiter,
+                    ..
+                }) => {
+                    return cnum_renders_first(elements, delimiter.as_opt_str());
+                }
+                El::Choose(c) => {
+                    let Choose(if_, ifthens_, else_) = c.as_ref();
+
+                    // You could have a citation number appear first in the bibliography in an else
+                    // block. You wouldn't, but you could.
+                    let either = cnum_renders_first(&if_.1, maybe_delim).or_else(|| {
+                        ifthens_
+                            .iter()
+                            .find_map(|ifthen| cnum_renders_first(&ifthen.1, maybe_delim))
+                    });
+                    if either.is_some() {
+                        return either;
+                    } else if else_.0.is_empty() {
+                        // No else block? The choose could be empty.
+                        continue;
+                    } else {
+                        let else_found = cnum_renders_first(&else_.0, maybe_delim);
+                        if else_found.is_some() {
+                            return else_found;
+                        }
+                    }
+                }
+                _ => break,
+            }
+        }
+        None
+    }
+    style
+        .get_layout(cite_or_bib)
+        .and_then(|layout| cnum_renders_first(&layout.elements, None))
+}
+
+#[test]
+fn test_mixed_numeric() {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    let mk = |layout: &str| {
+        let txt = format!(
+            r#"
+            <style class="in-text" version="1.0">
+                <citation><layout></layout></citation>
+                <bibliography><layout>
+                    {}
+                </layout></bibliography>
+            </style>
+        "#,
+            layout
+        );
+        Style::parse_for_test(&txt).unwrap()
+    };
+    let style = mk(r#"<group delimiter=". "> <text variable="citation-number" /> </group>"#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    let model_el = El::Text(TextElement {
+        source: TS::Variable(SV::Number(CitationNumber), VariableForm::Long),
+        ..Default::default()
+    });
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <group delimiter=". ">
+           <choose>
+               <if type="book">
+                   <text variable="citation-number" />
+                   <text variable="title" />
+               </if>
+           </choose>
+       </group>"#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <choose>
+           <if type="book">
+               <group delimiter=". ">
+                   <text variable="citation-number" />
+               </group>
+           </if>
+       </choose>
+       <text variable="title" />
+       "#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert_eq!(found, Some((&model_el, Some(". "))));
+    let style = mk(r#"
+       <choose>
+           <if type="book">
+               <group delimiter=". ">
+                   <number variable="citation-number" />
+                   <text variable="title" />
+               </group>
+           </if>
+       </choose>
+       "#);
+    let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
+    assert!(matches!(found, Some((_, Some(". ")))));
+}
+
+////////////////////////////////////////////////////
+// Layout affixes inside left-margin/right-inline //
+////////////////////////////////////////////////////
+
+#[derive(Debug, PartialEq)]
+struct LeftRightLayout {
+    left: Option<NodeId>,
+    right: Option<NodeId>,
+    layout: NodeId,
+}
+
+fn find_left_right_layout<O: OutputFormat>(
+    root: NodeId,
+    arena: &IrArena<O>,
+) -> Option<LeftRightLayout> {
+    let node = arena.get(root)?;
+    match &node.get().0 {
+        IR::Seq(seq)
+            if seq.is_layout
+                && seq
+                    .affixes
+                    .as_ref()
+                    .map_or(false, |af| !af.prefix.is_empty() || !af.suffix.is_empty()) =>
+        {
+            let left = node.first_child()
+                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::LeftMargin), .. }))));
+            let right = node.last_child()
+                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::RightInline), .. }))));
+            Some(LeftRightLayout {
+                left,
+                right,
+                layout: root,
+            })
+        }
+        _ => None,
+    }
+}
+
+pub fn fix_left_right_layout_affixes<O: OutputFormat>(
+    root: NodeId,
+    arena: &mut IrArena<O>,
+    fmt: &O,
+) {
+    let LeftRightLayout {
+        left,
+        right,
+        layout,
+    } = match find_left_right_layout(root, arena) {
+        Some(lrl) => lrl,
+        None => return,
+    };
+
+    fn get_af<O: OutputFormat>(node_id: NodeId, suf: bool, arena: &IrArena<O>) -> &str {
+        match &arena[node_id].get().0 {
+            IR::Seq(s) => s
+                .affixes
+                .as_ref()
+                .map(|af| if suf { &af.suffix } else { &af.prefix })
+                .map_or("", |af| af.as_str()),
+            _ => "",
+        }
+    }
+    fn write_af<O: OutputFormat>(
+        node_id: NodeId,
+        suf: bool,
+        content: SmartString,
+        arena: &mut IrArena<O>,
+    ) {
+        match &mut arena[node_id].get_mut().0 {
+            IR::Seq(s) => match &mut s.affixes {
+                Some(af) => {
+                    let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                    *which = content;
+                    if af.prefix.is_empty() && af.suffix.is_empty() {
+                        s.affixes = None;
+                    }
+                }
+                None if !content.is_empty() => {
+                    let mut af = Affixes::default();
+                    let which = if suf { &mut af.suffix } else { &mut af.prefix };
+                    *which = content;
+                    s.affixes = Some(af);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    if let Some(left) = left {
+        let layout_prefix = get_af(layout, false, arena);
+        if !layout_prefix.is_empty() {
+            let left_prefix = get_af(left, false, arena);
+            let mut new_prefix = SmartString::new();
+            new_prefix.push_str(layout_prefix);
+            new_prefix.push_str(left_prefix);
+            write_af(left, false, new_prefix, arena);
+            write_af(layout, false, "".into(), arena);
+        }
+    }
+    if let Some(right) = right {
+        let layout_suffix = get_af(layout, true, arena);
+        if !layout_suffix.is_empty() {
+            let right_suffix = get_af(right, true, arena);
+            let mut new_suffix = SmartString::new();
+            new_suffix.push_str(right_suffix);
+            new_suffix.push_str(layout_suffix);
+            write_af(right, true, new_suffix, arena);
+            write_af(layout, true, "".into(), arena);
+        }
+    }
+}
+
+#[test]
+fn test_left_right_layout() {
+    use csl::style::{Element as El, TextSource as TS, *};
+    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
+    let mut arena = IrArena::<Markup>::new();
+    let fmt = Markup::html();
+
+    let left = arena.seq(
+        IrSeq {
+            display: Some(DisplayMode::LeftMargin),
+            ..Default::default()
+        },
+        |arena, seq| {
+            let cnum = arena.blob(
+                CiteEdgeData::CitationNumber(fmt.plain("2. ")),
+                GroupVars::Important,
+            );
+            seq.append(cnum, arena);
+        },
+    );
+    let right = arena.seq(
+        IrSeq {
+            display: Some(DisplayMode::RightInline),
+            ..Default::default()
+        },
+        |arena, seq| {
+            let title = arena.blob(
+                CiteEdgeData::Output(fmt.plain("title")),
+                GroupVars::Important,
+            );
+            seq.append(title, arena);
+        },
+    );
+    let layout = arena.seq(
+        IrSeq {
+            is_layout: true,
+            affixes: Some(Affixes {
+                prefix: "".into(),
+                suffix: ".".into(),
+            }),
+            ..Default::default()
+        },
+        |arena, seq| {
+            seq.append(left, arena);
+            seq.append(right, arena);
+        },
+    );
+
+    let mut irgen = IrGen::new(layout, arena, IrState::new());
+    dbg!(&irgen);
+
+    let found = find_left_right_layout(layout, &mut irgen.arena);
+    assert_eq!(
+        found,
+        Some(LeftRightLayout {
+            left: Some(left),
+            right: Some(right),
+            layout
+        })
+    );
+
+    let blob = irgen
+        .arena
+        .blob(CiteEdgeData::Output(fmt.plain("blob")), GroupVars::Plain);
+    right.insert_before(blob, &mut irgen.arena);
+
+    dbg!(&irgen);
+
+    let found = find_left_right_layout(layout, &mut irgen.arena);
+    assert_eq!(
+        found,
+        Some(LeftRightLayout {
+            left: Some(left),
+            right: Some(right),
+            layout
+        })
+    );
+
+    fix_left_right_layout_affixes(layout, &mut irgen.arena, &fmt);
+
+    let flat = IR::flatten(layout, &irgen.arena, &fmt, None).unwrap();
+    let s = fmt.output(flat, false);
+    assert_eq!(
+        &s,
+        r#"<div class="csl-left-margin">2. </div>blob<div class="csl-right-inline">title.</div>"#
+    );
+}
+
+#[cfg(test)]
+trait ArenaExtensions<O: OutputFormat> {
+    fn blob(&mut self, edge: CiteEdgeData<O>, gv: GroupVars) -> NodeId;
+    fn seq<F: FnOnce(&mut Self, NodeId)>(&mut self, seq_tmpl: IrSeq, f: F) -> NodeId;
+}
+
+#[cfg(test)]
+impl<O: OutputFormat> ArenaExtensions<O> for IrArena<O> {
+    fn blob(&mut self, edge: CiteEdgeData<O>, gv: GroupVars) -> NodeId {
+        self.new_node((IR::Rendered(Some(edge)), gv))
+    }
+    fn seq<F: FnOnce(&mut Self, NodeId)>(&mut self, seq_tmpl: IrSeq, f: F) -> NodeId {
+        let seq_node = self.new_node((IR::Seq(seq_tmpl), GroupVars::Important));
+        f(self, seq_node);
+        seq_node
+    }
 }

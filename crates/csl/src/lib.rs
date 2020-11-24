@@ -6,11 +6,9 @@
 
 //! Describes the `<style>` element and all its children, and parses it from an XML tree.
 
-// pub use smartstring::alias::String as Atom;
+pub use smartstring::alias::String as SmartString;
 pub use string_cache::DefaultAtom as Atom;
 
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate strum_macros;
 #[macro_use]
@@ -18,66 +16,197 @@ extern crate log;
 
 use std::sync::Arc;
 
+pub mod error;
+
+macro_rules! append_invalid_err {
+    ($res:expr, $errs:expr) => {
+        match $res {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                $errs.push(e);
+                Err($crate::error::ChildGetterError)
+            }
+        }
+    };
+}
+
+macro_rules! append_err {
+    ($res:expr, $errs:expr) => {
+        match $res {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                $errs.extend(e.0.into_iter());
+                Err($crate::error::ChildGetterError)
+            }
+        }
+    };
+}
+
+mod from_node;
+use from_node::*;
+
+#[cfg(test)]
+macro_rules! assert_snapshot_parse {
+    ($ty:ty, $xml:literal) => {
+        ::insta::assert_debug_snapshot!(
+            $crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml)).expect("did not parse")
+        );
+    };
+}
+
+#[cfg(test)]
+macro_rules! assert_snapshot_err {
+    ($ty:ty, $xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml))
+            .expect_err("should have failed with errors"));
+    };
+}
+
+/// Easier version wherein
+#[cfg(test)]
+macro_rules! assert_snapshot_style_parse {
+    ($xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
+            .expect("should have parsed successfully"));
+    };
+}
+
+#[allow(unused_macros)]
+#[cfg(test)]
+macro_rules! assert_snapshot_style_err {
+    ($xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
+            .expect_err("should have failed with errors"));
+    };
+}
+
 pub(crate) mod attr;
 pub use self::attr::GetAttribute;
-pub mod error;
 pub mod locale;
 pub mod style;
 pub mod terms;
 pub mod variables;
 pub mod version;
 
+#[cfg(test)]
+mod test;
+
 pub use self::error::*;
+pub use self::from_node::ParseOptions;
 pub use self::locale::*;
-pub use self::style::*;
+pub use self::style::{dependent::*, info::*, *};
 pub use self::terms::*;
 pub use self::variables::*;
 pub use self::version::*;
 
 use self::attr::*;
 use fnv::FnvHashMap;
-use std::collections::HashMap;
 use roxmltree::{Children, Node};
 use semver::VersionReq;
+use std::collections::HashMap;
+
+use roxmltree::Document;
+use std::str::FromStr;
+impl FromStr for Style {
+    type Err = StyleError;
+    fn from_str(xml: &str) -> Result<Self, Self::Err> {
+        Style::parse(xml)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CiteOrBib {
+    Citation,
+    Bibliography,
+}
+
+impl Style {
+    /// Parses a style from an CSL string as XML.
+    pub fn parse(xml: &str) -> Result<Self, StyleError> {
+        Style::parse_with_opts(xml, ParseOptions::default())
+    }
+    pub fn parse_with_opts(xml: &str, options: ParseOptions) -> Result<Self, StyleError> {
+        let doc = Document::parse(xml)?;
+        let node = &doc.root_element();
+
+        // We don't know which features will be enabled yet, but we get that in
+        // Style::from_node_custom
+        let parse_info = ParseInfo {
+            options,
+            ..Default::default()
+        };
+
+        // If there is actually no info block (testing only!), it can't be a dependent style.
+        let mut errors = Vec::new();
+        let info = if parse_info.options.allow_no_info {
+            let mut throw_out = Vec::new();
+            Ok(max_one_child::<Info>(node, &parse_info, &mut throw_out)
+                .ok()
+                .flatten()
+                .unwrap_or_default())
+        } else {
+            exactly_one_child::<Info>(node, &parse_info, &mut errors)
+        };
+        if !errors.is_empty() {
+            return Err(StyleError::Invalid(CslError(errors)));
+        }
+        let info = info.map_err(|_| StyleError::Invalid(CslError(Vec::new())))?;
+
+        if let Some(parent_id) = info.independent_parent_id() {
+            return Err(StyleError::DependentStyle {
+                required_parent: parent_id,
+            }
+            .into());
+        }
+
+        let style = Style::from_node_custom(node, &parse_info, info)?;
+        Ok(style)
+    }
+    #[doc(hidden)]
+    pub fn parse_for_test(xml: &str) -> Result<Self, StyleError> {
+        Self::parse_with_opts(
+            xml,
+            ParseOptions {
+                allow_no_info: true,
+                ..Default::default()
+            },
+        )
+    }
+    pub fn is_dependent(&self) -> bool {
+        self.info.parent.is_some()
+    }
+    pub fn independent_parent(&self) -> Option<&ParentLink> {
+        self.info.parent.as_ref()
+    }
+    pub fn get_layout(&self, loc: CiteOrBib) -> Option<&Layout> {
+        match loc {
+            CiteOrBib::Citation => Some(&self.citation.layout),
+            CiteOrBib::Bibliography => self.bibliography.as_ref().map(|b| &b.layout),
+        }
+    }
+}
+
+impl Info {
+    pub fn parse_from_style(xml: &str) -> Result<Self, StyleError> {
+        let doc = Document::parse(xml)?;
+        let node = &doc.root_element();
+        let parse_info = ParseInfo::default();
+        let mut errors = Vec::new();
+        let info = exactly_one_child(node, &parse_info, &mut errors)?;
+        if !errors.is_empty() {
+            return Err(StyleError::Invalid(CslError(errors)));
+        }
+        Ok(info)
+    }
+    pub fn independent_parent_id(&self) -> Option<String> {
+        self.parent.as_ref().map(|p| p.href.to_string())
+    }
+}
 
 /// Something is Independent if what it represents is computed during processing, based on a Cite
 /// and the rest of a document. That is, it is not sourced directly from a Reference.
 pub trait IsIndependent {
     fn is_independent(&self) -> bool;
-}
-
-#[derive(Default)]
-pub(crate) struct ParseInfo {
-    features: Features,
-}
-
-pub(crate) type FromNodeResult<T> = Result<T, CslError>;
-
-pub(crate) trait FromNode
-where
-    Self: Sized,
-{
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self>;
-}
-
-trait AttrChecker
-where
-    Self: Sized,
-{
-    fn filter_attribute(attr: &str) -> bool;
-    fn is_on_node<'a>(node: &'a Node) -> bool {
-        node.attributes()
-            .iter()
-            .find(|a| Self::filter_attribute(a.name()))
-            != None
-    }
-    fn relevant_attrs<'a>(node: &'a Node) -> Vec<String> {
-        node.attributes()
-            .iter()
-            .filter(|a| Self::filter_attribute(a.name()))
-            .map(|a| String::from(a.name()))
-            .collect()
-    }
 }
 
 impl AttrChecker for Formatting {
@@ -90,35 +219,23 @@ impl AttrChecker for Formatting {
     }
 }
 
-impl<T> FromNode for Option<T>
-where
-    T: AttrChecker + FromNode,
-{
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        if T::is_on_node(node) {
-            Ok(Some(T::from_node(node, info)?))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
 impl FromNode for Affixes {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         Ok(Affixes {
-            prefix: attribute_atom(node, "prefix"),
-            suffix: attribute_atom(node, "suffix"),
+            prefix: SmartString::attribute_default(node, "prefix", info)?,
+            suffix: SmartString::attribute_default(node, "suffix", info)?,
         })
     }
 }
 
 impl FromNode for RangeDelimiter {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(RangeDelimiter(attribute_atom_default(
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        Ok(RangeDelimiter(SmartString::attribute_default_with(
             node,
             "range-delimiter",
-            "\u{2013}".into(),
-        )))
+            info,
+            || "\u{2013}".into(),
+        )?))
     }
 }
 
@@ -131,12 +248,6 @@ impl AttrChecker for RangeDelimiter {
 impl AttrChecker for Affixes {
     fn filter_attribute(attr: &str) -> bool {
         attr == "prefix" || attr == "suffix"
-    }
-}
-
-impl FromNode for Delimiter {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(Delimiter(attribute_atom(node, "delimiter")))
     }
 }
 
@@ -155,6 +266,10 @@ impl FromNode for Formatting {
 }
 
 impl FromNode for Citation {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("citation")
+    }
+    const CHILD_DESC: &'static str = "citation";
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         // TODO: remove collect() using Peekable
         let layouts: Vec<_> = node
@@ -177,28 +292,36 @@ impl FromNode for Citation {
             Some(Sort::from_node(&sorts[0], info)?)
         };
         Ok(Citation {
-            disambiguate_add_names: attribute_bool(node, "disambiguate-add-names", false)?,
-            disambiguate_add_givenname: attribute_bool(node, "disambiguate-add-givenname", false)?,
+            disambiguate_add_names: bool::attribute_default_val(
+                node,
+                "disambiguate-add-names",
+                info,
+                false,
+            )?,
+            disambiguate_add_givenname: bool::attribute_default_val(
+                node,
+                "disambiguate-add-givenname",
+                info,
+                false,
+            )?,
             givenname_disambiguation_rule: attribute_optional(
                 node,
                 "givenname-disambiguation-rule",
                 info,
             )?,
-            disambiguate_add_year_suffix: attribute_bool(
+            disambiguate_add_year_suffix: bool::attribute_default_val(
                 node,
                 "disambiguate-add-year-suffix",
+                info,
                 false,
             )?,
             layout: Layout::from_node(&layout_node, info)?,
             name_inheritance: Name::from_node(&node, info)?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            names_delimiter: attribute_option(node, "names-delimiter", info)?,
             near_note_distance: attribute_option_int(node, "near-note-distance")?.unwrap_or(5),
-            cite_group_delimiter: attribute_option_atom(node, "cite-group-delimiter"),
-            year_suffix_delimiter: attribute_option_atom(node, "year-suffix-delimiter"),
-            after_collapse_delimiter: attribute_option_atom(node, "after-collapse-delimiter"),
+            cite_group_delimiter: attribute_option(node, "cite-group-delimiter", info)?,
+            year_suffix_delimiter: attribute_option(node, "year-suffix-delimiter", info)?,
+            after_collapse_delimiter: attribute_option(node, "after-collapse-delimiter", info)?,
             collapse: attribute_option(node, "collapse", info)?,
             sort,
         })
@@ -223,7 +346,7 @@ impl FromNode for SortKey {
             sort_source: SortSource::from_node(node, info)?,
             names_min: attribute_option_int(node, "names-min")?,
             names_use_first: attribute_option_int(node, "names-use-first")?,
-            names_use_last: attribute_option_bool(node, "names-use-last")?,
+            names_use_last: attribute_option(node, "names-use-last", info)?,
             direction: attribute_option(node, "sort", info)?,
         })
     }
@@ -235,7 +358,15 @@ impl FromNode for SortSource {
         let variable = node.attribute("variable");
         let err = "<key> must have either a `macro` or `variable` attribute";
         match (macro_, variable) {
-            (Some(mac), None) => Ok(SortSource::Macro(mac.into())),
+            (Some(mac), None) => {
+                let mac: SmartString = mac.into();
+                if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
+                    return Err(
+                        InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into(),
+                    );
+                }
+                Ok(SortSource::Macro(mac))
+            }
             (None, Some(_)) => Ok(SortSource::Variable(attribute_var_type(
                 node,
                 "variable",
@@ -248,6 +379,10 @@ impl FromNode for SortSource {
 }
 
 impl FromNode for Bibliography {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("bibliography")
+    }
+    const CHILD_DESC: &'static str = "bibliography";
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         // TODO: layouts matching locales in CSL-M mode
         // TODO: make sure that all elements are under the control of a display attribute
@@ -279,24 +414,22 @@ impl FromNode for Bibliography {
         Ok(Bibliography {
             sort,
             layout: Layout::from_node(&layout_node, info)?,
-            hanging_indent: attribute_bool(node, "hanging-indent", false)?,
+            hanging_indent: bool::attribute_default_val(node, "hanging-indent", info, false)?,
             second_field_align: attribute_option(node, "second-field-align", info)?,
             line_spaces,
             entry_spacing,
             name_inheritance: Name::from_node(&node, info)?,
-            subsequent_author_substitute: attribute_option_atom(
+            subsequent_author_substitute: attribute_option(
                 node,
                 "subsequent-author-substitute",
-            ),
+                info,
+            )?,
             subsequent_author_substitute_rule: attribute_optional(
                 node,
                 "subsequent-author-substitute-rule",
                 info,
             )?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            names_delimiter: attribute_option(node, "names-delimiter", info)?,
         })
     }
 }
@@ -311,7 +444,7 @@ impl FromNode for Layout {
         Ok(Layout {
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
             locale: attribute_array(node, "locale", info)?,
             elements,
         })
@@ -412,7 +545,7 @@ impl FromNode for LabelElement {
             form: attribute_optional(node, "form", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            strip_periods: bool::attribute_default_val(node, "strip-periods", info, false)?,
             text_case: TextCase::from_node(node, info)?,
             plural: attribute_optional(node, "plural", info)?,
         })
@@ -428,7 +561,15 @@ impl FromNode for TextElement {
         let invalid = "<text> without a `variable`, `macro`, `term` or `value` is invalid";
 
         let source = match (macro_, value, variable, term) {
-            (Some(mac), None, None, None) => TextSource::Macro(mac.into()),
+            (Some(mac), None, None, None) => {
+                let mac: SmartString = mac.into();
+                if !info.macros.as_ref().map_or(false, |ms| ms.contains(&mac)) {
+                    return Err(
+                        InvalidCsl::new(node, format!("macro `{}` not defined", mac)).into(),
+                    );
+                }
+                TextSource::Macro(mac)
+            }
             (None, Some(val), None, None) => TextSource::Value(val.into()),
             (None, None, Some(_vv), None) => TextSource::Variable(
                 attribute_var_type(node, "variable", NeedVarType::TextVariable, info)?,
@@ -436,15 +577,15 @@ impl FromNode for TextElement {
             ),
             (None, None, None, Some(_tt)) => TextSource::Term(
                 TextTermSelector::from_node(node, info)?,
-                attribute_bool(node, "plural", false)?,
+                bool::attribute_default_val(node, "plural", info, false)?,
             ),
             _ => return Err(InvalidCsl::new(node, invalid).into()),
         };
 
         let formatting = Option::from_node(node, info)?;
         let affixes = Option::from_node(node, info)?;
-        let quotes = attribute_bool(node, "quotes", false)?;
-        let strip_periods = attribute_bool(node, "strip-periods", false)?;
+        let quotes = bool::attribute_default_val(node, "quotes", info, false)?;
+        let strip_periods = bool::attribute_default_val(node, "strip-periods", info, false)?;
         let text_case = TextCase::from_node(node, info)?;
         let display = attribute_option(node, "display", info)?;
 
@@ -483,11 +624,11 @@ impl FromNode for Group {
         Ok(Group {
             elements,
             formatting: Option::from_node(node, info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
             affixes: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
             // TODO: CSL-M only
-            is_parallel: attribute_bool(node, "is-parallel", false)?,
+            is_parallel: bool::attribute_default_val(node, "is-parallel", info, false)?,
         })
     }
 }
@@ -555,10 +696,10 @@ impl ConditionParser {
         };
         let cond = ConditionParser {
             match_type: Match::from_node(node, info)?,
-            jurisdiction: attribute_option_atom(node, "jurisdiction"),
+            jurisdiction: attribute_option(node, "jurisdiction", info)?,
             subjurisdictions: attribute_option_int(node, "subjurisdictions")?,
             context: attribute_option(node, "context", info)?,
-            disambiguate: attribute_option_bool(node, "disambiguate")?,
+            disambiguate: bool::attribute_option(node, "disambiguate", info)?,
             variable: attribute_array_var(node, "variable", NeedVarType::Any, info)?,
             position: attribute_array_var(node, "position", NeedVarType::CondPosition, info)?,
             is_plural: attribute_array_var(node, "is-plural", NeedVarType::CondIsPlural, info)?,
@@ -727,7 +868,7 @@ fn choose_el(node: &Node, info: &ParseInfo) -> Result<Element, CslError> {
     Ok(Element::Choose(Arc::new(Choose(_if, elseifs, else_block))))
 }
 
-fn max1_child<T: FromNode>(
+pub(crate) fn max1_child<T: FromNode>(
     parent_tag: &str,
     child_tag: &str,
     els: Children,
@@ -765,6 +906,9 @@ where
 {
     fn filter_attribute(attr: &str) -> bool {
         T::filter_attribute(attr)
+    }
+    fn filter_attribute_full(attr: &roxmltree::Attribute) -> bool {
+        T::filter_attribute_full(attr)
     }
 }
 
@@ -804,7 +948,7 @@ impl DatePart {
             DatePartName::Year => DatePartForm::Year(attribute_optional(node, "form", info)?),
             DatePartName::Month => DatePartForm::Month(
                 attribute_optional(node, "form", info)?,
-                attribute_bool(node, "strip-periods", false)?,
+                bool::attribute_default_val(node, "strip-periods", info, false)?,
             ),
             DatePartName::Day => DatePartForm::Day(attribute_optional(node, "form", info)?),
         };
@@ -833,7 +977,7 @@ impl FromNode for IndependentDate {
             affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
-            delimiter: Delimiter::from_node(node, info)?,
+            delimiter: attribute_option(node, "delimiter", info)?,
         })
     }
 }
@@ -884,29 +1028,8 @@ impl FromNode for Element {
     }
 }
 
-fn get_toplevel<'a, 'd: 'a>(
-    root: &Node<'a, 'd>,
-    nodename: &'static str,
-) -> Result<Node<'a, 'd>, CslError> {
-    // TODO: remove collect()
-    let matches: Vec<_> = root
-        .children()
-        .filter(|n| n.has_tag_name(nodename))
-        .collect();
-    if matches.len() > 1 {
-        Err(InvalidCsl::new(&root, &format!("Cannot have more than one <{}>", nodename)).into())
-    } else {
-        // move matches into its first item
-        Ok(matches
-            .into_iter()
-            .nth(0)
-            .ok_or_else(|| InvalidCsl::new(&root, &format!("Must have one <{}>", nodename)))?)
-    }
-}
-
 impl FromNode for MacroMap {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        // TODO: remove collect()
         let elements: Result<Vec<_>, _> = node
             .children()
             .filter(|n| n.is_element())
@@ -915,7 +1038,7 @@ impl FromNode for MacroMap {
         let name = match node.attribute("name") {
             Some(n) => n,
             None => {
-                return Err(InvalidCsl::new(node, "Macro must have a 'name' attribute.").into());
+                return Err(InvalidCsl::new(node, "<macro> must have a `name` attribute.").into());
             }
         };
         Ok(MacroMap {
@@ -923,6 +1046,30 @@ impl FromNode for MacroMap {
             elements: elements?,
         })
     }
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("macro")
+    }
+    const CHILD_DESC: &'static str = "macro";
+}
+
+struct MacroHeader {
+    name: SmartString,
+}
+
+impl FromNode for MacroHeader {
+    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+        let name = match node.attribute("name") {
+            Some(n) => n,
+            None => {
+                return Err(InvalidCsl::new(node, "<macro> must have a `name` attribute.").into());
+            }
+        };
+        Ok(MacroHeader { name: name.into() })
+    }
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("macro")
+    }
+    const CHILD_DESC: &'static str = "macro";
 }
 
 fn write_slot_once<T: FromNode>(
@@ -984,7 +1131,7 @@ impl FromNode for Names {
             affixes: Option::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             display: attribute_option(node, "display", info)?,
-            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, "delimiter", info)?,
         })
     }
 }
@@ -1010,10 +1157,10 @@ impl FromNode for Institution {
 
         Ok(Institution {
             and: attribute_option(node, "and", info)?,
-            delimiter: node.attribute("delimiter").map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, "delimiter", info)?,
             use_first,
             use_last: attribute_option_int(node, "use-last")?,
-            reverse_order: attribute_bool(node, "reverse-order", false)?,
+            reverse_order: bool::attribute_default_val(node, "reverse-order", info, false)?,
             parts_selector: attribute_optional(node, "institution-parts", info)?,
             institution_parts,
         })
@@ -1026,16 +1173,16 @@ impl FromNode for InstitutionPart {
             name: InstitutionPartName::from_node(node, info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
-            strip_periods: attribute_bool(node, "strip-periods", false)?,
+            strip_periods: bool::attribute_default_val(node, "strip-periods", info, false)?,
         })
     }
 }
 
 impl FromNode for InstitutionPartName {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         match node.attribute("name") {
-            Some("long") => Ok(InstitutionPartName::Long(attribute_bool(
-                node, "if-short", false,
+            Some("long") => Ok(InstitutionPartName::Long(bool::attribute_default_val(
+                node, "if-short", info, false,
             )?)),
             Some("short") => Ok(InstitutionPartName::Short),
             Some(ref val) => Err(InvalidCsl::attr_val(node, "name", val).into()),
@@ -1070,19 +1217,19 @@ impl FromNode for Name {
         }
         Ok(Name {
             and: attribute_option(node, "and", info)?,
-            delimiter: node.attribute(delim_attr).map(Atom::from).map(Delimiter),
+            delimiter: attribute_option(node, delim_attr, info)?,
             delimiter_precedes_et_al: attribute_option(node, "delimiter-precedes-et-al", info)?,
             delimiter_precedes_last: attribute_option(node, "delimiter-precedes-last", info)?,
             et_al_min: attribute_option_int(node, "et-al-min")?,
-            et_al_use_last: attribute_option_bool(node, "et-al-use-last")?,
+            et_al_use_last: bool::attribute_option(node, "et-al-use-last", info)?,
             et_al_use_first: attribute_option_int(node, "et-al-use-first")?,
             et_al_subsequent_min: attribute_option_int(node, "et-al-subsequent-min")?,
             et_al_subsequent_use_first: attribute_option_int(node, "et-al-subsequent-use-first")?,
             form: attribute_option(node, form_attr, info)?,
-            initialize: attribute_option_bool(node, "initialize")?,
-            initialize_with: attribute_option_atom(node, "initialize-with"),
+            initialize: bool::attribute_option(node, "initialize", info)?,
+            initialize_with: attribute_option(node, "initialize-with", info)?,
             name_as_sort_order: attribute_option(node, "name-as-sort-order", info)?,
-            sort_separator: attribute_option_atom(node, "sort-separator"),
+            sort_separator: attribute_option(node, "sort-separator", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
             name_part_given,
@@ -1125,7 +1272,7 @@ impl FromNode for NameLabelInput {
         Ok(NameLabelInput {
             form: attribute_option(node, "form", info)?,
             plural: attribute_option(node, "plural", info)?,
-            strip_periods: attribute_option_bool(node, "strip-periods")?,
+            strip_periods: bool::attribute_option(node, "strip-periods", info)?,
             formatting: Option::from_node(node, info)?,
             affixes: Option::from_node(node, info)?,
             text_case: Option::from_node(node, info)?,
@@ -1150,7 +1297,18 @@ struct TextContent(Option<String>);
 
 impl FromNode for TextContent {
     fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
-        let opt_s = node.text().map(String::from);
+        let opt_s = node.text().and_then(|s| {
+            if s.trim().is_empty() {
+                None
+            } else {
+                let t = s.trim_matches('\n');
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(String::from(t))
+                }
+            }
+        });
         Ok(TextContent(opt_s))
     }
 }
@@ -1200,6 +1358,30 @@ impl FromNode for TermForm {
 }
 
 impl FromNode for CslVersionReq {
+    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+        let version = attribute_string(node, "version");
+        let req = VersionReq::parse(&version).map_err(|_| {
+            InvalidCsl::new(
+                node,
+                &format!("could not parse version string \"{}\"", &version),
+            )
+        })?;
+        let supported = COMPILED_VERSION;
+        if !req.matches(&supported) {
+            return Err(InvalidCsl::new(
+                node,
+                &format!(
+                    "Unsupported CSL version: \"{}\". This engine supports {}.",
+                    req, supported
+                ),
+            )
+            .into());
+        }
+        Ok(CslVersionReq(req))
+    }
+}
+
+impl FromNode for CslCslMVersionReq {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let version = attribute_string(node, "version");
         let variant: CslVariant;
@@ -1209,7 +1391,7 @@ impl FromNode for CslVersionReq {
                 InvalidCsl::new(
                     node,
                     &"unsupported \"1.1mlz1\"-style version string (use variant=\"csl-m\" version=\"1.x\", for example)".to_string(),
-                )
+                    )
             })?
         } else {
             // TODO: bootstrap attribute_optional with a dummy CslVariant::Csl
@@ -1227,14 +1409,15 @@ impl FromNode for CslVersionReq {
         };
         if !req.matches(&supported) {
             return Err(InvalidCsl::new(
-                    node,
-                    &format!(
-                        "Unsupported version for variant {:?}: \"{}\". This engine supports {} and later.",
-                            variant,
-                            req,
-                            supported)).into());
+                node,
+                &format!(
+                    "Unsupported version for variant {:?}: \"{}\". This engine supports {}.",
+                    variant, req, supported
+                ),
+            )
+            .into());
         }
-        Ok(CslVersionReq(variant, req))
+        Ok(CslCslMVersionReq(variant, req))
     }
 }
 
@@ -1248,172 +1431,106 @@ impl FromNode for Features {
             InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)).into()
         })
     }
-}
-
-impl FromNode for Info {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let categories = node
-            .children()
-            .filter(|el| el.has_tag_name("category"))
-            .map(|el| Category::from_node(&el, info))
-            .partition_results()?;
-        Ok(Info { categories })
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("features")
     }
+    const CHILD_DESC: &'static str = "features";
 }
 
-impl FromNode for Category {
-    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        Ok(attribute_required(node, "name", info)?)
-    }
-}
+// type MacroDict = HashMap<SmartString, Vec<Element>>;
+// fn check_recursion(macros: &MacroDict, layout: &Layout, cite_or_bib_node: &Node) -> FromNodeResult<()> {
+//     let mut stack: Vec<SmartString> = Vec::new();
+//     let mut check_element = |macros: &MacroDict, element: &Element| -> bool {
+//         if let Element::Text(TextElement { source: TextSource::Macro(m), .. }) = &element {
+//             if stack.contains(m) {
+//                 Err(InvalidCsl::new(cite_or_bib_node, format!("Macros cannot be mutually recursive {:?}", stack)))
+//             } else {
+//                 stack.push(m.clone());
+//                 Ok(())
+//             }
+//         }
+//     };
+// }
 
-impl FromNode for Style {
-    fn from_node(node: &Node, default_info: &ParseInfo) -> FromNodeResult<Self> {
+impl Style {
+    fn from_node_custom(
+        node: &Node,
+        default_info: &ParseInfo,
+        info_block: Info,
+    ) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
-        // let info_node = get_toplevel(&doc, "info")?;
+        let mut errors: Vec<InvalidCsl> = Vec::new();
+
+        // Parse features first so we know how to interpret the rest.
+        let features = max_one_child::<Features>(node, default_info, &mut errors)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| Features::new());
+
+        // We will check again later (for MacroMap) if there are macros without names.
+        let mut throwaway = Vec::new();
+        let macro_headers = many_children::<MacroHeader>(node, default_info, &mut throwaway)
+            .unwrap_or_else(|_| Vec::new());
+        let macro_names = macro_headers
+            .into_iter()
+            .map(|header| header.name)
+            .collect();
+
+        // Create our own info struct, ignoring the one passed in.
+        let parse_info = ParseInfo {
+            options: default_info.options.clone(),
+            features: features.clone(),
+            macros: Some(macro_names),
+        };
+
+        let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
+        let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
+
         let mut macros = HashMap::default();
         let mut locale_overrides = FnvHashMap::default();
-        let mut errors: Vec<CslError> = Vec::new();
 
-        // Check features first, so we know when parsing the rest which are enabled
-        let feat_matches: Vec<_> = node
-            .children()
-            .filter(|n| n.has_tag_name("features"))
-            .collect();
-        let feat_node = if feat_matches.len() > 1 {
-            return Err(
-                InvalidCsl::new(&node, "Cannot have more than one <features> section").into(),
-            );
-        } else {
-            // move matches into its first item
-            Ok(feat_matches.into_iter().nth(0))
-        };
-
-        let features = match feat_node {
-            Ok(Some(node)) => match Features::from_node(&node, default_info) {
-                Ok(bib) => Some(bib),
-                Err(err) => {
-                    errors.push(err);
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(e) => {
-                errors.push(e);
-                None
+        let locales_res = many_children::<Locale>(node, &parse_info, &mut errors);
+        if let Ok(locales) = locales_res {
+            for loc in locales {
+                locale_overrides.insert(loc.lang.clone(), loc);
             }
         }
-        .unwrap_or_else(Features::new);
-        // Create our own info struct, ignoring the one passed in.
-        let info = ParseInfo {
-            features: features.clone(),
-        };
 
-        let locales_res = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("locale"))
-            .map(|el| Locale::from_node(&el, &info))
-            .partition_results();
-        match locales_res {
-            Ok(locales) => {
-                for loc in locales {
-                    locale_overrides.insert(loc.lang.clone(), loc);
-                }
-            }
-            Err(mut errs) => {
-                errors.append(&mut errs);
+        let macro_res = many_children::<MacroMap>(node, &parse_info, &mut errors);
+        if let Ok(macro_maps) = macro_res {
+            for mac in macro_maps {
+                macros.insert(mac.name, mac.elements);
             }
         }
-        // TODO: output errors from macros, locales as well as citation and bibliography, if there are errors in
-        // all
-        let macro_res = node
-            .children()
-            .filter(|n| n.is_element() && n.has_tag_name("macro"))
-            .map(|el| MacroMap::from_node(&el, &info))
-            .partition_results();
-        match macro_res {
-            Ok(macro_maps) => {
-                for mac in macro_maps {
-                    macros.insert(mac.name, mac.elements);
-                }
-            }
-            Err(mut errs) => {
-                errors.append(&mut errs);
-            }
-        }
-        let citation = match Citation::from_node(&get_toplevel(&node, "citation")?, &info) {
-            Ok(cit) => Ok(cit),
-            Err(err) => {
-                errors.push(err);
-                Err(CslError(Vec::new()))
-            }
-        };
-
-        let matches: Vec<_> = node
-            .children()
-            .filter(|n| n.has_tag_name("bibliography"))
-            .collect();
-
-        let bib_node = if matches.len() > 1 {
-            return Err(InvalidCsl::new(&node, "Cannot have more than one <bibliography>").into());
-        } else {
-            // move matches into its first item
-            Ok(matches.into_iter().nth(0))
-        };
-
-        let bibliography = match bib_node {
-            Ok(Some(node)) => match Bibliography::from_node(&node, &info) {
-                Ok(bib) => Some(bib),
-                Err(err) => {
-                    errors.push(err);
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(e) => {
-                errors.push(e);
-                None
-            }
-        };
 
         if !errors.is_empty() {
-            return Err(errors.into());
+            return Err(CslError(errors));
         }
 
         Ok(Style {
             macros,
             version_req,
             locale_overrides,
-            default_locale: attribute_optional(node, "default-locale", &info)?,
-            citation: citation?,
             features,
-            bibliography,
-            info: Info::from_node(&node, &info)?,
-            class: attribute_required(node, "class", &info)?,
-            name_inheritance: Name::from_node(&node, &info)?,
-            page_range_format: attribute_option(node, "page-range-format", &info)?,
+            info: info_block,
+            citation: citation?,
+            bibliography: bibliography?,
+            class: attribute_required(node, "class", &parse_info)?,
+            default_locale: attribute_option(node, "default-locale", &parse_info)?,
+            name_inheritance: Name::from_node(&node, &parse_info)?,
+            page_range_format: attribute_option(node, "page-range-format", &parse_info)?,
             demote_non_dropping_particle: attribute_optional(
                 node,
                 "demote-non-dropping-particle",
-                &info,
+                &parse_info,
             )?,
-            initialize_with_hyphen: attribute_bool(node, "initialize-with-hyphen", true)?,
-            names_delimiter: node
-                .attribute("names-delimiter")
-                .map(Atom::from)
-                .map(Delimiter),
+            initialize_with_hyphen: bool::attribute_default_val(
+                node,
+                "initialize-with-hyphen",
+                &parse_info,
+                true,
+            )?,
+            names_delimiter: attribute_option(node, "names-delimiter", &parse_info)?,
         })
-    }
-}
-
-use roxmltree::Document;
-use std::str::FromStr;
-impl FromStr for Style {
-    type Err = StyleError;
-    fn from_str(xml: &str) -> Result<Self, Self::Err> {
-        let doc = Document::parse(&xml)?;
-        let info = ParseInfo::default();
-        let style = Style::from_node(&doc.root_element(), &info)?;
-        Ok(style)
     }
 }

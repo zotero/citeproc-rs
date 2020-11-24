@@ -448,10 +448,11 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         match chunk {
             Chunk::Mode(m) => {
                 mode = mode.or_else(|| match m.as_str() {
-                    "citation" => Some((Mode::Citation, SupportedFormat::TestHtml)),
-                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml)),
-                    "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf)),
-                    "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf)),
+                    "citation" => Some((Mode::Citation, SupportedFormat::TestHtml, false)),
+                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml, false)),
+                    "bibliography-nosort" => Some((Mode::Bibliography, SupportedFormat::TestHtml, true)),
+                    "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf, false)),
+                    "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf, false)),
                     _ => panic!("unknown mode {}", m),
                 })
             }
@@ -480,9 +481,10 @@ pub fn parse_human_test(contents: &str) -> TestCase {
     }
 
     TestCase::new(
-        mode.map(|(m, _)| m).unwrap_or(Mode::Citation),
-        mode.map(|(_, f)| Format(f))
+        mode.map(|(m, _, _)| m).unwrap_or(Mode::Citation),
+        mode.map(|(_, f, _)| Format(f))
             .unwrap_or(Format(SupportedFormat::TestHtml)),
+        mode.map_or(false, |(_, _, nosort)| nosort),
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
         result

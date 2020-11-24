@@ -1,12 +1,20 @@
+use crate::cite_context::RenderContext;
 use crate::number::{arabic_number, render_ordinal, roman_lower, roman_representable};
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use citeproc_io::{Locator, Name, NumericToken, NumericValue, Reference};
+use citeproc_io::{Name, NumericToken, NumericValue, Reference};
 use csl::{
-    GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel, NameVariable,
-    NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural, RoleTermSelector, SortKey,
-    StandardVariable, Style, TextCase, TextElement, TextTermSelector, Variable,
+    Features, GenderedTermSelector, LabelElement, Lang, Locale, LocatorType, NameLabel,
+    NameVariable, NumberElement, NumberVariable, NumericForm, PageRangeFormat, Plural,
+    RoleTermSelector, SortKey, StandardVariable, Style, TextElement, TextTermSelector, Variable,
+    VariableForm,
 };
+
+use crate::choose::CondChecker;
+use citeproc_io::DateOrRange;
+use csl::{AnyVariable, DateVariable};
+use csl::{CslType, Position};
+use std::borrow::Cow;
 
 #[derive(Clone)]
 pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
@@ -14,148 +22,90 @@ pub enum GenericContext<'a, O: OutputFormat, I: OutputFormat = O> {
     Cit(&'a CiteContext<'a, O, I>),
 }
 
-#[allow(dead_code)]
-impl<O: OutputFormat, I: OutputFormat> GenericContext<'_, O, I> {
+macro_rules! forward_inner {
+    {$($vis:vis fn $name:ident(&self $(, $arg:ident : $ty:ty)* $(,)?) -> $ret:ty; )+ } => {
+        $(
+            fn $name(&self$(, $arg : $ty)*) -> $ret {
+                match self {
+                    GenericContext::Ref(r) => r.$name($($arg),*),
+                    GenericContext::Cit(c) => c.$name($($arg),*),
+                }
+            }
+        )+
+    };
+}
+
+impl<'a, O: OutputFormat, I: OutputFormat> RenderContext for GenericContext<'a, O, I> {
+    forward_inner! {
+        fn style(&self) -> &Style;
+        fn reference(&self) -> &Reference;
+        fn locale(&self) -> &Locale;
+        fn cite_lang(&self) -> Option<&Lang>;
+        fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>>;
+        fn get_ordinary(&self, var: Variable, form: VariableForm) -> Option<Cow<'_, str>>;
+        fn get_name(&self, var: NameVariable) -> Option<&[Name]>;
+    }
+}
+
+impl<'a, O: OutputFormat, I: OutputFormat> CondChecker for GenericContext<'a, O, I> {
+    forward_inner! {
+        fn has_variable(&self, var: AnyVariable) -> bool;
+        fn is_numeric(&self, var: AnyVariable) -> bool;
+        fn is_disambiguate(&self, current_count: u32) -> bool;
+        fn csl_type(&self) -> CslType;
+        fn locator_type(&self) -> Option<LocatorType>;
+        fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange>;
+        fn position(&self) -> Option<Position>;
+        fn features(&self) -> &Features;
+        fn has_year_only(&self, dvar: DateVariable) -> bool;
+        fn has_month_or_season(&self, dvar: DateVariable) -> bool;
+        fn has_day(&self, dvar: DateVariable) -> bool;
+    }
+}
+
+impl<'a, O: OutputFormat, I: OutputFormat> GenericContext<'a, O, I> {
     pub fn sort_key(&self) -> Option<&SortKey> {
         match self {
             GenericContext::Cit(ctx) => ctx.sort_key.as_ref(),
             GenericContext::Ref(_ctx) => None,
         }
     }
-    pub fn locale(&self) -> &Locale {
-        match self {
-            GenericContext::Cit(ctx) => ctx.locale,
-            GenericContext::Ref(ctx) => ctx.locale,
-        }
-    }
-    pub fn cite_lang(&self) -> Option<&Lang> {
-        let refr = self.reference();
-        refr.language.as_ref()
-    }
+
     /// https://docs.citationstyles.org/en/stable/specification.html#non-english-items
     pub fn is_english(&self) -> bool {
         let sty = self.style();
         let cite = self.cite_lang();
         // Bit messy but matches the spec wording
-        if sty.default_locale.is_english() {
-            cite.map_or(true, |l| l.is_english())
-        } else {
-            cite.map_or(false, |l| l.is_english())
-        }
+        // If a style doesn't have a default, it's en-US, which is English.
+        let default_is_english = sty.default_locale.as_ref().map_or(true, |x| x.is_english());
+        cite.map_or(default_is_english, |l| l.is_english())
     }
-    pub fn style(&self) -> &Style {
-        match self {
-            GenericContext::Cit(ctx) => ctx.style,
-            GenericContext::Ref(ctx) => ctx.style,
-        }
-    }
-    pub fn reference(&self) -> &Reference {
-        match self {
-            GenericContext::Cit(ctx) => ctx.reference,
-            GenericContext::Ref(ctx) => ctx.reference,
-        }
-    }
+
+    /// For setting display="X" on elements, where this should only take effect in the
+    /// bibliography.
     pub fn in_bibliography(&self) -> bool {
         match self {
             GenericContext::Cit(ctx) => ctx.in_bibliography,
+            // Do not say "we're in a bibliography" if you're generating RefIR for cites to match
+            // against.
             GenericContext::Ref(_ctx) => false,
         }
     }
+
     pub fn format(&self) -> &O {
         match self {
             GenericContext::Cit(ctx) => &ctx.format,
             GenericContext::Ref(ctx) => ctx.format,
         }
     }
+
     pub fn should_add_year_suffix_hook(&self) -> bool {
         match self {
             GenericContext::Cit(ctx) => ctx.style.citation.disambiguate_add_year_suffix,
             GenericContext::Ref(ctx) => ctx.year_suffix,
         }
     }
-    pub fn locator_type(&self) -> Option<LocatorType> {
-        match self {
-            Cit(ctx) => ctx
-                .cite
-                .locators
-                .as_ref()
-                .and_then(|ls| ls.single())
-                .map(Locator::type_of),
-            Ref(ctx) => ctx.locator_type,
-        }
-    }
-    pub fn get_name(&self, var: NameVariable) -> Option<&[Name]> {
-        match self {
-            Cit(ctx) => ctx.get_name(var),
-            Ref(ctx) => ctx.reference.name.get(&var),
-        }
-        .map(|vec| vec.as_slice())
-    }
-    fn get_number(&self, var: NumberVariable) -> Option<NumericValue<'_>> {
-        match self {
-            Cit(ctx) => ctx.get_number(var),
-            Ref(ctx) => ctx.get_number(var),
-        }
-    }
 }
-
-use crate::choose::CondChecker;
-use citeproc_io::DateOrRange;
-use csl::{AnyVariable, DateVariable};
-use csl::{CslType, Position};
-
-impl<'a, O: OutputFormat> CondChecker for GenericContext<'a, O> {
-    fn has_variable(&self, var: AnyVariable) -> bool {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::has_variable(ctx, var),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::has_variable(ctx, var),
-        }
-    }
-    fn is_numeric(&self, var: AnyVariable) -> bool {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_numeric(ctx, var),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_numeric(ctx, var),
-        }
-    }
-    fn is_disambiguate(&self, current_count: u32) -> bool {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::is_disambiguate(ctx, current_count),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::is_disambiguate(ctx, current_count),
-        }
-    }
-    fn csl_type(&self) -> CslType {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::csl_type(ctx),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::csl_type(ctx),
-        }
-    }
-    fn locator_type(&self) -> Option<LocatorType> {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::locator_type(ctx),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::locator_type(ctx),
-        }
-    }
-    fn get_date(&self, dvar: DateVariable) -> Option<&DateOrRange> {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::get_date(ctx, dvar),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::get_date(ctx, dvar),
-        }
-    }
-    fn position(&self) -> Option<Position> {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::position(ctx),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::position(ctx),
-        }
-    }
-    fn features(&self) -> &csl::version::Features {
-        match self {
-            Ref(ctx) => <RefContext<'a, O> as CondChecker>::features(ctx),
-            Cit(ctx) => <CiteContext<'a, O> as CondChecker>::features(ctx),
-        }
-    }
-}
-
-use GenericContext::*;
 
 pub struct Renderer<'a, O: OutputFormat, Custom: OutputFormat = O> {
     ctx: GenericContext<'a, O, Custom>,
@@ -208,14 +158,18 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         var: NumberVariable,
         form: NumericForm,
         val: &NumericValue,
-        _af: Option<&Affixes>,
-        _text_case: TextCase,
     ) -> O::Build {
         let locale = self.ctx.locale();
         let fmt = self.fmt();
         let prf = self.page_range_format(var);
+        use crate::sort::natural_sort;
+        let affixes = Some(if var == NumberVariable::CitationNumber {
+            natural_sort::citation_number_affixes()
+        } else {
+            natural_sort::num_affixes()
+        });
         match (val, form) {
-            (NumericValue::Tokens(_, ts), _) => {
+            (NumericValue::Tokens(_, ts, is_numeric), _) if *is_numeric => {
                 let mut s = SmartString::new();
                 for t in ts {
                     if !s.is_empty() {
@@ -225,18 +179,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
                         s.push_str(&format!("{:08}", n));
                     }
                 }
-                fmt.affixed_text(
-                    s,
-                    None,
-                    Some(crate::sort::natural_sort::num_affixes()).as_ref(),
-                )
+                fmt.affixed_text(s, None, affixes.as_ref())
             }
-            // TODO: text-case
-            _ => fmt.affixed_text(
-                arabic_number(val, locale, var, prf),
-                None,
-                Some(crate::sort::natural_sort::num_affixes()).as_ref(),
-            ),
+            _ => fmt.affixed_text(arabic_number(val, locale, var, prf), None, affixes.as_ref()),
         }
     }
 
@@ -246,7 +191,7 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         let style = self.ctx.style();
         debug!("number {:?}", val);
         let prf = self.page_range_format(number.variable);
-        let string = if let NumericValue::Tokens(_, ts) = val {
+        let string = if let NumericValue::Tokens(s, ts, true) = val {
             match number.form {
                 NumericForm::Roman if roman_representable(&val) => {
                     roman_lower(&ts, locale, number.variable, prf)
@@ -271,7 +216,6 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         };
         let fmt = self.fmt();
         let options = IngestOptions {
-            replace_hyphens: number.variable.should_replace_hyphens(style),
             text_case: number.text_case,
             quotes: self.quotes(),
             is_english: self.ctx.is_english(),

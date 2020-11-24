@@ -1,0 +1,11 @@
+---
+source: crates/csl/src/style/info.rs
+expression: "crate::from_node::parse_as::<Link>(::indoc::indoc!(r#\"<link rel=\"documentation\" href=\"literally any string here\" />\"#)).expect(\"did not parse\")"
+---
+Link {
+    href: Identifier(
+        "literally any string here",
+    ),
+    rel: Documentation,
+    lang: None,
+}
