@@ -97,7 +97,7 @@ impl TomlTestCase {
         }
         let fet = Arc::new(Filesystem::project_dirs());
         let mut proc = Processor::new(InitOptions {
-            style_xml: &self.style.csl,
+            style: &self.style.csl,
             fetcher: fet,
             format: self.format.unwrap_or(SupportedFormat::Html),
             test_mode: true,

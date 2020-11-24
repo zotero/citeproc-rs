@@ -50,7 +50,7 @@ impl Driver {
         let format = js_err!(format);
 
         let init = InitOptions {
-            style_xml: style,
+            style,
             fetcher: Some(us_fetcher),
             format,
             ..Default::default()

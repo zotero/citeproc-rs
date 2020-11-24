@@ -78,7 +78,7 @@ impl Clone for TestCase {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
             Processor::new(InitOptions {
-                style_xml: &self.csl,
+                style: &self.csl,
                 fetcher: Some(fet),
                 format: self.format.0,
                 test_mode: true,
@@ -117,7 +117,7 @@ impl TestCase {
         let mut processor = {
             let fet = Arc::new(Filesystem::project_dirs());
             Processor::new(InitOptions {
-                style_xml: &csl,
+                style: &csl,
                 fetcher: Some(fet),
                 format: format.0,
                 test_mode: true,

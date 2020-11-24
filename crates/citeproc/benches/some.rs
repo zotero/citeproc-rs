@@ -92,7 +92,7 @@ fn invalidate_rebuild_cluster(proc: &mut Processor, id: u32, cite_id: CiteId) ->
 
 fn bench_build_cluster(b: &mut Bencher, style: &str) {
     let mut proc = Processor::new(InitOptions {
-        style_xml: style,
+        style,
         test_mode: true,
         ..Default::default()
     }).unwrap();

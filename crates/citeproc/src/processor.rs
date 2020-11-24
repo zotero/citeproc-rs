@@ -130,7 +130,7 @@ impl Default for SupportedFormat {
 pub struct InitOptions<'a> {
     pub format: SupportedFormat,
     /// A full independent style.
-    pub style_xml: &'a str,
+    pub style: &'a str,
     /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
     pub locale_override: Option<Lang>,
     /// Mechanism for fetching the locale you provide, if necessary.
@@ -169,7 +169,7 @@ impl Processor {
         // The only thing you need from a dependent style is the override language, which may well
         // be none.
         let InitOptions {
-            style_xml,
+            style,
             locale_override,
             fetcher,
             format,
@@ -182,7 +182,7 @@ impl Processor {
         let mut db = Processor::safe_default(fetcher);
         db.formatter = format.make_markup();
         let style = Style::parse_with_opts(
-            &style_xml,
+            &style,
             csl::ParseOptions {
                 allow_no_info: test_mode,
                 ..Default::default()
@@ -198,14 +198,6 @@ impl Processor {
         let style = Style::parse(style_text)?;
         self.set_style_with_durability(Arc::new(style), Durability::HIGH);
         Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn test_db() -> Self {
-        use citeproc_db::PredefinedLocales;
-        let mut db = Processor::safe_default(Arc::new(PredefinedLocales::bundled_en_us()));
-        db.formatter = Markup::plain();
-        db
     }
 
     #[cfg(feature = "rayon")]

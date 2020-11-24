@@ -9,8 +9,7 @@ use std::sync::Arc;
 
 #[allow(dead_code)]
 pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
-    use std::str::FromStr;
-    let sty = Style::from_str(&format!(
+    let sty = Style::parse_for_test(&format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 {}"#,
         s
@@ -20,8 +19,7 @@ pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
 }
 
 pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
-    use std::str::FromStr;
-    let sty = Style::from_str(&format!(
+    let sty = Style::parse_for_test(&format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
     <style class="note" version="1.0.1">
         <citation>
@@ -82,8 +80,7 @@ impl MockProcessor {
     }
 
     pub fn set_style_text(&mut self, style_text: &str) {
-        use std::str::FromStr;
-        let style = Style::from_str(style_text).unwrap();
+        let style = Style::parse_for_test(style_text).unwrap();
         use salsa::Durability;
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
