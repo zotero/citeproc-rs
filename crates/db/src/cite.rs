@@ -47,9 +47,6 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     // All cite ids, in the order they are cited in the document
     fn all_cite_ids(&self) -> Arc<Vec<CiteId>>;
 
-    fn locale_by_cite(&self, id: CiteId) -> Arc<Locale>;
-    fn locale_by_reference(&self, ref_id: Atom) -> Arc<Locale>;
-
     /// Create ghost cites for disambiguation only as needed.
     /// These are subsequently interned into CiteIds.
     fn ghost_cite(&self, ref_id: Atom) -> Arc<Cite<Markup>>;
@@ -121,18 +118,6 @@ fn reference(db: &dyn CiteDatabase, key: Atom) -> Option<Arc<Reference>> {
     } else {
         None
     }
-}
-
-fn locale_by_cite(db: &dyn CiteDatabase, id: CiteId) -> Arc<Locale> {
-    let cite = id.lookup(db);
-    db.locale_by_reference(cite.ref_id.clone())
-}
-
-fn locale_by_reference(db: &dyn CiteDatabase, ref_id: Atom) -> Arc<Locale> {
-    let refr = db.reference(ref_id);
-    refr.and_then(|r| r.language.clone())
-        .map(|l| db.merged_locale(l))
-        .unwrap_or_else(|| db.default_locale())
 }
 
 /// Type to represent which references should appear in a bibiliography even if they are not cited

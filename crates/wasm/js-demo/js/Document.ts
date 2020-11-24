@@ -1,7 +1,7 @@
 import { Reference, Cite, Cluster, ClusterPosition, Driver, UpdateSummary, IncludeUncited } from '../../pkg';
 import { produce, immerable, Draft } from 'immer';
 
-export type ClusterId = number;
+export type ClusterId = string;
 export type CiteId = number;
 
 export class RenderedDocument {
@@ -20,7 +20,7 @@ export class RenderedDocument {
     constructor(clusters: Cluster[], oci: Array<ClusterPosition>, driver: Driver) {
         this[immerable] = true;
         this.orderedClusterIds = oci;
-        let render = driver.fullRender();
+        let render = driver.fullRender().unwrap();
         this.builtClusters = render.allClusters;
         for (let bibEntry of render.bibEntries) {
             this.bibliographyIds.push(bibEntry.id);
@@ -128,9 +128,9 @@ export class Document {
 
     private init(driver: Driver) {
         this.driver = driver;
-        driver.initClusters(this.clusters);
-        driver.setClusterOrder(this.clusterPositions());
-        driver.includeUncited(this.includeUncited);
+        driver.initClusters(this.clusters).unwrap();
+        driver.setClusterOrder(this.clusterPositions()).unwrap();
+        driver.includeUncited(this.includeUncited).unwrap();
         this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
         console.log(this.driver);
     }
@@ -152,7 +152,7 @@ export class Document {
             fn(draft);
             driver.setClusterOrder(draft.clusterPositions());
             console.time("batchedUpdates");
-            let summary = driver.batchedUpdates();
+            let summary = driver.batchedUpdates().unwrap();
             console.timeEnd("batchedUpdates");
             draft.rendered = draft.rendered.update(summary, this.clusterPositions());
         });
@@ -170,7 +170,7 @@ export class Document {
 
     setIncludeUncited(uncited: IncludeUncited) {
         this.includeUncited = uncited;
-        this.driver.includeUncited(this.includeUncited);
+        this.driver.includeUncited(this.includeUncited).unwrap();
     }
 
     //////////////
@@ -191,16 +191,16 @@ export class Document {
         this.refCounts.decrement(this.clusters[idx]);
         this.clusters[idx] = cluster;
         // Inform the driver
-        this.driver.insertCluster(cluster);
+        this.driver.insertCluster(cluster).unwrap();
     }
 
-    removeCluster(id: number) {
+    removeCluster(id: string) {
         // Mutate
         let idx = this.clusters.findIndex(c => c.id === id);
         this.refCounts.decrement(this.clusters[idx]);
         this.clusters.splice(idx, 1);
         // Inform the driver
-        this.driver.removeCluster(id);
+        this.driver.removeCluster(id).unwrap();
     }
 
     // TODO: be able to pick up a cluster and move it
@@ -238,13 +238,4 @@ export class Document {
         }
     }
 
-}
-
-function inc(x: number | [number, number]): number | [number, number] {
-    if (Array.isArray(x)) {
-        let [a, b] = x;
-        return [a+1, b];
-    } else {
-        return x + 1;
-    }
 }

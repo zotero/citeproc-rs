@@ -47,13 +47,23 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         // make sure it's not loading wasm in the initial chunk
         const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
-            let d = CreateDriver.new(style, fetcher, "html");
-            d.resetReferences(references);
-            return d;
+            try {
+                let driver = CreateDriver.new({
+                    style,
+                    lifecycle: fetcher,
+                    format: "html",
+                    // localeOverride: "de-AT",
+                });
+                let d = driver.unwrap();
+                d.resetReferences(references).unwrap();
+                return d;
+            } catch(e) {
+                console.error("caught in createDriver: ", e);
+            }
         });
         if (d.is_ok()) {
             let newDriver = d.unwrap();
-            newDriver.resetReferences(references);
+            newDriver.resetReferences(references).unwrap();
             await flightFetcher(newDriver);
         }
         setDriver(d);
@@ -63,10 +73,17 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         if (driver.is_ok()) {
             let d = driver.unwrap();
             try {
-                d.setStyle(style);
+                const { parseStyleMetadata } = await import('../../pkg');
+                let meta = parseStyleMetadata(style).unwrap();
+                if (meta.info.parent != null) {
+                    console.log("this is a dependent style!");
+                }
+                console.log(meta);
+                d.setStyle(style).unwrap();
                 setError(None());
             } catch (e) {
                 console.error(e);
+                console.log(e.data);
                 setError(Some("" + e));
             }
             await flightFetcher(d);
@@ -100,7 +117,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         setReferences(refs);
         if (driver.is_ok()) {
             let d = driver.unwrap();
-            d.resetReferences(refs);
+            d.resetReferences(refs).unwrap();
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         }
@@ -202,7 +219,7 @@ class _ExampleManager implements Lifecycle {
     async resetReferences(refs: Reference[]) {
         this.references = refs;
         if (this.driver) {
-            this.driver.resetReferences(refs);
+            this.driver.resetReferences(refs).unwrap();
             await this.driver.fetchAll();
             this.update();
         }
@@ -224,7 +241,7 @@ class _ExampleManager implements Lifecycle {
             } else {
                 neu[i] = ref;
             }
-            this.driver && this.driver.resetReferences(refs);
+            this.driver && this.driver.resetReferences(refs).unwrap();
         }
         this.references = neu;
         if (this.driver) {

@@ -53,7 +53,7 @@ js-sys = "0.3.39"
 serde = "1.0.116"
 serde_derive = "1.0.116"
 serde_json = "1.0.57"
-anyhow = "1.0.32"
+thiserror = "1.0.22"
 
 [dependencies.rand]
 version = "0.7.3"

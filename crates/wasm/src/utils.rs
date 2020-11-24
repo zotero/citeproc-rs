@@ -56,25 +56,12 @@ cfg_if! {
     }
 }
 
-// https://github.com/rustwasm/wasm-bindgen/issues/1742
-macro_rules! js_err {
-    ($expression:expr) => {
-        match $expression {
-            Ok(a) => a,
-            Err(e) => {
-                return Err(js_sys::Error::new(&format!("{}", e)).into());
-            }
-        }
-    };
-}
-
 #[allow(clippy::boxed_local)]
-pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue>
+pub fn read_js_array_2<T>(js: Box<[JsValue]>) -> serde_json::Result<Vec<T>>
 where
     T: DeserializeOwned,
 {
-    let xs: Result<Vec<T>, _> = js.iter().map(|x| x.into_serde()).collect();
-    Ok(js_err!(xs))
+    js.iter().map(|x| x.into_serde()).collect()
 }
 
 /// A `LocaleFetcher` that statically includes `en-US`, so it never has to be async-fetched, but

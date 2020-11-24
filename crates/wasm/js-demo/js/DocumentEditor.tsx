@@ -1,5 +1,5 @@
 import { Document, RenderedDocument } from './Document';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Cluster, Cite, IncludeUncited } from '../../pkg';
 
 import './bibliography.css';
@@ -10,7 +10,7 @@ const btnStyle = {
 
 export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
   let [csvIncl, setCsvIncl] = useState("");
-    const insertCluster = (before: number) => {
+    const insertCluster = (before: string) => {
         let neu = document.produce(draft => {
             let cl = draft.createCluster([{ id: 'citekey' }]);
             draft.insertCluster(cl, before);
@@ -99,6 +99,17 @@ const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: Cluste
     </>;
 }
 
+function useDidUpdateEffect(fn, inputs) {
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    if (didMountRef.current)
+      fn();
+    else
+      didMountRef.current = true;
+  }, inputs);
+}
+
 const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) => {
     let [key, setKey] = useState(cite.id);
     let [locator, setLocator] = useState(cite.locator);
@@ -115,7 +126,7 @@ const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) 
         setLocator(l);
     }, []);
 
-    useEffect(() => {
+    useDidUpdateEffect(() => {
         update({ ...cite, id: key, locators: undefined, locator });
     }, [key, locator]);
 

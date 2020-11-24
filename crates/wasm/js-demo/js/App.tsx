@@ -102,11 +102,11 @@ async function loadEditor() {
             <div style={{display: 'flex'}}>
                 <div style={column}>
                     <h3>Style</h3>
-                    <textarea value={style} onChange={e => setStyle(e.target.value)} style={mono} />
+                    <textarea defaultValue={style} onBlur={e => setStyle(e.target.value)} style={mono} />
                 </div>
                 <div style={column}>
                     <h3>References</h3>
-                    <textarea value={refsText} onChange={e => setRefsText(e.target.value)} style={mono} />
+                    <textarea defaultValue={refsText} onBlur={e => setRefsText(e.target.value)} style={mono} />
                 </div>
             </div>
         </div>;
@@ -125,7 +125,7 @@ const Results = ({ driver, style }: { driver: Result<Driver, any>, style: string
     return driver.match({
         Ok: d => <p>
             locales in use:
-            <code>{JSON.stringify(d.toFetch().sort())}</code>
+            <code>{JSON.stringify(d.toFetch().unwrap().sort())}</code>
         </p>,
         Err: e => <p style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>{e}</p>,
     });

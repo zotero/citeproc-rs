@@ -618,17 +618,11 @@ impl Processor {
     }
 
     pub fn get_langs_in_use(&self) -> Vec<Lang> {
-        let mut langs: HashSet<Lang> = self
-            .all_keys()
-            .iter()
-            .filter_map(|ref_id| self.reference(ref_id.clone()))
-            .filter_map(|refr| refr.language.clone())
-            .collect();
-        let style = self.style();
-        if let Some(dl) = style.default_locale.as_ref() {
-            langs.insert(dl.clone());
-        }
-        langs.into_iter().collect()
+        let dl = self.default_lang();
+        let mut vec: Vec<Lang> = dl.iter_fetchable_langs().collect();
+        vec.sort();
+        vec.dedup();
+        vec
     }
 
     pub fn has_cached_locale(&self, lang: &Lang) -> bool {
