@@ -4,8 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-#![feature(rustc_attrs)]
-
 #[macro_use]
 extern crate log;
 

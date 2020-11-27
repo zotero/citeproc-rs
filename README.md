@@ -16,7 +16,7 @@ geared at:
 
 ## Supported Rust versions
 
-With a stable Rust compiler, 1.39 or later, you can:
+With a stable Rust compiler, 1.43 or later, you can:
 
 * Build `citeproc` as a library
 * Build a WebAssembly package (see below for details)
