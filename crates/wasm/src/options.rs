@@ -3,7 +3,7 @@ use serde::de::Visitor;
 use wasm_bindgen::prelude::*;
 use citeproc::prelude::*;
 use csl::Lang;
-use crate::{Lifecycle, DriverError};
+use crate::{Fetcher, DriverError};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,38 +37,38 @@ extern "C" {
 
 #[derive(thiserror::Error, Debug, serde::Serialize)]
 #[serde(tag = "tag", content = "content")]
-pub enum GetLifecycleError {
-    #[error("lifecycle must be an object")]
+pub enum GetFetcherError {
+    #[error("fetcher must be an object")]
     NotAnObject,
-    #[error("lifecycle object must contain an `async fetchLocale(lang: string): string` function")]
+    #[error("fetcher object must contain an `async fetchLocale(lang: string): string` function")]
     MissingFetchLocale,
 }
 
-impl Lifecycle {
+impl Fetcher {
     /// You can't deserialize a JsValue from a generic Deserialize impl, as that's meant to work
     /// with any serialization format. So we pull this off the options object separately. Pass in a
-    /// JsValue with the structure `{ lifecycle?: Lifecycle }`. If it's missing the lifecycle
+    /// JsValue with the structure `{ fetcher?: Fetcher }`. If it's missing the fetcher
     /// field, you get Ok(None).
-    pub fn from_options_object(options: &JsValue) -> Result<Option<Self>, GetLifecycleError> {
+    pub fn from_options_object(options: &JsValue) -> Result<Option<Self>, GetFetcherError> {
         let object = Object::from(options.clone());
         thread_local! {
-            static LIFECYCLE_FIELD: JsValue = JsValue::from_str("lifecycle");
+            static FETCHER_FIELD: JsValue = JsValue::from_str("fetcher");
             static FETCH_LOCALE_FIELD: JsValue = JsValue::from_str("fetchLocale")
         }
-        let jsvalue = LIFECYCLE_FIELD.with(|field| object.get(field.clone()));
-        let lifecycle_obj = Object::from(jsvalue.clone());
+        let jsvalue = FETCHER_FIELD.with(|field| object.get(field.clone()));
+        let fetcher_obj = Object::from(jsvalue.clone());
         if jsvalue.is_undefined() {
             return Ok(None);
         }
         if !jsvalue.is_object() {
-            return Err(GetLifecycleError::NotAnObject);
+            return Err(GetFetcherError::NotAnObject);
         }
-        let fetch_locale = FETCH_LOCALE_FIELD.with(|f| lifecycle_obj.get(f.clone()));
+        let fetch_locale = FETCH_LOCALE_FIELD.with(|f| fetcher_obj.get(f.clone()));
         if !fetch_locale.is_function() {
-            return Err(GetLifecycleError::MissingFetchLocale);
+            return Err(GetFetcherError::MissingFetchLocale);
         }
-        let lifecycle = Lifecycle::from(jsvalue);
-        Ok(Some(lifecycle))
+        let fetcher = Fetcher::from(jsvalue);
+        Ok(Some(fetcher))
     }
 }
 

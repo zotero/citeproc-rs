@@ -10,13 +10,13 @@ mod utils;
 mod wasm_result;
 mod options;
 use wasm_result::*;
-use options::{WasmInitOptions, GetLifecycleError};
+use options::{WasmInitOptions, GetFetcherError};
 
 #[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 
-use js_sys::{Error as JsError, Promise};
+use js_sys::Promise;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -39,7 +39,7 @@ pub fn parse_style_metadata(style: &str) -> StyleMetaResult {
 #[wasm_bindgen]
 pub struct Driver {
     engine: Rc<RefCell<Processor>>,
-    fetcher: Option<Lifecycle>,
+    fetcher: Option<Fetcher>,
 }
 
 #[derive(thiserror::Error, Debug, serde::Serialize)]
@@ -51,8 +51,8 @@ pub enum DriverError {
     StyleError(#[from] csl::StyleError),
     #[error("JSON Deserialization Error: {0}")]
     JsonError(#[from] #[serde(skip_serializing)] serde_json::Error),
-    #[error("Invalid lifecycle object: {0}")]
-    GetLifecycleError(#[from] GetLifecycleError),
+    #[error("Invalid fetcher object: {0}")]
+    GetFetcherError(#[from] GetFetcherError),
     #[error("Non-Existent Cluster id: {0}")]
     NonExistentCluster(String),
     #[error("Reordering error: {0}")]
@@ -68,19 +68,21 @@ impl Driver {
     /// Creates a new Driver.
     ///
     /// * `style` is a CSL style as a string. Independent styles only.
-    /// * `lifecycle` must implement the `Lifecycle` interface
+    /// * `fetcher` must implement the `Fetcher` interface
     /// * `format` is one of { "html", "rtf" }
     ///
     /// Throws an error if it cannot parse the style you gave it.
-    pub fn new(options_js: JsValue) -> DriverResult {
+    pub fn new(options: TInitOptions) -> DriverResult {
         utils::set_panic_hook();
         utils::init_log();
+
+        let options_js: JsValue = options.into();
 
         js_driver_error(|| {
             // The Processor gets a "only has en-US, otherwise empty" fetcher.
             let us_fetcher = Arc::new(utils::USFetcher);
             let options: WasmInitOptions = JsValue::into_serde(&options_js)?;
-            let lifecycle = Lifecycle::from_options_object(&options_js)?;
+            let fetcher = Fetcher::from_options_object(&options_js)?;
             let init = InitOptions {
                 style: options.style.as_ref(),
                 fetcher: Some(us_fetcher),
@@ -92,16 +94,16 @@ impl Driver {
             };
             let engine = Processor::new(init)?;
 
-            if engine.default_lang() != Lang::en_us() && lifecycle.is_none() {
+            if engine.default_lang() != Lang::en_us() && fetcher.is_none() {
                 log::warn!("citeproc-rs was initialized with a locale other than en-US, but without a locale fetcher, using built-in en-US instead.");
             }
 
             let engine = Rc::new(RefCell::new(engine));
-            // The Driver manually adds locales fetched via Lifecycle, which asks the consumer
+            // The Driver manually adds locales fetched via Fetcher, which asks the consumer
             // asynchronously.
             Ok(Driver {
                 engine,
-                fetcher: lifecycle,
+                fetcher,
             })
         })
         .into()
@@ -109,10 +111,10 @@ impl Driver {
 
     /// Sets the style (which will also cause everything to be recomputed)
     #[wasm_bindgen(js_name = "setStyle")]
-    pub fn set_style(&self, style_text: &str) -> WasmResult {
-        js_driver_error(|| {
+    pub fn set_style(&self, style_text: &str) -> EmptyResult {
+        typescript_serde_result(|| {
             let _ = self.engine.borrow_mut().set_style_text(style_text)?;
-            Ok(JsValue::UNDEFINED)
+            Ok(())
         })
     }
 
@@ -366,7 +368,7 @@ impl Driver {
     }
 
     /// Asynchronously fetches all the locales that may be required, and saves them into the
-    /// engine. Uses your provided `Lifecycle.fetchLocale` function.
+    /// engine. Uses your provided `Fetcher.fetchLocale` function.
     #[wasm_bindgen(js_name = "fetchAll")]
     pub fn fetch_all(&self) -> Promise {
         let rc = self.engine.clone();
@@ -413,31 +415,48 @@ impl Driver {
 #[wasm_bindgen]
 extern "C" {
     #[derive(Clone)]
-    #[wasm_bindgen(js_name = "Lifecycle")]
-    pub type Lifecycle;
+    #[wasm_bindgen(js_name = "Fetcher")]
+    pub type Fetcher;
 
     #[wasm_bindgen(method, js_name = "fetchLocale")]
-    fn fetch_locale(this: &Lifecycle, lang: &str) -> Promise;
+    fn fetch_locale(this: &Fetcher, lang: &str) -> Promise;
 
     #[wasm_bindgen(js_name = "error", js_namespace = console)]
     fn log_js_error(val: JsValue);
 }
-
-// #[wasm_bindgen(module = "/src/include.js")]
-// extern "C" {
-//     #[wasm_bindgen(js_name = "noopLifecycle")]
-//     fn noop_lifecycle() -> Lifecycle;
-// }
 
 // TODO: include note about free()-ing the Driver before an async fetchLocale() call comes back (in
 // which case the Driver reference held to by the promise handler function is now a dangling
 // wasm-bindgen pointer).
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_1: &'static str = r#"
+interface InitOptions {
+    /** A CSL style as an XML string */
+    style: string,
+
+    /** A Fetcher implementation for fetching locales.
+      *
+      * If not provided, then no locales can be fetched, and default-locale and localeOverride will
+      * not be respected; the only locale used will be the bundled en-US. */
+    fetcher?: Fetcher,
+
+    /** The output format for this driver instance */
+    format: "html" | "rtf" | "plain",
+
+    /** A locale to use instead of the style's default-locale.
+      *
+      * For dependent styles, use parseStyleMetadata to find out which locale it prefers, and pass
+      * in the parent style with a localeOverride set to that value.
+      */
+    localeOverride?: string,
+
+    /** Disables sorting in the bibliography; items appear in cited order. */
+    bibliographyNosort?: bool,
+}
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
     according to which ones are needed. */
-export interface Lifecycle {
+export interface Fetcher {
     /** Return locale XML for a particular locale. */
     fetchLocale(lang: string): Promise<string>;
 }
@@ -575,7 +594,7 @@ type DriverError = {
 } | {
     tag: "JsonError",
 } | {
-    tag: "GetLifecycleError",
+    tag: "GetFetcherError",
 } | {
     tag: "NonExistentCluster",
     content: string,
@@ -706,10 +725,12 @@ extern "C" {
     pub type TIncludeUncited;
     #[wasm_bindgen(typescript_type = "Reference")]
     pub type TReference;
+    #[wasm_bindgen(typescript_type = "InitOptions")]
+    pub type TInitOptions;
 }
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
-async fn fetch_all(inner: &Lifecycle, langs: Vec<Lang>) -> Vec<(Lang, String)> {
+async fn fetch_all(inner: &Fetcher, langs: Vec<Lang>) -> Vec<(Lang, String)> {
     // Promises are push-, not pull-based, so this kicks all of the requests off at once. If the JS
     // consumer is making HTTP requests for extra locales, they will run in parallel.
     let thunks: Vec<_> = langs

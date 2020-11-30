@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
 import { Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary } from '../../pkg';
 import { ClusterId, Document, RenderedDocument } from './Document';
-import { Fetcher } from './Fetcher';
+import { CdnFetcher } from './CdnFetcher';
 
 // Global for caching.
-const fetcher = new Fetcher();
+const fetcher = new CdnFetcher();
 
 /**
  * This keeps a Driver, a style, some References, and a Document in sync, i.e.:
@@ -50,7 +50,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
             try {
                 let driver = CreateDriver.new({
                     style,
-                    lifecycle: fetcher,
+                    fetcher,
                     format: "html",
                     // localeOverride: "de-AT",
                 });
