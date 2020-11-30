@@ -618,22 +618,19 @@ declare class CslStyleError extends CiteprocRsError {
 }
 "#;
 
-#[wasm_bindgen(module = "/src/include.js")]
-extern "C" {
+js_import_class_constructor! {
     pub type CiteprocRsError;
     #[wasm_bindgen(constructor)]
     fn new(msg: JsValue) -> CiteprocRsError;
 }
 
-#[wasm_bindgen(module = "/src/include.js")]
-extern "C" {
+js_import_class_constructor! {
     pub type CiteprocRsDriverError;
     #[wasm_bindgen(constructor)]
     fn new(msg: JsValue, data: JsValue) -> CiteprocRsDriverError;
 }
 
-#[wasm_bindgen(module = "/src/include.js")]
-extern "C" {
+js_import_class_constructor! {
     pub type CslStyleError;
     #[wasm_bindgen(constructor)]
     fn new(msg: JsValue, data: JsValue) -> CslStyleError;

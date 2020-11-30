@@ -53,6 +53,12 @@ echo "Running: $0 --dest $DEST --cargo-version? ${USE_CARGO_VERSION:-false} --se
 # default destination location is called 'dist' i.e. distribution
 CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages  | .[] | select(.name=="wasm") | .version')
 
+bail() {
+  MESSAGE="$@"
+  echo -e "${RED}failed ${MESSAGE}${CLEAR}"
+  exit 1
+}
+
 # What's going on here?
 #
 # It's a replacement while we wait on https://github.com/rustwasm/wasm-pack/pull/705
@@ -78,10 +84,6 @@ CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages  
 # The PR linked above uses different folder names, but these ones accurately
 # describe why we need different builds in different environments.
 
-if [ -n "$FEATURES" ]; then
-  FEATURES="--features $FEATURES"
-fi
-
 if [ -z "$PACKAGE_ONLY" ]; then
   mkdir -p pkg-scratch
   rm -rf $DEST
@@ -91,19 +93,49 @@ if [ -z "$PACKAGE_ONLY" ]; then
   target() {
     TARGET=$1
     OUT=$2
-    wasm-pack build --release --out-name citeproc_rs_wasm --scope citeproc-rs --target $TARGET --out-dir pkg-scratch/$TARGET -- $FEATURES
-    mkdir -p $DEST/$OUT
-    cp pkg-scratch/$TARGET/citeproc_rs_wasm* $DEST/$OUT/
+    EXTRA_FEATURES=$3
+    wasm-pack build --release \
+      --out-name citeproc_rs_wasm \
+      --scope citeproc-rs \
+      --target "$TARGET" \
+      --out-dir pkg-scratch/$OUT \
+      -- --features "$FEATURES$EXTRA_FEATURES" \
+      && mkdir -p "$DEST/$OUT" \
+      && cp pkg-scratch/$OUT/citeproc_rs_wasm* "$DEST/$OUT/" \
+      || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
   }
 
   target nodejs _cjs
   target browser _esm
   target web _web
-  target no-modules _no_modules
+  target no-modules _no_modules ,no-modules
+  target no-modules _zotero ,zotero
+else
+  mkdir -p $DEST/_cjs $DEST/_esm $DEST/_web $DEST/_no_modules $DEST/_zotero
 fi
 
+ZOTERO_BINDGEN_SRC="pkg-scratch/_zotero/citeproc_rs_wasm.js"
+ZOTERO_BINDGEN="$DEST/_zotero/citeproc_rs_wasm.js"
+sed -e 's/CITEPROC_RS_ZOTERO_GLOBAL/Zotero.CiteprocRs/g' \
+  < $ZOTERO_BINDGEN_SRC \
+  > "$ZOTERO_BINDGEN" \
+  || bail "could not replace CITEPROC_RS_ZOTERO_GLOBAL"
+cat <<EOF >> "$ZOTERO_BINDGEN"
+module.exports = wasm_bindgen;
+if (typeof Zotero !== "undefined" && typeof Zotero.CiteprocRs !== "undefined") {
+  Object.assign(Zotero.CiteprocRs, wasm_bindgen)
+}
+EOF
 
-cp README.md $DEST/
+NOMOD_INCLUDE="$DEST/_no_modules/citeproc_rs_wasm_include.js"
+ZOTERO_INCLUDE="$DEST/_zotero/citeproc_rs_wasm_include.js"
+sed -e 's/export class/class/' < src/include.js \
+  | tee "$ZOTERO_INCLUDE"  > "$NOMOD_INCLUDE" \
+  || bail "could not write include.js for no-modules targets"
+cat src/js/nomod.js >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
+cat src/js/zotero.js >> "$ZOTERO_INCLUDE" || bail "failed writing $ZOTERO_INCLUDE"
+
+cp README.md $DEST/ || bail "could not copy README"
 # cp scripts/model-package.json $DEST/package.json
 
 TARGET_VERSION=${SET_VERSION:-$CARGO_VERSION}
@@ -145,7 +177,8 @@ fi
 
 printf "Writing package.json with: $JQ_ARGS\n$JQ_FILTERS\n"
 
-jq $JQ_ARGS "$JQ_FILTERS" < scripts/model-package.json > $DEST/package.json
+jq $JQ_ARGS "$JQ_FILTERS" < scripts/model-package.json > $DEST/package.json \
+  || bail "writing $DEST/package.json using scripts/model-package.json and jq"
 
 # cat $DEST/package.json | jq
 

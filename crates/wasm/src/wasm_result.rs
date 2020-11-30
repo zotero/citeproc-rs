@@ -31,8 +31,7 @@ mod helper {
     use crate::{DriverError, CiteprocRsDriverError, CiteprocRsError, CslStyleError};
     use csl::StyleError;
 
-    #[wasm_bindgen(module = "/src/include.js")]
-    extern "C" {
+    crate::js_import_class_constructor! {
         pub type WasmResult;
         #[wasm_bindgen(constructor)]
         fn new(value: JsValue) -> WasmResult;
