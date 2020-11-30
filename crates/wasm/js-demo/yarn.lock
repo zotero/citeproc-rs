@@ -4758,11 +4758,6 @@ rc@^1.2.7:
     minimist "^1.2.0"
     strip-json-comments "~2.0.1"
 
-react-async-component@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/react-async-component/-/react-async-component-2.0.0.tgz#a56c1278ac588291fce6cd5cf033eb97eb36483c"
-  integrity sha512-wefjuqJt5dYQC0y6v5uKqeDhigiVJQN3PO4L2/nF0/r3shtH52iRH3JvLP0UADhNsNnQmyORoqhVOJ59K7XQZA==
-
 react-dom@^16.8.2:
   version "16.9.0"
   resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-16.9.0.tgz#5e65527a5e26f22ae3701131bcccaee9fb0d3962"
