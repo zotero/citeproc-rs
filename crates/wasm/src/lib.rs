@@ -640,9 +640,11 @@ js_import_class_constructor! {
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_5: &'static str = r#"
-interface IWasmResult<T> {
+interface WasmResult<T> {
     /** If this is an error, throws the error. */
     unwrap(): T;
+    /** If this is an error, returns it, else throws. */
+    unwrap_err(): Error;
     is_ok(): boolean;
     is_err(): boolean;
     /** If this is an error, returns the default value. */
@@ -652,7 +654,6 @@ interface IWasmResult<T> {
     /** If this is Ok, returns f(ok_val), else returns the default value. */
     map_or<R>(default: R, f: (t: T) => R): R;
 }
-type WasmResult<T> = ({ Ok: T } | { Err: Error }) & IWasmResult<T>;
 "#;
 
 #[wasm_bindgen(typescript_custom_section)]

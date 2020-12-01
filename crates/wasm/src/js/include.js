@@ -6,41 +6,45 @@ export class WasmResult {
             this.Ok = value;
         }
     }
-    is_some() {
-        if (this.hasOwnProperty("Err")) {
-            return false;
-        }
-        return true;
+    is_err() {
+        return this.hasOwnProperty("Err");
     }
-    is_none() {
-        return !this.is_some();
+    is_ok() {
+        return !this.is_err();
     }
     unwrap() {
-        if (this.hasOwnProperty("Err")) {
-            throw this.Err;
+        if (this.is_ok()) {
+            return this.Ok;
         } else {
-            return this.Ok
+            throw this.Err;
+        }
+    }
+    unwrap_err() {
+        if (this.is_ok()) {
+            throw new Error("Called unwrap_err on an Ok value");
+        } else {
+            return this.Err;
         }
     }
     unwrap_or(otherwise) {
-        if (this.hasOwnProperty("Err")) {
-            return otherwise;
-        } else {
+        if (this.is_ok()) {
             return this.Ok;
+        } else {
+            return otherwise;
         }
     }
     map(func) {
-        if (this.hasOwnProperty("Err")) {
-            return this;
-        } else {
+        if (this.is_ok()) {
             return new WasmResult(func(this.Ok));
+        } else {
+            return this;
         }
     }
     map_or(otherwise, func) {
-        if (this.hasOwnProperty("Err")) {
-            return otherwise;
-        } else {
+        if (this.is_ok()) {
             return func(this.Ok);
+        } else {
+            return otherwise;
         }
     }
 }
