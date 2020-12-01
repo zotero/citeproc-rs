@@ -44,22 +44,24 @@ export const boringFetcher = new Fetcher(
 export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
     let style = cfg.style || mkStyle('<text variable="title" />');
     let fetcher = cfg.fetcher || boringFetcher;
-    let fmt = cfg.format || "plain";
-    let driver = Driver.new(style, fetcher, fmt);
+    let format = cfg.format || "plain";
+    let driver = Driver.new({ style, fetcher, format }).unwrap();
     callback(driver);
     driver.free();
 };
 
-export const oneOneOne = (driver: Driver, r?: any) => {
+export const oneOneOne = (driver: Driver, r?: any, cid?: string) => {
     let refr = {
         type: "book",
         title: "TEST_TITLE",
+        id: "citekey",
         ...r,
-        id: "citekey"
-    }
-    driver.insertReference(refr);
-    driver.insertCluster({id: "one", cites: [{id: "citekey"}]});
-    driver.setClusterOrder([{ id: "one" }]);
+    };
+    let id = refr.id;
+    cid = cid || "one";
+    driver.insertReference(refr).unwrap();
+    driver.insertCluster({id: cid, cites: [{ id }]}).unwrap();
+    driver.setClusterOrder([{ id: cid }]).unwrap();
 };
 
 export const checkUpdatesLen = (up: UpdateSummary, clusterCount: number, bibCount: number) => {
