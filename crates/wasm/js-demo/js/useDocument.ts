@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary } from '../../pkg';
+import { parseStyleMetadata, Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary, StyleMeta } from '../../pkg';
 import { ClusterId, Document, RenderedDocument } from './Document';
 import { CdnFetcher } from './CdnFetcher';
 
@@ -32,7 +32,8 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     const [inFlight, setInFlight] = useState(false);
     const [driver, setDriver] = useState<Result<Driver, any>>(Err("uninitialized"));
     const [style, setStyle] = useState(initialStyle);
-    const [error, setError] = useState<Option<any>>(None());
+    const [metadata, setMetadata] = useState<Option<StyleMeta>>(None);
+    const [error, setError] = useState<Option<CiteprocRsError>>(None());
 
     const flightFetcher = async (driv: Driver) => {
         setInFlight(true);
@@ -56,9 +57,12 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
                 });
                 let d = driver.unwrap();
                 d.resetReferences(references).unwrap();
+                let meta = parseStyleMetadata(style).unwrap();
+                setMetadata(Some(meta));
                 return d;
             } catch(e) {
                 console.error("caught in createDriver: ", e);
+                setError(Some(e));
             }
         });
         if (d.is_ok()) {
@@ -73,18 +77,18 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         if (driver.is_ok()) {
             let d = driver.unwrap();
             try {
-                const { parseStyleMetadata } = await import('../../pkg');
                 let meta = parseStyleMetadata(style).unwrap();
                 if (meta.info.parent != null) {
                     console.log("this is a dependent style!");
                 }
                 console.log(meta);
                 d.setStyle(style).unwrap();
+                setMetadata(Some(meta));
                 setError(None());
             } catch (e) {
                 console.error(e);
                 console.log(e.data);
-                setError(Some("" + e));
+                setError(Some(e));
             }
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
@@ -154,6 +158,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         resetReferences,
         updateReferences,
         references,
+        metadata,
     };
 }
 

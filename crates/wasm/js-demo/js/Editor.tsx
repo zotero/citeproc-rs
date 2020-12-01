@@ -1,7 +1,8 @@
 import React, { Component, useState, useEffect, useRef } from 'react';
 import { Result, Err, Ok, Option, Some } from 'safe-types';
+import ReactJson from 'react-json-view';
 
-import { Reference, Cluster, Driver, CslStyleError, StyleError, CiteprocRsError, CiteprocRsDriverError } from '../../pkg';
+import { Reference, Cluster, Driver, StyleError, StyleMeta } from '../../pkg';
 import { GraphViz } from './GraphViz';
 import { DocumentEditor } from './DocumentEditor';
 import { useDocument } from './useDocument';
@@ -17,35 +18,41 @@ const mono = {
     fontFamily: 'monospace',
 };
 
+const errorStyle = {backgroundColor: '#ff00002b', marginBottom: '5px'};
+
 const StyleErrorViewer = ({style, message, error}: { style: string, message: string, error: StyleError }) => {
     switch (error.tag) {
-        case "ParseError": 
-            return <p>{ message }</p>
-        case "DependentStyle":
-            return <p>{ message }</p>
         case "Invalid":
-            return <div>{ error.content.map(i => {
-                let text = style.slice(i.range.start, i.range.end);
-            return <div key={i.range.start * style.length + i.range.end}
-            style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>
-            <p>{ `${i.severity}: ${i.message}` }</p>
-            <pre style={{marginLeft: "2em" }}>{ text }</pre>
-            { i.hint && <p>{ i.hint }</p> }
-            </div>;
-        }) } </div>
-        default: return null;
+            return <div>{
+                error.content.map(i => {
+                    let text = style.slice(i.range.start, i.range.end);
+                    return <div key={i.range.start * style.length + i.range.end}
+                        style={errorStyle}>
+                        <p>{ `${i.severity}: ${i.message}` }</p>
+                        <pre style={{marginLeft: "2em" }}>{ text }</pre>
+                        { i.hint && <p>{ i.hint }</p> }
+                    </div>;
+                })
+            } </div>;
+        default:
+            return <p style={errorStyle}>{ message }</p>
     }
 }
 
 const ErrorViewer = ({style, error}: { style: string, error: CiteprocRsError }) => {
-    if (error instanceof CiteprocRsDriverError) {
+    if (error instanceof CiteprocRsDriverError && error.data.tag == "StyleError") {
+        return <StyleErrorViewer
+                    style={style}
+                    message={error.message}
+                    error={error.data.content} />;
+    } else if (error instanceof CslStyleError) {
         let info = error.data;
-        switch (info.tag) {
-            case "StyleError": return <StyleErrorViewer style={style} message={error.message} error={info.content} />;
-            default: return <p>{ error.message }</p>;
-        }
+        return <StyleErrorViewer
+                    style={style}
+                    message={error.message}
+                    error={info} />;
     } else {
-        return <p>{ error.message }</p>;
+        return <p style={errorStyle}>{ error.message }</p>;
     }
 }
 
@@ -55,7 +62,6 @@ const Results = ({ driver, style }: { driver: Result<Driver, CiteprocRsError>, s
             locales in use:
             <code>{JSON.stringify(d.toFetch().unwrap().sort())}</code>
             </p>,
-        // Err: e => <p style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}></p>,
         Err: e => <ErrorViewer style={style} error={e} />
     });
 };
@@ -90,11 +96,11 @@ const StyleEditor = ({style, setStyle, resetReferences} : {
         <div style={{display: 'flex'}}>
             <div style={column}>
                 <h3>Style</h3>
-                <textarea value={style} onChange={e => setStyle(e.target.value)} style={mono} />
+                <textarea defaultValue={style} onBlur={e => setStyle(e.target.value)} style={mono} />
             </div>
             <div style={column}>
                 <h3>References</h3>
-                <textarea value={refsText} onChange={e => setRefsText(e.target.value)} style={mono} />
+                <textarea defaultValue={refsText} onBlur={e => setRefsText(e.target.value)} style={mono} />
             </div>
         </div>
         </div>;
@@ -110,11 +116,22 @@ const EditorAndResults = () => {
         setDocument,
         references,
         resetReferences,
+        metadata,
         // updateReferences,
     } = useDocument(initialStyle, initialReferences, initialClusters);
 
+    let [hasBibliography, setHasBibliography] = useState(false);
+    useEffect(() => {
+        metadata.map(meta => {
+            if (meta.independentMeta) {
+                setHasBibliography(meta.independentMeta.hasBibliography);
+            }
+        })
+    }, [metadata]);
+
     const docEditor = document.map(doc =>
         <DocumentEditor
+        showBibliography={hasBibliography}
         document={doc}
         onChange={newDoc => setDocument(Some(newDoc))} />
     ).unwrap_or(null);
@@ -125,6 +142,13 @@ const EditorAndResults = () => {
             setStyle={setStyle}
             inFlight={inFlight}
             resetReferences={resetReferences} />
+        <section>
+          { metadata.map_or(null, meta => <details>
+              <summary>Style Metadata</summary>
+              <ReactJson name={false} src={meta}
+                enableClipboard={false} displayObjectSize={false} displayDataTypes={false} />
+            </details>) }
+        </section>
         <div style={{display: 'flex'}}>
             <section style={{flexGrow: 1}}>
                 <Results style={style} driver={driver} />

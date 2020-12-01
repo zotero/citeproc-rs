@@ -8,7 +8,7 @@ const btnStyle = {
     display: "inline"
 }
 
-export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
+export const DocumentEditor = ({document, onChange, showBibliography}: { document: Document; onChange: (d: Document) => void, showBibliography: boolean }) => {
   let [csvIncl, setCsvIncl] = useState("");
     const insertCluster = (before: string) => {
         let neu = document.produce(draft => {
@@ -51,26 +51,32 @@ export const DocumentEditor = ({document, onChange}: { document: Document; onCha
                 setCsvIncl(joined);
               }} placeholder="None (default), All, or a comma-separated list of citekeys"/>
         </div>
-        <DocumentViewer renderedDocument={document.rendered} />
+        <DocumentViewer showBibliography={showBibliography} renderedDocument={document.rendered} />
     </>;
 };
 
-const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: RenderedDocument}) => {
+const DocumentViewer = React.memo(({renderedDocument, showBibliography}: {renderedDocument: RenderedDocument, showBibliography: boolean}) => {
     let clusters = renderedDocument.orderedClusterIds.map(c => {
         let html = renderedDocument.builtClusters[c.id];
         let touched = renderedDocument.updatedLastRevision[c.id];
         return <ClusterViewer key={c.id} note={c.note} html={html} touched={touched} />
     });
-    let bibs = renderedDocument.bibliographyIds.map((key, x) => {
-        let str = renderedDocument.bibliography[key];
-        return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
-    });
+    let bib: JSX.Element | null = null;
+    if (showBibliography) {
+        let bibs = renderedDocument.bibliographyIds.map((key, x) => {
+            let str = renderedDocument.bibliography[key];
+            return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
+        });
+        bib = <>
+            <h2>Bibliography</h2>
+            <div className="csl-bib-body">
+              {bibs}
+            </div>
+        </>;
+    }
     return <div>
         {clusters}
-        <h2>Bibliography</h2>
-        <div className="csl-bib-body">
-            {bibs}
-        </div>
+        {bib}
     </div>;
 });
 

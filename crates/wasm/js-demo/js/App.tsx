@@ -1,6 +1,5 @@
 import React, { Component, Suspense } from 'react';
 
-
 const AsyncEditor = React.lazy(async () => {
     // Load wasm before making it interactive.
     // Removes failed expectation of immediate response compared to lazily loading it.
