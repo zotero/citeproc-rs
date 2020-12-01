@@ -604,17 +604,19 @@ type DriverError = {
     tag: "ReorderingErrorNumericId"
 };
 
-/** Catch-all citeproc-rs Error subclass. */
-declare class CiteprocRsError extends Error {
-    constructor(message: string);
-}
-declare class CiteprocRsDriverError extends CiteprocRsError {
-    data: DriverError;
-    constructor(message: string, data: DriverError);
-}
-declare class CslStyleError extends CiteprocRsError {
-    data: StyleError;
-    constructor(message: string, data: StyleError);
+declare global {
+    /** Catch-all citeproc-rs Error subclass. */
+    declare class CiteprocRsError extends Error {
+        constructor(message: string);
+    }
+    declare class CiteprocRsDriverError extends CiteprocRsError {
+        data: DriverError;
+        constructor(message: string, data: DriverError);
+    }
+    declare class CslStyleError extends CiteprocRsError {
+        data: StyleError;
+        constructor(message: string, data: StyleError);
+    }
 }
 "#;
 
@@ -702,7 +704,7 @@ interface StyleMeta {
     class?: "in-text" | "note",
     cslVersionRequired: string,
     /** May be absent on a dependent style */
-    independent_meta?: IndependentMeta,
+    independentMeta?: IndependentMeta,
 };
 "#;
 

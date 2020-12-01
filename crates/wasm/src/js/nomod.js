@@ -7,18 +7,6 @@
 
 // doExport defined in include.js
 
-let env_global;
-if (typeof self !== "undefined") {
-    env_global = self;
-} else if (typeof global !== "undefined") {
-    env_global = global;
-} else if (typeof window !== "undefined") {
-    env_global = window;
-}
-if (typeof env_global !== "undefined") {
-    doExport(env_global)
-}
-
 // Then we do one little commonjs hack
 if (typeof module !== "undefined") {
     module.exports = {};

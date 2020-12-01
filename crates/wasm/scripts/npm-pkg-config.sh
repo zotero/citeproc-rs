@@ -129,7 +129,7 @@ EOF
 
 NOMOD_INCLUDE="$DEST/_no_modules/citeproc_rs_wasm_include.js"
 ZOTERO_INCLUDE="$DEST/_zotero/citeproc_rs_wasm_include.js"
-sed -e 's/export class/class/' < src/include.js \
+sed -e 's/export class/class/' < src/js/include.js \
   | tee "$ZOTERO_INCLUDE"  > "$NOMOD_INCLUDE" \
   || bail "could not write include.js for no-modules targets"
 cat src/js/nomod.js >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"

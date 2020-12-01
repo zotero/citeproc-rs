@@ -72,7 +72,7 @@ macro_rules! js_import {
                     $($tt)*
                 }
             } else {
-                #[wasm_bindgen(module = "/src/include.js")]
+                #[wasm_bindgen(module = "/src/js/include.js")]
                 extern "C" {
                     $($tt)*
                 }
