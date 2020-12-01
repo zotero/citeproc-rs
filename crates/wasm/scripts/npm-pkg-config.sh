@@ -127,12 +127,18 @@ if (typeof Zotero !== "undefined" && typeof Zotero.CiteprocRs !== "undefined") {
 }
 EOF
 
+NODEJS_INCLUDE="$DEST/_cjs/citeproc_rs_wasm_include.js"
 NOMOD_INCLUDE="$DEST/_no_modules/citeproc_rs_wasm_include.js"
 ZOTERO_INCLUDE="$DEST/_zotero/citeproc_rs_wasm_include.js"
 sed -e 's/export class/class/' < src/js/include.js \
-  | tee "$ZOTERO_INCLUDE"  > "$NOMOD_INCLUDE" \
+  | tee "$ZOTERO_INCLUDE" \
+  | tee "$NODEJS_INCLUDE" \
+  > "$NOMOD_INCLUDE" \
   || bail "could not write include.js for no-modules targets"
-cat src/js/nomod.js >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
+# We want the commonjs module.exports in both of these
+cat src/js/commonjs_export.js >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
+cat src/js/commonjs_export.js >> "$NODEJS_INCLUDE" || bail "failed writing $NODEJS_INCLUDE"
+# zotero is weird
 cat src/js/zotero.js >> "$ZOTERO_INCLUDE" || bail "failed writing $ZOTERO_INCLUDE"
 
 cp README.md $DEST/ || bail "could not copy README"
