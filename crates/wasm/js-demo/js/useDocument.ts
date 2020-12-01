@@ -49,6 +49,8 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
             try {
+                let meta = parseStyleMetadata(style).unwrap();
+                setMetadata(Some(meta));
                 let driver = CreateDriver.new({
                     style,
                     fetcher,
@@ -57,8 +59,6 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
                 });
                 let d = driver.unwrap();
                 d.resetReferences(references).unwrap();
-                let meta = parseStyleMetadata(style).unwrap();
-                setMetadata(Some(meta));
                 return d;
             } catch(e) {
                 console.error("caught in createDriver: ", e);
@@ -80,10 +80,10 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
                 let meta = parseStyleMetadata(style).unwrap();
                 if (meta.info.parent != null) {
                     console.log("this is a dependent style!");
+                    console.log(meta);
                 }
-                console.log(meta);
-                d.setStyle(style).unwrap();
                 setMetadata(Some(meta));
+                d.setStyle(style).unwrap();
                 setError(None());
             } catch (e) {
                 console.error(e);

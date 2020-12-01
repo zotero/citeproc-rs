@@ -28,6 +28,7 @@ use citeproc::prelude::*;
 use citeproc::string_id;
 use csl::{Lang, StyleMeta};
 
+/// Parses a CSL style, either independent or dependent, and returns its metadata.
 #[wasm_bindgen(js_name = "parseStyleMetadata")]
 pub fn parse_style_metadata(style: &str) -> StyleMetaResult {
     typescript_serde_result(|| {
