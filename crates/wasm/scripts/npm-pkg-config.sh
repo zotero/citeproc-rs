@@ -26,6 +26,7 @@ function usage() {
   echo "  --github-packages @scope/repo/pkg-name Configure for publishing to GitHub packages, @scope/pkg-name in repo @scope/repo"
   echo "  --features                             List of cargo features to enable (comma-sep)"
   echo "  --targets                              List of npm targets to build (comma-sep, default all)"
+  echo "  --dev                                  Build in --dev mode"
   echo
   exit 1
 }
@@ -39,6 +40,7 @@ GITHUB_PACKAGES_DEF=
 CANARY_SHA=
 FEATURES=
 TARGETS=
+DEV_OR_RELEASE=--release
 
 # parse params
 while [[ "$#" > 0 ]]; do case $1 in
@@ -51,6 +53,7 @@ while [[ "$#" > 0 ]]; do case $1 in
   --github-packages) GITHUB_PACKAGES_DEF="$2";shift;shift;;
   --features) FEATURES="$2";shift;shift;;
   --targets) TARGETS="$2";shift;shift;;
+  --dev) DEV_OR_RELEASE="--dev";shift;;
   *) usage "Unknown parameter passed: $1"; shift; shift;;
 esac; done
 
@@ -109,7 +112,7 @@ if [ -z "$PACKAGE_ONLY" ]; then
     OUT=${2:-}
     EXTRA_FEATURES=${3:-}
     SCRATCH="$DIR/pkg-scratch/$OUT"
-    wasm-pack build --release \
+    wasm-pack build $DEV_OR_RELEASE \
       --out-name citeproc_rs_wasm \
       --scope citeproc-rs \
       --target "$TARGET" \
