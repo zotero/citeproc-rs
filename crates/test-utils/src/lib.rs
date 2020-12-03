@@ -64,7 +64,7 @@ impl Default for Format {
 pub struct TestCase {
     pub mode: Mode,
     pub format: Format,
-    pub bibliography_nosort: bool,
+    pub bibliography_no_sort: bool,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -82,7 +82,7 @@ impl Clone for TestCase {
                 fetcher: Some(fet),
                 format: self.format.0,
                 test_mode: true,
-                bibliography_nosort: self.bibliography_nosort,
+                bibliography_no_sort: self.bibliography_no_sort,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -93,7 +93,7 @@ impl Clone for TestCase {
             processor,
             mode: self.mode.clone(),
             format: self.format.clone(),
-            bibliography_nosort: self.bibliography_nosort,
+            bibliography_no_sort: self.bibliography_no_sort,
             csl: self.csl.clone(),
             input: self.input.clone(),
             result: self.result.clone(),
@@ -107,7 +107,7 @@ impl TestCase {
     pub fn new(
         mode: Mode,
         format: Format,
-        bibliography_nosort: bool,
+        bibliography_no_sort: bool,
         csl: String,
         input: Vec<Reference>,
         result: String,
@@ -121,7 +121,7 @@ impl TestCase {
                 fetcher: Some(fet),
                 format: format.0,
                 test_mode: true,
-                bibliography_nosort,
+                bibliography_no_sort,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -140,7 +140,7 @@ impl TestCase {
         TestCase {
             mode,
             format,
-            bibliography_nosort,
+            bibliography_no_sort,
             csl,
             input,
             result,

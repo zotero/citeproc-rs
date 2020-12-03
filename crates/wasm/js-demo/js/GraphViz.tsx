@@ -70,6 +70,7 @@ export const Dot = ({ dotString }: { dotString: string }) => {
 
 export const GraphViz = ({driver, references}: { driver: Result<Driver, any>, references: Reference[] }) => {
     const ids = references.map(r => ({value: r.id, label: r.id}));
+    ids.splice(0, 0, { value: null, label: "None" });
     const [current, setCurrent] = useState<string>(null);
     const ref = references.find(r => r.id == current);
     return (

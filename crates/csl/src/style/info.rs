@@ -169,6 +169,7 @@ impl EnumGetAttribute for CitationFormat {}
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum Rel {
     #[strum(serialize = "self")]
+    #[cfg_attr(feature = "serde", serde(rename = "self"))]
     RelSelf,
     Documentation,
     /// Not allowed in dependent styles

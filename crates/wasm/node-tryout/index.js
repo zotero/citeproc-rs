@@ -54,7 +54,7 @@ let prom = async () => {
     driver.initClusters(initialClusters);
     driver.setClusterOrder([ {id: 1, note: 1}, {id: 2, note: 2}, {id: 3, note: 3} ])
     console.log(driver.toFetch());
-    await driver.fetchAll();
+    await driver.fetchLocales();
     let result = driver.builtCluster(3);
     console.log(result);
   } catch (e) {

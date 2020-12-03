@@ -1,177 +1,38 @@
-import React, { Component, ChangeEvent, useEffect, useRef } from 'react';
-import { asyncComponent } from 'react-async-component';
-import { Reference, Cluster, Driver, StyleError, ParseError, Invalid } from '../../pkg';
-import { useState } from 'react';
-import { DocumentEditor } from './DocumentEditor';
-import { GraphViz } from './GraphViz';
-import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { useDocument } from './useDocument';
+import React, { Component, Suspense } from 'react';
 
-import initialStyle from './style.csl';
-import { initialReferences } from './initialReferences';
-
-const initialClusters: Cluster[] = [
-    {
-        id: "cluster-1",
-        cites: [
-            { id: "citekey" }
-        ],
-    },
-    {
-        id: "cluster-2",
-        cites: [
-            { id: "citekey2" }
-        ],
-    },
-    {
-        id: "cluster-3",
-        cites: [
-            { id: "citekey", locator: "56" }
-        ],
-    },
-    {
-        id: "cluster-4",
-        cites: [
-            { id: "r1" }
-        ]
-    },
-    {
-        id: "cluster-5",
-        cites: [
-            { id: "ysuf1" }
-        ]
-    },
-    {
-        id: "cluster-6",
-        cites: [
-            { id: "ysuf2" }
-        ]
-    },
-    {
-        id: "cluster-7",
-        cites: [
-            { id: "ysuf1" }
-        ]
-    },
-    {
-        id: "cluster-8",
-        cites: [
-            { id: "r7" }
-        ]
-    },
-];
-
-const mono = {
-    width: '100%',
-    minHeight: '300px',
-    fontFamily: 'monospace',
-};
-
-async function loadEditor() {
+const AsyncEditor = React.lazy(async () => {
     // Load wasm before making it interactive.
     // Removes failed expectation of immediate response compared to lazily loading it.
     await import('../../pkg');
+    return await import('./Editor');
+})
 
-    const StyleEditor = ({style, setStyle, resetReferences} : {
-        inFlight: boolean,
-        style: string,
-        setStyle: React.Dispatch<string>,
-        resetReferences: (rs: Reference[]) => void;
-    }) => {
-        const [refsText, setRefsText] = useState(JSON.stringify(initialReferences, null, 2));
-
-        const parseRefs = () => {
-            try {
-                let refs = JSON.parse(refsText);
-                resetReferences(refs);
-            } catch (e) {
-                console.error("could not parse references json", e);
-            }
-        };
-
-        useEffect(parseRefs, [ refsText ]);
-
-        const firstRun = useRef(true);
-        if (firstRun.current) {
-            firstRun.current = false;
-            parseRefs();
-        }
-
-        let column = { width: '50%' };
-        return <div>
-            <div style={{display: 'flex'}}>
-                <div style={column}>
-                    <h3>Style</h3>
-                    <textarea value={style} onChange={e => setStyle(e.target.value)} style={mono} />
-                </div>
-                <div style={column}>
-                    <h3>References</h3>
-                    <textarea value={refsText} onChange={e => setRefsText(e.target.value)} style={mono} />
-                </div>
-            </div>
-        </div>;
+class ErrorBoundary extends Component<{}, { hasError: boolean, }> {
+    constructor(props: {}) {
+        super(props);
+        this.state = { hasError: false };
     }
 
-    return StyleEditor;
-}
+    static getDerivedStateFromError(error: any) {
+        // Update state so the next render will show the fallback UI.
+        return { hasError: true };
+    }
 
-const AsyncEditor = asyncComponent({
-    resolve: loadEditor,
-    LoadingComponent: () => <div><i>(Loading editor)</i></div>, // Optional
-    ErrorComponent: ({ error }) => <pre>{JSON.stringify(error)}</pre> // Optional
-});
+    componentDidCatch(error: any, errorInfo: any) {
+        // You can also log the error to an error reporting service
+        // logErrorToMyService(error, errorInfo);
+    }
 
-const Results = ({ driver, style }: { driver: Result<Driver, any>, style: string }) => {
-    return driver.match({
-        Ok: d => <p>
-            locales in use:
-            <code>{JSON.stringify(d.toFetch().sort())}</code>
-        </p>,
-        Err: e => <p style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>{e}</p>,
-    });
-};
-
-
-
-const ErrorViewer = ({style, error}: { style: string, error: StyleError }) => {
-    if (error.ParseError) {
-        let e = error as ParseError;
-        return <p>{ e.ParseError }</p>
-    } else if (error.Invalid) {
-        let e = error as Invalid;
-        return <div>{ e.Invalid.map(i => {
-            let text = style.slice(i.range.start, i.range.end);
-            return <div key={i.range.start * style.length + i.range.end}
-                        style={{backgroundColor: '#ff00002b', marginBottom: '5px'}}>
-                <p>{ `${i.severity}: ${i.message}` }</p>
-                <pre style={{marginLeft: "2em" }}>{ text }</pre>
-                { i.hint && <p>{ i.hint } </p>}
-            </div>
-        }) } </div>
-    } else {
-        return null;
+    render() {
+        if (this.state.hasError) {
+            // You can render any custom fallback UI
+            return <h1>Something went wrong.</h1>;
+        }
+        return this.props.children; 
     }
 }
 
 const App = () => {
-    const {
-        document,
-        driver,
-        style,
-        setStyle,
-        inFlight,
-        setDocument,
-        references,
-        resetReferences,
-        updateReferences,
-    } = useDocument(initialStyle, initialReferences, initialClusters);
-
-    const docEditor = document.map(doc =>
-        <DocumentEditor
-            document={doc}
-            onChange={newDoc => setDocument(Some(newDoc))} />
-    ).unwrap_or(null);
-
     return (
         <div className="App">
             <header className="App-header">
@@ -184,16 +45,11 @@ const App = () => {
                     Test driver for <code>citeproc-wasm</code>
                 </a>
             </header>
-            <AsyncEditor style={style} setStyle={setStyle} inFlight={inFlight} resetReferences={resetReferences} />
-            <div  style={{display: 'flex'}}>
-                <section style={{flexGrow: 1}}>
-                    <Results style={style} driver={driver} />
-                    { docEditor }
-                </section>
-                <section style={{flexGrow: 1}}>
-                    <GraphViz references={references} driver={driver} />
-                </section>
-            </div>
+            <ErrorBoundary>
+                <Suspense fallback={<div>Loading...</div>}>
+                    <AsyncEditor />
+                </Suspense>
+            </ErrorBoundary>
         </div>
     );
 };

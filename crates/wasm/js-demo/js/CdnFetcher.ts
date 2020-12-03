@@ -1,10 +1,10 @@
-import { Lifecycle } from '../../pkg';
+import { Fetcher } from '../../pkg';
 
 function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export class Fetcher implements Lifecycle {
+export class CdnFetcher implements Fetcher {
     private cache: { [lang: string]: string } = {};
     async fetchLocale(lang: string) {
         if (typeof this.cache[lang] === 'string') {

@@ -170,30 +170,34 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
     fn default_lang_override(&self) -> Option<Lang>;
 
     /// Backed by the LocaleFetcher implementation
+    #[salsa::transparent]
     fn locale_xml(&self, key: Lang) -> Option<Arc<String>>;
 
     /// Derived from a `Style`
+    #[salsa::transparent]
     fn inline_locale(&self, key: Option<Lang>) -> Option<Arc<Locale>>;
 
     /// A locale object, which may be `Default::default()`
-    fn locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
+    fn parsed_locale(&self, key: LocaleSource) -> Option<Arc<Locale>>;
 
     /// Derives the full lang inheritance chain, and merges them into one
+    #[salsa::transparent]
     fn merged_locale(&self, key: Lang) -> Arc<Locale>;
 
-    /// Even though we already have a merged `LocaleOptionsNode` struct, all its fields are
-    /// `Option`. To avoid having to unwrap each field later on, we merge whatever options did
-    /// get provided into a non-`Option` defaults struct.
-    fn locale_options(&self, key: Lang) -> Arc<LocaleOptions>;
-
     fn default_locale(&self) -> Arc<Locale>;
+
+    #[salsa::transparent]
+    fn default_lang(&self) -> Lang;
+}
+
+fn default_lang(db: &dyn LocaleDatabase) -> Lang {
+    db
+        .default_lang_override()
+        .unwrap_or_else(|| db.style().default_locale.clone().unwrap_or_else(Default::default))
 }
 
 fn default_locale(db: &dyn LocaleDatabase) -> Arc<Locale> {
-    let overrider = db
-        .default_lang_override()
-        .unwrap_or_else(|| db.style().default_locale.clone().unwrap_or_else(Default::default));
-    db.merged_locale(overrider)
+    db.merged_locale(db.default_lang())
 }
 
 fn locale_xml(db: &dyn LocaleDatabase, key: Lang) -> Option<Arc<String>> {
@@ -216,12 +220,12 @@ fn inline_locale(db: &dyn LocaleDatabase, key: Option<Lang>) -> Option<Arc<Local
     db.style().locale_overrides.get(&key).cloned().map(Arc::new)
 }
 
-fn locale(db: &dyn LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
+fn parsed_locale(db: &dyn LocaleDatabase, key: LocaleSource) -> Option<Arc<Locale>> {
     match key {
         LocaleSource::File(ref lang) => {
             let string = db.locale_xml(lang.clone());
             string
-                .and_then(|s| match Locale::from_str(&s) {
+                .and_then(|s| match Locale::parse(&s) {
                     Ok(l) => Some(l),
                     Err(e) => {
                         error!("failed to parse locale for lang {}: {:?}", lang, e);
@@ -238,7 +242,7 @@ fn merged_locale(db: &dyn LocaleDatabase, key: Lang) -> Arc<Locale> {
     debug!("requested locale {:?}", key);
     let locales = key
         .iter()
-        .filter_map(|src| db.locale(src))
+        .filter_map(|src| db.parsed_locale(src))
         .collect::<Vec<_>>();
     Arc::new(
         locales
@@ -259,11 +263,6 @@ fn merged_locale(db: &dyn LocaleDatabase, key: Lang) -> Arc<Locale> {
     )
 }
 
-fn locale_options(db: &dyn LocaleDatabase, key: Lang) -> Arc<LocaleOptions> {
-    let merged = &db.merged_locale(key).options_node;
-    Arc::new(LocaleOptions::from_merged(merged))
-}
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "parallel")] {
         pub trait LocaleFetcher: Send + Sync {
@@ -271,7 +270,7 @@ cfg_if::cfg_if! {
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
                 use std::str::FromStr;
                 let s = self.fetch_string(lang).ok()??;
-                Some(Locale::from_str(&s).ok()?)
+                Some(Locale::parse(&s).ok()?)
             }
         }
     } else {
@@ -280,7 +279,7 @@ cfg_if::cfg_if! {
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
                 use std::str::FromStr;
                 let s = self.fetch_string(lang).ok()??;
-                Some(Locale::from_str(&s).ok()?)
+                Some(Locale::parse(&s).ok()?)
             }
         }
     }

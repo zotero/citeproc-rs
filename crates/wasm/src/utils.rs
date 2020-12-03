@@ -56,25 +56,72 @@ cfg_if! {
     }
 }
 
-// https://github.com/rustwasm/wasm-bindgen/issues/1742
-macro_rules! js_err {
-    ($expression:expr) => {
-        match $expression {
-            Ok(a) => a,
-            Err(e) => {
-                return Err(js_sys::Error::new(&format!("{}", e)).into());
+
+/// Import JS items
+/// 1. the global namespace, under no-modules
+/// 2. the src/js/include.js file itself as an ES module in the other setups
+#[macro_export]
+macro_rules! js_import {
+    {$($tt:tt)*} => {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "zotero")] {
+                compile_error!("Cannot use bare js_import for zotero output, it has to be namespaced")
+            } else if #[cfg(feature = "no-modules")] {
+                #[wasm_bindgen]
+                extern "C" {
+                    $($tt)*
+                }
+            } else {
+                #[wasm_bindgen(module = "/src/js/include.js")]
+                extern "C" {
+                    $($tt)*
+                }
+            }
+        }
+    };
+}
+
+/// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.WasmResult(...)`
+/// either from 
+/// 1. that namespace, under zotero
+/// 2. the global namespace, under no-modules
+/// 3. the src/js/include.js file itself as an ES module in the other setups
+#[macro_export]
+macro_rules! js_import_class_constructor {
+    {
+        pub type $name:ident;
+        #[wasm_bindgen(constructor)]
+        $constructor:item
+    } => {
+        cfg_if::cfg_if! {
+            // We'd rather use ["Zotero", "CiteprocRs"] but we're pinned to a wasm-bindgen that
+            // doesn't support that kind of multi-level namespace.
+            // So this has to be replaced in the wasm-bindgen glue file as it gets written to
+            // _zotero.
+            if #[cfg(feature = "zotero")] {
+                #[wasm_bindgen]
+                extern "C" {
+                    pub type $name;
+                    #[wasm_bindgen(constructor, js_namespace = CITEPROC_RS_ZOTERO_GLOBAL)]
+                    $constructor
+                }
+            } else {
+                js_import! {
+                    pub type $name;
+                    #[wasm_bindgen(constructor)]
+                    $constructor
+                }
             }
         }
     };
 }
 
 #[allow(clippy::boxed_local)]
-pub fn read_js_array<T>(js: Box<[JsValue]>) -> Result<Vec<T>, JsValue>
+pub fn read_js_array_2<T>(js: Box<[JsValue]>) -> serde_json::Result<Vec<T>>
 where
     T: DeserializeOwned,
 {
-    let xs: Result<Vec<T>, _> = js.iter().map(|x| x.into_serde()).collect();
-    Ok(js_err!(xs))
+    js.iter().map(|x| x.into_serde()).collect()
 }
 
 /// A `LocaleFetcher` that statically includes `en-US`, so it never has to be async-fetched, but

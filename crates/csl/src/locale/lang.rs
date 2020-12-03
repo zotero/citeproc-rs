@@ -17,7 +17,7 @@ pub enum LocaleSource {
 /// A parsable representation of `xml:lang`.
 ///
 /// See http://www.datypic.com/sc/xsd/t-xsd_language.html
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum Lang {
     /// ISO 639 language code, + optional hyphen and 2-letter ISO 3166 country code.
     ///
@@ -87,6 +87,13 @@ impl Lang {
             .map(LocaleSource::Inline)
             .chain(self.file_iter().map(LocaleSource::File))
     }
+    pub fn iter_fetchable_langs(&self) -> impl Iterator<Item = Lang> {
+        self.iter()
+            .filter_map(|source| match source {
+                LocaleSource::File(l) => Some(l),
+                _ => None,
+            })
+    }
     fn file_iter(&self) -> FileIter {
         FileIter {
             current: Some(self.clone()),
@@ -154,7 +161,7 @@ fn test_french() {
 /// Language codes for `Lang::Iso`.
 ///
 /// The 3-character codes are ISO 639-3.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, EnumString)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, EnumString, PartialOrd, Ord)]
 pub enum IsoLang {
     #[strum(serialize = "en", serialize = "eng")]
     English,
@@ -212,7 +219,7 @@ impl fmt::Display for IsoLang {
 /// These countries are used to do dialect fallback. Countries not used in that can be represented
 /// as `IsoCountry::Other`. If a country is in the list, you don't need to allocate to refer to it,
 /// so there are some non-participating countries in the list simply because it's faster.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, EnumString)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, EnumString, PartialOrd, Ord)]
 pub enum IsoCountry {
     /// United States
     US,

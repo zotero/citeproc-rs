@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary } from '../../pkg';
+import { parseStyleMetadata, Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary, StyleMeta } from '../../pkg';
 import { ClusterId, Document, RenderedDocument } from './Document';
-import { Fetcher } from './Fetcher';
+import { CdnFetcher } from './CdnFetcher';
 
 // Global for caching.
-const fetcher = new Fetcher();
+const fetcher = new CdnFetcher();
 
 /**
  * This keeps a Driver, a style, some References, and a Document in sync, i.e.:
@@ -19,7 +19,7 @@ const fetcher = new Fetcher();
  *   `useEffect` hook.
  * 
  * You will typically want to update references if a user has edited them. This
- * makes sure to wait for fetchAll() when modifying references, as they might
+ * makes sure to wait for fetchLocales() when modifying references, as they might
  * have new locales. Any syncing of clusters back to the Driver is done by
  * Document.
  *
@@ -32,12 +32,13 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     const [inFlight, setInFlight] = useState(false);
     const [driver, setDriver] = useState<Result<Driver, any>>(Err("uninitialized"));
     const [style, setStyle] = useState(initialStyle);
-    const [error, setError] = useState<Option<any>>(None());
+    const [metadata, setMetadata] = useState<Option<StyleMeta>>(None);
+    const [error, setError] = useState<Option<CiteprocRsError>>(None());
 
     const flightFetcher = async (driv: Driver) => {
         setInFlight(true);
         try {
-            await driv.fetchAll();
+            await driv.fetchLocales();
         } finally {
             setInFlight(false);
         }
@@ -47,13 +48,29 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         // make sure it's not loading wasm in the initial chunk
         const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
-            let d = CreateDriver.new(style, fetcher, "html");
-            d.resetReferences(references);
-            return d;
+            try {
+                let meta = parseStyleMetadata(style).unwrap();
+                setMetadata(Some(meta));
+                let driver = CreateDriver.new({
+                    style,
+                    fetcher,
+                    format: "html",
+                    // localeOverride: "de-AT",
+                });
+                let d = driver.unwrap();
+                d.resetReferences(references).unwrap();
+                return d;
+            } catch(e) {
+                if (e instanceof CiteprocRsError) {
+                    setError(Some(e));
+                } else {
+                    throw e;
+                }
+            }
         });
         if (d.is_ok()) {
             let newDriver = d.unwrap();
-            newDriver.resetReferences(references);
+            newDriver.resetReferences(references).unwrap();
             await flightFetcher(newDriver);
         }
         setDriver(d);
@@ -63,11 +80,18 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         if (driver.is_ok()) {
             let d = driver.unwrap();
             try {
-                d.setStyle(style);
+                let meta = parseStyleMetadata(style).unwrap();
+                if (meta.info.parent != null) {
+                    console.log("this is a dependent style!");
+                    console.log(meta);
+                }
+                setMetadata(Some(meta));
+                d.setStyle(style).unwrap();
                 setError(None());
             } catch (e) {
                 console.error(e);
-                setError(Some("" + e));
+                console.log(e.data);
+                setError(Some(e));
             }
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
@@ -100,7 +124,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         setReferences(refs);
         if (driver.is_ok()) {
             let d = driver.unwrap();
-            d.resetReferences(refs);
+            d.resetReferences(refs).unwrap();
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         }
@@ -137,6 +161,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         resetReferences,
         updateReferences,
         references,
+        metadata,
     };
 }
 
@@ -178,7 +203,7 @@ class _ExampleManager implements Lifecycle {
         newDriver.resetReferences(this.references);
         newDriver.initClusters(this.clusters);
         // wait for any locales to come back
-        await newDriver.fetchAll();
+        await newDriver.fetchLocales();
         this.driver = newDriver;
         if (oldDriver) {
             oldDriver.free();
@@ -202,8 +227,8 @@ class _ExampleManager implements Lifecycle {
     async resetReferences(refs: Reference[]) {
         this.references = refs;
         if (this.driver) {
-            this.driver.resetReferences(refs);
-            await this.driver.fetchAll();
+            this.driver.resetReferences(refs).unwrap();
+            await this.driver.fetchLocales();
             this.update();
         }
     }
@@ -224,11 +249,11 @@ class _ExampleManager implements Lifecycle {
             } else {
                 neu[i] = ref;
             }
-            this.driver && this.driver.resetReferences(refs);
+            this.driver && this.driver.resetReferences(refs).unwrap();
         }
         this.references = neu;
         if (this.driver) {
-            await this.driver.fetchAll();
+            await this.driver.fetchLocales();
             this.update();
         }
     }

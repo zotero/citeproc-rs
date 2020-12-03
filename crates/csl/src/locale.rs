@@ -78,6 +78,12 @@ pub struct Locale {
 impl FromStr for Locale {
     type Err = StyleError;
     fn from_str(xml: &str) -> Result<Self, Self::Err> {
+        Locale::parse(xml)
+    }
+}
+
+impl Locale {
+    pub fn parse(xml: &str) -> Result<Self, StyleError> {
         let doc = Document::parse(&xml)?;
         let info = ParseInfo::default();
         let locale = Locale::from_node(&doc.root_element(), &info)?;

@@ -54,6 +54,7 @@ pub enum BibNumber {
     Cited(u32),
     Uncited(u32),
 }
+
 impl BibNumber {
     pub fn get(&self) -> u32 {
         match *self {
@@ -84,33 +85,32 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
     // first, compute refs in the order that they are cited.
     // stable sorting will cause this to be the final tiebreaker.
     let all = db.all_keys();
-    let all_cite_ids = db.all_cite_ids();
-    let uncited_ordered = db.uncited_ordered();
+    let cited_keys = db.cited_keys();
+    let disamb_participants = db.disamb_participants();
+    let uncited_ordered = db.all_uncited();
     let mut preordered = Vec::with_capacity(all.len());
 
     // Put all the cited refs in
     let mut i = 1;
-    for &id in all_cite_ids.iter() {
-        let ref_id = &id.lookup(db).ref_id;
-        if all.contains(ref_id) && !citation_numbers.contains_key(ref_id) {
-            preordered.push(ref_id.clone());
-            citation_numbers.insert(ref_id.clone(), BibNumber::Cited(i as u32));
+    for id in cited_keys.iter() {
+        if !citation_numbers.contains_key(id) {
+            preordered.push(id.clone());
+            citation_numbers.insert(id.clone(), BibNumber::Cited(i as u32));
+            i += 1;
+        }
+    }
+    // "The rest" ie the uncited items
+    for id in disamb_participants.difference(&cited_keys) {
+        if !citation_numbers.contains_key(id) {
+            preordered.push(id.clone());
+            citation_numbers.insert(id.clone(), BibNumber::Uncited(i as u32));
             i += 1;
         }
     }
 
-    // Then all the uncited ones
-    for id in uncited_ordered.iter() {
-        // guaranteed to be a valid reference id already.
-        // but may have duplicated an actual cite.
-        preordered.push(id.clone());
-        citation_numbers.insert(id.clone(), BibNumber::Uncited(i as u32));
-        i += 1;
-    }
-
     let max_cnum = preordered.len() as u32;
     let mut reverse = false;
-    let now_sorted = if db.bibliography_nosort() {
+    let now_sorted = if db.bibliography_no_sort() {
         preordered
     } else if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {

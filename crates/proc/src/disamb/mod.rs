@@ -273,7 +273,7 @@ pub fn create_ref_ir<O: OutputFormat>(
     refr: &Reference,
 ) -> Vec<(FreeCond, RefIR)> {
     let style = db.style();
-    let locale = db.locale_by_reference(refr.id.clone());
+    let locale = db.default_locale();
     let ysh_explicit_edge = EdgeData::YearSuffixExplicit;
     let ysh_plain_edge = EdgeData::YearSuffixPlain;
     let ysh_edge = EdgeData::YearSuffix;

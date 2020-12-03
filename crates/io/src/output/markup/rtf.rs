@@ -101,13 +101,12 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
-                // TODO: {\field{\*\fldinst{HYPERLINK "https://google.com"}}{\fldrslt whatever}}
-                // TODO: HTML-quoted-escape? the url?
-                self.dest.push_str(r#"<a href=""#);
+                // TODO: quoted-escape the url?
+                self.dest.push_str(r#"{\field{\*\fldinst HYPERLINK \""#);
                 self.dest.push_str(&url);
-                self.dest.push_str(r#"">"#);
+                self.dest.push_str(r#""}{\fldrslt "#);
                 self.write_inlines(content, true);
-                self.dest.push_str("</a>");
+                self.dest.push_str("}}");
             }
         }
     }

@@ -45,6 +45,7 @@ pub trait IrDatabase:
     CiteDatabase + LocaleDatabase + StyleDatabase + ImplementationDetails
 {
     fn ref_dfa(&self, key: Atom) -> Option<Arc<Dfa>>;
+    #[salsa::transparent]
     fn all_ref_dfas(&self) -> Arc<FnvHashMap<Atom, Arc<Dfa>>>;
 
     // TODO: cache this
@@ -112,14 +113,14 @@ pub trait IrDatabase:
     #[salsa::invoke(crate::sort::sorted_refs)]
     fn sorted_refs(&self) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibNumber>)>;
     #[salsa::input]
-    fn bibliography_nosort(&self) -> bool;
+    fn bibliography_no_sort(&self) -> bool;
 
     #[salsa::invoke(crate::sort::bib_number)]
     fn bib_number(&self, id: CiteId) -> Option<BibNumber>;
 }
 
 pub fn safe_default(db: &mut dyn IrDatabase) {
-    db.set_bibliography_nosort_with_durability(false, salsa::Durability::HIGH);
+    db.set_bibliography_no_sort_with_durability(false, salsa::Durability::HIGH);
 }
 
 fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambNameData>> {
@@ -360,7 +361,6 @@ fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
 // style
 // cite
 // reference
-// locale_by_cite
 // cite_position
 //  -
 // bib_number
@@ -368,7 +368,7 @@ fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
 macro_rules! preamble {
     ($style:ident, $locale:ident, $cite:ident, $refr:ident, $ctx:ident, $db:expr, $id:expr, $pass:expr) => {{
         $style = $db.style();
-        $locale = $db.locale_by_cite($id);
+        $locale = $db.default_locale();
         // Avoid making bibliography ghosts all depend any positional / note num info
         let cite_stuff = match $db.lookup_cite($id) {
             CiteData::RealCite { cite, .. } => (cite, $db.cite_position($id)),
@@ -785,11 +785,12 @@ fn expand_one_name_ir(
     }
     use crate::disamb::names::MatchKey;
 
-    let name_ambiguity_number = |edge: &EdgeData, match_key: Option<&MatchKey>, slot: &[NameVariantMatcher]| -> u32 {
-        slot.iter()
-            .filter(|matcher| matcher.accepts(edge, None))
-            .count() as u32
-    };
+    let name_ambiguity_number =
+        |edge: &EdgeData, match_key: Option<&MatchKey>, slot: &[NameVariantMatcher]| -> u32 {
+            slot.iter()
+                .filter(|matcher| matcher.accepts(edge, None))
+                .count() as u32
+        };
 
     let mut n = 0usize;
     for dnr in nir.disamb_names.iter_mut() {
@@ -846,7 +847,9 @@ fn disambiguate_add_givennames(
     ctx: &mut CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
-    ctx.disamb_pass = Some(DisambPass::AddGivenName(ctx.style.citation.givenname_disambiguation_rule));
+    ctx.disamb_pass = Some(DisambPass::AddGivenName(
+        ctx.style.citation.givenname_disambiguation_rule,
+    ));
     let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(
         db,
@@ -992,7 +995,14 @@ fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
     let gndr = style.citation.givenname_disambiguation_rule;
     let cite = id.lookup(db);
     let gen2 = db.ir_gen2_add_given_name(id);
-    let refs = refs_accepting_cite(db, gen2.root, &gen2.arena, Some(id), &cite.ref_id, Some(DisambPass::AddGivenName(gndr)));
+    let refs = refs_accepting_cite(
+        db,
+        gen2.root,
+        &gen2.arena,
+        Some(id),
+        &cite.ref_id,
+        Some(DisambPass::AddGivenName(gndr)),
+    );
     Arc::new(refs)
 }
 
@@ -1464,7 +1474,7 @@ pub fn with_cite_context<T>(
     f: impl FnOnce(CiteContext) -> T,
 ) -> Option<T> {
     let style = db.style();
-    let locale = db.locale_by_cite(id);
+    let locale = db.default_locale();
     let cite = id.lookup(db);
     let refr = db.reference(cite.ref_id.clone())?;
     let (names_delimiter, name_el) = db.name_info_citation();
@@ -1505,7 +1515,7 @@ pub fn with_bib_context<T>(
 ) -> Option<T> {
     let style = db.style();
     let bib = style.bibliography.as_ref()?;
-    let locale = db.locale_by_reference(ref_id.clone());
+    let locale = db.default_locale();
     let cite = Cite::basic(ref_id.clone());
     let refr_arc = db.reference(ref_id);
     let null_ref = citeproc_io::Reference::empty("empty_ref".into(), csl::CslType::Article);

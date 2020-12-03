@@ -3,3 +3,9 @@ opt-level = "z" # otherwise the wasm binaries are too big to load quickly
 
 [profile.release]
 debug = 1
+
+# hardening for https://github.com/cormacrelf/citeproc-rs/issues/78
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-C", "link-args=-z stack-size=8388608", # 8 * 1048576 B = 8 MB
+]

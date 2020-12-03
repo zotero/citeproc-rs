@@ -1,5 +1,5 @@
 import { Document, RenderedDocument } from './Document';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Cluster, Cite, IncludeUncited } from '../../pkg';
 
 import './bibliography.css';
@@ -8,9 +8,9 @@ const btnStyle = {
     display: "inline"
 }
 
-export const DocumentEditor = ({document, onChange}: { document: Document; onChange: (d: Document) => void }) => {
+export const DocumentEditor = ({document, onChange, showBibliography}: { document: Document; onChange: (d: Document) => void, showBibliography: boolean }) => {
   let [csvIncl, setCsvIncl] = useState("");
-    const insertCluster = (before: number) => {
+    const insertCluster = (before: string) => {
         let neu = document.produce(draft => {
             let cl = draft.createCluster([{ id: 'citekey' }]);
             draft.insertCluster(cl, before);
@@ -51,26 +51,32 @@ export const DocumentEditor = ({document, onChange}: { document: Document; onCha
                 setCsvIncl(joined);
               }} placeholder="None (default), All, or a comma-separated list of citekeys"/>
         </div>
-        <DocumentViewer renderedDocument={document.rendered} />
+        <DocumentViewer showBibliography={showBibliography} renderedDocument={document.rendered} />
     </>;
 };
 
-const DocumentViewer = React.memo(({renderedDocument}: {renderedDocument: RenderedDocument}) => {
+const DocumentViewer = React.memo(({renderedDocument, showBibliography}: {renderedDocument: RenderedDocument, showBibliography: boolean}) => {
     let clusters = renderedDocument.orderedClusterIds.map(c => {
         let html = renderedDocument.builtClusters[c.id];
         let touched = renderedDocument.updatedLastRevision[c.id];
         return <ClusterViewer key={c.id} note={c.note} html={html} touched={touched} />
     });
-    let bibs = renderedDocument.bibliographyIds.map((key, x) => {
-        let str = renderedDocument.bibliography[key];
-        return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
-    });
+    let bib: JSX.Element | null = null;
+    if (showBibliography) {
+        let bibs = renderedDocument.bibliographyIds.map((key, x) => {
+            let str = renderedDocument.bibliography[key];
+            return <div key={x} className="footnote csl-entry" dangerouslySetInnerHTML={{__html: str}}></div>;
+        });
+        bib = <>
+            <h2>Bibliography</h2>
+            <div className="csl-bib-body">
+              {bibs}
+            </div>
+        </>;
+    }
     return <div>
         {clusters}
-        <h2>Bibliography</h2>
-        <div className="csl-bib-body">
-            {bibs}
-        </div>
+        {bib}
     </div>;
 });
 
@@ -99,6 +105,17 @@ const ClusterEditor = ({cluster, updateCluster, removeCluster}: {cluster: Cluste
     </>;
 }
 
+function useDidUpdateEffect(fn, inputs) {
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    if (didMountRef.current)
+      fn();
+    else
+      didMountRef.current = true;
+  }, inputs);
+}
+
 const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) => {
     let [key, setKey] = useState(cite.id);
     let [locator, setLocator] = useState(cite.locator);
@@ -115,7 +132,7 @@ const CiteEditor = ({cite, update}: {cite: Cite, update: (cite: Cite) => void}) 
         setLocator(l);
     }, []);
 
-    useEffect(() => {
+    useDidUpdateEffect(() => {
         update({ ...cite, id: key, locators: undefined, locator });
     }, [key, locator]);
 

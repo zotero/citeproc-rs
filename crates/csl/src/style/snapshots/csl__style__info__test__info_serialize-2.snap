@@ -26,7 +26,7 @@ expression: "parse_as::<Info>(indoc::indoc! {\n                     r#\"\n      
   "links": [
     {
       "href": "https://example.com/self",
-      "rel": "rel-self",
+      "rel": "self",
       "lang": "en-AU"
     },
     {

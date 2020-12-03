@@ -37,11 +37,12 @@ where
 
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(tag = "tag", content = "content"))]
 #[non_exhaustive]
 pub enum StyleError {
     #[error("invalid style: {0}")]
     Invalid(#[from] CslError),
-    #[error("could not parse style")]
+    #[error("could not parse style: {0}")]
     ParseError(
         #[from]
         #[cfg_attr(feature = "serde", serde(serialize_with = "rox_error_serialize"))]
@@ -50,6 +51,7 @@ pub enum StyleError {
     #[error(
         "incorrectly supplied a dependent style, which refers to a parent {required_parent:?}"
     )]
+    #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
     DependentStyle { required_parent: String },
 }
 
@@ -98,6 +100,7 @@ pub struct InvalidCsl {
     // TODO: serialize_with or otherwise get this into the output
     pub range: Range<usize>,
     pub message: String,
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "String::is_empty"))]
     pub hint: String,
 }
 

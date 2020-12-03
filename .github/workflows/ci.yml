@@ -142,8 +142,8 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
 
       - name: Build WASM
-        working-directory: crates/wasm
-        run: wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs --dev
+        working-directory: crates/wasm/js-tests
+        run: yarn build
 
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
