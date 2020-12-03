@@ -140,7 +140,7 @@ pub struct InitOptions<'a> {
     pub test_mode: bool,
 
     /// Disables sorting on the bibliography
-    pub bibliography_nosort: bool,
+    pub bibliography_no_sort: bool,
 
     #[doc(hidden)]
     pub use_default_default: (),
@@ -174,7 +174,7 @@ impl Processor {
             fetcher,
             format,
             test_mode,
-            bibliography_nosort,
+            bibliography_no_sort,
             use_default_default: _,
         } = options;
 
@@ -190,7 +190,7 @@ impl Processor {
         )?;
         db.set_style_with_durability(Arc::new(style), Durability::HIGH);
         db.set_default_lang_override_with_durability(locale_override, Durability::HIGH);
-        db.set_bibliography_nosort_with_durability(bibliography_nosort, Durability::HIGH);
+        db.set_bibliography_no_sort_with_durability(bibliography_no_sort, Durability::HIGH);
         Ok(db)
     }
 

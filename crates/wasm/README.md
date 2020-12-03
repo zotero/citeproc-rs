@@ -284,6 +284,7 @@ let driverResult = Driver.new({
     style: "<style version=\"1.0\" class=\"note\" ... > ... </style>",
     format: "html", // optional, html is the default
     localeOverride: "de-DE", // optional, like setting default-locale on the style
+    // bibliographyNoSort: true // disables sorting on the bibliography
     fetcher,
 });
 // Throw any errors, get the inner Driver

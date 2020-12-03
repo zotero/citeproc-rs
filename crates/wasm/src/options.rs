@@ -1,9 +1,8 @@
-use serde::{Deserialize, de::{Deserializer as _, MapAccess, IgnoredAny}};
-use serde::de::Visitor;
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 use citeproc::prelude::*;
 use csl::Lang;
-use crate::{Fetcher, DriverError};
+use crate::Fetcher;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +19,7 @@ pub struct WasmInitOptions {
     pub locale_override: Option<Lang>,
     /// Disables sorting on the bibliography
     #[serde(default)]
-    pub bibliography_nosort: bool,
+    pub bibliography_no_sort: bool,
 }
 
 

@@ -110,7 +110,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
 
     let max_cnum = preordered.len() as u32;
     let mut reverse = false;
-    let now_sorted = if db.bibliography_nosort() {
+    let now_sorted = if db.bibliography_no_sort() {
         preordered
     } else if let Some(ref sort) = bib {
         preordered.sort_by_cached_key(|a| {

@@ -88,7 +88,7 @@ impl Driver {
                 style: options.style.as_ref(),
                 fetcher: Some(us_fetcher),
                 format: options.format,
-                bibliography_nosort: options.bibliography_nosort,
+                bibliography_no_sort: options.bibliography_no_sort,
                 locale_override: options.locale_override,
                 test_mode: false,
                 ..Default::default()
@@ -452,7 +452,7 @@ interface InitOptions {
     localeOverride?: string,
 
     /** Disables sorting in the bibliography; items appear in cited order. */
-    bibliographyNosort?: bool,
+    bibliographyNoSort?: bool,
 }
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
