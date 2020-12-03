@@ -183,7 +183,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, map_res, opt},
+    combinator::{map, opt},
     multi::{fold_many1, many0, many0_count},
     sequence::{delimited, tuple},
     IResult,
@@ -220,12 +220,14 @@ fn sep<'a>(and_term: &'a str) -> impl Fn(&'a str) -> IResult<&'a str, NumericTok
 }
 
 /// Parses and counts leading zeros
-fn from_digits(input: &str) -> Result<u32, std::num::ParseIntError> {
-    input.parse()
+fn from_digits(input: &str) -> IResult<&str, u32> {
+    nom::parse_to!(input, u32)
 }
 
 fn int(inp: &str) -> IResult<&str, NumericToken> {
-    map(map_res(digit1, from_digits), NumericToken::Num)(inp)
+    let (rem, digits) = digit1(inp)?;
+    let (_empty, parsed) = from_digits(digits)?;
+    Ok((rem, NumericToken::Num(parsed)))
 }
 
 // Try to parse affixed versions first, because
@@ -297,44 +299,47 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
     // Split it into a sequence of numeric / non-numerics, and save the last numeric one
     let (rem, res) = fold_many1(
         alt((map(num_pre, Blk::Alpha), map(digit1, Blk::Num))),
-        Acc::Len(0),
-        |acc, neu| match neu {
-            Blk::Num(n) => match acc {
-                Acc::Len(prefix) => Acc::LenNum {
-                    prefix,
-                    num_len: n.len(),
-                    num: from_digits(n).expect("must parse digit1"),
-                    post_num_len: 0,
+        Ok(Acc::Len(0)),
+        |acc, neu| {
+            let acc = acc?;
+            match neu {
+                Blk::Num(n) => match acc {
+                    Acc::Len(prefix) => Ok(Acc::LenNum {
+                        prefix,
+                        num_len: n.len(),
+                        num: from_digits(n)?.1,
+                        post_num_len: 0,
+                    }),
+                    Acc::LenNum {
+                        prefix,
+                        num_len,
+                        num: _,
+                        post_num_len,
+                    } => Ok(Acc::LenNum {
+                        prefix: prefix + num_len + post_num_len,
+                        num_len: n.len(),
+                        num: from_digits(n)?.1,
+                        post_num_len: 0,
+                    }),
                 },
-                Acc::LenNum {
-                    prefix,
-                    num_len,
-                    num: _,
-                    post_num_len,
-                } => Acc::LenNum {
-                    prefix: prefix + num_len + post_num_len,
-                    num_len: n.len(),
-                    num: from_digits(n).expect("must parse digit1"),
-                    post_num_len: 0,
+                Blk::Alpha(a) => match acc {
+                    Acc::Len(prefix) => Ok(Acc::Len(prefix + a.len())),
+                    Acc::LenNum {
+                        prefix,
+                        num_len,
+                        num,
+                        post_num_len,
+                    } => Ok(Acc::LenNum {
+                        prefix,
+                        num_len,
+                        num,
+                        post_num_len: post_num_len + a.len(),
+                    }),
                 },
-            },
-            Blk::Alpha(a) => match acc {
-                Acc::Len(prefix) => Acc::Len(prefix + a.len()),
-                Acc::LenNum {
-                    prefix,
-                    num_len,
-                    num,
-                    post_num_len,
-                } => Acc::LenNum {
-                    prefix,
-                    num_len,
-                    num,
-                    post_num_len: post_num_len + a.len(),
-                },
-            },
+            }
         },
     )(inp)?;
-    let token = match res {
+    let token = match res? {
         Acc::Len(_len) => return Err(nom::Err::Error((inp, nom::error::ErrorKind::Many1))),
         Acc::LenNum {
             prefix,
@@ -499,6 +504,14 @@ fn test_weird_affixes() {
 #[test]
 fn test_numeric_escape() {
     test_parse!("3\\-B", [afxd("", 3, "-B")]);
+}
+
+#[test]
+fn test_integer_overflow() {
+    // https://github.com/cormacrelf/citeproc-rs/issues/93
+    // This shouldn't panic when parsing an overflowing integer,
+    // it should just see it as a string.
+    test_parse!("071124114012001-???", @noparse);
 }
 
 #[test]
