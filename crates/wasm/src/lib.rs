@@ -48,6 +48,7 @@ pub struct Driver {
 pub enum DriverError {
     #[error("Unknown output format {0}")]
     UnknownOutputFormat(String),
+    /// Never serialized as a CiteprocRsDriverError, only serialized as a CslStyleError.
     #[error("Style error: {0}")]
     StyleError(#[from] csl::StyleError),
     #[error("JSON Deserialization Error: {0}")]
@@ -589,9 +590,6 @@ type StyleError = {
 type DriverError = {
     tag: "UnknownOutputFormat",
     content: string,
-} | {
-    tag: "StyleError",
-    content: StyleError
 } | {
     tag: "JsonError",
 } | {

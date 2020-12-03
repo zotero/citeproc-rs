@@ -61,8 +61,11 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
                 d.resetReferences(references).unwrap();
                 return d;
             } catch(e) {
-                console.error("caught in createDriver: ", e);
-                setError(Some(e));
+                if (e instanceof CiteprocRsError) {
+                    setError(Some(e));
+                } else {
+                    throw e;
+                }
             }
         });
         if (d.is_ok()) {
