@@ -19,7 +19,7 @@ const fetcher = new CdnFetcher();
  *   `useEffect` hook.
  * 
  * You will typically want to update references if a user has edited them. This
- * makes sure to wait for fetchAll() when modifying references, as they might
+ * makes sure to wait for fetchLocales() when modifying references, as they might
  * have new locales. Any syncing of clusters back to the Driver is done by
  * Document.
  *
@@ -38,7 +38,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     const flightFetcher = async (driv: Driver) => {
         setInFlight(true);
         try {
-            await driv.fetchAll();
+            await driv.fetchLocales();
         } finally {
             setInFlight(false);
         }
@@ -200,7 +200,7 @@ class _ExampleManager implements Lifecycle {
         newDriver.resetReferences(this.references);
         newDriver.initClusters(this.clusters);
         // wait for any locales to come back
-        await newDriver.fetchAll();
+        await newDriver.fetchLocales();
         this.driver = newDriver;
         if (oldDriver) {
             oldDriver.free();
@@ -225,7 +225,7 @@ class _ExampleManager implements Lifecycle {
         this.references = refs;
         if (this.driver) {
             this.driver.resetReferences(refs).unwrap();
-            await this.driver.fetchAll();
+            await this.driver.fetchLocales();
             this.update();
         }
     }
@@ -250,7 +250,7 @@ class _ExampleManager implements Lifecycle {
         }
         this.references = neu;
         if (this.driver) {
-            await this.driver.fetchAll();
+            await this.driver.fetchLocales();
             this.update();
         }
     }

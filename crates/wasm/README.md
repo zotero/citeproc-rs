@@ -279,7 +279,7 @@ A driver needs at least an XML style string, a fetcher (below), and an output
 format (one of `"html"`, `"rtf"` or `"plain"`).
 
 ```javascript
-let fetcher =  ...;
+let fetcher =  ...; // see below
 let driverResult = Driver.new({
     style: "<style version=\"1.0\" class=\"note\" ... > ... </style>",
     format: "html", // optional, html is the default
@@ -290,7 +290,7 @@ let driverResult = Driver.new({
 // Throw any errors, get the inner Driver
 let driver = driverResult.unwrap();
 // Fetch the chain of locale files required to use the specified locale
-await driver.fetchAll();
+await driver.fetchLocales();
 // ... use the driver ...
 driver.free()
 ```
@@ -302,10 +302,10 @@ See [Error Handling](#error-handling) for how to access this.
 
 #### Fetcher
 
-There are hundreds of locales, and the locales you need change depending on the 
-references that are active in your document, so the procedure for retrieving 
-one is asynchronous to allow for fetching one over HTTP. There's not much more 
-to it than this:
+There are hundreds of locales, and the locales you need depend on the style
+default, any overrides and any fallback locales defined, so the procedure for
+retrieving one is asynchronous to allow for fetching one over HTTP. There's not
+much more to it than this:
 
 ```javascript
 class Fetcher {
@@ -324,13 +324,16 @@ class Fetcher {
 
 let fetcher = new Fetcher();
 let driver = Driver.new({ ..., fetcher }).unwrap();
-await driver.fetchAll();
+// Make sure you actually fetch them!
+await driver.fetchLocales();
 ```
 
 Unless you don't have `async` syntax, in which case, return a `Promise` 
 directly, e.g. `return Promise.resolve("<locale> ... </locale>")`.
 
-
+Declining to provide a locale fetcher in `Driver.new` or forgetting to call
+`await driver.fetchLocales()` results in use of the bundled `en-US` locale. You
+should also never attempt to use the driver instance while it is fetching locales.
 
 ### 2. Edit the references or the citation clusters
 
@@ -560,7 +563,7 @@ let driver = Driver.new({
     localeOverride,
     ...
 }).unwrap();
-await driver.fetchAll();
+await driver.fetchLocales();
 
 // Here you might also want to know if the style can render a bibliography or not
 let parentMeta = parseStyleMetadata(parentStyle).unwrap();

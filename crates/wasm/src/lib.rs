@@ -370,8 +370,8 @@ impl Driver {
 
     /// Asynchronously fetches all the locales that may be required, and saves them into the
     /// engine. Uses your provided `Fetcher.fetchLocale` function.
-    #[wasm_bindgen(js_name = "fetchAll")]
-    pub fn fetch_all(&self) -> Promise {
+    #[wasm_bindgen(js_name = "fetchLocales")]
+    pub fn fetch_locales(&self) -> Promise {
         let rc = self.engine.clone();
         let langs: Vec<Lang> = {
             let eng = rc.borrow();
@@ -388,7 +388,7 @@ impl Driver {
         let fetcher = if let Some(f) = self.fetcher.clone() {
             f
         } else {
-            log::warn!("citeproc-rs was initialized without a locale fetcher, but reqested to fetchAll() required locales {:?}, bailing out", langs);
+            log::warn!("citeproc-rs was initialized without a locale fetcher, but reqested to fetchLocales() required locales {:?}, bailing out", langs);
             return Promise::resolve(&JsValue::UNDEFINED);
         };
         future_to_promise(async move {

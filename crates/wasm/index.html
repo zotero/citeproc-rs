@@ -71,7 +71,7 @@
         driver.insertReferences([{id: "citekey", title: "Hello", language: 'fr-FR'}]);
         driver.initClusters([{id: 1, cites: [{id: "citekey"}]}]);
         driver.setClusterOrder([ {id: 1} ]);
-        await driver.fetchAll();
+        await driver.fetchLocales();
         let result = driver.builtCluster(1);
         console.log("Built a cite cluster:", result);
       }
