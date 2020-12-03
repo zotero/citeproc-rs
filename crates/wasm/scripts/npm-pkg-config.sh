@@ -6,7 +6,7 @@ shopt -s extglob
 shopt -s globstar
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DIR="$( cd .. && pwd )"
+DIR="$( cd $DIR/.. && pwd )"
 
 CLEAR='\033[0m'
 RED='\033[0;31m'
@@ -60,10 +60,8 @@ esac; done
 # make sure it doesn't have a v prefix
 SET_VERSION=${SET_VERSION#v}
 
-echo "Running: $0 --dest $DEST --cargo-version? ${USE_CARGO_VERSION:-false} --set-version ${SET_VERSION:-<none>} --set-name ${SET_NAME:-<none>}"
-
 # default destination location is called 'dist' i.e. distribution
-CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages  | .[] | select(.name=="wasm") | .version')
+CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps --manifest-path $DIR/Cargo.toml | jq -r '.packages  | .[] | select(.name=="wasm") | .version')
 
 bail() {
   MESSAGE="$@"
