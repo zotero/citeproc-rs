@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "test": "jest",
-    "build": "wasm-pack build --target nodejs --out-dir pkg-node --scope citeproc-rs"
+    "build": "../scripts/npm-pkg-config.sh --targets nodejs --dest ../pkg-node"
   },
   "dependencies": {
     "@citeproc-rs/wasm": "../pkg-node",
