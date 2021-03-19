@@ -68,8 +68,9 @@ dlmalloc = { version = "0.1.4", features = ["global"] }
 
 [dev-dependencies.datatest]
 git = "https://github.com/cormacrelf/datatest"
-branch = "test_type"
-features = ["post_v139"]
+branch = "main"
+# main branch has this as the default
+# features = ["test_case_registration"]
 
 [[bench]]
 name = "some"

@@ -608,23 +608,23 @@ dependencies = [
 
 [[package]]
 name = "datatest"
-version = "0.5.3-alpha.0"
-source = "git+https://github.com/cormacrelf/datatest?branch=test_type#e267a78dac1e863d5f539e7074fef81827727f74"
+version = "0.6.4"
+source = "git+https://github.com/cormacrelf/datatest?branch=main#0c12efabd3c0d1769b62d241f51aced05b35df11"
 dependencies = [
- "cfg-if 0.1.10",
  "ctor",
  "datatest-derive",
  "regex",
  "serde",
  "serde_yaml",
+ "version_check 0.9.3",
  "walkdir",
  "yaml-rust",
 ]
 
 [[package]]
 name = "datatest-derive"
-version = "0.5.3-alpha.0"
-source = "git+https://github.com/cormacrelf/datatest?branch=test_type#e267a78dac1e863d5f539e7074fef81827727f74"
+version = "0.6.4"
+source = "git+https://github.com/cormacrelf/datatest?branch=main#0c12efabd3c0d1769b62d241f51aced05b35df11"
 dependencies = [
  "proc-macro2",
  "quote",
