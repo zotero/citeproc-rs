@@ -242,7 +242,7 @@ fn esc<'a>(
         // For whatever reason, escaped() accepts "" even if the inner parser does not.
         // So we have to guard it
         if i.len() == 0 {
-            return Err(nom::Err::Error((i, nom::error::ErrorKind::Escaped)));
+            return Err(nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Escaped)));
         }
         escaped(f, '\\', one_of(r#"\ ,&-\u{2013}"#))(i)
     }
@@ -277,8 +277,9 @@ fn num_pre(inp: &str) -> IResult<&str, &str> {
 fn non_sep(inp: &str) -> IResult<&str, &str> {
     esc(is_not(" ,&-\u{2013}"))(inp)
 }
+use nom::error::Error as NomError;
 
-fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
+fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken, NomError<&str>> {
     #[derive(Debug, PartialEq)]
     enum Blk<'a> {
         Num(&'a str),
@@ -295,7 +296,6 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
             post_num_len: usize,
         },
     }
-
     // Split it into a sequence of numeric / non-numerics, and save the last numeric one
     let (rem, res) = fold_many1(
         alt((map(num_pre, Blk::Alpha), map(digit1, Blk::Num))),
@@ -340,7 +340,7 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
         },
     )(inp)?;
     let token = match res? {
-        Acc::Len(_len) => return Err(nom::Err::Error((inp, nom::error::ErrorKind::Many1))),
+        Acc::Len(_len) => return Err(nom::Err::Error(NomError::new(inp, nom::error::ErrorKind::Many1))),
         Acc::LenNum {
             prefix,
             num_len,
@@ -376,7 +376,7 @@ fn roman_numeral(inp: &str) -> IResult<&str, NumericToken> {
             ),
         ));
     }
-    Err(nom::Err::Error((inp, nom::error::ErrorKind::ParseTo)))
+    Err(nom::Err::Error(nom::error::Error::new(inp, nom::error::ErrorKind::ParseTo)))
 }
 
 fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
