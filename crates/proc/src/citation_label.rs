@@ -158,7 +158,7 @@ mod parser {
         bytes::complete::{take_while, take_while1},
         character::complete::char,
         combinator::recognize,
-        multi::{many1, separated_nonempty_list},
+        multi::{many1, separated_list1},
         IResult,
     };
 
@@ -192,6 +192,6 @@ mod parser {
     }
 
     pub(super) fn colon_separated(inp: &str) -> IResult<&str, Vec<Vec<ConfigCell>>> {
-        separated_nonempty_list(char(':'), many1(alt((author, year))))(inp)
+        separated_list1(char(':'), many1(alt((author, year))))(inp)
     }
 }

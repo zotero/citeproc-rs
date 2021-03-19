@@ -125,7 +125,7 @@ impl FromStr for Results {
             bytes::complete::{tag, take_until},
             character::complete::{char, digit1},
             combinator::map,
-            multi::separated_nonempty_list,
+            multi::separated_list1,
             sequence::{delimited, preceded, tuple},
             IResult,
         };
@@ -155,7 +155,7 @@ impl FromStr for Results {
             })(inp)
         }
         fn whole_thing(inp: &str) -> IResult<&str, Vec<CiteResult>> {
-            separated_nonempty_list(char('\n'), total)(inp)
+            separated_list1(char('\n'), total)(inp)
         }
         Ok(Results(whole_thing(s).unwrap().1))
     }

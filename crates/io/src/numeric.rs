@@ -183,7 +183,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, opt},
+    combinator::{map, map_parser, opt},
     multi::{fold_many1, many0, many0_count},
     sequence::{delimited, tuple},
     IResult,
@@ -242,7 +242,7 @@ fn esc<'a>(
         // For whatever reason, escaped() accepts "" even if the inner parser does not.
         // So we have to guard it
         if i.len() == 0 {
-            return Err(nom::Err::Error((i, nom::error::ErrorKind::Escaped)));
+            return Err(nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Escaped)));
         }
         escaped(f, '\\', one_of(r#"\ ,&-\u{2013}"#))(i)
     }
@@ -277,12 +277,22 @@ fn num_pre(inp: &str) -> IResult<&str, &str> {
 fn non_sep(inp: &str) -> IResult<&str, &str> {
     esc(is_not(" ,&-\u{2013}"))(inp)
 }
+use nom::error::Error as NomError;
 
 fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
     #[derive(Debug, PartialEq)]
-    enum Blk<'a> {
-        Num(&'a str),
-        Alpha(&'a str),
+    enum Blk {
+        Num(usize, u32),
+        Alpha(usize),
+    }
+    impl Blk {
+        fn num(s: &str) -> IResult<&str, Self> {
+            let (rem, n) = from_digits(s)?;
+            Ok((rem, Blk::Num(s.len(), n)))
+        }
+        fn alpha(s: &str) -> Self {
+            Blk::Alpha(s.len())
+        }
     }
 
     #[derive(Clone, Debug)]
@@ -295,52 +305,50 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
             post_num_len: usize,
         },
     }
-
     // Split it into a sequence of numeric / non-numerics, and save the last numeric one
     let (rem, res) = fold_many1(
-        alt((map(num_pre, Blk::Alpha), map(digit1, Blk::Num))),
-        Ok(Acc::Len(0)),
+        alt((map(num_pre, Blk::alpha), map_parser(digit1, Blk::num))),
+        Acc::Len(0),
         |acc, neu| {
-            let acc = acc?;
             match neu {
-                Blk::Num(n) => match acc {
-                    Acc::Len(prefix) => Ok(Acc::LenNum {
+                Blk::Num(new_num_len, new_num) => match acc {
+                    Acc::Len(prefix) => Acc::LenNum {
                         prefix,
-                        num_len: n.len(),
-                        num: from_digits(n)?.1,
+                        num_len: new_num_len,
+                        num: new_num,
                         post_num_len: 0,
-                    }),
+                    },
                     Acc::LenNum {
                         prefix,
-                        num_len,
+                        num_len: old_num_len,
                         num: _,
                         post_num_len,
-                    } => Ok(Acc::LenNum {
-                        prefix: prefix + num_len + post_num_len,
-                        num_len: n.len(),
-                        num: from_digits(n)?.1,
+                    } => Acc::LenNum {
+                        prefix: prefix + old_num_len + post_num_len,
+                        num_len: new_num_len,
+                        num: new_num,
                         post_num_len: 0,
-                    }),
+                    },
                 },
-                Blk::Alpha(a) => match acc {
-                    Acc::Len(prefix) => Ok(Acc::Len(prefix + a.len())),
+                Blk::Alpha(len) => match acc {
+                    Acc::Len(prefix) => Acc::Len(prefix + len),
                     Acc::LenNum {
                         prefix,
                         num_len,
                         num,
                         post_num_len,
-                    } => Ok(Acc::LenNum {
+                    } => Acc::LenNum {
                         prefix,
                         num_len,
                         num,
-                        post_num_len: post_num_len + a.len(),
-                    }),
+                        post_num_len: post_num_len + len,
+                    },
                 },
             }
         },
     )(inp)?;
-    let token = match res? {
-        Acc::Len(_len) => return Err(nom::Err::Error((inp, nom::error::ErrorKind::Many1))),
+    let token = match res {
+        Acc::Len(_len) => return Err(nom::Err::Error(NomError::new(inp, nom::error::ErrorKind::Many1))),
         Acc::LenNum {
             prefix,
             num_len,
@@ -376,7 +384,7 @@ fn roman_numeral(inp: &str) -> IResult<&str, NumericToken> {
             ),
         ));
     }
-    Err(nom::Err::Error((inp, nom::error::ErrorKind::ParseTo)))
+    Err(nom::Err::Error(nom::error::Error::new(inp, nom::error::ErrorKind::ParseTo)))
 }
 
 fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
