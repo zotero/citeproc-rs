@@ -27,7 +27,7 @@ class WebDriverEnvironment extends NodeEnvironment {
 
     this.driver = driver;
 
-    this.global.by = By;
+    this.global.By = By;
     this.global.browser = driver;
     this.global.element = locator => driver.findElement(locator);
     this.global.element.all = locator => driver.findElements(locator);

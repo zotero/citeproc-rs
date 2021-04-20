@@ -3,14 +3,17 @@ if (process.env.FIREFOX_BINARY_PATH) {
     firefoxBinary = process.env.FIREFOX_BINARY_PATH;
 }
 module.exports = {
+    roots: ["browser"],
     testEnvironment: "webdriver-environment",
     testEnvironmentOptions: {
         "browser": "firefox",
         options: {
             "moz:firefoxOptions": {
                 "binary": firefoxBinary,
-                "prefs": { },
-                "args": [ "-headless" ]
+                "prefs": {
+                    "app.update.auto": false,
+                },
+                // "args": [ "-headless" ]
             },
             "goog:chromeOptions": {
                 "args": [ ]
