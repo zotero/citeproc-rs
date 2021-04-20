@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "test": "jest",
-    "build": "../scripts/npm-pkg-config.sh --dev --targets nodejs --dest ../pkg-node"
+    "test-firefox": "jest --config webdriver.config.js",
+    "build": "../scripts/npm-pkg-config.sh --dev --targets nodejs --dest ../pkg-node",
+    "build-firefox": "mkdir -p node_modules/webdriver-environment && cp webdriver-environment.js node_modules/webdriver-environment/index.js && ../scripts/npm-pkg-config.sh --dev --targets web --dest ../pkg-node"
   },
   "dependencies": {
     "@citeproc-rs/wasm": "../pkg-node",
@@ -16,6 +18,9 @@
     "@babel/preset-env": "^7.11.5",
     "@babel/preset-typescript": "^7.10.4",
     "babel-jest": "^26.3.0",
-    "jest": "^26.4.2"
+    "geckodriver": "^1.22.3",
+    "jest": "^26.4.2",
+    "jest-environment-node": "^26.6.2",
+    "selenium-webdriver": "^4.0.0-beta.3"
   }
 }
