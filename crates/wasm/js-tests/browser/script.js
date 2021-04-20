@@ -14,7 +14,26 @@
 console.log("first");
 const { Driver } = wasm_bindgen;
 
-const style = '<?xml version="1.0" encoding="utf-8"?>\n<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">\n<citation><layout><group delimiter=" "><text variable="title" /><text term="edition" form="long"/></group></layout></citation></style>';
+const mkStyle = (inner, bibliography) => {
+    return `
+    <style class="note">
+      <info>
+        <id>https://github.com/cormacrelf/citeproc-rs/test-style</id>
+        <title>test-style</title>
+        <updated>2000-01-01T00:00:00Z</updated>
+      </info>
+      <citation>
+        <layout>
+          ${inner}
+        </layout>
+      </citation>
+      ${ bibliography != null ? bibliography : "" }
+    </style>
+    `;
+}
+
+let style = mkStyle();
+
 
 class Fetcher {
     async fetchLocale(lang) {
@@ -51,32 +70,27 @@ async function run() {
     // Also note that the promise, when resolved, yields the wasm module's
     // exports which is the same as importing the `*_bg` module in other
     // modes
-    try {
-        console.log('fetching wasm');
-        await wasm_bindgen('../../pkg-nomod/_no_modules/citeproc_rs_wasm_bg.wasm');
-    } catch (e) {
-        console.log('failing hard');
-        document.write('<p id="failure">' + e.message + '</p>');
-        return;
-    }
+    await wasm_bindgen('../../pkg-nomod/_no_modules/citeproc_rs_wasm_bg.wasm');
 
     // And afterwards we can use all the functionality defined in wasm.
     // const result = Driver.new("<>noparse", {}, 2);
     const fetcher = new Fetcher();
-    const driver = Driver.new(style, fetcher, "html");
-    if (driver == null) {
-        throw new Error("wasm Driver.new doesn't work!");
-    }
+    const driver = Driver.new({
+        style,
+        fetcher,
+        format: "html"
+    }).unwrap();
 
     console.log("--- Successfully loaded wasm driver. You can now use it. ---")
-    driver.insertReferences([{id: "citekey", title: "Hello", language: 'fr-FR'}]);
-    driver.initClusters([{id: 1, cites: [{id: "citekey"}]}]);
-    driver.setClusterOrder([ {id: 1} ]);
+    driver.insertReference({id: "citekey", title: "Hello", language: 'fr-FR'}).unwrap();
+    driver.initClusters([{id: "one", cites: [{id: "citekey"}]}]).unwrap();
+    driver.setClusterOrder([ {id: "one"} ]).unwrap();
     await driver.fetchLocales();
-    let result = driver.builtCluster(1);
+    let result = driver.builtCluster("one").unwrap();
     console.log("Built a cite cluster:", result);
-    document.write('<p id="success">success</p>')
     return;
 }
 
-run();
+run()
+    .then(() => document.write('<p id="success">success</p>'))
+    .catch((e) => document.write('<p id="failure">' + e.message + '</p>'));
