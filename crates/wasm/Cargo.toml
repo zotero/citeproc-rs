@@ -17,13 +17,8 @@ description = "citeproc-rs, compiled to WebAssembly"
 # TODO: Set the opt level on new wasm-pack 0.6.0 config
 # when it's released, so as not to interfere with the
 # other native binary targets (cargo only lets you set it
-# on the workspace root)
-
-# https://github.com/rustwasm/wasm-pack/issues/886#issuecomment-667669802
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O3", "--enable-mutable-globals", "-g"]
-# wasm-opt = ["-O3", "-g"]
-# wasm-opt = false
+wasm-opt = ["-O4", "-g"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -57,7 +52,7 @@ serde = "1.0.116"
 serde_derive = "1.0.116"
 serde_json = "1.0.57"
 thiserror = "1.0.22"
-wasm-bindgen-test = "=0.3.18"
+wasm-bindgen-test = "0.3.23"
 
 [dependencies.rand]
 version = "0.7.3"
@@ -66,7 +61,7 @@ features = ["wasm-bindgen"]
 # getrandom = { version = "0.1.0", features = ["js"] }
 
 [dependencies.wasm-bindgen]
-version = "=0.2.69"
+version = "0.2.70"
 features = ["serde-serialize"]
 
 [dependencies.log]
