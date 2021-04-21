@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use citeproc_db::{CiteData, ClusterId, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_db::{CiteData, ClusterId, ClusterNumber, LocaleFetcher, PredefinedLocales, StyleDatabase};
 use citeproc_io::{output::markup::Markup, Cite, Reference};
 use csl::Atom;
 
@@ -18,8 +18,8 @@ pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
     f(sty)
 }
 
-pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
-    let sty = Style::parse_for_test(&format!(
+pub fn test_style_layout(s: &str) -> String {
+    format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
     <style class="note" version="1.0.1">
         <citation>
@@ -30,7 +30,11 @@ pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
     </style>
 "#,
         s
-    ))
+    )
+}
+
+pub fn with_test_citation<T>(mut f: impl FnMut(Style) -> T, s: &str) -> T {
+    let sty = Style::parse_for_test(&test_style_layout(s))
     .unwrap();
     f(sty)
 }
@@ -45,13 +49,14 @@ pub fn with_test_citation<T>(f: impl Fn(Style) -> T, s: &str) -> T {
 pub struct MockProcessor {
     storage: salsa::Storage<Self>,
     fetcher: Arc<dyn LocaleFetcher>,
+    formatter: Markup,
 }
 
 impl salsa::Database for MockProcessor {}
 
 impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
-        Markup::html()
+        self.formatter.clone()
     }
     fn lookup_interned_string(
         &self,
@@ -68,11 +73,17 @@ impl citeproc_db::HasFetcher for MockProcessor {
 }
 
 impl MockProcessor {
+    pub fn rtf() -> Self {
+        let mut new = Self::new();
+        new.formatter = Markup::rtf();
+        new
+    }
     pub fn new() -> Self {
         let fetcher = Arc::new(PredefinedLocales::bundled_en_us());
         let mut db = MockProcessor {
             storage: Default::default(),
             fetcher,
+            formatter: Markup::html(),
         };
         citeproc_db::safe_default(&mut db);
         crate::safe_default(&mut db);
@@ -85,10 +96,10 @@ impl MockProcessor {
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<(ClusterId, Vec<Cite<Markup>>)>) {
+    pub fn init_clusters(&mut self, clusters: Vec<(ClusterId, ClusterNumber, Vec<Cite<Markup>>)>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let (cluster_id, cites) = cluster;
+            let (cluster_id, note_number, cites) = cluster;
             let mut ids = Vec::new();
             for (index, cite) in cites.into_iter().enumerate() {
                 let cite_id = self.cite(CiteData::RealCite {
@@ -99,7 +110,7 @@ impl MockProcessor {
                 ids.push(cite_id);
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
-            self.set_cluster_note_number(cluster_id, None);
+            self.set_cluster_note_number(cluster_id, Some(note_number));
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
