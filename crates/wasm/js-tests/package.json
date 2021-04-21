@@ -4,13 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "test": "jest",
-    "test-firefox": "jest --config webdriver.config.js",
-    "build": "../scripts/npm-pkg-config.sh --dev --targets nodejs --dest ../pkg-node",
-    "build-firefox": "mkdir -p node_modules/webdriver-environment && cp webdriver-environment.js node_modules/webdriver-environment/index.js && ../scripts/npm-pkg-config.sh --dev --targets no-modules --dest ../pkg-nomod"
+    "test-node-only": "FIREFOX_BINARY_PATH='' jest --verbose",
+    "test": "source firefox-env && jest --verbose",
+    "build": "./build.sh"
   },
   "dependencies": {
-    "@citeproc-rs/wasm": "../pkg-node",
     "@types/jest": "^26.0.14"
   },
   "devDependencies": {

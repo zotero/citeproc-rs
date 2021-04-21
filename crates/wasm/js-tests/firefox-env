@@ -1,0 +1,26 @@
+#!/bin/sh
+CALLDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd $CALLDIR
+
+ZSB=zotero-standalone-build
+if [ ! -d $ZSB/xulrunner ]; then
+  echo "error: could not find Firefox in $CALLDIR/$ZSB/xulrunner" >/dev/stderr
+  exit 1
+fi
+. $ZSB/config.sh
+
+UNAME=$(uname)
+if [ "$UNAME" == "Linux" ]; then
+  export FIREFOX_BINARY_PATH="$LINUX_x86_64_RUNTIME_PATH/firefox-bin"
+elif [ "$UNAME" == "Darwin" ]; then
+  export FIREFOX_BINARY_PATH="$MAC_RUNTIME_PATH/Contents/MacOS/firefox-bin"
+else
+  echo "windows not automatic sorry" >/dev/stderr
+  exit 1
+fi
+
+if ! test -e $FIREFOX_BINARY_PATH; then
+  echo "error: could not find Firefox at $FIREFOX_BINARY_PATH"
+  exit 1
+fi
+

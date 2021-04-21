@@ -126,6 +126,7 @@ jobs:
         with:
           toolchain: 1.51.0
           override: true
+
       - name: Cache cargo directories
         uses: actions/cache@v2
         with:
@@ -140,10 +141,6 @@ jobs:
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-
-      - name: Build WASM
-        working-directory: crates/wasm/js-tests
-        run: yarn build
 
       - name: Get yarn cache directory path
         id: yarn-cache-dir-path
@@ -161,14 +158,23 @@ jobs:
         working-directory: crates/wasm/js-tests
         run: yarn install
 
-      - name: Run tests
+      - name: Build WASM
         working-directory: crates/wasm/js-tests
-        run: yarn test
+        run: yarn build
 
-      # otherwise, the yarn cache will contain a different @citeproc-rs/wasm
-      # entry every time.
-      - name: Clean yarn cache dir of wasm output
-        run: |
-          cd "$(yarn cache dir)"
-          ls | grep citeproc-rs-wasm | xargs rm -rf
+      - name: Download Firefox ESR from zotero-standalone-build
+        working-directory: crates/wasm/js-tests
+        run: ./install_firefox.sh
+
+      - name: Run tests, including in Firefox ESR
+        working-directory: crates/wasm/js-tests
+        run: MUST_RUN_FIREFOX_TESTS=1 yarn test
+
+      # not necessary because we install @citeproc-rs/wasm without yarn knowing now
+      # # otherwise, the yarn cache will contain a different @citeproc-rs/wasm
+      # # entry every time.
+      # - name: Clean yarn cache dir of wasm output
+      #   run: |
+      #     cd "$(yarn cache dir)"
+      #     ls | grep citeproc-rs-wasm | xargs rm -rf
 
