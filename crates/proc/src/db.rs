@@ -1154,7 +1154,7 @@ fn built_cluster(
     cluster_id: ClusterId,
 ) -> Arc<<Markup as OutputFormat>::Output> {
     let fmt = db.get_formatter();
-    let build = built_cluster_before_output(db, cluster_id);
+    let build = built_cluster_before_output(db, cluster_id, &fmt);
     let string = fmt.output(build, get_piq(db));
     Arc::new(string)
 }
@@ -1162,11 +1162,54 @@ fn built_cluster(
 pub fn built_cluster_preview(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,
-    formatter: &Markup,
+    fmt: &Markup,
 ) -> Arc<<Markup as OutputFormat>::Output> {
-    let build = built_cluster_before_output(db, cluster_id);
-    let string = formatter.output(build, get_piq(db));
+    let build = built_cluster_before_output(db, cluster_id, &fmt);
+    let string = fmt.output(build, get_piq(db));
     Arc::new(string)
+}
+
+#[test]
+pub fn test_preview_unicode_escape_issue_91() {
+    use crate::test::{MockProcessor, test_style_layout};
+    use csl::{CslType, Variable, NameVariable, NumberVariable};
+    use citeproc_io::{Reference, NumberLike};
+
+    // ugh. this should be easier.
+
+    let mut proc = MockProcessor::rtf();
+
+    let style = test_style_layout(r#"
+        <group delimiter=", ">
+        <text prefix="text: " variable="title" />
+        <names prefix="name: " variable="author" />
+        <number prefix="number: " variable="page" />
+        </group>
+    "#);
+    proc.set_style_text(&style);
+
+    let mut r = Reference::empty("id".into(), CslType::Book);
+    r.ordinary.insert(Variable::Title, "Čotar".into());
+    r.name.insert(NameVariable::Author, vec![citeproc_io::Name::Person(citeproc_io::PersonName {
+        family: Some("Čotar".into()),
+        ..Default::default()
+    })]);
+    r.number.insert(NumberVariable::Page, NumberLike::Str("Čotar".into()));
+    proc.insert_references(vec![r]);
+
+    let mut interner = string_interner::StringInterner::<ClusterId>::new();
+    let cluster = interner.get_or_intern("cluster");
+    proc.init_clusters(vec![(cluster, ClusterNumber::Note(IntraNote::Single(1)), vec![Cite::basic("id")])]);
+
+    // check the rtf (default)
+    let built = proc.built_cluster(cluster);
+    println!("{}", built);
+    assert_eq!(built.as_str(), "text: \\uc0\\u268 otar, name: \\uc0\\u268 otar, number: \\uc0\\u268 otar");
+
+    let plain = Markup::plain();
+    let preview = built_cluster_preview(&proc, cluster, &plain);
+    println!("{}", preview);
+    assert_eq!(preview.as_str(), "text: Čotar, name: Čotar, number: Čotar");
 }
 
 fn cluster_cites_sorted(db: &dyn IrDatabase, cluster_id: ClusterId) -> Option<Arc<Vec<CiteId>>> {
@@ -1179,8 +1222,8 @@ use crate::ir::transforms;
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
     cluster_id: ClusterId,
+    fmt: &Markup,
 ) -> <Markup as OutputFormat>::Build {
-    let fmt = db.get_formatter();
     let cite_ids = if let Some(x) = db.cluster_cites_sorted(cluster_id) {
         x
     } else {

@@ -473,6 +473,10 @@ let positions = [ ... before, { note: 34 }, ... after ];
 let preview = driver.previewCitationCluster(cites, positions, "html").unwrap();
 ```
 
+The format argument is like the format passed to `Driver.new`: one of `"html"`,
+`"rtf"` or `"plain"`. The driver will use that instead of its normal output
+format.
+
 The positions array is exactly like a call to `setClusterOrder`, except exactly 
 one of the positions omits the id field. This could either:
 
