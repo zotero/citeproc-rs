@@ -46,7 +46,7 @@ pub struct Driver {
 #[derive(thiserror::Error, Debug, serde::Serialize)]
 #[serde(tag = "tag", content = "content")]
 pub enum DriverError {
-    #[error("Unknown output format {0}")]
+    #[error("Unknown output format {0:?}")]
     UnknownOutputFormat(String),
     /// Never serialized as a CiteprocRsDriverError, only serialized as a CslStyleError.
     #[error("Style error: {0}")]
@@ -272,7 +272,8 @@ impl Driver {
             let preview = eng.preview_citation_cluster(
                 &cites,
                 PreviewPosition::MarkWithZeroStr(&positions),
-                SupportedFormat::from_str(format).ok(),
+                Some(SupportedFormat::from_str(format)
+                    .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?),
             );
             Ok(preview?)
         })
