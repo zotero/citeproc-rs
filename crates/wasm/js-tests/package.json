@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "test-node-only": "FIREFOX_BINARY_PATH='' jest --verbose",
-    "test": "source firefox-env && jest --verbose",
+    "test": ". ./firefox-env && jest --verbose",
     "build": "./build.sh"
   },
   "dependencies": {
