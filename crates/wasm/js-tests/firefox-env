@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ ! -d zotero-standalone-build/xulrunner ]; then
+  echo "error: could not find Firefox in $PWD/zotero-standalone-build/xulrunner" >/dev/stderr
+  exit 1
+fi
+
+LINUX=$(cd zotero-standalone-build && . "./config.sh" && echo "$LINUX_x86_64_RUNTIME_PATH")
+MAC=$(cd zotero-standalone-build && . "./config.sh" && echo "$MAC_RUNTIME_PATH")
+
+UNAME=$(uname)
+if [ "$UNAME" = "Linux" ]; then
+  export FIREFOX_BINARY_PATH="$LINUX/firefox-bin"
+elif [ "$UNAME" = "Darwin" ]; then
+  export FIREFOX_BINARY_PATH="$MAC/Contents/MacOS/firefox-bin"
+else
+  echo "windows not automatic sorry" >/dev/stderr
+  exit 1
+fi
+
+if ! test -e "$FIREFOX_BINARY_PATH"; then
+  echo "error: could not find Firefox at $FIREFOX_BINARY_PATH"
+  exit 1
+fi
+
+

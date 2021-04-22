@@ -4,11 +4,11 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "test": "jest",
-    "build": "../scripts/npm-pkg-config.sh --dev --targets nodejs --dest ../pkg-node"
+    "test-node-only": "FIREFOX_BINARY_PATH='' jest --verbose",
+    "test": ". ./firefox-env && jest --verbose",
+    "build": "./build.sh"
   },
   "dependencies": {
-    "@citeproc-rs/wasm": "../pkg-node",
     "@types/jest": "^26.0.14"
   },
   "devDependencies": {
@@ -16,6 +16,9 @@
     "@babel/preset-env": "^7.11.5",
     "@babel/preset-typescript": "^7.10.4",
     "babel-jest": "^26.3.0",
-    "jest": "^26.4.2"
+    "geckodriver": "^1.22.3",
+    "jest": "^26.4.2",
+    "jest-environment-node": "^26.6.2",
+    "selenium-webdriver": "^4.0.0-beta.3"
   }
 }

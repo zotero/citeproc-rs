@@ -16,6 +16,10 @@ default-members = [
   "crates/citeproc",
 ]
 
+[profile.dev]
+# rust 1.51 release notes -- replaces dsymutil on macOS, faster dev builds
+split-debuginfo = "unpacked"
+
 [profile.bench]
 lto = "thin"
 # flamegraph with cargo test --release
