@@ -11,6 +11,8 @@ enum TestSuiteSub {
     #[structopt(setting = structopt::clap::AppSettings::TrailingVarArg)]
     #[structopt(setting = structopt::clap::AppSettings::AllowLeadingHyphen)]
     Run {
+        #[structopt(long)]
+        release: bool,
         /// Any additional arguments are passed to the test harness (i.e. with -- --args)
         rest: Vec<String>,
     },
@@ -75,8 +77,8 @@ fn main() -> Result<(), Error> {
         Tools::PullLocales => pull_locales(),
         Tools::BuildUcd => build_superscript_trie(),
         Tools::TestSuite(test_suite) => match test_suite.sub {
-            None => run(Vec::new()),
-            Some(TestSuiteSub::Run { rest, .. }) => run(rest),
+            None => run(Vec::new(), false),
+            Some(TestSuiteSub::Run { release, rest }) => run(rest, release),
             Some(TestSuiteSub::Store { to, rest, .. }) => log_tests(&to, rest),
             Some(TestSuiteSub::CheckoutStore { rev, to }) => {
                 store_at_rev(&rev, to.as_ref().map(|x| x.as_ref()))
