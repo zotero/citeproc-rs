@@ -458,6 +458,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
             Circa,
             Literal,
             Raw,
+            Year,
         }
 
         struct DateVisitor;
@@ -514,6 +515,11 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         }
                         DateType::Season => found_season = Some(map.next_value()?),
                         DateType::Circa => found_circa = Some(map.next_value()?),
+                        DateType::Year => {
+                            let year = map.next_value()?;
+                            let date = Date { year, month: 0, day: 0, circa: false };
+                            found = Some(DateOrRange::Single(date));
+                        }
                     }
                 }
                 Ok(found
