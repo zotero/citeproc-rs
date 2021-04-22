@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Installs firefox using zotero-standalone-build. (Not system-wide.)
 

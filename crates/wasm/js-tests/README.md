@@ -1,6 +1,6 @@
 ## Running tests
 
-Requires a POSIX shell. Sorry Windows.
+Requires bash. Sorry Windows.
 
 ```sh
 yarn
