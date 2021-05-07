@@ -8,7 +8,7 @@ use super::free::{FreeCond, FreeCondSets};
 use super::get_free_conds;
 use crate::prelude::*;
 use crate::test::MockProcessor;
-use citeproc_db::{ClusterId, ClusterNumber, IntraNote};
+use citeproc_db::{ClusterNumber, IntraNote};
 use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, Reference};
 
@@ -119,7 +119,11 @@ fn test() {
     db.insert_references(vec![refr, refr2]);
     let mut interner = string_interner::StringInterner::default();
     let id = interner.get_or_intern("1");
-    db.init_clusters(vec![(id, ClusterNumber::Note(IntraNote::Single(1)), vec![Cite::basic("ref_id")])]);
+    db.init_clusters(vec![(
+        id,
+        ClusterNumber::Note(IntraNote::Single(1)),
+        vec![Cite::basic("ref_id")],
+    )]);
     let cite_ids = db.cluster_cites(id);
 
     let get_stream = |ind: usize| {

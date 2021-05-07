@@ -4,7 +4,6 @@
 //
 // Copyright © 2020 Corporation for Digital Scholarship
 
-use citeproc_io::{Cite, output::OutputFormat};
 use serde_derive::Deserialize;
 
 use string_interner::DefaultSymbol;

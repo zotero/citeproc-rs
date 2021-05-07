@@ -5,11 +5,10 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use std::io;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use csl::{
-    locale::{Lang, Locale, LocaleOptions, LocaleSource, EN_US},
+    locale::{Lang, Locale, LocaleSource, EN_US},
     style::{Name, Style, TextElement, TextSource},
     SmartString,
 };
@@ -268,7 +267,6 @@ cfg_if::cfg_if! {
         pub trait LocaleFetcher: Send + Sync {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
-                use std::str::FromStr;
                 let s = self.fetch_string(lang).ok()??;
                 Some(Locale::parse(&s).ok()?)
             }

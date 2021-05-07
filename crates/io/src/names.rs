@@ -296,22 +296,21 @@ impl From<PersonNameInput> for PersonName {
     }
 }
 
-impl PersonNameInput {
-    fn parse_particles(self) -> PersonName {
-        self.into()
-    }
-}
-
-
 #[test]
 fn parse_particles() {
+    impl PersonNameInput {
+        fn parse_particles(self) -> PersonName {
+            self.into()
+        }
+    }
+
     env_logger::init();
 
     let mut hi: String = " hi ".into();
     hi.trim_in_place();
     assert_eq!(&hi, "hi");
 
-    let mut init = PersonNameInput {
+    let init = PersonNameInput {
         given: Some("Schnitzel".into()),
         family: Some("von Crumb".into()),
         ..Default::default()

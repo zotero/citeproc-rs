@@ -95,7 +95,7 @@ impl Disambiguation<Markup> for Names {
                         let mut iter = ntbs.into_iter().peekable();
                         while let Some(ntb) = iter.next() {
                             match ntb {
-                                NameTokenBuilt::Built(b, lat_cy) => {
+                                NameTokenBuilt::Built(b, _lat_cy) => {
                                     if !fmt.is_empty(&b) {
                                         let out =
                                             fmt.output_in_context(b.to_vec(), child_stack, None);
@@ -118,7 +118,7 @@ impl Disambiguation<Markup> for Names {
                                 NameTokenBuilt::Ratchet(index) => match &nir.disamb_names[index] {
                                     DisambNameRatchet::Literal {
                                         literal,
-                                        is_latin_cyrillic,
+                                        is_latin_cyrillic: _,
                                     } => {
                                         if !fmt.is_empty(literal) {
                                             let out = fmt.output_in_context(
@@ -581,8 +581,6 @@ pub fn disambiguated_person_names(
                 max_pass = pass;
                 edge = dn.single_name_edge(db, Formatting::default());
             } else {
-                // failed, so we must reset
-                dn = orig.clone();
                 max_pass = NameDisambPass::Initial;
                 break;
             }

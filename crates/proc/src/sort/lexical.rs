@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 pub(crate) struct Lexical<S: AsRef<str>>(S);
 
 impl<S: AsRef<str>> Lexical<S> {
+    #[allow(dead_code)]
     pub(crate) fn new(inner: S) -> Self {
         Lexical(inner)
     }

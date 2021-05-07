@@ -84,7 +84,7 @@ pub fn ref_sequence<'c>(
     state: &mut IrState,
     ctx: &RefContext<'c, Markup>,
     els: &[Element],
-    implicit_conditional: bool,
+    _implicit_conditional: bool,
     formatting: Option<Formatting>,
     seq_template: Option<&dyn Fn() -> RefIrSeq>,
 ) -> (RefIR, GroupVars) {

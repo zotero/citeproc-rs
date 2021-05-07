@@ -8,7 +8,6 @@ use crate::disamb::names::RefNameIR;
 use crate::disamb::Nfa;
 use crate::prelude::*;
 use citeproc_io::output::LocalizedQuotes;
-use csl::Atom;
 use csl::{Affixes, Formatting};
 
 #[allow(dead_code)]

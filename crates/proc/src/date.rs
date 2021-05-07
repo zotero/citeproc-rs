@@ -115,7 +115,6 @@ where
 impl Either<Markup> {
     fn into_ref_ir(
         self,
-        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         arena: &mut IrArena<Markup>,
         stack: Formatting,
@@ -173,7 +172,7 @@ where
 impl Disambiguation<Markup> for BodyDate {
     fn ref_ir(
         &self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         _state: &mut IrState,
         stack: Formatting,
@@ -201,7 +200,7 @@ impl Disambiguation<Markup> for BodyDate {
         if var == DateVariable::Accessed {
             either.map(|_| (RefIR::Edge(Some(EdgeData::Accessed)), GroupVars::Important))
         } else {
-            either.map(|e| e.into_ref_ir(db, ctx, &mut arena, stack))
+            either.map(|e| e.into_ref_ir(ctx, &mut arena, stack))
         }
         .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }

@@ -216,6 +216,7 @@ impl<O> IR<O>
 where
     O: OutputFormat + PartialEq,
 {
+    #[allow(dead_code)]
     fn deep_equals(
         &self,
         _self_gv: GroupVars,

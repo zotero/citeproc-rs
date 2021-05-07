@@ -188,10 +188,9 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
     /// With variable="locator", this assumes ctx has a locator_type and will panic otherwise.
     pub fn number(&self, number: &NumberElement, val: &NumericValue<'_>) -> O::Build {
         let locale = self.ctx.locale();
-        let style = self.ctx.style();
         debug!("number {:?}", val);
         let prf = self.page_range_format(number.variable);
-        let string = if let NumericValue::Tokens(s, ts, true) = val {
+        let string = if let NumericValue::Tokens(_s, ts, true) = val {
             match number.form {
                 NumericForm::Roman if roman_representable(&val) => {
                     roman_lower(&ts, locale, number.variable, prf)

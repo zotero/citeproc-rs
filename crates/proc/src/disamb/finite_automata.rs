@@ -151,7 +151,7 @@ enum DebugNode {
 }
 
 impl Dfa {
-    pub fn debug_graph(&self, db: &dyn IrDatabase) -> String {
+    pub fn debug_graph(&self, _db: &dyn IrDatabase) -> String {
         let g = self.graph.map(
             |node, _| {
                 let cont = self.accepting.contains(&node);

@@ -1,10 +1,8 @@
 use crate::prelude::*;
 use citeproc_db::{CiteData, ClusterId, ClusterNumber, LocaleFetcher, PredefinedLocales, StyleDatabase};
 use citeproc_io::{output::markup::Markup, Cite, Reference};
-use csl::Atom;
 
 use csl::Style;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -60,7 +58,7 @@ impl ImplementationDetails for MockProcessor {
     }
     fn lookup_interned_string(
         &self,
-        symbol: string_interner::DefaultSymbol,
+        _symbol: string_interner::DefaultSymbol,
     ) -> Option<SmartString> {
         None
     }

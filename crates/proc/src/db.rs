@@ -328,7 +328,6 @@ pub struct IrGen {
 use std::fmt;
 impl fmt::Debug for IrGen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use crate::ir::IrDebug;
         let dbg = IrDebug::new(self.root, &self.arena);
         write!(f, "state: {:?}, contents: {:?}", self.state, dbg)
     }
@@ -1636,7 +1635,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
 
             // Pull affixes off layout into the right-inlines etc, after we may have created those
             // divs in split_first_field
-            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
+            transforms::fix_left_right_layout_affixes(root, &mut arena);
 
             if IR::is_empty(root, &arena) {
                 None
@@ -1678,7 +1677,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
 
             // Pull affixes off layout into the right-inlines etc, after we may have created those
             // divs in split_first_field
-            transforms::fix_left_right_layout_affixes(root, &mut arena, &ctx.format);
+            transforms::fix_left_right_layout_affixes(root, &mut arena);
 
             Some(Arc::new(IrGen::new(root, arena, state)))
         },
