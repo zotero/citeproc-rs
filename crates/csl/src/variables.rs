@@ -194,6 +194,7 @@ pub enum Variable {
     /// primary title of the item
     Title,
     /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
+    #[strum(serialize = "title-short", serialize = "shortTitle")]
     TitleShort,
     ///  URL (e.g. “https://aem.asm.org/cgi/content/full/74/9/2766”)
     #[strum(serialize = "URL", serialize = "url")]
