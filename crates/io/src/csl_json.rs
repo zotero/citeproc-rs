@@ -399,12 +399,6 @@ impl<'de> Deserialize<'de> for OptDate {
                     Ok(OptDate(None))
                 }
             }
-
-            // citeproc-rs may wish to parse its own pandoc Meta blocks without forking out
-            // (since MetaInlines are already-parsed markdown or whatver your input format is).
-            // in that case, it would have to recognise a different date structure.
-            // https://github.com/jgm/pandoc-citeproc/issues/309
-            // https://github.com/jgm/pandoc-citeproc/issues/103
         }
 
         deserializer.deserialize_seq(SingleDatePartVisitor)
