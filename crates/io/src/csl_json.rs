@@ -8,6 +8,8 @@
 // If you want to add a new input format, you can write one
 // e.g. with a bibtex parser https://github.com/charlesvdv/nom-bibtex
 
+mod cow_str;
+
 use crate::names::Name;
 use serde::de::Error;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
@@ -88,13 +90,17 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     }
 }
 
+
+
 #[derive(Debug, Deserialize)]
 #[serde(field_identifier, rename_all = "kebab-case")]
-enum Field {
+enum Field<'a> {
     Id,
     Type,
     Language,
-    Any(WrapVar),
+    // don't use plain `&'a str`, because that would fail when parsing from a serde::Value.
+    #[serde(borrow, deserialize_with="cow_str::deserialize_cow_str")]
+    Any(Cow<'a, str>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Hash)]
@@ -209,43 +215,52 @@ impl<'de> Deserialize<'de> for Reference {
                             let wrap: WrapLang = map.next_value()?;
                             language = wrap.0;
                         }
-                        Field::Any(WrapVar(AnyVariable::Ordinary(v))) => match ordinary.entry(v) {
-                            Entry::Occupied(_) => {
-                                return Err(de::Error::duplicate_field("dunno"));
-                            }
-                            Entry::Vacant(ve) => {
-                                ve.insert(map.next_value()?);
-                            }
-                        },
-                        Field::Any(WrapVar(AnyVariable::Number(v))) => match number.entry(v) {
-                            Entry::Occupied(_) => {
-                                return Err(de::Error::duplicate_field("dunno"));
-                            }
-                            Entry::Vacant(ve) => {
-                                ve.insert(map.next_value()?);
-                            }
-                        },
-                        Field::Any(WrapVar(AnyVariable::Name(v))) => {
-                            match name.entry(v) {
-                                Entry::Occupied(_) => {
-                                    return Err(de::Error::duplicate_field("dunno"));
+                        Field::Any(var_name) => {
+                            match AnyVariable::get_attr(&var_name, &Features::default()) {
+                                Err(_unknown) => {
+                                    // Unknown variable. Let it slide.
+                                    log::warn!("reference had unknown variable `{}`", var_name);
+                                    let _: serde::de::IgnoredAny = map.next_value()?;
                                 }
-                                Entry::Vacant(ve) => {
-                                    let names: Vec<Name> = map.next_value()?;
-                                    ve.insert(names);
+                                Ok(AnyVariable::Ordinary(v)) => match ordinary.entry(v) {
+                                    Entry::Occupied(_) => {
+                                        return Err(de::Error::duplicate_field("dunno"));
+                                    }
+                                    Entry::Vacant(ve) => {
+                                        ve.insert(map.next_value()?);
+                                    }
+                                }
+                                Ok(AnyVariable::Number(v)) => match number.entry(v) {
+                                    Entry::Occupied(_) => {
+                                        return Err(de::Error::duplicate_field("dunno"));
+                                    }
+                                    Entry::Vacant(ve) => {
+                                        ve.insert(map.next_value()?);
+                                    }
+                                }
+                                Ok(AnyVariable::Name(v)) => {
+                                    match name.entry(v) {
+                                        Entry::Occupied(_) => {
+                                            return Err(de::Error::duplicate_field("dunno"));
+                                        }
+                                        Entry::Vacant(ve) => {
+                                            let names: Vec<Name> = map.next_value()?;
+                                            ve.insert(names);
+                                        }
+                                    }
+                                }
+                                Ok(AnyVariable::Date(v)) => match date.entry(v) {
+                                    Entry::Occupied(_) => {
+                                        return Err(de::Error::duplicate_field("dunno"));
+                                    }
+                                    Entry::Vacant(ve) => {
+                                        if let MaybeDate(Some(d)) = map.next_value()? {
+                                            ve.insert(d);
+                                        }
+                                    }
                                 }
                             }
                         }
-                        Field::Any(WrapVar(AnyVariable::Date(v))) => match date.entry(v) {
-                            Entry::Occupied(_) => {
-                                return Err(de::Error::duplicate_field("dunno"));
-                            }
-                            Entry::Vacant(ve) => {
-                                if let MaybeDate(Some(d)) = map.next_value()? {
-                                    ve.insert(d);
-                                }
-                            }
-                        },
                     }
                 }
                 Ok(Reference {
