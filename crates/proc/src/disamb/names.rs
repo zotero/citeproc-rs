@@ -12,6 +12,7 @@ use csl::{
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
 use std::sync::Arc;
+use smallvec::SmallVec;
 
 impl Disambiguation<Markup> for Names {
     fn ref_ir(
@@ -193,17 +194,27 @@ impl DisambName {
     }
 }
 
+/// A name, with enough context to perform global name disambiguation.
+/// Created mainly with `crate::db::all_person_names`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DisambNameData {
+    /// The reference the name appears in
     pub(crate) ref_id: Atom,
+    /// The variable in the reference that the name appears in
     pub(crate) var: NameVariable,
+    /// The element that it is to be rendered with. This has to contain the inherited name options,
+    /// so it encapsulates a single "rendering context".
     pub(crate) el: NameEl,
+    /// The actual name itself
     pub(crate) value: PersonName,
+    /// Whether the name is the primary name for this name variable
     pub(crate) primary: bool,
+
     /// Hack for fullstyles_APA.txt
     /// This is something of an APA-specific hack, but it's OK to apply everywhere
     /// as the APA rule is sane enough. We want to avoid adding initials to a the
     /// first of a bunch of the same last names.
+    /// Just stores the result of calling `crate::disamb::all_same_family_name`.
     pub(crate) all_same_family_name: bool,
 }
 
@@ -247,6 +258,8 @@ fn test_all_same_family_name() {
 }
 
 impl DisambNameData {
+    /// Sets options on the NameEl such that rendering the name again will
+    /// produce an expanded form.
     pub fn apply_upto_pass(&mut self, pass: NameDisambPass) {
         if pass == NameDisambPass::Initial {
             // noop, but also won't reverse higher settings.
@@ -259,7 +272,10 @@ impl DisambNameData {
         }
     }
 
-    /// This is used directly for *global name disambiguation*
+    /// Render the name to an EdgeData, using the db's default formatter,
+    /// in a formatting context `stack`.
+    /// This is used directly for *global name disambiguation*, and for ratcheting one name
+    /// forward in NameIR expansion.
     pub(crate) fn single_name_edge(&self, db: &dyn IrDatabase, stack: Formatting) -> EdgeData {
         let fmt = &db.get_formatter();
         let style = db.style();
@@ -450,10 +466,14 @@ fn add_expanded_name_to_graph(
     let style = db.style();
     let rule = style.citation.givenname_disambiguation_rule;
     let fmt = &db.get_formatter();
-    let edge = dn.single_name_edge(db, stack);
     let next_spot = nfa.graph.add_node(());
+
+    // first, the original form
+    let edge = dn.single_name_edge(db, stack);
     let last = add_to_graph(fmt, nfa, &RefIR::Edge(Some(edge)), spot, None);
     nfa.graph.add_edge(last, next_spot, NfaEdge::Epsilon);
+
+    // then all the expansions the name can have
     for pass in dn.disamb_iter(rule) {
         dn.apply_upto_pass(pass);
         let first = nfa.graph.add_node(());
@@ -465,6 +485,7 @@ fn add_expanded_name_to_graph(
     next_spot
 }
 
+/// The bool means 'is_primary'
 pub(crate) type MatchKey = (Atom, NameVariable, bool);
 
 impl DisambNameData {
@@ -479,7 +500,9 @@ impl DisambNameData {
     }
 }
 
-use smallvec::SmallVec;
+/// Matches a name against its possible disambiguated forms, each encoded as a single EdgeData.
+/// Used for testing the ambiguity of names, both while doing global name disambiguation and when
+/// disambiguating in other phases.
 #[derive(Debug)]
 pub struct NameVariantMatcher {
     edges: SmallVec<[EdgeData; 3]>,
@@ -512,16 +535,15 @@ impl NameVariantMatcher {
         result
     }
 
+    /// Construct from a DisambNameData, which
     pub fn from_disamb_name(db: &dyn IrDatabase, mut data: DisambNameData) -> Self {
         let style = db.style();
-        let _fmt = &db.get_formatter();
         let rule = style.citation.givenname_disambiguation_rule;
 
-        let iter = data.disamb_iter(rule);
         let mut edges = SmallVec::new();
         let edge = data.single_name_edge(db, Formatting::default());
         edges.push(edge);
-        for pass in iter {
+        for pass in data.disamb_iter(rule) {
             data.apply_upto_pass(pass);
             let edge = data.single_name_edge(db, Formatting::default());
             edges.push(edge);

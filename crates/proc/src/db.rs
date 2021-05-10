@@ -71,6 +71,7 @@ pub trait IrDatabase:
 
     fn branch_runs(&self) -> Arc<FreeCondSets>;
 
+    /// For all refs, for all name configurations, for each name, produce one DisambNameData.
     fn all_person_names(&self) -> Arc<Vec<DisambNameData>>;
 
     /// The *Data indexed here are ratcheted as far as was required to do global name
@@ -132,7 +133,7 @@ fn all_person_names(db: &dyn IrDatabase) -> Arc<Vec<DisambNameData>> {
     // -> for each ref
     //    for each <names var="v" />
     //    for each name in ref["v"]
-    //    .. push a DisambName
+    //    .. push a DisambNameData
     for ref_id in refs.iter() {
         if let Some(refr) = db.reference(ref_id.clone()) {
             for (var, el) in name_configurations.iter() {
@@ -1170,40 +1171,53 @@ pub fn built_cluster_preview(
 
 #[test]
 pub fn test_preview_unicode_escape_issue_91() {
-    use crate::test::{MockProcessor, test_style_layout};
-    use csl::{CslType, Variable, NameVariable, NumberVariable};
-    use citeproc_io::{Reference, NumberLike};
+    use crate::test::{test_style_layout, MockProcessor};
+    use citeproc_io::{NumberLike, Reference};
+    use csl::{CslType, NameVariable, NumberVariable, Variable};
 
     // ugh. this should be easier.
 
     let mut proc = MockProcessor::rtf();
 
-    let style = test_style_layout(r#"
+    let style = test_style_layout(
+        r#"
         <group delimiter=", ">
         <text prefix="text: " variable="title" />
         <names prefix="name: " variable="author" />
         <number prefix="number: " variable="page" />
         </group>
-    "#);
+    "#,
+    );
     proc.set_style_text(&style);
 
     let mut r = Reference::empty("id".into(), CslType::Book);
     r.ordinary.insert(Variable::Title, "Čotar".into());
-    r.name.insert(NameVariable::Author, vec![citeproc_io::Name::Person(citeproc_io::PersonName {
-        family: Some("Čotar".into()),
-        ..Default::default()
-    })]);
-    r.number.insert(NumberVariable::Page, NumberLike::Str("Čotar".into()));
+    r.name.insert(
+        NameVariable::Author,
+        vec![citeproc_io::Name::Person(citeproc_io::PersonName {
+            family: Some("Čotar".into()),
+            ..Default::default()
+        })],
+    );
+    r.number
+        .insert(NumberVariable::Page, NumberLike::Str("Čotar".into()));
     proc.insert_references(vec![r]);
 
     let mut interner = string_interner::StringInterner::<ClusterId>::new();
     let cluster = interner.get_or_intern("cluster");
-    proc.init_clusters(vec![(cluster, ClusterNumber::Note(IntraNote::Single(1)), vec![Cite::basic("id")])]);
+    proc.init_clusters(vec![(
+        cluster,
+        ClusterNumber::Note(IntraNote::Single(1)),
+        vec![Cite::basic("id")],
+    )]);
 
     // check the rtf (default)
     let built = proc.built_cluster(cluster);
     println!("{}", built);
-    assert_eq!(built.as_str(), "text: \\uc0\\u268 otar, name: \\uc0\\u268 otar, number: \\uc0\\u268 otar");
+    assert_eq!(
+        built.as_str(),
+        "text: \\uc0\\u268 otar, name: \\uc0\\u268 otar, number: \\uc0\\u268 otar"
+    );
 
     let plain = Markup::plain();
     let preview = built_cluster_preview(&proc, cluster, &plain);

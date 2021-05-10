@@ -108,6 +108,7 @@ fn name_configurations_inner(
     }
 }
 
+/// Testable variant, is all.
 fn name_configurations_middle(style: &Style) -> Vec<(NameVariable, Name)> {
     let base = style.name_citation();
     let mut vec = Vec::new();
