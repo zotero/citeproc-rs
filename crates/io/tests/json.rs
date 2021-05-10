@@ -105,3 +105,9 @@ test_equiv!(ignore_unknown_weird_keys, r#" { "id": 1, "with\"quote": "title" } "
 test_equiv!(ignore_unknown_keys_weird_data, r#" { "id": 1, "asdklfjhhjkl": { "completely": "unrecognizable" } } "# => EMPTY);
 test_equiv!(ignore_unknown_weird_keys_weird_data, r#" { "id": 1, "\"\"\"": { "completely": -0.9999 } } "# => EMPTY);
 
+test_parse!(duplicate_keys_ok, r#" { "id": 1, "title": "first", "title": "second"} "#, |r: Reference| {
+    // It parsed. that's already a win. May as well also check it has the title.
+    assert!(r.ordinary.contains_key(&Title));
+    // we won't make any assertions about which one will win.
+    // that's just undefined JSON behaviour.
+});

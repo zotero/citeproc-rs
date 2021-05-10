@@ -11,7 +11,7 @@
 mod cow_str;
 
 use crate::names::Name;
-use serde::de::Error;
+use serde::de::{Error, IgnoredAny};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
@@ -90,8 +90,6 @@ impl<'de, T: GetAttribute> Visitor<'de> for CslVariantVisitor<T> {
     }
 }
 
-
-
 #[derive(Debug, Deserialize)]
 #[serde(field_identifier, rename_all = "kebab-case")]
 enum Field<'a> {
@@ -99,7 +97,7 @@ enum Field<'a> {
     Type,
     Language,
     // don't use plain `&'a str`, because that would fail when parsing from a serde::Value.
-    #[serde(borrow, deserialize_with="cow_str::deserialize_cow_str")]
+    #[serde(borrow, deserialize_with = "cow_str::deserialize_cow_str")]
     Any(Cow<'a, str>),
 }
 
@@ -220,45 +218,43 @@ impl<'de> Deserialize<'de> for Reference {
                                 Err(_unknown) => {
                                     // Unknown variable. Let it slide.
                                     log::warn!("reference had unknown variable `{}`", var_name);
-                                    let _: serde::de::IgnoredAny = map.next_value()?;
+                                    let _: IgnoredAny = map.next_value()?;
                                 }
                                 Ok(AnyVariable::Ordinary(v)) => match ordinary.entry(v) {
                                     Entry::Occupied(_) => {
-                                        return Err(de::Error::duplicate_field("dunno"));
+                                        let _: IgnoredAny = map.next_value()?;
                                     }
                                     Entry::Vacant(ve) => {
                                         ve.insert(map.next_value()?);
                                     }
-                                }
+                                },
                                 Ok(AnyVariable::Number(v)) => match number.entry(v) {
                                     Entry::Occupied(_) => {
-                                        return Err(de::Error::duplicate_field("dunno"));
+                                        let _: IgnoredAny = map.next_value()?;
                                     }
                                     Entry::Vacant(ve) => {
                                         ve.insert(map.next_value()?);
                                     }
-                                }
-                                Ok(AnyVariable::Name(v)) => {
-                                    match name.entry(v) {
-                                        Entry::Occupied(_) => {
-                                            return Err(de::Error::duplicate_field("dunno"));
-                                        }
-                                        Entry::Vacant(ve) => {
-                                            let names: Vec<Name> = map.next_value()?;
-                                            ve.insert(names);
-                                        }
+                                },
+                                Ok(AnyVariable::Name(v)) => match name.entry(v) {
+                                    Entry::Occupied(_) => {
+                                        let _: IgnoredAny = map.next_value()?;
                                     }
-                                }
+                                    Entry::Vacant(ve) => {
+                                        let names: Vec<Name> = map.next_value()?;
+                                        ve.insert(names);
+                                    }
+                                },
                                 Ok(AnyVariable::Date(v)) => match date.entry(v) {
                                     Entry::Occupied(_) => {
-                                        return Err(de::Error::duplicate_field("dunno"));
+                                        let _: IgnoredAny = map.next_value()?;
                                     }
                                     Entry::Vacant(ve) => {
                                         if let MaybeDate(Some(d)) = map.next_value()? {
                                             ve.insert(d);
                                         }
                                     }
-                                }
+                                },
                             }
                         }
                     }
@@ -509,10 +505,10 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         DateType::Raw => {
                             let v: Cow<'de, str> = map.next_value()?;
                             if found.is_none() {
-                                found = Some(
-                                    DateOrRange::from_str(&v)
-                                        .unwrap_or_else(|_| DateOrRange::Literal(v.as_ref().into())),
-                                )
+                                found =
+                                    Some(DateOrRange::from_str(&v).unwrap_or_else(|_| {
+                                        DateOrRange::Literal(v.as_ref().into())
+                                    }))
                             }
                         }
                         DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
@@ -526,7 +522,12 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         DateType::Circa => found_circa = Some(map.next_value()?),
                         DateType::Year => {
                             let year = map.next_value()?;
-                            let date = Date { year, month: 0, day: 0, circa: false };
+                            let date = Date {
+                                year,
+                                month: 0,
+                                day: 0,
+                                circa: false,
+                            };
                             found = Some(DateOrRange::Single(date));
                         }
                     }
