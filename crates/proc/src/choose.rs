@@ -259,17 +259,25 @@ where
             // None in a bibliography
             Cond::Position(pos) => checker.position().map_or(false, |p| p.matches(*pos)),
             Cond::Locator(typ) => checker.locator_type() == Some(*typ),
+            Cond::IsUncertainDate(dvar) => checker.is_uncertain_date(*dvar),
 
             Cond::HasYearOnly(_) | Cond::HasMonthOrSeason(_) | Cond::HasDay(_)
                 if !features.condition_date_parts =>
             {
                 return None;
             }
-
             Cond::HasYearOnly(dvar) => checker.has_year_only(*dvar),
             Cond::HasMonthOrSeason(dvar) => checker.has_month_or_season(*dvar),
             Cond::HasDay(dvar) => checker.has_day(*dvar),
-            _ => return None,
+
+            // Not implemented
+            Cond::Context(_)
+            | Cond::IsPlural(_)
+            | Cond::Jurisdiction(_)
+            | Cond::SubJurisdiction(_) => {
+                log::warn!("unimplemented choose condition: {:?}", cond);
+                return None;
+            }
         })
     });
 
@@ -360,7 +368,9 @@ pub trait CondChecker {
             })
             .unwrap_or(false)
     }
-    // TODO: is_uncertain_date ("ca. 2003"). CSL and CSL-JSON do not specify how this is meant to
-    // work.
-    // Actually, is_uncertain_date (+ circa) is is a CSL-JSON thing.
+    /// This comes from CSL-JSON { circa: true }
+    fn is_uncertain_date(&self, dvar: DateVariable) -> bool {
+        self.get_date(dvar)
+            .map_or(false, |dor| dor.is_uncertain_date())
+    }
 }

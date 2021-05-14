@@ -533,6 +533,21 @@ pub enum RoleTerm {
     Recipient,
     ReviewedAuthor,
     Translator,
+
+    // From the CSL-JSON schema
+    Curator,
+    ScriptWriter,
+    Performer,
+    Producer,
+    ExecutiveProducer,
+    Guest,
+    Narrator,
+    Chair,
+    Compiler,
+    Contributor,
+    SeriesCreator,
+    Organizer,
+    Host,
 }
 
 impl RoleTerm {
@@ -553,6 +568,19 @@ impl RoleTerm {
             NameVariable::Recipient => RoleTerm::Recipient,
             NameVariable::ReviewedAuthor => RoleTerm::ReviewedAuthor,
             NameVariable::Translator => RoleTerm::Translator,
+            NameVariable::Curator => RoleTerm::Curator,
+            NameVariable::ScriptWriter => RoleTerm::ScriptWriter,
+            NameVariable::Performer => RoleTerm::Performer,
+            NameVariable::Producer => RoleTerm::Producer,
+            NameVariable::ExecutiveProducer => RoleTerm::ExecutiveProducer,
+            NameVariable::Guest => RoleTerm::Guest,
+            NameVariable::Narrator => RoleTerm::Narrator,
+            NameVariable::Chair => RoleTerm::Chair,
+            NameVariable::Compiler => RoleTerm::Compiler,
+            NameVariable::Contributor => RoleTerm::Contributor,
+            NameVariable::SeriesCreator => RoleTerm::SeriesCreator,
+            NameVariable::Organizer => RoleTerm::Organizer,
+            NameVariable::Host => RoleTerm::Host,
             // CSL-M only
             NameVariable::Authority => {
                 warn!("unimplemented: CSL-M authority role term");

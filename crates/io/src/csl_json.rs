@@ -11,10 +11,9 @@
 mod cow_str;
 
 use crate::names::Name;
-use serde::de::{Error, IgnoredAny};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{Error, IgnoredAny};
 use std::borrow::Cow;
-use std::collections::hash_map::Entry;
 use std::fmt;
 use std::str::FromStr;
 
@@ -55,7 +54,7 @@ impl<'de> Visitor<'de> for LanguageVisitor {
     }
 }
 
-struct MaybeDate(Option<DateOrRange>);
+pub struct MaybeDate(Option<DateOrRange>);
 
 pub struct WrapLang(Option<Lang>);
 
@@ -125,16 +124,19 @@ impl NumberLike {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-pub enum NumberLikeSigned {
+enum CircaValue {
     Str(String),
     Num(i32),
+    // TODO: add this
+    Bool(bool),
 }
 
-impl NumberLikeSigned {
-    pub fn to_number(&self) -> Result<i32, std::num::ParseIntError> {
-        match self {
-            NumberLikeSigned::Str(s) => s.parse(),
-            NumberLikeSigned::Num(i) => Ok(*i),
+impl CircaValue {
+    pub fn to_bool(&self) -> bool {
+        match *self {
+            CircaValue::Str(ref s) => s != "",
+            CircaValue::Num(n) => n != 0i32,
+            CircaValue::Bool(value) => value,
         }
     }
 }
@@ -220,41 +222,21 @@ impl<'de> Deserialize<'de> for Reference {
                                     log::warn!("reference had unknown variable `{}`", var_name);
                                     let _: IgnoredAny = map.next_value()?;
                                 }
-                                Ok(AnyVariable::Ordinary(v)) => match ordinary.entry(v) {
-                                    Entry::Occupied(_) => {
-                                        let _: IgnoredAny = map.next_value()?;
+                                Ok(AnyVariable::Ordinary(v)) => {
+                                    ordinary.insert(v, map.next_value()?);
+                                }
+                                Ok(AnyVariable::Number(v)) => {
+                                    number.insert(v, map.next_value()?);
+                                }
+                                Ok(AnyVariable::Name(v)) => {
+                                    let names: Vec<Name> = map.next_value()?;
+                                    name.insert(v, names);
+                                }
+                                Ok(AnyVariable::Date(v)) => {
+                                    if let MaybeDate(Some(d)) = map.next_value()? {
+                                        date.insert(v, d);
                                     }
-                                    Entry::Vacant(ve) => {
-                                        ve.insert(map.next_value()?);
-                                    }
-                                },
-                                Ok(AnyVariable::Number(v)) => match number.entry(v) {
-                                    Entry::Occupied(_) => {
-                                        let _: IgnoredAny = map.next_value()?;
-                                    }
-                                    Entry::Vacant(ve) => {
-                                        ve.insert(map.next_value()?);
-                                    }
-                                },
-                                Ok(AnyVariable::Name(v)) => match name.entry(v) {
-                                    Entry::Occupied(_) => {
-                                        let _: IgnoredAny = map.next_value()?;
-                                    }
-                                    Entry::Vacant(ve) => {
-                                        let names: Vec<Name> = map.next_value()?;
-                                        ve.insert(names);
-                                    }
-                                },
-                                Ok(AnyVariable::Date(v)) => match date.entry(v) {
-                                    Entry::Occupied(_) => {
-                                        let _: IgnoredAny = map.next_value()?;
-                                    }
-                                    Entry::Vacant(ve) => {
-                                        if let MaybeDate(Some(d)) = map.next_value()? {
-                                            ve.insert(d);
-                                        }
-                                    }
-                                },
+                                }
                             }
                         }
                     }
@@ -397,6 +379,10 @@ impl<'de> Deserialize<'de> for OptDate {
                         .unwrap_or(DateInt(None))
                         .0
                         .unwrap_or(0);
+
+                    // ignore any additional entries in the array
+                    while let Some(_) = seq.next_element::<IgnoredAny>()? {}
+
                     let month = if month >= 1 && month <= 16 {
                         month
                     } else if month >= 21 && month <= 24 {
@@ -434,12 +420,15 @@ impl<'de> Deserialize<'de> for DateParts {
                 V: SeqAccess<'de>,
             {
                 if let Some(OptDate(Some(from))) = seq.next_element()? {
-                    match seq.next_element()? {
+                    let result = match seq.next_element()? {
                         Some(OptDate(Some(to))) => {
                             Ok(DateParts(Some(DateOrRange::Range(from, to))))
                         }
                         _ => Ok(DateParts(Some(DateOrRange::Single(from)))),
-                    }
+                    };
+                    // ignore any additional date arrays (nonsense)
+                    while let Some(_) = seq.next_element::<IgnoredAny>()? {}
+                    result
                 } else {
                     Ok(DateParts(None))
                 }
@@ -457,13 +446,16 @@ impl<'de> Deserialize<'de> for MaybeDate {
     {
         #[derive(Deserialize)]
         #[serde(field_identifier, rename_all = "kebab-case")]
-        enum DateType {
+        enum DateType<'a> {
             DateParts,
             Season,
             Circa,
             Literal,
             Raw,
             Year,
+            Edtf,
+            #[serde(borrow, deserialize_with = "cow_str::deserialize_cow_str")]
+            Unknown(Cow<'a, str>),
         }
 
         struct DateVisitor;
@@ -480,7 +472,12 @@ impl<'de> Deserialize<'de> for MaybeDate {
                 E: de::Error,
             {
                 FromStr::from_str(value)
-                    .or_else(|_| Ok(DateOrRange::Literal(value.into())))
+                    .or_else(|_| {
+                        Ok(DateOrRange::Literal {
+                            literal: value.into(),
+                            circa: false,
+                        })
+                    })
                     .map(|x| MaybeDate(Some(x)))
             }
 
@@ -489,7 +486,12 @@ impl<'de> Deserialize<'de> for MaybeDate {
                 E: de::Error,
             {
                 FromStr::from_str(&value)
-                    .or_else(|_| Ok(DateOrRange::Literal(value.into())))
+                    .or_else(|_| {
+                        Ok(DateOrRange::Literal {
+                            literal: value.into(),
+                            circa: false,
+                        })
+                    })
                     .map(|x| MaybeDate(Some(x)))
             }
 
@@ -499,36 +501,65 @@ impl<'de> Deserialize<'de> for MaybeDate {
             {
                 let mut found = None;
                 let mut found_season: Option<NumberLike> = None;
-                let mut found_circa: Option<NumberLikeSigned> = None;
+                let mut found_circa: Option<bool> = None;
                 while let Some(key) = map.next_key()? {
                     match key {
                         DateType::Raw => {
                             let v: Cow<'de, str> = map.next_value()?;
                             if found.is_none() {
-                                found =
-                                    Some(DateOrRange::from_str(&v).unwrap_or_else(|_| {
-                                        DateOrRange::Literal(v.as_ref().into())
-                                    }))
+                                found = Some(DateOrRange::from_str(&v).unwrap_or_else(|_| {
+                                    DateOrRange::Literal {
+                                        literal: v.as_ref().into(),
+                                        circa: false,
+                                    }
+                                }))
                             }
                         }
-                        DateType::Literal => found = Some(DateOrRange::Literal(map.next_value()?)),
+                        DateType::Literal => {
+                            found = Some(DateOrRange::Literal {
+                                literal: map.next_value()?,
+                                circa: false,
+                            })
+                        }
                         DateType::DateParts => {
-                            let dp: DateParts = map.next_value()?;
+                            let dp: DateParts = match map.next_value() {
+                                Ok(dp) => dp,
+                                Err(e) => {
+                                    log::warn!("failed to parse date-parts: {:?}", e);
+                                    continue;
+                                }
+                            };
                             if dp.0.is_some() {
                                 found = dp.0;
                             }
                         }
+                        DateType::Edtf => {
+                            log::warn!("unimplemented: edtf date support");
+                            let _: IgnoredAny = map.next_value()?;
+                            continue;
+                        }
                         DateType::Season => found_season = Some(map.next_value()?),
-                        DateType::Circa => found_circa = Some(map.next_value()?),
+                        DateType::Circa => {
+                            if let Ok(circa) = map.next_value::<CircaValue>() {
+                                found_circa = Some(circa.to_bool())
+                            } else {
+                                log::warn!("invalid value for circa");
+                            }
+                        }
                         DateType::Year => {
-                            let year = map.next_value()?;
-                            let date = Date {
-                                year,
-                                month: 0,
-                                day: 0,
-                                circa: false,
-                            };
-                            found = Some(DateOrRange::Single(date));
+                            if let Ok(year) = map.next_value() {
+                                let date = Date {
+                                    year,
+                                    month: 0,
+                                    day: 0,
+                                    circa: false,
+                                };
+                                found = Some(DateOrRange::Single(date));
+                            }
+                        }
+                        DateType::Unknown(k) => {
+                            log::warn!("unknown date variable key: {}", k);
+                            let _: IgnoredAny = map.next_value()?;
                         }
                     }
                 }
@@ -568,17 +599,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                             }
                         }
                         if let Some(circa) = found_circa {
-                            if circa.to_number() == Ok(1) {
-                                match &mut found {
-                                    DateOrRange::Single(d) => d.circa = true,
-                                    DateOrRange::Range(d, d2) => {
-                                        d.circa = true;
-                                        d2.circa = true;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            // Do something?
+                            found.set_circa(circa)
                         }
                         Ok(MaybeDate(Some(found)))
                     })

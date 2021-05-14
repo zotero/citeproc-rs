@@ -1,0 +1,35 @@
+mode: citation
+result: is-uncertain-date; is-uncertain-date; is-uncertain-date
+input:
+  - id: 1
+    issued:
+      raw: 1995-08-07
+      circa: true
+  - id: 2
+    issued:
+      raw: 1995-08-07
+      circa: "true"
+  - id: 2
+    issued:
+      raw: 1995-08-07
+      circa: 1
+csl:
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+    <info><title>sort_StripMarkupInNames</title><id>id</id><updated>2010-01-27T20:08:03+00:00</updated>
+    </info>
+    <macro name="author">
+      <names variable="author"></names>
+    </macro>
+    <citation>
+      <layout delimiter="; ">
+        <choose>
+          <if is-uncertain-date="issued">
+            <text value="is-uncertain-date" />
+          </if>
+          <else>
+            <text value="certain" />
+          </else>
+        </choose>
+      </layout>
+    </citation>
+  </style>
