@@ -213,7 +213,7 @@ pub struct Info {
 
     /// `<category citation-format="...">`
     pub citation_format: Option<CitationFormat>,
-    /// `<category field="...">`*
+    /// 0 or more `<category field="...">` elements
     pub categories: Vec<Category>,
 
     pub issn: Option<String>,

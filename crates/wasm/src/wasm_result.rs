@@ -23,6 +23,7 @@ macro_rules! result_type {
   };
 }
 
+#[allow(dead_code)]
 mod helper {
     use wasm_bindgen::prelude::*;
     use js_sys::Error as JsError;
@@ -127,6 +128,7 @@ mod helper {
 
 }
 
+#[allow(dead_code)]
 mod raw {
     //! Alternative impl with no Javascript dependency but no methods available
     //! on the returned objects.

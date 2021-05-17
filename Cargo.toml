@@ -15,6 +15,7 @@ default-members = [
   "crates/wasm",
   "crates/citeproc",
 ]
+resolver = "2"
 
 [profile.dev]
 # rust 1.51 release notes -- replaces dsymutil on macOS, faster dev builds

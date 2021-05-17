@@ -7,8 +7,6 @@
 use super::cluster::*;
 use super::xml::{LocaleDatabase, StyleDatabase};
 
-use csl::Locale;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;

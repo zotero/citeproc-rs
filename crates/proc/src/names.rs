@@ -7,7 +7,7 @@
 use self::initials::initialize;
 
 use crate::disamb::names::{
-    self as disamb, DisambName, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
+    self as disamb, DisambNameData, DisambNameRatchet, NameIR, PersonDisambNameRatchet,
 };
 use crate::prelude::*;
 use crate::NamesInheritance;
@@ -490,11 +490,11 @@ impl<'c, O: OutputFormat> NameIR<O> {
         let mut iter = ntbs.into_iter().peekable();
         while let Some(ntb) = iter.next() {
             let renderable = match ntb {
-                NameTokenBuilt::Built(b, lat_cy) => Some(b),
+                NameTokenBuilt::Built(b, _lat_cy) => Some(b),
                 NameTokenBuilt::Ratchet(index) => match self.disamb_names.get(index)? {
                     DisambNameRatchet::Literal {
                         literal,
-                        is_latin_cyrillic,
+                        is_latin_cyrillic: _,
                     } => {
                         if fmt.is_empty(literal) {
                             None

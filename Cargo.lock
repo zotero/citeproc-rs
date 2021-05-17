@@ -357,6 +357,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_path_to_error",
  "smartstring",
  "stringreader",
  "ucd-trie",
@@ -1258,9 +1259,9 @@ checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
 
 [[package]]
 name = "once_cell"
-version = "1.4.1"
+version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "260e51e7efe62b592207e9e13a68e43692a7a279171d6ba57abd208bf23645ad"
+checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "oorandom"
@@ -1827,9 +1828,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.116"
+version = "1.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96fe57af81d28386a513cbc6858332abc6117cfdb5999647c6444b8f43a370a5"
+checksum = "558dc50e1a5a5fa7112ca2ce4effcb321b0300c0d4ccf0776a9f60cd89031171"
 dependencies = [
  "serde_derive",
 ]
@@ -1846,9 +1847,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.116"
+version = "1.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f630a6370fd8e457873b4bd2ffdae75408bc291ba72be773772a4c2a065d9ae8"
+checksum = "b093b7a2bb58203b5da3056c05b4ec1fed827dcfdb37347a8841695263b3d06d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1863,6 +1864,15 @@ checksum = "164eacbdb13512ec2745fb09d51fd5b22b0d65ed294a1dcf7285a360c80a675c"
 dependencies = [
  "itoa",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42f6109f0506e20f7e0f910e51a0079acf41da8e0694e6442527c4ddf5a2b158"
+dependencies = [
  "serde",
 ]
 

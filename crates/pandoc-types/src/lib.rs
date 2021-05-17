@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
 extern crate ordered_float;
 extern crate serde;
 

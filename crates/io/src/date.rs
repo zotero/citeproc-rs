@@ -23,7 +23,7 @@ pub struct Date {
     /// range 1 to 31 inclusive
     /// 0 is "not present"
     pub day: u32,
-
+    /// aka is_uncertain_date
     pub circa: bool,
 }
 
@@ -46,7 +46,7 @@ impl Ord for Date {
 impl PartialOrd for DateOrRange {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            (DateOrRange::Literal(_), _) | (_, DateOrRange::Literal(_)) => None,
+            (DateOrRange::Literal { .. }, _) | (_, DateOrRange::Literal { .. }) => None,
             (DateOrRange::Single(a), DateOrRange::Single(b)) => Some(a.cmp(b)),
             (DateOrRange::Range(a1, a2), DateOrRange::Single(b)) => Some(a1.cmp(b).then(a2.cmp(b))),
             (DateOrRange::Single(a), DateOrRange::Range(b1, b2)) => Some(a.cmp(b1).then(a.cmp(b2))),
@@ -76,6 +76,11 @@ impl Date {
     }
     pub fn has_day(&self) -> bool {
         self.day != 0
+    }
+    pub fn new_circa(y: i32, m: u32, d: u32) -> Self {
+        let mut d = Date::new(y, m, d);
+        d.circa = true;
+        d
     }
     pub fn new(y: i32, m: u32, d: u32) -> Self {
         Date {
@@ -112,12 +117,33 @@ impl Date {
 pub enum DateOrRange {
     Single(Date),
     Range(Date, Date),
-    Literal(String),
+    Literal { literal: String, circa: bool },
 }
 
 impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
         DateOrRange::Single(Date::new(year, month, day))
+    }
+    pub fn with_circa(mut self, circa: bool) -> Self {
+        self.set_circa(circa);
+        self
+    }
+    pub fn set_circa(&mut self, circa: bool) {
+        match self {
+            DateOrRange::Single(d) => d.circa = circa,
+            DateOrRange::Range(d1, d2) => {
+                d1.circa = circa;
+                d2.circa = circa;
+            }
+            DateOrRange::Literal { circa: c, .. } => *c = circa,
+        }
+    }
+    pub fn is_uncertain_date(&self) -> bool {
+        match *self {
+            DateOrRange::Single(d) => d.circa,
+            DateOrRange::Range(d1, d2) => d1.circa || d2.circa,
+            DateOrRange::Literal { circa, .. } => circa,
+        }
     }
     pub fn single(&self) -> Option<Date> {
         if let DateOrRange::Single(d) = self {
@@ -144,6 +170,18 @@ impl DateOrRange {
                 Date::from_parts(parts[1])?,
             ))
         }
+    }
+}
+
+impl From<Date> for DateOrRange {
+    fn from(d: Date) -> Self {
+        Self::Single(d)
+    }
+}
+
+impl From<(Date, Date)> for DateOrRange {
+    fn from(d: (Date, Date)) -> Self {
+        Self::Range(d.0, d.1)
     }
 }
 

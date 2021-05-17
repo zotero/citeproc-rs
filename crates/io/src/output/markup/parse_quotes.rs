@@ -1,6 +1,4 @@
 use crate::output::micro_html::MicroNode;
-#[cfg(test)]
-use crate::output::FormatCmd;
 use crate::IngestOptions;
 use crate::LocalizedQuotes;
 use crate::String;

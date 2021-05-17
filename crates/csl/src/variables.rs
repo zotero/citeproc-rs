@@ -4,6 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use std::str::FromStr;
+
 use super::attr::{EnumGetAttribute, GetAttribute};
 use super::error::*;
 use super::version::Features;
@@ -16,6 +18,23 @@ pub enum AnyVariable {
     Name(NameVariable),
     Date(DateVariable),
     Number(NumberVariable),
+}
+
+impl FromStr for AnyVariable {
+    type Err = strum::ParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use self::AnyVariable::*;
+        if let Ok(v) = Variable::from_str(s) {
+            return Ok(Ordinary(v));
+        } else if let Ok(v) = NameVariable::from_str(s) {
+            return Ok(Name(v));
+        } else if let Ok(v) = DateVariable::from_str(s) {
+            return Ok(Date(v));
+        } else if let Ok(v) = NumberVariable::from_str(s) {
+            return Ok(Number(v));
+        }
+        Err(strum::ParseError::VariantNotFound)
+    }
 }
 
 impl EnumGetAttribute for Variable {}
@@ -194,6 +213,7 @@ pub enum Variable {
     /// primary title of the item
     Title,
     /// short/abbreviated form of “title” (also accessible through the “short” form of the “title” variable)
+    #[strum(serialize = "title-short", serialize = "shortTitle")]
     TitleShort,
     ///  URL (e.g. “https://aem.asm.org/cgi/content/full/74/9/2766”)
     #[strum(serialize = "URL", serialize = "url")]
@@ -202,6 +222,16 @@ pub enum Variable {
     Version,
     /// disambiguating year suffix in author-date styles (e.g. “a” in “Doe, 1999a”)
     YearSuffix,
+
+    // These are in the CSL-JSON spec
+    CitationKey,
+    Division,
+    EventTitle,
+    PartTitle,
+    ReviewedGenre,
+    #[strum(serialize = "archive-collection", serialize = "archive_collection")]
+    ArchiveCollection,
+    VolumeTitleShort,
 
     /// CSL-M only
     // Intercept Hereinafter at CiteContext, as it isn't known at Reference-time.
@@ -316,6 +346,10 @@ pub enum NumberVariable {
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     Authority,
+
+    // From CSL-JSON schema
+    Part,
+    Printing,
 }
 
 impl NumberVariable {
@@ -385,6 +419,22 @@ pub enum NameVariable {
     /// rendering to be suppressed through the remainder of the current cite.
     #[strum(props(csl = "0", cslM = "1"))]
     Dummy,
+
+    // From the CSL-JSON schema
+
+    Curator,
+    ScriptWriter,
+    Performer,
+    Producer,
+    ExecutiveProducer,
+    Guest,
+    Narrator,
+    Chair,
+    Compiler,
+    Contributor,
+    SeriesCreator,
+    Organizer,
+    Host,
 }
 
 impl Default for NameVariable {

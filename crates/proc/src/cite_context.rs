@@ -59,8 +59,8 @@ pub struct CiteContext<
 }
 
 use std::fmt;
-impl<'c, O: OutputFormat, I: OutputFormat> std::fmt::Debug for CiteContext<'c, O, I> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<'c, O: OutputFormat, I: OutputFormat> fmt::Debug for CiteContext<'c, O, I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("CiteContext")
             .field("ref_id", &AsRef::<str>::as_ref(&self.reference.id))
             .field("position", &self.position)

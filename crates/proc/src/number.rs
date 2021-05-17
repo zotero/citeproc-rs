@@ -179,7 +179,7 @@ impl<'a> State<'a> {
                     (pfx, num, HyphenInsert::Simple, State::Normal)
                 }
             }
-            State::Hyphenating { prefix, last } => (pfx, num, HyphenInsert::Simple, State::Normal),
+            State::Hyphenating { prefix: _, last: _ } => (pfx, num, HyphenInsert::Simple, State::Normal),
         }
     }
     fn see_hyphen(&self) -> Self {
@@ -319,7 +319,6 @@ pub fn roman_lower(
     _prf: Option<PageRangeFormat>,
 ) -> SmartString {
     let mut s = SmartString::new();
-    use std::convert::TryInto;
     for t in ts {
         match t {
             Roman(i, _) | Num(i) => {

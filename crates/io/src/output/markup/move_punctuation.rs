@@ -596,7 +596,7 @@ fn remove_empty_left(els: &mut Vec<InlineElement>, ix: usize) -> usize {
 fn find_right_quote<'a>(
     els: &'a mut Vec<InlineElement>,
     ix: usize,
-    punctuation_in_quote: bool,
+    _punctuation_in_quote: bool,
 ) -> Option<RightQuoteInsertionPoint<'a>> {
     // outside needs to return OutsideInline/OutsideMicro which need to append to the vector that
     // contains a Quoted, rather than the vector inside it. These variants still have access to the

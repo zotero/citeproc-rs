@@ -20,3 +20,4 @@ pub fn safe_default(db: &mut (impl cite::CiteDatabase + xml::LocaleDatabase + xm
     db.set_locale_input_langs_with_durability(Default::default(), Durability::HIGH);
     db.set_default_lang_override_with_durability(Default::default(), Durability::HIGH);
 }
+

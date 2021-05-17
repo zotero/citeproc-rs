@@ -115,7 +115,6 @@ where
 impl Either<Markup> {
     fn into_ref_ir(
         self,
-        db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         arena: &mut IrArena<Markup>,
         stack: Formatting,
@@ -173,7 +172,7 @@ where
 impl Disambiguation<Markup> for BodyDate {
     fn ref_ir(
         &self,
-        db: &dyn IrDatabase,
+        _db: &dyn IrDatabase,
         ctx: &RefContext<Markup>,
         _state: &mut IrState,
         stack: Formatting,
@@ -201,7 +200,7 @@ impl Disambiguation<Markup> for BodyDate {
         if var == DateVariable::Accessed {
             either.map(|_| (RefIR::Edge(Some(EdgeData::Accessed)), GroupVars::Important))
         } else {
-            either.map(|e| e.into_ref_ir(db, ctx, &mut arena, stack))
+            either.map(|e| e.into_ref_ir(ctx, &mut arena, stack))
         }
         .unwrap_or((RefIR::Edge(None), GroupVars::Missing))
     }
@@ -458,18 +457,6 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
     let cloned_gen = gen_date.clone();
     let do_single =
         |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
-            if single.circa {
-                let circa = cloned_gen
-                    .locale
-                    .get_simple_term(csl::SimpleTermSelector::Misc(
-                        MiscTerm::Circa,
-                        TermFormExtended::default(),
-                    ));
-                if let Some(circa) = circa {
-                    builder.push_either(arena, Either::Build(Some(fmt.plain(circa.singular()))));
-                    builder.push_either(arena, Either::Build(Some(fmt.plain(" "))));
-                }
-            }
             let mut seen_one = false;
             for dp in parts.iter() {
                 if let Some((_form, either)) = {
@@ -542,12 +529,12 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             }
             Some(builder.into_either(fmt))
         }
-        DateOrRange::Literal(string) => {
+        DateOrRange::Literal { literal, circa: _ } => {
             let options = IngestOptions {
                 text_case: gen_date.overall_text_case,
                 ..Default::default()
             };
-            let b = fmt.ingest(&string, &options);
+            let b = fmt.ingest(&literal, &options);
             let b = fmt.with_format(b, gen_date.overall_formatting);
             let b = fmt.affixed(b, gen_date.overall_affixes.as_ref());
             Some(Either::Build(Some(b)))

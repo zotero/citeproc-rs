@@ -724,17 +724,6 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     }
 }
 
-fn pair_at_mut<T>(mut slice: &mut [T], ix: usize) -> Option<(&mut T, &mut T)> {
-    let nix = ix + 1;
-    slice = &mut slice[ix..];
-    if slice.len() < 2 || nix >= slice.len() {
-        return None;
-    }
-    slice
-        .split_first_mut()
-        .and_then(|(first, rest)| rest.first_mut().map(|second| (first, second)))
-}
-
 ////////////////////////////////
 // Cite Grouping & Collapsing //
 ////////////////////////////////
@@ -790,6 +779,7 @@ impl<'a, T> ReducedNameToken<'a, T> {
     }
 }
 
+#[allow(dead_code)]
 impl<O: OutputFormat> IR<O> {
     pub(crate) fn unwrap_name_ir(&self) -> &NameIR<O> {
         match self {
@@ -815,6 +805,7 @@ impl<O: OutputFormat> IR<O> {
             _ => panic!("Called unwrap_year_suffix_mut on a {:?}", self),
         }
     }
+    #[allow(dead_code)]
     pub(crate) fn unwrap_cond_disamb(&self) -> &ConditionalDisambIR {
         match self {
             IR::ConditionalDisamb(cond) => cond,
@@ -1122,7 +1113,6 @@ fn find_left_right_layout<O: OutputFormat>(
 pub fn fix_left_right_layout_affixes<O: OutputFormat>(
     root: NodeId,
     arena: &mut IrArena<O>,
-    fmt: &O,
 ) {
     let LeftRightLayout {
         left,
@@ -1196,8 +1186,6 @@ pub fn fix_left_right_layout_affixes<O: OutputFormat>(
 
 #[test]
 fn test_left_right_layout() {
-    use csl::style::{Element as El, TextSource as TS, *};
-    use csl::variables::{NumberVariable::CitationNumber, StandardVariable as SV};
     let mut arena = IrArena::<Markup>::new();
     let fmt = Markup::html();
 
@@ -1272,7 +1260,7 @@ fn test_left_right_layout() {
         })
     );
 
-    fix_left_right_layout_affixes(layout, &mut irgen.arena, &fmt);
+    fix_left_right_layout_affixes(layout, &mut irgen.arena);
 
     let flat = IR::flatten(layout, &irgen.arena, &fmt, None).unwrap();
     let s = fmt.output(flat, false);

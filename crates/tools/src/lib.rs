@@ -389,9 +389,10 @@ fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
     ))
 }
 
-fn get_cmd_run(rest: &[String]) -> String {
+fn get_cmd_run(rest: &[String], release: bool) -> String {
     let rest = rest.join(" ");
-    let mut cmd = "cargo test --package citeproc --test suite -- ".to_owned();
+    let release = if release { " --release" } else { "" };
+    let mut cmd = format!("cargo test --package citeproc{} --test suite -- ", release);
     cmd.push_str(&rest);
     cmd
 }
@@ -417,8 +418,8 @@ fn get_test_stdout(rest: &[String]) -> Result<Vec<u8>, Error> {
     Ok(child.stdout)
 }
 
-pub fn run(rest: Vec<String>) -> Result<(), Error> {
-    let cmd = get_cmd_run(&rest);
+pub fn run(rest: Vec<String>, release: bool) -> Result<(), Error> {
+    let cmd = get_cmd_run(&rest, release);
     let mut child = Command::new("sh")
         .arg("-c")
         .arg(&cmd)

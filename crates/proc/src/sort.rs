@@ -87,7 +87,6 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
     let all = db.all_keys();
     let cited_keys = db.cited_keys();
     let disamb_participants = db.disamb_participants();
-    let uncited_ordered = db.all_uncited();
     let mut preordered = Vec::with_capacity(all.len());
 
     // Put all the cited refs in

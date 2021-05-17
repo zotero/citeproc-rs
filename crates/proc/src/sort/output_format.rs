@@ -133,7 +133,7 @@ impl OutputFormat for SortStringFormat {
         pre_and_content.push_str(suffix)
     }
 
-    fn ends_with_full_stop(&self, build: &Self::Build) -> bool {
+    fn ends_with_full_stop(&self, _build: &Self::Build) -> bool {
         // not needed
         false
     }
