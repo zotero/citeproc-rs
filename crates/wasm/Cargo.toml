@@ -18,7 +18,7 @@ description = "citeproc-rs, compiled to WebAssembly"
 # when it's released, so as not to interfere with the
 # other native binary targets (cargo only lets you set it
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O4", "-g"]
+wasm-opt = ["-O3", "-g"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
