@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
-      - name: Install Rust 1.51.0
+      - name: Install Rust 1.52.1
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.51.0
+          toolchain: 1.52.1
           override: true
       - name: Cache cargo directories
         uses: actions/cache@v2
@@ -26,8 +26,27 @@ jobs:
           key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-wasm-target-
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+      - name: Install wasm-pack and binaryen
+        # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+        #
+        # wasm-opt seems to have a segfault, wasm-pack doesn't let you use a wasm-opt off your $PATH,
+        # it has to use its own pinned version and is not being updated much at the moment.
+        # So custom wasm-pack, and binaryen from github releases
+        run: |
+          cd /tmp
+          mkdir -p $HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+          VERSION=manual-1
+          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzvf wasm-pack.tar.gz
+          cp wasm-pack $HOME/.local/bin/
+
+          VERSION=version_101
+          curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
+          tar -xzvf binaryen.tar.gz
+          cp binaryen-$VERSION/bin/* $HOME/.local/bin/
+
       - name: Yarn install
         run: cd crates/wasm/js-demo && yarn
       - name: Yarn build (dev)
@@ -52,10 +71,10 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
-      - name: Install Rust 1.51.0
+      - name: Install Rust 1.52.1
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: 1.51.0
+            toolchain: 1.52.1
             override: true
       - name: Cache cargo directories
         uses: actions/cache@v2
@@ -69,8 +88,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-wasm-target-
 
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+      - name: Install wasm-pack and binaryen
+        # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+        run: |
+          cd /tmp
+          mkdir -p $HOME/.local/bin
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+          VERSION=manual-1
+          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzvf wasm-pack.tar.gz
+          cp wasm-pack $HOME/.local/bin/
+
+          VERSION=version_101
+          curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
+          tar -xzvf binaryen.tar.gz
+          cp binaryen-$VERSION/bin/* $HOME/.local/bin/
 
       - name: Get version info
         id: version
@@ -90,18 +123,6 @@ jobs:
           ./scripts/npm-pkg-config.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
           # log in to the NPM repository
           echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" > .npmrc
-          npm publish dist --tag canary --access public
-
-      - name: Publish to GitHub Packages canary dist tag
-        working-directory: crates/wasm
-        run: |
-          # GitHub packages must be scoped by their repo owner
-          # This configures a publishConfig field pointing to GitHub in the package.json
-          ./scripts/npm-pkg-config.sh --package-only \
-            --canary-sha ${{steps.version.outputs.short_sha}} \
-            --github-packages @cormacrelf/citeproc-rs/citeproc-wasm
-          # log in to the NPM repository
-          echo "//npm.pkg.github.com/:_authToken=${{secrets.GITHUB_TOKEN}}" > .npmrc
           npm publish dist --tag canary --access public
 
 
