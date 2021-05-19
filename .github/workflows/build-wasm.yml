@@ -23,7 +23,7 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
         with:
-          sharedKey: cargo-release-wasm
+          sharedKey: ${{ github.ref == 'refs/heads/master' && 'cargo-wasm-release' || 'cargo-wasm-debug' }}
 
       - name: Install wasm-pack and binaryen
         # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
@@ -114,7 +114,7 @@ jobs:
             override: true
       - uses: Swatinem/rust-cache@v1
         with:
-          sharedKey: cargo-release-wasm
+          sharedKey: cargo-wasm-release
 
       - name: Install wasm-pack and binaryen
         # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
