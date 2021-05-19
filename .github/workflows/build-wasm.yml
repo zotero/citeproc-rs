@@ -15,22 +15,16 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v2
+
       - name: Install Rust 1.52.1
         uses: actions-rs/toolchain@v1
         with:
           toolchain: 1.52.1
           override: true
-      - name: Cache cargo directories
-        uses: pat-s/always-upload-cache@v2
+      - uses: Swatinem/rust-cache@v1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          # use "-wasm-target" to cache these separately from the CI workflow
-          key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-wasm-target-
+          sharedKey: cargo-release-wasm
+
       - name: Install wasm-pack and binaryen
         # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
         #
@@ -76,12 +70,6 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
-      - name: Install Rust 1.52.1
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: 1.52.1
-            override: true
-
       - name: Get version info
         id: version
         run: |
@@ -119,17 +107,14 @@ jobs:
           dist tag ${{ steps.version.outputs.npm_dist_tag }}
         run: echo
 
-      - name: Cache cargo directories
-        uses: pat-s/always-upload-cache@v2
+      - name: Install Rust 1.52.1
+        uses: actions-rs/toolchain@v1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          # use "-wasm-target" to cache these separately from the CI workflow
-          key: ${{ runner.os }}-cargo-wasm-target-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-wasm-target-
+            toolchain: 1.52.1
+            override: true
+      - uses: Swatinem/rust-cache@v1
+        with:
+          sharedKey: cargo-release-wasm
 
       - name: Install wasm-pack and binaryen
         # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
