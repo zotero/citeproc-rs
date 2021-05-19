@@ -186,7 +186,7 @@ function append() {
 }
 
 if [ -n "$CANARY_SHA" ]; then
-  append "--arg version 0.0.0-canary-$CANARY_SHA" '.version = $version'
+  append "--arg version v0.0.0-canary-$CANARY_SHA" '.version = $version'
 elif [ -n "$SET_VERSION" ]; then
   append "--arg version $SET_VERSION" '.version = $version'
 elif [ -n "$USE_CARGO_VERSION" ]; then

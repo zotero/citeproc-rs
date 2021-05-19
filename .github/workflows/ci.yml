@@ -4,10 +4,14 @@ on:
   push: 
     branches:
     - master
+    - ci/*
+
 jobs:
   cargo_test:
     name: Cargo Test
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    env:
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
         with:
@@ -18,7 +22,12 @@ jobs:
             toolchain: nightly
             override: true
       - name: Cache cargo directories
-        uses: actions/cache@v2
+        # actions/cache@v2 does not upload if the workflow fails.
+        # this is annoying, nobody cares if the cache is from a revision that failed.
+        # especially because sometimes Actions serves as an edit compile test loop.
+        # => very, very slow CI.
+        # this is a good fork that always uploads the result.
+        uses: pat-s/always-upload-cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -29,19 +38,25 @@ jobs:
             ${{ runner.os }}-cargo-test-lib-
             ${{ runner.os }}-cargo-test-
 
-      - run: cargo test --lib
+      - run: |
+          cargo test --lib
+          cargo test -p citeproc-io --test integration
 
   regressions:
     name: CSL Test Suite Regressions
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    env:
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: recursive
 
       - name: Extract branch name
+        id: branch
         shell: bash
         run: |
+          IS_CI_TEST=${{ github.event_name == 'push' && github.ref != 'refs/heads/master' && 'true' || 'false '}}
           GITHUB_HEAD=${{ github.head_ref }}
           GITHUB_BASE=${{ github.base_ref }}
 
@@ -58,12 +73,19 @@ jobs:
           echo "GITHUB_HEAD = ${GITHUB_HEAD}"
           echo "::set-output name=head::${GITHUB_HEAD}"
 
-          GITHUB_BASE=${GITHUB_BASE#refs/heads/}
-          GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
-          echo "GITHUB_BASE = ${GITHUB_BASE}"
-          echo "::set-output name=base::${GITHUB_BASE}"
+          if $IS_CI_TEST; then
+            echo "::set-output name=base::master"
+          else
+            GITHUB_BASE=${GITHUB_BASE#refs/heads/}
+            GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
+            echo "GITHUB_BASE = ${GITHUB_BASE}"
+            echo "::set-output name=base::${GITHUB_BASE}"
+          fi
 
-        id: branch
+      - name: >
+          Plan: compare ${{ steps.branch.outputs.head }} to ${{ steps.branch.outputs.base }}
+        run: echo
+
       - name: Download base output
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -81,7 +103,7 @@ jobs:
             toolchain: nightly
             override: true
       - name: Cache cargo directories
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -113,12 +135,16 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
         run: |
+          if test -f .snapshots/current; then
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
             aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
+          fi
 
   wasm_tests:
     name: "Test the WASM package"
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    env:
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust 1.52.1
@@ -128,7 +154,7 @@ jobs:
           override: true
 
       - name: Cache cargo directories
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -146,7 +172,7 @@ jobs:
         id: yarn-cache-dir-path
         run: echo "::set-output name=dir::$(yarn cache dir)"
       - name: Restore yarn cache
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         id: yarn-cache
         with:
           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
