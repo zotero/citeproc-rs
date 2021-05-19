@@ -437,6 +437,7 @@ pub fn log_tests(name: &str, rest: Vec<String>) -> Result<(), Error> {
     if let Some((branch, commit)) = repo.current_branch_commit()? {
         write_snapshot(&snapshot_path_commit(&commit)?, &stdout)?;
         if let Some(branch) = branch {
+            let branch = branch.replace('/', "-");
             write_snapshot(&snapshot_path_branch(&branch)?, &stdout)?;
         }
     }

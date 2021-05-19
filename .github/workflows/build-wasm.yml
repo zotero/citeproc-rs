@@ -3,11 +3,16 @@ on:
   push:
     branches:
     - master
+    - ci/*
+    release:
+      types: [published]
 
 jobs:
   publish_wasm_demo:
     name: Publish WebAssembly Demo
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    # only runs for push, so not for releases.
+    if: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust 1.52.1
@@ -16,7 +21,7 @@ jobs:
           toolchain: 1.52.1
           override: true
       - name: Cache cargo directories
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -50,13 +55,13 @@ jobs:
       - name: Yarn install
         run: cd crates/wasm/js-demo && yarn
       - name: Yarn build (dev)
-        if: github.event_name == 'pull_request'
+        if: ${{ github.ref != 'refs/heads/master' }}
         run: cd crates/wasm/js-demo && yarn build -d
       - name: Yarn build (prod)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: ${{ github.ref == 'refs/heads/master' }}
         run: cd crates/wasm/js-demo && yarn build -p
       - name: Deploy
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: ${{ github.ref == 'refs/heads/master' }}
         uses: peaceiris/actions-gh-pages@v2
         env:
           ACTIONS_DEPLOY_KEY: ${{ secrets.ACTIONS_DEPLOY_KEY }}
@@ -66,9 +71,9 @@ jobs:
           EXTERNAL_REPOSITORY: cormacrelf/citeproc-wasm-demo
           PUBLISH_BRANCH: gh-pages
 
-  publish_npm_canary:
-    name: "Publish to the 'canary' npm dist-tag"
-    runs-on: ubuntu-18.04
+  publish_npm:
+    name: "Publish to NPM"
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust 1.52.1
@@ -76,8 +81,46 @@ jobs:
         with:
             toolchain: 1.52.1
             override: true
+
+      - name: Get version info
+        id: version
+        run: |
+          function set-output() {
+            local name="$1"
+            local value="$2"
+            echo "setting output $name -> $value"
+            echo "::set-output name=$name::$value"
+          }
+
+          IS_TAGGED_RELEASE=${{ github.event_name == 'release' && 'true' || 'false' }}
+          DRY_RUN=${{ github.event_name == 'push' && github.ref != 'refs/heads/master' && 'true' || 'false' }}
+          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
+          set-output short_sha "${SHORT_SHA}"
+          set-output npm_dry_run "$DRY_RUN"
+
+          if $IS_TAGGED_RELEASE; then
+            TAG=${GITHUB_REF#refs/tags/}
+            IFS='-' read -ra PLAIN_VERSION POST_HYPHEN <<< "$TAG"
+            if ! [ -z "$POST_HYPHEN" ]; then
+              # i.e. there was a -alpha.1 appended, use the `next` dist tag
+              set-output npm_dist_tag next
+            else
+              set-output npm_dist_tag latest
+            fi
+            set-output npm_version "$TAG"
+          else
+            set-output npm_version "v0.0.0-canary-${SHORT_SHA}"
+            set-output npm_dist_tag canary
+          fi
+
+      - name: >
+          Will execute: ${{ steps.version.outputs.npm_dry_run == 'true' && '[Dry run]' || ''}}
+          Publish @citeproc-rs/wasm ${{ steps.version.outputs.npm_version }} to NPM,
+          dist tag ${{ steps.version.outputs.npm_dist_tag }}
+        run: echo
+
       - name: Cache cargo directories
-        uses: actions/cache@v2
+        uses: pat-s/always-upload-cache@v2
         with:
           path: |
             ~/.cargo/registry
@@ -105,24 +148,22 @@ jobs:
           tar -xzvf binaryen.tar.gz
           cp binaryen-$VERSION/bin/* $HOME/.local/bin/
 
-      - name: Get version info
-        id: version
-        run: |
-          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
-          echo "::set-output name=short_sha::${SHORT_SHA}"
-          echo "::set-output name=npm_version::v0.0.0-canary-${SHORT_SHA}"
-
       - name: Build for all targets
         working-directory: crates/wasm
         run: |
           ./scripts/npm-pkg-config.sh --features console
 
-      - name: Publish to NPM canary dist tag
-        working-directory: crates/wasm
-        run: |
-          ./scripts/npm-pkg-config.sh --package-only --canary-sha ${{steps.version.outputs.short_sha}}
-          # log in to the NPM repository
-          echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" > .npmrc
-          npm publish dist --tag canary --access public
+      - name: Log in to the NPM registry
+        run: echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" > .npmrc
 
+      - name: Configure package for publishing to NPM
+        working-directory: crates/wasm
+        run: ./scripts/npm-pkg-config.sh --package-only --set-version ${{steps.version.outputs.npm_version }}
+
+      - name: Publish @citeproc-rs/wasm to NPM
+        working-directory: crates/wasm
+        run: >
+          npm publish dist --access public
+          --tag ${{ steps.version.outputs.npm_dist_tag }}
+          ${{ steps.version.outputs.npm_dry_run == 'true' && '--dry-run' || '' }}
 
