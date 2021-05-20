@@ -142,12 +142,11 @@ jobs:
         run: |
           ./scripts/npm-pkg-config.sh --features console
 
-      - name: Log in to the NPM registry
-        run: echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" > .npmrc
-
       - name: Configure package for publishing to NPM
         working-directory: crates/wasm
-        run: ./scripts/npm-pkg-config.sh --package-only --set-version ${{steps.version.outputs.npm_version }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{secrets.NPM_PUBLISH_TOKEN}}" > .npmrc
+          ./scripts/npm-pkg-config.sh --package-only --set-version ${{steps.version.outputs.npm_version }}
 
       - name: Publish @citeproc-rs/wasm to NPM
         working-directory: crates/wasm
