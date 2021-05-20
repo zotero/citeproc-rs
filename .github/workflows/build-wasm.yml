@@ -7,6 +7,10 @@ on:
     release:
       types: [published]
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+
 jobs:
   publish_wasm_demo:
     name: Publish WebAssembly Demo

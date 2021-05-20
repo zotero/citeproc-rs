@@ -6,12 +6,14 @@ on:
     - master
     - ci/*
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: '1'
+
 jobs:
   cargo_test:
     name: Cargo Test
     runs-on: ubuntu-20.04
-    env:
-      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
         with:
@@ -31,8 +33,6 @@ jobs:
   regressions:
     name: CSL Test Suite Regressions
     runs-on: ubuntu-20.04
-    env:
-      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
         with:
@@ -120,8 +120,6 @@ jobs:
   wasm_tests:
     name: "Test the WASM package"
     runs-on: ubuntu-20.04
-    env:
-      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v2
       - name: Install Rust 1.52.1
