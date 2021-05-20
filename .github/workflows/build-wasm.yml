@@ -109,7 +109,7 @@ jobs:
             fi
             set-output npm_version "$TAG"
           else
-            set-output npm_version "v0.0.0-canary-${SHORT_SHA}"
+            set-output npm_version "0.0.0-canary-${SHORT_SHA}"
             set-output npm_dist_tag canary
           fi
 
