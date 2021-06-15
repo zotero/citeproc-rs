@@ -10,6 +10,7 @@ use crate::SmartString;
 use fnv::FnvHashSet;
 use roxmltree::{Attribute, Node};
 
+#[allow(dead_code)]
 #[cfg(test)]
 pub(crate) fn parse_as<T>(s: &str) -> FromNodeResult<T>
 where
@@ -19,14 +20,39 @@ where
     T::from_node(&doc.root_element(), &ParseInfo::default())
 }
 
-#[derive(Default, Clone)]
-pub struct ParseOptions {
-    pub allow_no_info: bool,
-    #[doc(hidden)]
-    pub use_default_default: (),
+#[cfg(test)]
+pub(crate) fn parse_as_with<T>(s: &str, options: Option<ParseOptions>) -> FromNodeResult<T>
+where
+    T: FromNode,
+{
+    let doc = roxmltree::Document::parse(s).unwrap();
+    let o = options.unwrap_or_else(Default::default);
+    let info = ParseInfo {
+        features: o.features.clone().unwrap_or_else(Default::default),
+        macros: None,
+        options: o,
+    };
+    T::from_node(&doc.root_element(), &info)
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
+pub struct ParseOptions {
+    /// Allow style to omit the `<info>` block (good for tests).
+    pub allow_no_info: bool,
+    /// Feature overrides. Allows you to enable features programmatically. Features declared in the
+    /// style will be added to this.
+    pub features: Option<Features>,
+    #[doc(hidden)]
+    pub use_default_default: private::CannotConstruct,
+}
+
+mod private {
+    #[derive(Clone, Default, Debug)]
+    #[non_exhaustive]
+    pub struct CannotConstruct;
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct ParseInfo {
     pub(crate) features: Features,
     pub(crate) options: ParseOptions,

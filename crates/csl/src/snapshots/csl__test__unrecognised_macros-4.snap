@@ -62,6 +62,7 @@ Style {
         collapse: None,
     },
     bibliography: None,
+    intext: None,
     info: Info {
         id: Identifier(
             "default",

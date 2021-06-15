@@ -1011,6 +1011,12 @@ pub struct Bibliography {
     pub names_delimiter: Option<SmartString>,
 }
 
+/// cs:intext element
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct InText {
+    pub layout: Layout,
+}
+
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
 #[strum(serialize_all = "kebab_case")]
 pub enum SecondFieldAlign {
@@ -1128,6 +1134,7 @@ pub struct Style {
     pub macros: FnvHashMap<SmartString, Vec<Element>>,
     pub citation: Citation,
     pub bibliography: Option<Bibliography>,
+    pub intext: Option<InText>,
     pub info: Info,
     pub features: Features,
     pub name_inheritance: Name,
@@ -1148,7 +1155,8 @@ impl Default for Style {
             macros: Default::default(),
             citation: Default::default(),
             features: Default::default(),
-            bibliography: Default::default(),
+            bibliography: None,
+            intext: None,
             info: Default::default(),
             name_inheritance: Default::default(),
             names_delimiter: None,
@@ -1478,15 +1486,16 @@ pub enum CslType {
     Classic,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
-    Gazette,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
-    Hearing,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
-    Regulation,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
     Video,
+
+    /// feature = "cslm_legal_types"
+    #[strum(props(feature = "cslm_legal_types"))]
+    Gazette,
+    /// feature = cslm_legal_types
+    #[strum(props(feature = "cslm_legal_types"))]
+    Hearing,
+    /// feature = cslm_legal_types
+    #[strum(props(feature = "cslm_legal_types"))]
+    Regulation,
 }
 impl EnumGetAttribute for CslType {}

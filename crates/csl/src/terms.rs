@@ -465,18 +465,22 @@ pub enum LocatorType {
     Verse,
     Volume,
 
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Article,
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Subparagraph,
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Rule,
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Subsection,
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Schedule,
-    #[strum(props(csl = "0", cslM = "1"))]
+    #[strum(props(feature = "legal_locators"))]
     Title,
+
+    /// feature = term_unpublished
+    #[strum(props(feature = "term_unpublished"))]
+    Unpublished,
 
     // Not documented but in use?
     #[strum(props(csl = "0", cslM = "1"))]

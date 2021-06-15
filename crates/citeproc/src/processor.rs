@@ -126,6 +126,11 @@ impl Default for SupportedFormat {
     }
 }
 
+/// ```
+/// use citeproc::InitOptions;
+///
+/// let _opts = InitOptions { style: "...", ..Default::default() };
+/// ```
 #[derive(Clone, Default)]
 pub struct InitOptions<'a> {
     pub format: SupportedFormat,
@@ -143,7 +148,13 @@ pub struct InitOptions<'a> {
     pub bibliography_no_sort: bool,
 
     #[doc(hidden)]
-    pub use_default_default: (),
+    pub use_default_default: private::CannotConstruct,
+}
+
+mod private {
+    #[derive(Clone, Default)]
+    #[non_exhaustive]
+    pub struct CannotConstruct;
 }
 
 impl Processor {

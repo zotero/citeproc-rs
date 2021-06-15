@@ -93,7 +93,10 @@ macro_rules! set {
 }
 
 macro_rules! declare_features {
-    ($((active, $feature: ident, $ver: expr, $issue: expr, $edition: expr),)+) => {
+    ($(
+        $(#[$feat_meta:meta])*
+        (active, $feature: ident, $ver: expr, $issue: expr, $edition: expr),
+    )+) => {
         /// Represents active features that are currently being implemented or
         /// currently being considered for addition/removal.
         const ACTIVE_FEATURES:
@@ -105,15 +108,16 @@ macro_rules! declare_features {
             !*b
         }
 
-        /// A set of features to be used by later passes.
+        /// A set of features declared / enabled by a style.
         #[derive(Clone, Eq, PartialEq, Default)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize))]
         #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
         pub struct Features {
-            // `#![feature]` attrs for language features, for error reporting
+            /// `(name, Option<since_version>)`: already accepted features that have nevertheless been declared by a style
             #[cfg_attr(feature = "serde", serde(skip_serializing))]
-            pub declared_lang_features: Vec<Atom>,
+            pub declared_lang_features: Vec<(Atom, Option<Atom>)>,
             $(
+                $(#[$feat_meta])*
                 #[cfg_attr(feature = "serde", serde(skip_serializing_if = "is_false"))]
                 pub $feature: bool,
             )+
@@ -188,66 +192,90 @@ macro_rules! declare_features {
         const ACCEPTED_FEATURES: &[(&str, &str, Option<u32>, Option<&str>)] = &[
             $((stringify!($feature), $ver, $issue, None)),+
         ];
-    }
+    };
+
+    ($((placeholder, $feature: ident, $ver: expr, $issue: expr, None),)+) => {
+        // nothing
+    };
 }
+// placeholders
+declare_features!(
+    // Processor features
+    (placeholder, parallel_citations, "1.0.1", None, None),
+    // includes legal_case form=short abbreviations, for now
+    (placeholder, abbreviations, "1.0.1", None, None),
+    (placeholder, condition_page, "1.0.1", None, None),
+    (placeholder, condition_context, "1.0.1", None, None),
+    (placeholder, condition_genre, "1.0.1", None, None),
+    // should include Authority being an institutional author?
+    (placeholder, institutions, "1.0.1", None, None),
+    // layout locale matching, default-locale-sort, name-as-sort-order languages, name-never-sort
+    (placeholder, multilingual, "1.0.1", None, None),
+    (placeholder, hereinafter, "1.0.1", None, None),
+    (placeholder, date_form_imperial, "1.0.1", None, None),
+    // (currently includes the dodgy macro label-form="..." business)
+    (placeholder, multiple_locators, "1.0.1", None, None),
+    (placeholder, locator_extras, "1.0.1", None, None),
+    (placeholder, leading_noise_words, "1.0.1", None, None),
+    (placeholder, name_as_reverse_order, "1.0.1", None, None),
+    (placeholder, skip_words, "1.0.1", None, None),
+    (placeholder, subgroup_delimiter, "1.0.1", None, None),
+    (placeholder, suppress_min_max, "1.0.1", None, None),
+    (placeholder, text_case_normal, "1.0.1", None, None),
+    (placeholder, year_range_format, "1.0.1", None, None),
+    (placeholder, jurisdictions, "1.0.1", None, None),
+    // E.g. page and page-first become numeric variables
+    (placeholder, more_numerics, "1.0.1", None, None),
+    (placeholder, var_license, "1.0.1", None, None),
+    (placeholder, var_document_name, "1.0.1", None, None),
+    (placeholder, var_part_number, "1.0.1", None, None),
+
+    // bare if/else statements without surrounding `<choose>`
+    (placeholder, bare_choose, "1.0.1", None, None),
+);
 
 // status, name, first added version, tracking issue, edition
 // add an issue number as in the first None when you get tracking issues sorted
 declare_features!(
-    // Processor features
-    (active, parallel_citations, "1.0.1", None, None),
-    // includes legal_case form=short abbreviations, for now
-    (active, abbreviations, "1.0.1", None, None),
-    // includes cs:conditions, match="nand"
+    /// `<intext>` element and split cite modes
+    ///
+    /// - <https://github.com/zotero/zotero/issues/1580>
+    /// - <https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms>
+    (active, intext, "1.1", None, None),
+    /// includes cs:conditions, match="nand"
     (active, conditions, "1.0.1", None, None),
-    (active, condition_page, "1.0.1", None, None),
-    (active, condition_context, "1.0.1", None, None),
-    (active, condition_genre, "1.0.1", None, None),
+    /// includes condition matchers `has-day="issued [date vars...]"`/`has-year-only="issued"`/`has-month-or-season="issued"`
     (active, condition_date_parts, "1.0.1", None, None),
-    // should include Authority being an institutional author?
-    (active, institutions, "1.0.1", None, None),
-    // layout locale matching, default-locale-sort, name-as-sort-order languages,
-    // name-never-short
-    (active, multilingual, "1.0.1", None, None),
-    (active, hereinafter, "1.0.1", None, None),
-    (active, supplement, "1.0.1", None, None),
-    (active, volume_title, "1.0.1", None, None),
-    (active, date_form_imperial, "1.0.1", None, None),
-    // (currently includes the dodgy macro label-form="..." business)
-    (active, multiple_locators, "1.0.1", None, None),
-    (active, locator_extras, "1.0.1", None, None),
-    (active, leading_noise_words, "1.0.1", None, None),
-    (active, name_as_reverse_order, "1.0.1", None, None),
-    (active, skip_words, "1.0.1", None, None),
-    (active, subgroup_delimiter, "1.0.1", None, None),
-    (active, suppress_min_max, "1.0.1", None, None),
-    (active, text_case_normal, "1.0.1", None, None),
-    (active, year_range_format, "1.0.1", None, None),
-    (active, edtf_dates, "1.0.1", None, None),
-    // includes vars: publication-date, publication-number, committee, document-name
+    /// `issued: "1981-09"`; `issued: "198X"` etc. Also via `"issued": { "edtf": "..." }`.
+    (active, edtf_dates, "1.1", None, None),
+    /// includes types: gazette, hearing, regulation
     (active, cslm_legal_types, "1.0.1", None, None),
-    (active, jurisdictions, "1.0.1", None, None),
-    (active, standard_type, "1.0.1", None, None),
-    (active, software_type, "1.0.1", None, None),
-    (active, periodical_type, "1.0.1", None, None),
-    // E.g. page and page-first become numeric variables
-    (active, more_numerics, "1.0.1", None, None),
-    (active, var_volume_title, "1.0.1", None, None),
-    (active, var_license, "1.0.1", None, None),
-    (active, var_document_name, "1.0.1", None, None),
-    (active, var_part_number, "1.0.1", None, None),
-    (active, var_available_date, "1.0.1", None, None),
+    /// `locator-date` date variable
+    (active, var_locator_date, "1.0.1", None, None),
+    /// `<names variable="dummy">`
     (active, var_dummy_name, "1.0.1", None, None),
-    (active, var_publication_date, "1.0.1", None, None),
-    (active, var_publication_number, "1.0.1", None, None),
-    (active, term_every_type, "1.0.1", None, None),
-    (active, term_unpublished, "1.0.1", None, None),
-    (active, term_legal_locators, "1.0.1", None, None),
-    // Enables using editortranslator as a CSL-JSON and CSL variable directly, avoiding
-    // the need for "editor translator"
-    //
-    // https://discourse.citationstyles.org/t/more-flexible-editortranslator-behavior/1498/7
+    /// variables: `publication-date`, `publication-number`, `available-date`>
+    (active, var_publications, "1.0.1", None, None),
+    /// variable: `supplement`
+    (active, var_supplement, "1.0.1", None, None),
+    /// Enables using editortranslator as a CSL-JSON and CSL variable directly, avoiding
+    /// the need for "editor translator"
+    ///
+    /// <https://discourse.citationstyles.org/t/more-flexible-editortranslator-behavior/1498/7>
     (active, var_editortranslator, "1.0.1", None, None),
+    /// article, subparagraph, rule, subsection, schedule, title as locator types
+    (active, legal_locators, "1.0.1", None, None),
+    /// `<text term="unpublished">`
+    (active, term_unpublished, "1.0.1", None, None),
+);
+
+// status, name, first added version, tracking issue, edition, None
+declare_features! (
+    (accepted, supplement, "1.0.2", None, None),
+    (accepted, var_volume_title, "1.0.2", None, None),
+    (accepted, standard_type, "1.0.2", None, None),
+    (accepted, software_type, "1.0.2", None, None),
+    (accepted, periodical_type, "1.0.2", None, None),
 );
 
 // status, name, first added version, tracking issue, None, reason(str)
@@ -260,15 +288,6 @@ declare_features!((
     Some("could be done without a breaking change")
 ),);
 
-// // status, name, first added version, tracking issue, edition, None
-// declare_features! (
-//     (accepted, associated_types, "1.0.0", None, None),
-//     // Allows overloading augmented assignment operations like `a += b`.
-//     (accepted, augmented_assignments, "1.8.0", Some(28235), None),
-//     // Allows empty structs and enum variants with braces.
-//     (accepted, braced_empty_structs, "1.8.0", Some(29720), None),
-// );
-
 // // status, name, first added version, tracking issue, reason
 // declare_features! (
 //     (stable_removed, no_stack_check, "1.0.0", None, None),
@@ -277,12 +296,19 @@ declare_features!((
 pub fn read_features<'a>(
     input_features: impl Iterator<Item = &'a str>,
 ) -> Result<Features, &'a str> {
-    // TODO: multiple errors here
     let mut features = Features::new();
+    read_features_into(input_features,&mut features)?;
+    Ok(features)
+}
+
+pub fn read_features_into<'a>(
+    input_features: impl Iterator<Item = &'a str>,
+    features: &mut Features,
+) -> Result<(), &'a str> {
     for kebab in input_features {
         let name = kebab.replace('-', "_");
         if let Some((.., set)) = ACTIVE_FEATURES.iter().find(|f| name == f.0) {
-            set(&mut features);
+            set(features);
             continue;
         }
 
@@ -296,13 +322,14 @@ pub fn read_features<'a>(
             return Err(kebab);
         }
 
-        // if let Some((_, _since, ..)) = ACCEPTED_FEATURES.iter().find(|f| name == f.0) {
-        //     let since = Some(Symbol::intern(since));
-        //     features.declared_lang_features.push((name, mi.span, since));
-        //     continue
-        // }
+        if let Some((name, since, ..)) = ACCEPTED_FEATURES.iter().find(|f| name == f.0) {
+            let name = Atom::from(*name);
+            let since = Some(Atom::from(*since));
+            features.declared_lang_features.push((name, since));
+            continue
+        }
 
         return Err(kebab);
     }
-    Ok(features)
+    Ok(())
 }

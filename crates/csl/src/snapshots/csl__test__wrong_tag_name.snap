@@ -1,0 +1,16 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"\n        <stylo version=\"1.0.1\" class=\"in-text\">\n            <citation><layout></layout></citation>\n        </stylo>\n    \"#),\n                             None).expect_err(\"should have failed with errors\")"
+---
+Invalid(
+    CslError(
+        [
+            InvalidCsl {
+                severity: Error,
+                range: 0..91,
+                message: "root node must be a `<style>` node, was `<stylo>` instead",
+                hint: "",
+            },
+        ],
+    ),
+)

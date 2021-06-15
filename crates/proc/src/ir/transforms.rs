@@ -1026,7 +1026,7 @@ fn test_mixed_numeric() {
         "#,
             layout
         );
-        Style::parse_for_test(&txt).unwrap()
+        Style::parse_for_test(&txt, None).unwrap()
     };
     let style = mk(r#"<group delimiter=". "> <text variable="citation-number" /> </group>"#);
     let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
@@ -1096,10 +1096,24 @@ fn find_left_right_layout<O: OutputFormat>(
                     .as_ref()
                     .map_or(false, |af| !af.prefix.is_empty() || !af.suffix.is_empty()) =>
         {
-            let left = node.first_child()
-                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::LeftMargin), .. }))));
-            let right = node.last_child()
-                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::RightInline), .. }))));
+            let left = node.first_child().filter(|c| {
+                matches!(
+                    arena.get(*c).map(|x| &x.get().0),
+                    Some(IR::Seq(IrSeq {
+                        display: Some(DisplayMode::LeftMargin),
+                        ..
+                    }))
+                )
+            });
+            let right = node.last_child().filter(|c| {
+                matches!(
+                    arena.get(*c).map(|x| &x.get().0),
+                    Some(IR::Seq(IrSeq {
+                        display: Some(DisplayMode::RightInline),
+                        ..
+                    }))
+                )
+            });
             Some(LeftRightLayout {
                 left,
                 right,
@@ -1110,10 +1124,7 @@ fn find_left_right_layout<O: OutputFormat>(
     }
 }
 
-pub fn fix_left_right_layout_affixes<O: OutputFormat>(
-    root: NodeId,
-    arena: &mut IrArena<O>,
-) {
+pub fn fix_left_right_layout_affixes<O: OutputFormat>(root: NodeId, arena: &mut IrArena<O>) {
     let LeftRightLayout {
         left,
         right,
