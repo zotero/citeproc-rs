@@ -417,7 +417,6 @@ pub enum NameVariable {
     Dummy,
 
     // From the CSL-JSON schema
-
     Curator,
     ScriptWriter,
     Performer,

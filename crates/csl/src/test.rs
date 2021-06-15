@@ -32,7 +32,10 @@ fn features() {
 
 #[test]
 fn intext() {
-    let features = Features { intext: true, ..Default::default() };
+    let features = Features {
+        intext: true,
+        ..Default::default()
+    };
     let options = ParseOptions {
         allow_no_info: true,
         features: Some(features),

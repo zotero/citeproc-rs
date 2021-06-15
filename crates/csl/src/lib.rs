@@ -48,42 +48,58 @@ use from_node::*;
 #[cfg(test)]
 macro_rules! assert_snapshot_parse {
     (Style, $xml:literal, $o:expr) => {
-        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), Some($o))
-            .expect("should have parsed successfully"));
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(
+            ::indoc::indoc!($xml),
+            Some($o)
+        )
+        .expect("should have parsed successfully"));
     };
     (Style, $xml:literal) => {
         ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), None)
             .expect("should have parsed successfully"));
     };
     ($ty:ty, $xml:literal, $options:expr) => {
-        ::insta::assert_debug_snapshot!(
-            $crate::from_node::parse_as_with::<$ty>(::indoc::indoc!($xml), Some($options)).expect("did not parse")
-        );
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            Some($options)
+        )
+        .expect("did not parse"));
     };
     ($ty:ty, $xml:literal) => {
-        ::insta::assert_debug_snapshot!(
-            $crate::from_node::parse_as_with::<$ty>(::indoc::indoc!($xml), None).expect("did not parse")
-        );
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            None
+        )
+        .expect("did not parse"));
     };
 }
 
 #[cfg(test)]
 macro_rules! assert_snapshot_err {
     (Style, $xml:literal, $o:expr) => {
-        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), Some($o))
-            .expect_err("should have failed with errors"));
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(
+            ::indoc::indoc!($xml),
+            Some($o)
+        )
+        .expect_err("should have failed with errors"));
     };
     (Style, $xml:literal) => {
         ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), None)
             .expect_err("should have failed with errors"));
     };
     ($ty:ty, $xml:literal, $options:expr) => {
-        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(::indoc::indoc!($xml), Some($options))
-            .expect_err("should have failed with errors"));
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            Some($options)
+        )
+        .expect_err("should have failed with errors"));
     };
     ($ty:ty, $xml:literal) => {
-        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(::indoc::indoc!($xml), None)
-            .expect_err("should have failed with errors"));
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            None
+        )
+        .expect_err("should have failed with errors"));
     };
 }
 
@@ -140,9 +156,12 @@ impl Style {
             return Err(StyleError::Invalid(CslError(vec![InvalidCsl {
                 severity: Severity::Error,
                 range: node.range(),
-                message: format!("root node must be a `<style>` node, was `<{}>` instead", node.tag_name().name()),
+                message: format!(
+                    "root node must be a `<style>` node, was `<{}>` instead",
+                    node.tag_name().name()
+                ),
                 hint: "".into(),
-            }])))
+            }])));
         }
 
         // We don't know which features will be enabled yet, but we get that in
@@ -405,9 +424,7 @@ impl FromNode for InText {
         if !errors.is_empty() {
             return Err(CslError(errors));
         }
-        Ok(InText {
-            layout: layout?,
-        })
+        Ok(InText { layout: layout? })
     }
 }
 
@@ -1460,14 +1477,17 @@ impl FromNode for CslCslMVersionReq {
 
 impl FromNode for Features {
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
-        let mut features = info.options.features.clone().unwrap_or_else(Default::default);
+        let mut features = info
+            .options
+            .features
+            .clone()
+            .unwrap_or_else(Default::default);
         let input = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("feature"))
             .filter_map(|el| el.attribute("name"));
-        read_features_into(input, &mut features).map_err(|s| {
-            InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s))
-        })?;
+        read_features_into(input, &mut features)
+            .map_err(|s| InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)))?;
         Ok(features)
     }
     fn select_child(node: &Node) -> bool {
@@ -1504,7 +1524,13 @@ impl Style {
         let features = max_one_child::<Features>(node, default_info, &mut errors)
             .ok()
             .flatten()
-            .unwrap_or_else(|| default_info.options.features.clone().unwrap_or_else(Default::default));
+            .unwrap_or_else(|| {
+                default_info
+                    .options
+                    .features
+                    .clone()
+                    .unwrap_or_else(Default::default)
+            });
 
         // We will check again later (for MacroMap) if there are macros without names.
         let mut throwaway = Vec::new();

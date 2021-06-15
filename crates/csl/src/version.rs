@@ -229,7 +229,6 @@ declare_features!(
     (placeholder, var_license, "1.0.1", None, None),
     (placeholder, var_document_name, "1.0.1", None, None),
     (placeholder, var_part_number, "1.0.1", None, None),
-
     // bare if/else statements without surrounding `<choose>`
     (placeholder, bare_choose, "1.0.1", None, None),
 );
@@ -270,7 +269,7 @@ declare_features!(
 );
 
 // status, name, first added version, tracking issue, edition, None
-declare_features! (
+declare_features!(
     (accepted, supplement, "1.0.2", None, None),
     (accepted, var_volume_title, "1.0.2", None, None),
     (accepted, standard_type, "1.0.2", None, None),
@@ -297,7 +296,7 @@ pub fn read_features<'a>(
     input_features: impl Iterator<Item = &'a str>,
 ) -> Result<Features, &'a str> {
     let mut features = Features::new();
-    read_features_into(input_features,&mut features)?;
+    read_features_into(input_features, &mut features)?;
     Ok(features)
 }
 
@@ -326,7 +325,7 @@ pub fn read_features_into<'a>(
             let name = Atom::from(*name);
             let since = Some(Atom::from(*since));
             features.declared_lang_features.push((name, since));
-            continue
+            continue;
         }
 
         return Err(kebab);

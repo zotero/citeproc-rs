@@ -88,11 +88,10 @@ impl Lang {
             .chain(self.file_iter().map(LocaleSource::File))
     }
     pub fn iter_fetchable_langs(&self) -> impl Iterator<Item = Lang> {
-        self.iter()
-            .filter_map(|source| match source {
-                LocaleSource::File(l) => Some(l),
-                _ => None,
-            })
+        self.iter().filter_map(|source| match source {
+            LocaleSource::File(l) => Some(l),
+            _ => None,
+        })
     }
     fn file_iter(&self) -> FileIter {
         FileIter {
