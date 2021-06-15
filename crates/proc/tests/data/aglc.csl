@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0" demote-non-dropping-particle="sort-only" default-locale="en-GB">
+  <features>
+    <feature name="legal_locators" />
+  </features>
   <info>
     <title>Australian Guide to Legal Citation, 4th Edition</title>
     <title-short>AGLC</title-short>
