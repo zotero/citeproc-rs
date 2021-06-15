@@ -153,7 +153,13 @@ wrapper () {
   # args to pass to github_changelog_generator
   local FUTURE_RELEASE=""
   local INSERT_TAG="Unreleased"
-  local SINCE_TAG="--since-tag $(git describe --abbrev=0)"
+  local SINCE_TAG=""
+  if ! git describe --abbrev=0 &>/dev/null; then
+    confirm 'no tags in repo, `git describe --abbrev=0` found nothing.
+    Continue by creating first ever release?:' --bail
+  else
+    SINCE_TAG="--since-tag $(git describe --abbrev=0)"
+  fi
   local REST=""
   local OUTPUT="CHANGELOG.md"
   local BASE="CHANGELOG.md"
