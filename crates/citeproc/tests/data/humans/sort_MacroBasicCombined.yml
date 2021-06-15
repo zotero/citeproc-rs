@@ -12,12 +12,12 @@ input:
     type: book
     title: 'B'
     chapter-number: 2
-    publication-number: 1
+    collection-number: 1
   - id: ITEM-3
     type: book
     title: 'B'
     chapter-number: 2
-    publication-number: 2
+    collection-number: 2
   - id: ITEM-2
     type: book
     title: 'B'
@@ -33,7 +33,7 @@ csl: |
     <macro name="combined">
       <text variable="title" />
       <number variable="chapter-number" />
-      <number variable="publication-number" />
+      <number variable="collection-number" />
     </macro>
     <citation><layout></layout></citation>
     <bibliography>
@@ -43,7 +43,7 @@ csl: |
       <layout>
         <text variable="title" />
         <number variable="chapter-number" />
-        <number variable="publication-number" />
+        <number variable="collection-number" />
       </layout>
     </bibliography>
   </style>

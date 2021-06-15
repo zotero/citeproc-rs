@@ -7,8 +7,8 @@
 use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
-use citeproc::string_id::{Cluster as ClusterStr};
-use citeproc_io::{Cite, Locators, Reference, Suppression, SmartString};
+use citeproc::string_id::Cluster as ClusterStr;
+use citeproc_io::{Cite, CiteMode, Locators, Reference, SmartString};
 
 use lazy_static::lazy_static;
 use std::mem;
@@ -71,9 +71,9 @@ impl CiteprocJsCite {
             prefix: self.prefix.as_ref().map(SmartString::from),
             suffix: self.suffix.as_ref().map(SmartString::from),
             locators: self.locators.clone(),
-            suppression: match (self.suppress_author, self.author_only) {
-                (false, true) => Some(Suppression::InText),
-                (true, false) => Some(Suppression::Rest),
+            mode: match (self.suppress_author, self.author_only) {
+                (false, true) => Some(CiteMode::InText),
+                (true, false) => Some(CiteMode::Rest),
                 (false, false) => None,
                 _ => panic!("multiple citation modes passed to CiteprocJsCite"),
             },
@@ -450,7 +450,9 @@ pub fn parse_human_test(contents: &str) -> TestCase {
                 mode = mode.or_else(|| match m.as_str() {
                     "citation" => Some((Mode::Citation, SupportedFormat::TestHtml, false)),
                     "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml, false)),
-                    "bibliography-nosort" => Some((Mode::Bibliography, SupportedFormat::TestHtml, true)),
+                    "bibliography-nosort" => {
+                        Some((Mode::Bibliography, SupportedFormat::TestHtml, true))
+                    }
                     "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf, false)),
                     "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf, false)),
                     _ => panic!("unknown mode {}", m),
