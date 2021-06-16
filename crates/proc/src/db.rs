@@ -1261,6 +1261,10 @@ pub fn built_cluster_before_output(
         transforms::group_and_collapse(&fmt, collapse, &mut irs);
     }
 
+    if let Some(mode) = db.cluster_mode(cluster_id) {
+        transforms::apply_cluster_mode(&fmt, mode, &mut irs);
+    }
+
     // Cite capitalization
     // TODO: allow clients to pass a flag to prevent this (on ix==0) when a cluster is in the
     // middle of an existing footnote, and isn't preceded by a period (or however else a client
@@ -1316,7 +1320,7 @@ pub fn built_cluster_before_output(
         ends_punc(this_suffix) || starts_punc(next_prefix)
     };
 
-    let build_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
+    let flatten_affix_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
         let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
         use std::borrow::Cow;
         let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt, None) {
@@ -1393,7 +1397,7 @@ pub fn built_cluster_before_output(
                         ix, force_single, ..
                     }) => {
                         advance_to = ix;
-                        if let Some(one) = build_cite(&irs, ix) {
+                        if let Some(one) = flatten_affix_cite(&irs, ix) {
                             group.push(one);
                             if !is_last && !suppress_delimiter(&irs, ix) {
                                 group.push(fmt.plain(if force_single {
@@ -1412,10 +1416,10 @@ pub fn built_cluster_before_output(
                             delim = group_delim;
                         }
                         let mut g = vec![];
-                        if let Some(start) = build_cite(&irs, start.ix) {
+                        if let Some(start) = flatten_affix_cite(&irs, start.ix) {
                             g.push(start);
                         }
-                        if let Some(end) = build_cite(&irs, end.ix) {
+                        if let Some(end) = flatten_affix_cite(&irs, end.ix) {
                             g.push(end);
                         }
                         // Delimiters here are never suppressed by build_cite, as they wouldn't be part
@@ -1476,7 +1480,7 @@ pub fn built_cluster_before_output(
                     }
                     rix = advance_to;
                 } else {
-                    if let Some(b) = build_cite(&irs, rix) {
+                    if let Some(b) = flatten_affix_cite(&irs, rix) {
                         group.push(b);
                         if !suppress_delimiter(&irs, ix) {
                             group.push(fmt.plain(if irs[rix].has_locator {
@@ -1500,7 +1504,7 @@ pub fn built_cluster_before_output(
             }
             ix = rix;
         } else {
-            if let Some(built) = build_cite(&irs, ix) {
+            if let Some(built) = flatten_affix_cite(&irs, ix) {
                 built_cites.push(built);
                 if !suppress_delimiter(&irs, ix) {
                     built_cites.push(fmt.plain(layout_delim.as_opt_str().unwrap_or("")));
@@ -1734,7 +1738,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
         // TODO: put Nones in there so they can be updated
         if let Some(mut gen0) = db.bib_item_gen0(key.clone()) {
             // in a bibliography, we do the affixes etc inside Layout, so they're not here
-            let current = IR::first_name_block(gen0.root, &gen0.arena);
+            let current = IR::first_names_block(gen0.root, &gen0.arena);
             let sas = style.bibliography.as_ref().and_then(|bib| {
                 bib.subsequent_author_substitute
                     .as_ref()

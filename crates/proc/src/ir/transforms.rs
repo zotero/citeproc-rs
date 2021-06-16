@@ -1,7 +1,7 @@
 use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
-use citeproc_io::Cite;
+use citeproc_io::{Cite, ClusterMode};
 use std::mem;
 use std::sync::Arc;
 
@@ -139,13 +139,27 @@ impl<O: OutputFormat> IR<O> {
 ////////////////////////////////
 
 impl<O: OutputFormat> IR<O> {
-    pub fn first_name_block(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
+    pub fn leading_names_block_or_title(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
+        match arena.get(node)?.get().0 {
+            IR::Name(_) => Some(node),
+            IR::Rendered(Some(CiteEdgeData::Title(_))) => Some(node),
+            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+                // it must be at the start of the cite
+                node.children(arena)
+                    .nth(0)
+                    .and_then(|child| IR::leading_names_block_or_title(child, arena))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn first_names_block(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
         match arena.get(node)?.get().0 {
             IR::Name(_) => Some(node),
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // assumes it's the first one that appears
                 node.children(arena)
-                    .find_map(|child| IR::first_name_block(child, arena))
+                    .find_map(|child| IR::first_names_block(child, arena))
             }
             _ => None,
         }
@@ -280,7 +294,7 @@ impl<O: OutputFormat> IR<O> {
     }
 
     pub fn suppress_names(node: NodeId, arena: &mut IrArena<O>) {
-        if let Some(fnb) = IR::first_name_block(node, arena) {
+        if let Some(fnb) = IR::first_names_block(node, arena) {
             // TODO: check interaction of this with GroupVars of the parent seq
             fnb.remove_subtree(arena);
         }
@@ -293,6 +307,25 @@ impl<O: OutputFormat> IR<O> {
             return;
         }
         IR::suppress_first_year(node, arena, has_explicit);
+    }
+
+    pub fn suppress_author(node: NodeId, arena: &mut IrArena<O>) -> Option<NodeId> {
+        if let Some(node) = IR::leading_names_block_or_title(node, arena) {
+            // TODO: check interaction of this with GroupVars of the parent seq
+            node.remove_subtree(arena);
+            Some(node)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the new node that should be considered the root.
+    ///
+    /// This strips away any formatting defined on any parent seq nodes, but that is acceptable; if
+    /// a style wishes to have text appear formatted even in an in-text reference, then it should
+    /// define an `<intext>` node.
+    pub fn author_only(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
+        IR::leading_names_block_or_title(node, arena)
     }
 }
 
@@ -507,6 +540,64 @@ impl Unnamed3<Markup> {
     }
 }
 
+pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
+    fmt: &Markup,
+    mode: ClusterMode,
+    cites: &mut Vec<Unnamed3<O>>,
+) {
+    match mode {
+        ClusterMode::AuthorOnly => {
+            for Unnamed3 { ref mut gen4, .. } in cites.iter_mut()
+            {
+                if let Some(new_root) = IR::author_only(gen4.root, &gen4.arena) {
+                    let gen4 = Arc::make_mut(gen4);
+                    gen4.root = new_root;
+                }
+            }
+        }
+        ClusterMode::SuppressAuthor { suppress_max: max } => {
+            let suppress_it = |cite: &mut Unnamed3<O>| {
+                let gen4 = Arc::make_mut(&mut cite.gen4);
+                let _discard = IR::suppress_author(gen4.root, &mut gen4.arena);
+            };
+
+            let mut take = if max > 0 {
+                max as usize
+            } else {
+                core::usize::MAX
+            };
+            cites.iter_mut().take(take).for_each(suppress_it);
+        }
+        ClusterMode::Composite { infix } => {
+            for Unnamed3 {
+                gen4,
+                ..
+            } in cites.iter_mut()
+            {
+                let hmm = todo!(
+                    "this ain't gonna cut it; 
+                need the whole splitting and re-joining logic from bibliography first fields."
+                );
+                let gen4 = Arc::make_mut(gen4);
+                if let Some(removed) = IR::suppress_author(gen4.root, &mut gen4.arena) {
+                    // i.e. IR::split_first_field + transforms::fix_left_right_layout_affixes
+                    let grup = IrSeq {
+                        delimiter: Some(" ".into()),
+                        formatting: None,
+                        // affixes: None,
+                        ..hmm
+                    };
+                    let top = gen4.arena.new_node((IR::Seq(grup), GroupVars::Important));
+                    top.append(removed, &mut gen4.arena);
+                    top.append(todo!("infix"), &mut gen4.arena);
+                    top.append(gen4.root, &mut gen4.arena);
+                    gen4.root = top;
+                }
+            }
+        }
+    }
+}
+
 pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     fmt: &Markup,
     collapse: Option<Collapse>,
@@ -522,7 +613,7 @@ pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     // First, group cites with the same name
     for ix in 0..cites.len() {
         let gen4 = &cites[ix].gen4;
-        let rendered = IR::first_name_block(gen4.root, &gen4.arena)
+        let rendered = IR::first_names_block(gen4.root, &gen4.arena)
             .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt, None))
             .map(|flat| fmt.output(flat, false));
         same_names

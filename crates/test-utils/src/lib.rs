@@ -127,11 +127,11 @@ impl TestCase {
             .expect("could not construct processor")
         };
         let clusters = clusters.map(|vec| {
-            vec.iter()
+            vec.into_iter()
                 .map(|str_cluster| Cluster {
                     id: processor.new_cluster(&str_cluster.id),
-                    cites: str_cluster.cites.clone(),
-                    mode: None,
+                    cites: str_cluster.cites,
+                    mode: str_cluster.mode,
                 })
                 .collect()
         });

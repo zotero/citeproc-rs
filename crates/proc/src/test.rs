@@ -113,6 +113,7 @@ impl MockProcessor {
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
             self.set_cluster_note_number(cluster_id, Some(note_number));
+            self.set_cluster_mode(cluster_id, None);
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
@@ -132,6 +133,7 @@ impl MockProcessor {
             new_cluster_ids.push(cluster_id);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
             self.set_cluster_note_number(cluster_id, None);
+            self.set_cluster_mode(cluster_id, None);
         }
 
         let mut ids = Vec::new();

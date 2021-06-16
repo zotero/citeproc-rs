@@ -103,6 +103,8 @@ pub enum YearSuffixHook {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CiteEdgeData<O: OutputFormat = Markup> {
+    /// Used for [IR::leading_names_block_or_title]
+    Title(O::Build),
     Output(O::Build),
     Locator(O::Build),
     LocatorLabel(O::Build),
@@ -134,6 +136,8 @@ impl<O: OutputFormat> CiteEdgeData<O> {
     pub fn from_ordinary_variable(var: Variable) -> fn(O::Build) -> Self {
         match var {
             Variable::YearSuffix => CiteEdgeData::YearSuffix,
+            Variable::Title => CiteEdgeData::Title,
+            Variable::TitleShort => CiteEdgeData::Title,
             _ => CiteEdgeData::Output,
         }
     }
@@ -298,7 +302,7 @@ impl<O: OutputFormat<Output = SmartString>> IR<O> {
 impl<O: OutputFormat<Output = SmartString>> CiteEdgeData<O> {
     pub(crate) fn to_edge_data(&self, fmt: &O, formatting: Formatting) -> EdgeData {
         match self {
-            CiteEdgeData::Output(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
+            CiteEdgeData::Output(x) | CiteEdgeData::Title(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting, None))
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
@@ -323,6 +327,7 @@ impl<O: OutputFormat<Output = SmartString>> CiteEdgeData<O> {
             | CiteEdgeData::LocatorLabel(x)
             | CiteEdgeData::CitationNumber(x)
             | CiteEdgeData::Accessed(x)
+            | CiteEdgeData::Title(x)
             | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
         }
     }
