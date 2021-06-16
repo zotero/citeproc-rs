@@ -56,6 +56,7 @@ fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
         clusters.push(Cluster {
             id,
             cites: vec![Cite::basic(ref_ids[i - 1])],
+            mode: None,
         });
         order.push(ClusterPosition {
             id,
@@ -83,10 +84,12 @@ mod position {
             Cluster {
                 id: one,
                 cites: vec![Cite::basic("one")],
+                mode: None,
             },
             Cluster {
                 id: two,
                 cites: vec![Cite::basic("one")],
+                mode: None,
             },
         ]);
         db.set_cluster_order(&ordering(one, two)).unwrap();

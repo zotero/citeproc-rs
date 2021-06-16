@@ -22,6 +22,7 @@ extern crate serde_derive;
 extern crate log;
 
 mod cite;
+mod cluster;
 mod csl_json;
 mod date;
 mod names;
@@ -35,11 +36,18 @@ pub mod utils;
 pub use csl_json::NumberLike;
 pub use output::micro_html::micro_html_to_string;
 
+#[doc(inline)]
 pub use self::cite::*;
+#[doc(inline)]
 pub use self::date::*;
+#[doc(inline)]
 pub use self::names::*;
+#[doc(inline)]
 pub use self::numeric::*;
+#[doc(inline)]
 pub use self::reference::*;
+#[doc(inline)]
+pub use self::cluster::*;
 
 use self::output::LocalizedQuotes;
 use csl::TextCase;

@@ -10,7 +10,7 @@ use super::xml::{LocaleDatabase, StyleDatabase};
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Cite, Reference};
+use citeproc_io::{Cite, Reference, ClusterMode};
 use csl::Atom;
 
 use indexmap::set::IndexSet;
@@ -33,6 +33,9 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     #[salsa::input]
     fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
+
+    #[salsa::input]
+    fn cluster_mode(&self, key: ClusterId) -> Option<ClusterMode>;
 
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;

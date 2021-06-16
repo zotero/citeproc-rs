@@ -9,7 +9,7 @@
 use super::processor::Interner;
 use citeproc_db::ClusterId as ClusterIdInternal;
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, SmartString};
+use citeproc_io::{Cite, ClusterMode, SmartString};
 use csl::Atom;
 use fnv::FnvHashMap;
 use std::str::FromStr;
@@ -29,10 +29,16 @@ impl ClusterId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Cluster<O: OutputFormat> {
-    pub id: ClusterId,
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(bound(
+    serialize = "Id: serde::Serialize",
+    deserialize = "Id: serde::Deserialize<'de>"
+))]
+pub struct Cluster<O: OutputFormat = Markup, Id = ClusterId> {
+    pub id: Id,
     pub cites: Vec<Cite<O>>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ClusterMode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,17 +81,12 @@ pub mod string_id {
     use super::{BibEntry, BibliographyUpdate};
     use citeproc_io::{
         output::{markup::Markup, OutputFormat},
-        Cite, SmartString,
+        SmartString,
     };
     use fnv::FnvHashMap;
     use std::sync::Arc;
 
-    #[derive(Deserialize, Debug, Clone, PartialEq)]
-    #[serde(bound(deserialize = ""))]
-    pub struct Cluster<O: OutputFormat> {
-        pub id: SmartString,
-        pub cites: Vec<Cite<O>>,
-    }
+    pub type Cluster<O = Markup> = super::Cluster<O, SmartString>;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub struct ClusterPosition {

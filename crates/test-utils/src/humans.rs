@@ -8,7 +8,7 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
-use citeproc_io::{Cite, CiteMode, Locators, Reference, SmartString};
+use citeproc_io::{Cite, ClusterMode, Locators, Reference, SmartString};
 
 use lazy_static::lazy_static;
 use std::mem;
@@ -28,19 +28,24 @@ where
 #[serde(untagged)]
 pub enum CitationItem {
     Array(Vec<CiteprocJsCite>),
-    Map { cites: Vec<CiteprocJsCite> },
+    Map {
+        cites: Vec<CiteprocJsCite>,
+        #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+        mode: Option<ClusterMode>,
+    },
 }
 
 impl CitationItem {
     pub fn to_note_cluster(self, index: u32) -> ClusterStr<Markup> {
-        let v = match self {
-            CitationItem::Array(v) => v,
-            CitationItem::Map { cites } => cites,
+        let (v, mode) = match self {
+            CitationItem::Array(v) => (v, None),
+            CitationItem::Map { cites, mode } => (cites, mode),
         };
         let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
         ClusterStr {
             id: index.to_string().into(),
             cites,
+            mode,
         }
     }
 }
@@ -66,17 +71,14 @@ pub struct CiteprocJsCite {
 
 impl CiteprocJsCite {
     fn to_cite(&self) -> Cite<Markup> {
+        if self.suppress_author || self.author_only {
+            panic!("suppress-author and author-only are not supported on a Cite")
+        }
         Cite {
             ref_id: csl::Atom::from(self.id.as_str()),
             prefix: self.prefix.as_ref().map(SmartString::from),
             suffix: self.suffix.as_ref().map(SmartString::from),
             locators: self.locators.clone(),
-            mode: match (self.suppress_author, self.author_only) {
-                (false, true) => Some(CiteMode::InText),
-                (true, false) => Some(CiteMode::Rest),
-                (false, false) => None,
-                _ => panic!("multiple citation modes passed to CiteprocJsCite"),
-            },
         }
     }
 }

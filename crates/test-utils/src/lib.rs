@@ -10,8 +10,8 @@ extern crate serde_derive;
 pub use citeproc;
 pub use citeproc_proc;
 
+use citeproc::prelude::string_id::Cluster as ClusterStr;
 use citeproc::prelude::*;
-use citeproc::prelude::string_id::{Cluster as ClusterStr};
 use csl::Lang;
 
 use directories::ProjectDirs;
@@ -68,7 +68,7 @@ pub struct TestCase {
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
-    pub clusters: Option<Vec<Cluster<Markup>>>,
+    pub clusters: Option<Vec<Cluster>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     pub processor: Processor,
 }
@@ -111,7 +111,7 @@ impl TestCase {
         csl: String,
         input: Vec<Reference>,
         result: String,
-        clusters: Option<Vec<ClusterStr<Markup>>>,
+        clusters: Option<Vec<ClusterStr>>,
         process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     ) -> Self {
         let mut processor = {
@@ -126,15 +126,15 @@ impl TestCase {
             })
             .expect("could not construct processor")
         };
-        let clusters = clusters
-            .map(|vec| {
-                vec.iter()
-                    .map(|str_cluster| Cluster {
-                        id: processor.new_cluster(&str_cluster.id),
-                        cites: str_cluster.cites.clone()
-                    })
-                    .collect()
-            });
+        let clusters = clusters.map(|vec| {
+            vec.iter()
+                .map(|str_cluster| Cluster {
+                    id: processor.new_cluster(&str_cluster.id),
+                    cites: str_cluster.cites.clone(),
+                    mode: None,
+                })
+                .collect()
+        });
         processor.reset_references(input.clone());
         Warmup::maximum().execute(&mut processor);
         TestCase {
@@ -178,7 +178,11 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&*refr.id));
                 }
-                clusters_auto.push(Cluster { id: self.processor.random_cluster_id(), cites });
+                clusters_auto.push(Cluster {
+                    id: self.processor.random_cluster_id(),
+                    cites,
+                    mode: None,
+                });
                 &clusters_auto
             };
 

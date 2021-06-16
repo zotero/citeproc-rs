@@ -9,39 +9,6 @@ use crate::NumberLike;
 use csl::Atom;
 use csl::LocatorType;
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
-pub enum Suppression {
-    InText,
-    // For the rest.
-    //
-    // E.g. the cite with the author suppressed, or a case without party names.
-    Rest,
-}
-
-/// [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum CiteMode {
-    /// AKA `author-only`
-    ///
-    /// For author-in-text, or whatever the style author wants to put inline.
-    ///
-    /// E.g. the author, or party names for a legal case.
-    #[serde(alias = "author-only")]
-    InText,
-    /// AKA `suppress-author`
-    ///
-    /// For the rest.
-    ///
-    /// E.g. the cite with the author suppressed, or a legal case without party names.
-    #[serde(alias = "suppress-author")]
-    Rest,
-    /// Render `InText` + infix + `Rest`. Infix is given leading spaces automatically, if there is
-    /// no leading punctuation (`'s Magic Castle` does not attract a leading space). The default
-    /// for Infix is a single space.
-    Composite { infix: Option<String> },
-}
-
 #[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
 pub struct Locator {
     pub locator: NumberLike,
@@ -83,9 +50,6 @@ pub struct Cite<O: OutputFormat> {
 
     #[serde(default)]
     pub suffix: Option<O::Input>,
-
-    #[serde(default)]
-    pub mode: Option<CiteMode>,
 
     // TODO: Enforce len() == 1 in CSL mode
     #[serde(default, flatten, deserialize_with = "get_locators")]
@@ -141,7 +105,6 @@ impl<O: OutputFormat> PartialEq for Cite<O> {
         self.ref_id == other.ref_id
             && self.prefix == other.prefix
             && self.suffix == other.suffix
-            && self.mode == other.mode
             && self.locators == other.locators
     }
 }
@@ -152,7 +115,6 @@ impl<O: OutputFormat> Hash for Cite<O> {
         self.ref_id.hash(h);
         self.prefix.hash(h);
         self.suffix.hash(h);
-        self.mode.hash(h);
         self.locators.hash(h);
     }
 }
@@ -163,7 +125,6 @@ impl<O: OutputFormat> Cite<O> {
             ref_id: ref_id.into(),
             prefix: Default::default(),
             suffix: Default::default(),
-            mode: None,
             locators: None,
         }
     }

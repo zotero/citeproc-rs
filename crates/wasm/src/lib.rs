@@ -206,9 +206,9 @@ impl Driver {
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(&self, cluster: JsValue) -> EmptyResult {
         typescript_serde_result(|| {
-            let cluster: string_id::Cluster<Markup> = cluster.into_serde()?;
+            let cluster: string_id::Cluster = cluster.into_serde()?;
             let mut eng = self.engine.borrow_mut();
-            eng.insert_cites_str(&cluster.id, &cluster.cites);
+            eng.insert_cluster_str(cluster);
             Ok(())
         })
     }
