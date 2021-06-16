@@ -17,24 +17,24 @@ mod test;
 
 pub use self::api::*;
 
-pub use self::processor::{Processor, InitOptions};
+pub use self::processor::{InitOptions, Processor};
 
 pub mod prelude {
     pub use crate::api::*;
-    pub use crate::processor::{Processor, InitOptions};
+    pub use crate::processor::{InitOptions, Processor};
     pub use citeproc_db::{
-        CiteDatabase, CiteId, LocaleDatabase, LocaleFetchError, LocaleFetcher, StyleDatabase,
-        IntraNote, ClusterNumber
+        CiteDatabase, CiteId, ClusterNumber, IntraNote, LocaleDatabase, LocaleFetchError,
+        LocaleFetcher, StyleDatabase,
     };
     pub use citeproc_io::output::{markup::Markup, OutputFormat};
-    pub use citeproc_io::{ Cite, Reference, SmartString, };
+    pub use citeproc_io::{Cite, Reference, SmartString};
     pub use citeproc_proc::db::{ImplementationDetails, IrDatabase};
     pub use csl::Atom;
 }
 
 pub fn random_cluster_id() -> citeproc_io::SmartString {
-    use rand::{thread_rng, Rng};
     use rand::distributions::Alphanumeric;
+    use rand::{thread_rng, Rng};
     let prefix = "cluster-";
     let mut string = citeproc_io::SmartString::from(prefix);
     thread_rng()

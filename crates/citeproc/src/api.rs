@@ -7,13 +7,13 @@
 #![allow(dead_code)]
 
 use super::processor::Interner;
-use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{SmartString, Cite};
 use citeproc_db::ClusterId as ClusterIdInternal;
-use std::str::FromStr;
-use std::sync::Arc;
+use citeproc_io::output::{markup::Markup, OutputFormat};
+use citeproc_io::{Cite, SmartString};
 use csl::Atom;
 use fnv::FnvHashMap;
+use std::str::FromStr;
+use std::sync::Arc;
 
 /// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
 /// identifier, but `citeproc_db` is not responsible for interning those ids.
@@ -72,10 +72,13 @@ impl ReorderingError {
 pub mod string_id {
     //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
     //! consumers.
-    use citeproc_io::{SmartString, output::{OutputFormat, markup::Markup}, Cite};
-    use std::sync::Arc;
-    use super::{BibliographyUpdate, BibEntry};
+    use super::{BibEntry, BibliographyUpdate};
+    use citeproc_io::{
+        output::{markup::Markup, OutputFormat},
+        Cite, SmartString,
+    };
     use fnv::FnvHashMap;
+    use std::sync::Arc;
 
     #[derive(Deserialize, Debug, Clone, PartialEq)]
     #[serde(bound(deserialize = ""))]
@@ -114,7 +117,6 @@ pub mod string_id {
         #[error("non-existent cluster id {0:?}")]
         NonExistentCluster(SmartString),
     }
-
 }
 
 #[derive(Clone, Serialize)]
@@ -252,4 +254,3 @@ pub enum PreviewPosition<'a> {
     MarkWithZero(&'a [ClusterPosition]),
     MarkWithZeroStr(&'a [string_id::ClusterPosition]),
 }
-
