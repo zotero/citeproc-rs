@@ -233,13 +233,26 @@ impl InvalidCsl {
         }
     }
 
-    pub fn unknown_element(node: &Node) -> Self {
-        let tag = node.tag_name().name();
-        let range = node.range();
+    pub fn unknown_element(parent: &Node, child: &Node) -> Self {
+        fn blacklist_lookup(parent_tag: &str, child_tag: &str) -> Option<&'static str> {
+            match (parent_tag, child_tag) {
+                ("style", "intext") => Some("requires <feature name=\"intext\"/> to be enabled"),
+                _ => None,
+            }
+        }
+
+        let child_tag = child.tag_name().name();
+        let parent_tag = parent.tag_name().name();
+        let range = child.range();
         InvalidCsl {
             range,
-            message: format!("Unknown element <{}>", tag),
-            hint: "".to_string(),
+            message: format!(
+                "Unknown element <{}> as child of <{}>",
+                child_tag, parent_tag
+            ),
+            hint: blacklist_lookup(parent_tag, child_tag)
+                .unwrap_or("")
+                .to_string(),
             severity: Severity::Error,
         }
     }

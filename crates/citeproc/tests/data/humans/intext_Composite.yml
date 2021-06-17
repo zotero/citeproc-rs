@@ -1,5 +1,4 @@
 mode: citation
-# the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
 result: |
   Smith whose paper title=Jellybeans
 input:
@@ -22,6 +21,9 @@ clusters:
 csl: |
   <style class="in-text" version="1.0.1">
     <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
     <citation>
       <layout delimiter="; ">
         <group delimiter=", ">
@@ -30,7 +32,4 @@ csl: |
         </group>
       </layout>
     </citation>
-    <intext>
-      <names variable="author" suffix=" (using intext element)" />
-    </intext>
   </style>

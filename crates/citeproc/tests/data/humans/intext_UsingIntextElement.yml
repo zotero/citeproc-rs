@@ -28,6 +28,9 @@ clusters:
 csl: |
   <style class="in-text" version="1.0.1">
     <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
     <citation>
       <layout delimiter="; ">
         <group delimiter=", ">
@@ -37,6 +40,8 @@ csl: |
       </layout>
     </citation>
     <intext>
-      <names variable="author" suffix=" (using intext element)" />
+      <layout>
+        <names variable="author" suffix=" (using intext element)" />
+      </layout>
     </intext>
   </style>

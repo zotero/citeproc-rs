@@ -1154,7 +1154,7 @@ impl FromNode for Names {
         let mut with = None;
         let mut institution = None;
         let mut substitute = None;
-        for child in node.children().filter(|node| node.is_element()) {
+        for child in node.children().filter(|child| child.is_element()) {
             let tag_name = child.tag_name().name();
             match tag_name {
                 "name" => write_slot_once(&child, info, &mut name)?,
@@ -1169,7 +1169,7 @@ impl FromNode for Names {
                 "with" => write_slot_once(&child, info, &mut with)?,
                 "substitute" => write_slot_once(&child, info, &mut substitute)?,
                 _ => {
-                    return Err(InvalidCsl::unknown_element(&child).into());
+                    return Err(InvalidCsl::unknown_element(node, &child).into());
                 }
             }
         }
@@ -1511,6 +1511,12 @@ impl FromNode for Features {
 //     };
 // }
 
+fn whitelist_child_nodes(node: &Node, whitelist: &[&str], errors: &mut Vec<InvalidCsl>) {
+    node.children()
+        .filter(|x| x.is_element() && !whitelist.contains(&x.tag_name().name()))
+        .for_each(|unspec_node| errors.push(InvalidCsl::unknown_element(node, &unspec_node)))
+}
+
 impl Style {
     fn from_node_custom(
         node: &Node,
@@ -1519,6 +1525,17 @@ impl Style {
     ) -> FromNodeResult<Self> {
         let version_req = CslVersionReq::from_node(node, default_info)?;
         let mut errors: Vec<InvalidCsl> = Vec::new();
+
+        let whitelist_intext: &[&str] = &[
+            "macro",        // 1
+            "info",         // 2
+            "features",     // 3
+            "citation",     // 4
+            "bibliography", // 5
+            "locale",       // 6
+            "intext",       // 7
+        ];
+        let whitelist: &[&str] = &whitelist_intext[..6];
 
         // Parse features first so we know how to interpret the rest.
         let features = max_one_child::<Features>(node, default_info, &mut errors)
@@ -1531,6 +1548,16 @@ impl Style {
                     .clone()
                     .unwrap_or_else(Default::default)
             });
+
+        whitelist_child_nodes(
+            node,
+            if features.custom_intext {
+                whitelist_intext
+            } else {
+                whitelist
+            },
+            &mut errors,
+        );
 
         // We will check again later (for MacroMap) if there are macros without names.
         let mut throwaway = Vec::new();
@@ -1550,7 +1577,7 @@ impl Style {
 
         let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
         let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
-        let intext = if parse_info.features.intext {
+        let intext = if parse_info.features.custom_intext {
             max_one_child::<InText>(node, &parse_info, &mut errors)
         } else {
             Ok(None)

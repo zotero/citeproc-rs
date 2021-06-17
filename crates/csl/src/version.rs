@@ -240,7 +240,7 @@ declare_features!(
     ///
     /// - <https://github.com/zotero/zotero/issues/1580>
     /// - <https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms>
-    (active, intext, "1.1", None, None),
+    (active, custom_intext, "1.1", None, None),
     /// includes cs:conditions, match="nand"
     (active, conditions, "1.0.1", None, None),
     /// includes condition matchers `has-day="issued [date vars...]"`/`has-year-only="issued"`/`has-month-or-season="issued"`

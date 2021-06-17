@@ -95,7 +95,7 @@ Style {
         issnl: None,
     },
     features: Features {
-        "intext",
+        "custom_intext",
     },
     name_inheritance: Name {
         and: None,

@@ -33,7 +33,7 @@ fn features() {
 #[test]
 fn intext() {
     let features = Features {
-        intext: true,
+        custom_intext: true,
         ..Default::default()
     };
     let options = ParseOptions {
@@ -53,8 +53,7 @@ fn intext() {
         </style>"#,
         options.clone()
     );
-    // without the feature enabled, that's fine, but don't parse the intext node
-    assert_snapshot_parse!(
+    assert_snapshot_err!(
         Style,
         r#"<style class="in-text">
              <citation><layout></layout></citation>
