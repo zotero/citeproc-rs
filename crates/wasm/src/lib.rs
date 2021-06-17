@@ -494,12 +494,6 @@ export type Cite<Affix = string> = {
     suppression?: "InText" | "Rest" | null;
 } & Partial<CiteLocator>;
 
-export type ClusterNumber = {
-    note: number | [number, number]
-} | {
-    inText: number
-};
-
 export type Cluster = {
     id: string;
     cites: Cite[];
@@ -520,7 +514,7 @@ export type Reference = {
     [key: string]: any;
 };
 
-export type CslType = "book" | "article" | "legal_case" | "article-journal";
+export type CslType = "book" | "article" | "legal_case" | "article-journal" | string;
 "#;
 
 // Bibliography handling
