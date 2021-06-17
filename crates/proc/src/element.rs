@@ -19,6 +19,23 @@ where
     }
 }
 
+impl<'c, O, I> Proc<'c, O, I> for InText
+where
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    fn intermediate(
+        &self,
+        db: &dyn IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O, I>,
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
+        let layout = &self.layout;
+        sequence(db, state, ctx, arena, &layout.elements, false, None)
+    }
+}
+
 impl<'c, O, I> Proc<'c, O, I> for Bibliography
 where
     O: OutputFormat,

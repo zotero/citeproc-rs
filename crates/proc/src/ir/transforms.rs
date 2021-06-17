@@ -452,6 +452,7 @@ fn range_collapse() {
 
 type MarkupBuild = <Markup as OutputFormat>::Build;
 pub struct Unnamed3<O: OutputFormat> {
+    pub cite_id: CiteId,
     pub cite: Arc<Cite<O>>,
     pub cnum: Option<u32>,
     pub gen4: Arc<IrGen>,
@@ -488,6 +489,7 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let fmt = &Markup::default();
         f.debug_struct("Unnamed3")
+            .field("cite_id", &self.cite_id)
             .field("cite", &self.cite)
             .field("cnum", &self.cnum)
             .field(
@@ -511,7 +513,13 @@ impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
 }
 
 impl Unnamed3<Markup> {
-    pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
+    pub fn new(
+        cite_id: CiteId,
+        cite: Arc<Cite<Markup>>,
+        cnum: Option<u32>,
+        gen4: Arc<IrGen>,
+        fmt: &Markup,
+    ) -> Self {
         let prefix_parsed = cite.prefix.as_opt_str().map(|p| {
             fmt.ingest(
                 p,
@@ -522,6 +530,7 @@ impl Unnamed3<Markup> {
             )
         });
         Unnamed3 {
+            cite_id,
             has_locator: cite.locators.is_some()
                 && IR::find_locator(gen4.root, &gen4.arena).is_some(),
             cite,
@@ -541,15 +550,24 @@ impl Unnamed3<Markup> {
 }
 
 pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
+    db: &dyn IrDatabase,
     fmt: &Markup,
     mode: ClusterMode,
     cites: &mut Vec<Unnamed3<O>>,
 ) {
     match mode {
         ClusterMode::AuthorOnly => {
-            for Unnamed3 { ref mut gen4, .. } in cites.iter_mut()
+            for Unnamed3 {
+                cite_id,
+                ref mut gen4,
+                ..
+            } in cites.iter_mut()
             {
-                if let Some(new_root) = IR::author_only(gen4.root, &gen4.arena) {
+                if let Some(intext) = db.intext(*cite_id) {
+                    // completely replace with the intext arena, no need to copy
+                    // into the old arena in gen4.
+                    *gen4 = intext;
+                } else if let Some(new_root) = IR::author_only(gen4.root, &gen4.arena) {
                     let gen4 = Arc::make_mut(gen4);
                     gen4.root = new_root;
                 }
@@ -569,11 +587,7 @@ pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             cites.iter_mut().take(take).for_each(suppress_it);
         }
         ClusterMode::Composite { infix } => {
-            for Unnamed3 {
-                gen4,
-                ..
-            } in cites.iter_mut()
-            {
+            for Unnamed3 { gen4, .. } in cites.iter_mut() {
                 let hmm = todo!(
                     "this ain't gonna cut it; 
                 need the whole splitting and re-joining logic from bibliography first fields."

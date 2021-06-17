@@ -65,6 +65,9 @@ pub trait IrDatabase:
     fn ir_fully_disambiguated(&self, key: CiteId) -> Arc<IrGen>;
     fn built_cluster(&self, key: ClusterId) -> Arc<MarkupOutput>;
 
+    /// render the `<intext>` element on demand
+    fn intext(&self, key: CiteId) -> Option<Arc<IrGen>>;
+
     fn bib_item_gen0(&self, ref_id: Atom) -> Option<Arc<IrGen>>;
     fn bib_item(&self, ref_id: Atom) -> Arc<MarkupOutput>;
     fn get_bibliography_map(&self) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>>;
@@ -1253,7 +1256,7 @@ pub fn built_cluster_before_output(
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            Unnamed3::new(cite, cnum.map(|x| x.get()), gen4, &fmt)
+            Unnamed3::new(id, cite, cnum.map(|x| x.get()), gen4, &fmt)
         })
         .collect();
 
@@ -1262,7 +1265,7 @@ pub fn built_cluster_before_output(
     }
 
     if let Some(mode) = db.cluster_mode(cluster_id) {
-        transforms::apply_cluster_mode(&fmt, mode, &mut irs);
+        transforms::apply_cluster_mode(db, &fmt, mode, &mut irs);
     }
 
     // Cite capitalization
@@ -2036,4 +2039,21 @@ fn cite_position(db: &dyn IrDatabase, key: CiteId) -> (Position, Option<u32>) {
         // Assume this cite is a ghost cite.
         (Position::Subsequent, None)
     }
+}
+
+fn intext(db: &dyn IrDatabase, id: CiteId) -> Option<Arc<IrGen>> {
+    let style = db.style();
+    style.intext.as_ref().map(|intext| {
+        let style;
+        let locale;
+        let cite;
+        let refr;
+        let ctx;
+        preamble!(style, locale, cite, refr, ctx, db, id, None);
+        let mut state = IrState::new();
+        let mut arena = IrArena::new();
+        let root = intext.intermediate(db, &mut state, &ctx, &mut arena);
+        let irgen = IrGen::new(root, arena, state);
+        Arc::new(irgen)
+    })
 }
