@@ -1811,8 +1811,9 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                 .map_or(false, |d| d <= near_note_distance)
         };
         let in_text = match cluster.number {
-            ClusterNumber::InText(n) => Some(n),
-            _ => None,
+            ClusterNumber::InText(n) => true,
+            ClusterNumber::OutsideFlow => true,
+            _ => false,
         };
         for (j, &cite_id) in cluster.cites.iter().enumerate() {
             let cite = cite_id.lookup(db);
@@ -1829,7 +1830,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                 // other in the document.
                 PrevCluster(Arc<Cite<Markup>>, Option<u32>),
             }
-            let matching_prev = prev_cite
+            let matching_prev: Option<Position> = prev_cite
                 .and_then(|p| {
                     if p.ref_id == cite.ref_id {
                         Some(Where::SameCluster(p))
@@ -1839,6 +1840,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                 })
                 .or_else(|| {
                     if let Some(prev_cluster) = match cluster.number {
+                        ClusterNumber::OutsideFlow => None,
                         ClusterNumber::InText(_) => prev_in_text,
                         ClusterNumber::Note(_) => prev_note,
                     } {
@@ -1846,7 +1848,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                             ClusterNumber::Note(intra) => Some(intra.note_number()),
                             _ => None,
                         };
-                        let cites_all_same = if prev_in_group && in_text.is_none() {
+                        let cites_all_same = if prev_in_group && !in_text {
                             // { id: 1, note: 4, cites: [A] },
                             // { id: 2, note: 4, cites: [B] },
                             // { id: 3: note: 5, cites: [B] } => subsequent
@@ -1899,8 +1901,10 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                         Where::SameCluster(prev) | Where::PrevCluster(prev, _) => prev,
                     };
                     match (prev.locators.as_ref(), cite.locators.as_ref(), near) {
+                        // no locators
                         (None, None, false) => Position::Ibid,
                         (None, None, true) => Position::IbidNear,
+                        // prev no locator, cur has locator
                         (None, Some(_cur), false) => Position::IbidWithLocator,
                         (None, Some(_cur), true) => Position::IbidWithLocatorNear,
                         // Despite "position can only be subsequent", we get
@@ -1912,6 +1916,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                                 Position::FarNote
                             }
                         }
+                        // both have locator, but it's the same locator
                         (Some(pre), Some(cur), x) if pre == cur => {
                             if x {
                                 Position::IbidNear
@@ -1931,22 +1936,35 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
             let seen = first_seen.get(&cite.ref_id).cloned();
             match seen {
                 Some(ClusterNumber::Note(first_note_number)) => {
-                    let first_number = ClusterNumber::Note(first_note_number);
-                    assert!(
-                        cluster.number >= first_number,
-                        "note numbers not monotonic: {:?} came after but was less than {:?}",
-                        cluster.number,
-                        first_note_number,
-                    );
-                    let unsigned = first_note_number.note_number();
-                    if let Some(pos) = matching_prev {
-                        map.insert(cite_id, (pos, Some(unsigned)));
-                    } else if cluster.number == first_number || is_near(unsigned) {
-                        // XXX: not sure about this one
-                        // unimplemented!("cite position for same number, but different cluster");
-                        map.insert(cite_id, (Position::NearNote, Some(unsigned)));
-                    } else {
-                        map.insert(cite_id, (Position::FarNote, Some(unsigned)));
+                    match cluster.number {
+                        ClusterNumber::Note(this_intranote) => {
+                            debug_assert!(
+                                // the PartialOrd impl sometimes returns None => false
+                                // so !
+                                !(this_intranote < first_note_number),
+                                "note numbers not monotonic: {:?} came after but was less than {:?}",
+                                cluster.number,
+                                first_note_number,
+                            );
+                            let unsigned = first_note_number.note_number();
+                            if let Some(pos) = matching_prev {
+                                map.insert(cite_id, (pos, Some(unsigned)));
+                            } else if this_intranote == first_note_number || is_near(unsigned) {
+                                // XXX: not sure about this one
+                                // unimplemented!("cite position for same number, but different cluster");
+                                map.insert(cite_id, (Position::NearNote, Some(unsigned)));
+                            } else {
+                                map.insert(cite_id, (Position::FarNote, Some(unsigned)));
+                            }
+                        }
+                        ClusterNumber::InText(this_intext) => {
+                            log::warn!("InText should not be sorted after a Note");
+                            // this won't happen; InText is sorted before Note. Nevertheless:
+                            map.insert(cite_id, (Position::First, None));
+                        }
+                        ClusterNumber::OutsideFlow => {
+                            map.insert(cite_id, (Position::First, None));
+                        }
                     }
                 }
                 Some(ClusterNumber::InText(seen_in_text_num)) => {
@@ -1969,32 +1987,42 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                             };
                             map.insert(cite_id, (pos, None));
                         }
+                        ClusterNumber::OutsideFlow => {
+                            map.insert(cite_id, (Position::First, None));
+                        }
                     }
                 }
-                None => {
+                Some(ClusterNumber::OutsideFlow) | None => {
+                    match cluster.number {
+                        ClusterNumber::Note(_) | ClusterNumber::InText(_) => {
+                            first_seen.insert(cite.ref_id.clone(), cluster.number);
+                        }
+                        ClusterNumber::OutsideFlow => {}
+                    }
                     map.insert(cite_id, (Position::First, None));
-                    first_seen.insert(cite.ref_id.clone(), cluster.number);
                 }
             }
         }
 
-        if let ClusterNumber::Note(n) = cluster.number {
-            let n = n.note_number();
-            if last_note_num != Some(n) {
-                last_note_num = Some(n);
-                clusters_in_last_note.clear();
+        match cluster.number {
+            ClusterNumber::Note(n) => {
+                let n = n.note_number();
+                if last_note_num != Some(n) {
+                    last_note_num = Some(n);
+                    clusters_in_last_note.clear();
+                }
+                clusters_in_last_note.push(cluster.id);
             }
-            clusters_in_last_note.push(cluster.id);
+            ClusterNumber::InText(_) => {}
+            ClusterNumber::OutsideFlow => {}
         }
-        prev_in_text = if let ClusterNumber::InText(_i) = cluster.number {
-            Some(cluster)
-        } else {
-            None
+        prev_in_text = match cluster.number {
+            ClusterNumber::InText(_) => Some(cluster),
+            _ => None,
         };
-        prev_note = if let ClusterNumber::Note(_i) = cluster.number {
-            Some(cluster)
-        } else {
-            None
+        prev_note = match cluster.number {
+            ClusterNumber::Note(_) => Some(cluster),
+            _ => None,
         };
     }
 

@@ -827,12 +827,12 @@ impl Processor {
         {
             return Err(ReorderingError::DidNotSupplyZeroPosition);
         }
-        let mut vec = Vec::new();
+        let mut old_positions = Vec::new();
         // Save state first so we don't clobber its cluster_ids store
         let mut state = self.save_cluster_state(None);
-        self.set_cluster_order_inner(positions.iter(), |id, num| vec.push((id, num)))?;
-        vec.push((self.preview_cluster_id, None));
-        state.old_positions = Some(vec);
+        self.set_cluster_order_inner(positions.iter(), |id, num| old_positions.push((id, num)))?;
+        old_positions.push((self.preview_cluster_id, None));
+        state.old_positions = Some(old_positions);
         Ok((self.preview_cluster_id, state))
     }
 }
