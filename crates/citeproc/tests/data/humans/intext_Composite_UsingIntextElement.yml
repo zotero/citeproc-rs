@@ -1,0 +1,36 @@
+mode: citation
+# the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
+result: |
+  Smith (using intext element) whose paper title=Jellybeans
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: "ITEM-2"
+    title: "Scavengers"
+    author:
+      - { family: "Jones" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "composite"
+    infix: " whose paper "
+    cites:
+      - id: ITEM-1
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="author" />
+          <text variable="title" prefix="title=" />
+        </group>
+      </layout>
+    </citation>
+    <intext>
+      <names variable="author" suffix=" (using intext element)" />
+    </intext>
+  </style>
