@@ -312,7 +312,7 @@ impl<O: OutputFormat> IR<O> {
     pub fn suppress_author(node: NodeId, arena: &mut IrArena<O>) -> Option<NodeId> {
         if let Some(node) = IR::leading_names_block_or_title(node, arena) {
             // TODO: check interaction of this with GroupVars of the parent seq
-            node.remove_subtree(arena);
+            node.detach(arena);
             Some(node)
         } else {
             None
@@ -549,6 +549,39 @@ impl Unnamed3<Markup> {
     }
 }
 
+use indextree::Arena;
+fn arena_copy_node<T: Clone>(
+    src_node: NodeId,
+    src_arena: &Arena<T>,
+    dst_arena: &mut Arena<T>,
+) -> Option<NodeId> {
+    let node = src_arena.get(src_node)?;
+    let new_node = dst_arena.new_node(node.get().clone());
+    Some(new_node)
+}
+fn arena_copy_children<T: Clone>(
+    src_node: NodeId,
+    src_arena: &Arena<T>,
+    dst_node: NodeId,
+    dst_arena: &mut Arena<T>,
+) {
+    for src_child in src_node.children(src_arena) {
+        let dst_child = arena_copy_node(src_child, src_arena, dst_arena)
+            .expect("children are always valid node ids");
+        dst_node.append(dst_child, dst_arena);
+        arena_copy_children(src_child, src_arena, dst_child, dst_arena);
+    }
+}
+fn arena_copy_tree<T: Clone>(
+    src_root: NodeId,
+    src_arena: &Arena<T>,
+    dst_arena: &mut Arena<T>,
+) -> Option<NodeId> {
+    let dst_root = arena_copy_node(src_root, src_arena, dst_arena)?;
+    arena_copy_children(src_root, src_arena, dst_root, dst_arena);
+    Some(dst_root)
+}
+
 pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     fmt: &Markup,
@@ -589,25 +622,49 @@ pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             cites.iter_mut().take(take).for_each(suppress_it);
         }
         ClusterMode::Composite { infix } => {
-            for Unnamed3 { gen4, .. } in cites.iter_mut() {
-                let hmm = todo!(
-                    "this ain't gonna cut it; 
-                need the whole splitting and re-joining logic from bibliography first fields."
-                );
+            for Unnamed3 { cite_id, gen4, .. } in cites.iter_mut() {
                 let gen4 = Arc::make_mut(gen4);
-                if let Some(removed) = IR::suppress_author(gen4.root, &mut gen4.arena) {
-                    // i.e. IR::split_first_field + transforms::fix_left_right_layout_affixes
-                    let grup = IrSeq {
-                        delimiter: Some(" ".into()),
-                        formatting: None,
-                        // affixes: None,
-                        ..hmm
+                if let Some(removed_node) = IR::suppress_author(gen4.root, &mut gen4.arena) {
+                    let author_only = if let Some(intext) = db.intext(*cite_id) {
+                        removed_node.remove_subtree(&mut gen4.arena);
+                        arena_copy_tree(intext.root, &intext.arena, &mut gen4.arena)
+                            .expect("invalid node id for arena_copy_tree")
+                    } else {
+                        removed_node
                     };
-                    let top = gen4.arena.new_node((IR::Seq(grup), GroupVars::Important));
-                    top.append(removed, &mut gen4.arena);
-                    top.append(todo!("infix"), &mut gen4.arena);
-                    top.append(gen4.root, &mut gen4.arena);
-                    gen4.root = top;
+                    let infix = {
+                        let mut infix: SmartString = infix.as_opt_str().unwrap_or(" ").into();
+                        if !infix.ends_with(" ") {
+                            infix.push(' ');
+                        }
+                        let is_punc =
+                            |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
+                        if !infix
+                            .chars()
+                            .nth(0)
+                            .map_or(true, |x| x == ' ' || is_punc(x))
+                        {
+                            infix.insert(0, ' ');
+                        }
+                        fmt.ingest(
+                            &infix,
+                            &IngestOptions {
+                                is_external: true,
+                                ..Default::default()
+                            },
+                        )
+                    };
+                    let infix_node = gen4.arena.new_node((
+                        IR::Rendered(Some(CiteEdgeData::Output(infix))),
+                        GroupVars::Important,
+                    ));
+                    let seq_node = gen4
+                        .arena
+                        .new_node((IR::Seq(IrSeq::default()), GroupVars::Important));
+                    seq_node.append(author_only, &mut gen4.arena);
+                    seq_node.append(infix_node, &mut gen4.arena);
+                    seq_node.append(gen4.root, &mut gen4.arena);
+                    gen4.root = seq_node;
                 }
             }
         }
