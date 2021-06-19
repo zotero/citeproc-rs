@@ -569,6 +569,8 @@ pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                     *gen4 = intext;
                 } else if let Some(new_root) = IR::author_only(gen4.root, &gen4.arena) {
                     let gen4 = Arc::make_mut(gen4);
+                    new_root.detach(&mut gen4.arena);
+                    gen4.root.remove_subtree(&mut gen4.arena);
                     gen4.root = new_root;
                 }
             }

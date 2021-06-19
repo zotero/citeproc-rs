@@ -988,7 +988,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
     let mut arena = IrArena::new();
-    let root = style.intermediate(db, &mut state, &ctx, &mut arena);
+    let root = style.citation.intermediate(db, &mut state, &ctx, &mut arena);
     let irgen = IrGen::new(root, arena, state);
     Arc::new(irgen)
 }
