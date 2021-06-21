@@ -296,7 +296,8 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
                 if found.is_none() {
                     let child_ids: Vec<_> = self.node.children(self.arena).collect();
                     for child in child_ids {
-                        found = self.with_node(child, |mut ch| ch.suppress_first_year(has_explicit));
+                        found =
+                            self.with_node(child, |mut ch| ch.suppress_first_year(has_explicit));
                         if found.is_some() {
                             break;
                         }
@@ -354,6 +355,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
         ClusterMode::AuthorOnly => {
             for CiteInCluster {
                 cite_id,
+                layout_destination,
                 ref mut gen4,
                 ..
             } in cites.iter_mut()
@@ -362,12 +364,14 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                     // completely replace with the intext arena, no need to copy
                     // into the old arena in gen4.
                     *gen4 = intext;
+                    *layout_destination = LayoutDestination::MainToCitation; // default
                 } else if let Some(new_root) = gen4.tree_ref().leading_names_block_or_title() {
                     let gen4 = Arc::make_mut(gen4);
                     let tree = gen4.tree_mut();
                     new_root.detach(&mut tree.arena);
                     tree.root.remove_subtree(&mut tree.arena);
                     tree.root = new_root;
+                    *layout_destination = LayoutDestination::MainToCitation; // default
                 }
             }
         }
@@ -375,6 +379,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             let suppress_it = |cite: &mut CiteInCluster<O>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
+                cite.layout_destination = LayoutDestination::MainToIntext;
             };
 
             let take = if max > 0 {
@@ -384,8 +389,14 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             };
             cites.iter_mut().take(take).for_each(suppress_it);
         }
-        ClusterMode::Composite { infix } => {
-            for CiteInCluster { cite_id, gen4, .. } in cites.iter_mut() {
+        ClusterMode::Composite { .. } => {
+            for CiteInCluster {
+                cite_id,
+                gen4,
+                layout_destination,
+                ..
+            } in cites.iter_mut()
+            {
                 let gen4 = Arc::make_mut(gen4);
                 log::debug!("called Composite");
                 if let Some(removed_node) = gen4.tree_mut().suppress_author() {
@@ -403,46 +414,14 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                     } else {
                         removed_node
                     };
-                    let infix = {
-                        let mut infix: SmartString = infix.as_opt_str().unwrap_or(" ").into();
-                        if !infix.ends_with(" ") {
-                            infix.push(' ');
-                        }
-                        let is_punc =
-                            |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
-                        if !infix
-                            .chars()
-                            .nth(0)
-                            .map_or(true, |x| x == ' ' || is_punc(x))
-                        {
-                            infix.insert(0, ' ');
-                        }
-                        fmt.ingest(
-                            &infix,
-                            &IngestOptions {
-                                is_external: true,
-                                ..Default::default()
-                            },
-                        )
-                    };
-                    let tree = gen4.tree_mut();
-                    let infix_node = tree.arena.new_node((
-                        IR::Rendered(Some(CiteEdgeData::Output(infix))),
-                        GroupVars::Important,
-                    ));
-                    let seq_node = tree
-                        .arena
-                        .new_node((IR::Seq(IrSeq::default()), GroupVars::Important));
-                    seq_node.append(author_only, &mut tree.arena);
-                    seq_node.append(infix_node, &mut tree.arena);
-                    seq_node.append(tree.root, &mut tree.arena);
-                    tree.root = seq_node;
+                    *layout_destination = LayoutDestination::MainToCitationPlusIntext(author_only);
                 }
             }
         }
     }
 }
 
+use crate::cluster::LayoutDestination;
 use crate::disamb::names::DisambNameRatchet;
 use citeproc_io::PersonName;
 use csl::SubsequentAuthorSubstituteRule as SasRule;
@@ -956,10 +935,9 @@ fn test_left_right_layout() {
         },
     );
 
-    let mut irgen = IrGen::new(layout, arena, IrState::new());
-    dbg!(&irgen);
+    let mut tree = dbg!(IrTree::new(layout, arena));
 
-    let found = find_left_right_layout(layout, &mut irgen.arena);
+    let found = find_left_right_layout(tree.root, &mut tree.arena);
     assert_eq!(
         found,
         Some(LeftRightLayout {
@@ -969,14 +947,14 @@ fn test_left_right_layout() {
         })
     );
 
-    let blob = irgen
+    let blob = tree
         .arena
         .blob(CiteEdgeData::Output(fmt.plain("blob")), GroupVars::Plain);
-    right.insert_before(blob, &mut irgen.arena);
+    right.insert_before(blob, &mut tree.arena);
 
-    dbg!(&irgen);
+    dbg!(&tree);
 
-    let found = find_left_right_layout(layout, &mut irgen.arena);
+    let found = find_left_right_layout(tree.root, &mut tree.arena);
     assert_eq!(
         found,
         Some(LeftRightLayout {
@@ -986,9 +964,9 @@ fn test_left_right_layout() {
         })
     );
 
-    fix_left_right_layout_affixes(layout, &mut irgen.arena);
+    fix_left_right_layout_affixes(layout, &mut tree.arena);
 
-    let flat = IR::flatten(layout, &irgen.arena, &fmt, None).unwrap();
+    let flat = tree.tree_ref().flatten(&fmt, None).unwrap();
     let s = fmt.output(flat, false);
     assert_eq!(
         &s,

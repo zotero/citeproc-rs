@@ -138,3 +138,419 @@ pub fn plain_text_element(v: Variable) -> TextElement {
         display: None,
     }
 }
+
+/// Unstable `#[feature(slice_group_by)]`: <https://github.com/rust-lang/rust/issues/80552>
+///
+/// Used under the MIT license from the implementation PR by Kerollmops
+pub(crate) mod slice_group_by {
+    use core::fmt;
+    use core::iter::FusedIterator;
+    use core::mem;
+
+    /// An iterator over slice in (non-overlapping) chunks separated by a predicate.
+    ///
+    /// This struct is created by the [`group_by`] method on [slices].
+    ///
+    /// [`group_by`]: ../../std/primitive.slice.html#method.group_by
+    /// [slices]: ../../std/primitive.slice.html
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    pub struct GroupBy<'a, T: 'a, P> {
+        slice: &'a [T],
+        predicate: P,
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> GroupBy<'a, T, P> {
+        pub(super) fn new(slice: &'a [T], predicate: P) -> Self {
+            GroupBy { slice, predicate }
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> Iterator for GroupBy<'a, T, P>
+    where
+        P: FnMut(&T, &T) -> bool,
+    {
+        type Item = &'a [T];
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.slice.is_empty() {
+                None
+            } else {
+                let mut len = 1;
+                let mut iter = self.slice.windows(2);
+                while let Some([l, r]) = iter.next() {
+                    if (self.predicate)(l, r) {
+                        len += 1
+                    } else {
+                        break;
+                    }
+                }
+                let (head, tail) = self.slice.split_at(len);
+                self.slice = tail;
+                Some(head)
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.slice.is_empty() {
+                (0, Some(0))
+            } else {
+                (1, Some(self.slice.len()))
+            }
+        }
+
+        #[inline]
+        fn last(mut self) -> Option<Self::Item> {
+            self.next_back()
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> DoubleEndedIterator for GroupBy<'a, T, P>
+    where
+        P: FnMut(&T, &T) -> bool,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
+            if self.slice.is_empty() {
+                None
+            } else {
+                let mut len = 1;
+                let mut iter = self.slice.windows(2);
+                while let Some([l, r]) = iter.next_back() {
+                    if (self.predicate)(l, r) {
+                        len += 1
+                    } else {
+                        break;
+                    }
+                }
+                let (head, tail) = self.slice.split_at(self.slice.len() - len);
+                self.slice = head;
+                Some(tail)
+            }
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> FusedIterator for GroupBy<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupBy<'a, T, P> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("GroupBy")
+                .field("slice", &self.slice)
+                .finish()
+        }
+    }
+
+    /// An iterator over slice in (non-overlapping) mutable chunks separated
+    /// by a predicate.
+    ///
+    /// This struct is created by the [`group_by_mut`] method on [slices].
+    ///
+    /// [`group_by_mut`]: ../../std/primitive.slice.html#method.group_by_mut
+    /// [slices]: ../../std/primitive.slice.html
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    pub struct GroupByMut<'a, T: 'a, P> {
+        slice: &'a mut [T],
+        predicate: P,
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> GroupByMut<'a, T, P> {
+        pub(super) fn new(slice: &'a mut [T], predicate: P) -> Self {
+            GroupByMut { slice, predicate }
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> Iterator for GroupByMut<'a, T, P>
+    where
+        P: FnMut(&T, &T) -> bool,
+    {
+        type Item = &'a mut [T];
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.slice.is_empty() {
+                None
+            } else {
+                let mut len = 1;
+                let mut iter = self.slice.windows(2);
+                while let Some([l, r]) = iter.next() {
+                    if (self.predicate)(l, r) {
+                        len += 1
+                    } else {
+                        break;
+                    }
+                }
+                let slice = mem::take(&mut self.slice);
+                let (head, tail) = slice.split_at_mut(len);
+                self.slice = tail;
+                Some(head)
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.slice.is_empty() {
+                (0, Some(0))
+            } else {
+                (1, Some(self.slice.len()))
+            }
+        }
+
+        #[inline]
+        fn last(mut self) -> Option<Self::Item> {
+            self.next_back()
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> DoubleEndedIterator for GroupByMut<'a, T, P>
+    where
+        P: FnMut(&T, &T) -> bool,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
+            if self.slice.is_empty() {
+                None
+            } else {
+                let mut len = 1;
+                let mut iter = self.slice.windows(2);
+                while let Some([l, r]) = iter.next_back() {
+                    if (self.predicate)(l, r) {
+                        len += 1
+                    } else {
+                        break;
+                    }
+                }
+                let slice = mem::take(&mut self.slice);
+                let (head, tail) = slice.split_at_mut(slice.len() - len);
+                self.slice = head;
+                Some(tail)
+            }
+        }
+    }
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a, P> FusedIterator for GroupByMut<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupByMut<'a, T, P> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("GroupByMut")
+                .field("slice", &self.slice)
+                .finish()
+        }
+    }
+
+    /// Returns an iterator over the slice producing non-overlapping runs
+    /// of elements using the predicate to separate them.
+    ///
+    /// The predicate is called on two elements following themselves,
+    /// it means the predicate is called on `slice[0]` and `slice[1]`
+    /// then on `slice[1]` and `slice[2]` and so on.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(slice_group_by)]
+    ///
+    /// let slice = &[1, 1, 1, 3, 3, 2, 2, 2];
+    ///
+    /// let mut iter = slice.group_by(|a, b| a == b);
+    ///
+    /// assert_eq!(iter.next(), Some(&[1, 1, 1][..]));
+    /// assert_eq!(iter.next(), Some(&[3, 3][..]));
+    /// assert_eq!(iter.next(), Some(&[2, 2, 2][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    ///
+    /// This method can be used to extract the sorted subslices:
+    ///
+    /// ```
+    /// #![feature(slice_group_by)]
+    ///
+    /// let slice = &[1, 1, 2, 3, 2, 3, 2, 3, 4];
+    ///
+    /// let mut iter = slice.group_by(|a, b| a <= b);
+    ///
+    /// assert_eq!(iter.next(), Some(&[1, 1, 2, 3][..]));
+    /// assert_eq!(iter.next(), Some(&[2, 3][..]));
+    /// assert_eq!(iter.next(), Some(&[2, 3, 4][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    #[inline]
+    pub fn group_by<T, F>(slice: &[T], pred: F) -> GroupBy<'_, T, F>
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        GroupBy::new(slice, pred)
+    }
+
+    /// Returns an iterator over the slice producing non-overlapping mutable
+    /// runs of elements using the predicate to separate them.
+    ///
+    /// The predicate is called on two elements following themselves,
+    /// it means the predicate is called on `slice[0]` and `slice[1]`
+    /// then on `slice[1]` and `slice[2]` and so on.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// #![feature(slice_group_by)]
+    ///
+    /// let slice = &mut [1, 1, 1, 3, 3, 2, 2, 2];
+    ///
+    /// let mut iter = slice.group_by_mut(|a, b| a == b);
+    ///
+    /// assert_eq!(iter.next(), Some(&mut [1, 1, 1][..]));
+    /// assert_eq!(iter.next(), Some(&mut [3, 3][..]));
+    /// assert_eq!(iter.next(), Some(&mut [2, 2, 2][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    ///
+    /// This method can be used to extract the sorted subslices:
+    ///
+    /// ```
+    /// #![feature(slice_group_by)]
+    ///
+    /// let slice = &mut [1, 1, 2, 3, 2, 3, 2, 3, 4];
+    ///
+    /// let mut iter = slice.group_by_mut(|a, b| a <= b);
+    ///
+    /// assert_eq!(iter.next(), Some(&mut [1, 1, 2, 3][..]));
+    /// assert_eq!(iter.next(), Some(&mut [2, 3][..]));
+    /// assert_eq!(iter.next(), Some(&mut [2, 3, 4][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    // #[unstable(feature = "slice_group_by", issue = "80552")]
+    #[inline]
+    pub fn group_by_mut<T, F>(slice: &mut [T], pred: F) -> GroupByMut<'_, T, F>
+    where
+        F: FnMut(&T, &T) -> bool,
+    {
+        GroupByMut::new(slice, pred)
+    }
+}
+
+pub(crate) mod collapse_ranges {
+    use core::iter::FusedIterator;
+
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub enum Segment<T> {
+        RangeInclusive(T, T),
+        Single(T),
+    }
+
+    impl<T> Segment<T> {
+        pub fn as_ref(&self) -> Segment<&T> {
+            match self {
+                Segment::RangeInclusive(a, b) => Segment::RangeInclusive(a, b),
+                Segment::Single(a) => Segment::Single(a),
+            }
+        }
+        pub fn map<R>(self, mut f: impl FnMut(T) -> R) -> Segment<R> {
+            match self {
+                Segment::RangeInclusive(a, b) => Segment::RangeInclusive(f(a), f(b)),
+                Segment::Single(a) => Segment::Single(f(a)),
+            }
+        }
+    }
+
+    impl<T> Segment<T> {
+        fn into_start(mut self) -> T {
+            match self {
+                Segment::Single(start) => start,
+                Segment::RangeInclusive(start, _end) => start,
+            }
+        }
+        fn try_append<F: FnMut(&T, &T) -> bool>(
+            segment: &mut Option<Self>,
+            nxt: T,
+            mut f: F,
+        ) -> Option<Self> {
+            *segment = match segment {
+                Some(Segment::Single(start)) if f(start, &nxt) => {
+                    let start = core::mem::take(segment).unwrap().into_start();
+                    Some(Segment::RangeInclusive(start, nxt))
+                }
+                Some(Segment::RangeInclusive(_, ref mut end)) if f(end, &nxt) => {
+                    *end = nxt;
+                    return None;
+                }
+                _ => return core::mem::replace(segment, Some(Segment::Single(nxt))),
+            };
+            None
+        }
+    }
+
+    pub struct CollapsingIter<I: Iterator, F> {
+        inner: I,
+        precedes_fn: F,
+        segment: Option<Segment<I::Item>>,
+    }
+
+    impl<T, I, F> Iterator for CollapsingIter<I, F>
+    where
+        I: Iterator<Item = T> + FusedIterator,
+        F: FnMut(&T, &T) -> bool,
+    {
+        type Item = Segment<T>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            loop {
+                match (self.inner.next(), self.segment.is_some()) {
+                    (Some(x), true) => {
+                        let emit = Segment::try_append(&mut self.segment, x, &mut self.precedes_fn);
+                        if emit.is_some() {
+                            return emit;
+                        }
+                    }
+                    (Some(x), false) => {
+                        self.segment = Some(Segment::Single(x));
+                    }
+                    (None, true) => return self.segment.take(),
+                    (None, false) => return None,
+                }
+            }
+        }
+    }
+
+    pub fn collapse_ranges<T, I, F>(iter: I, precedes_fn: F) -> CollapsingIter<I, F>
+    where
+        I: Iterator<Item = T> + FusedIterator,
+        F: FnMut(&T, &T) -> bool,
+    {
+        CollapsingIter {
+            inner: iter,
+            precedes_fn,
+            segment: None,
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::{collapse_ranges, Segment};
+
+        #[test]
+        fn testit() {
+            let slice = &[1, 2, 3, 5, 6, 8];
+            let iter = slice.iter().cloned();
+            let done: Vec<_> = collapse_ranges(iter, |&a, &b| a + 1 == b).collect();
+            assert_eq!(
+                done.as_slice(),
+                &[
+                    Segment::RangeInclusive(1, 3),
+                    Segment::RangeInclusive(5, 6),
+                    Segment::Single(8)
+                ][..]
+            );
+        }
+    }
+}
