@@ -5,6 +5,11 @@ use citeproc_db::ClusterId;
 use citeproc_io::{Cite, CiteMode, ClusterMode};
 use csl::Collapse;
 
+use crate::helpers::{
+    collapse_ranges::{collapse_ranges, Segment},
+    slice_group_by::group_by_mut,
+};
+
 use crate::db::IrGen;
 use crate::ir::transforms;
 use crate::prelude::*;
@@ -266,7 +271,7 @@ pub fn built_cluster_before_output(
 
     while ix < irs.len() {
         let CiteInCluster {
-            vanished,
+            trailing_only: vanished,
             collapsed_ranges,
             first_of_name,
             layout_destination,
@@ -545,9 +550,17 @@ pub(crate) enum Partial<T> {
     Filled(T),
 }
 
+use Partial::{Filled, Incomparable};
+
 impl<T> Default for Partial<T> {
     fn default() -> Self {
         Self::Incomparable
+    }
+}
+
+impl<T> From<Option<T>> for Partial<T> {
+    fn from(o: Option<T>) -> Self {
+        o.map_or(Partial::Incomparable, Partial::Filled)
     }
 }
 
@@ -576,6 +589,12 @@ impl<T> Partial<T> {
             Self::Filled(t) => Partial::Filled(t),
         }
     }
+    pub(crate) fn filter(self, enable: bool) -> Partial<T> {
+        match (self, enable) {
+            (Self::Filled(t), true) => Partial::Filled(t),
+            _ => Partial::Incomparable,
+        }
+    }
 }
 
 impl<T> PartialEq for Partial<T>
@@ -593,7 +612,7 @@ where
 pub(crate) struct CiteInCluster<O: OutputFormat> {
     pub cite_id: CiteId,
     pub cite: Arc<Cite<O>>,
-    pub cnum: Option<u32>,
+    pub cnum: Partial<u32>,
     pub gen4: Arc<IrGen>,
     pub layout_destination: LayoutDestination,
     /// So we can look for punctuation at the end and use the format's quoting abilities
@@ -628,7 +647,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     pub collapsed_ranges: Vec<RangePiece>,
 
     /// Tagging removed cites is cheaper than memmoving the rest of the Vec
-    pub vanished: bool,
+    pub trailing_only: bool,
 
     pub has_locator: bool,
 }
@@ -662,7 +681,7 @@ impl<O: OutputFormat<Output = SmartString>> Debug for CiteInCluster<O> {
             .field("year_suffix", &self.year_suffix)
             .field("collapsed_year_suffixes", &self.collapsed_year_suffixes)
             .field("collapsed_ranges", &self.collapsed_ranges)
-            .field("vanished", &self.vanished)
+            .field("vanished", &self.trailing_only)
             .field("gen4_full", &self.gen4)
             .finish()
     }
@@ -692,7 +711,7 @@ impl CiteInCluster<Markup> {
             gen4,
             layout_destination: LayoutDestination::default(),
             prefix_parsed,
-            cnum,
+            cnum: Partial::from(cnum),
             first_of_name: false,
             subsequent_same_name: false,
             unique_name_number: Partial::Incomparable,
@@ -703,7 +722,7 @@ impl CiteInCluster<Markup> {
             year_suffix: Partial::Incomparable,
             collapsed_year_suffixes: Vec::new(),
             collapsed_ranges: Vec::new(),
-            vanished: false,
+            trailing_only: false,
         }
     }
 }
@@ -780,7 +799,7 @@ fn range_append() {
     );
 }
 
-pub fn collapse_ranges(nums: &[Collapsible]) -> Vec<RangePiece> {
+pub fn collapse_collapsible_ranges(nums: &[Collapsible]) -> Vec<RangePiece> {
     let mut pieces = Vec::new();
     if let Some(init) = nums.first() {
         let mut wip = RangePiece::Single(*init);
@@ -798,11 +817,11 @@ pub fn collapse_ranges(nums: &[Collapsible]) -> Vec<RangePiece> {
 fn range_collapse() {
     let s = |cnum: u32| Collapsible::new(cnum, cnum as usize);
     assert_eq!(
-        collapse_ranges(&[s(1), s(2), s(3)]),
+        collapse_collapsible_ranges(&[s(1), s(2), s(3)]),
         vec![RangePiece::Range(s(1), s(3))]
     );
     assert_eq!(
-        collapse_ranges(&[s(1), s(2), Collapsible::new(4, 3)]),
+        collapse_collapsible_ranges(&[s(1), s(2), Collapsible::new(4, 3)]),
         vec![
             RangePiece::Range(s(1), s(2)),
             RangePiece::Single(Collapsible::new(4, 3))
@@ -864,10 +883,6 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     if collapse.map_or(false, |c| {
         c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
     }) {
-        use crate::helpers::{
-            collapse_ranges::{collapse_ranges, Segment},
-            slice_group_by::group_by_mut,
-        };
         let name_runs = group_by_mut(cites.as_mut(), |a, b| {
             a.unique_name_number == b.unique_name_number
         });
@@ -887,9 +902,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                     cite.year_suffix = Partial::Filled(suf);
                 }
             }
-            for run in group_by_mut(run, |a, b| {
-                a.year.as_ref() == b.year.as_ref()
-            }) {
+            for run in group_by_mut(run, |a, b| a.year.as_ref() == b.year.as_ref()) {
                 if run.len() > 1 {
                     run[0].first_of_same_year = true;
                     for cite in &mut run[1..] {
@@ -910,118 +923,122 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
         }
     }
 
+    impl<O: OutputFormat> CiteInCluster<O> {
+        fn by_year(&self) -> Partial<&SmartString> {
+            self.year.as_ref().filter(!self.has_locator)
+        }
+        fn by_name(&self) -> Partial<u32> {
+            self.unique_name_number.filter(!self.has_locator).filter(self.cite.mode != Some(CiteMode::AuthorOnly))
+        }
+    }
+
     if let Some(collapse) = collapse {
         match collapse {
             Collapse::CitationNumber => {
+                let by_name = group_by_mut(cites.as_mut(), |a, b| {
+                    a.by_name() == b.by_name()
+                });
                 let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.first_of_name {
-                            let following = rest.iter_mut().take_while(|u| u.subsequent_same_name);
-
-                            let mut cnums = Vec::new();
-                            if let Some(cnum) = u.cnum {
-                                cnums.push(Collapsible::new(cnum, ix));
-                            }
-                            let mut count = 0;
-                            for (nix, cite) in following.enumerate() {
-                                if let Some(cnum) = cite.cnum {
-                                    cnums.push(Collapsible {
-                                        number: cnum,
-                                        ix: ix + nix + 1,
-                                        force_single: cite.has_locator
-                                            || cite.cite.mode == Some(CiteMode::AuthorOnly),
-                                    })
-                                }
-                                cite.vanished = true;
-                                count += 1;
-                            }
-                            ix += count;
-                            u.collapsed_ranges = collapse_ranges(&cnums);
-                        }
+                for name_run in by_name {
+                    let mut cnums = Vec::new();
+                    if let Filled(cnum) = name_run[0].cnum {
+                        let mut c = Collapsible::new(cnum, ix);
+                        c.force_single = name_run.len() == 1;
+                        cnums.push(c);
                     }
-                    ix += 1;
+                    for (run_ix, cite) in name_run[1..].iter_mut().enumerate() {
+                        let run_ix = run_ix + 1;
+                        if let Filled(cnum) = cite.cnum {
+                            cnums.push(Collapsible {
+                                number: cnum,
+                                ix: ix + run_ix,
+                                force_single: false,
+                                // force_single: cite.has_locator
+                                //     || cite.cite.mode == Some(CiteMode::AuthorOnly),
+                            })
+                        }
+                        cite.trailing_only = true;
+                    }
+                    name_run[0].collapsed_ranges = collapse_collapsible_ranges(&cnums);
+                    ix += name_run.len();
                 }
             }
             Collapse::Year => {
-                let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.first_of_name {
-                            let following = rest.iter_mut().take_while(|u| u.subsequent_same_name);
-                            let mut count = 0;
-                            for cite in following {
-                                let gen4 = Arc::make_mut(&mut cite.gen4);
-                                gen4.tree_mut().suppress_names();
-                                count += 1;
-                            }
-                            ix += count;
-                        }
+                let by_name = group_by_mut(cites.as_mut(), |a, b| {
+                    a.unique_name_number == b.unique_name_number
+                });
+                for run in by_name {
+                    // runs are non-empty
+                    for cite in &mut run[1..] {
+                        let gen4 = Arc::make_mut(&mut cite.gen4);
+                        gen4.tree_mut().suppress_names();
                     }
-                    ix += 1;
                 }
             }
             Collapse::YearSuffixRanged | Collapse::YearSuffix => {
+                let by_name = group_by_mut(cites.as_mut(), |a, b| {
+                    a.by_name() == b.by_name()
+                });
                 let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.first_of_name {
-                            let following = rest.iter_mut().take_while(|u| u.subsequent_same_name);
-                            for cite in following {
-                                let gen4 = Arc::make_mut(&mut cite.gen4);
-                                gen4.tree_mut().suppress_names()
+                for name_run in by_name {
+                    for cite in &mut name_run[1..] {
+                        let gen4 = Arc::make_mut(&mut cite.gen4);
+                        gen4.tree_mut().suppress_names()
+                    }
+                    let by_year = group_by_mut(name_run, |a, b| a.by_year() == b.by_year());
+                    let mut nix = 0;
+                    for year_run in by_year {
+                        if collapse == Collapse::YearSuffixRanged {
+                            // Potentially confusing: cnums here are year suffixes in u32 form
+                            let mut cnums = Vec::new();
+                            if let Filled(suf) = year_run[0].year_suffix {
+                                let mut c = Collapsible::new(suf, ix + nix);
+                                c.force_single = year_run.len() == 1;
+                                cnums.push(c);
                             }
-                        }
-                        if u.first_of_same_year {
-                            let following = rest.iter_mut().take_while(|u| u.subsequent_same_year);
-
-                            if collapse == Collapse::YearSuffixRanged {
-                                // Potentially confusing; 'cnums' here are year suffixes in u32 form.
-                                let mut cnums = Vec::new();
-                                if let Some(cnum) = u.year_suffix.option() {
-                                    cnums.push(Collapsible::new(cnum, ix));
+                            for (yix, cite) in year_run[1..].iter_mut().enumerate() {
+                                let yix = yix + 1;
+                                if let Filled(cnum) = cite.year_suffix {
+                                    cnums.push(Collapsible {
+                                        number: cnum,
+                                        ix: ix + nix + yix,
+                                        force_single: cite.has_locator,
+                                    });
                                 }
-                                for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix.option() {
-                                        cnums.push(Collapsible {
-                                            number: cnum,
-                                            ix: ix + nix + 1,
-                                            force_single: cite.has_locator,
-                                        });
-                                    }
-                                    cite.vanished = true;
-                                    if !cite.has_locator {
-                                        let gen4 = Arc::make_mut(&mut cite.gen4);
-                                        gen4.tree_mut().suppress_year();
-                                    }
-                                }
-                                u.collapsed_year_suffixes = collapse_ranges(&cnums);
-                            } else {
-                                if let Some(cnum) = u.year_suffix.option() {
-                                    u.collapsed_year_suffixes
-                                        .push(RangePiece::Single(Collapsible::new(cnum, ix)));
-                                }
-                                for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix.option() {
-                                        u.collapsed_year_suffixes.push(RangePiece::Single(
-                                            Collapsible {
-                                                number: cnum,
-                                                ix: ix + nix + 1,
-                                                force_single: cite.has_locator,
-                                            },
-                                        ));
-                                    }
-                                    cite.vanished = true;
+                                cite.trailing_only = true;
+                                if !cite.has_locator {
                                     let gen4 = Arc::make_mut(&mut cite.gen4);
                                     gen4.tree_mut().suppress_year();
                                 }
                             }
+                            year_run[0].collapsed_year_suffixes =
+                                collapse_collapsible_ranges(&cnums);
+                        } else {
+                            let mut range_pieces = Vec::new();
+                            if let Some(cnum) = year_run[0].year_suffix.option() {
+                                range_pieces
+                                    .push(RangePiece::Single(Collapsible::new(cnum, ix + nix)));
+                            }
+                            for (yix, cite) in year_run[1..].iter_mut().enumerate() {
+                                let yix = yix + 1;
+                                if let Some(cnum) = cite.year_suffix.option() {
+                                    range_pieces.push(RangePiece::Single(
+                                        Collapsible {
+                                            number: cnum,
+                                            ix: ix + nix + yix,
+                                            force_single: cite.has_locator,
+                                        },
+                                    ));
+                                }
+                                cite.trailing_only = true;
+                                let gen4 = Arc::make_mut(&mut cite.gen4);
+                                gen4.tree_mut().suppress_year();
+                            }
+                            year_run[0].collapsed_year_suffixes = range_pieces;
                         }
+                        nix += year_run.len();
                     }
-                    ix += 1;
+                    ix += name_run.len();
                 }
             }
         }
