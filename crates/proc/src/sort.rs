@@ -598,11 +598,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn names(&mut self, names: &Names) -> Self::Output {
         let node =
             crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
-            gv,
-        )
+        let tree = IrTreeRef::new(node, &self.arena);
+        let gv = tree.get_node().unwrap().get().1;
+        (tree.flatten(&self.ctx.format, None).unwrap_or_default(), gv)
     }
 
     // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
@@ -610,11 +608,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
         let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
-            gv,
-        )
+        let tree = IrTreeRef::new(node, &self.arena);
+        let gv = tree.get_node().unwrap().get().1;
+        (tree.flatten(&self.ctx.format, None).unwrap_or_default(), gv)
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {

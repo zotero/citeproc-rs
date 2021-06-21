@@ -317,8 +317,7 @@ fn ref_bib_number(bib_numbers: &FnvHashMap<Atom, BibNumber>, ref_id: &Atom) -> u
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct IrGen {
-    pub(crate) arena: IrArena<Markup>,
-    pub(crate) root: NodeId,
+    pub(crate) tree: IrTree<Markup>,
     pub(crate) state: IrState,
     pub(crate) used_disambiguate_true: bool,
 }
@@ -326,19 +325,29 @@ pub struct IrGen {
 use std::fmt;
 impl fmt::Debug for IrGen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let dbg = IrDebug::new(self.root, &self.arena);
-        write!(f, "state: {:?}, contents: {:?}", self.state, dbg)
+        let mut dbg = f.debug_struct("IrGen");
+        dbg.field("tree", &self.tree);
+        dbg.field("state", &self.state);
+        dbg.finish()
     }
 }
 
 impl IrGen {
-    pub(crate) fn new(root: NodeId, arena: IrArena<Markup>, state: IrState) -> Self {
+    pub(crate) fn new(tree: IrTree<Markup>, state: IrState) -> Self {
         IrGen {
-            root,
-            arena,
+            tree,
             state,
             used_disambiguate_true: false,
         }
+    }
+    pub(crate) fn tree(&self) -> &IrTree {
+        &self.tree
+    }
+    pub(crate) fn tree_ref(&self) -> IrTreeRef {
+        self.tree.tree_ref()
+    }
+    pub(crate) fn tree_mut(&mut self) -> &mut IrTree {
+        &mut self.tree
     }
 }
 
@@ -351,7 +360,7 @@ fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
         IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
         GroupVars::Plain,
     ));
-    Arc::new(IrGen::new(root, arena, IrState::new()))
+    Arc::new(IrGen::new(IrTree::new(root, arena), IrState::new()))
 }
 
 // IR gen0 depends on:
@@ -428,15 +437,11 @@ macro_rules! cfg_rayon {
     }};
 }
 
-fn is_unambiguous(
-    db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &IrArena<Markup>,
-    self_id: &Atom,
-) -> bool {
+fn is_unambiguous(db: &dyn IrDatabase, tree: IrTreeRef, self_id: &Atom) -> bool {
     struct OtherRef;
 
-    let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
+    let fmt = db.get_formatter();
+    let edges = tree.to_edge_stream(&fmt);
 
     // Participants could be 100 different references, each with quite a lot of CPU work to do.
     // A possible improvement would be to check the ones that are likely to collide first, so
@@ -476,8 +481,7 @@ fn edge_stream_matches_ref(db: &dyn IrDatabase, edges: Vec<EdgeData>, ref_id: At
 /// Returns the set of Reference IDs that could have produced a cite's IR
 fn refs_accepting_cite(
     db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &IrArena<Markup>,
+    tree: IrTreeRef,
     cite_id: Option<CiteId>,
     ref_id: &Atom,
     disamb_pass: Option<DisambPass>,
@@ -486,7 +490,7 @@ fn refs_accepting_cite(
     // - cite_id
     // - reference.id
     // - disamb_pass (for debug)
-    let edges = IR::to_edge_stream(root, arena, &db.get_formatter());
+    let edges = tree.to_edge_stream(&db.get_formatter());
     let participants = db.disamb_participants();
     // #[cfg(feature = "rayon")]
     // use rayon::prelude::*;
@@ -576,51 +580,50 @@ fn make_identical_name_formatter<'a>(
     find_name_block(&ref_ir, &mut nth).cloned()
 }
 
-fn list_all_name_blocks(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
-    fn list_all_name_blocks_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
-        let me = match arena.get(node) {
+fn list_all_name_blocks(tree: IrTreeRef) -> Vec<NodeId> {
+    fn list_all_name_blocks_inner(tree: IrTreeRef, vec: &mut Vec<NodeId>) {
+        let me = match tree.get_node() {
             Some(x) => x.get(),
             None => return,
         };
         match me.0 {
             IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) => {}
             IR::Name(_) => {
-                vec.push(node);
+                vec.push(tree.node);
             }
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // assumes it's the first one that appears
-                for child in node.children(arena) {
-                    list_all_name_blocks_inner(child, arena, vec);
+                for child in tree.children() {
+                    list_all_name_blocks_inner(child, vec);
                 }
             }
         }
     }
     let mut vec = Vec::new();
-    list_all_name_blocks_inner(root, arena, &mut vec);
+    list_all_name_blocks_inner(tree, &mut vec);
     vec
 }
 
-fn list_all_cond_disambs(root: NodeId, arena: &IrArena<Markup>) -> Vec<NodeId> {
-    fn list_all_cd_inner(node: NodeId, arena: &IrArena<Markup>, vec: &mut Vec<NodeId>) {
-        let me = match arena.get(node) {
+fn list_all_cond_disambs(tree: IrTreeRef) -> Vec<NodeId> {
+    fn list_all_cd_inner(tree: IrTreeRef, vec: &mut Vec<NodeId>) {
+        let me = match tree.get_node() {
             Some(x) => x.get(),
             None => return,
         };
         match &me.0 {
-            IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {}
+            IR::NameCounter(_) | IR::YearSuffix(..) | IR::Rendered(_) | IR::Name(_) => {
+                return;
+            }
             IR::ConditionalDisamb(_c) => {
-                vec.push(node);
-                node.children(arena)
-                    .for_each(|child| list_all_cd_inner(child, arena, vec));
+                vec.push(tree.node);
             }
-            IR::Seq(_seq) => {
-                node.children(arena)
-                    .for_each(|child| list_all_cd_inner(child, arena, vec));
-            }
+            IR::Seq(_seq) => {}
         }
+        tree.children()
+            .for_each(|child| list_all_cd_inner(child, vec));
     }
     let mut vec = Vec::new();
-    list_all_cd_inner(root, arena, &mut vec);
+    list_all_cd_inner(tree, &mut vec);
     vec
 }
 
@@ -640,8 +643,7 @@ fn get_cond_mut(cid: NodeId, arena: &mut IrArena) -> (&mut ConditionalDisambIR, 
 
 fn disambiguate_add_names(
     db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &mut IrArena<Markup>,
+    tree: &mut IrTree,
     ctx: &mut CiteContext<'_, Markup>,
     also_expand: bool,
 ) -> bool {
@@ -652,14 +654,13 @@ fn disambiguate_add_names(
     // initial_refs after adding names. We'll see how that holds up.
     let initial_refs = refs_accepting_cite(
         db,
-        root,
-        arena,
+        tree.tree_ref(),
         ctx.cite_id,
         &ctx.reference.id,
         ctx.disamb_pass,
     );
     let mut best = initial_refs.len() as u16;
-    let name_refs = list_all_name_blocks(root, arena);
+    let name_refs = list_all_name_blocks(tree.tree_ref());
 
     debug!(
         "attempting to disambiguate {:?} ({}) with {:?}",
@@ -678,9 +679,9 @@ fn disambiguate_add_names(
             dfas.push(dfa);
         }
 
-        let total_ambiguity_number = |arena: &IrArena<Markup>| -> u16 {
+        let total_ambiguity_number = |tree: IrTreeRef<Markup>| -> u16 {
             // unlock the nir briefly, so we can access it during to_edge_stream
-            let edges = IR::to_edge_stream(root, arena, fmt);
+            let edges = tree.to_edge_stream(fmt);
             let count = dfas.iter().filter(|dfa| dfa.accepts_data(&edges)).count() as u16;
             if count == 0 {
                 warn!("should not get to zero matching refs");
@@ -689,7 +690,7 @@ fn disambiguate_add_names(
         };
 
         // So we can roll back to { bump = 0 }
-        let nir = get_nir_mut(nid, arena);
+        let nir = get_nir_mut(nid, &mut tree.arena);
         nir.achieved_count(best);
 
         let is_sort_key = ctx.sort_key.is_some();
@@ -702,53 +703,57 @@ fn disambiguate_add_names(
         let built_label = nir.built_label.clone();
 
         while best > 1 {
-            let nir = get_nir_mut(nid, arena);
+            let nir = get_nir_mut(nid, &mut tree.arena);
             nir.achieved_count(best);
             // TODO: reuse backing storage when doing this, with a scratch Vec<O::Build>.
             if let Some(built_names) = nir.add_name(db, ctx) {
                 let seq = NameIR::rendered_ntbs_to_node(
                     built_names,
-                    arena,
+                    &mut tree.arena,
                     is_sort_key,
                     label_after_name,
                     built_label.as_ref(),
                 );
-                replace_single_child(nid, seq, arena);
+                tree.replace_single_child(nid, seq);
             } else {
                 break;
             }
             if also_expand {
-                if let Some(expanded) =
-                    expand_one_name_ir(db, ctx, &initial_refs, get_nir_mut(nid, arena), n as u32)
-                {
+                if let Some(expanded) = expand_one_name_ir(
+                    db,
+                    ctx,
+                    &initial_refs,
+                    get_nir_mut(nid, &mut tree.arena),
+                    n as u32,
+                ) {
                     let seq = NameIR::rendered_ntbs_to_node(
                         expanded,
-                        arena,
+                        &mut tree.arena,
                         is_sort_key,
                         label_after_name,
                         built_label.as_ref(),
                     );
-                    replace_single_child(nid, seq, arena);
+                    tree.replace_single_child(nid, seq);
                 }
             }
-            IR::recompute_group_vars(root, arena);
-            let new_count = total_ambiguity_number(arena);
-            get_nir_mut(nid, arena).achieved_count(new_count);
+            tree.recompute_group_vars();
+            let new_count = total_ambiguity_number(tree.tree_ref());
+            get_nir_mut(nid, &mut tree.arena).achieved_count(new_count);
             best = std::cmp::min(best, new_count);
         }
         // TODO: simply save the node id of the rolled-back nir, and restore it to position.
-        if let Some(rolled_back) = get_nir_mut(nid, arena).rollback(db, ctx) {
+        if let Some(rolled_back) = get_nir_mut(nid, &mut tree.arena).rollback(db, ctx) {
             let new_seq = NameIR::rendered_ntbs_to_node(
                 rolled_back,
-                arena,
+                &mut tree.arena,
                 is_sort_key,
                 label_after_name,
                 built_label.as_ref(),
             );
-            replace_single_child(nid, new_seq, arena);
+            tree.replace_single_child(nid, new_seq);
         }
-        IR::recompute_group_vars(root, arena);
-        best = total_ambiguity_number(arena);
+        tree.recompute_group_vars();
+        best = total_ambiguity_number(tree.tree_ref());
     }
     best <= 1
 }
@@ -839,8 +844,7 @@ fn expand_one_name_ir(
 
 fn disambiguate_add_givennames(
     db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &mut IrArena<Markup>,
+    tree: &mut IrTree,
     ctx: &mut CiteContext<'_, Markup>,
     also_add: bool,
 ) -> Option<bool> {
@@ -850,17 +854,16 @@ fn disambiguate_add_givennames(
     let _fmt = db.get_formatter();
     let refs = refs_accepting_cite(
         db,
-        root,
-        arena,
+        tree.tree_ref(),
         ctx.cite_id,
         &ctx.reference.id,
         ctx.disamb_pass,
     );
-    let name_refs = list_all_name_blocks(root, arena);
+    let name_refs = list_all_name_blocks(tree.tree_ref());
 
     let is_sort_key = ctx.sort_key.is_some();
     for (n, nid) in name_refs.into_iter().enumerate() {
-        let nir = get_nir_mut(nid, arena);
+        let nir = get_nir_mut(nid, &mut tree.arena);
 
         let label_after_name = nir
             .names_inheritance
@@ -872,43 +875,36 @@ fn disambiguate_add_givennames(
         if let Some(expanded) = expand_one_name_ir(db, ctx, &refs, nir, n as u32) {
             let seq = NameIR::rendered_ntbs_to_node(
                 expanded,
-                arena,
+                &mut tree.arena,
                 is_sort_key,
                 label_after_name,
                 built_label.as_ref(),
             );
-            replace_single_child(nid, seq, arena);
+            tree.replace_single_child(nid, seq);
         }
         // TODO: this is likely unnecessary
-        IR::recompute_group_vars(root, arena);
+        tree.recompute_group_vars();
     }
     if also_add {
-        disambiguate_add_names(db, root, arena, ctx, true);
+        disambiguate_add_names(db, tree, ctx, true);
     }
     None
 }
 
-fn disambiguate_add_year_suffix(
-    _db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &mut IrArena<Markup>,
-    _state: &mut IrState,
-    ctx: &CiteContext<'_, Markup>,
-    suffix: u32,
-) {
+fn disambiguate_add_year_suffix(tree: &mut IrTree, ctx: &CiteContext<'_, Markup>, suffix: u32) {
     // First see if we can do it with an explicit one
-    let hooks = IR::list_year_suffix_hooks(root, arena);
+    let hooks = tree.tree_ref().list_year_suffix_hooks();
     let mut added_suffix = false;
     for &yid in &hooks {
-        let (ys, _) = get_ys_mut(yid, arena);
+        let (ys, _) = get_ys_mut(yid, &mut tree.arena);
         let sum: IrSum<Markup> = match &ys.hook {
             YearSuffixHook::Explicit(_) => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
-        let node = arena.new_node(sum);
-        replace_single_child(yid, node, arena);
-        let (ys, ys_gv) = get_ys_mut(yid, arena);
+        let node = tree.arena.new_node(sum);
+        tree.replace_single_child(yid, node);
+        let (ys, ys_gv) = get_ys_mut(yid, &mut tree.arena);
         *ys_gv = gv;
         ys.suffix_num = Some(suffix);
         added_suffix = true;
@@ -920,28 +916,27 @@ fn disambiguate_add_year_suffix(
 
     // Then attempt to do it for the ones that are embedded in date output
     for yid in hooks {
-        let (ys, _) = get_ys_mut(yid, arena);
+        let (ys, _) = get_ys_mut(yid, &mut tree.arena);
         let sum: IrSum<Markup> = match &ys.hook {
             YearSuffixHook::Plain => ys.hook.render(ctx, suffix),
             _ => continue,
         };
         let gv = sum.1;
-        let node = arena.new_node(sum);
-        yid.append(node, arena);
-        let (ys, ys_gv) = get_ys_mut(yid, arena);
+        let node = tree.arena.new_node(sum);
+        yid.append(node, &mut tree.arena);
+        let (ys, ys_gv) = get_ys_mut(yid, &mut tree.arena);
         *ys_gv = gv;
         ys.suffix_num = Some(suffix);
         break;
     }
 
-    IR::recompute_group_vars(root, arena);
+    tree.recompute_group_vars();
 }
 
 #[inline(never)]
 fn disambiguate_true(
     db: &dyn IrDatabase,
-    root: NodeId,
-    arena: &mut IrArena<Markup>,
+    tree: &mut IrTree,
     state: &mut IrState,
     ctx: &CiteContext<'_, Markup>,
 ) {
@@ -949,17 +944,18 @@ fn disambiguate_true(
         "attempting to disambiguate {:?} ({}) with {:?}",
         ctx.cite_id, &ctx.reference.id, ctx.disamb_pass
     );
-    let un = is_unambiguous(db, root, arena, &ctx.reference.id);
+    let un = is_unambiguous(db, tree.tree_ref(), &ctx.reference.id);
     if un {
         return;
     }
-    let cond_refs = list_all_cond_disambs(root, arena);
+    let cond_refs = list_all_cond_disambs(tree.tree_ref());
     for cid in cond_refs.into_iter() {
-        if is_unambiguous(db, root, arena, &ctx.reference.id) {
+        if is_unambiguous(db, tree.tree_ref(), &ctx.reference.id) {
             debug!("successfully disambiguated with Cond");
             break;
         }
         {
+            let arena = &mut tree.arena;
             let (cond, _) = get_cond_mut(cid, arena);
             let choose = cond.choose.clone();
             let new_node = choose.intermediate(db, state, ctx, arena);
@@ -969,7 +965,7 @@ fn disambiguate_true(
             cond.done = true;
             *cond_gv = gv;
         }
-        IR::recompute_group_vars(root, arena);
+        tree.recompute_group_vars();
     }
 }
 
@@ -985,7 +981,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let root = style
         .citation
         .intermediate(db, &mut state, &ctx, &mut arena);
-    let irgen = IrGen::new(root, arena, state);
+    let irgen = IrGen::new(IrTree::new(root, arena), state);
     Arc::new(irgen)
 }
 
@@ -996,8 +992,7 @@ fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
     let gen2 = db.ir_gen2_add_given_name(id);
     let refs = refs_accepting_cite(
         db,
-        gen2.root,
-        &gen2.arena,
+        gen2.tree_ref(),
         Some(id),
         &cite.ref_id,
         Some(DisambPass::AddGivenName(gndr)),
@@ -1051,8 +1046,7 @@ impl IrGenCow {
         if ctx.style.citation.disambiguate_add_names {
             // Clone ir0; disambiguate by adding names
             let cloned = self.to_mut();
-            let unambiguous =
-                disambiguate_add_names(db, cloned.root, &mut cloned.arena, ctx, false);
+            let unambiguous = disambiguate_add_names(db, cloned.tree_mut(), ctx, false);
             unambiguous
         } else {
             false
@@ -1063,7 +1057,7 @@ impl IrGenCow {
         if ctx.style.citation.disambiguate_add_givenname {
             let cloned = self.to_mut();
             let also_add_names = ctx.style.citation.disambiguate_add_names;
-            disambiguate_add_givennames(db, cloned.root, &mut cloned.arena, ctx, also_add_names);
+            disambiguate_add_givennames(db, cloned.tree_mut(), ctx, also_add_names);
         }
     }
     fn disambiguate_add_year_suffix(
@@ -1078,15 +1072,8 @@ impl IrGenCow {
             };
             let cloned = self.to_mut();
             ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
-            disambiguate_add_year_suffix(
-                db,
-                cloned.root,
-                &mut cloned.arena,
-                &mut cloned.state,
-                &ctx,
-                year_suffix,
-            );
-            is_unambiguous(db, cloned.root, &cloned.arena, &ctx.reference.id)
+            disambiguate_add_year_suffix(cloned.tree_mut(), &ctx, year_suffix);
+            is_unambiguous(db, cloned.tree_ref(), &ctx.reference.id)
         } else {
             false
         }
@@ -1095,7 +1082,7 @@ impl IrGenCow {
         let cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
         cloned.used_disambiguate_true = true;
-        disambiguate_true(db, cloned.root, &mut cloned.arena, &mut cloned.state, &ctx);
+        disambiguate_true(db, &mut cloned.tree, &mut cloned.state, &ctx);
     }
 }
 
@@ -1109,7 +1096,7 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
 
     let mut irgen = IrGenCow::Arc(db.ir_gen0(id));
-    if is_unambiguous(db, irgen.root, &irgen.arena, &ctx.reference.id) {
+    if is_unambiguous(db, irgen.tree_ref(), &ctx.reference.id) {
         return irgen.into_arc();
     }
     let successful = irgen.disambiguate_add_names(db, &mut ctx);
@@ -1332,6 +1319,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             let mut state = IrState::new();
             let mut arena = IrArena::new();
             let mut root = bib.intermediate(db, &mut state, &ctx, &mut arena);
+            let mut tree = IrTree { root, arena };
 
             // Immediately apply year suffixes.
             // Early-gen cites determine whether these exist -- but in the bibliography, we are already
@@ -1343,40 +1331,40 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             // versa"
             if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
-                disambiguate_add_year_suffix(db, root, &mut arena, &mut state, &ctx, suffix);
+                disambiguate_add_year_suffix(&mut tree, &ctx, suffix);
             }
 
             if first_cite_used_disambiguate_true(db, ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::Conditionals);
-                disambiguate_true(db, root, &mut arena, &mut state, &ctx);
+                disambiguate_true(db, &mut tree, &mut state, &ctx);
             }
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
-                if let Some(new_root) = IR::split_first_field(root, &mut arena) {
+                if let Some(new_root) = IR::split_first_field(root, &mut tree.arena) {
                     root = new_root;
                 }
             }
 
             // Pull affixes off layout into the right-inlines etc, after we may have created those
             // divs in split_first_field
-            transforms::fix_left_right_layout_affixes(root, &mut arena);
+            transforms::fix_left_right_layout_affixes(root, &mut tree.arena);
 
-            if IR::is_empty(root, &arena) {
+            if tree.tree_ref().is_empty() {
                 None
             } else {
-                Some(Arc::new(IrGen::new(root, arena, state)))
+                Some(Arc::new(IrGen::new(tree, state)))
             }
         },
         |bib, ctx, _just_empty_output| {
             let mut state = IrState::new();
-            let mut arena = IrArena::new();
 
             // Re the ? operator here: sort_omittedBibRefMixedNonNumericStyle.txt
             // If no citation-number found, simply exclude it from the bibliography.
             let (el_ref, maybe_delim) =
                 transforms::style_is_mixed_numeric(ctx.style, CiteOrBib::Bibliography)?;
             // Render it as "1. [CSL STYLE ERROR ...]"
-            let mut root = {
+            let mut tree = {
+                let mut arena = IrArena::new();
                 let msg = ctx.format.plain(CSL_STYLE_ERROR);
                 let msg_node = arena.new_node((
                     IR::Rendered(Some(CiteEdgeData::Output(msg))),
@@ -1390,20 +1378,20 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 let seq_node = arena.new_node((IR::Seq(seq), GroupVars::Important));
                 seq_node.append(n, &mut arena);
                 seq_node.append(msg_node, &mut arena);
-                seq_node
+                IrTree { root: seq_node, arena }
             };
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
-                if let Some(new_root) = IR::split_first_field(root, &mut arena) {
-                    root = new_root;
+                if let Some(new_root) = IR::split_first_field(tree.root, &mut tree.arena) {
+                    tree.root = new_root;
                 }
             }
 
             // Pull affixes off layout into the right-inlines etc, after we may have created those
             // divs in split_first_field
-            transforms::fix_left_right_layout_affixes(root, &mut arena);
+            transforms::fix_left_right_layout_affixes(tree.root, &mut tree.arena);
 
-            Some(Arc::new(IrGen::new(root, arena, state)))
+            Some(Arc::new(IrGen::new(tree, state)))
         },
     )
 }
@@ -1423,7 +1411,10 @@ fn first_cite_used_disambiguate_true(db: &dyn IrDatabase, ref_id: Atom) -> bool 
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
     if let Some(gen0) = db.bib_item_gen0(ref_id) {
-        let flat = IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
+        let flat = gen0
+            .tree_ref()
+            .flatten(&fmt, None)
+            .unwrap_or_else(|| fmt.plain(""));
         // in a bibliography, we do the affixes etc inside Layout, so they're not here
         let string = fmt.output(flat, get_piq(db));
         Arc::new(string)
@@ -1444,7 +1435,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
         // TODO: put Nones in there so they can be updated
         if let Some(mut gen0) = db.bib_item_gen0(key.clone()) {
             // in a bibliography, we do the affixes etc inside Layout, so they're not here
-            let current = IR::first_names_block(gen0.root, &gen0.arena);
+            let current = gen0.tree_ref().first_names_block();
             let sas = style.bibliography.as_ref().and_then(|bib| {
                 bib.subsequent_author_substitute
                     .as_ref()
@@ -1452,7 +1443,7 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
             });
             if let (Some(prev_name_block), Some(current_name_block), Some((sas, sas_rule))) = (
                 prev.as_ref()
-                    .and_then(|(first_block, gen)| gen.arena.get(*first_block)),
+                    .and_then(|(first_block, gen)| gen.tree.arena.get(*first_block)),
                 current,
                 sas,
             ) {
@@ -1463,16 +1454,18 @@ fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupO
                     // children, not the IR.
                     prev_name_block.get().0.unwrap_name_ir(),
                     current_name_block,
-                    &mut mutated.arena,
+                    &mut mutated.tree.arena,
                     sas,
                     sas_rule,
                 );
                 if did {
-                    IR::recompute_group_vars(mutated.root, &mut mutated.arena);
+                    mutated.tree_mut().recompute_group_vars();
                 }
             }
-            let flat =
-                IR::flatten(gen0.root, &gen0.arena, &fmt, None).unwrap_or_else(|| fmt.plain(""));
+            let flat = gen0
+                .tree_ref()
+                .flatten(&fmt, None)
+                .unwrap_or_else(|| fmt.plain(""));
             let string = fmt.output(flat, get_piq(db));
             if !string.is_empty() {
                 m.insert(key.clone(), Arc::new(string));
@@ -1756,7 +1749,7 @@ fn intext(db: &dyn IrDatabase, id: CiteId) -> Option<Arc<IrGen>> {
         let mut state = IrState::new();
         let mut arena = IrArena::new();
         let root = intext.intermediate(db, &mut state, &ctx, &mut arena);
-        let irgen = IrGen::new(root, arena, state);
+        let irgen = IrGen::new(IrTree::new(root, arena), state);
         Arc::new(irgen)
     })
 }

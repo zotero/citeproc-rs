@@ -48,6 +48,33 @@ pub enum IR<O: OutputFormat = Markup> {
     NameCounter(IrNameCounter<O>),
 }
 
+/// Simplified output that's more readable
+impl<O: OutputFormat> std::fmt::Display for IR<O> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IR::Name(_) => write!(f, "Name"),
+            IR::Seq(seq) => {
+                let mut dbg = f.debug_struct("Seq");
+                if let Some(pre) = seq.affixes.as_ref().map(|x| x.prefix.as_str()) {
+                    dbg.field("prefix", &pre);
+                }
+                if let Some(delim) = seq.delimiter.as_ref() {
+                    dbg.field("delimiter", &delim);
+                }
+                if let Some(suf) = seq.affixes.as_ref().map(|x| x.suffix.as_str()) {
+                    dbg.field("suffix", &suf);
+                }
+                dbg.finish()
+            }
+            IR::ConditionalDisamb(_) => write!(f, "ConditionalDisamb"),
+            IR::NameCounter(_) => write!(f, "NameCounter"),
+            IR::Rendered(None) => write!(f, "<empty>"),
+            IR::Rendered(Some(data)) => write!(f, "{:?}", data.build()),
+            IR::YearSuffix(_) => write!(f, "YearSuffix"),
+        }
+    }
+}
+
 /// # Disambiguation and group_vars
 ///
 /// IrSeq needs to hold things
@@ -194,27 +221,6 @@ impl<O: OutputFormat> IrNameCounter<O> {
     }
 }
 
-impl<O> IR<O>
-where
-    O: OutputFormat,
-{
-    /// Rendered(None), empty YearSuffix or empty seq
-    pub fn is_empty(node: NodeId, arena: &IrArena<O>) -> bool {
-        let me = match arena.get(node) {
-            Some(x) => x.get(),
-            None => return false,
-        };
-        match &me.0 {
-            IR::Rendered(None) => true,
-            IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
-                node.children(arena).next().is_none()
-            }
-            IR::NameCounter(_nc) => false,
-            _ => false,
-        }
-    }
-}
-
 // impl<O> Eq for IR<O> where O: OutputFormat + PartialEq + Eq {}
 impl<O> IR<O>
 where
@@ -256,53 +262,13 @@ impl<O: OutputFormat> Default for IR<O> {
     }
 }
 
-/// Currently, flattening into EdgeData(String) only works when the Output type is String
-/// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
-impl<O: OutputFormat<Output = SmartString>> IR<O> {
-    /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
-    /// be rendered
-    pub fn flatten(
-        node: NodeId,
-        arena: &IrArena<O>,
-        fmt: &O,
-        override_delim: Option<&str>,
-    ) -> Option<O::Build> {
-        // must clone
-        match arena.get(node)?.get().0 {
-            IR::Rendered(None) => None,
-            IR::Rendered(Some(ref x)) => Some(x.inner()),
-            IR::ConditionalDisamb(_) => IR::flatten_children(node, arena, fmt, override_delim),
-            IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) => {
-                IR::flatten_children(node, arena, fmt, None)
-            }
-            IR::Seq(ref seq) => seq.flatten_seq(node, arena, fmt, override_delim),
-        }
-    }
-
-    pub fn flatten_children(
-        self_id: NodeId,
-        arena: &IrArena<O>,
-        fmt: &O,
-        override_delim: Option<&str>,
-    ) -> Option<O::Build> {
-        let mut group = Vec::new();
-        for child in self_id
-            .children(arena)
-            .filter_map(|child| IR::flatten(child, arena, fmt, override_delim))
-        {
-            group.push(child)
-        }
-        if group.is_empty() {
-            return None;
-        }
-        Some(fmt.group(group, "", None))
-    }
-}
-
 impl<O: OutputFormat<Output = SmartString>> CiteEdgeData<O> {
     pub(crate) fn to_edge_data(&self, fmt: &O, formatting: Formatting) -> EdgeData {
         match self {
-            CiteEdgeData::Output(x) | CiteEdgeData::Title(x) | CiteEdgeData::Year(x) | CiteEdgeData::Term(x) => {
+            CiteEdgeData::Output(x)
+            | CiteEdgeData::Title(x)
+            | CiteEdgeData::Year(x)
+            | CiteEdgeData::Term(x) => {
                 EdgeData::Output(fmt.output_in_context(x.clone(), formatting, None))
             }
             CiteEdgeData::YearSuffix(_) => EdgeData::YearSuffix,
@@ -315,47 +281,26 @@ impl<O: OutputFormat<Output = SmartString>> CiteEdgeData<O> {
             CiteEdgeData::Accessed(_) => EdgeData::Accessed,
         }
     }
-    fn inner(&self) -> O::Build {
-        match self {
-            CiteEdgeData::Output(x)
-            | CiteEdgeData::Term(x)
-            | CiteEdgeData::Year(x)
-            | CiteEdgeData::YearSuffix(x)
-            | CiteEdgeData::Frnn(x)
-            | CiteEdgeData::FrnnLabel(x)
-            | CiteEdgeData::Locator(x)
-            | CiteEdgeData::LocatorLabel(x)
-            | CiteEdgeData::CitationNumber(x)
-            | CiteEdgeData::Accessed(x)
-            | CiteEdgeData::Title(x)
-            | CiteEdgeData::CitationNumberLabel(x) => x.clone(),
-        }
-    }
 }
-
-impl<O: OutputFormat> IR<O> {
-    pub(crate) fn list_year_suffix_hooks(root: NodeId, arena: &IrArena<O>) -> Vec<NodeId> {
-        fn list_ysh_inner<O: OutputFormat>(
-            node: NodeId,
-            arena: &IrArena<O>,
-            vec: &mut Vec<NodeId>,
-        ) {
-            let me = match arena.get(node) {
-                Some(x) => x.get(),
-                None => return,
-            };
-            match &me.0 {
-                IR::YearSuffix(..) => vec.push(node),
-                IR::NameCounter(_) | IR::Rendered(_) | IR::Name(_) => {}
-                IR::ConditionalDisamb(_) | IR::Seq(_) => {
-                    node.children(arena)
-                        .for_each(|child| list_ysh_inner(child, arena, vec));
-                }
-            }
+impl<O: OutputFormat> CiteEdgeData<O> {
+    pub(crate) fn inner(&self) -> O::Build {
+        self.build().clone()
+    }
+    fn build(&self) -> &O::Build {
+        match self {
+            Self::Title(b)
+            | Self::Output(b)
+            | Self::Locator(b)
+            | Self::LocatorLabel(b)
+            | Self::YearSuffix(b)
+            | Self::CitationNumber(b)
+            | Self::CitationNumberLabel(b)
+            | Self::Frnn(b)
+            | Self::FrnnLabel(b)
+            | Self::Accessed(b)
+            | Self::Year(b)
+            | Self::Term(b) => b,
         }
-        let mut vec = Vec::new();
-        list_ysh_inner(root, arena, &mut vec);
-        vec
     }
 }
 
@@ -372,11 +317,12 @@ impl IR<Markup> {
             Some(x) => x.get(),
             None => return,
         };
+        let tree = IrTreeRef { node, arena };
         match &me.0 {
             IR::Rendered(None) => {}
             IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
             IR::YearSuffix(_ys) => {
-                if !IR::is_empty(node, arena) {
+                if !tree.is_empty() {
                     edges.push(EdgeData::YearSuffix);
                 }
             }
@@ -388,7 +334,7 @@ impl IR<Markup> {
                 IR::append_child_edges(node, arena, edges, fmt, formatting, inherit_delim)
             }
             IR::Seq(seq) => {
-                if IrSeq::overall_group_vars(seq.dropped_gv, node, arena)
+                if IrSeq::overall_group_vars(seq.dropped_gv, tree)
                     .map_or(true, |x| x.should_render_tree())
                 {
                     seq.append_edges(node, arena, edges, fmt, formatting, inherit_delim)
@@ -409,12 +355,6 @@ impl IR<Markup> {
             IR::append_edges(child, arena, edges, fmt, formatting, inherit_delim);
         }
     }
-
-    pub fn to_edge_stream(root: NodeId, arena: &IrArena<Markup>, fmt: &Markup) -> Vec<EdgeData> {
-        let mut edges = Vec::new();
-        IR::append_edges(root, arena, &mut edges, fmt, Formatting::default(), None);
-        edges
-    }
 }
 
 // impl<'a> From<&'a CiteEdgeData> for EdgeData {
@@ -429,40 +369,14 @@ impl IR<Markup> {
 //     }
 // }
 
-impl<O: OutputFormat> IR<O> {
-    pub(crate) fn recompute_group_vars(node: NodeId, arena: &mut IrArena<O>) {
-        let _me = match arena.get(node) {
-            Some(x) => x.get(),
-            None => return,
-        };
-        let mut queue = Vec::new();
-        for node in node.descendants(arena) {
-            match &arena.get(node).unwrap().get().0 {
-                IR::Seq(seq) => {
-                    queue.push((node, seq.dropped_gv));
-                }
-                _ => {}
-            }
-        }
-        // Reverse, such that descendants are recalculated first
-        for (seq_node, dropped_gv) in queue.into_iter().rev() {
-            // let data = arena.get_mut(node).unwrap().get_mut();
-            if let Some(force) = IrSeq::overall_group_vars(dropped_gv, seq_node, arena) {
-                arena.get_mut(seq_node).unwrap().get_mut().1 = force;
-            }
-        }
-    }
-}
-
 impl IrSeq {
     pub(crate) fn overall_group_vars<O: OutputFormat>(
         dropped_gv: Option<GroupVars>,
-        self_id: NodeId,
-        arena: &IrArena<O>,
+        tree: IrTreeRef<O>,
     ) -> Option<GroupVars> {
         dropped_gv.map(|dropped| {
-            let acc = self_id.children(arena).fold(dropped, |acc, child| {
-                let gv = arena.get(child).unwrap().get().1;
+            let acc = tree.children().fold(dropped, |acc, child| {
+                let gv = child.get_node().unwrap().get().1;
                 acc.neighbour(gv)
             });
             // Replicate GroupVars::implicit_conditional
@@ -475,18 +389,62 @@ impl IrSeq {
     }
 }
 
+/// Currently, flattening into EdgeData(String) only works when the Output type is String
+/// So Pandoc isn't ready yet; maybe you can flatten Pandoc structure into a string.
+impl<'a, O: OutputFormat<Output = SmartString>> IrTreeRef<'a, O> {
+    pub(crate) fn flatten_or_plain(&self, fmt: &O, if_empty: &str) -> O::Build {
+        self.flatten(fmt, None)
+            .unwrap_or_else(|| fmt.plain(if_empty))
+    }
+
+    /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
+    /// be rendered
+    pub(crate) fn flatten(&self, fmt: &O, override_delim: Option<&str>) -> Option<O::Build> {
+        // must clone
+        match self.arena.get(self.node)?.get().0 {
+            IR::Rendered(None) => None,
+            IR::Rendered(Some(ref x)) => Some(x.inner()),
+            IR::ConditionalDisamb(_) => self.flatten_children(fmt, override_delim),
+            IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) => {
+                self.flatten_children(fmt, None)
+            }
+            IR::Seq(ref seq) => seq.flatten_seq(*self, fmt, override_delim),
+        }
+    }
+    pub(crate) fn flatten_children(&self, fmt: &O, override_delim: Option<&str>) -> Option<O::Build> {
+        let mut group = Vec::new();
+        for child in self
+            .children()
+            .filter_map(|child| child.flatten(fmt, override_delim))
+        {
+            group.push(child)
+        }
+        if group.is_empty() {
+            return None;
+        }
+        Some(fmt.group(group, "", None))
+    }
+}
+
+impl<'a> IrTreeRef<'a, Markup> {
+    pub fn to_edge_stream(&self, fmt: &Markup) -> Vec<EdgeData> {
+        let mut edges = Vec::new();
+        IR::append_edges(self.node, self.arena, &mut edges, fmt, Formatting::default(), None);
+        edges
+    }
+}
+
 impl IrSeq {
     // TODO: Groupvars
     fn flatten_seq<O: OutputFormat<Output = SmartString>>(
         &self,
-        id: NodeId,
-        arena: &IrArena<O>,
+        tree: IrTreeRef<O>,
         fmt: &O,
         override_delim: Option<&str>,
     ) -> Option<O::Build> {
         // Do this where it won't require mut access
         // self.recompute_group_vars();
-        if !IrSeq::overall_group_vars(self.dropped_gv, id, arena)
+        if !IrSeq::overall_group_vars(self.dropped_gv, tree)
             .map_or(true, |x| x.should_render_tree())
         {
             return None;
@@ -502,9 +460,9 @@ impl IrSeq {
             should_inherit_delim,
             is_layout: _,
         } = *self;
-        let xs: Vec<_> = id
-            .children(arena)
-            .filter_map(|child| IR::flatten(child, arena, fmt, delimiter.as_opt_str()))
+        let xs: Vec<_> = tree
+            .children()
+            .filter_map(|child| child.flatten(fmt, delimiter.as_opt_str()))
             .collect();
         if xs.is_empty() {
             return None;
@@ -612,11 +570,13 @@ pub(crate) struct IrDebug<'a, O: OutputFormat> {
     root: NodeId,
     arena: &'a IrArena<O>,
 }
+
 impl<'a, O: OutputFormat> IrDebug<'a, O> {
     pub(crate) fn new(root: NodeId, arena: &'a IrArena<O>) -> Self {
         IrDebug { root, arena }
     }
 }
+
 impl<'a, O: OutputFormat> std::fmt::Debug for IrDebug<'a, O> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn go<O2: OutputFormat>(

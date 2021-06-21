@@ -41,6 +41,7 @@ mod page_range;
 mod ref_ir;
 mod renderer;
 mod sort;
+mod tree;
 mod walker;
 
 pub use crate::cluster::built_cluster_before_output;
@@ -66,10 +67,11 @@ pub(crate) mod prelude {
     pub use crate::cite_context::RenderContext;
     pub use crate::db::{safe_default, ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
+    pub(crate) use crate::tree::{IrTree, IrTreeRef, IrTreeMut};
     pub use crate::walker::{StyleWalker, WalkerFoldType};
+
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
-
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
