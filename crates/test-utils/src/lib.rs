@@ -64,6 +64,7 @@ impl Default for Format {
 pub struct TestCase {
     pub mode: Mode,
     pub format: Format,
+    pub csl_features: Option<csl::Features>,
     pub bibliography_no_sort: bool,
     pub csl: String,
     pub input: Vec<Reference>,
@@ -92,6 +93,7 @@ impl Clone for TestCase {
         TestCase {
             processor,
             mode: self.mode.clone(),
+            csl_features: self.csl_features.clone(),
             format: self.format.clone(),
             bibliography_no_sort: self.bibliography_no_sort,
             csl: self.csl.clone(),
@@ -107,6 +109,7 @@ impl TestCase {
     pub fn new(
         mode: Mode,
         format: Format,
+        csl_features: Option<csl::Features>,
         bibliography_no_sort: bool,
         csl: String,
         input: Vec<Reference>,
@@ -119,6 +122,7 @@ impl TestCase {
             Processor::new(InitOptions {
                 style: &csl,
                 fetcher: Some(fet),
+                csl_features: csl_features.clone(),
                 format: format.0,
                 test_mode: true,
                 bibliography_no_sort,
@@ -142,6 +146,7 @@ impl TestCase {
             format,
             bibliography_no_sort,
             csl,
+            csl_features,
             input,
             result,
             clusters,

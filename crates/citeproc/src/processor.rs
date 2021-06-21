@@ -145,6 +145,8 @@ pub struct InitOptions<'a> {
     /// Mechanism for fetching the locale you provide, if necessary.
     pub fetcher: Option<Arc<dyn LocaleFetcher>>,
 
+    pub csl_features: Option<csl::Features>,
+
     /// Disables some formalities for test suite operation
     pub test_mode: bool,
 
@@ -188,6 +190,7 @@ impl Processor {
             locale_override,
             fetcher,
             format,
+            csl_features,
             test_mode,
             bibliography_no_sort,
             use_default_default: _,
@@ -201,6 +204,7 @@ impl Processor {
             &style,
             csl::ParseOptions {
                 allow_no_info: test_mode,
+                features: csl_features,
                 ..Default::default()
             },
         )?;

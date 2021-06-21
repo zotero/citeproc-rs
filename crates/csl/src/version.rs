@@ -300,15 +300,18 @@ pub fn read_features<'a>(
     Ok(features)
 }
 
-pub fn read_features_into<'a>(
-    input_features: impl Iterator<Item = &'a str>,
-    features: &mut Features,
-) -> Result<(), &'a str> {
-    for kebab in input_features {
-        let name = kebab.replace('-', "_");
+impl Features {
+    pub fn try_set_feature<'a>(&mut self, feat_str: &'a str) -> Result<(), &'a str> {
+        let replaced;
+        let name = if feat_str.contains('_') {
+            replaced = feat_str.replace('-', "_");
+            replaced.as_str()
+        } else {
+            feat_str
+        };
         if let Some((.., set)) = ACTIVE_FEATURES.iter().find(|f| name == f.0) {
-            set(features);
-            continue;
+            set(self);
+            return Ok(());
         }
 
         let removed = REMOVED_FEATURES.iter().find(|f| name == f.0);
@@ -318,17 +321,91 @@ pub fn read_features_into<'a>(
             log::warn!("{:?}", reason);
             // feature_removed(span_handler, mi.span, *reason);
             // continue
-            return Err(kebab);
+            return Err(feat_str);
         }
 
         if let Some((name, since, ..)) = ACCEPTED_FEATURES.iter().find(|f| name == f.0) {
             let name = Atom::from(*name);
             let since = Some(Atom::from(*since));
-            features.declared_lang_features.push((name, since));
-            continue;
+            self.declared_lang_features.push((name, since));
+            return Ok(());
         }
 
-        return Err(kebab);
+        return Err(feat_str);
+    }
+}
+
+pub fn read_features_into<'a>(
+    input_features: impl Iterator<Item = &'a str>,
+    features: &mut Features,
+) -> Result<(), &'a str> {
+    for kebab in input_features {
+        let _ = features.try_set_feature(kebab)?;
     }
     Ok(())
+}
+
+#[cfg(feature = "serde")]
+use serde::de::{
+    DeserializeSeed, Deserializer, Error, Unexpected, Visitor,
+};
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Features {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct SetFeature<'a>(&'a mut Features);
+        impl<'a, 'de> Visitor<'de> for SetFeature<'a> {
+            type Value = ();
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a valid CSL feature name (kebab-case)")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                self.0
+                    .try_set_feature(v)
+                    .map_err(|str_err| Error::invalid_value(Unexpected::Str(str_err), &self))
+            }
+        }
+
+        struct SingleFeature<'a>(&'a mut Features);
+
+        impl<'a, 'de> DeserializeSeed<'de> for SingleFeature<'a> {
+            type Value = ();
+
+            fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let _ = deserializer.deserialize_str(SetFeature(self.0));
+                Ok(())
+            }
+        }
+
+        struct FeatureVisitor;
+        impl<'de> Visitor<'de> for FeatureVisitor {
+            type Value = Features;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a list of valid CSL feature names as strings")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut features = Features::new();
+                while let Some(_) = seq.next_element_seed(SingleFeature(&mut features))? {}
+                Ok(features)
+            }
+        }
+
+        deserializer.deserialize_seq(FeatureVisitor)
+    }
 }

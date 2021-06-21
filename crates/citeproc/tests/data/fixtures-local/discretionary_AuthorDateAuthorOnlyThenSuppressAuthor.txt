@@ -1,0 +1,112 @@
+>>== MODE ==>>
+citation
+<<== MODE ==<<
+
+
+>>== RESULT ==>>
+John Smith
+(2005)
+(Jones 2000)
+<<== RESULT ==<<
+
+>>== CITATION-ITEMS ==>>
+[
+    [
+        {
+            "author-only": true, 
+            "id": "ITEM-1"
+        }
+    ], 
+    [
+        {
+            "id": "ITEM-1", 
+            "suppress-author": true
+        }
+    ],
+    [
+        {
+            "id": "ITEM-2"
+        }
+    ]
+
+]
+<<== CITATION-ITEMS ==<<
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="in-text"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout prefix="(" suffix=")" delimiter="; ">
+      <group delimiter=" ">
+        <names variable="author">
+          <name form="short"/>
+        </names>
+        <date variable="issued" form="text" date-parts="year"/>
+      </group>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <text variable="title" />
+    </layout>
+  </bibliography>
+  <intext>
+    <layout>
+      <names variable="author">
+        <name/>
+      </names>
+    </layout>
+  </intext>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "author": [
+            {
+                "family": "Smith", 
+                "given": "John"
+            }
+        ], 
+        "id": "ITEM-1", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2005"
+                ]
+            ]
+        }, 
+        "title": "Book A", 
+        "type": "book"
+    }, 
+    {
+        "author": [
+            {
+                "family": "Jones", 
+                "given": "Robert"
+            }
+        ], 
+        "id": "ITEM-2", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2000"
+                ]
+            ]
+        }, 
+        "title": "Book B", 
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
+
+

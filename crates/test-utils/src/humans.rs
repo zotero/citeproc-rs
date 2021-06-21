@@ -11,6 +11,7 @@ use citeproc::string_id::Cluster as ClusterStr;
 use citeproc_io::{Cite, ClusterMode, Locators, Reference, SmartString};
 
 use lazy_static::lazy_static;
+use serde_json::Value;
 use std::mem;
 use std::str::FromStr;
 
@@ -64,14 +65,24 @@ pub struct CiteprocJsCite {
     #[serde(default)]
     suffix: Option<String>,
     #[serde(default)]
-    suppress_author: bool,
+    suppress_author: Option<Value>,
     #[serde(default)]
-    author_only: bool,
+    author_only: Option<Value>,
+}
+
+fn is_truthy(v: &Value) -> bool {
+    match v {
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_i64().map_or(false, |x| x == 0),
+        _ => false,
+    }
 }
 
 impl CiteprocJsCite {
     fn to_cite(&self) -> Cite<Markup> {
-        if self.suppress_author || self.author_only {
+        if self.suppress_author.as_ref().map_or(false, is_truthy)
+            || self.author_only.as_ref().map_or(false, is_truthy)
+        {
             panic!("suppress-author and author-only are not supported on a Cite")
         }
         Cite {
@@ -186,24 +197,13 @@ impl<'de> Deserialize<'de> for InstructionMode {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "mode", rename = "kebab-case")]
-pub enum ModeProperties {
-    Composite {
-        #[serde(default)]
-        infix: String,
-    },
-    AuthorOnly,
-    SuppressAuthor,
-}
-
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Properties {
     #[serde(rename = "noteIndex", alias = "note")]
     note_index: u32,
     #[serde(default, flatten)]
-    mode: Option<ModeProperties>,
+    mode: Option<ClusterMode>,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -308,19 +308,31 @@ impl JsExecutor<'_> {
         self.proc.drain();
         let mut renum = Vec::new();
         for CiteprocJsInstruction { cluster, pre, post } in instructions {
-            let id = &cluster.cluster_id;
-            let note = cluster.properties.note_index;
+            let ClusterInstruction {
+                cluster_id,
+                citation_items,
+                properties,
+            } = cluster;
+            let Properties { mode, note_index } = properties;
 
             let mut cites = Vec::new();
-            for cite_item in cluster.citation_items.iter() {
+            for cite_item in citation_items.iter() {
                 cites.push(cite_item.to_cite());
             }
 
             renum.clear();
             self.to_renumbering(&mut renum, pre);
-            self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
+            self.to_renumbering(
+                &mut renum,
+                &[PrePost(cluster.cluster_id.clone(), *note_index)],
+            );
             self.to_renumbering(&mut renum, post);
-            self.proc.insert_cites_str(id, &cites);
+            println!("{:?}", mode);
+            self.proc.insert_cluster_str(ClusterStr {
+                id: cluster_id.clone(),
+                mode: mode.clone(),
+                cites,
+            });
             self.proc.set_cluster_order(&renum).unwrap();
             for &ClusterPosition { id, .. } in &renum {
                 if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
@@ -383,7 +395,7 @@ enum Chunk {
 //     out
 // }
 
-pub fn parse_human_test(contents: &str) -> TestCase {
+pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> TestCase {
     use regex::Regex;
     lazy_static! {
         static ref BEGIN: Regex = Regex::new(r">>=+ ([A-Z\-]+) =+>>").unwrap();
@@ -488,6 +500,7 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         mode.map(|(m, _, _)| m).unwrap_or(Mode::Citation),
         mode.map(|(_, f, _)| Format(f))
             .unwrap_or(Format(SupportedFormat::TestHtml)),
+        csl_features,
         mode.map_or(false, |(_, _, nosort)| nosort),
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),

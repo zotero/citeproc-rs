@@ -1,0 +1,171 @@
+>>== MODE ==>>
+citation
+<<== MODE ==<<
+
+
+
+
+>>== RESULT ==>>
+(2001)
+(Robert Jones, 2002)
+(2003)
+(2004, [Susan Jenkins tran.])
+(2005, [Vincent Herbert tran.])
+<<== RESULT ==<<
+
+>>== CITATION-ITEMS ==>>
+[
+    [
+        {
+            "id": "ITEM-1", 
+            "suppress-author": true
+        }
+    ], 
+    [
+        {
+            "id": "ITEM-2"
+        }
+    ],
+    [
+        {
+            "id": "ITEM-3",
+            "suppress-author": true
+        }
+    ],
+    [
+        {
+            "id": "ITEM-4",
+            "suppress-author": true
+        }
+    ],
+    [
+        {
+            "id": "ITEM-5",
+            "suppress-author": true
+        }
+    ]
+]
+<<== CITATION-ITEMS ==<<
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout delimiter="; " prefix="(" suffix=")">
+      <group delimiter=", ">
+        <names variable="author">
+          <name />
+          <substitute>
+            <names variable="editor" />
+            <text variable="title"/>
+          </substitute>
+        </names>
+        <date variable="issued">
+          <date-part name="year" />
+        </date>
+        <names variable="translator" prefix="[" suffix="]">
+          <name/>
+          <label prefix=" " form="short"/>
+        </names>
+      </group>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "editor": [
+            {
+                "family": "Smith", 
+                "given": "John"
+            }
+        ], 
+        "id": "ITEM-1", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2001"
+                ]
+            ]
+        }, 
+        "title": "Book A", 
+        "type": "book"
+    }, 
+    {
+        "editor": [
+            {
+                "family": "Jones", 
+                "given": "Robert"
+            }
+        ], 
+        "id": "ITEM-2", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2002"
+                ]
+            ]
+        }, 
+        "title": "Book B", 
+        "type": "book"
+    }, 
+    {
+        "id": "ITEM-3", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2003"
+                ]
+            ]
+        }, 
+        "title": "Book C", 
+        "type": "book"
+    }, 
+    {
+        "id": "ITEM-4", 
+        "translator": [
+            {
+                "family": "Jenkins", 
+                "given": "Susan"
+            }
+        ], 
+        "issued": {
+            "date-parts": [
+                [
+                    "2004"
+                ]
+            ]
+        }, 
+        "type": "book"
+    },
+    {
+        "translator": [
+            {
+                "family": "Herbert", 
+                "given": "Vincent"
+            }
+        ], 
+        "id": "ITEM-5", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2005"
+                ]
+            ]
+        }, 
+        "title": "Book E", 
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<
