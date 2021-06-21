@@ -27,6 +27,7 @@ macro_rules! smart_format {
 mod choose;
 mod citation_label;
 mod cite_context;
+mod cluster;
 mod date;
 pub mod db;
 pub mod disamb;
@@ -42,7 +43,8 @@ mod renderer;
 mod sort;
 mod walker;
 
-pub use crate::db::{built_cluster_before_output, safe_default};
+pub use crate::cluster::built_cluster_before_output;
+pub use crate::db::safe_default;
 pub use crate::sort::BibNumber;
 
 pub(crate) mod prelude {
@@ -67,6 +69,7 @@ pub(crate) mod prelude {
     pub use crate::walker::{StyleWalker, WalkerFoldType};
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};
     pub use citeproc_io::output::markup::Markup;
+
     pub use citeproc_io::output::OutputFormat;
     pub use citeproc_io::IngestOptions;
     pub use citeproc_io::{NumberLike, NumericValue};
@@ -82,10 +85,14 @@ pub(crate) mod prelude {
     pub use crate::ref_ir::*;
     pub use crate::sort::BibNumber;
 
+    pub(crate) type MarkupBuild = <Markup as OutputFormat>::Build;
+    pub(crate) type MarkupOutput = <Markup as OutputFormat>::Output;
     pub(crate) use crate::disamb::{Disambiguation, EdgeData, RefContext};
     pub(crate) use crate::helpers::*;
     pub(crate) use crate::renderer::Renderer;
     pub(crate) use crate::{IrState, Proc};
+    pub(crate) const CSL_STYLE_ERROR: &'static str =
+        "[CSL STYLE ERROR: reference with no printed form.]";
 }
 
 use prelude::*;
