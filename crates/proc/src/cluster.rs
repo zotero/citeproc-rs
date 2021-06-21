@@ -558,10 +558,22 @@ impl<T> Partial<T> {
             Self::Filled(x) => Partial::Filled(f(x)),
         }
     }
+    pub(crate) fn and<T2>(self, other: Partial<T2>) -> Partial<(T, T2)> {
+        match (self, other) {
+            (Self::Filled(a), Partial::Filled(b)) => Partial::Filled((a, b)),
+            _ => Partial::Incomparable,
+        }
+    }
     pub(crate) fn option(self) -> Option<T> {
         match self {
             Self::Incomparable => None,
             Self::Filled(t) => Some(t),
+        }
+    }
+    pub(crate) fn as_ref(&self) -> Partial<&T> {
+        match self {
+            Self::Incomparable => Partial::Incomparable,
+            Self::Filled(t) => Partial::Filled(t),
         }
     }
 }
@@ -604,6 +616,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     /// (within a unique_name_number group_by)
     pub range_collapse_key: RangeCollapseKey,
 
+    pub year: Partial<SmartString>,
     pub year_suffix: Partial<u32>,
 
     /// Ranges of year suffixes (not alphabetic, in its base u32 form)
@@ -686,6 +699,7 @@ impl CiteInCluster<Markup> {
             first_of_same_year: false,
             range_collapse_key: RangeCollapseKey::ForceSingle,
             subsequent_same_year: false,
+            year: Partial::Incomparable,
             year_suffix: Partial::Incomparable,
             collapsed_year_suffixes: Vec::new(),
             collapsed_ranges: Vec::new(),
@@ -806,7 +820,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     // magic_ImplicitYearSuffixExplicitDelimiter.txt, I guess that's the only possible reason, but
     // ok.)
     let mut same_names: HashMap<Option<SmartString>, (usize, bool)> = HashMap::new();
-    let mut same_years: HashMap<SmartString, (usize, bool)> = HashMap::new();
+    // let mut same_years: HashMap<SmartString, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
     let mut unique_name = 1;
@@ -850,8 +864,10 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     if collapse.map_or(false, |c| {
         c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
     }) {
-        use crate::helpers::collapse_ranges::collapse_ranges;
-        use crate::helpers::slice_group_by::group_by_mut;
+        use crate::helpers::{
+            collapse_ranges::{collapse_ranges, Segment},
+            slice_group_by::group_by_mut,
+        };
         let name_runs = group_by_mut(cites.as_mut(), |a, b| {
             a.unique_name_number == b.unique_name_number
         });
@@ -867,52 +883,20 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                         Some((fmt.output(flat, false), suf))
                     });
                 if let Some((y, suf)) = year_and_suf {
+                    cite.year = Partial::Filled(y);
                     cite.year_suffix = Partial::Filled(suf);
                 }
             }
-            for cite in collapse_ranges(run.iter_mut(), |a, b| a.year_suffix == b.year_suffix) {}
-        }
-        let mut top_ix = 0;
-        while top_ix < cites.len() {
-            if cites[top_ix].first_of_name {
-                let mut moved = 0;
-                let mut ix = top_ix;
-                while ix < cites.len() {
-                    if ix != top_ix && !cites[ix].subsequent_same_name {
-                        break;
+            for run in group_by_mut(run, |a, b| {
+                a.year.as_ref() == b.year.as_ref()
+            }) {
+                if run.len() > 1 {
+                    run[0].first_of_same_year = true;
+                    for cite in &mut run[1..] {
+                        cite.subsequent_same_year = true;
                     }
-                    moved += 1;
-                    let tree = cites[ix].gen4.tree_ref();
-                    let year_and_suf =
-                        tree.find_first_year_and_suffix()
-                            .and_then(|(ys_node, suf)| {
-                                let ys_tree = tree.with_node(ys_node);
-                                let flat = ys_tree.flatten(fmt, None)?;
-                                Some((fmt.output(flat, false), suf))
-                            });
-                    if let Some((y, suf)) = year_and_suf {
-                        // cites[ix].year_suffix = Some(suf);
-                        same_years
-                            .entry(y)
-                            .and_modify(|(oix, seen_once)| {
-                                if *oix == ix - 1 {
-                                    if !*seen_once {
-                                        cites[*oix].first_of_same_year = true;
-                                    }
-                                    cites[ix].subsequent_same_year = true;
-                                    *seen_once = true;
-                                } else {
-                                    *seen_once = false;
-                                }
-                                *oix = ix;
-                            })
-                            .or_insert((ix, false));
-                    }
-                    ix += 1;
                 }
-                top_ix += moved;
             }
-            top_ix += 1;
         }
     }
 
