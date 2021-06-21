@@ -536,6 +536,48 @@ fn test_range_collapse_key() {
     assert_eq!(groups, expected);
 }
 
+/// A wrapper for Option where `a == b` evaluates to false if either is empty
+///
+/// Implements PartialEq, but does not implement Eq, of course.
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum Partial<T> {
+    Incomparable,
+    Filled(T),
+}
+
+impl<T> Default for Partial<T> {
+    fn default() -> Self {
+        Self::Incomparable
+    }
+}
+
+impl<T> Partial<T> {
+    pub(crate) fn map<R>(self, mut f: impl FnMut(T) -> R) -> Partial<R> {
+        match self {
+            Self::Incomparable => Partial::Incomparable,
+            Self::Filled(x) => Partial::Filled(f(x)),
+        }
+    }
+    pub(crate) fn option(self) -> Option<T> {
+        match self {
+            Self::Incomparable => None,
+            Self::Filled(t) => Some(t),
+        }
+    }
+}
+
+impl<T> PartialEq for Partial<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Filled(a), Self::Filled(b)) => a.eq(b),
+            _ => false,
+        }
+    }
+}
+
 pub(crate) struct CiteInCluster<O: OutputFormat> {
     pub cite_id: CiteId,
     pub cite: Arc<Cite<O>>,
@@ -550,7 +592,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     /// Subsequent in a group of cites with the same name
     pub subsequent_same_name: bool,
     /// equivalent to using first_of_name + subsequent_same_name, except works with group_by
-    pub unique_name_number: u32,
+    pub unique_name_number: Partial<u32>,
 
     /// First of a group of cites with the same year, all with suffixes
     /// (same name implied)
@@ -562,7 +604,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     /// (within a unique_name_number group_by)
     pub range_collapse_key: RangeCollapseKey,
 
-    pub year_suffix: Option<u32>,
+    pub year_suffix: Partial<u32>,
 
     /// Ranges of year suffixes (not alphabetic, in its base u32 form)
     /// (only applicable if first_of_ys == true)
@@ -640,11 +682,11 @@ impl CiteInCluster<Markup> {
             cnum,
             first_of_name: false,
             subsequent_same_name: false,
-            unique_name_number: 0,
+            unique_name_number: Partial::Incomparable,
             first_of_same_year: false,
             range_collapse_key: RangeCollapseKey::ForceSingle,
             subsequent_same_year: false,
-            year_suffix: None,
+            year_suffix: Partial::Incomparable,
             collapsed_year_suffixes: Vec::new(),
             collapsed_ranges: Vec::new(),
             vanished: false,
@@ -767,6 +809,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     let mut same_years: HashMap<SmartString, (usize, bool)> = HashMap::new();
 
     // First, group cites with the same name
+    let mut unique_name = 1;
     for ix in 0..cites.len() {
         let gen4 = &cites[ix].gen4;
         let tree = gen4.tree_ref();
@@ -790,9 +833,12 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                 if *oix < ix {
                     if !*seen_once {
                         cites[*oix].first_of_name = true;
+                        cites[*oix].unique_name_number = Partial::Filled(unique_name);
+                        unique_name += 1;
                     }
                     *seen_once = true;
                     cites[ix].subsequent_same_name = true;
+                    cites[ix].unique_name_number = cites[*oix].unique_name_number;
                     let rotation = &mut cites[*oix + 1..ix + 1];
                     rotation.rotate_right(1);
                     *oix += 1;
@@ -804,6 +850,28 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     if collapse.map_or(false, |c| {
         c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
     }) {
+        use crate::helpers::collapse_ranges::collapse_ranges;
+        use crate::helpers::slice_group_by::group_by_mut;
+        let name_runs = group_by_mut(cites.as_mut(), |a, b| {
+            a.unique_name_number == b.unique_name_number
+        });
+        for run in name_runs {
+            let mut ix = 0;
+            for cite in run.iter_mut() {
+                let tree = cite.gen4.tree_ref();
+                let year_and_suf = tree
+                    .find_first_year_and_suffix()
+                    .and_then(|(ys_node, suf)| {
+                        let ys_tree = tree.with_node(ys_node);
+                        let flat = ys_tree.flatten(fmt, None)?;
+                        Some((fmt.output(flat, false), suf))
+                    });
+                if let Some((y, suf)) = year_and_suf {
+                    cite.year_suffix = Partial::Filled(suf);
+                }
+            }
+            for cite in collapse_ranges(run.iter_mut(), |a, b| a.year_suffix == b.year_suffix) {}
+        }
         let mut top_ix = 0;
         while top_ix < cites.len() {
             if cites[top_ix].first_of_name {
@@ -823,7 +891,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                                 Some((fmt.output(flat, false), suf))
                             });
                     if let Some((y, suf)) = year_and_suf {
-                        cites[ix].year_suffix = Some(suf);
+                        // cites[ix].year_suffix = Some(suf);
                         same_years
                             .entry(y)
                             .and_modify(|(oix, seen_once)| {
@@ -929,11 +997,11 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                             if collapse == Collapse::YearSuffixRanged {
                                 // Potentially confusing; 'cnums' here are year suffixes in u32 form.
                                 let mut cnums = Vec::new();
-                                if let Some(cnum) = u.year_suffix {
+                                if let Some(cnum) = u.year_suffix.option() {
                                     cnums.push(Collapsible::new(cnum, ix));
                                 }
                                 for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix {
+                                    if let Some(cnum) = cite.year_suffix.option() {
                                         cnums.push(Collapsible {
                                             number: cnum,
                                             ix: ix + nix + 1,
@@ -948,12 +1016,12 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                                 }
                                 u.collapsed_year_suffixes = collapse_ranges(&cnums);
                             } else {
-                                if let Some(cnum) = u.year_suffix {
+                                if let Some(cnum) = u.year_suffix.option() {
                                     u.collapsed_year_suffixes
                                         .push(RangePiece::Single(Collapsible::new(cnum, ix)));
                                 }
                                 for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix {
+                                    if let Some(cnum) = cite.year_suffix.option() {
                                         u.collapsed_year_suffixes.push(RangePiece::Single(
                                             Collapsible {
                                                 number: cnum,
