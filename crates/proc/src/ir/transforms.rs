@@ -614,7 +614,7 @@ pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                 let _discard = IR::suppress_author(gen4.root, &mut gen4.arena);
             };
 
-            let mut take = if max > 0 {
+            let take = if max > 0 {
                 max as usize
             } else {
                 core::usize::MAX
@@ -624,8 +624,17 @@ pub fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
         ClusterMode::Composite { infix } => {
             for Unnamed3 { cite_id, gen4, .. } in cites.iter_mut() {
                 let gen4 = Arc::make_mut(gen4);
+                log::debug!("called Composite");
                 if let Some(removed_node) = IR::suppress_author(gen4.root, &mut gen4.arena) {
+                    log::debug!(
+                        "removed node from composite: {:?}",
+                        IrDebug::new(removed_node, &gen4.arena),
+                    );
                     let author_only = if let Some(intext) = db.intext(*cite_id) {
+                        log::debug!(
+                            "using <intext> node for composite: {:?}",
+                            IrDebug::new(intext.root, &intext.arena),
+                        );
                         removed_node.remove_subtree(&mut gen4.arena);
                         arena_copy_tree(intext.root, &intext.arena, &mut gen4.arena)
                             .expect("invalid node id for arena_copy_tree")

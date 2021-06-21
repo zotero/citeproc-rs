@@ -988,7 +988,9 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
     let mut state = IrState::new();
     let mut arena = IrArena::new();
-    let root = style.citation.intermediate(db, &mut state, &ctx, &mut arena);
+    let root = style
+        .citation
+        .intermediate(db, &mut state, &ctx, &mut arena);
     let irgen = IrGen::new(root, arena, state);
     Arc::new(irgen)
 }
@@ -1323,13 +1325,16 @@ pub fn built_cluster_before_output(
         ends_punc(this_suffix) || starts_punc(next_prefix)
     };
 
-    let flatten_affix_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
-        let Unnamed3 { cite, gen4, .. } = cites.get(ix)?;
-        use std::borrow::Cow;
-        let flattened = match IR::flatten(gen4.root, &gen4.arena, &fmt, None) {
+    fn flatten_arena(root: NodeId, arena: &IrArena<Markup>, fmt: &Markup, if_empty: &str) -> MarkupBuild {
+        match IR::flatten(root, arena, fmt, None) {
             Some(x) => x,
-            None => fmt.plain(CSL_STYLE_ERROR),
-        };
+            None => fmt.plain(if_empty),
+        }
+    }
+    let flatten_affix_unnamed = |unnamed: &Unnamed3<Markup>, cite_is_last: bool| -> MarkupBuild {
+        let Unnamed3 { cite, gen4, .. } = unnamed;
+        use std::borrow::Cow;
+        let flattened = flatten_arena(gen4.root, &gen4.arena, &fmt, CSL_STYLE_ERROR);
         let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
         if !pre.is_empty() && !pre.ends_with(' ') {
@@ -1346,7 +1351,6 @@ pub fn built_cluster_before_output(
         let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
             x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
         });
-        let cite_is_last = ix == cites.len() - 1;
         if suf_last_punc && !cite_is_last {
             let suf_mut = suf.to_mut();
             suf_mut.push(' ');
@@ -1360,13 +1364,14 @@ pub fn built_cluster_before_output(
         // TODO: custom procedure for joining user-supplied cite affixes, which should interact
         // with terminal punctuation by overriding rather than joining in the usual way.
         use std::iter::once;
-        Some(
-            fmt.seq(
-                once(prefix_parsed)
-                    .chain(once(flattened))
-                    .chain(once(suffix_parsed)),
-            ),
+        fmt.seq(
+            once(prefix_parsed)
+            .chain(once(flattened))
+            .chain(once(suffix_parsed)),
         )
+    };
+    let flatten_affix_cite = |cites: &[Unnamed3<Markup>], ix: usize| -> Option<MarkupBuild> {
+        Some(flatten_affix_unnamed(cites.get(ix)?, ix == cites.len() - 1))
     };
 
     let cgroup_delim = style
@@ -1387,6 +1392,21 @@ pub fn built_cluster_before_output(
         .or(style.citation.layout.delimiter.as_opt_str())
         .unwrap_or("");
     let layout_delim = style.citation.layout.delimiter.as_ref();
+
+    let intext_el = style.intext.as_ref();
+    let intext_delim = intext_el.map_or("", |x| x.layout.delimiter.as_opt_str().unwrap_or(""));
+    let intext_pre = intext_el.map_or("", |x| {
+        x.layout
+            .affixes
+            .as_ref()
+            .map_or("", |af| af.prefix.as_str())
+    });
+    let intext_suf = intext_el.map_or("", |x| {
+        x.layout
+            .affixes
+            .as_ref()
+            .map_or("", |af| af.suffix.as_str())
+    });
 
     // returned usize is advance len
     let render_range =
