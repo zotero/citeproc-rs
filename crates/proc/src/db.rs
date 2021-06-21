@@ -1318,7 +1318,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         |bib, mut ctx| {
             let mut state = IrState::new();
             let mut arena = IrArena::new();
-            let mut root = bib.intermediate(db, &mut state, &ctx, &mut arena);
+            let root = bib.intermediate(db, &mut state, &ctx, &mut arena);
             let mut tree = IrTree { root, arena };
 
             // Immediately apply year suffixes.
@@ -1340,14 +1340,14 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             }
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
-                if let Some(new_root) = IR::split_first_field(root, &mut tree.arena) {
-                    root = new_root;
+                if let Some(new_root) = IR::split_first_field(tree.root, &mut tree.arena) {
+                    tree.root = new_root;
                 }
             }
 
             // Pull affixes off layout into the right-inlines etc, after we may have created those
             // divs in split_first_field
-            transforms::fix_left_right_layout_affixes(root, &mut tree.arena);
+            transforms::fix_left_right_layout_affixes(tree.root, &mut tree.arena);
 
             if tree.tree_ref().is_empty() {
                 None
