@@ -25,6 +25,12 @@ impl Locator {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
+pub enum CiteMode {
+    AuthorOnly,
+    SuppressAuthor,
+}
+
 use serde::de::{Deserialize, Deserializer};
 
 /// Techincally reference IDs are allowed to be numbers.
@@ -54,6 +60,9 @@ pub struct Cite<O: OutputFormat> {
     // TODO: Enforce len() == 1 in CSL mode
     #[serde(default, flatten, deserialize_with = "get_locators")]
     pub locators: Option<Locators>,
+
+    #[serde(default, flatten, deserialize_with = "get_mode_flags")]
+    pub mode: Option<CiteMode>,
 }
 
 /// Accepts either
@@ -99,6 +108,68 @@ where
     Ok(Option::<Locators>::deserialize(d)?.and_then(|me| me.into_option()))
 }
 
+/// Single length locators arrays => Some(Locators::Single)
+/// Zero length => None
+fn get_mode_flags<'de, D>(d: D) -> Result<Option<CiteMode>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    enum Truthy {
+        Boolean(bool),
+        Number(i32),
+    }
+
+    impl Default for Truthy {
+        fn default() -> Self {
+            Self::Boolean(false)
+        }
+    }
+
+    impl Truthy {
+        fn is_truthy(&self) -> bool {
+            match *self {
+                Truthy::Boolean(b) => b,
+                Truthy::Number(x) => x > 0,
+            }
+        }
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "kebab-case")]
+    struct ModeFlags {
+        #[serde(default)]
+        suppress_author: Truthy,
+        #[serde(default)]
+        author_only: Truthy,
+        #[serde(default)]
+        composite: Option<serde::de::IgnoredAny>,
+    }
+
+    impl ModeFlags {
+        fn to_mode<E: serde::de::Error>(self) -> Result<Option<CiteMode>, E> {
+            if self.composite.is_some() {
+                return Err(E::custom(
+                    "`composite` mode not supported on Cite, only on Cluster",
+                ));
+            }
+            match (
+                self.author_only.is_truthy(),
+                self.suppress_author.is_truthy(),
+            ) {
+                (true, true) => Err(E::custom(
+                    "must supply only one of `author-only` or `suppress-author` on Cite",
+                )),
+                (true, _) => Ok(Some(CiteMode::AuthorOnly)),
+                (_, true) => Ok(Some(CiteMode::SuppressAuthor)),
+                _ => Ok(None),
+            }
+        }
+    }
+
+    ModeFlags::deserialize(d)?.to_mode()
+}
+
 impl<O: OutputFormat> Eq for Cite<O> {}
 impl<O: OutputFormat> PartialEq for Cite<O> {
     fn eq(&self, other: &Self) -> bool {
@@ -126,6 +197,7 @@ impl<O: OutputFormat> Cite<O> {
             prefix: Default::default(),
             suffix: Default::default(),
             locators: None,
+            mode: None,
         }
     }
     pub fn has_affix(&self) -> bool {
@@ -138,4 +210,3 @@ impl<O: OutputFormat> Cite<O> {
         self.suffix.is_some()
     }
 }
-

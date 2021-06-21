@@ -28,9 +28,9 @@ where
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum CitationItem {
-    Array(Vec<CiteprocJsCite>),
+    Array(Vec<Cite<Markup>>),
     Map {
-        cites: Vec<CiteprocJsCite>,
+        cites: Vec<Cite<Markup>>,
         #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
         mode: Option<ClusterMode>,
     },
@@ -42,32 +42,12 @@ impl CitationItem {
             CitationItem::Array(v) => (v, None),
             CitationItem::Map { cites, mode } => (cites, mode),
         };
-        let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
         ClusterStr {
             id: index.to_string().into(),
-            cites,
+            cites: v,
             mode,
         }
     }
-}
-
-#[derive(Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub struct CiteprocJsCite {
-    #[serde(deserialize_with = "get_ref_id")]
-    id: String,
-
-    #[serde(default, flatten)]
-    locators: Option<Locators>,
-
-    #[serde(default)]
-    prefix: Option<String>,
-    #[serde(default)]
-    suffix: Option<String>,
-    #[serde(default)]
-    suppress_author: Option<Value>,
-    #[serde(default)]
-    author_only: Option<Value>,
 }
 
 fn is_truthy(v: &Value) -> bool {
@@ -75,22 +55,6 @@ fn is_truthy(v: &Value) -> bool {
         Value::Bool(b) => *b,
         Value::Number(n) => n.as_i64().map_or(false, |x| x == 0),
         _ => false,
-    }
-}
-
-impl CiteprocJsCite {
-    fn to_cite(&self) -> Cite<Markup> {
-        if self.suppress_author.as_ref().map_or(false, is_truthy)
-            || self.author_only.as_ref().map_or(false, is_truthy)
-        {
-            panic!("suppress-author and author-only are not supported on a Cite")
-        }
-        Cite {
-            ref_id: csl::Atom::from(self.id.as_str()),
-            prefix: self.prefix.as_ref().map(SmartString::from),
-            suffix: self.suffix.as_ref().map(SmartString::from),
-            locators: self.locators.clone(),
-        }
     }
 }
 
@@ -211,7 +175,7 @@ pub struct ClusterInstruction {
     #[serde(rename = "citationID", alias = "id")]
     cluster_id: SmartString,
     #[serde(rename = "citationItems", alias = "cites")]
-    citation_items: Vec<CiteprocJsCite>,
+    citation_items: Vec<Cite<Markup>>,
     properties: Properties,
 }
 
@@ -315,11 +279,6 @@ impl JsExecutor<'_> {
             } = cluster;
             let Properties { mode, note_index } = properties;
 
-            let mut cites = Vec::new();
-            for cite_item in citation_items.iter() {
-                cites.push(cite_item.to_cite());
-            }
-
             renum.clear();
             self.to_renumbering(&mut renum, pre);
             self.to_renumbering(
@@ -331,7 +290,7 @@ impl JsExecutor<'_> {
             self.proc.insert_cluster_str(ClusterStr {
                 id: cluster_id.clone(),
                 mode: mode.clone(),
-                cites,
+                cites: citation_items.to_vec(),
             });
             self.proc.set_cluster_order(&renum).unwrap();
             for &ClusterPosition { id, .. } in &renum {
