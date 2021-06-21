@@ -115,6 +115,7 @@ where
     D: Deserializer<'de>,
 {
     #[derive(Deserialize)]
+    #[serde(untagged)]
     enum Truthy {
         Boolean(bool),
         Number(i32),
@@ -167,7 +168,12 @@ where
         }
     }
 
-    ModeFlags::deserialize(d)?.to_mode()
+    ModeFlags::deserialize(d)
+        .map_err(|e| {
+            log::warn!("{}", e);
+            e
+        })?
+        .to_mode()
 }
 
 impl<O: OutputFormat> Eq for Cite<O> {}

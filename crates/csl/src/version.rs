@@ -303,7 +303,7 @@ pub fn read_features<'a>(
 impl Features {
     pub fn try_set_feature<'a>(&mut self, feat_str: &'a str) -> Result<(), &'a str> {
         let replaced;
-        let name = if feat_str.contains('_') {
+        let name = if feat_str.contains('-') {
             replaced = feat_str.replace('-', "_");
             replaced.as_str()
         } else {
