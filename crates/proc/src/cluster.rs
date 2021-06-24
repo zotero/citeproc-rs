@@ -166,9 +166,7 @@ pub fn built_cluster_before_output(
     let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
     let intext_delimiters = layout::LayoutDelimiters::from_intext(intext_el, citation_el);
 
-    // XXX: remove clone eventually
-    let mut citation_stream =
-        layout::LayoutStream::new(irs.len() * 2, citation_delims.clone(), fmt);
+    let mut citation_stream = layout::LayoutStream::new(irs.len() * 2, citation_delims, fmt);
     let mut intext_stream = layout::LayoutStream::new(0, intext_delimiters, fmt);
 
     // render the intext stream
@@ -199,18 +197,6 @@ pub fn built_cluster_before_output(
     });
 
     intext_stream.write_interspersed(intext_authors, DelimKind::Layout);
-
-    // let mut ix = 0;
-    // for positional in layout::iter_peek_is_last(&irs) {
-    //     let layout::Positional(item, peek) = positional;
-    //     let is_last = peek.is_none();
-    //     if let Some(peek) = peek {
-    //         let suppress_delimiter = layout::suppress_delimiter_between(item, peek);
-    //     }
-    // }
-
-    // XXX: replace with citation_stream
-    // let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
     let mut ix = 0;
     while ix < irs.len() {
@@ -247,18 +233,13 @@ pub fn built_cluster_before_output(
                         &r.collapsed_year_suffixes,
                         DelimKind::CollapseYearSuffixMid,
                         // weird
-                        DelimKind::AfterCollapsedGroup,
-                    );
-                    citation_stream.write_delim(
-                        Some(DelimKind::CollapseYearSuffixLast),
+                        DelimKind::CollapseYearSuffixLast,
                     );
                     rix = advance_to;
                 } else {
                     // rix is actually just a single cite with a suppressed name
                     // Jones 1999, 2000[rix]
                     if let Some((pre, built, suf)) = flatten_affix_cite(&irs, rix, fmt) {
-                        // XXX: need to modify flatten_affix_cite to return prefix/suffix info
-                        // and to make Chunk::Cite carry affixes instead of their own variants
                         citation_stream.write_cite(pre, built, suf);
                         let delim_kind = if irs[rix].has_locator {
                             Some(DelimKind::AfterCollapsedGroup)

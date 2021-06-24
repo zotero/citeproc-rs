@@ -1,6 +1,6 @@
 mode: citation
 result: |
-  Smith says we are wrong. (Jellybeans; Scavengers)
+  Smith says we are wrong. (Jellybeans; Barnacles)
   Smith & Jones says we are wrong. (Jellybeans; Barnacles; Piranhas)
 input:
   - id: smith-1
@@ -49,7 +49,7 @@ csl: |
           <names variable="author">
             <name and="symbol" />
           </names>
-          <text variable="title" prefix="title=" />
+          <text variable="title" />
         </group>
       </layout>
     </citation>
