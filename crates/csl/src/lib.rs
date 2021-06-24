@@ -427,7 +427,7 @@ impl FromNode for InText {
         Ok(InText {
             layout: layout?,
             cite_group_delimiter: attribute_option(node, "cite-group-delimiter", info)?,
-            year_suffix_delimiter: attribute_option(node, "year-suffix-delimiter", info)?,
+            and: attribute_option(node, "and", info)?,
             after_collapse_delimiter: attribute_option(node, "after-collapse-delimiter", info)?,
         })
     }

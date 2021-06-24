@@ -46,6 +46,15 @@ enum Chunk {
     Delim(DelimKind),
 }
 
+impl Chunk {
+    fn as_delim_mut(&mut self) -> Option<&mut DelimKind> {
+        match self {
+            Chunk::Delim(d) => Some(d),
+            _ => None
+        }
+    }
+}
+
 impl<'a> LayoutStream<'a> {
     pub(crate) fn new(cap: usize, delimiters: LayoutDelimiters<'a>, fmt: &'a Markup) -> Self {
         Self {
@@ -64,6 +73,14 @@ impl<'a> LayoutStream<'a> {
             iter.into_iter().map(|built| Chunk::Cite { built }),
             Chunk::Delim(delim_kind),
         ))
+    }
+
+    pub(crate) fn overwrite_and_position(&mut self) {
+        if let Some(_) = self.delimiters.and_last_delimiter {
+            if let Some(last_delim) = self.chunks.iter_mut().rev().find_map(Chunk::as_delim_mut) {
+                *last_delim = DelimKind::And;
+            }
+        }
     }
 
     /// Replaces an existing delimiter, which means you can write delimiters unconditionally and
@@ -134,6 +151,7 @@ impl<'a> LayoutStream<'a> {
 
     pub(crate) fn finish(mut self) -> Option<MarkupBuild> {
         self.pop_delim();
+        self.overwrite_and_position();
         if self.chunks.is_empty() {
             return None;
         }
@@ -185,6 +203,7 @@ pub(crate) struct LayoutDelimiters<'a> {
     pub layout_delim: &'a str,
     pub affixes: Option<&'a Affixes>,
     pub formatting: Option<Formatting>,
+    pub and_last_delimiter: Option<SmartString>,
 }
 
 pub struct CiteOpensRuns {
@@ -203,10 +222,11 @@ pub(crate) enum DelimKind {
     CollapseYearSuffixMid,
     CollapseYearSuffixLast,
     Range,
+    And,
 }
 
 impl<'a> LayoutDelimiters<'a> {
-    pub(crate) fn delim(&self, post: DelimKind) -> Option<&'a str> {
+    pub(crate) fn delim(&'a self, post: DelimKind) -> Option<&'a str> {
         Some(match post {
             DelimKind::CiteGroup => self.cite_group,
             DelimKind::AfterCollapsedGroup => self.after_collapse,
@@ -216,6 +236,9 @@ impl<'a> LayoutDelimiters<'a> {
             DelimKind::CollapseYearSuffixLast => self.cite_group,
             DelimKind::Layout => self.layout_delim,
             DelimKind::Range => "\u{2013}",
+            // should not have to observe None here, simply don't write any Ands until you are sure
+            // you have and_last_delimiter
+            DelimKind::And => return self.and_last_delimiter.as_opt_str(),
         })
         .filter(|x| !x.is_empty())
     }
@@ -242,11 +265,13 @@ impl<'a> LayoutDelimiters<'a> {
             layout_delim,
             affixes,
             formatting,
+            and_last_delimiter: None,
         }
     }
     pub(crate) fn from_intext(
         intext_el: Option<&'a csl::InText>,
         citation: &'a csl::Citation,
+        merged_locale: &'a csl::Locale,
     ) -> Self {
         let mut citation = LayoutDelimiters::from_citation(citation);
         citation.formatting = None;
@@ -257,24 +282,31 @@ impl<'a> LayoutDelimiters<'a> {
                 .cite_group_delimiter
                 .as_opt_str()
                 .unwrap_or(citation.cite_group);
-            let year_suffix = intext_el
-                .year_suffix_delimiter
-                .as_opt_str()
-                .unwrap_or(citation.cite_group);
             let after_collapse = intext_el
                 .after_collapse_delimiter
                 .as_opt_str()
                 .unwrap_or(citation.after_collapse);
             let layout_delim = layout_opt.unwrap_or(citation.layout_delim);
             let affixes = intext_el.layout.affixes.as_ref();
+            let and_last_delimiter = intext_el.and.map(|x| match x {
+                csl::NameAnd::Symbol => SmartString::from(" & "),
+                csl::NameAnd::Text => {
+                    let mut string = SmartString::new();
+                    string.push(' ');
+                    string.push_str(merged_locale.and_term(None).unwrap_or("and").trim());
+                    string.push(' ');
+                    string
+                },
+            });
             let formatting = intext_el.layout.formatting.clone();
             citation = Self {
                 cite_group,
-                year_suffix,
+                year_suffix: citation.year_suffix,
                 after_collapse,
                 layout_delim,
                 affixes,
                 formatting,
+                and_last_delimiter,
             }
         }
         citation

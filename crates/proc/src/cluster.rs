@@ -163,8 +163,9 @@ pub fn built_cluster_before_output(
     let citation_el = &style.citation;
     let intext_el = style.intext.as_ref();
 
+    let merged_locale = db.default_locale();
     let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
-    let intext_delimiters = layout::LayoutDelimiters::from_intext(intext_el, citation_el);
+    let intext_delimiters = layout::LayoutDelimiters::from_intext(intext_el, citation_el, &merged_locale);
 
     let mut citation_stream = layout::LayoutStream::new(irs.len() * 2, citation_delims, fmt);
     let mut intext_stream = layout::LayoutStream::new(0, intext_delimiters, fmt);
@@ -193,6 +194,7 @@ pub fn built_cluster_before_output(
         cite.gen4
             .tree_ref()
             .with_node(node)
+            // this is something @fbennett made up specifically for author-only.
             .flatten_or_plain(fmt, "[NO_PRINTED_FORM]")
     });
 
