@@ -2,7 +2,7 @@ mode: citation
 # the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
 result: |
   Smith (using intext element)
-  title=Jellybeans; Jones, title=Scavengers
+  Jellybeans; Jones, Scavengers
 input:
   - id: "ITEM-1"
     title: "Jellybeans"
@@ -35,7 +35,7 @@ csl: |
       <layout delimiter="; ">
         <group delimiter=", ">
           <names variable="author" />
-          <text variable="title" prefix="title=" />
+          <text variable="title" />
         </group>
       </layout>
     </citation>

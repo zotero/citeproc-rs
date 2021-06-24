@@ -61,9 +61,10 @@ impl OutputFormat for SortStringFormat {
         a
     }
 
-    fn seq(&self, mut nodes: impl Iterator<Item = Self::Build>) -> Self::Build {
-        if let Some(first) = nodes.next() {
-            nodes.fold(first, |mut a, b| {
+    fn seq(&self, mut nodes: impl IntoIterator<Item = Self::Build>) -> Self::Build {
+        let mut iter = nodes.into_iter();
+        if let Some(first) = iter.next() {
+            iter.fold(first, |mut a, b| {
                 a.push_str(&b);
                 a
             })

@@ -348,10 +348,10 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
 pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     fmt: &Markup,
-    mode: ClusterMode,
+    mode: &ClusterMode,
     cites: &mut Vec<CiteInCluster<O>>,
 ) {
-    match mode {
+    match *mode {
         ClusterMode::AuthorOnly => {
             for CiteInCluster {
                 cite_id,
@@ -364,14 +364,14 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                     // completely replace with the intext arena, no need to copy
                     // into the old arena in gen4.
                     *gen4 = intext;
-                    *layout_destination = LayoutDestination::MainToCitation; // default
+                    *layout_destination = LayoutDestination::MainToIntext; // default
                 } else if let Some(new_root) = gen4.tree_ref().leading_names_block_or_title() {
                     let gen4 = Arc::make_mut(gen4);
                     let tree = gen4.tree_mut();
                     new_root.detach(&mut tree.arena);
                     tree.root.remove_subtree(&mut tree.arena);
                     tree.root = new_root;
-                    *layout_destination = LayoutDestination::MainToCitation; // default
+                    *layout_destination = LayoutDestination::MainToIntext; // default
                 }
             }
         }
@@ -379,7 +379,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             let suppress_it = |cite: &mut CiteInCluster<O>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
-                cite.layout_destination = LayoutDestination::MainToIntext;
+                cite.layout_destination = LayoutDestination::MainToCitation;
             };
 
             let take = if max > 0 {

@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+//
+// Copyright © 2021 Corporation for Digital Scholarship
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -7,12 +13,15 @@ use csl::Collapse;
 
 use crate::helpers::{
     collapse_ranges::{collapse_ranges, Segment},
-    slice_group_by::group_by_mut,
+    slice_group_by::{group_by, group_by_mut},
 };
 
 use crate::db::IrGen;
 use crate::ir::transforms;
 use crate::prelude::*;
+
+mod layout;
+pub(crate) use layout::LayoutDestination;
 
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
@@ -43,7 +52,7 @@ pub fn built_cluster_before_output(
     }
 
     let cluster_mode = db.cluster_mode(cluster_id);
-    if let Some(mode) = cluster_mode {
+    if let Some(mode) = &cluster_mode {
         transforms::apply_cluster_mode(db, &fmt, mode, &mut irs);
     }
 
@@ -74,110 +83,22 @@ pub fn built_cluster_before_output(
 
     // csl_test_suite::affix_WithCommas.txt
     let suppress_delimiter = |cites: &[CiteInCluster<Markup>], ix: usize| -> bool {
-        let this_suffix = match cites.get(ix) {
-            Some(x) => x.cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""),
-            None => "",
-        };
-        let next_prefix = match cites.get(ix + 1) {
-            Some(x) => x.cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""),
-            None => "",
-        };
-        let ends_punc = |string: &str| {
-            string
-                .chars()
-                .rev()
-                .nth(0)
-                .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!')
-        };
-        let starts_punc = |string: &str| {
-            string
-                .chars()
-                .nth(0)
-                .map_or(false, |x| x == ',' || x == '.' || x == '?' || x == '!')
-        };
-
-        // "2000 is one source,; David Jones" => "2000 is one source, David Jones"
-        // "2000;, and David Jones" => "2000, and David Jones"
-        ends_punc(this_suffix) || starts_punc(next_prefix)
+        if let (Some(a), Some(b)) = (cites.get(ix), cites.get(ix + 1)) {
+            layout::suppress_delimiter_between(a, b)
+        } else {
+            false
+        }
     };
 
-    let flatten_affix_unnamed =
-        |unnamed: &CiteInCluster<Markup>, cite_is_last: bool| -> MarkupBuild {
-            let CiteInCluster { cite, gen4, .. } = unnamed;
-            use std::borrow::Cow;
-            let flattened = gen4.tree_ref().flatten_or_plain(&fmt, CSL_STYLE_ERROR);
-            let mut pre = Cow::from(cite.prefix.as_ref().map(AsRef::as_ref).unwrap_or(""));
-            let mut suf = Cow::from(cite.suffix.as_ref().map(AsRef::as_ref).unwrap_or(""));
-            if !pre.is_empty() && !pre.ends_with(' ') {
-                let pre_mut = pre.to_mut();
-                pre_mut.push(' ');
-            }
-            let suf_first = suf.chars().nth(0);
-            if suf_first.map_or(false, |x| {
-                x != ' ' && !citeproc_io::output::markup::is_punc(x)
-            }) {
-                let suf_mut = suf.to_mut();
-                suf_mut.insert_str(0, " ");
-            }
-            let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
-                x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
-            });
-            if suf_last_punc && !cite_is_last {
-                let suf_mut = suf.to_mut();
-                suf_mut.push(' ');
-            }
-            let opts = IngestOptions {
-                is_external: true,
-                ..Default::default()
-            };
-            let prefix_parsed = fmt.ingest(&pre, &opts);
-            let suffix_parsed = fmt.ingest(&suf, &opts);
-            // TODO: custom procedure for joining user-supplied cite affixes, which should interact
-            // with terminal punctuation by overriding rather than joining in the usual way.
-            use std::iter::once;
-            fmt.seq(
-                once(prefix_parsed)
-                    .chain(once(flattened))
-                    .chain(once(suffix_parsed)),
-            )
-        };
     let flatten_affix_cite = |cites: &[CiteInCluster<Markup>], ix: usize| -> Option<MarkupBuild> {
-        Some(flatten_affix_unnamed(cites.get(ix)?, ix == cites.len() - 1))
+        Some(layout::flatten_with_affixes(
+            cites.get(ix)?,
+            ix == cites.len() - 1,
+            fmt,
+        ))
     };
 
-    let cgroup_delim = style
-        .citation
-        .cite_group_delimiter
-        .as_opt_str()
-        .unwrap_or(", ");
-    let ysuf_delim = style
-        .citation
-        .year_suffix_delimiter
-        .as_opt_str()
-        .or(style.citation.layout.delimiter.as_opt_str())
-        .unwrap_or("");
-    let acol_delim = style
-        .citation
-        .after_collapse_delimiter
-        .as_opt_str()
-        .or(style.citation.layout.delimiter.as_opt_str())
-        .unwrap_or("");
-    let layout_delim = style.citation.layout.delimiter.as_ref();
-
-    let intext_el = style.intext.as_ref();
-    let intext_delim = intext_el.map_or("", |x| x.layout.delimiter.as_opt_str().unwrap_or(""));
-    let intext_pre = intext_el.map_or("", |x| {
-        x.layout
-            .affixes
-            .as_ref()
-            .map_or("", |af| af.prefix.as_str())
-    });
-    let intext_suf = intext_el.map_or("", |x| {
-        x.layout
-            .affixes
-            .as_ref()
-            .map_or("", |af| af.suffix.as_str())
-    });
+    let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
 
     enum OutputChannels {
         CitationLayout(MarkupBuild),
@@ -234,40 +155,68 @@ pub fn built_cluster_before_output(
             (fmt.group(group, "", None), advance_to)
         };
 
-    let mut intext_authors = Vec::with_capacity(irs.len() * 2);
     let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
-    let mut push_built_cite = |output: OutputChannels, ix: usize| {
-        match output {
-            // <intext><layout>; joined later with the intext layout's delimiter/affixes
-            OutputChannels::IntextLayout(intext) => intext_authors.push(intext),
-            // the normal one, <citation><layout>, joined later witht the citation layout's
-            // delimiter/affixes
-            OutputChannels::CitationLayout(cite) => built_cites.push(cite),
-            // one into each
-            OutputChannels::SplitIntextCitation(intext, cite) => {
-                intext_authors.push(intext);
-                built_cites.push(cite);
-            }
-        }
-    };
+    let intext_el = style.intext.as_ref();
+    let intext_delim = intext_el.and_then(|x| x.layout.delimiter.as_opt_str());
+    let intext_pre = intext_el.map_or("", |x| {
+        x.layout
+            .affixes
+            .as_ref()
+            .map_or("", |af| af.prefix.as_str())
+    });
+    let intext_suf = intext_el.map_or("", |x| {
+        x.layout
+            .affixes
+            .as_ref()
+            .map_or("", |af| af.suffix.as_str())
+    });
+    let intext_affixes = intext_el.and_then(|x| x.layout.affixes.as_ref());
+    let intext_formatting = intext_el.and_then(|x| x.layout.formatting.clone());
+
+    let mut intext_stream = layout::LayoutStream::new(
+        0,
+        intext_delim,
+        Some(", "),
+        intext_affixes,
+        fmt,
+        intext_formatting,
+    );
 
     // render the intext stream
-    for CiteInCluster {
-        gen4,
-        layout_destination,
-        ..
-    } in irs.iter()
-    {
-        match layout_destination {
-            LayoutDestination::Nowhere => {}
-            LayoutDestination::MainToCitation => {}
-            LayoutDestination::MainToIntext => {}
-            LayoutDestination::MainToCitationPlusIntext(intext_node) => {}
-        }
-    }
+    let intext_authors = group_by(irs.as_slice(), |a, b| {
+        a.unique_name_number == b.unique_name_number
+    })
+    // only need the first one of each group, the rest should have identical names
+    //
+    //
+    //
+    // TODO: technically the intext name can differ from the first name element.
+    // do we factor that in by replacing with intext where possible in group_and_collapse?
+    //
+    //
+    //
+    //
+    .map(|run| &run[0])
+    .filter_map(|cite| match cite.layout_destination {
+        LayoutDestination::MainToIntext => Some((cite, cite.gen4.tree_ref().node)),
+        LayoutDestination::MainToCitationPlusIntext(node) => Some((cite, node)),
+        _ => None,
+    })
+    .map(|(cite, node)| {
+        cite.gen4
+            .tree_ref()
+            .with_node(node)
+            .flatten_or_plain(fmt, "[NO_PRINTED_FORM]")
+    });
+
+    intext_stream.write_interspersed(intext_authors, ", ");
 
     let mut ix = 0;
+
+    for pair in irs.windows(2) {
+        let (this, next) = (&pair[0], &pair[1]); // windows are never <2 long
+    }
 
     while ix < irs.len() {
         let CiteInCluster {
@@ -284,12 +233,12 @@ pub fn built_cluster_before_output(
         if !collapsed_ranges.is_empty() {
             let (built, advance_to) = render_range(
                 collapsed_ranges,
-                layout_delim.as_opt_str().unwrap_or(""),
-                acol_delim,
+                citation_delims.layout_delim,
+                citation_delims.after_collapse,
             );
             built_cites.push(built);
             if !suppress_delimiter(&irs, ix) {
-                built_cites.push(fmt.plain(acol_delim));
+                built_cites.push(fmt.plain(citation_delims.after_collapse));
             } else {
                 built_cites.push(fmt.plain(""));
             }
@@ -303,11 +252,14 @@ pub fn built_cluster_before_output(
                     break;
                 }
                 if !r.collapsed_year_suffixes.is_empty() {
-                    let (built, advance_to) =
-                        render_range(&r.collapsed_year_suffixes, ysuf_delim, acol_delim);
+                    let (built, advance_to) = render_range(
+                        &r.collapsed_year_suffixes,
+                        citation_delims.year_suffix,
+                        citation_delims.after_collapse,
+                    );
                     group.push(built);
                     if !suppress_delimiter(&irs, ix) {
-                        group.push(fmt.plain(cgroup_delim));
+                        group.push(fmt.plain(citation_delims.cite_group));
                     } else {
                         group.push(fmt.plain(""));
                     }
@@ -317,9 +269,9 @@ pub fn built_cluster_before_output(
                         group.push(b);
                         if !suppress_delimiter(&irs, ix) {
                             group.push(fmt.plain(if irs[rix].has_locator {
-                                acol_delim
+                                citation_delims.after_collapse
                             } else {
-                                cgroup_delim
+                                citation_delims.cite_group
                             }));
                         } else {
                             group.push(fmt.plain(""));
@@ -331,7 +283,7 @@ pub fn built_cluster_before_output(
             group.pop();
             built_cites.push(fmt.group(group, "", None));
             if !suppress_delimiter(&irs, ix) {
-                built_cites.push(fmt.plain(acol_delim));
+                built_cites.push(fmt.plain(citation_delims.after_collapse));
             } else {
                 built_cites.push(fmt.plain(""));
             }
@@ -340,7 +292,7 @@ pub fn built_cluster_before_output(
             if let Some(built) = flatten_affix_cite(&irs, ix) {
                 built_cites.push(built);
                 if !suppress_delimiter(&irs, ix) {
-                    built_cites.push(fmt.plain(layout_delim.as_opt_str().unwrap_or("")));
+                    built_cites.push(fmt.plain(citation_delims.layout_delim));
                 } else {
                     built_cites.push(fmt.plain(""));
                 }
@@ -350,54 +302,31 @@ pub fn built_cluster_before_output(
     }
     built_cites.pop();
 
-    fmt.with_format(
-        fmt.affixed(fmt.group(built_cites, "", None), layout.affixes.as_ref()),
-        layout.formatting,
-    )
-}
-
-struct LayoutStream<'a> {
-    group: Vec<MarkupBuild>,
-    layout_delim: Option<&'a str>,
-    default_delim: Option<&'a str>,
-    affixes: Option<&'a Affixes>,
-    fmt: &'a Markup,
-    formatting: Option<Formatting>,
-}
-
-impl<'a> LayoutStream<'a> {
-    fn write(&mut self, built: MarkupBuild) {}
-    fn finish(self) -> MarkupBuild {
-        let Self {
-            group,
-            layout_delim,
-            affixes,
-            formatting,
-            fmt,
-            default_delim: _,
-        } = self;
-        // we maintain either a delimiter or an extra element at the end all the way through, just for this
-        fmt.with_format(fmt.affixed(fmt.group(group, "", None), affixes), formatting)
+    let citation_final = if !built_cites.is_empty() {
+        Some(fmt.with_format(
+            fmt.affixed(fmt.seq(built_cites), layout.affixes.as_ref()),
+            layout.formatting,
+        ))
+    } else {
+        None
+    };
+    let intext_final = intext_stream.finish();
+    if intext_final.is_none() {
+        return fmt.seq(citation_final.into_iter());
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LayoutDestination {
-    /// Do not render this cite anywhere, it is in the middle of a collapsed range.
-    Nowhere,
-    /// Take gen4's tree and put it in the `<citation><layout>` stream
-    MainToCitation,
-    /// Take gen4's tree and put it in the `<intext><layout>` stream
-    MainToIntext,
-    /// Take gen4's tree and put it in the `<citation><layout>` stream, and then put this detached node
-    /// into the `<intext><layout>` stream
-    MainToCitationPlusIntext(NodeId),
-}
-
-impl Default for LayoutDestination {
-    fn default() -> Self {
-        LayoutDestination::MainToCitation
-    }
+    let infix = render_composite_infix(
+        match &cluster_mode {
+            Some(ClusterMode::Composite { infix }) => Some(infix.as_opt_str()),
+            _ => None,
+        },
+        fmt,
+    );
+    use core::iter::once;
+    let seq = intext_final
+        .into_iter()
+        .chain(infix)
+        .chain(citation_final);
+    fmt.seq(seq)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -725,6 +654,13 @@ impl CiteInCluster<Markup> {
             trailing_only: false,
         }
     }
+
+    fn prefix_str(&self) -> Option<&str> {
+        self.cite.prefix.as_ref().map(AsRef::as_ref)
+    }
+    fn suffix_str(&self) -> Option<&str> {
+        self.cite.suffix.as_ref().map(AsRef::as_ref)
+    }
 }
 
 ////////////////////////////////
@@ -928,16 +864,16 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
             self.year.as_ref().filter(!self.has_locator)
         }
         fn by_name(&self) -> Partial<u32> {
-            self.unique_name_number.filter(!self.has_locator).filter(self.cite.mode != Some(CiteMode::AuthorOnly))
+            self.unique_name_number
+                .filter(!self.has_locator)
+                .filter(self.cite.mode != Some(CiteMode::AuthorOnly))
         }
     }
 
     if let Some(collapse) = collapse {
         match collapse {
             Collapse::CitationNumber => {
-                let by_name = group_by_mut(cites.as_mut(), |a, b| {
-                    a.by_name() == b.by_name()
-                });
+                let by_name = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
                 let mut ix = 0;
                 for name_run in by_name {
                     let mut cnums = Vec::new();
@@ -976,9 +912,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                 }
             }
             Collapse::YearSuffixRanged | Collapse::YearSuffix => {
-                let by_name = group_by_mut(cites.as_mut(), |a, b| {
-                    a.by_name() == b.by_name()
-                });
+                let by_name = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
                 let mut ix = 0;
                 for name_run in by_name {
                     for cite in &mut name_run[1..] {
@@ -1022,13 +956,11 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                             for (yix, cite) in year_run[1..].iter_mut().enumerate() {
                                 let yix = yix + 1;
                                 if let Some(cnum) = cite.year_suffix.option() {
-                                    range_pieces.push(RangePiece::Single(
-                                        Collapsible {
-                                            number: cnum,
-                                            ix: ix + nix + yix,
-                                            force_single: cite.has_locator,
-                                        },
-                                    ));
+                                    range_pieces.push(RangePiece::Single(Collapsible {
+                                        number: cnum,
+                                        ix: ix + nix + yix,
+                                        force_single: cite.has_locator,
+                                    }));
                                 }
                                 cite.trailing_only = true;
                                 let gen4 = Arc::make_mut(&mut cite.gen4);
@@ -1049,8 +981,11 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
 // Cluster Modes & Cite Modes //
 ////////////////////////////////
 
-fn render_cluster_infix<O: OutputFormat>(infix: Option<&str>, fmt: &O) -> O::Build {
-    let mut infix: SmartString = infix.unwrap_or(" ").into();
+fn render_composite_infix<O: OutputFormat>(
+    infix: Option<Option<&str>>,
+    fmt: &O,
+) -> Option<O::Build> {
+    let mut infix: SmartString = infix?.unwrap_or(" ").into();
     if !infix.ends_with(" ") {
         infix.push(' ');
     }
@@ -1062,11 +997,11 @@ fn render_cluster_infix<O: OutputFormat>(infix: Option<&str>, fmt: &O) -> O::Bui
     {
         infix.insert(0, ' ');
     }
-    fmt.ingest(
+    Some(fmt.ingest(
         &infix,
         &IngestOptions {
             is_external: true,
             ..Default::default()
         },
-    )
+    ))
 }

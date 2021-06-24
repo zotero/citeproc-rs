@@ -131,7 +131,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         formatting: Option<Formatting>,
     ) -> Self::Build;
 
-    fn seq(&self, nodes: impl Iterator<Item = Self::Build>) -> Self::Build;
+    fn seq(&self, nodes: impl IntoIterator<Item = Self::Build>) -> Self::Build;
 
     fn join_delim(&self, a: Self::Build, delim: &str, b: Self::Build) -> Self::Build;
 
