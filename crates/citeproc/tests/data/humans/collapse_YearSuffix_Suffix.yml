@@ -1,7 +1,7 @@
 mode: citation
 result: |
-  (Smith 1999a,b,c --suffix here--, 2000)
-  (Smith 1999a,b,c --suffix here--, 1999d, 2000)
+  (Smith 1999a,b, 1999c --suffix here--, 2000)
+  (Smith 1999a,b, 1999c --suffix here--, 1999d, 2000)
 input:
   - id: smith-1999-1
     author: [{family: "Smith"}]
@@ -24,13 +24,15 @@ clusters:
     cites:
       - id: smith-1999-1
       - id: smith-1999-2
-      - id: smith-1999-3 # suffix here
+      - id: smith-1999-3
+        suffix: "--suffix here--"
       - id: smith-2000
   - id: cluster-two
     cites:
       - id: smith-1999-1
       - id: smith-1999-2
-      - id: smith-1999-3 # suffix here
+      - id: smith-1999-3
+        suffix: "--suffix here--"
         # should render with the 1999 still intact
       - id: smith-1999-4
       - id: smith-2000
