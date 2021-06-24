@@ -21,8 +21,8 @@ use crate::ir::transforms;
 use crate::prelude::*;
 
 mod layout;
-pub(crate) use layout::LayoutDestination;
 use layout::DelimKind;
+pub(crate) use layout::LayoutDestination;
 
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
@@ -158,7 +158,8 @@ pub fn built_cluster_before_output(
     let intext_delimiters = layout::LayoutDelimiters::from_intext(intext_el, citation_el);
 
     // XXX: remove clone eventually
-    let mut citation_stream = layout::LayoutStream::new(irs.len() * 2, citation_delims.clone(), fmt);
+    let mut citation_stream =
+        layout::LayoutStream::new(irs.len() * 2, citation_delims.clone(), fmt);
     let mut intext_stream = layout::LayoutStream::new(0, intext_delimiters, fmt);
 
     // render the intext stream
@@ -200,7 +201,7 @@ pub fn built_cluster_before_output(
     // }
 
     // XXX: replace with citation_stream
-    let mut built_cites = Vec::with_capacity(irs.len() * 2);
+    // let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
     let mut ix = 0;
     while ix < irs.len() {
@@ -222,15 +223,14 @@ pub fn built_cluster_before_output(
                 citation_delims.layout_delim,
                 citation_delims.after_collapse,
             );
-            built_cites.push(built);
-            if !should_suppress_delimiter(&irs, ix) {
-                built_cites.push(fmt.plain(citation_delims.after_collapse));
-            } else {
-                built_cites.push(fmt.plain(""));
-            }
+            citation_stream.write_cite(None, built, None, false);
+            citation_stream.write_delim(
+                // changed from ix to advance_to here
+                Some(DelimKind::CollapseCitationNumbersLast)
+                    .filter(|_| !should_suppress_delimiter(&irs, advance_to)),
+            );
             ix = advance_to + 1;
         } else if *first_of_name {
-            let mut group = Vec::with_capacity(4);
             let mut rix = ix;
             while rix < irs.len() {
                 let r = &irs[rix];
@@ -238,65 +238,57 @@ pub fn built_cluster_before_output(
                     break;
                 }
                 if !r.collapsed_year_suffixes.is_empty() {
+                    // rix is the start of a run of 1999a[rix],b,c
                     let (built, advance_to) = render_range(
                         &irs,
                         &r.collapsed_year_suffixes,
                         citation_delims.year_suffix,
                         citation_delims.after_collapse,
                     );
-                    group.push(built);
-                    if !should_suppress_delimiter(&irs, ix) {
-                        group.push(fmt.plain(citation_delims.cite_group));
-                    } else {
-                        group.push(fmt.plain(""));
-                    }
+                    citation_stream.write_cite(None, built, None, false);
+                    citation_stream.write_delim(
+                        // changed ix to advance_to here
+                        Some(DelimKind::CollapseYearSuffixLast)
+                            .filter(|_| !should_suppress_delimiter(&irs, advance_to)),
+                    );
                     rix = advance_to;
                 } else {
-                    if let Some(b) = flatten_affix_cite(&irs, rix) {
-                        group.push(b);
-                        if !should_suppress_delimiter(&irs, ix) {
-                            group.push(fmt.plain(if irs[rix].has_locator {
-                                citation_delims.after_collapse
-                            } else {
-                                citation_delims.cite_group
-                            }));
+                    // rix is actually just a single cite with a suppressed name
+                    // Jones 1999, 2000[rix]
+                    if let Some(built) = flatten_affix_cite(&irs, rix) {
+                        // XXX: need to modify flatten_affix_cite to return prefix/suffix info
+                        // and to make Chunk::Cite carry affixes instead of their own variants
+                        citation_stream.write_cite(None, built, None, false);
+                        let delim_kind = if irs[rix].has_locator {
+                            Some(DelimKind::AfterCollapsedGroup)
                         } else {
-                            group.push(fmt.plain(""));
-                        }
+                            Some(DelimKind::CiteGroup)
+                        };
+                        citation_stream.write_delim(
+                            // changed ix to advance_to here
+                            delim_kind.filter(|_| !should_suppress_delimiter(&irs, rix)),
+                        );
                     }
                 }
                 rix += 1;
             }
-            group.pop();
-            built_cites.push(fmt.seq(group));
-            if !should_suppress_delimiter(&irs, ix) {
-                built_cites.push(fmt.plain(citation_delims.after_collapse));
-            } else {
-                built_cites.push(fmt.plain(""));
-            }
+            citation_stream.write_delim(
+                Some(DelimKind::AfterCollapsedGroup)
+                    .filter(|_| !should_suppress_delimiter(&irs, rix.saturating_sub(1))),
+            );
             ix = rix;
         } else {
             if let Some(built) = flatten_affix_cite(&irs, ix) {
-                built_cites.push(built);
-                if !should_suppress_delimiter(&irs, ix) {
-                    built_cites.push(fmt.plain(citation_delims.layout_delim));
-                } else {
-                    built_cites.push(fmt.plain(""));
-                }
+                citation_stream.write_cite(None, built, None, false);
+                citation_stream.write_delim(
+                    Some(DelimKind::Layout).filter(|_| !should_suppress_delimiter(&irs, ix))
+                );
             }
             ix += 1;
         }
     }
-    built_cites.pop();
 
-    let citation_final = if !built_cites.is_empty() {
-        Some(fmt.with_format(
-            fmt.affixed(fmt.seq(built_cites), layout.affixes.as_ref()),
-            layout.formatting,
-        ))
-    } else {
-        None
-    };
+    let citation_final = citation_stream.finish();
     let intext_final = intext_stream.finish();
     if intext_final.is_none() {
         return fmt.seq(citation_final.into_iter());
