@@ -85,13 +85,17 @@ pub fn built_cluster_before_output(
         }
     };
 
-    let flatten_affix_cite = |cites: &[CiteInCluster<Markup>], ix: usize| -> Option<MarkupBuild> {
+    fn flatten_affix_cite(
+        cites: &[CiteInCluster<Markup>],
+        ix: usize,
+        fmt: &Markup,
+    ) -> Option<(Option<SmartString>, MarkupBuild, Option<SmartString>)> {
         Some(layout::flatten_with_affixes(
             cites.get(ix)?,
             ix + 1 == cites.len(),
             fmt,
         ))
-    };
+    }
 
     enum OutputChannels {
         CitationLayout(MarkupBuild),
@@ -100,11 +104,11 @@ pub fn built_cluster_before_output(
     }
 
     // returned usize is advance len
-    let render_range = |irs: &[CiteInCluster<Markup>],
+    let render_range = |stream: &mut layout::LayoutStream,
                         ranges: &[RangePiece],
-                        group_delim: &str,
-                        outer_delim: &str|
-     -> (MarkupBuild, usize) {
+                        group_delim: DelimKind,
+                        outer_delim: DelimKind|
+     -> usize {
         let mut advance_to = 0usize;
         let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
         for (ix, piece) in ranges.iter().enumerate() {
@@ -114,41 +118,46 @@ pub fn built_cluster_before_output(
                     ix, force_single, ..
                 }) => {
                     advance_to = ix;
-                    if let Some(one) = flatten_affix_cite(&irs, ix) {
-                        group.push(one);
-                        if !is_last && !should_suppress_delimiter(&irs, ix) {
-                            group.push(fmt.plain(if force_single {
-                                outer_delim
-                            } else {
-                                group_delim
-                            }));
-                        }
+                    if let Some((pre, one, suf)) = flatten_affix_cite(&irs, ix, fmt) {
+                        stream.write_cite(pre, one, suf);
+                        let delim_kind = if force_single {
+                            outer_delim
+                        } else {
+                            group_delim
+                        };
+                        stream.write_delim(Some(delim_kind));
                     }
                 }
-                RangePiece::Range(start, end) => {
-                    advance_to = end.ix;
-                    let mut delim = "\u{2013}";
-                    if start.number == end.number - 1 {
+                RangePiece::Range(range_start, range_end) => {
+                    advance_to = range_end.ix;
+                    let mut range_delimiter = DelimKind::Range;
+                    if range_start.number + 1 == range_end.number {
                         // Not represented as a 1-2, just two sequential numbers 1,2
-                        delim = group_delim;
+                        range_delimiter = group_delim;
                     }
-                    let mut g = vec![];
-                    if let Some(start) = flatten_affix_cite(&irs, start.ix) {
-                        g.push(start);
-                    }
-                    if let Some(end) = flatten_affix_cite(&irs, end.ix) {
-                        g.push(end);
-                    }
+                    // XXX: need to guarantee before designating it a RangePiece that the start's
+                    // suffix is None and the end's prefix is also None
+                    let start = flatten_affix_cite(&irs, range_start.ix, fmt);
+                    let end = flatten_affix_cite(&irs, range_end.ix, fmt);
                     // Delimiters here are never suppressed by build_cite, as they wouldn't be part
                     // of the range if they had affixes on the inside
-                    group.push(fmt.group(g, delim, None));
-                    if !is_last && !should_suppress_delimiter(&irs, end.ix) {
-                        group.push(fmt.plain(group_delim));
+                    match (start, end) {
+                        (Some((pre, start, _)), Some((_, end, suf))) => {
+                            stream.write_cite(pre, start, None);
+                            stream.write_delim(Some(range_delimiter));
+                            stream.write_cite(None, end, suf);
+                        }
+                        (Some((a, b, c)), None) | ((None, Some((a, b, c)))) => {
+                            stream.write_cite(a, b, c);
+                        }
+                        _ => {}
                     }
+                    stream.write_delim(Some(group_delim));
                 }
             }
         }
-        (fmt.group(group, "", None), advance_to)
+        stream.write_delim(Some(outer_delim));
+        advance_to
     };
 
     let citation_el = &style.citation;
@@ -217,17 +226,11 @@ pub fn built_cluster_before_output(
             continue;
         }
         if !collapsed_ranges.is_empty() {
-            let (built, advance_to) = render_range(
-                &irs,
+            let advance_to = render_range(
+                &mut citation_stream,
                 collapsed_ranges,
-                citation_delims.layout_delim,
-                citation_delims.after_collapse,
-            );
-            citation_stream.write_cite(None, built, None, false);
-            citation_stream.write_delim(
-                // changed from ix to advance_to here
-                Some(DelimKind::CollapseCitationNumbersLast)
-                    .filter(|_| !should_suppress_delimiter(&irs, advance_to)),
+                DelimKind::CollapseCitationNumbersMid,
+                DelimKind::CollapseCitationNumbersLast,
             );
             ix = advance_to + 1;
         } else if *first_of_name {
@@ -239,26 +242,24 @@ pub fn built_cluster_before_output(
                 }
                 if !r.collapsed_year_suffixes.is_empty() {
                     // rix is the start of a run of 1999a[rix],b,c
-                    let (built, advance_to) = render_range(
-                        &irs,
+                    let advance_to = render_range(
+                        &mut citation_stream,
                         &r.collapsed_year_suffixes,
-                        citation_delims.year_suffix,
-                        citation_delims.after_collapse,
+                        DelimKind::CollapseYearSuffixMid,
+                        // weird
+                        DelimKind::AfterCollapsedGroup,
                     );
-                    citation_stream.write_cite(None, built, None, false);
                     citation_stream.write_delim(
-                        // changed ix to advance_to here
-                        Some(DelimKind::CollapseYearSuffixLast)
-                            .filter(|_| !should_suppress_delimiter(&irs, advance_to)),
+                        Some(DelimKind::CollapseYearSuffixLast),
                     );
                     rix = advance_to;
                 } else {
                     // rix is actually just a single cite with a suppressed name
                     // Jones 1999, 2000[rix]
-                    if let Some(built) = flatten_affix_cite(&irs, rix) {
+                    if let Some((pre, built, suf)) = flatten_affix_cite(&irs, rix, fmt) {
                         // XXX: need to modify flatten_affix_cite to return prefix/suffix info
                         // and to make Chunk::Cite carry affixes instead of their own variants
-                        citation_stream.write_cite(None, built, None, false);
+                        citation_stream.write_cite(pre, built, suf);
                         let delim_kind = if irs[rix].has_locator {
                             Some(DelimKind::AfterCollapsedGroup)
                         } else {
@@ -266,23 +267,18 @@ pub fn built_cluster_before_output(
                         };
                         citation_stream.write_delim(
                             // changed ix to advance_to here
-                            delim_kind.filter(|_| !should_suppress_delimiter(&irs, rix)),
+                            delim_kind,
                         );
                     }
                 }
                 rix += 1;
             }
-            citation_stream.write_delim(
-                Some(DelimKind::AfterCollapsedGroup)
-                    .filter(|_| !should_suppress_delimiter(&irs, rix.saturating_sub(1))),
-            );
+            citation_stream.write_delim(Some(DelimKind::AfterCollapsedGroup));
             ix = rix;
         } else {
-            if let Some(built) = flatten_affix_cite(&irs, ix) {
-                citation_stream.write_cite(None, built, None, false);
-                citation_stream.write_delim(
-                    Some(DelimKind::Layout).filter(|_| !should_suppress_delimiter(&irs, ix))
-                );
+            if let Some((pre, built, suf)) = flatten_affix_cite(&irs, ix, fmt) {
+                citation_stream.write_cite(pre, built, suf);
+                citation_stream.write_delim(Some(DelimKind::Layout));
             }
             ix += 1;
         }

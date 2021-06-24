@@ -26,7 +26,7 @@ pub(crate) fn iter_peek_is_last<'a, T>(
 }
 
 pub(crate) struct LayoutStream<'a> {
-    chunks: Vec<Chunk<'a>>,
+    chunks: Vec<Chunk>,
     delimiters: LayoutDelimiters<'a>,
     fmt: &'a Markup,
 }
@@ -39,13 +39,10 @@ enum Affix {
 use Affix::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Chunk<'a> {
-    Cite {
-        built: MarkupBuild,
-        suppress_delim: bool,
-    },
-    Prefix(SmartCow<'a>),
-    Suffix(SmartCow<'a>),
+enum Chunk {
+    Cite { built: MarkupBuild },
+    Prefix(SmartString),
+    Suffix(SmartString),
     Delim(DelimKind),
 }
 
@@ -64,10 +61,7 @@ impl<'a> LayoutStream<'a> {
     ) {
         use itertools::Itertools;
         self.chunks.extend(Itertools::intersperse(
-            iter.into_iter().map(|built| Chunk::Cite {
-                built,
-                suppress_delim: false,
-            }),
+            iter.into_iter().map(|built| Chunk::Cite { built }),
             Chunk::Delim(delim_kind),
         ))
     }
@@ -76,22 +70,17 @@ impl<'a> LayoutStream<'a> {
     /// replace them with more appropriate ones later
     pub(crate) fn write_cite(
         &mut self,
-        prefix: Option<SmartCow<'a>>,
+        prefix: Option<SmartString>,
         built: MarkupBuild,
-        suffix: Option<SmartCow<'a>>,
-        suppress_delim: bool,
+        suffix: Option<SmartString>,
     ) {
         if let Some(pre) = prefix {
-            if pre.as_ref() == "" {
-
+            if starts_punc(pre.as_ref()) {
+                self.pop_delim();
             }
-            // todo: pop_delim if prefix starts with punc
             self.chunks.push(Chunk::Prefix(pre))
         }
-        self.chunks.push(Chunk::Cite {
-            built,
-            suppress_delim,
-        });
+        self.chunks.push(Chunk::Cite { built });
         if let Some(suf) = suffix {
             self.chunks.push(Chunk::Suffix(suf))
         }
@@ -118,12 +107,9 @@ impl<'a> LayoutStream<'a> {
             return;
         };
         let push_chunk = match self.chunks.last_mut() {
-            Some(Chunk::Prefix(a)) => !ends_punc(&a),
-            Some(Chunk::Suffix(a)) => true,
-            Some(Chunk::Cite {
-                built,
-                suppress_delim,
-            }) => !*suppress_delim,
+            Some(Chunk::Suffix(a)) => !ends_punc(&a),
+            Some(Chunk::Prefix(a)) => true,
+            Some(Chunk::Cite { built }) => true,
             Some(Chunk::Delim(d)) => {
                 *d = delim_kind;
                 return;
@@ -153,10 +139,14 @@ impl<'a> LayoutStream<'a> {
         }
         let fmt = self.fmt;
         let delimiters = self.delimiters;
+        let external = IngestOptions {
+            is_external: true,
+            ..Default::default()
+        };
         let seq = self.chunks.into_iter().filter_map(|x| match x {
             Chunk::Cite { built, .. } => Some(built),
-            Chunk::Prefix(s) if !s.is_empty() => Some(fmt.plain(&s)),
-            Chunk::Suffix(s) if !s.is_empty() => Some(fmt.plain(&s)),
+            Chunk::Prefix(s) if !s.is_empty() => Some(fmt.ingest(&s, &external)),
+            Chunk::Suffix(s) if !s.is_empty() => Some(fmt.ingest(&s, &external)),
             Chunk::Delim(d) => delimiters.delim(d).map(|x| fmt.plain(x)),
             _ => None,
         });
@@ -212,6 +202,7 @@ pub(crate) enum DelimKind {
     CollapseCitationNumbersLast,
     CollapseYearSuffixMid,
     CollapseYearSuffixLast,
+    Range,
 }
 
 impl<'a> LayoutDelimiters<'a> {
@@ -224,6 +215,7 @@ impl<'a> LayoutDelimiters<'a> {
             DelimKind::CollapseYearSuffixMid => self.year_suffix,
             DelimKind::CollapseYearSuffixLast => self.cite_group,
             DelimKind::Layout => self.layout_delim,
+            DelimKind::Range => "\u{2013}",
         })
         .filter(|x| !x.is_empty())
     }
@@ -293,10 +285,20 @@ fn is_no_delim_punc(c: char) -> bool {
     c == ',' || c == '.' || c == '?' || c == '!'
 }
 fn ends_punc(string: &str) -> bool {
-    string.chars().rev().nth(0).map_or(false, is_no_delim_punc)
+    // got to trim spaces first, people might input a suffix like "hello; "
+    string
+        .trim_end()
+        .chars()
+        .rev()
+        .nth(0)
+        .map_or(false, is_no_delim_punc)
 }
 fn starts_punc(string: &str) -> bool {
-    string.chars().nth(0).map_or(false, is_no_delim_punc)
+    string
+        .trim_start()
+        .chars()
+        .nth(0)
+        .map_or(false, is_no_delim_punc)
 }
 
 pub(crate) fn suppress_delimiter_between(
@@ -314,45 +316,37 @@ pub(crate) fn flatten_with_affixes(
     cite_in_cluster: &CiteInCluster<Markup>,
     cite_is_final_in_cluster: bool,
     fmt: &Markup,
-) -> MarkupBuild {
+) -> (Option<SmartString>, MarkupBuild, Option<SmartString>) {
     let CiteInCluster { cite, gen4, .. } = cite_in_cluster;
     let flattened = gen4.tree_ref().flatten_or_plain(&fmt, CSL_STYLE_ERROR);
 
     // we treat the None cases as empty strings because we would otherwise need a case
     // explosion for fmt.seq below. When they're empty they stay empty and don't allocate.
     //
-    let mut pre = Cow::from(cite_in_cluster.prefix_str().unwrap_or(""));
-    let mut suf = Cow::from(cite_in_cluster.suffix_str().unwrap_or(""));
-    if !pre.is_empty() && !pre.ends_with(' ') {
-        let pre_mut = pre.to_mut();
-        pre_mut.push(' ');
+    let mut pre = cite_in_cluster.prefix_str().map(SmartString::from);
+    let mut suf = cite_in_cluster.suffix_str().map(SmartString::from);
+    if let Some(pre) = pre.as_mut() {
+        if !pre.is_empty() && !pre.ends_with(' ') {
+            pre.push(' ');
+        }
     }
-    let suf_first = suf.chars().nth(0);
-    if suf_first.map_or(false, |x| {
-        x != ' ' && !citeproc_io::output::markup::is_punc(x)
-    }) {
-        let suf_mut = suf.to_mut();
-        suf_mut.insert_str(0, " ");
-    }
-    let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
-        x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
-    });
-    if suf_last_punc && !cite_is_final_in_cluster {
-        let suf_mut = suf.to_mut();
-        suf_mut.push(' ');
+    if let Some(suf) = suf.as_mut() {
+        let suf_first = suf.chars().nth(0);
+        if suf_first.map_or(false, |x| {
+            x != ' ' && !citeproc_io::output::markup::is_punc(x)
+        }) {
+            suf.insert_str(0, " ");
+        }
+        let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
+            x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
+        });
+        if suf_last_punc && !cite_is_final_in_cluster {
+            suf.push(' ');
+        }
     }
     let opts = IngestOptions {
         is_external: true,
         ..Default::default()
     };
-    let prefix_parsed = fmt.ingest(&pre, &opts);
-    let suffix_parsed = fmt.ingest(&suf, &opts);
-    // TODO: custom procedure for joining user-supplied cite affixes, which should interact
-    // with terminal punctuation by overriding rather than joining in the usual way.
-    use std::iter::once;
-    fmt.seq(
-        once(prefix_parsed)
-            .chain(once(flattened))
-            .chain(once(suffix_parsed)),
-    )
+    (pre, flattened, suf)
 }
