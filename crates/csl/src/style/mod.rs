@@ -1015,6 +1015,9 @@ pub struct Bibliography {
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct InText {
     pub layout: Layout,
+    pub cite_group_delimiter: Option<SmartString>,
+    pub year_suffix_delimiter: Option<SmartString>,
+    pub after_collapse_delimiter: Option<SmartString>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]

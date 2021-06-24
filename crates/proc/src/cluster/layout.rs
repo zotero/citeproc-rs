@@ -27,11 +27,8 @@ pub(crate) fn iter_peek_is_last<'a, T>(
 
 pub(crate) struct LayoutStream<'a> {
     chunks: Vec<Chunk<'a>>,
-    layout_delim: Option<&'a str>,
-    default_delim: Option<&'a str>,
-    affixes: Option<&'a Affixes>,
+    delimiters: LayoutDelimiters<'a>,
     fmt: &'a Markup,
-    formatting: Option<Formatting>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -49,31 +46,25 @@ enum Chunk<'a> {
     },
     Prefix(SmartCow<'a>),
     Suffix(SmartCow<'a>),
-    Delim(&'a str),
+    Delim(DelimKind),
 }
 
 impl<'a> LayoutStream<'a> {
     pub(crate) fn new(
         cap: usize,
-        layout_delim: Option<&'a str>,
-        default_delim: Option<&'a str>,
-        affixes: Option<&'a Affixes>,
+        delimiters: LayoutDelimiters<'a>,
         fmt: &'a Markup,
-        formatting: Option<Formatting>,
     ) -> Self {
         Self {
             chunks: Vec::with_capacity(cap),
-            layout_delim,
-            default_delim,
-            affixes,
+            delimiters,
             fmt,
-            formatting,
         }
     }
     pub(crate) fn write_interspersed(
         &mut self,
         iter: impl IntoIterator<Item = MarkupBuild>,
-        delim: &'a str,
+        delim_kind: DelimKind,
     ) {
         use itertools::Itertools;
         self.chunks.extend(Itertools::intersperse(
@@ -81,13 +72,13 @@ impl<'a> LayoutStream<'a> {
                 built,
                 suppress_delim: false,
             }),
-            Chunk::Delim(delim),
+            Chunk::Delim(delim_kind),
         ))
     }
 
     /// Replaces an existing delimiter, which means you can write delimiters unconditionally and
     /// replace them with more appropriate ones later
-    pub(crate) fn write_delim(&mut self, delim: &'a str) {
+    pub(crate) fn write_delim(&mut self, delim_kind: DelimKind) {
         match self.chunks.last_mut() {
             Some(Chunk::Prefix(a)) if ends_punc(&a) => return,
             Some(Chunk::Suffix(a)) => return,
@@ -96,12 +87,12 @@ impl<'a> LayoutStream<'a> {
                 suppress_delim,
             }) if *suppress_delim => return,
             Some(Chunk::Delim(d)) => {
-                *d = delim;
+                *d = delim_kind;
                 return;
             }
             _ => {}
         }
-        self.chunks.push(Chunk::Delim(delim))
+        self.chunks.push(Chunk::Delim(delim_kind))
     }
     pub(crate) fn write_cite(
         &mut self,
@@ -125,11 +116,8 @@ impl<'a> LayoutStream<'a> {
     pub(crate) fn finish(self) -> Option<MarkupBuild> {
         let Self {
             mut chunks,
-            layout_delim,
-            affixes,
-            formatting,
             fmt,
-            ..
+            delimiters,
         } = self;
         // we maintain either a delimiter or an extra element at the end all the way through, just for this
         match chunks.last() {
@@ -143,10 +131,10 @@ impl<'a> LayoutStream<'a> {
             Chunk::Cite { built, .. } => Some(built),
             Chunk::Prefix(s) if !s.is_empty() => Some(fmt.plain(&s)),
             Chunk::Suffix(s) if !s.is_empty() => Some(fmt.plain(&s)),
-            Chunk::Delim(s) if !s.is_empty() => Some(fmt.plain(s)),
+            Chunk::Delim(d) => delimiters.delim(d).map(|x| fmt.plain(x)),
             _ => None,
         });
-        Some(fmt.with_format(fmt.affixed(fmt.seq(seq), affixes), formatting))
+        Some(fmt.with_format(fmt.affixed(fmt.seq(seq), delimiters.affixes), delimiters.formatting))
             .filter(|x| !x.is_empty())
     }
 }
@@ -170,11 +158,14 @@ impl Default for LayoutDestination {
     }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct LayoutDelimiters<'a> {
     pub cite_group: &'a str,
     pub year_suffix: &'a str,
     pub after_collapse: &'a str,
     pub layout_delim: &'a str,
+    pub affixes: Option<&'a Affixes>,
+    pub formatting: Option<Formatting>,
 }
 
 pub struct CiteOpensRuns {
@@ -184,24 +175,36 @@ pub struct CiteOpensRuns {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(crate) enum CitePostDelimiter {
+pub(crate) enum DelimKind {
+    Layout,
     GroupMid,
     GroupLast,
     YearSuffixMid,
     YearSuffixLast,
-    SuppressDelimiter,
+    Suppressed,
+}
+
+impl DelimKind {
+    pub fn filter(self, condition: bool) -> Self {
+        if condition {
+            DelimKind::Suppressed
+        } else {
+            self
+        }
+    }
 }
 
 impl<'a> LayoutDelimiters<'a> {
-    pub(crate) fn for_cite_post(&self, post: CitePostDelimiter) -> &'a str {
-        use CitePostDelimiter as CPD;
-        match post {
-            CPD::GroupMid => self.cite_group,
-            CPD::GroupLast => self.after_collapse,
-            CPD::YearSuffixMid => self.after_collapse,
-            CPD::YearSuffixLast => self.after_collapse,
-            CPD::SuppressDelimiter => "",
-        }
+    pub(crate) fn delim(&self, post: DelimKind) -> Option<&'a str> {
+        Some(match post {
+            DelimKind::GroupMid => self.cite_group,
+            DelimKind::GroupLast => self.after_collapse,
+            DelimKind::YearSuffixMid => self.year_suffix,
+            DelimKind::YearSuffixLast => self.after_collapse,
+            DelimKind::Layout => self.layout_delim,
+            DelimKind::Suppressed => return None,
+        })
+        .filter(|x| !x.is_empty())
     }
     pub(crate) fn from_citation(citation: &'a csl::Citation) -> Self {
         let layout_opt = citation.layout.delimiter.as_opt_str();
@@ -217,12 +220,51 @@ impl<'a> LayoutDelimiters<'a> {
             .or(layout_opt)
             .unwrap_or("");
         let between_cites = layout_opt.unwrap_or("");
+        let affixes = citation.layout.affixes.as_ref();
+        let formatting = citation.layout.formatting.clone();
         Self {
             cite_group,
             year_suffix,
             after_collapse,
             layout_delim: between_cites,
+            affixes,
+            formatting,
         }
+    }
+    pub(crate) fn from_intext(
+        intext_el: Option<&'a csl::InText>,
+        citation: &'a csl::Citation,
+    ) -> Self {
+        let mut citation = LayoutDelimiters::from_citation(citation);
+        citation.formatting = None;
+        citation.affixes = None;
+        if let Some(intext_el) = intext_el {
+            let layout_opt = intext_el.layout.delimiter.as_opt_str();
+            let cite_group = intext_el
+                .cite_group_delimiter
+                .as_opt_str()
+                .unwrap_or(citation.cite_group);
+            let year_suffix = intext_el
+                .year_suffix_delimiter
+                .as_opt_str()
+                .unwrap_or(citation.cite_group);
+            let after_collapse = intext_el
+                .after_collapse_delimiter
+                .as_opt_str()
+                .unwrap_or(citation.after_collapse);
+            let layout_delim = layout_opt.unwrap_or(citation.layout_delim);
+            let affixes = intext_el.layout.affixes.as_ref();
+            let formatting = intext_el.layout.formatting.clone();
+            citation = Self {
+                cite_group,
+                year_suffix,
+                after_collapse,
+                layout_delim,
+                affixes,
+                formatting,
+            }
+        }
+        citation
     }
 }
 

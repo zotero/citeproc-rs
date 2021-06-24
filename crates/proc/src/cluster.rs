@@ -22,6 +22,7 @@ use crate::prelude::*;
 
 mod layout;
 pub(crate) use layout::LayoutDestination;
+use layout::DelimKind;
 
 pub fn built_cluster_before_output(
     db: &dyn IrDatabase,
@@ -92,8 +93,6 @@ pub fn built_cluster_before_output(
         ))
     };
 
-    let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
-
     enum OutputChannels {
         CitationLayout(MarkupBuild),
         SplitIntextCitation(MarkupBuild, MarkupBuild),
@@ -152,33 +151,15 @@ pub fn built_cluster_before_output(
         (fmt.group(group, "", None), advance_to)
     };
 
-    let mut built_cites = Vec::with_capacity(irs.len() * 2);
-
+    let citation_el = &style.citation;
     let intext_el = style.intext.as_ref();
-    let intext_delim = intext_el.and_then(|x| x.layout.delimiter.as_opt_str());
-    let intext_pre = intext_el.map_or("", |x| {
-        x.layout
-            .affixes
-            .as_ref()
-            .map_or("", |af| af.prefix.as_str())
-    });
-    let intext_suf = intext_el.map_or("", |x| {
-        x.layout
-            .affixes
-            .as_ref()
-            .map_or("", |af| af.suffix.as_str())
-    });
-    let intext_affixes = intext_el.and_then(|x| x.layout.affixes.as_ref());
-    let intext_formatting = intext_el.and_then(|x| x.layout.formatting.clone());
 
-    let mut intext_stream = layout::LayoutStream::new(
-        0,
-        intext_delim,
-        Some(", "),
-        intext_affixes,
-        fmt,
-        intext_formatting,
-    );
+    let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
+    let intext_delimiters = layout::LayoutDelimiters::from_intext(intext_el, citation_el);
+
+    // XXX: remove clone eventually
+    let mut citation_stream = layout::LayoutStream::new(irs.len() * 2, citation_delims.clone(), fmt);
+    let mut intext_stream = layout::LayoutStream::new(0, intext_delimiters, fmt);
 
     // render the intext stream
     let intext_authors = group_by(irs.as_slice(), |a, b| {
@@ -207,16 +188,19 @@ pub fn built_cluster_before_output(
             .flatten_or_plain(fmt, "[NO_PRINTED_FORM]")
     });
 
-    intext_stream.write_interspersed(intext_authors, ", ");
+    intext_stream.write_interspersed(intext_authors, DelimKind::Layout);
 
-    let mut ix = 0;
-    for positional in layout::iter_peek_is_last(&irs) {
-        let layout::Positional(item, peek) = positional;
-        let is_last = peek.is_none();
-        if let Some(peek) = peek {
-            let suppress_delimiter = layout::suppress_delimiter_between(item, peek);
-        }
-    }
+    // let mut ix = 0;
+    // for positional in layout::iter_peek_is_last(&irs) {
+    //     let layout::Positional(item, peek) = positional;
+    //     let is_last = peek.is_none();
+    //     if let Some(peek) = peek {
+    //         let suppress_delimiter = layout::suppress_delimiter_between(item, peek);
+    //     }
+    // }
+
+    // XXX: replace with citation_stream
+    let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
     let mut ix = 0;
     while ix < irs.len() {

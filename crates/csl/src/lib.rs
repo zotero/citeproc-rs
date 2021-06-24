@@ -424,7 +424,12 @@ impl FromNode for InText {
         if !errors.is_empty() {
             return Err(CslError(errors));
         }
-        Ok(InText { layout: layout? })
+        Ok(InText {
+            layout: layout?,
+            cite_group_delimiter: attribute_option(node, "cite-group-delimiter", info)?,
+            year_suffix_delimiter: attribute_option(node, "year-suffix-delimiter", info)?,
+            after_collapse_delimiter: attribute_option(node, "after-collapse-delimiter", info)?,
+        })
     }
 }
 
