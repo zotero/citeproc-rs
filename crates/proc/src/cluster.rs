@@ -61,28 +61,22 @@ pub fn built_cluster_before_output(
     // middle of an existing footnote, and isn't preceded by a period (or however else a client
     // wants to judge that).
     // We capitalize all cites whose prefixes end with full stops.
-    for (
-        ix,
-        CiteInCluster {
-            gen4,
-            prefix_parsed,
-            ..
-        },
-    ) in irs.iter_mut().enumerate()
-    {
-        if style.class != csl::StyleClass::InText
-            && prefix_parsed
+    if style.class != csl::StyleClass::InText {
+        for (ix, cite) in irs.iter_mut().enumerate() {
+            if cite
+                .prefix_parsed
                 .as_ref()
                 .map_or(ix == 0, |pre| fmt.ends_with_full_stop(pre))
-        {
-            // dbg!(ix, prefix_parsed);
-            let gen_mut = Arc::make_mut(gen4);
-            gen_mut.tree_mut().capitalize_first_term_of_cluster(&fmt);
+            {
+                // dbg!(ix, prefix_parsed);
+                let gen_mut = Arc::make_mut(&mut cite.gen4);
+                gen_mut.tree_mut().capitalize_first_term_of_cluster(&fmt);
+            }
         }
     }
 
     // csl_test_suite::affix_WithCommas.txt
-    let suppress_delimiter = |cites: &[CiteInCluster<Markup>], ix: usize| -> bool {
+    let should_suppress_delimiter = |cites: &[CiteInCluster<Markup>], ix: usize| -> bool {
         if let (Some(a), Some(b)) = (cites.get(ix), cites.get(ix + 1)) {
             layout::suppress_delimiter_between(a, b)
         } else {
@@ -93,7 +87,7 @@ pub fn built_cluster_before_output(
     let flatten_affix_cite = |cites: &[CiteInCluster<Markup>], ix: usize| -> Option<MarkupBuild> {
         Some(layout::flatten_with_affixes(
             cites.get(ix)?,
-            ix == cites.len() - 1,
+            ix + 1 == cites.len(),
             fmt,
         ))
     };
@@ -107,53 +101,56 @@ pub fn built_cluster_before_output(
     }
 
     // returned usize is advance len
-    let render_range =
-        |ranges: &[RangePiece], group_delim: &str, outer_delim: &str| -> (MarkupBuild, usize) {
-            let mut advance_to = 0usize;
-            let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
-            for (ix, piece) in ranges.iter().enumerate() {
-                let is_last = ix == ranges.len() - 1;
-                match *piece {
-                    RangePiece::Single(Collapsible {
-                        ix, force_single, ..
-                    }) => {
-                        advance_to = ix;
-                        if let Some(one) = flatten_affix_cite(&irs, ix) {
-                            group.push(one);
-                            if !is_last && !suppress_delimiter(&irs, ix) {
-                                group.push(fmt.plain(if force_single {
-                                    outer_delim
-                                } else {
-                                    group_delim
-                                }));
-                            }
-                        }
-                    }
-                    RangePiece::Range(start, end) => {
-                        advance_to = end.ix;
-                        let mut delim = "\u{2013}";
-                        if start.number == end.number - 1 {
-                            // Not represented as a 1-2, just two sequential numbers 1,2
-                            delim = group_delim;
-                        }
-                        let mut g = vec![];
-                        if let Some(start) = flatten_affix_cite(&irs, start.ix) {
-                            g.push(start);
-                        }
-                        if let Some(end) = flatten_affix_cite(&irs, end.ix) {
-                            g.push(end);
-                        }
-                        // Delimiters here are never suppressed by build_cite, as they wouldn't be part
-                        // of the range if they had affixes on the inside
-                        group.push(fmt.group(g, delim, None));
-                        if !is_last && !suppress_delimiter(&irs, end.ix) {
-                            group.push(fmt.plain(group_delim));
+    let render_range = |irs: &[CiteInCluster<Markup>],
+                        ranges: &[RangePiece],
+                        group_delim: &str,
+                        outer_delim: &str|
+     -> (MarkupBuild, usize) {
+        let mut advance_to = 0usize;
+        let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
+        for (ix, piece) in ranges.iter().enumerate() {
+            let is_last = ix + 1 == ranges.len();
+            match *piece {
+                RangePiece::Single(Collapsible {
+                    ix, force_single, ..
+                }) => {
+                    advance_to = ix;
+                    if let Some(one) = flatten_affix_cite(&irs, ix) {
+                        group.push(one);
+                        if !is_last && !should_suppress_delimiter(&irs, ix) {
+                            group.push(fmt.plain(if force_single {
+                                outer_delim
+                            } else {
+                                group_delim
+                            }));
                         }
                     }
                 }
+                RangePiece::Range(start, end) => {
+                    advance_to = end.ix;
+                    let mut delim = "\u{2013}";
+                    if start.number == end.number - 1 {
+                        // Not represented as a 1-2, just two sequential numbers 1,2
+                        delim = group_delim;
+                    }
+                    let mut g = vec![];
+                    if let Some(start) = flatten_affix_cite(&irs, start.ix) {
+                        g.push(start);
+                    }
+                    if let Some(end) = flatten_affix_cite(&irs, end.ix) {
+                        g.push(end);
+                    }
+                    // Delimiters here are never suppressed by build_cite, as they wouldn't be part
+                    // of the range if they had affixes on the inside
+                    group.push(fmt.group(g, delim, None));
+                    if !is_last && !should_suppress_delimiter(&irs, end.ix) {
+                        group.push(fmt.plain(group_delim));
+                    }
+                }
             }
-            (fmt.group(group, "", None), advance_to)
-        };
+        }
+        (fmt.group(group, "", None), advance_to)
+    };
 
     let mut built_cites = Vec::with_capacity(irs.len() * 2);
 
@@ -213,11 +210,15 @@ pub fn built_cluster_before_output(
     intext_stream.write_interspersed(intext_authors, ", ");
 
     let mut ix = 0;
-
-    for pair in irs.windows(2) {
-        let (this, next) = (&pair[0], &pair[1]); // windows are never <2 long
+    for positional in layout::iter_peek_is_last(&irs) {
+        let layout::Positional(item, peek) = positional;
+        let is_last = peek.is_none();
+        if let Some(peek) = peek {
+            let suppress_delimiter = layout::suppress_delimiter_between(item, peek);
+        }
     }
 
+    let mut ix = 0;
     while ix < irs.len() {
         let CiteInCluster {
             trailing_only: vanished,
@@ -232,12 +233,13 @@ pub fn built_cluster_before_output(
         }
         if !collapsed_ranges.is_empty() {
             let (built, advance_to) = render_range(
+                &irs,
                 collapsed_ranges,
                 citation_delims.layout_delim,
                 citation_delims.after_collapse,
             );
             built_cites.push(built);
-            if !suppress_delimiter(&irs, ix) {
+            if !should_suppress_delimiter(&irs, ix) {
                 built_cites.push(fmt.plain(citation_delims.after_collapse));
             } else {
                 built_cites.push(fmt.plain(""));
@@ -253,12 +255,13 @@ pub fn built_cluster_before_output(
                 }
                 if !r.collapsed_year_suffixes.is_empty() {
                     let (built, advance_to) = render_range(
+                        &irs,
                         &r.collapsed_year_suffixes,
                         citation_delims.year_suffix,
                         citation_delims.after_collapse,
                     );
                     group.push(built);
-                    if !suppress_delimiter(&irs, ix) {
+                    if !should_suppress_delimiter(&irs, ix) {
                         group.push(fmt.plain(citation_delims.cite_group));
                     } else {
                         group.push(fmt.plain(""));
@@ -267,7 +270,7 @@ pub fn built_cluster_before_output(
                 } else {
                     if let Some(b) = flatten_affix_cite(&irs, rix) {
                         group.push(b);
-                        if !suppress_delimiter(&irs, ix) {
+                        if !should_suppress_delimiter(&irs, ix) {
                             group.push(fmt.plain(if irs[rix].has_locator {
                                 citation_delims.after_collapse
                             } else {
@@ -281,8 +284,8 @@ pub fn built_cluster_before_output(
                 rix += 1;
             }
             group.pop();
-            built_cites.push(fmt.group(group, "", None));
-            if !suppress_delimiter(&irs, ix) {
+            built_cites.push(fmt.seq(group));
+            if !should_suppress_delimiter(&irs, ix) {
                 built_cites.push(fmt.plain(citation_delims.after_collapse));
             } else {
                 built_cites.push(fmt.plain(""));
@@ -291,7 +294,7 @@ pub fn built_cluster_before_output(
         } else {
             if let Some(built) = flatten_affix_cite(&irs, ix) {
                 built_cites.push(built);
-                if !suppress_delimiter(&irs, ix) {
+                if !should_suppress_delimiter(&irs, ix) {
                     built_cites.push(fmt.plain(citation_delims.layout_delim));
                 } else {
                     built_cites.push(fmt.plain(""));
@@ -322,10 +325,7 @@ pub fn built_cluster_before_output(
         fmt,
     );
     use core::iter::once;
-    let seq = intext_final
-        .into_iter()
-        .chain(infix)
-        .chain(citation_final);
+    let seq = intext_final.into_iter().chain(infix).chain(citation_final);
     fmt.seq(seq)
 }
 
@@ -579,6 +579,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     pub trailing_only: bool,
 
     pub has_locator: bool,
+    pub suppress_delimiter: bool,
 }
 
 use std::fmt::{Debug, Formatter};
@@ -601,6 +602,7 @@ impl<O: OutputFormat<Output = SmartString>> Debug for CiteInCluster<O> {
             .field("extra_node", &self.layout_destination)
             .field("prefix_parsed", &self.prefix_parsed)
             .field("has_locator", &self.has_locator)
+            .field("suppress_delimiter", &self.suppress_delimiter)
             .field("first_of_name", &self.first_of_name)
             .field("subsequent_same_name", &self.subsequent_same_name)
             .field("unique_name_number", &self.unique_name_number)
@@ -652,6 +654,7 @@ impl CiteInCluster<Markup> {
             collapsed_year_suffixes: Vec::new(),
             collapsed_ranges: Vec::new(),
             trailing_only: false,
+            suppress_delimiter: false,
         }
     }
 

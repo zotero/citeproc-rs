@@ -14,6 +14,17 @@ use crate::prelude::*;
 
 use super::CiteInCluster;
 
+pub(crate) struct Positional<T>(pub T, pub Option<T>);
+pub(crate) fn iter_peek_is_last<'a, T>(
+    slice: &'a [T],
+) -> impl Iterator<Item = Positional<&'a T>> + 'a {
+    let len = slice.len();
+    slice
+        .iter()
+        .enumerate()
+        .map(move |(ix, this)| Positional(this, slice.get(ix + 1)))
+}
+
 pub(crate) struct LayoutStream<'a> {
     chunks: Vec<Chunk<'a>>,
     layout_delim: Option<&'a str>,
@@ -92,11 +103,23 @@ impl<'a> LayoutStream<'a> {
         }
         self.chunks.push(Chunk::Delim(delim))
     }
-    pub(crate) fn write_cite(&mut self, built: MarkupBuild, suppress_delim: bool) {
+    pub(crate) fn write_cite(
+        &mut self,
+        prefix: Option<SmartCow<'a>>,
+        built: MarkupBuild,
+        suffix: Option<SmartCow<'a>>,
+        suppress_delim: bool,
+    ) {
+        if let Some(pre) = prefix {
+            self.chunks.push(Chunk::Prefix(pre))
+        }
         self.chunks.push(Chunk::Cite {
             built,
             suppress_delim,
-        })
+        });
+        if let Some(suf) = suffix {
+            self.chunks.push(Chunk::Suffix(suf))
+        }
     }
 
     pub(crate) fn finish(self) -> Option<MarkupBuild> {
@@ -113,18 +136,18 @@ impl<'a> LayoutStream<'a> {
             Some(Chunk::Delim(_)) => {
                 chunks.pop();
             }
+            None => return None,
             _ => {}
         }
-        let seq = chunks.into_iter().map(|x| match x {
-            Chunk::Cite { built, .. } => built,
-            Chunk::Prefix(s) => fmt.plain(&s),
-            Chunk::Suffix(s) => fmt.plain(&s),
-            Chunk::Delim(s) => fmt.plain(s),
+        let seq = chunks.into_iter().filter_map(|x| match x {
+            Chunk::Cite { built, .. } => Some(built),
+            Chunk::Prefix(s) if !s.is_empty() => Some(fmt.plain(&s)),
+            Chunk::Suffix(s) if !s.is_empty() => Some(fmt.plain(&s)),
+            Chunk::Delim(s) if !s.is_empty() => Some(fmt.plain(s)),
+            _ => None,
         });
-        if seq.len() == 0 {
-            return None
-        }
         Some(fmt.with_format(fmt.affixed(fmt.seq(seq), affixes), formatting))
+            .filter(|x| !x.is_empty())
     }
 }
 
