@@ -48,8 +48,8 @@ pub fn built_cluster_before_output(
         })
         .collect();
 
-    if let Some((_cgd, collapse)) = style.citation.group_collapsing() {
-        group_and_collapse(&fmt, collapse, &mut irs);
+    if let Some(maybe_collapse) = style.citation.group_collapsing() {
+        group_and_maybe_collapse(&fmt, maybe_collapse, &mut irs);
     }
 
     let cluster_mode = db.cluster_mode(cluster_id);
@@ -669,7 +669,7 @@ fn range_collapse() {
     );
 }
 
-pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
+pub(crate) fn group_and_maybe_collapse<O: OutputFormat<Output = SmartString>>(
     fmt: &Markup,
     collapse: Option<Collapse>,
     cites: &mut Vec<CiteInCluster<O>>,
@@ -684,7 +684,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
     // First, group cites with the same name
     if matches!(
         collapse,
-        Some(Collapse::Year) | Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged)
+        None | Some(Collapse::Year) | Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged)
     ) {
         let mut unique_name = 1;
         for ix in 0..cites.len() {
@@ -738,12 +738,44 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
         }
     }
 
+    // Unconditional; cover the group only, no collapse case
+    let name_runs = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
+    for run in name_runs {
+        log::debug!(
+            "group only name_run: {:?}",
+            run.iter().map(|x| x.unique_name_number).collect::<Vec<_>>()
+        );
+        let set_delim = |cite: &mut CiteInCluster<O>| {
+            if !cite.has_locator_or_affixes {
+                cite.own_delimiter = Some(DelimKind::CiteGroup);
+            }
+        };
+        match run {
+            [] => log::warn!("run of same name should never be empty"),
+            [single] => {
+                // this is the default
+                // single.own_delimiter = Some(DelimKind::Layout);
+            }
+            [head, middle @ .., last] => {
+                set_delim(head);
+                for cite in middle {
+                    // XXX: we kinda need to know if the following cite is going to
+                    // have a prefix... unless we fix it up in LayoutStream::finish
+                    set_delim(cite);
+                }
+                last.own_delimiter = if collapse.is_some() {
+                    Some(DelimKind::AfterCollapse)
+                } else {
+                    Some(DelimKind::Layout)
+                };
+            }
+        }
+    }
+
     if collapse.map_or(false, |c| {
         c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
     }) {
-        let name_runs = group_by_mut(cites.as_mut(), |a, b| {
-            a.unique_name_number == b.unique_name_number
-        });
+        let name_runs = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
         for run in name_runs {
             let mut ix = 0;
             for cite in run.iter_mut() {
@@ -771,24 +803,9 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
         }
     }
 
-    if collapse == Some(Collapse::CitationNumber) {
-        // XXX: Gotta factor in that some might have prefixes and suffixes
-        if let Some((first, rest)) = cites.split_first_mut() {
-            first.first_of_name = true;
-            for r in rest {
-                r.subsequent_same_name = true;
-            }
-        }
-    }
-
     fn suppress_names<O: OutputFormat>(cite: &mut CiteInCluster<O>) {
         let gen4 = Arc::make_mut(&mut cite.gen4);
         gen4.tree_mut().suppress_names()
-    }
-
-    fn suppress_year<O: OutputFormat>(cite: &mut CiteInCluster<O>) {
-        let gen4 = Arc::make_mut(&mut cite.gen4);
-        gen4.tree_mut().suppress_year()
     }
 
     if let Some(collapse) = collapse {
@@ -797,7 +814,6 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
             Collapse::CitationNumber => {
                 let monotonic_runs = group_by_mut(cites, |a, b| {
                     a.cnum.map(|x| x + 1) == b.cnum
-                    // && a.isolate_loc_affix() == b.isolate_loc_affix()
                 });
                 for run in monotonic_runs {
                     match run {
@@ -809,7 +825,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                             head.own_delimiter = Some(if !middle.is_empty() {
                                 DelimKind::Range
                             } else {
-                                DelimKind::CiteGroup
+                                DelimKind::Layout
                             });
                             for ignored in middle {
                                 ignored.trailing_only = true;
@@ -820,11 +836,14 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                 }
             }
             Collapse::Year => {
-                let by_name = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
-                for run in by_name {
-                    log::error!(
+                let mut by_name =
+                    group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name()).peekable();
+                while let Some(name_run) = by_name.next() {
+                    log::debug!(
                         "name_run: {:?}",
-                        run.iter().map(|x| x.unique_name_number).collect::<Vec<_>>()
+                        name_run.iter()
+                            .map(|x| (x.unique_name_number, x.own_delimiter))
+                            .collect::<Vec<_>>()
                     );
                     let delim_for_cite = |cite: &CiteInCluster<O>| {
                         if !cite.has_locator_or_affixes {
@@ -833,7 +852,7 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                             Some(DelimKind::AfterCollapse)
                         }
                     };
-                    match run {
+                    match name_run {
                         [] => log::warn!("run of same name should never be empty"),
                         [single] => {}
                         [head, middle @ .., last] => {
@@ -845,21 +864,20 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                                 cite.own_delimiter = delim_for_cite(cite);
                             }
                             suppress_names(last);
-                            last.own_delimiter = Some(DelimKind::AfterCollapse);
                         }
                     }
                 }
             }
             Collapse::YearSuffixRanged | Collapse::YearSuffix => {
                 let ranged = collapse == Collapse::YearSuffixRanged;
-                let by_name = group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name());
-                for name_run in by_name {
-                    let mut did_collapse = false;
+                let mut by_name =
+                    group_by_mut(cites.as_mut(), |a, b| a.by_name() == b.by_name()).peekable();
+                while let Some(name_run) = by_name.next() {
+                    let name_run_end_delim = name_run.last().and_then(|l| l.own_delimiter);
                     // suppress names in the tail.
                     for cite in &mut name_run[1..] {
                         let gen4 = Arc::make_mut(&mut cite.gen4);
                         gen4.tree_mut().suppress_names();
-                        did_collapse = true;
                     }
                     let by_year = group_by_mut(name_run, |a, b| a.by_year() == b.by_year());
                     for year_run in by_year {
@@ -867,54 +885,9 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                             a.by_year_suffix().map(|ysuf| ysuf + 1) == b.by_year_suffix()
                                 && a.isolate_loc_affix() == b.isolate_loc_affix()
                         });
-                        fn collapse_year_suffix_run<O: OutputFormat>(
-                            ysuf_run: &mut [CiteInCluster<O>],
-                            is_first_ysuf_run: bool,
-                            ranged: bool,
-                        ) {
-                            match ysuf_run {
-                                [] => log::warn!("run of year suffixes should never be empty"),
-                                [single] => {
-                                    if ranged
-                                        && !single.has_locator_or_affixes
-                                        && !is_first_ysuf_run
-                                    {
-                                        suppress_year(single);
-                                    }
-                                    single.own_delimiter = Some(DelimKind::CiteGroup);
-                                }
-                                [head, middle @ .., last] if ranged => {
-                                    if !is_first_ysuf_run {
-                                        suppress_year(head);
-                                    }
-                                    head.own_delimiter = Some(if !middle.is_empty() {
-                                        DelimKind::Range
-                                    } else {
-                                        DelimKind::YearSuffix
-                                    });
-                                    for ignored in middle {
-                                        ignored.trailing_only = true;
-                                    }
-                                    suppress_year(last);
-                                    last.own_delimiter = Some(DelimKind::CiteGroup);
-                                }
-                                [head, middle @ .., last] => {
-                                    if !is_first_ysuf_run {
-                                        suppress_year(head);
-                                    }
-                                    head.own_delimiter = Some(DelimKind::YearSuffix);
-                                    for cite in middle {
-                                        suppress_year(cite);
-                                        cite.own_delimiter = Some(DelimKind::YearSuffix);
-                                    }
-                                    suppress_year(last);
-                                    last.own_delimiter = Some(DelimKind::CiteGroup);
-                                }
-                            }
-                        }
                         for (ysuf_ix, ysuf_run) in monotonic_nonaffixed_ysufs.enumerate() {
                             collapse_year_suffix_run(ysuf_run, ysuf_ix == 0, ranged);
-                            log::error!(
+                            log::debug!(
                                 "ysuf_run: {:?}",
                                 ysuf_run
                                     .iter()
@@ -922,19 +895,73 @@ pub(crate) fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
                                     .collect::<Vec<_>>()
                             );
                         }
+                        year_run.last_mut().unwrap().own_delimiter = Some(DelimKind::CiteGroup);
                     }
-                    log::error!(
+                    log::debug!(
                         "name_run: {:?}",
                         name_run
                             .iter()
                             .map(|x| x.unique_name_number)
                             .collect::<Vec<_>>()
                     );
-                    if did_collapse && name_run.len() > 1 {
-                        name_run.last_mut().unwrap().own_delimiter = Some(DelimKind::AfterCollapse);
-                    }
+                    name_run.last_mut().unwrap().own_delimiter = name_run_end_delim;
                 }
             }
+        }
+    }
+}
+
+fn collapse_year_suffix_run<O: OutputFormat>(
+    ysuf_run: &mut [CiteInCluster<O>],
+    is_first_ysuf_run: bool,
+    ranged: bool,
+) {
+    fn suppress_year<O: OutputFormat>(cite: &mut CiteInCluster<O>) {
+        let gen4 = Arc::make_mut(&mut cite.gen4);
+        gen4.tree_mut().suppress_year()
+    }
+
+    let delim_for_cite = |cite: &CiteInCluster<O>, d: DelimKind| {
+        if !cite.has_locator_or_affixes {
+            Some(d)
+        } else {
+            Some(DelimKind::AfterCollapse)
+        }
+    };
+    match ysuf_run {
+        [] => log::warn!("run of year suffixes should never be empty"),
+        [single] => {
+            if ranged && !single.has_locator_or_affixes && !is_first_ysuf_run {
+                suppress_year(single);
+            }
+            single.own_delimiter = delim_for_cite(single, DelimKind::YearSuffix);
+        }
+        [head, middle @ .., last] if ranged => {
+            if !is_first_ysuf_run {
+                suppress_year(head);
+            }
+            head.own_delimiter = Some(if !middle.is_empty() {
+                DelimKind::Range
+            } else {
+                DelimKind::YearSuffix
+            });
+            for ignored in middle {
+                ignored.trailing_only = true;
+            }
+            suppress_year(last);
+            last.own_delimiter = delim_for_cite(last, DelimKind::YearSuffix);
+        }
+        [head, middle @ .., last] => {
+            if !is_first_ysuf_run {
+                suppress_year(head);
+            }
+            head.own_delimiter = Some(DelimKind::YearSuffix);
+            for cite in middle {
+                suppress_year(cite);
+                cite.own_delimiter = Some(DelimKind::YearSuffix);
+            }
+            suppress_year(last);
+            last.own_delimiter = delim_for_cite(last, DelimKind::YearSuffix);
         }
     }
 }

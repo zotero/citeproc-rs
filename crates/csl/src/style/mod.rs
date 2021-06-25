@@ -996,11 +996,17 @@ impl Citation {
             x => x,
         }
     }
-    pub fn group_collapsing(&self) -> Option<(&str, Option<Collapse>)> {
+    /// Returns `None` if neither cite-group-delimiter nor collapse is supplied.
+    ///
+    /// Returns `Some(None)` for only cite-group-delimiter and therefore grouping but no collapsing.
+    ///
+    /// Returns `Some(Some(collapse))` for grouping AND collapsing, with a particular collapse
+    /// setting.
+    pub fn group_collapsing(&self) -> Option<Option<Collapse>> {
         let col = self.collapse_fallback();
         match self.cite_group_delimiter.as_ref() {
-            Some(cgd) => Some((cgd.as_ref(), col)),
-            None => col.map(|c| (", ", Some(c))),
+            Some(cgd) => Some(col),
+            None => col.map(Some)
         }
     }
 }

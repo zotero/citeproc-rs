@@ -121,6 +121,7 @@ impl<'a> LayoutStream<'a> {
         suffix: Option<SmartString>,
     ) {
         if let Some(pre) = prefix {
+            // XXX: should also maybe rewrite a delimiter to be AfterCollapseDelimiter if it's CiteGroup
             if starts_punc(pre.as_ref()) {
                 self.pop_delim();
             }
