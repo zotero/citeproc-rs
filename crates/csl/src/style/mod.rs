@@ -988,8 +988,16 @@ impl Default for Citation {
 }
 
 impl Citation {
+    /// Implements fallback to Year when disambiguate-add-year-suffix is false.
+    pub fn collapse_fallback(&self) -> Option<Collapse> {
+        let addyearsuf = self.disambiguate_add_year_suffix;
+        match self.collapse {
+            Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged) if !addyearsuf => Some(Collapse::Year),
+            x => x,
+        }
+    }
     pub fn group_collapsing(&self) -> Option<(&str, Option<Collapse>)> {
-        let col = self.collapse;
+        let col = self.collapse_fallback();
         match self.cite_group_delimiter.as_ref() {
             Some(cgd) => Some((cgd.as_ref(), col)),
             None => col.map(|c| (", ", Some(c))),

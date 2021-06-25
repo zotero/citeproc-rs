@@ -5,6 +5,7 @@
 // Copyright © 2021 Corporation for Digital Scholarship
 
 use citeproc_db::ClusterId;
+use citeproc_io::TrimInPlace;
 use citeproc_io::{Cite, CiteMode, ClusterMode};
 use csl::Collapse;
 use std::borrow::Cow;
@@ -25,6 +26,7 @@ pub(crate) fn iter_peek_is_last<'a, T>(
         .map(move |(ix, this)| Positional(this, slice.get(ix + 1)))
 }
 
+#[derive(Debug)]
 pub(crate) struct LayoutStream<'a> {
     chunks: Vec<Chunk>,
     delimiters: LayoutDelimiters<'a>,
@@ -50,6 +52,18 @@ impl Chunk {
     fn as_delim_mut(&mut self) -> Option<&mut DelimKind> {
         match self {
             Chunk::Delim(d) => Some(d),
+            _ => None
+        }
+    }
+    fn as_prefix_mut(&mut self) -> Option<&mut SmartString> {
+        match self {
+            Chunk::Prefix(d) => Some(d),
+            _ => None
+        }
+    }
+    fn as_suffix_mut(&mut self) -> Option<&mut SmartString> {
+        match self {
+            Chunk::Suffix(d) => Some(d),
             _ => None
         }
     }
@@ -83,6 +97,21 @@ impl<'a> LayoutStream<'a> {
         }
     }
 
+    pub(crate) fn trim_first_last_affixes(&mut self) {
+        if let Some(suffix_in_final_pos) = self.chunks.iter_mut().nth_back(0).and_then(Chunk::as_suffix_mut) {
+            suffix_in_final_pos.trim_end_in_place();
+        }
+        if let Some(prefix_initial) = self.chunks.iter_mut().nth(0).and_then(Chunk::as_prefix_mut) {
+            prefix_initial.trim_start_in_place();
+        }
+    }
+
+    pub(crate) fn write_flat(&mut self, single: &CiteInCluster<Markup>, override_delim_kind: Option<DelimKind>) {
+        let (pre, built, suf) = flatten_with_affixes(single, self.fmt);
+        self.write_cite(pre, built, suf);
+        self.write_delim(override_delim_kind.or(single.own_delimiter));
+    }
+
     /// Replaces an existing delimiter, which means you can write delimiters unconditionally and
     /// replace them with more appropriate ones later
     pub(crate) fn write_cite(
@@ -104,15 +133,15 @@ impl<'a> LayoutStream<'a> {
     }
 
     pub(crate) fn close_year_suffix_ranges(&mut self) {
-        self.write_delim(Some(DelimKind::CollapseYearSuffixLast));
+        self.write_delim(Some(DelimKind::CiteGroup));
     }
 
     pub(crate) fn close_year_suffix_run(&mut self) {
-        self.write_delim(Some(DelimKind::CollapseYearSuffixLast));
+        self.write_delim(Some(DelimKind::CiteGroup));
     }
 
     pub(crate) fn close_name_run(&mut self) {
-        self.write_delim(Some(DelimKind::AfterCollapsedGroup));
+        self.write_delim(Some(DelimKind::AfterCollapse));
     }
 
     // If you pass None, this calls pop_delim.
@@ -152,6 +181,7 @@ impl<'a> LayoutStream<'a> {
     pub(crate) fn finish(mut self) -> Option<MarkupBuild> {
         self.pop_delim();
         self.overwrite_and_position();
+        self.trim_first_last_affixes();
         if self.chunks.is_empty() {
             return None;
         }
@@ -216,11 +246,9 @@ pub struct CiteOpensRuns {
 pub(crate) enum DelimKind {
     Layout,
     CiteGroup,
-    AfterCollapsedGroup,
+    AfterCollapse,
     CollapseCitationNumbersMid,
-    CollapseCitationNumbersLast,
-    CollapseYearSuffixMid,
-    CollapseYearSuffixLast,
+    YearSuffix,
     Range,
     And,
 }
@@ -229,11 +257,9 @@ impl<'a> LayoutDelimiters<'a> {
     pub(crate) fn delim(&'a self, post: DelimKind) -> Option<&'a str> {
         Some(match post {
             DelimKind::CiteGroup => self.cite_group,
-            DelimKind::AfterCollapsedGroup => self.after_collapse,
+            DelimKind::AfterCollapse => self.after_collapse,
             DelimKind::CollapseCitationNumbersMid => self.layout_delim,
-            DelimKind::CollapseCitationNumbersLast => self.after_collapse,
-            DelimKind::CollapseYearSuffixMid => self.year_suffix,
-            DelimKind::CollapseYearSuffixLast => self.cite_group,
+            DelimKind::YearSuffix => self.year_suffix,
             DelimKind::Layout => self.layout_delim,
             DelimKind::Range => "\u{2013}",
             // should not have to observe None here, simply don't write any Ands until you are sure
@@ -346,7 +372,6 @@ pub(crate) fn suppress_delimiter_between(
 
 pub(crate) fn flatten_with_affixes(
     cite_in_cluster: &CiteInCluster<Markup>,
-    cite_is_final_in_cluster: bool,
     fmt: &Markup,
 ) -> (Option<SmartString>, MarkupBuild, Option<SmartString>) {
     let CiteInCluster { cite, gen4, .. } = cite_in_cluster;
@@ -372,7 +397,8 @@ pub(crate) fn flatten_with_affixes(
         let suf_last_punc = suf.chars().rev().nth(0).map_or(false, |x| {
             x == ',' || x == '.' || x == '!' || x == '?' || x == ':'
         });
-        if suf_last_punc && !cite_is_final_in_cluster {
+        // for a final position suffix, we clean up trailing whitespace later (trim_first_last_affixes)
+        if suf_last_punc {
             suf.push(' ');
         }
     }
