@@ -1,7 +1,7 @@
 mode: citation
 result: |
-  (Smith 1999a-c, --prefix here-- 1999d, 2000)
-  (Smith 1999a-c, --prefix here-- 1999d,e, 2000)
+  (Smith 1999a–c, --prefix here-- 1999d, 2000)
+  (Smith 1999a–c, --prefix here-- 1999d, 1999e, 2000)
 input:
   - id: smith-1999-1
     author: [{family: "Smith"}]
@@ -28,16 +28,16 @@ clusters:
       - id: smith-1999-1
       - id: smith-1999-2
       - id: smith-1999-3
-        # prefix here
       - id: smith-1999-4
+        prefix: "--prefix here--"
       - id: smith-2000
   - id: cluster-two
     cites:
       - id: smith-1999-1
       - id: smith-1999-2
       - id: smith-1999-3
-        # prefix here
       - id: smith-1999-4
+        prefix: "--prefix here--"
       - id: smith-1999-5
       - id: smith-2000
 csl: |

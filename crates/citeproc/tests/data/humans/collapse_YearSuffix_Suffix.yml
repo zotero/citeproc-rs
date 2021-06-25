@@ -12,7 +12,6 @@ input:
   - id: smith-1999-3
     author: [{family: "Smith"}]
     issued: { raw: "1999" }
-    suffix: "--suffix here--"
   - id: smith-1999-4
     author: [{family: "Smith"}]
     issued: { raw: "1999" }

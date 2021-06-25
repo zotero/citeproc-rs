@@ -1,7 +1,7 @@
 mode: citation
 result: |
   (Smith 1999a,b, 1999c --locator here--, 2000)
-  (Smith 1999a-c, 1999d --locator here--, 1999e, 2000)
+  (Smith 1999a–c, 1999d --locator here--, 1999e, 2000)
 input:
   - id: smith-1999-1
     author: [{family: "Smith"}]
@@ -55,6 +55,7 @@ csl: |
         <group delimiter=" ">
           <names variable="author" />
           <date variable="issued" form="numeric"/>
+          <text variable="locator" />
         </group>
       </layout>
     </citation>
