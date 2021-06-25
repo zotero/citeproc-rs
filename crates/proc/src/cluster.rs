@@ -813,7 +813,7 @@ pub(crate) fn group_and_maybe_collapse<O: OutputFormat<Output = SmartString>>(
         match collapse {
             Collapse::CitationNumber => {
                 let monotonic_runs = group_by_mut(cites, |a, b| {
-                    a.cnum.map(|x| x + 1) == b.cnum
+                    a.cnum.map(|x| x + 1) == b.cnum && a.isolate_loc_affix() == b.isolate_loc_affix()
                 });
                 for run in monotonic_runs {
                     match run {

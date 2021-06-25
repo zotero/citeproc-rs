@@ -1005,7 +1005,7 @@ impl Citation {
     pub fn group_collapsing(&self) -> Option<Option<Collapse>> {
         let col = self.collapse_fallback();
         match self.cite_group_delimiter.as_ref() {
-            Some(cgd) => Some(col),
+            Some(_) => Some(col),
             None => col.map(Some)
         }
     }
