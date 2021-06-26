@@ -813,7 +813,8 @@ pub(crate) fn group_and_maybe_collapse<O: OutputFormat<Output = SmartString>>(
         match collapse {
             Collapse::CitationNumber => {
                 let monotonic_runs = group_by_mut(cites, |a, b| {
-                    a.cnum.map(|x| x + 1) == b.cnum && a.isolate_loc_affix() == b.isolate_loc_affix()
+                    a.cnum.map(|x| x + 1) == b.cnum
+                        && a.isolate_loc_affix() == b.isolate_loc_affix()
                 });
                 for run in monotonic_runs {
                     match run {
@@ -841,7 +842,8 @@ pub(crate) fn group_and_maybe_collapse<O: OutputFormat<Output = SmartString>>(
                 while let Some(name_run) = by_name.next() {
                     log::debug!(
                         "name_run: {:?}",
-                        name_run.iter()
+                        name_run
+                            .iter()
                             .map(|x| (x.unique_name_number, x.own_delimiter))
                             .collect::<Vec<_>>()
                     );
@@ -885,14 +887,19 @@ pub(crate) fn group_and_maybe_collapse<O: OutputFormat<Output = SmartString>>(
                             a.by_year_suffix().map(|ysuf| ysuf + 1) == b.by_year_suffix()
                                 && a.isolate_loc_affix() == b.isolate_loc_affix()
                         });
-                        for (ysuf_ix, ysuf_run) in monotonic_nonaffixed_ysufs.enumerate() {
-                            collapse_year_suffix_run(ysuf_run, ysuf_ix == 0, ranged);
-                            log::debug!(
-                                "ysuf_run: {:?}",
-                                ysuf_run
-                                    .iter()
-                                    .map(|x| (x.year.clone(), x.year_suffix))
-                                    .collect::<Vec<_>>()
+                        let mut prev_affixed = false;
+                        let mut ysuf_runs = monotonic_nonaffixed_ysufs.enumerate().peekable();
+                        while let Some((ysuf_ix, ysuf_run)) = ysuf_runs.next() {
+                            let next_affixed = ysuf_runs
+                                .peek()
+                                .and_then(|x| x.1.first())
+                                .map_or(false, |x| x.has_locator_or_affixes);
+                            collapse_year_suffix_run(
+                                ysuf_run,
+                                ysuf_ix == 0,
+                                ranged,
+                                &mut prev_affixed,
+                                next_affixed,
                             );
                         }
                         year_run.last_mut().unwrap().own_delimiter = Some(DelimKind::CiteGroup);
@@ -915,29 +922,33 @@ fn collapse_year_suffix_run<O: OutputFormat>(
     ysuf_run: &mut [CiteInCluster<O>],
     is_first_ysuf_run: bool,
     ranged: bool,
+    prev_affixed: &mut bool,
+    next_affixed: bool,
 ) {
     fn suppress_year<O: OutputFormat>(cite: &mut CiteInCluster<O>) {
         let gen4 = Arc::make_mut(&mut cite.gen4);
         gen4.tree_mut().suppress_year()
     }
 
-    let delim_for_cite = |cite: &CiteInCluster<O>, d: DelimKind| {
-        if !cite.has_locator_or_affixes {
-            Some(d)
+    let trailing_delim = |cite: &CiteInCluster<O>, d: DelimKind| {
+        if cite.has_locator_or_affixes || next_affixed {
+            Some(DelimKind::CiteGroup)
         } else {
-            Some(DelimKind::AfterCollapse)
+            Some(d)
         }
     };
     match ysuf_run {
         [] => log::warn!("run of year suffixes should never be empty"),
         [single] => {
-            if ranged && !single.has_locator_or_affixes && !is_first_ysuf_run {
+            if ranged && !single.has_locator_or_affixes && !is_first_ysuf_run && !*prev_affixed {
+                log::debug!("suppressing year on a single.");
                 suppress_year(single);
             }
-            single.own_delimiter = delim_for_cite(single, DelimKind::YearSuffix);
+            *prev_affixed = single.has_locator_or_affixes;
+            single.own_delimiter = trailing_delim(single, DelimKind::YearSuffix);
         }
         [head, middle @ .., last] if ranged => {
-            if !is_first_ysuf_run {
+            if !is_first_ysuf_run && !*prev_affixed {
                 suppress_year(head);
             }
             head.own_delimiter = Some(if !middle.is_empty() {
@@ -949,10 +960,11 @@ fn collapse_year_suffix_run<O: OutputFormat>(
                 ignored.trailing_only = true;
             }
             suppress_year(last);
-            last.own_delimiter = delim_for_cite(last, DelimKind::YearSuffix);
+            last.own_delimiter = trailing_delim(last, DelimKind::YearSuffix);
+            *prev_affixed = false;
         }
         [head, middle @ .., last] => {
-            if !is_first_ysuf_run {
+            if !is_first_ysuf_run && !*prev_affixed {
                 suppress_year(head);
             }
             head.own_delimiter = Some(DelimKind::YearSuffix);
@@ -961,7 +973,8 @@ fn collapse_year_suffix_run<O: OutputFormat>(
                 cite.own_delimiter = Some(DelimKind::YearSuffix);
             }
             suppress_year(last);
-            last.own_delimiter = delim_for_cite(last, DelimKind::YearSuffix);
+            last.own_delimiter = trailing_delim(last, DelimKind::YearSuffix);
+            *prev_affixed = false;
         }
     }
 }
