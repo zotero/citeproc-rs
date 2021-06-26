@@ -411,7 +411,11 @@ impl<'a, O: OutputFormat<Output = SmartString>> IrTreeRef<'a, O> {
             IR::Seq(ref seq) => seq.flatten_seq(*self, fmt, override_delim),
         }
     }
-    pub(crate) fn flatten_children(&self, fmt: &O, override_delim: Option<&str>) -> Option<O::Build> {
+    pub(crate) fn flatten_children(
+        &self,
+        fmt: &O,
+        override_delim: Option<&str>,
+    ) -> Option<O::Build> {
         let mut group = Vec::new();
         for child in self
             .children()
@@ -429,7 +433,14 @@ impl<'a, O: OutputFormat<Output = SmartString>> IrTreeRef<'a, O> {
 impl<'a> IrTreeRef<'a, Markup> {
     pub fn to_edge_stream(&self, fmt: &Markup) -> Vec<EdgeData> {
         let mut edges = Vec::new();
-        IR::append_edges(self.node, self.arena, &mut edges, fmt, Formatting::default(), None);
+        IR::append_edges(
+            self.node,
+            self.arena,
+            &mut edges,
+            fmt,
+            Formatting::default(),
+            None,
+        );
         edges
     }
 }
@@ -563,37 +574,5 @@ impl IrSeq {
         if !affixes.map_or(true, |a| a.suffix.is_empty()) {
             edges.push(EdgeData::Output(affixes.unwrap().suffix.as_str().into()));
         }
-    }
-}
-
-pub(crate) struct IrDebug<'a, O: OutputFormat> {
-    root: NodeId,
-    arena: &'a IrArena<O>,
-}
-
-impl<'a, O: OutputFormat> IrDebug<'a, O> {
-    pub(crate) fn new(root: NodeId, arena: &'a IrArena<O>) -> Self {
-        IrDebug { root, arena }
-    }
-}
-
-impl<'a, O: OutputFormat> std::fmt::Debug for IrDebug<'a, O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn go<O2: OutputFormat>(
-            indent: u32,
-            node: NodeId,
-            arena: &IrArena<O2>,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
-            let pair = arena.get(node).unwrap().get();
-            for _ in 0..indent {
-                write!(f, "    ")?;
-            }
-            writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
-            node.children(arena)
-                .try_for_each(|ch| go(indent + 1, ch, arena, f))
-        }
-        write!(f, "\n")?;
-        go(0, self.root, &self.arena, f)
     }
 }

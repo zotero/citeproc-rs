@@ -1,10 +1,8 @@
 use crate::cluster::CiteInCluster;
-use crate::db::IrGen;
 use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
-use citeproc_io::{Cite, CiteMode, ClusterMode};
-use indextree::Arena;
+use citeproc_io::{CiteMode, ClusterMode};
 use std::mem;
 use std::sync::Arc;
 
@@ -279,12 +277,12 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
                 } else if let (Some(first), Some(second)) = first_two {
                     match self.arena.get(second).unwrap().get() {
                         (IR::YearSuffix(_), GroupVars::Unresolved) if has_explicit => {
-                            self.with_node(first, |mut f| f.suppress_first_year(has_explicit))
+                            self.with_node(first, |f| f.suppress_first_year(has_explicit))
                         }
                         (IR::YearSuffix(_), GroupVars::Important)
                             if !has_explicit && !self.tree_at_node(second).is_empty() =>
                         {
-                            self.with_node(first, |mut f| f.suppress_first_year(has_explicit))
+                            self.with_node(first, |f| f.suppress_first_year(has_explicit))
                         }
                         _ => None,
                     }
@@ -296,8 +294,7 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
                 if found.is_none() {
                     let child_ids: Vec<_> = self.node.children(self.arena).collect();
                     for child in child_ids {
-                        found =
-                            self.with_node(child, |mut ch| ch.suppress_first_year(has_explicit));
+                        found = self.with_node(child, |ch| ch.suppress_first_year(has_explicit));
                         if found.is_some() {
                             break;
                         }
@@ -347,57 +344,31 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
 
 fn apply_author_only<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
-    fmt: &Markup,
     cite: &mut CiteInCluster<O>,
-) -> bool {
+) {
     if let Some(intext) = db.intext(cite.cite_id) {
         // completely replace with the intext arena, no need to copy
         // into the old arena in gen4.
         cite.gen4 = intext;
-        cite.layout_destination = LayoutDestination::MainToIntext; // default
-        return true;
+        cite.destination = WhichStream::MainToIntext;
     } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
         let gen4 = Arc::make_mut(&mut cite.gen4);
         let tree = gen4.tree_mut();
         new_root.detach(&mut tree.arena);
         tree.root.remove_subtree(&mut tree.arena);
         tree.root = new_root;
-        cite.layout_destination = LayoutDestination::MainToIntext; // default
-        return true;
+        cite.destination = WhichStream::MainToIntext;
     }
-    false
-}
-
-fn apply_suppress_author<O: OutputFormat<Output = SmartString>>(
-    db: &dyn IrDatabase,
-    fmt: &Markup,
-    cite: &mut CiteInCluster<O>,
-) -> bool {
-    if let Some(intext) = db.intext(cite.cite_id) {
-        // completely replace with the intext arena, no need to copy
-        // into the old arena in gen4.
-        cite.gen4 = intext;
-        return true;
-    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
-        let gen4 = Arc::make_mut(&mut cite.gen4);
-        let tree = gen4.tree_mut();
-        new_root.detach(&mut tree.arena);
-        tree.root.remove_subtree(&mut tree.arena);
-        tree.root = new_root;
-        return true;
-    }
-    false
 }
 
 pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
-    fmt: &Markup,
     cites: &mut [CiteInCluster<O>],
 ) {
     for cite in cites {
         match cite.cite.mode {
             Some(CiteMode::AuthorOnly) => {
-                apply_author_only(db, fmt, cite);
+                apply_author_only(db, cite);
             }
             Some(CiteMode::SuppressAuthor) => {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
@@ -410,23 +381,20 @@ pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
 
 pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
-    fmt: &Markup,
     mode: &ClusterMode,
     cites: &mut [CiteInCluster<O>],
 ) {
     match *mode {
         ClusterMode::AuthorOnly => {
             for cite in cites.iter_mut() {
-                if apply_author_only(db, fmt, cite) {
-                    cite.layout_destination = LayoutDestination::MainToIntext; // default
-                }
+                apply_author_only(db, cite);
             }
         }
         ClusterMode::SuppressAuthor { suppress_max: max } => {
             let suppress_it = |cite: &mut CiteInCluster<O>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
-                cite.layout_destination = LayoutDestination::MainToCitation;
+                cite.destination = WhichStream::MainToCitation;
             };
 
             let take = if max > 0 {
@@ -440,7 +408,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             for CiteInCluster {
                 cite_id,
                 gen4,
-                layout_destination,
+                destination: layout_destination,
                 ..
             } in cites.iter_mut()
             {
@@ -461,14 +429,14 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                     } else {
                         removed_node
                     };
-                    *layout_destination = LayoutDestination::MainToCitationPlusIntext(author_only);
+                    *layout_destination = WhichStream::MainToCitationPlusIntext(author_only);
                 }
             }
         }
     }
 }
 
-use crate::cluster::LayoutDestination;
+use crate::cluster::WhichStream;
 use crate::disamb::names::DisambNameRatchet;
 use citeproc_io::PersonName;
 use csl::SubsequentAuthorSubstituteRule as SasRule;

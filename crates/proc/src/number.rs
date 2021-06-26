@@ -179,7 +179,9 @@ impl<'a> State<'a> {
                     (pfx, num, HyphenInsert::Simple, State::Normal)
                 }
             }
-            State::Hyphenating { prefix: _, last: _ } => (pfx, num, HyphenInsert::Simple, State::Normal),
+            State::Hyphenating { prefix: _, last: _ } => {
+                (pfx, num, HyphenInsert::Simple, State::Normal)
+            }
         }
     }
     fn see_hyphen(&self) -> Self {

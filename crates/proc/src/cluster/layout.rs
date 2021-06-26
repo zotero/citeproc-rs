@@ -4,16 +4,9 @@
 //
 // Copyright © 2021 Corporation for Digital Scholarship
 
-use citeproc_db::ClusterId;
-use citeproc_io::TrimInPlace;
-use citeproc_io::{Cite, CiteMode, ClusterMode};
-use csl::Collapse;
-use std::borrow::Cow;
-
-use crate::ir::transforms;
-use crate::prelude::*;
-
 use super::CiteInCluster;
+use crate::prelude::*;
+use citeproc_io::TrimInPlace;
 
 #[derive(Debug)]
 pub(crate) struct LayoutStream<'a> {
@@ -21,13 +14,6 @@ pub(crate) struct LayoutStream<'a> {
     delimiters: LayoutDelimiters<'a>,
     fmt: &'a Markup,
 }
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum Affix {
-    Prefix,
-    Suffix,
-}
-use Affix::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Chunk {
@@ -41,19 +27,19 @@ impl Chunk {
     fn as_delim_mut(&mut self) -> Option<&mut DelimKind> {
         match self {
             Chunk::Delim(d) => Some(d),
-            _ => None
+            _ => None,
         }
     }
     fn as_prefix_mut(&mut self) -> Option<&mut SmartString> {
         match self {
             Chunk::Prefix(d) => Some(d),
-            _ => None
+            _ => None,
         }
     }
     fn as_suffix_mut(&mut self) -> Option<&mut SmartString> {
         match self {
             Chunk::Suffix(d) => Some(d),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -87,7 +73,12 @@ impl<'a> LayoutStream<'a> {
     }
 
     pub(crate) fn trim_first_last_affixes(&mut self) {
-        if let Some(suffix_in_final_pos) = self.chunks.iter_mut().nth_back(0).and_then(Chunk::as_suffix_mut) {
+        if let Some(suffix_in_final_pos) = self
+            .chunks
+            .iter_mut()
+            .nth_back(0)
+            .and_then(Chunk::as_suffix_mut)
+        {
             suffix_in_final_pos.trim_end_in_place();
         }
         if let Some(prefix_initial) = self.chunks.iter_mut().nth(0).and_then(Chunk::as_prefix_mut) {
@@ -95,7 +86,11 @@ impl<'a> LayoutStream<'a> {
         }
     }
 
-    pub(crate) fn write_flat(&mut self, single: &CiteInCluster<Markup>, override_delim_kind: Option<DelimKind>) {
+    pub(crate) fn write_flat(
+        &mut self,
+        single: &CiteInCluster<Markup>,
+        override_delim_kind: Option<DelimKind>,
+    ) {
         let (pre, built, suf) = flatten_with_affixes(single, self.fmt);
         self.write_cite(pre, built, suf);
         self.write_delim(override_delim_kind.or(single.own_delimiter));
@@ -122,18 +117,6 @@ impl<'a> LayoutStream<'a> {
         }
     }
 
-    pub(crate) fn close_year_suffix_ranges(&mut self) {
-        self.write_delim(Some(DelimKind::CiteGroup));
-    }
-
-    pub(crate) fn close_year_suffix_run(&mut self) {
-        self.write_delim(Some(DelimKind::CiteGroup));
-    }
-
-    pub(crate) fn close_name_run(&mut self) {
-        self.write_delim(Some(DelimKind::AfterCollapse));
-    }
-
     // If you pass None, this calls pop_delim.
     pub(crate) fn write_delim(&mut self, delim_kind: Option<DelimKind>) {
         let delim_kind = if let Some(dnew) = delim_kind {
@@ -144,8 +127,8 @@ impl<'a> LayoutStream<'a> {
         };
         let push_chunk = match self.chunks.last_mut() {
             Some(Chunk::Suffix(a)) => !ends_punc(&a),
-            Some(Chunk::Prefix(a)) => true,
-            Some(Chunk::Cite { built }) => true,
+            Some(Chunk::Prefix(_)) => true,
+            Some(Chunk::Cite { .. }) => true,
             Some(Chunk::Delim(d)) => {
                 *d = delim_kind;
                 return;
@@ -197,7 +180,7 @@ impl<'a> LayoutStream<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LayoutDestination {
+pub(crate) enum WhichStream {
     /// Do not render this cite anywhere, it is in the middle of a collapsed range.
     Nowhere,
     /// Take gen4's tree and put it in the `<citation><layout>` stream
@@ -209,9 +192,9 @@ pub(crate) enum LayoutDestination {
     MainToCitationPlusIntext(NodeId),
 }
 
-impl Default for LayoutDestination {
+impl Default for WhichStream {
     fn default() -> Self {
-        LayoutDestination::MainToCitation
+        WhichStream::MainToCitation
     }
 }
 
@@ -226,18 +209,11 @@ pub(crate) struct LayoutDelimiters<'a> {
     pub and_last_delimiter: Option<SmartString>,
 }
 
-pub struct CiteOpensRuns {
-    name: bool,
-    multiple_years: bool,
-    year_suffixes: bool,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum DelimKind {
     Layout,
     CiteGroup,
     AfterCollapse,
-    CollapseCitationNumbersMid,
     YearSuffix,
     Range,
     And,
@@ -248,7 +224,6 @@ impl<'a> LayoutDelimiters<'a> {
         Some(match post {
             DelimKind::CiteGroup => self.cite_group,
             DelimKind::AfterCollapse => self.after_collapse,
-            DelimKind::CollapseCitationNumbersMid => self.layout_delim,
             DelimKind::YearSuffix => self.year_suffix,
             DelimKind::Layout => self.layout_delim,
             DelimKind::Range => "\u{2013}",
@@ -312,7 +287,7 @@ impl<'a> LayoutDelimiters<'a> {
                     string.push_str(merged_locale.and_term(None).unwrap_or("and").trim());
                     string.push(' ');
                     string
-                },
+                }
             });
             let formatting = intext_el.layout.formatting.clone();
             citation = Self {
@@ -349,22 +324,11 @@ fn starts_punc(string: &str) -> bool {
         .map_or(false, is_no_delim_punc)
 }
 
-pub(crate) fn suppress_delimiter_between(
-    this: &CiteInCluster<Markup>,
-    next: &CiteInCluster<Markup>,
-) -> bool {
-    let this_suffix = this.suffix_str().unwrap_or("");
-    let next_prefix = next.prefix_str().unwrap_or("");
-    // "2000 is one source,; David Jones" => "2000 is one source, David Jones"
-    // "2000;, and David Jones" => "2000, and David Jones"
-    ends_punc(this_suffix) || starts_punc(next_prefix)
-}
-
 pub(crate) fn flatten_with_affixes(
     cite_in_cluster: &CiteInCluster<Markup>,
     fmt: &Markup,
 ) -> (Option<SmartString>, MarkupBuild, Option<SmartString>) {
-    let CiteInCluster { cite, gen4, .. } = cite_in_cluster;
+    let CiteInCluster { gen4, .. } = cite_in_cluster;
     let flattened = gen4.tree_ref().flatten_or_plain(&fmt, CSL_STYLE_ERROR);
 
     // we treat the None cases as empty strings because we would otherwise need a case
@@ -392,9 +356,5 @@ pub(crate) fn flatten_with_affixes(
             suf.push(' ');
         }
     }
-    let opts = IngestOptions {
-        is_external: true,
-        ..Default::default()
-    };
     (pre, flattened, suf)
 }

@@ -11,7 +11,6 @@ use citeproc::string_id::Cluster as ClusterStr;
 use citeproc_io::{Cite, ClusterMode, Reference, SmartString};
 
 use lazy_static::lazy_static;
-use serde_json::Value;
 use serde::{Deserialize, Deserializer};
 use std::mem;
 use std::str::FromStr;
@@ -38,14 +37,6 @@ impl CitationItem {
             cites: v,
             mode,
         }
-    }
-}
-
-fn is_truthy(v: &Value) -> bool {
-    match v {
-        Value::Bool(b) => *b,
-        Value::Number(n) => n.as_i64().map_or(false, |x| x == 0),
-        _ => false,
     }
 }
 

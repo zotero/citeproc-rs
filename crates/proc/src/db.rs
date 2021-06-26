@@ -1378,7 +1378,10 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
                 let seq_node = arena.new_node((IR::Seq(seq), GroupVars::Important));
                 seq_node.append(n, &mut arena);
                 seq_node.append(msg_node, &mut arena);
-                IrTree { root: seq_node, arena }
+                IrTree {
+                    root: seq_node,
+                    arena,
+                }
             };
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {
@@ -1510,7 +1513,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                 .map_or(false, |d| d <= near_note_distance)
         };
         let in_text = match cluster.number {
-            ClusterNumber::InText(n) => true,
+            ClusterNumber::InText(_n) => true,
             ClusterNumber::OutsideFlow => true,
             _ => false,
         };
@@ -1656,7 +1659,7 @@ fn cite_positions(db: &dyn IrDatabase) -> Arc<FnvHashMap<CiteId, (Position, Opti
                                 map.insert(cite_id, (Position::FarNote, Some(unsigned)));
                             }
                         }
-                        ClusterNumber::InText(this_intext) => {
+                        ClusterNumber::InText(_this_intext) => {
                             log::warn!("InText should not be sorted after a Note");
                             // this won't happen; InText is sorted before Note. Nevertheless:
                             map.insert(cite_id, (Position::First, None));

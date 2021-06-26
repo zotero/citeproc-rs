@@ -67,7 +67,7 @@ pub(crate) mod prelude {
     pub use crate::cite_context::RenderContext;
     pub use crate::db::{safe_default, ImplementationDetails, IrDatabase};
     pub use crate::renderer::GenericContext;
-    pub(crate) use crate::tree::{IrTree, IrTreeRef, IrTreeMut};
+    pub(crate) use crate::tree::{IrTree, IrTreeMut, IrTreeRef};
     pub use crate::walker::{StyleWalker, WalkerFoldType};
 
     pub use citeproc_db::{CiteDatabase, CiteId, LocaleDatabase, StyleDatabase};

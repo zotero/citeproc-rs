@@ -33,7 +33,10 @@ impl<O: OutputFormat> IrTree<O> {
             arena: &self.arena,
         }
     }
-    pub(crate) fn get_mut(&mut self, node: NodeId) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
+    pub(crate) fn get_mut(
+        &mut self,
+        node: NodeId,
+    ) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
         self.arena.get_mut(node)
     }
     pub(crate) fn root_mut(&mut self) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
@@ -117,7 +120,10 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     pub(crate) fn root_mut(&mut self) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
         self.arena.get_mut(self.node)
     }
-    pub(crate) fn get_mut(&mut self, node: NodeId) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
+    pub(crate) fn get_mut(
+        &mut self,
+        node: NodeId,
+    ) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
         self.arena.get_mut(node)
     }
     pub(crate) fn get(&self, node: NodeId) -> Option<&indextree::Node<(IR<O>, GroupVars)>> {
@@ -235,12 +241,22 @@ impl<O: OutputFormat> IrTree<O> {
 
 impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     pub(crate) fn tree_at_node(&self, node: NodeId) -> IrTreeRef<O> {
-        IrTreeRef { node, arena: self.arena }
+        IrTreeRef {
+            node,
+            arena: self.arena,
+        }
     }
     pub(crate) fn as_ref(&self) -> IrTreeRef<O> {
-        IrTreeRef { node: self.node, arena: self.arena }
+        IrTreeRef {
+            node: self.node,
+            arena: self.arena,
+        }
     }
-    pub(crate) fn with_node<R>(&mut self, node: NodeId, f: impl FnOnce(&mut IrTreeMut<'_, O>) -> R) -> R {
+    pub(crate) fn with_node<R>(
+        &mut self,
+        node: NodeId,
+        f: impl FnOnce(&mut IrTreeMut<'_, O>) -> R,
+    ) -> R {
         let my_node = core::mem::replace(&mut self.node, node);
         let res = f(self);
         self.node = my_node;
@@ -270,4 +286,3 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
         }
     }
 }
-
