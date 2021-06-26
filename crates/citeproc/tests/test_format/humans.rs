@@ -8,22 +8,13 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
-use citeproc_io::{Cite, ClusterMode, Locators, Reference, SmartString};
+use citeproc_io::{Cite, ClusterMode, Reference, SmartString};
 
 use lazy_static::lazy_static;
 use serde_json::Value;
+use serde::{Deserialize, Deserializer};
 use std::mem;
 use std::str::FromStr;
-
-/// Techincally reference IDs are allowed to be numbers.
-fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use citeproc_io::NumberLike;
-    let s = NumberLike::deserialize(d)?;
-    Ok(s.into_string())
-}
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
@@ -128,7 +119,7 @@ impl FromStr for Results {
                 // incorrect, but we don't actually know except by looking at the instructions what
                 // the right note number is
                 note: ClusterNumber::Note(IntraNote::Single(n)),
-                text: crate::normalise_html(&f),
+                text: super::normalise_html(&f),
             })(inp)
         }
         fn whole_thing(inp: &str) -> IResult<&str, Vec<CiteResult>> {
@@ -137,8 +128,6 @@ impl FromStr for Results {
         Ok(Results(whole_thing(s).unwrap().1))
     }
 }
-
-use serde::de::{Deserialize, Deserializer};
 
 pub enum InstructionMode {
     Composite,
@@ -235,7 +224,7 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Arrows,
                 // id,
                 note,
-                text: crate::normalise_html(&text),
+                text: super::normalise_html(&text),
             })
         }
         // for &id in self.current_note_numbers.keys() {
@@ -248,7 +237,7 @@ impl JsExecutor<'_> {
         //             kind: ResultKind::Dots,
         //             id,
         //             note,
-        //             text: crate::normalise_html(&text),
+        //             text: super::normalise_html(&text),
         //         })
         //     }
         // }
@@ -286,7 +275,6 @@ impl JsExecutor<'_> {
                 &[PrePost(cluster.cluster_id.clone(), *note_index)],
             );
             self.to_renumbering(&mut renum, post);
-            println!("{:?}", mode);
             self.proc.insert_cluster_str(ClusterStr {
                 id: cluster_id.clone(),
                 mode: mode.clone(),
@@ -464,7 +452,7 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
         result
-            .map(|x| crate::normalise_html(&x))
+            .map(|x| super::normalise_html(&x))
             .expect("test case without a RESULT section"),
         citation_items.map(|items: Vec<CitationItem>| {
             items

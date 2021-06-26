@@ -13,8 +13,8 @@ use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 #[cfg(feature = "markup")]
 pub mod markup;
 pub mod micro_html;
-#[cfg(feature = "pandoc")]
-pub mod pandoc;
+// #[cfg(feature = "pandoc")]
+// pub mod pandoc;
 mod superscript;
 
 // pub use self::pandoc::Pandoc;

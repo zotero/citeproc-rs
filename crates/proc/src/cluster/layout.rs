@@ -15,17 +15,6 @@ use crate::prelude::*;
 
 use super::CiteInCluster;
 
-pub(crate) struct Positional<T>(pub T, pub Option<T>);
-pub(crate) fn iter_peek_is_last<'a, T>(
-    slice: &'a [T],
-) -> impl Iterator<Item = Positional<&'a T>> + 'a {
-    let len = slice.len();
-    slice
-        .iter()
-        .enumerate()
-        .map(move |(ix, this)| Positional(this, slice.get(ix + 1)))
-}
-
 #[derive(Debug)]
 pub(crate) struct LayoutStream<'a> {
     chunks: Vec<Chunk>,

@@ -4,9 +4,6 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-#[macro_use]
-extern crate serde_derive;
-
 pub use citeproc;
 pub use citeproc_proc;
 
@@ -337,9 +334,4 @@ pub fn normalise_html(strg: &str) -> String {
     let mut rep = newlines.replace_all(&rep, ">\n<${1}div").into_owned();
     rep.truncate(rep.trim_end().trim_end_matches('\n').len());
     rep
-}
-
-#[test]
-fn test_normalise() {
-    assert_eq!(normalise_html("<div>\n  <div>"), "<div><div>".to_owned());
 }

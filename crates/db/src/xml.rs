@@ -141,7 +141,8 @@ fn test_name_configurations() {
                 <text macro="blah" />
             </layout>
         </citation>
-    </style>"#
+    </style>"#,
+    None,
     ).unwrap();
     let confs = name_configurations_middle(&sty);
     let mut conf = Name::root_default();

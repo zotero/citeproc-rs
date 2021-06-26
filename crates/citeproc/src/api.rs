@@ -6,6 +6,7 @@
 
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use super::processor::Interner;
 use citeproc_db::ClusterId as ClusterIdInternal;
 use citeproc_io::output::{markup::Markup, OutputFormat};
@@ -79,6 +80,7 @@ pub mod string_id {
     //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
     //! consumers.
     use super::{BibEntry, BibliographyUpdate};
+    use serde::{Deserialize, Serialize};
     use citeproc_io::{
         output::{markup::Markup, OutputFormat},
         SmartString,

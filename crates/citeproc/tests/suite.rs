@@ -23,7 +23,8 @@ cfg_if! {
     }
 }
 
-use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
+mod test_format;
+use test_format::{humans::parse_human_test, yaml::parse_yaml_test};
 
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;

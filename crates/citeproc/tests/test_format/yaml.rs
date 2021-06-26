@@ -8,7 +8,7 @@ use super::humans::{CitationItem, CiteprocJsInstruction};
 use super::{Format, Mode, TestCase};
 use anyhow::Error;
 use citeproc_io::Reference;
-use serde::Deserializer;
+use serde::Deserialize;
 
 pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {
     let yaml_test_case: YamlTestCase = serde_yaml::from_str(s)?;
@@ -41,7 +41,7 @@ impl From<YamlTestCase> for TestCase {
             yaml.bibliography_no_sort,
             yaml.csl,
             yaml.input,
-            crate::normalise_html(&yaml.result),
+            super::normalise_html(&yaml.result),
             yaml.clusters.map(|cls| {
                 cls.into_iter()
                     .enumerate()

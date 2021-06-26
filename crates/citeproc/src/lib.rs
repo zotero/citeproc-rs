@@ -4,8 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-#[macro_use]
-extern crate serde_derive;
 // #[macro_use]
 // extern crate log;
 
