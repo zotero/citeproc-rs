@@ -1,8 +1,8 @@
 mode: citation
 # the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
 result: |
-  Smith-intext
-  (Jellybeans; Jones, Scavengers)
+  Smith-intext (see also Jones, Scavengers)
+  (Jellybeans; Scavengers)
 input:
   - id: "ITEM-1"
     title: "Jellybeans"
@@ -16,16 +16,17 @@ input:
     type: book
 clusters:
   - id: cluster-one
-    mode: "author-only"
     cites:
       - id: ITEM-1
-  - id: cluster-two
-    mode: "suppress-author"
-    # only suppress the first one.
-    suppressMax: 1
-    cites:
-      - id: ITEM-1
+        author-only: true
       - id: ITEM-2
+        prefix: "see also"
+  - id: cluster-two
+    cites:
+      - id: ITEM-1
+        suppress-author: true
+      - id: ITEM-2
+        suppress-author: true
 csl: |
   <style class="in-text" version="1.0.1">
     <info><id>id</id><title /></info>

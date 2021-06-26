@@ -55,6 +55,8 @@ pub fn built_cluster_before_output(
     let cluster_mode = db.cluster_mode(cluster_id);
     if let Some(mode) = &cluster_mode {
         transforms::apply_cluster_mode(db, &fmt, mode, &mut irs);
+    } else {
+        transforms::apply_cite_modes(db, &fmt, &mut irs);
     }
 
     // Cite capitalization
@@ -76,84 +78,19 @@ pub fn built_cluster_before_output(
         }
     }
 
-    fn flatten_affix_cite(
-        cites: &[CiteInCluster<Markup>],
-        ix: usize,
-        fmt: &Markup,
-    ) -> Option<(Option<SmartString>, MarkupBuild, Option<SmartString>)> {
-        Some(layout::flatten_with_affixes(cites.get(ix)?, fmt))
-    }
-
-    enum OutputChannels {
-        CitationLayout(MarkupBuild),
-        SplitIntextCitation(MarkupBuild, MarkupBuild),
-        IntextLayout(MarkupBuild),
-    }
-
-    // returned usize is advance len
-    let render_range = |stream: &mut layout::LayoutStream,
-                        ranges: &[RangePiece],
-                        group_delim: DelimKind,
-                        outer_delim: DelimKind|
-     -> usize {
-        let mut advance_to = 0usize;
-        let mut group: Vec<MarkupBuild> = Vec::with_capacity(ranges.len());
-        for (ix, piece) in ranges.iter().enumerate() {
-            let is_last = ix + 1 == ranges.len();
-            match *piece {
-                RangePiece::Single(Collapsible {
-                    ix, force_single, ..
-                }) => {
-                    advance_to = ix;
-                    stream.write_flat(&irs[ix], None);
-                }
-                RangePiece::Range(range_start, range_end) => {
-                    advance_to = range_end.ix;
-                    let mut range_delimiter = DelimKind::Range;
-                    if range_start.number + 1 == range_end.number {
-                        // Not represented as a 1-2, just two sequential numbers 1,2
-                        range_delimiter = group_delim;
-                    }
-                    // XXX: need to guarantee before designating it a RangePiece that the start's
-                    // suffix is None and the end's prefix is also None
-                    let start = flatten_affix_cite(&irs, range_start.ix, fmt);
-                    let end = flatten_affix_cite(&irs, range_end.ix, fmt);
-                    // Delimiters here are never suppressed by build_cite, as they wouldn't be part
-                    // of the range if they had affixes on the inside
-                    match (start, end) {
-                        (Some((pre, start, _)), Some((_, end, suf))) => {
-                            stream.write_cite(pre, start, None);
-                            stream.write_delim(Some(range_delimiter));
-                            stream.write_cite(None, end, suf);
-                        }
-                        (Some((a, b, c)), None) | ((None, Some((a, b, c)))) => {
-                            stream.write_cite(a, b, c);
-                        }
-                        _ => {}
-                    }
-                    stream.write_delim(Some(group_delim));
-                }
-            }
-        }
-        stream.write_delim(Some(outer_delim));
-        advance_to
-    };
-
-    let citation_el = &style.citation;
-    let intext_el = style.intext.as_ref();
-
-    let merged_locale = db.default_locale();
+    let default_locale = db.default_locale();
     let citation_delims = layout::LayoutDelimiters::from_citation(&style.citation);
-    let intext_delimiters =
-        layout::LayoutDelimiters::from_intext(intext_el, citation_el, &merged_locale);
-
-    log::debug!("citation_delims: {:?}", citation_delims);
+    let intext_delimiters = layout::LayoutDelimiters::from_intext(
+        style.intext.as_ref(),
+        &style.citation,
+        &default_locale,
+    );
 
     let mut citation_stream = layout::LayoutStream::new(irs.len() * 2, citation_delims, fmt);
     let mut intext_stream = layout::LayoutStream::new(0, intext_delimiters, fmt);
 
     // render the intext stream
-    let intext_authors = group_by(irs.as_slice(), |a, b| a.by_name() == b.by_name())
+    let intext_authors = group_by(&irs, |a, b| a.by_name() == b.by_name())
         // only need the first one of each group, the rest should have identical names
         //
         //
@@ -196,6 +133,10 @@ pub fn built_cluster_before_output(
     let infix = render_composite_infix(
         match &cluster_mode {
             Some(ClusterMode::Composite { infix }) => Some(infix.as_opt_str()),
+            // humans::intext_Mixed.yml
+            // This is to separate any author-only cites from any others (suppress-author, normal)
+            // in there.
+            None => Some(Some(" ")).filter(|_| citation_final.is_some()),
             _ => None,
         },
         fmt,
@@ -983,6 +924,9 @@ fn collapse_year_suffix_run<O: OutputFormat>(
 // Cluster Modes & Cite Modes //
 ////////////////////////////////
 
+/// If infix is `None`, returns None.
+/// If Infix is `Some(None)`, returns a single space.
+/// If Infix is `Some(Some(x))`, adjusts puncuated ends.
 fn render_composite_infix<O: OutputFormat>(
     infix: Option<Option<&str>>,
     fmt: &O,

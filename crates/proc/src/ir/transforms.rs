@@ -3,7 +3,7 @@ use crate::db::IrGen;
 use crate::disamb::names::{replace_single_child, NameIR};
 use crate::names::NameToken;
 use crate::prelude::*;
-use citeproc_io::{Cite, ClusterMode};
+use citeproc_io::{Cite, CiteMode, ClusterMode};
 use indextree::Arena;
 use std::mem;
 use std::sync::Arc;
@@ -345,33 +345,80 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     }
 }
 
+fn apply_author_only<O: OutputFormat<Output = SmartString>>(
+    db: &dyn IrDatabase,
+    fmt: &Markup,
+    cite: &mut CiteInCluster<O>,
+) -> bool {
+    if let Some(intext) = db.intext(cite.cite_id) {
+        // completely replace with the intext arena, no need to copy
+        // into the old arena in gen4.
+        cite.gen4 = intext;
+        cite.layout_destination = LayoutDestination::MainToIntext; // default
+        return true;
+    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
+        let gen4 = Arc::make_mut(&mut cite.gen4);
+        let tree = gen4.tree_mut();
+        new_root.detach(&mut tree.arena);
+        tree.root.remove_subtree(&mut tree.arena);
+        tree.root = new_root;
+        cite.layout_destination = LayoutDestination::MainToIntext; // default
+        return true;
+    }
+    false
+}
+
+fn apply_suppress_author<O: OutputFormat<Output = SmartString>>(
+    db: &dyn IrDatabase,
+    fmt: &Markup,
+    cite: &mut CiteInCluster<O>,
+) -> bool {
+    if let Some(intext) = db.intext(cite.cite_id) {
+        // completely replace with the intext arena, no need to copy
+        // into the old arena in gen4.
+        cite.gen4 = intext;
+        return true;
+    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
+        let gen4 = Arc::make_mut(&mut cite.gen4);
+        let tree = gen4.tree_mut();
+        new_root.detach(&mut tree.arena);
+        tree.root.remove_subtree(&mut tree.arena);
+        tree.root = new_root;
+        return true;
+    }
+    false
+}
+
+pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
+    db: &dyn IrDatabase,
+    fmt: &Markup,
+    cites: &mut [CiteInCluster<O>],
+) {
+    for cite in cites {
+        match cite.cite.mode {
+            Some(CiteMode::AuthorOnly) => {
+                apply_author_only(db, fmt, cite);
+            }
+            Some(CiteMode::SuppressAuthor) => {
+                let gen4 = Arc::make_mut(&mut cite.gen4);
+                let _discard = gen4.tree_mut().suppress_author();
+            }
+            None => {}
+        }
+    }
+}
+
 pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     fmt: &Markup,
     mode: &ClusterMode,
-    cites: &mut Vec<CiteInCluster<O>>,
+    cites: &mut [CiteInCluster<O>],
 ) {
     match *mode {
         ClusterMode::AuthorOnly => {
-            for CiteInCluster {
-                cite_id,
-                layout_destination,
-                ref mut gen4,
-                ..
-            } in cites.iter_mut()
-            {
-                if let Some(intext) = db.intext(*cite_id) {
-                    // completely replace with the intext arena, no need to copy
-                    // into the old arena in gen4.
-                    *gen4 = intext;
-                    *layout_destination = LayoutDestination::MainToIntext; // default
-                } else if let Some(new_root) = gen4.tree_ref().leading_names_block_or_title() {
-                    let gen4 = Arc::make_mut(gen4);
-                    let tree = gen4.tree_mut();
-                    new_root.detach(&mut tree.arena);
-                    tree.root.remove_subtree(&mut tree.arena);
-                    tree.root = new_root;
-                    *layout_destination = LayoutDestination::MainToIntext; // default
+            for cite in cites.iter_mut() {
+                if apply_author_only(db, fmt, cite) {
+                    cite.layout_destination = LayoutDestination::MainToIntext; // default
                 }
             }
         }
