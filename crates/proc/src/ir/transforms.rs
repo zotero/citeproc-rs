@@ -383,6 +383,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     mode: &ClusterMode,
     cites: &mut [CiteInCluster<O>],
+    class: csl::StyleClass,
 ) {
     match *mode {
         ClusterMode::AuthorOnly => {
@@ -390,7 +391,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                 apply_author_only(db, cite);
             }
         }
-        ClusterMode::SuppressAuthor { suppress_max: max } => {
+        ClusterMode::SuppressAuthor { suppress_max: max } if class != csl::StyleClass::Note => {
             let suppress_it = |cite: &mut CiteInCluster<O>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
@@ -404,7 +405,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             };
             cites.iter_mut().take(take).for_each(suppress_it);
         }
-        ClusterMode::Composite { .. } => {
+        ClusterMode::Composite { .. } if class != csl::StyleClass::Note => {
             for CiteInCluster {
                 cite_id,
                 gen4,
@@ -433,6 +434,7 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                 }
             }
         }
+        _ => {}
     }
 }
 

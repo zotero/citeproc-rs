@@ -50,7 +50,7 @@ pub fn built_cluster_before_output(
 
     let cluster_mode = db.cluster_mode(cluster_id);
     if let Some(mode) = &cluster_mode {
-        transforms::apply_cluster_mode(db, mode, &mut irs);
+        transforms::apply_cluster_mode(db, mode, &mut irs, style.class);
     } else {
         transforms::apply_cite_modes(db, &mut irs);
     }
