@@ -1,0 +1,9 @@
+---
+source: crates/citeproc/tests/suite.rs
+expression: res
+---
+John Smith
+(Robert Jones, 2002)
+Book C
+(2004, [Susan Jenkins tran.])
+Book E

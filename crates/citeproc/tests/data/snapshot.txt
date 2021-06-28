@@ -62,3 +62,10 @@ date_VariousInvalidDates.txt
 # The spec says "The 'locator' variable is always rendered with an en-dash replacing any hyphens."
 # The test suite doesn't do this for one of them here.
 label_CollapsedPageNumberPluralDetection.txt
+
+# The citeproc-js docs say the author field or the title.
+# discretionary_AuthorOnly.txt extracts a `<date variable="issued" />`;
+# discretionary_SuppressAuthor does not delete it.
+# In order to preserve consistency with "composite = author-only + suppress-author",
+# citeproc-rs decides that dates are not eligible for extraction/suppression.
+discretionary_AuthorOnly.txt
