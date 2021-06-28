@@ -95,6 +95,7 @@ pub(crate) mod prelude {
     pub(crate) use crate::{IrState, Proc};
     pub(crate) const CSL_STYLE_ERROR: &'static str =
         "[CSL STYLE ERROR: reference with no printed form.]";
+    pub(crate) const CLUSTER_NO_PRINTED_FORM: &'static str = "[NO_PRINTED_FORM]";
 }
 
 use prelude::*;

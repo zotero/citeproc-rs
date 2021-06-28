@@ -346,18 +346,19 @@ fn apply_author_only<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     cite: &mut CiteInCluster<O>,
 ) {
+    cite.destination = WhichStream::MainToIntext;
     if let Some(intext) = db.intext(cite.cite_id) {
         // completely replace with the intext arena, no need to copy
         // into the old arena in gen4.
         cite.gen4 = intext;
-        cite.destination = WhichStream::MainToIntext;
     } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
         let gen4 = Arc::make_mut(&mut cite.gen4);
         let tree = gen4.tree_mut();
         new_root.detach(&mut tree.arena);
         tree.root.remove_subtree(&mut tree.arena);
         tree.root = new_root;
-        cite.destination = WhichStream::MainToIntext;
+    } else {
+        cite.no_printed_form = true;
     }
 }
 

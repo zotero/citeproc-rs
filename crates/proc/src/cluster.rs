@@ -99,16 +99,20 @@ pub fn built_cluster_before_output(
         //
         .map(|run| &run[0])
         .filter_map(|cite| match cite.destination {
-            WhichStream::MainToIntext => Some((cite, cite.gen4.tree_ref().node)),
-            WhichStream::MainToCitationPlusIntext(node) => Some((cite, node)),
+            WhichStream::MainToIntext => Some((cite, Some(cite.gen4.tree_ref().node))),
+            WhichStream::MainToCitationPlusIntext(node) => Some((cite, Some(node))),
             _ => None,
         })
         .map(|(cite, node)| {
-            cite.gen4
-                .tree_ref()
-                .with_node(node)
-                // this is something @fbennett made up specifically for author-only.
-                .flatten_or_plain(fmt, "[NO_PRINTED_FORM]")
+            node.filter(|_| !cite.no_printed_form)
+                .and_then(|node| {
+                    cite.gen4
+                        .tree_ref()
+                        .with_node(node)
+                        // this is something @fbennett made up specifically for author-only / clusters.
+                        .flatten(fmt, None)
+                })
+                .unwrap_or_else(|| fmt.plain(CLUSTER_NO_PRINTED_FORM))
         });
 
     intext_stream.write_interspersed(intext_authors, DelimKind::Layout);
@@ -124,11 +128,14 @@ pub fn built_cluster_before_output(
         }
     }
 
-    log::debug!("citation_stream: {:#?}", &citation_stream);
     let citation_final = citation_stream.finish();
     let intext_final = intext_stream.finish();
     if intext_final.is_none() {
-        return fmt.seq(citation_final.into_iter());
+        if citation_final.is_none() {
+            return fmt.plain(CLUSTER_NO_PRINTED_FORM);
+        } else {
+            return fmt.seq(citation_final.into_iter());
+        }
     }
     let infix = render_composite_infix(
         match &cluster_mode {
@@ -206,6 +213,7 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
     pub gen4: Arc<IrGen>,
     /// Tagging removed cites is cheaper than memmoving the rest of the Vec
     pub destination: WhichStream,
+    pub no_printed_form: bool,
     /// So we can look for punctuation at the end and use the format's quoting abilities
     pub prefix_parsed: Option<MarkupBuild>,
     /// A key to group_by cites in order to collapse runs of the same **name**.
@@ -284,6 +292,7 @@ impl CiteInCluster<Markup> {
         CiteInCluster {
             cite_id,
             has_locator,
+            no_printed_form: false,
             has_locator_or_affixes: has_locator || cite.has_affix(),
             own_delimiter: Some(DelimKind::Layout),
             cite,
