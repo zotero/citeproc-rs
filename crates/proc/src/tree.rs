@@ -182,6 +182,7 @@ fn arena_copy_node<T: Clone>(
     let new_node = dst_arena.new_node(node.get().clone());
     Some(new_node)
 }
+
 fn arena_copy_children<T: Clone>(
     src_node: NodeId,
     src_arena: &Arena<T>,

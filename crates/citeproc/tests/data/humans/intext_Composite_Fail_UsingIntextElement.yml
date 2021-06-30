@@ -1,0 +1,46 @@
+mode: citation
+result: |
+  Smith, Jellybeans
+  [NO_PRINTED_FORM], whose paper ibid., Jellybeans
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+clusters:
+  - id: cluster-one
+    cites:
+      - id: ITEM-1
+  - id: cluster-two
+    mode: "composite"
+    infix: ", whose paper"
+    cites:
+      - id: ITEM-1
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <choose>
+            <if position="ibid">
+              <text term="ibid" />
+            </if>
+            <else>
+              <names variable="author" />
+            </else>
+          </choose>
+          <text variable="title" />
+        </group>
+      </layout>
+    </citation>
+    <intext>
+      <layout>
+        <names variable="editor" />
+      </layout>
+    </intext>
+  </style>

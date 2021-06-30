@@ -216,12 +216,11 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
             None => return false,
         };
         match &me.0 {
-            IR::Rendered(None) => true,
+            IR::Rendered(opt) => opt.is_none(),
             IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
                 self.children().next().is_none()
             }
             IR::NameCounter(_nc) => false,
-            _ => false,
         }
     }
 
@@ -334,6 +333,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // it must be at the start of the cite
                 self.children()
+                    .filter(|x| !x.is_empty())
                     .nth(0)
                     .and_then(|child| child.leading_names_block_or_title())
             }
@@ -346,7 +346,7 @@ fn apply_author_only<O: OutputFormat<Output = SmartString>>(
     db: &dyn IrDatabase,
     cite: &mut CiteInCluster<O>,
 ) {
-    cite.destination = WhichStream::MainToIntext;
+    let mut success = true;
     if let Some(intext) = db.intext(cite.cite_id) {
         // completely replace with the intext arena, no need to copy
         // into the old arena in gen4.
@@ -358,8 +358,9 @@ fn apply_author_only<O: OutputFormat<Output = SmartString>>(
         tree.root.remove_subtree(&mut tree.arena);
         tree.root = new_root;
     } else {
-        cite.no_printed_form = true;
+        success = false;
     }
+    cite.destination = WhichStream::MainToIntext { success };
 }
 
 pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
@@ -410,29 +411,31 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
             for CiteInCluster {
                 cite_id,
                 gen4,
-                destination: layout_destination,
+                destination,
                 ..
             } in cites.iter_mut()
             {
                 let gen4 = Arc::make_mut(gen4);
                 log::debug!("called Composite");
-                if let Some(removed_node) = gen4.tree_mut().suppress_author() {
+                let intext_part = if let Some(removed_node) = gen4.tree_mut().suppress_author() {
                     log::debug!(
                         "removed node from composite: {}",
                         gen4.tree().tree_at_node(removed_node),
                     );
-                    let author_only = if let Some(intext) = db.intext(*cite_id) {
+                    if let Some(intext) = db.intext(*cite_id) {
                         log::debug!("using <intext> node for composite: {}", intext.tree());
                         let gen4_tree = gen4.tree_mut();
                         removed_node.remove_subtree(&mut gen4_tree.arena);
-                        gen4.tree_mut()
-                            .extend(intext.tree().tree_ref())
-                            .expect("invalid node id for arena_copy_tree")
+                        // this only fails if the tree root is not a valid node, but we need an
+                        // Option<NodeId> anyway, so leave it
+                        gen4.tree_mut().extend(intext.tree().tree_ref())
                     } else {
-                        removed_node
-                    };
-                    *layout_destination = WhichStream::MainToCitationPlusIntext(author_only);
-                }
+                        Some(removed_node)
+                    }
+                } else {
+                    None
+                };
+                *destination = WhichStream::MainToCitationPlusIntext(intext_part);
             }
         }
         _ => {}

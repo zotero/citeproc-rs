@@ -186,10 +186,12 @@ pub(crate) enum WhichStream {
     /// Take gen4's tree and put it in the `<citation><layout>` stream
     MainToCitation,
     /// Take gen4's tree and put it in the `<intext><layout>` stream
-    MainToIntext,
+    MainToIntext { success: bool },
     /// Take gen4's tree and put it in the `<citation><layout>` stream, and then put this detached node
     /// into the `<intext><layout>` stream
-    MainToCitationPlusIntext(NodeId),
+    ///
+    /// None gives [NO_PRINTED_FORM] instead of a rendered intext.
+    MainToCitationPlusIntext(Option<NodeId>),
 }
 
 impl Default for WhichStream {
