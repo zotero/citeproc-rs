@@ -38,6 +38,7 @@ clusters:
       - id: smith-2
   - id: cluster-two
     mode: "composite"
+    suppressFirst: 0
     infix: "all found the opposite."
     cites:
       - id: smith-1

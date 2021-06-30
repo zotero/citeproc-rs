@@ -148,7 +148,7 @@ pub fn built_cluster_before_output(
     }
     let infix = render_composite_infix(
         match &cluster_mode {
-            Some(ClusterMode::Composite { infix }) => Some(infix.as_opt_str()),
+            Some(ClusterMode::Composite { infix, .. }) => Some(infix.as_opt_str()),
             // humans::intext_Mixed.yml
             // This is to separate any author-only cites from any others (suppress-author, normal)
             // in there.
@@ -236,16 +236,16 @@ pub(crate) struct CiteInCluster<O: OutputFormat> {
 }
 
 impl<O: OutputFormat> CiteInCluster<O> {
-    fn by_year(&self) -> Partial<&SmartString> {
+    pub(crate) fn by_year(&self) -> Partial<&SmartString> {
         self.year.as_ref()
     }
-    fn by_name(&self) -> Partial<u32> {
+    pub(crate) fn by_name(&self) -> Partial<u32> {
         self.unique_name_number
     }
-    fn isolate_loc_affix(&self) -> Partial<()> {
+    pub(crate) fn isolate_loc_affix(&self) -> Partial<()> {
         Partial::Filled(()).filter(!self.has_locator_or_affixes)
     }
-    fn by_year_suffix(&self) -> Partial<u32> {
+    pub(crate) fn by_year_suffix(&self) -> Partial<u32> {
         self.year_suffix
     }
 }
@@ -308,7 +308,7 @@ impl CiteInCluster<Markup> {
             prefix_parsed,
             cnum: Partial::from(cnum),
             // by default, no names are in groups.
-            unique_name_number: Partial::Filled(0),
+            unique_name_number: Partial::Incomparable,
             year: Partial::Incomparable,
             year_suffix: Partial::Incomparable,
         }

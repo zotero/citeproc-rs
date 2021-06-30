@@ -3,6 +3,7 @@ mode: citation
 result: |
   Smith-intext
   (Jellybeans; Jones, Scavengers)
+  (Jellybeans; Scavengers)
 input:
   - id: "ITEM-1"
     title: "Jellybeans"
@@ -21,8 +22,15 @@ clusters:
       - id: ITEM-1
   - id: cluster-two
     mode: "suppress-author"
-    # only suppress the first one.
-    suppressMax: 1
+    # only suppress the first one. (the default)
+    suppressFirst: 1
+    cites:
+      - id: ITEM-1
+      - id: ITEM-2
+  - id: cluster-three
+    mode: "suppress-author"
+    # do both authors. 0 will do all of them
+    suppressFirst: 2
     cites:
       - id: ITEM-1
       - id: ITEM-2

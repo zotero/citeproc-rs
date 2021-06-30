@@ -1,5 +1,6 @@
 use crate::cluster::CiteInCluster;
 use crate::disamb::names::{replace_single_child, NameIR};
+use crate::helpers::slice_group_by::group_by_mut;
 use crate::names::NameToken;
 use crate::prelude::*;
 use citeproc_io::{CiteMode, ClusterMode};
@@ -387,33 +388,40 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     cites: &mut [CiteInCluster<O>],
     class: csl::StyleClass,
 ) {
+    fn first_n_authors<'a, O: OutputFormat>(
+        cites: &'a mut [CiteInCluster<O>],
+        suppress_first: u32,
+    ) -> impl Iterator<Item = &'a mut CiteInCluster<O>> + 'a {
+        let by_name = group_by_mut(cites, |a, b| a.by_name() == b.by_name());
+        let take = if suppress_first > 0 {
+            suppress_first as usize
+        } else {
+            core::usize::MAX
+        };
+        by_name.take(take).flatten()
+    }
     match *mode {
         ClusterMode::AuthorOnly => {
             for cite in cites.iter_mut() {
                 apply_author_only(db, cite);
             }
         }
-        ClusterMode::SuppressAuthor { suppress_max: max } if class != csl::StyleClass::Note => {
+        ClusterMode::SuppressAuthor { suppress_first } if class != csl::StyleClass::Note => {
             let suppress_it = |cite: &mut CiteInCluster<O>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
                 cite.destination = WhichStream::MainToCitation;
             };
 
-            let take = if max > 0 {
-                max as usize
-            } else {
-                core::usize::MAX
-            };
-            cites.iter_mut().take(take).for_each(suppress_it);
+            first_n_authors(cites, suppress_first).for_each(suppress_it);
         }
-        ClusterMode::Composite { .. } if class != csl::StyleClass::Note => {
+        ClusterMode::Composite { suppress_first, .. } if class != csl::StyleClass::Note => {
             for CiteInCluster {
                 cite_id,
                 gen4,
                 destination,
                 ..
-            } in cites.iter_mut()
+            } in first_n_authors(cites, suppress_first)
             {
                 let gen4 = Arc::make_mut(gen4);
                 log::debug!("called Composite");

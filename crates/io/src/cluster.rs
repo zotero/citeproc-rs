@@ -18,14 +18,14 @@ use crate::String;
 /// [ { "id": 1, "cites": [{ "id": "smith" }] }
 /// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "author-only" }
 /// , { "id": 3, "cites": [{ "id": "smith" }, { "id": "jones" }],
-///     "mode": "suppress-author", "suppressMax": 1 }
+///     "mode": "suppress-author", "suppressFirst": 1 }
 /// ]"#;
 /// let clusters: Vec<Cluster> = serde_json::from_str(json).unwrap();
 /// assert_eq!(clusters, vec![
 ///     Cluster { id: 1, cites: vec![Cite::basic("smith")], mode: None, },
 ///     Cluster { id: 2, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::AuthorOnly), },
 ///     Cluster { id: 3, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
-///               mode: Some(ClusterMode::SuppressAuthor { suppress_max: 1 }), },
+///               mode: Some(ClusterMode::SuppressAuthor { suppress_first: 1 }), },
 /// ])
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -40,8 +40,9 @@ pub enum ClusterMode {
     /// E.g. the cite with the author suppressed, or a legal case without party names.
     #[serde(rename_all = "camelCase")]
     SuppressAuthor {
-        /// Suppress authors in the first `n` cites in the cluster. If this is absent or zero, then
-        /// all cites have their authors suppressed.
+        /// Suppress authors in the first `n` cites in the cluster, or if cite grouping is enabled,
+        /// the first `n` same-author groups. The default value is 1. If this is zero, then all
+        /// cites have their authors suppressed.
         ///
         /// ```ignore
         /// // imagine @refid is a Cite to a reference with id 'refid'
@@ -54,7 +55,7 @@ pub enum ClusterMode {
         ///     id: 2,
         ///     cites: vec![Cite::basic("smith"), Cite::basic("jones")],
         ///     mode: ClusterMode::SuppressAuthor {
-        ///         suppress_max: 1,
+        ///         suppress_first: 1,
         ///     },
         /// };
         /// ```
@@ -64,13 +65,33 @@ pub enum ClusterMode {
         /// > Smith et al in their paper[^1]
         ///
         /// [^1]: 'A paper', 1968; Jones et al. 'A different paper', 1993.
-        #[serde(default)]
-        suppress_max: u32,
+        #[serde(default = "default_one")]
+        suppress_first: u32,
     },
     /// Render `AuthorOnly` + infix + `SuppressAuthor`. Infix is given leading spaces automatically, if there is
     /// no leading punctuation (`'s Magic Castle` does not attract a leading space). The default
     /// for Infix is a single space.
-    Composite { infix: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    Composite {
+        infix: Option<String>,
+        /// This has the same effect and same default (1) as `ClusterMode::SuppressAuthor {
+        /// suppress_first }`. The number of prepended author-only representations is equal to the
+        /// number of cites whose author is suppressed in the main part of the rendered cluster.
+        ///
+        /// For a cluster normally rendered as:
+        ///
+        /// > (Author1 1996, 1997; Author2 1999; Author3 2009)
+        ///
+        /// with `ClusterMode::Composite { infix: ", infix".into(), suppress_first: 2 }`:
+        ///
+        /// > Author1; Author2, infix (1996, 1997; 1999; Author3 2009)
+        #[serde(default = "default_one")]
+        suppress_first: u32,
+    },
+}
+
+fn default_one() -> u32 {
+    1
 }
 
 /// [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
