@@ -30,7 +30,6 @@ use crate::String;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(tag = "mode")]
-#[serde(rename_all = "kebab-case")]
 pub enum ClusterMode {
     /// For author-in-text, or whatever the style author wants to put inline.
     ///
@@ -94,7 +93,8 @@ fn default_one() -> u32 {
 }
 
 #[derive(Deserialize)]
-#[serde(remote = "ClusterMode", tag = "mode", rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+#[serde(remote = "ClusterMode", tag = "mode")]
 pub enum CompatClusterMode {
     AuthorOnly,
     #[serde(rename_all = "kebab-case")]

@@ -504,18 +504,18 @@ export type Locator = {
 };
 
 export type CiteLocator = Locator | { locator: undefined; locators: Locator[]; };
-export type CiteMode = { "author-only": boolean; } | { "suppress-author": boolean; };
+export type CiteMode = { mode?: "SuppressAuthor" | "AuthorOnly"; };
 
 export type Cite<Affix = string> = {
     id: string;
     prefix?: Affix;
     suffix?: Affix;
-} & Partial<CiteLocator> & Partial<CiteMode>;
+} & Partial<CiteLocator> & CiteMode;
 
 export type ClusterMode
-    = { mode: "composite"; infix?: string; suppressFirst?: number; } 
-    | { mode: "suppress-author"; suppressFirst?: number; }
-    | { mode: "author-only"; }
+    = { mode: "Composite"; infix?: string; suppressFirst?: number; } 
+    | { mode: "SuppressAuthor"; suppressFirst?: number; }
+    | { mode: "AuthorOnly"; }
     | {};
 export type Cluster = {
     id: string;

@@ -490,34 +490,34 @@ assemble the positions array as you would a call to `setClusterOrder` with
 exactly the operation you're previewing applied.
 
 
-### `author-only,` `suppress-author` & `composite`
+### `AuthorOnly`, `SuppressAuthor` & `Composite`
 
 `@citeproc-rs/wasm` supports these flags on clusters (all 3) and cites (except
-`composite`), in the same way as `citeproc-js`. See the [`citeproc-js`
+`Composite`), in a similar way to `citeproc-js`. See the [`citeproc-js`
 documentation on Special Citation
 Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
 for reference.
 
 ```javascript
-// only two options for cites
-let citeAO = { id: "jones2006", author-only: true };
-let citeSA = { id: "jones2006", suppress-author: true };
+// only two modes for cites
+let citeAO = { id: "jones2006", mode: "AuthorOnly" };
+let citeSA = { id: "jones2006", mode: "SuppressAuthor" };
 
-// different syntax for clusters
-let clusterAO       = { id: "one", cites: [...], mode: "author-only" };
-let clusterSA       = { id: "one", cites: [...], mode: "suppress-author" };
-let clusterSA_First = { id: "one", cites: [...], mode: "suppress-author", suppressFirst: 3 };
-let clusterC        = { id: "one", cites: [...], mode: "composite" };
-let clusterC_Infix  = { id: "one", cites: [...], mode: "composite", infix: ", whose book" };
-let clusterC_Full   = { id: "one", cites: [...], mode: "composite", infix: ", whose books", suppressFirst: 0 };
+// additional options for clusters
+let clusterAO       = { id: "one", cites: [...], mode: "AuthorOnly" };
+let clusterSA       = { id: "one", cites: [...], mode: "SuppressAuthor" };
+let clusterSA_First = { id: "one", cites: [...], mode: "SuppressAuthor", suppressFirst: 3 };
+let clusterC        = { id: "one", cites: [...], mode: "Composite" };
+let clusterC_Infix  = { id: "one", cites: [...], mode: "Composite", infix: ", whose book" };
+let clusterC_Full   = { id: "one", cites: [...], mode: "Composite", infix: ", whose books", suppressFirst: 0 };
 ```
 
-It does support one extra option with `suppress-author` and `composite` on
+It does support one extra option with `SuppressAuthor` and `Composite` on
 clusters: `suppressFirst`, which limits the effect to the first N name groups
 (or if cite grouping is disabled, first N names). Setting it to 0 means
 unlimited.
 
-#### `<intext>` element with `author-only` etc.
+#### `<intext>` element with `AuthorOnly` etc.
 
 `citeproc-rs` supports the `<intext>` element described in the `citeproc-js`
 docs linked above, but it is not enabled by default. It also supports `<intext

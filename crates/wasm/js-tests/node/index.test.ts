@@ -170,7 +170,7 @@ describe("previewCitationCluster", () => {
 
 });
 
-describe("author-only and friends", () => {
+describe("AuthorOnly and friends", () => {
     let style = mkInTextStyle(
         `
         <group delimiter=", ">
@@ -193,46 +193,48 @@ describe("author-only and friends", () => {
     }
 
     describe("on a Cite", () => {
-        test("should accept suppress-author: true", () => {
+        test("should accept mode: SuppressAuthor", () => {
             withSupp((driver, [one, two]) => {
                 driver.insertCluster({ id: one, cites: [{ id: "r1" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith, ONE");
 
-                driver.insertCluster({ id: one, cites: [{ id: "r1", "suppress-author": true }] }).unwrap();
+                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "SuppressAuthor" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("ONE");
             })
         });
-        test("should accept author-only: true", () => {
+        test("should accept mode: AuthorOnly", () => {
             withSupp((driver, [one, two]) => {
                 driver.insertCluster({ id: one, cites: [{ id: "r1" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith, ONE");
 
-                driver.insertCluster({ id: one, cites: [{ id: "r1", "author-only": true }] }).unwrap();
+                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "AuthorOnly" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith");
             })
         });
     });
 
     describe("on a Cluster", () => {
-        test("should accept mode: suppress-author", () => {
+        test("should accept mode: SuppressAuthor", () => {
             withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "suppress-author", cites: [{ id: "r1"}, {id: "r2"}] }).unwrap();
+                driver.insertCluster({ id: one, mode: "SuppressAuthor", cites: [{ id: "r1"}, {id: "r2"}] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("ONE; Jones, TWO");
-                driver.insertCluster({ id: one, mode: "suppress-author", suppressFirst: 2, cites: [{ id: "r1", }, { id: "r2" }] }).unwrap();
+                driver.insertCluster({ id: one, mode: "SuppressAuthor", suppressFirst: 2, cites: [{ id: "r1", }, { id: "r2" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("ONE; TWO");
             })
         });
-        test("should accept mode: author-only", () => {
+        test("should accept mode: AuthorOnly", () => {
             withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "author-only", cites: [{ id: "r1", }] }).unwrap();
+                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith");
             })
         });
-        test("should accept mode: composite", () => {
+        test("should accept mode: Composite", () => {
             withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "composite", cites: [{ id: "r1", }] }).unwrap();
+                driver.insertCluster({ id: one, mode: "Composite", cites: [{ id: "r1", }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith ONE");
-                driver.insertCluster({ id: one, mode: "composite", infix: ", whose book", cites: [{ id: "r1", }] }).unwrap();
+                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", cites: [{ id: "r1", }] }).unwrap();
+                expect(driver.builtCluster(one).unwrap()).toEqual("Smith, whose book ONE");
+                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", suppressFirst: 0, cites: [{ id: "r1", }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith, whose book ONE");
             })
         });
@@ -255,7 +257,7 @@ describe("author-only and friends", () => {
             withDriver({style: styleWithIntext, cslFeatures: ["custom-intext"]}, driver => {
                 let one = "cluster-one";
                 driver.insertReference({ id: "r1", title: "hi", })
-                driver.insertCluster({ id: one, mode: "author-only", cites: [{ id: "r1", }] }).unwrap();
+                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] }).unwrap();
                 driver.setClusterOrder([{ id: one}]).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toBe("intext element");
             });

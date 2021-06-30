@@ -147,7 +147,7 @@ impl<'de> Deserialize<'de> for InstructionMode {
 struct Properties {
     #[serde(rename = "noteIndex", alias = "note")]
     note_index: u32,
-    #[serde(default, flatten)]
+    #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
     mode: Option<ClusterMode>,
 }
 

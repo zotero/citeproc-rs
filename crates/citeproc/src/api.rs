@@ -39,13 +39,13 @@ impl ClusterId {
 /// use citeproc::Cluster;
 /// let json = r#"
 /// [ { "id": 1, "cites": [{ "id": "smith" }] }
-/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "author-only" }
-/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "suppress-author" }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "AuthorOnly" }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "SuppressAuthor" }
 /// , { "id": 3, "cites": [{ "id": "smith" }, { "id": "jones" }],
-///     "mode": "suppress-author", "suppressFirst": 2 }
-/// , { "id": 4, "cites": [{ "id": "smith" }], "mode": "composite" }
+///     "mode": "SuppressAuthor", "suppressFirst": 2 }
+/// , { "id": 4, "cites": [{ "id": "smith" }], "mode": "Composite" }
 /// , { "id": 5, "cites": [{ "id": "smith" }, { "id": "jones" }],
-///     "mode": "composite", "suppressFirst": 2 }
+///     "mode": "Composite", "suppressFirst": 2 }
 /// ]"#;
 /// let clusters: Vec<Cluster<Markup, i32>> = serde_json::from_str(json).unwrap();
 /// use pretty_assertions::assert_eq;

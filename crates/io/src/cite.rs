@@ -25,8 +25,8 @@ use serde::de::{Deserialize, Deserializer};
 /// use citeproc_io::{Cite, CiteMode, output::markup::Markup};
 /// let json = r#"
 /// [ { "id": "smith" }
-/// , { "id": "smith", mode: "SuppressAuthor" }
-/// , { "id": "smith", mode: "AuthorOnly" }
+/// , { "id": "smith", "mode": "SuppressAuthor" }
+/// , { "id": "smith", "mode": "AuthorOnly" }
 /// ]"#;
 /// let cites: Vec<Cite<Markup>> = serde_json::from_str(json).unwrap();
 /// use pretty_assertions::assert_eq;
@@ -68,7 +68,7 @@ pub struct Cite<O: OutputFormat> {
 /// use serde::Deserialize;
 /// use citeproc_io::{Cite, CiteMode, CiteCompat, output::markup::Markup};
 ///
-/// #[derive(Deserialize)]
+/// #[derive(Debug, PartialEq, Deserialize)]
 /// struct CiteHolder(#[serde(with = "CiteCompat")] Cite<Markup>);
 ///
 /// let json = r#"
