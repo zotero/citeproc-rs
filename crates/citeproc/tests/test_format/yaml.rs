@@ -4,10 +4,11 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::humans::{CitationItem, CiteprocJsInstruction};
+use super::humans::{CiteprocJsInstruction, CompatCitationItem};
 use super::{Format, Mode, TestCase};
 use anyhow::Error;
-use citeproc_io::Reference;
+use citeproc_io::{output::markup::Markup, Cite, ClusterMode, Reference};
+use citeproc::string_id::Cluster as ClusterStr;
 use serde::Deserialize;
 
 pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {
@@ -26,7 +27,7 @@ pub struct YamlTestCase {
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
-    pub clusters: Option<Vec<CitationItem>>,
+    pub clusters: Option<Vec<CompatCitationItem>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     #[serde(default)]
     pub bibliography_no_sort: bool,

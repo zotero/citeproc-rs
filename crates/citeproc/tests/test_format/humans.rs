@@ -8,7 +8,7 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
-use citeproc_io::{Cite, ClusterMode, Reference, SmartString};
+use citeproc_io::{output::markup::Markup, Cite, cite_compat_vec, ClusterMode, Reference, SmartString};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer};
@@ -17,20 +17,21 @@ use std::str::FromStr;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
-pub enum CitationItem {
-    Array(Vec<Cite<Markup>>),
+pub enum CompatCitationItem {
+    Array(#[serde(with = "cite_compat_vec")] Vec<Cite<Markup>>),
     Map {
+        #[serde(with = "cite_compat_vec")]
         cites: Vec<Cite<Markup>>,
-        #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+        #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
         mode: Option<ClusterMode>,
     },
 }
 
-impl CitationItem {
+impl CompatCitationItem {
     pub fn to_note_cluster(self, index: u32) -> ClusterStr<Markup> {
         let (v, mode) = match self {
-            CitationItem::Array(v) => (v, None),
-            CitationItem::Map { cites, mode } => (cites, mode),
+            CompatCitationItem::Array(v) => (v, None),
+            CompatCitationItem::Map { cites, mode } => (cites, mode),
         };
         ClusterStr {
             id: index.to_string().into(),
@@ -154,7 +155,7 @@ struct Properties {
 pub struct ClusterInstruction {
     #[serde(rename = "citationID", alias = "id")]
     cluster_id: SmartString,
-    #[serde(rename = "citationItems", alias = "cites")]
+    #[serde(rename = "citationItems", alias = "cites", with = "cite_compat_vec")]
     citation_items: Vec<Cite<Markup>>,
     properties: Properties,
 }
@@ -445,11 +446,11 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
         result
             .map(|x| super::normalise_html(&x))
             .expect("test case without a RESULT section"),
-        citation_items.map(|items: Vec<CitationItem>| {
+        citation_items.map(|items: Vec<CompatCitationItem>| {
             items
                 .into_iter()
                 .enumerate()
-                .map(|(n, c_item): (usize, CitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
+                .map(|(n, c_item): (usize, CompatCitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
                 .collect()
         }),
         process_citation_clusters.map(|inst2s| {

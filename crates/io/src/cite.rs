@@ -4,47 +4,16 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::output::OutputFormat;
+use super::output::{markup::Markup, OutputFormat};
 use crate::NumberLike;
+use crate::String;
 use csl::Atom;
 use csl::LocatorType;
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
-pub struct Locator {
-    pub locator: NumberLike,
-    #[serde(default, rename = "label")]
-    pub loc_type: LocatorType,
-}
-
-impl Locator {
-    pub fn type_of(&self) -> LocatorType {
-        self.loc_type
-    }
-    pub fn value(&self) -> &NumberLike {
-        &self.locator
-    }
-}
-
-#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
-pub enum CiteMode {
-    AuthorOnly,
-    SuppressAuthor,
-}
-
 use serde::de::{Deserialize, Deserializer};
-
-/// Techincally reference IDs are allowed to be numbers.
-pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = NumberLike::deserialize(d)?;
-    Ok(Atom::from(s.into_string()))
-}
 
 /// Represents one cite in someone's document, to exactly one reference.
 ///
-/// Prefixes and suffixes
+/// ## Prefixes and suffixes
 ///
 /// ## Special Citation Forms
 ///
@@ -56,8 +25,8 @@ where
 /// use citeproc_io::{Cite, CiteMode, output::markup::Markup};
 /// let json = r#"
 /// [ { "id": "smith" }
-/// , { "id": "smith", "suppress-author": true }
-/// , { "id": "smith", "author-only": true }
+/// , { "id": "smith", mode: "SuppressAuthor" }
+/// , { "id": "smith", mode: "AuthorOnly" }
 /// ]"#;
 /// let cites: Vec<Cite<Markup>> = serde_json::from_str(json).unwrap();
 /// use pretty_assertions::assert_eq;
@@ -84,12 +53,98 @@ pub struct Cite<O: OutputFormat> {
     #[serde(default)]
     pub suffix: Option<O::Input>,
 
-    // TODO: Enforce len() == 1 in CSL mode
-    #[serde(default, flatten, deserialize_with = "get_locators")]
+    /// Multiple locator functionality needs CSL support, so it is disabled via using
+    /// `Locators::single_locator` for now.
+    #[serde(default, flatten, deserialize_with = "Locators::single_locator")]
     pub locators: Option<Locators>,
 
-    #[serde(default, flatten, deserialize_with = "get_mode_flags")]
+    #[serde(default, flatten)]
     pub mode: Option<CiteMode>,
+}
+
+/// Designed for use with `#[serde(with = "...")]`.
+///
+/// ```
+/// use serde::Deserialize;
+/// use citeproc_io::{Cite, CiteMode, CiteCompat, output::markup::Markup};
+///
+/// #[derive(Deserialize)]
+/// struct CiteHolder(#[serde(with = "CiteCompat")] Cite<Markup>);
+///
+/// let json = r#"
+/// [ { "id": "smith" }
+/// , { "id": "smith", "suppress-author": true }
+/// , { "id": "smith", "author-only": true }
+/// ]"#;
+/// let cites: Vec<CiteHolder> = serde_json::from_str(json).unwrap();
+/// use pretty_assertions::assert_eq;
+/// let basic_mode = |ref_id, mode| {
+///     let mut cite = Cite::basic(ref_id);
+///     cite.mode = Some(mode);
+///     cite
+/// };
+/// assert_eq!(cites, vec![
+///     CiteHolder(Cite::basic("smith")),
+///     CiteHolder(basic_mode("smith", CiteMode::SuppressAuthor)),
+///     CiteHolder(basic_mode("smith", CiteMode::AuthorOnly)),
+/// ])
+/// ```
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(remote = "Cite::<Markup>")]
+pub struct CiteCompat {
+    #[serde(rename = "id", deserialize_with = "get_ref_id")]
+    pub ref_id: Atom,
+
+    #[serde(default)]
+    pub prefix: Option<String>,
+
+    #[serde(default)]
+    pub suffix: Option<String>,
+
+    #[serde(default, flatten, deserialize_with = "Locators::single_locator")]
+    pub locators: Option<Locators>,
+
+    #[serde(default, flatten, deserialize_with = "CiteMode::compat")]
+    pub mode: Option<CiteMode>,
+}
+
+pub mod cite_compat_vec {
+    use super::*;
+    pub fn deserialize<'de, D>(d: D) -> Result<Vec<Cite<Markup>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper(#[serde(with = "CiteCompat")] Cite<Markup>);
+        let compat: Vec<Helper> = Deserialize::deserialize(d)?;
+        let unwrapped = compat.into_iter().map(|Helper(x)| x).collect();
+        Ok(unwrapped)
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
+pub struct Locator {
+    pub locator: NumberLike,
+    #[serde(default, rename = "label")]
+    pub loc_type: LocatorType,
+}
+
+impl Locator {
+    pub fn type_of(&self) -> LocatorType {
+        self.loc_type
+    }
+    pub fn value(&self) -> &NumberLike {
+        &self.locator
+    }
+}
+
+/// Techincally reference IDs are allowed to be numbers.
+pub fn get_ref_id<'de, D>(d: D) -> Result<Atom, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = NumberLike::deserialize(d)?;
+    Ok(Atom::from(s.into_string()))
 }
 
 /// Accepts either
@@ -124,83 +179,102 @@ impl Locators {
             l => Some(l),
         }
     }
+
+    /// Only accepts `"locator": "abc", "label": "page|etc"`, no arrays.
+    ///
+    /// Locates singles in your area
+    fn single_locator<'de, D>(d: D) -> Result<Option<Locators>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Option::<Locator>::deserialize(d)?.map(Locators::Single))
+    }
+
+    /// Single length locators arrays => Some(Locators::Single)
+    /// Zero length => None
+    fn get_locators<'de, D>(d: D) -> Result<Option<Locators>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Option::<Locators>::deserialize(d)?.and_then(|me| me.into_option()))
+    }
 }
 
-/// Single length locators arrays => Some(Locators::Single)
-/// Zero length => None
-fn get_locators<'de, D>(d: D) -> Result<Option<Locators>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    Ok(Option::<Locators>::deserialize(d)?.and_then(|me| me.into_option()))
+#[derive(Clone, Eq, PartialEq, Hash, Debug, Deserialize)]
+#[serde(tag = "mode")]
+pub enum CiteMode {
+    AuthorOnly,
+    SuppressAuthor,
 }
 
-/// Single length locators arrays => Some(Locators::Single)
-/// Zero length => None
-fn get_mode_flags<'de, D>(d: D) -> Result<Option<CiteMode>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Truthy {
-        Boolean(bool),
-        Number(i32),
-    }
-
-    impl Default for Truthy {
-        fn default() -> Self {
-            Self::Boolean(false)
+impl CiteMode {
+    /// Single length locators arrays => Some(Locators::Single)
+    /// Zero length => None
+    pub fn compat<'de, D>(d: D) -> Result<Option<CiteMode>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Truthy {
+            Boolean(bool),
+            Number(i32),
         }
-    }
 
-    impl Truthy {
-        fn is_truthy(&self) -> bool {
-            match *self {
-                Truthy::Boolean(b) => b,
-                Truthy::Number(x) => x > 0,
+        impl Default for Truthy {
+            fn default() -> Self {
+                Self::Boolean(false)
             }
         }
-    }
 
-    #[derive(Deserialize)]
-    #[serde(rename_all = "kebab-case")]
-    struct ModeFlags {
-        #[serde(default)]
-        suppress_author: Truthy,
-        #[serde(default)]
-        author_only: Truthy,
-        #[serde(default)]
-        composite: Option<serde::de::IgnoredAny>,
-    }
-
-    impl ModeFlags {
-        fn to_mode<E: serde::de::Error>(self) -> Result<Option<CiteMode>, E> {
-            if self.composite.is_some() {
-                return Err(E::custom(
-                    "`composite` mode not supported on Cite, only on Cluster",
-                ));
-            }
-            match (
-                self.author_only.is_truthy(),
-                self.suppress_author.is_truthy(),
-            ) {
-                (true, true) => Err(E::custom(
-                    "must supply only one of `author-only` or `suppress-author` on Cite",
-                )),
-                (true, _) => Ok(Some(CiteMode::AuthorOnly)),
-                (_, true) => Ok(Some(CiteMode::SuppressAuthor)),
-                _ => Ok(None),
+        impl Truthy {
+            fn is_truthy(&self) -> bool {
+                match *self {
+                    Truthy::Boolean(b) => b,
+                    Truthy::Number(x) => x > 0,
+                }
             }
         }
-    }
 
-    ModeFlags::deserialize(d)
-        .map_err(|e| {
-            log::warn!("{}", e);
-            e
-        })?
-        .to_mode()
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct ModeFlags {
+            #[serde(default)]
+            suppress_author: Truthy,
+            #[serde(default)]
+            author_only: Truthy,
+            #[serde(default)]
+            composite: Option<serde::de::IgnoredAny>,
+        }
+
+        impl ModeFlags {
+            fn to_mode<E: serde::de::Error>(self) -> Result<Option<CiteMode>, E> {
+                if self.composite.is_some() {
+                    return Err(E::custom(
+                        "`composite` mode not supported on Cite, only on Cluster",
+                    ));
+                }
+                match (
+                    self.author_only.is_truthy(),
+                    self.suppress_author.is_truthy(),
+                ) {
+                    (true, true) => Err(E::custom(
+                        "must supply only one of `author-only` or `suppress-author` on Cite",
+                    )),
+                    (true, _) => Ok(Some(CiteMode::AuthorOnly)),
+                    (_, true) => Ok(Some(CiteMode::SuppressAuthor)),
+                    _ => Ok(None),
+                }
+            }
+        }
+
+        ModeFlags::deserialize(d)
+            .map_err(|e| {
+                log::warn!("{}", e);
+                e
+            })?
+            .to_mode()
+    }
 }
 
 use std::hash::{Hash, Hasher};

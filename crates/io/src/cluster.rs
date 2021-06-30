@@ -16,9 +16,9 @@ use crate::String;
 /// }
 /// let json = r#"
 /// [ { "id": 1, "cites": [{ "id": "smith" }] }
-/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "author-only" }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "AuthorOnly" }
 /// , { "id": 3, "cites": [{ "id": "smith" }, { "id": "jones" }],
-///     "mode": "suppress-author", "suppressFirst": 1 }
+///     "mode": "SuppressAuthor", "suppressFirst": 1 }
 /// ]"#;
 /// let clusters: Vec<Cluster> = serde_json::from_str(json).unwrap();
 /// assert_eq!(clusters, vec![
@@ -31,7 +31,6 @@ use crate::String;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(tag = "mode")]
 #[serde(rename_all = "kebab-case")]
-// #[serde(untagged)]
 pub enum ClusterMode {
     /// For author-in-text, or whatever the style author wants to put inline.
     ///
@@ -92,4 +91,34 @@ pub enum ClusterMode {
 
 fn default_one() -> u32 {
     1
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "ClusterMode", tag = "mode", rename_all = "kebab-case")]
+pub enum CompatClusterMode {
+    AuthorOnly,
+    #[serde(rename_all = "kebab-case")]
+    SuppressAuthor {
+        #[serde(default = "default_one")]
+        suppress_first: u32,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Composite {
+        infix: Option<String>,
+        #[serde(default = "default_one")]
+        suppress_first: u32,
+    },
+}
+
+use serde::Deserialize;
+
+impl ClusterMode {
+    pub fn compat_opt<'de, D>(d: D) -> Result<Option<ClusterMode>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper(#[serde(with = "CompatClusterMode")] ClusterMode);
+        Option::<Helper>::deserialize(d).map(|x| x.map(|Helper(y)| y))
+    }
 }

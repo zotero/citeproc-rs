@@ -23,14 +23,14 @@ clusters:
   - id: cluster-two
     mode: "suppress-author"
     # only suppress the first one. (the default)
-    suppressFirst: 1
+    suppress-first: 1
     cites:
       - id: ITEM-1
       - id: ITEM-2
   - id: cluster-three
     mode: "suppress-author"
     # do both authors. 0 will do all of them
-    suppressFirst: 2
+    suppress-first: 2
     cites:
       - id: ITEM-1
       - id: ITEM-2
