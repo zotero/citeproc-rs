@@ -1,5 +1,5 @@
 import { withDriver, oneOneOne, mkNoteStyle, mkInTextStyle, checkUpdatesLen } from './utils';
-import {UpdateSummary} from '@citeproc-rs/wasm';
+import {UpdateSummary, Driver} from '@citeproc-rs/wasm';
 
 describe("Driver", () => {
 
@@ -178,8 +178,7 @@ describe("author-only and friends", () => {
             <text variable="title" />
         </group>
     `,
-        ``,
-        { class: "in-text" }
+        ``
     );
 
     function withSupp(callback) {
@@ -236,6 +235,34 @@ describe("author-only and friends", () => {
                 driver.insertCluster({ id: one, mode: "composite", infix: ", whose book", cites: [{ id: "r1", }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("Smith, whose book ONE");
             })
+        });
+    });
+
+    let styleWithIntext = mkInTextStyle(
+        `
+        <group delimiter=", ">
+            <names variable="author" />
+            <text variable="title" />
+        </group>
+    `,
+        `<intext><layout>
+            <text value="intext element" />
+        </layout></intext>`
+    );
+
+    describe("<intext> element", () => {
+        test("should parse when custom-intext feature is enabled via Driver.new", () => {
+            withDriver({style: styleWithIntext, cslFeatures: ["custom-intext"]}, driver => {
+                let one = "cluster-one";
+                driver.insertReference({ id: "r1", title: "hi", })
+                driver.insertCluster({ id: one, mode: "author-only", cites: [{ id: "r1", }] }).unwrap();
+                driver.setClusterOrder([{ id: one}]).unwrap();
+                expect(driver.builtCluster(one).unwrap()).toBe("intext element");
+            });
+        });
+        test("should fail to parse when custom-intext feature is not enabled via Driver.new", () => {
+            let driver_is_err = Driver.new({style: styleWithIntext, cslFeatures: []}).is_err();
+            expect(driver_is_err).toBe(true);
         });
     });
 });

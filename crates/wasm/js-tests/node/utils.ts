@@ -63,7 +63,8 @@ export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
     let style = cfg.style || mkNoteStyle('<text variable="title" />');
     let fetcher = cfg.fetcher || boringFetcher;
     let format = cfg.format || "plain";
-    let driver = Driver.new({ style, fetcher, format }).unwrap();
+    let cslFeatures = cfg.cslFeatures || [];
+    let driver = Driver.new({ style, fetcher, format, cslFeatures }).unwrap();
     callback(driver);
     driver.free();
 };

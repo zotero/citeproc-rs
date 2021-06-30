@@ -48,6 +48,8 @@ pub struct Driver {
 pub enum DriverError {
     #[error("Unknown output format {0:?}")]
     UnknownOutputFormat(String),
+    #[error("Unknown CSL feature {0:?}")]
+    UnknownCSLFeature(String),
     /// Never serialized as a CiteprocRsDriverError, only serialized as a CslStyleError.
     #[error("Style error: {0}")]
     StyleError(#[from] csl::StyleError),
@@ -97,6 +99,8 @@ impl Driver {
             let us_fetcher = Arc::new(utils::USFetcher);
             let options: WasmInitOptions = JsValue::into_serde(&options_js)?;
             let fetcher = Fetcher::from_options_object(&options_js)?;
+            let csl_features = csl::version::read_features(options.csl_features.iter().map(|x| x.as_str()))
+                .map_err(|x| DriverError::UnknownCSLFeature(x.to_owned()))?;
             let init = InitOptions {
                 style: options.style.as_ref(),
                 fetcher: Some(us_fetcher),
@@ -104,6 +108,7 @@ impl Driver {
                 bibliography_no_sort: options.bibliography_no_sort,
                 locale_override: options.locale_override,
                 test_mode: false,
+                csl_features: Some(csl_features),
                 ..Default::default()
             };
             let engine = Processor::new(init)?;
