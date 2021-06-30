@@ -650,6 +650,9 @@ fn render_composite_infix<O: OutputFormat>(
     if !infix.ends_with(" ") {
         infix.push(' ');
     }
+    if infix.starts_with('\'') {
+        infix.replace_range(0..1, "’");
+    }
     let is_punc = |c| unic_ucd_category::GeneralCategory::of(c).is_punctuation();
     if !infix
         .chars()
