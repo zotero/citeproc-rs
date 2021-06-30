@@ -179,6 +179,8 @@ impl Processor {
         };
         citeproc_db::safe_default(&mut db);
         citeproc_proc::safe_default(&mut db);
+        // XXX: currently impossible to preview a cluster with a ClusterMode applied
+        db.set_cluster_mode(preview_cluster_id.raw(), None);
         db
     }
 

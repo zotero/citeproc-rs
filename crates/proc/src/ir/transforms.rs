@@ -485,7 +485,13 @@ pub(crate) fn apply_cluster_mode(
                 apply_author_only(db, cite, cite.position, fmt);
             }
         }
-        ClusterMode::SuppressAuthor { suppress_first } if class != csl::StyleClass::Note => {
+        ClusterMode::SuppressAuthor { suppress_first } => {
+            if class == csl::StyleClass::Note {
+                log::warn!(
+                    "attempt to use cluster mode suppress-author with a note style, will be no-op"
+                );
+                return;
+            }
             let suppress_it = |cite: &mut CiteInCluster<Markup>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
@@ -494,7 +500,13 @@ pub(crate) fn apply_cluster_mode(
 
             first_n_authors(cites, suppress_first).for_each(suppress_it);
         }
-        ClusterMode::Composite { suppress_first, .. } if class != csl::StyleClass::Note => {
+        ClusterMode::Composite { suppress_first, .. } => {
+            if class == csl::StyleClass::Note {
+                log::warn!(
+                    "attempt to use cluster mode composite with a note style, will be no-op"
+                );
+                return;
+            }
             for CiteInCluster {
                 cite_id,
                 gen4,
@@ -504,17 +516,11 @@ pub(crate) fn apply_cluster_mode(
             } in first_n_authors(cites, suppress_first)
             {
                 let gen4 = Arc::make_mut(gen4);
-                log::debug!("called Composite");
+                log::debug!("called Composite, with tree {:?}", gen4.tree_ref());
                 let intext_part = if let Some(mut removed_node) = gen4.tree_mut().suppress_author()
                 {
                     log::debug!(
                         "removed node from composite: {}",
-                        gen4.tree().tree_at_node(removed_node),
-                    );
-                    gen4.tree_mut()
-                        .author_only_strip_formatting(removed_node, *position, fmt);
-                    log::debug!(
-                        "reformatted node from composite: {}",
                         gen4.tree().tree_at_node(removed_node),
                     );
                     if let Some(intext) = db.intext(*cite_id) {
@@ -525,6 +531,12 @@ pub(crate) fn apply_cluster_mode(
                         // Option<NodeId> anyway, so leave it
                         gen4.tree_mut().extend(intext.tree().tree_ref())
                     } else {
+                        gen4.tree_mut()
+                            .author_only_strip_formatting(removed_node, *position, fmt);
+                        log::debug!(
+                            "reformatted node from composite: {}",
+                            gen4.tree().tree_at_node(removed_node),
+                        );
                         Some(removed_node)
                     }
                 } else {
@@ -533,7 +545,6 @@ pub(crate) fn apply_cluster_mode(
                 *destination = WhichStream::MainToCitationPlusIntext(intext_part);
             }
         }
-        _ => {}
     }
 }
 

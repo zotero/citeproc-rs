@@ -93,22 +93,3 @@ pub enum ClusterMode {
 fn default_one() -> u32 {
     1
 }
-
-/// [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ClusterSplit {
-    /// Produced with [ClusterMode::AuthorOnly]
-    AuthorOnly(String),
-    /// Produced by [ClusterMode::SuppressAuthor]
-    ///
-    /// `ClusterMode::SuppressAuthor`
-    SuppressAuthor(String),
-    /// Produced by [ClusterMode::Composite]
-    ///
-    /// `ClusterMode::Composite { infix: Some("’s early work".into()) }`
-    ///
-    /// > Kesey’s early work (1962, 1964; cf. <i>Le Guin</i> 1969)
-    ///
-    Composite(String),
-}

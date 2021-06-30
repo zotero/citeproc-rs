@@ -1,6 +1,6 @@
 import { Driver, UpdateSummary } from "@citeproc-rs/wasm";
 
-export const mkStyle = (inner: string, bibliography?: string) => {
+export const mkNoteStyle = (inner: string, bibliography?: string) => {
     return `
     <style class="note">
       <info>
@@ -8,8 +8,26 @@ export const mkStyle = (inner: string, bibliography?: string) => {
         <title>test-style</title>
         <updated>2000-01-01T00:00:00Z</updated>
       </info>
-      <citation>
+      <citation collapse="year">
         <layout>
+          ${inner}
+        </layout>
+      </citation>
+      ${ bibliography != null ? bibliography : "" }
+    </style>
+    `;
+}
+
+export const mkInTextStyle = (inner: string, bibliography?: string) => {
+    return `
+    <style class="in-text">
+      <info>
+        <id>https://github.com/cormacrelf/citeproc-rs/test-style</id>
+        <title>test-style</title>
+        <updated>2000-01-01T00:00:00Z</updated>
+      </info>
+      <citation collapse="year">
+        <layout delimiter="; ">
           ${inner}
         </layout>
       </citation>
@@ -42,7 +60,7 @@ export const boringFetcher = new Fetcher(
 );
 
 export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
-    let style = cfg.style || mkStyle('<text variable="title" />');
+    let style = cfg.style || mkNoteStyle('<text variable="title" />');
     let fetcher = cfg.fetcher || boringFetcher;
     let format = cfg.format || "plain";
     let driver = Driver.new({ style, fetcher, format }).unwrap();

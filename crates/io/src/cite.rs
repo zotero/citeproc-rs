@@ -45,7 +45,34 @@ where
 /// Represents one cite in someone's document, to exactly one reference.
 ///
 /// Prefixes and suffixes
-#[derive(Debug, Clone, Deserialize)]
+///
+/// ## Special Citation Forms
+///
+/// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
+///
+///
+/// ```
+/// use serde::Deserialize;
+/// use citeproc_io::{Cite, CiteMode, output::markup::Markup};
+/// let json = r#"
+/// [ { "id": "smith" }
+/// , { "id": "smith", "suppress-author": true }
+/// , { "id": "smith", "author-only": true }
+/// ]"#;
+/// let cites: Vec<Cite<Markup>> = serde_json::from_str(json).unwrap();
+/// use pretty_assertions::assert_eq;
+/// let basic_mode = |ref_id, mode| {
+///     let mut cite = Cite::basic(ref_id);
+///     cite.mode = Some(mode);
+///     cite
+/// };
+/// assert_eq!(cites, vec![
+///     Cite::basic("smith"),
+///     basic_mode("smith", CiteMode::SuppressAuthor),
+///     basic_mode("smith", CiteMode::AuthorOnly),
+/// ])
+/// ```
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cite<O: OutputFormat> {
     #[serde(rename = "id", deserialize_with = "get_ref_id")]
@@ -174,16 +201,6 @@ where
             e
         })?
         .to_mode()
-}
-
-impl<O: OutputFormat> Eq for Cite<O> {}
-impl<O: OutputFormat> PartialEq for Cite<O> {
-    fn eq(&self, other: &Self) -> bool {
-        self.ref_id == other.ref_id
-            && self.prefix == other.prefix
-            && self.suffix == other.suffix
-            && self.locators == other.locators
-    }
 }
 
 use std::hash::{Hash, Hasher};

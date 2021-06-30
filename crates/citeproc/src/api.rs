@@ -30,6 +30,38 @@ impl ClusterId {
     }
 }
 
+/// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
+///
+///
+/// ```
+/// use serde::Deserialize;
+/// use citeproc_io::{Cite, ClusterMode, output::markup::Markup};
+/// use citeproc::Cluster;
+/// let json = r#"
+/// [ { "id": 1, "cites": [{ "id": "smith" }] }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "author-only" }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "suppress-author" }
+/// , { "id": 3, "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "suppress-author", "suppressFirst": 2 }
+/// , { "id": 4, "cites": [{ "id": "smith" }], "mode": "composite" }
+/// , { "id": 5, "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "composite", "suppressFirst": 2 }
+/// ]"#;
+/// let clusters: Vec<Cluster<Markup, i32>> = serde_json::from_str(json).unwrap();
+/// use pretty_assertions::assert_eq;
+/// assert_eq!(clusters, vec![
+///     Cluster { id: 1, cites: vec![Cite::basic("smith")], mode: None, },
+///     Cluster { id: 2, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::AuthorOnly), },
+///     Cluster { id: 2, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::SuppressAuthor
+///     { suppress_first: 1 }), },
+///     Cluster { id: 3, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
+///               mode: Some(ClusterMode::SuppressAuthor { suppress_first: 2 }), },
+///     Cluster { id: 4, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::Composite
+///     { infix: None, suppress_first: 1 }), },
+///     Cluster { id: 5, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
+///               mode: Some(ClusterMode::Composite { infix: None, suppress_first: 2 }), },
+/// ])
+/// ```
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(bound(
     serialize = "Id: serde::Serialize",

@@ -53,6 +53,11 @@ pub fn built_cluster_before_output(
     // working on names blocks that have already been suppressed.
     // intext_Composite_Multiple.yml
     let cluster_mode = db.cluster_mode(cluster_id);
+    log::trace!(
+        "built_cluster_before_output: cluster_id = {:?}, cluster_mode = {:?}",
+        cluster_id,
+        cluster_mode
+    );
     if let Some(mode) = &cluster_mode {
         transforms::apply_cluster_mode(db, mode, &mut irs, style.class, fmt);
     } else {

@@ -1,6 +1,6 @@
 const { Driver } = wasm_bindgen;
 
-const mkStyle = (inner, bibliography) => {
+const mkNoteStyle = (inner, bibliography) => {
     return `
     <style class="note">
       <info>
@@ -18,7 +18,7 @@ const mkStyle = (inner, bibliography) => {
     `;
 }
 
-let style = mkStyle();
+let style = mkNoteStyle();
 
 
 class Fetcher {

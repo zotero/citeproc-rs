@@ -9,8 +9,8 @@ mod utils;
 #[macro_use]
 mod wasm_result;
 mod options;
+use options::{GetFetcherError, WasmInitOptions};
 use wasm_result::*;
-use options::{WasmInitOptions, GetFetcherError};
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -52,17 +52,29 @@ pub enum DriverError {
     #[error("Style error: {0}")]
     StyleError(#[from] csl::StyleError),
     #[error("JSON Deserialization Error: {0}")]
-    JsonError(#[from] #[serde(skip_serializing)] serde_json::Error),
+    JsonError(
+        #[from]
+        #[serde(skip_serializing)]
+        serde_json::Error,
+    ),
     #[error("Invalid fetcher object: {0}")]
     GetFetcherError(#[from] GetFetcherError),
     #[error("Non-Existent Cluster id: {0}")]
     NonExistentCluster(String),
     #[error("Reordering error: {0}")]
-    ReorderingError(#[from] #[serde(skip_serializing)] string_id::ReorderingError),
+    ReorderingError(
+        #[from]
+        #[serde(skip_serializing)]
+        string_id::ReorderingError,
+    ),
 
     // This should not be necessary
     #[error("Reordering error: {0}")]
-    ReorderingErrorNumericId(#[from] #[serde(skip_serializing)] citeproc::ReorderingError),
+    ReorderingErrorNumericId(
+        #[from]
+        #[serde(skip_serializing)]
+        citeproc::ReorderingError,
+    ),
 }
 
 #[wasm_bindgen]
@@ -194,7 +206,6 @@ impl Driver {
         })
     }
 
-
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
     #[wasm_bindgen(js_name = "randomClusterId")]
     pub fn random_cluster_id(&self) -> String {
@@ -272,8 +283,10 @@ impl Driver {
             let preview = eng.preview_citation_cluster(
                 &cites,
                 PreviewPosition::MarkWithZeroStr(&positions),
-                Some(SupportedFormat::from_str(format)
-                    .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?),
+                Some(
+                    SupportedFormat::from_str(format)
+                        .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?,
+                ),
             );
             Ok(preview?)
         })
@@ -703,11 +716,27 @@ interface StyleMeta {
 };
 "#;
 
-result_type!(string_id::UpdateSummary, UpdateSummaryResult, "WasmResult<UpdateSummary>");
-result_type!(Vec<citeproc::BibEntry>, BibEntriesResult, "WasmResult<BibEntries>");
-result_type!(string_id::FullRender, FullRenderResult, "WasmResult<FullRender>");
+result_type!(
+    string_id::UpdateSummary,
+    UpdateSummaryResult,
+    "WasmResult<UpdateSummary>"
+);
+result_type!(
+    Vec<citeproc::BibEntry>,
+    BibEntriesResult,
+    "WasmResult<BibEntries>"
+);
+result_type!(
+    string_id::FullRender,
+    FullRenderResult,
+    "WasmResult<FullRender>"
+);
 result_type!(Driver, DriverResult, "WasmResult<Driver>");
-result_type!(Option<citeproc::BibliographyMeta>, BibliographyMetaResult, "WasmResult<BibliographyMeta>");
+result_type!(
+    Option<citeproc::BibliographyMeta>,
+    BibliographyMetaResult,
+    "WasmResult<BibliographyMeta>"
+);
 result_type!((), EmptyResult, "WasmResult<undefined>");
 result_type!(Arc<SmartString>, StringResult, "WasmResult<string>");
 result_type!(Vec<String>, StringArrayResult, "WasmResult<string[]>");
