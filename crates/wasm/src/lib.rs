@@ -503,19 +503,24 @@ export type Locator = {
     locators: undefined;
 };
 
-export type CiteLocator = Locator | { locator: undefined; locators: Locator[] };
+export type CiteLocator = Locator | { locator: undefined; locators: Locator[]; };
+export type CiteMode = { "author-only": boolean; } | { "suppress-author": boolean; };
 
 export type Cite<Affix = string> = {
     id: string;
     prefix?: Affix;
     suffix?: Affix;
-    suppression?: "InText" | "Rest" | null;
-} & Partial<CiteLocator>;
+} & Partial<CiteLocator> & Partial<CiteMode>;
 
+export type ClusterMode
+    = { mode: "composite"; infix?: string; suppressFirst?: number; } 
+    | { mode: "suppress-author"; suppressFirst?: number; }
+    | { mode: "author-only"; }
+    | {};
 export type Cluster = {
     id: string;
     cites: Cite[];
-};
+} & ClusterMode;
 
 export type ClusterPosition = {
     id: string;
