@@ -72,6 +72,9 @@ Style {
                 ],
                 locale: [],
             },
+            and: None,
+            cite_group_delimiter: None,
+            after_collapse_delimiter: None,
         },
     ),
     info: Info {

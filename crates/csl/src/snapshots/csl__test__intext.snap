@@ -1,6 +1,6 @@
 ---
 source: crates/csl/src/test.rs
-expression: "crate::from_node::parse_as::<InText>(::indoc::indoc!(r#\"<intext><layout><text variable=\"title\"/></layout></intext>\"#)).expect(\"did not parse\")"
+expression: "crate::from_node::parse_as_with::<InText>(::indoc::indoc!(r#\"<intext><layout><text variable=\"title\"/></layout></intext>\"#),\n                                          None).expect(\"did not parse\")"
 ---
 InText {
     layout: Layout {
@@ -27,4 +27,7 @@ InText {
         ],
         locale: [],
     },
+    and: None,
+    cite_group_delimiter: None,
+    after_collapse_delimiter: None,
 }

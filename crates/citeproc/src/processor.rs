@@ -340,7 +340,12 @@ impl Processor {
     ///
     /// ```
     /// use citeproc::prelude::*;
-    /// let mut processor = Processor::new().unwrap();
+    /// let options = InitOptions {
+    ///     style: r#"<style class="in-text"><citation><layout></layout></citation></style>"#,
+    ///     test_mode: true,
+    ///     ..Default::default()
+    /// };
+    /// let mut processor = Processor::new(options).unwrap();
     /// let a = processor.new_cluster("cluster-A");
     /// let b = processor.new_cluster("cluster-B");
     /// processor.insert_cites(a, &[Cite::basic("nonexistent-reference")]);

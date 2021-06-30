@@ -25,10 +25,9 @@ jobs:
             toolchain: nightly-2021-05-18
             override: true
       - uses: Swatinem/rust-cache@v1
-
-      - run: |
-          cargo test --lib
-          cargo test -p citeproc-io --test integration
+      - run: cargo test --lib
+      - run: cargo test --doc
+      - run: cargo test -p citeproc-io --test integration
 
   regressions:
     name: CSL Test Suite Regressions
