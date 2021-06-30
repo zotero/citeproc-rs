@@ -223,13 +223,30 @@ impl TestSummary {
     }
 
     pub fn diff<'a>(&'a self, base: &'a TestSummary) -> TestDiff<'a> {
-        let common_keys = base.test_names.intersection(&self.test_names);
-        let count = common_keys.clone().count();
+        let common_keys: HashSet<_> = base
+            .test_names
+            .intersection(&self.test_names)
+            .cloned()
+            .collect();
+        let count = common_keys.len();
         let mut regressions = Vec::new();
         let mut improvements = Vec::new();
         let mut new_ignores = Vec::new();
         let mut output_changed = Vec::new();
-        for key in common_keys {
+        let mut remaining_failures = Vec::new();
+        let remain_keys = self.test_names.difference(&common_keys);
+
+        for key in remain_keys {
+            println!("remained key: {}", key);
+            match self.kind_for_name(key).unwrap() {
+                EventKind::Failed => {
+                    remaining_failures.push(self.failed.get(key).unwrap());
+                }
+                _ => {}
+            }
+        }
+
+        for key in common_keys.iter() {
             let base_kind = base.kind_for_name(key).unwrap();
             let my_kind = self.kind_for_name(key).unwrap();
             match (base_kind, my_kind) {
@@ -249,13 +266,15 @@ impl TestSummary {
                     };
                     if changed {
                         output_changed.push((orig, mine));
+                    } else {
+                        remaining_failures.push(mine);
                     }
                 }
                 (EventKind::Ignored, EventKind::Failed) | (EventKind::Ok, EventKind::Failed) => {
                     regressions.push(self.failed.get(key).unwrap());
                 }
                 (EventKind::Ignored, EventKind::Ok) | (EventKind::Failed, EventKind::Ok) => {
-                    improvements.push(self.ok.get(key).unwrap());
+                    improvements.push((base.failed.get(key).unwrap(), self.ok.get(key).unwrap()));
                 }
                 (x, EventKind::Ignored) if x != EventKind::Ignored => {
                     new_ignores.push(self.ignored.get(key).unwrap());
@@ -268,6 +287,7 @@ impl TestSummary {
             improvements,
             new_ignores,
             output_changed,
+            remaining_failures,
             count,
         }
     }
@@ -275,35 +295,46 @@ impl TestSummary {
 
 pub struct TestDiff<'a> {
     regressions: Vec<&'a Test>,
-    improvements: Vec<&'a Test>,
+    improvements: Vec<(&'a Test, &'a Test)>,
     new_ignores: Vec<&'a Test>,
     output_changed: Vec<(&'a Test, &'a Test)>,
+    remaining_failures: Vec<&'a Test>,
     count: usize,
 }
 
 impl TestDiff<'_> {
     // True if should fail
     fn print(&self, pad: String) -> bool {
-        for test in &self.regressions {
-            println!(
-                "regression: {}\noutput:\n{}",
-                &test.name,
-                test.stdout.as_ref().map(|x| x.as_str()).unwrap_or("")
-            );
+        let indent_lines = |string: &str| {
+            for line in string.lines() {
+                println!("        {}", line);
+            }
+        };
+        for test in &self.remaining_failures {
+            println!("failure: {}", &test.name);
+            if let Some(orig) = test.stdout.as_ref() {
+                println!("{}", orig);
+            }
         }
-        for test in &self.improvements {
+        for test in &self.regressions {
+            println!("regression: {}", &test.name);
+            if let Some(orig) = test.stdout.as_ref() {
+                println!("    current (now failing):");
+                indent_lines(orig);
+            }
+        }
+        for (orig, test) in &self.improvements {
             println!("improved: {}", &test.name);
+            if let Some(orig) = orig.stdout.as_ref() {
+                println!("    base (now fixed):");
+                indent_lines(orig);
+            }
         }
         for test in &self.new_ignores {
             println!("newly ignored: {}", &test.name);
         }
         for (orig, mine) in &self.output_changed {
             println!("output changed: {}\n", &orig.name);
-            let indent_lines = |string: &str| {
-                for line in string.lines() {
-                    println!("        {}", line);
-                }
-            };
             if let Some(orig) = orig.stdout.as_ref() {
                 println!("    base:");
                 indent_lines(orig);
@@ -392,7 +423,10 @@ fn follow_snapshot_ref(s: &str) -> Result<PathBuf, Error> {
 fn get_cmd_run(rest: &[String], release: bool) -> String {
     let rest = rest.join(" ");
     let release = if release { " --release" } else { "" };
-    let mut cmd = format!("cargo test --package citeproc{} --test suite --features test-jemalloc -- ", release);
+    let mut cmd = format!(
+        "cargo test --package citeproc{} --test suite --features test-jemalloc -- ",
+        release
+    );
     cmd.push_str(&rest);
     cmd
 }
