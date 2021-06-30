@@ -317,6 +317,79 @@ impl<O: OutputFormat> IrTree<O> {
             None
         }
     }
+    pub fn author_only_strip_formatting(
+        &mut self,
+        suppress_author_orig_node: NodeId,
+        cite_pos: csl::Position,
+        fmt: &O,
+    ) -> Option<()> {
+        let arena = &mut self.arena;
+        match &mut arena.get_mut(suppress_author_orig_node)?.get_mut().0 {
+            IR::Seq(seq) if seq.formatting.is_some() => {
+                seq.formatting = None;
+            }
+            IR::Name(nir) => {
+                log::debug!("NIR found, stripping formatting");
+                if let Some(rebuilt) = nir.strip_formatting(fmt, cite_pos) {
+                    log::debug!("strip formatting rebuilt as {:?}", rebuilt);
+                    let label_after_name = nir
+                        .names_inheritance
+                        .label
+                        .as_ref()
+                        .map_or(false, |l| l.after_name);
+                    let built_label = nir.built_label.clone();
+                    let new_node = NameIR::rendered_ntbs_to_node(
+                        rebuilt,
+                        arena,
+                        false,
+                        label_after_name,
+                        built_label.as_ref(),
+                    );
+                    replace_single_child(suppress_author_orig_node, new_node, arena);
+                }
+            }
+            _ => {}
+        }
+        Some(())
+    }
+}
+
+impl<O: OutputFormat> NameIR<O> {
+    fn strip_formatting(&mut self, fmt: &O, cite_pos: csl::Position) -> Option<Vec<O::Build>> {
+        use core::mem::replace;
+        let old_ni = replace(&mut self.names_inheritance.formatting, None)
+            .or(replace(&mut self.names_inheritance.name.formatting, None))
+            .or(self
+                .names_inheritance
+                .name
+                .name_part_family
+                .as_mut()
+                .and_then(|x| replace(&mut x.formatting, None)))
+            .or(self
+                .names_inheritance
+                .name
+                .name_part_given
+                .as_mut()
+                .and_then(|x| replace(&mut x.formatting, None)));
+        for dn in self.disamb_names.iter_mut() {
+            match dn {
+                DisambNameRatchet::Person(pdnr) => {
+                    pdnr.data.el = self.names_inheritance.name.clone();
+                }
+                _ => {}
+            }
+        }
+        log::debug!(
+            "NameIR::strip_formatting found some formatting to remove ({:?}), rebuilding names block",
+            old_ni
+        );
+        if old_ni.is_some() {
+            let rebuilt = self.intermediate_custom(fmt, cite_pos, false, None, None)?;
+            Some(rebuilt)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
@@ -343,9 +416,11 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     }
 }
 
-fn apply_author_only<O: OutputFormat<Output = SmartString>>(
+fn apply_author_only(
     db: &dyn IrDatabase,
-    cite: &mut CiteInCluster<O>,
+    cite: &mut CiteInCluster<Markup>,
+    position: csl::Position,
+    fmt: &Markup,
 ) {
     let mut success = true;
     if let Some(intext) = db.intext(cite.cite_id) {
@@ -358,20 +433,23 @@ fn apply_author_only<O: OutputFormat<Output = SmartString>>(
         new_root.detach(&mut tree.arena);
         tree.root.remove_subtree(&mut tree.arena);
         tree.root = new_root;
+
+        tree.author_only_strip_formatting(new_root, position, fmt);
     } else {
         success = false;
     }
     cite.destination = WhichStream::MainToIntext { success };
 }
 
-pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
+pub(crate) fn apply_cite_modes(
     db: &dyn IrDatabase,
-    cites: &mut [CiteInCluster<O>],
+    cites: &mut [CiteInCluster<Markup>],
+    fmt: &Markup,
 ) {
     for cite in cites {
         match cite.cite.mode {
             Some(CiteMode::AuthorOnly) => {
-                apply_author_only(db, cite);
+                apply_author_only(db, cite, cite.position, fmt);
             }
             Some(CiteMode::SuppressAuthor) => {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
@@ -382,16 +460,17 @@ pub(crate) fn apply_cite_modes<O: OutputFormat<Output = SmartString>>(
     }
 }
 
-pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
+pub(crate) fn apply_cluster_mode(
     db: &dyn IrDatabase,
     mode: &ClusterMode,
-    cites: &mut [CiteInCluster<O>],
+    cites: &mut [CiteInCluster<Markup>],
     class: csl::StyleClass,
+    fmt: &Markup,
 ) {
-    fn first_n_authors<'a, O: OutputFormat>(
-        cites: &'a mut [CiteInCluster<O>],
+    fn first_n_authors<'a>(
+        cites: &'a mut [CiteInCluster<Markup>],
         suppress_first: u32,
-    ) -> impl Iterator<Item = &'a mut CiteInCluster<O>> + 'a {
+    ) -> impl Iterator<Item = &'a mut CiteInCluster<Markup>> + 'a {
         let by_name = group_by_mut(cites, |a, b| a.by_name() == b.by_name());
         let take = if suppress_first > 0 {
             suppress_first as usize
@@ -403,11 +482,11 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
     match *mode {
         ClusterMode::AuthorOnly => {
             for cite in cites.iter_mut() {
-                apply_author_only(db, cite);
+                apply_author_only(db, cite, cite.position, fmt);
             }
         }
         ClusterMode::SuppressAuthor { suppress_first } if class != csl::StyleClass::Note => {
-            let suppress_it = |cite: &mut CiteInCluster<O>| {
+            let suppress_it = |cite: &mut CiteInCluster<Markup>| {
                 let gen4 = Arc::make_mut(&mut cite.gen4);
                 let _discard = gen4.tree_mut().suppress_author();
                 cite.destination = WhichStream::MainToCitation;
@@ -420,14 +499,22 @@ pub(crate) fn apply_cluster_mode<O: OutputFormat<Output = SmartString>>(
                 cite_id,
                 gen4,
                 destination,
+                position,
                 ..
             } in first_n_authors(cites, suppress_first)
             {
                 let gen4 = Arc::make_mut(gen4);
                 log::debug!("called Composite");
-                let intext_part = if let Some(removed_node) = gen4.tree_mut().suppress_author() {
+                let intext_part = if let Some(mut removed_node) = gen4.tree_mut().suppress_author()
+                {
                     log::debug!(
                         "removed node from composite: {}",
+                        gen4.tree().tree_at_node(removed_node),
+                    );
+                    gen4.tree_mut()
+                        .author_only_strip_formatting(removed_node, *position, fmt);
+                    log::debug!(
+                        "reformatted node from composite: {}",
                         gen4.tree().tree_at_node(removed_node),
                     );
                     if let Some(intext) = db.intext(*cite_id) {

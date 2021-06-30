@@ -37,10 +37,11 @@ pub fn built_cluster_before_output(
         .iter()
         .map(|&id| {
             let gen4 = db.ir_fully_disambiguated(id);
+            let position = db.cite_position(id).0;
             let cite = id.lookup(db);
             let (_keys, citation_numbers_by_id) = &*sorted_refs_arc;
             let cnum = citation_numbers_by_id.get(&cite.ref_id).cloned();
-            CiteInCluster::new(id, cite, cnum.map(|x| x.get()), gen4, &fmt)
+            CiteInCluster::new(id, cite, position, cnum.map(|x| x.get()), gen4, &fmt)
         })
         .collect();
 
@@ -53,9 +54,9 @@ pub fn built_cluster_before_output(
     // intext_Composite_Multiple.yml
     let cluster_mode = db.cluster_mode(cluster_id);
     if let Some(mode) = &cluster_mode {
-        transforms::apply_cluster_mode(db, mode, &mut irs, style.class);
+        transforms::apply_cluster_mode(db, mode, &mut irs, style.class, fmt);
     } else {
-        transforms::apply_cite_modes(db, &mut irs);
+        transforms::apply_cite_modes(db, &mut irs, fmt);
     }
 
     if let Some(Some(collapse)) = style.citation.group_collapsing() {
@@ -215,9 +216,10 @@ where
     }
 }
 
-pub(crate) struct CiteInCluster<O: OutputFormat> {
+pub(crate) struct CiteInCluster<O: OutputFormat = Markup> {
     pub cite_id: CiteId,
     pub cite: Arc<Cite<O>>,
+    pub position: csl::Position,
     pub cnum: Partial<u32>,
     pub gen4: Arc<IrGen>,
     /// Tagging removed cites is cheaper than memmoving the rest of the Vec
@@ -283,6 +285,7 @@ impl CiteInCluster<Markup> {
     pub fn new(
         cite_id: CiteId,
         cite: Arc<Cite<Markup>>,
+        position: csl::Position,
         cnum: Option<u32>,
         gen4: Arc<IrGen>,
         fmt: &Markup,
@@ -302,6 +305,7 @@ impl CiteInCluster<Markup> {
             has_locator,
             has_locator_or_affixes: has_locator || cite.has_affix(),
             own_delimiter: Some(DelimKind::Layout),
+            position,
             cite,
             gen4,
             destination: WhichStream::default(),
