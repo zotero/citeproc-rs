@@ -274,8 +274,10 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                     let node = el.intermediate(db, &mut new_state, ctx, arena);
                     if !IrTree::is_empty(node, arena) {
                         new_state.name_override.restore_name_overrides(old);
+                        let wrapper = arena.new_node((IR::Substitute, GroupVars::Important));
+                        wrapper.append(node, arena);
                         *state = new_state;
-                        return node;
+                        return wrapper;
                     }
                 }
             }
@@ -350,8 +352,10 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                 let node = el.intermediate(db, &mut new_state, ctx, arena);
                 if !IrTree::is_empty(node, arena) {
                     new_state.name_override.restore_name_overrides(old);
+                    let wrapper = arena.new_node((IR::Substitute, GroupVars::Important));
+                    wrapper.append(node, arena);
                     *state = new_state;
-                    return node;
+                    return wrapper;
                 }
             }
         }

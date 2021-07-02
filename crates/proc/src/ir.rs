@@ -24,6 +24,8 @@ pub enum IR<O: OutputFormat = Markup> {
     // the name block,
     Name(NameIR<O>),
 
+    Substitute,
+
     /// a single <if disambiguate="true"> being tested once means the whole <choose> is re-rendered in step 4
     /// or <choose><if><conditions><condition>
     /// Should also include `if variable="year-suffix"` because that could change.
@@ -66,6 +68,7 @@ impl<O: OutputFormat> std::fmt::Display for IR<O> {
                 }
                 dbg.finish()
             }
+            IR::Substitute => write!(f, "Substitute"),
             IR::ConditionalDisamb(_) => write!(f, "ConditionalDisamb"),
             IR::NameCounter(_) => write!(f, "NameCounter"),
             IR::Rendered(None) => write!(f, "<empty>"),
@@ -243,6 +246,7 @@ where
             (IR::YearSuffix(a), IR::YearSuffix(b)) if a == b => {}
             (IR::ConditionalDisamb(a), IR::ConditionalDisamb(b)) if a == b => {}
             (IR::Name(a), IR::Name(b)) if a == b => {}
+            (IR::Substitute, IR::Substitute) => {}
             _ => return false,
         }
         self_id
@@ -326,7 +330,7 @@ impl IR<Markup> {
                     edges.push(EdgeData::YearSuffix);
                 }
             }
-            IR::Name(_) | IR::NameCounter(_) => {
+            IR::Name(_) | IR::NameCounter(_) | IR::Substitute => {
                 IR::append_child_edges(node, arena, edges, fmt, formatting, None)
             }
             // Inherit the delimiter here.
@@ -405,7 +409,7 @@ impl<'a, O: OutputFormat<Output = SmartString>> IrTreeRef<'a, O> {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::ConditionalDisamb(_) => self.flatten_children(fmt, override_delim),
-            IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) => {
+            IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) | IR::Substitute => {
                 self.flatten_children(fmt, None)
             }
             IR::Seq(ref seq) => seq.flatten_seq(*self, fmt, override_delim),

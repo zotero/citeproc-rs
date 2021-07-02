@@ -591,7 +591,7 @@ fn list_all_name_blocks(tree: IrTreeRef) -> Vec<NodeId> {
             IR::Name(_) => {
                 vec.push(tree.node);
             }
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // assumes it's the first one that appears
                 for child in tree.children() {
                     list_all_name_blocks_inner(child, vec);
@@ -617,7 +617,7 @@ fn list_all_cond_disambs(tree: IrTreeRef) -> Vec<NodeId> {
             IR::ConditionalDisamb(_c) => {
                 vec.push(tree.node);
             }
-            IR::Seq(_seq) => {}
+            IR::Seq(_) | IR::Substitute => {}
         }
         tree.children()
             .for_each(|child| list_all_cd_inner(child, vec));

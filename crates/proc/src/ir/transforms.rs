@@ -39,7 +39,7 @@ impl<O: OutputFormat> IrTreeRef<'_, O> {
             IR::Rendered(Some(CiteEdgeData::Term(_)))
             | IR::Rendered(Some(CiteEdgeData::LocatorLabel(_)))
             | IR::Rendered(Some(CiteEdgeData::FrnnLabel(_))) => Some(self.node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => self
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => self
                 .node
                 .children(self.arena)
                 .next()
@@ -148,7 +148,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     pub fn find_locator(&self) -> Option<NodeId> {
         match self.get_node()?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Locator(_))) => Some(self.node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // Search backwards because it's likely to be near the end
                 self.reverse_children()
                     .find_map(|child| child.find_locator())
@@ -160,7 +160,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     pub fn first_names_block(&self) -> Option<NodeId> {
         match self.get_node()?.get().0 {
             IR::Name(_) => Some(self.node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // assumes it's the first one that appears
                 self.children().find_map(|child| child.first_names_block())
             }
@@ -171,7 +171,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     fn find_first_year(&self) -> Option<NodeId> {
         match &self.get_node()?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Year(_b))) => Some(self.node),
-            IR::Seq(_) | IR::ConditionalDisamb(_) => {
+            IR::Seq(_) | IR::ConditionalDisamb(_) | IR::Substitute => {
                 self.children().find_map(|child| child.find_first_year())
             }
             _ => None,
@@ -185,7 +185,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
                 suffix_num: Some(n),
                 ..
             }) if !self.is_empty() => Some(n),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // assumes it's the first one that appears
                 self.children()
                     .find_map(|child| child.has_explicit_year_suffix())
@@ -201,7 +201,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
                 suffix_num: Some(n),
                 ..
             }) if !self.is_empty() => Some(n),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // assumes it's the first one that appears
                 self.children()
                     .find_map(|child| child.has_implicit_year_suffix())
@@ -218,9 +218,11 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
         };
         match &me.0 {
             IR::Rendered(opt) => opt.is_none(),
-            IR::Seq(_) | IR::Name(_) | IR::ConditionalDisamb(_) | IR::YearSuffix(_) => {
-                self.children().next().is_none()
-            }
+            IR::Seq(_)
+            | IR::Name(_)
+            | IR::ConditionalDisamb(_)
+            | IR::YearSuffix(_)
+            | IR::Substitute => self.children().next().is_none(),
             IR::NameCounter(_nc) => false,
         }
     }
@@ -268,7 +270,7 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
                 Some(self.node)
             }
             IR::ConditionalDisamb(_) => None,
-            IR::Seq(_) => {
+            IR::Seq(_) | IR::Substitute => {
                 let mut iter = self.node.children(self.arena).fuse();
                 let first_two = (iter.next(), iter.next());
                 // Check for the exact explicit year suffix IR output
@@ -309,7 +311,7 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
 
 impl<O: OutputFormat> IrTree<O> {
     pub fn suppress_author(&mut self) -> Option<NodeId> {
-        if let Some(node) = self.tree_ref().leading_names_block_or_title() {
+        if let Some(node) = self.tree_ref().leading_names_block_or_title(false) {
             // TODO: check interaction of this with GroupVars of the parent seq
             node.detach(&mut self.arena);
             Some(node)
@@ -400,16 +402,23 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     /// This strips away any formatting defined on any parent seq nodes, but that is acceptable; if
     /// a style wishes to have text appear formatted even in an in-text reference, then it should
     /// define an `<intext>` node.
-    pub fn leading_names_block_or_title(&self) -> Option<NodeId> {
+    pub fn leading_names_block_or_title(&self, in_substitute: bool) -> Option<NodeId> {
         match self.get_node()?.get().0 {
             IR::Name(_) => Some(self.node),
-            IR::Rendered(Some(CiteEdgeData::Title(_))) => Some(self.node),
+            IR::Rendered(Some(CiteEdgeData::Title(_))) if in_substitute => Some(self.node),
+            IR::Substitute => {
+                // it must be at the start of the cite
+                self.children()
+                    .filter(|x| !x.is_empty())
+                    .nth(0)
+                    .and_then(|child| child.leading_names_block_or_title(true))
+            }
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // it must be at the start of the cite
                 self.children()
                     .filter(|x| !x.is_empty())
                     .nth(0)
-                    .and_then(|child| child.leading_names_block_or_title())
+                    .and_then(|child| child.leading_names_block_or_title(in_substitute))
             }
             _ => None,
         }
@@ -427,7 +436,7 @@ fn apply_author_only(
         // completely replace with the intext arena, no need to copy
         // into the old arena in gen4.
         cite.gen4 = intext;
-    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title() {
+    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title(false) {
         let gen4 = Arc::make_mut(&mut cite.gen4);
         let tree = gen4.tree_mut();
         new_root.detach(&mut tree.arena);

@@ -217,7 +217,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
             match &me.0 {
                 IR::YearSuffix(..) => vec.push(tree.node),
                 IR::NameCounter(_) | IR::Rendered(_) | IR::Name(_) => {}
-                IR::ConditionalDisamb(_) | IR::Seq(_) => {
+                IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                     tree.children().for_each(|child| list_ysh_inner(child, vec));
                 }
             }
