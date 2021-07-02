@@ -2,7 +2,7 @@ use crate::helpers::plain_text_element;
 use crate::prelude::*;
 use csl::{style::*, variables::*};
 
-impl<'c, O, I> Proc<'c, O, I> for Style
+impl<'c, O, I> Proc<'c, O, I> for Citation
 where
     O: OutputFormat,
     I: OutputFormat,
@@ -14,7 +14,37 @@ where
         ctx: &CiteContext<'c, O, I>,
         arena: &mut IrArena<O>,
     ) -> NodeId {
-        let layout = &self.citation.layout;
+        let layout = &self.layout;
+        sequence(
+            db,
+            state,
+            ctx,
+            arena,
+            &layout.elements,
+            false,
+            Some(&|| IrSeq {
+                // enable layout fixups on citation output, for when it is being combined with
+                // intext.
+                is_layout: true,
+                ..Default::default()
+            }),
+        )
+    }
+}
+
+impl<'c, O, I> Proc<'c, O, I> for InText
+where
+    O: OutputFormat,
+    I: OutputFormat,
+{
+    fn intermediate(
+        &self,
+        db: &dyn IrDatabase,
+        state: &mut IrState,
+        ctx: &CiteContext<'c, O, I>,
+        arena: &mut IrArena<O>,
+    ) -> NodeId {
+        let layout = &self.layout;
         sequence(db, state, ctx, arena, &layout.elements, false, None)
     }
 }

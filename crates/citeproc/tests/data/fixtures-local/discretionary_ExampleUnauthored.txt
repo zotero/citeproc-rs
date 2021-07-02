@@ -1,0 +1,123 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+..[0] (Unauthored thing 1964)
+..[1] [NO_PRINTED_FORM]
+..[2] (Unauthored thing 1964)
+>>[3] [NO_PRINTED_FORM] (Unauthored thing 1964)
+<<===== RESULT =====<<
+
+
+>>===== CITATIONS =====>>
+[
+    [
+        {
+            "citationID": "CITATION-1",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "noteIndex": 0
+            }
+        },
+        [],
+        []
+    ],
+    [
+        {
+            "citationID": "CITATION-2",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "mode": "author-only",
+                "noteIndex": 0
+            }
+        },
+        [["CITATION-1", 0]],
+        []
+    ],
+    [
+        {
+            "citationID": "CITATION-3",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "mode": "suppress-author",
+                "noteIndex": 0
+            }
+        },
+        [["CITATION-1", 0],["CITATION-2", 0]],
+        []
+    ],
+    [
+        {
+            "citationID": "CITATION-4",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "mode": "composite",
+                "noteIndex": 0
+            }
+        },
+        [["CITATION-1", 0],["CITATION-2", 0],["CITATION-3", 0]],
+        []
+    ]
+]
+<<===== CITATIONS =====<<
+
+
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="in-text"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout prefix="(" suffix=")">
+      <group delimiter=" ">
+        <text variable="title"/>
+        <date variable="issued" date-parts="year" form="text"/>
+      </group>
+    </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+	{
+        "id": "ITEM-1",
+		"type": "legal_case",
+		"title": "Unauthored thing",
+		"issued": {
+			"date-parts": [
+				[
+					"1964"
+				]
+			]
+		}
+	}
+]
+<<===== INPUT =====<<

@@ -1,0 +1,38 @@
+mode: citation
+# shouldn't have ibid or subsequent etc. The author-only cluster should not be referenced anywhere.
+# TODO: need to test composite as well
+result: |
+  Smith
+  title=Jellybeans
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "author-only"
+    cites:
+      - id: ITEM-1
+  - id: cluster-two
+    mode: "suppress-author"
+    cites:
+      - id: ITEM-1
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="author" />
+          <text variable="title" prefix="title=" />
+          <choose>
+            <if position="ibid"><text value="ibid" /></if>
+            <else-if position="subsequent"><text value="subsequent" /></else-if>
+          </choose>
+        </group>
+      </layout>
+    </citation>
+  </style>
+

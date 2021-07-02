@@ -7,76 +7,36 @@
 use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
-use citeproc::string_id::{Cluster as ClusterStr};
-use citeproc_io::{Cite, Locators, Reference, Suppression, SmartString};
+use citeproc::string_id::Cluster as ClusterStr;
+use citeproc_io::{output::markup::Markup, Cite, cite_compat_vec, ClusterMode, Reference, SmartString};
 
 use lazy_static::lazy_static;
+use serde::{Deserialize, Deserializer};
 use std::mem;
 use std::str::FromStr;
 
-/// Techincally reference IDs are allowed to be numbers.
-fn get_ref_id<'de, D>(d: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use citeproc_io::NumberLike;
-    let s = NumberLike::deserialize(d)?;
-    Ok(s.into_string())
-}
-
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
-pub enum CitationItem {
-    Array(Vec<CiteprocJsCite>),
-    Map { cites: Vec<CiteprocJsCite> },
+pub enum CompatCitationItem {
+    Array(#[serde(with = "cite_compat_vec")] Vec<Cite<Markup>>),
+    Map {
+        #[serde(with = "cite_compat_vec")]
+        cites: Vec<Cite<Markup>>,
+        #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+        mode: Option<ClusterMode>,
+    },
 }
 
-impl CitationItem {
+impl CompatCitationItem {
     pub fn to_note_cluster(self, index: u32) -> ClusterStr<Markup> {
-        let v = match self {
-            CitationItem::Array(v) => v,
-            CitationItem::Map { cites } => cites,
+        let (v, mode) = match self {
+            CompatCitationItem::Array(v) => (v, None),
+            CompatCitationItem::Map { cites, mode } => (cites, mode),
         };
-        let cites = v.iter().map(CiteprocJsCite::to_cite).collect();
         ClusterStr {
             id: index.to_string().into(),
-            cites,
-        }
-    }
-}
-
-#[derive(Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub struct CiteprocJsCite {
-    #[serde(deserialize_with = "get_ref_id")]
-    id: String,
-
-    #[serde(default, flatten)]
-    locators: Option<Locators>,
-
-    #[serde(default)]
-    prefix: Option<String>,
-    #[serde(default)]
-    suffix: Option<String>,
-    #[serde(default)]
-    suppress_author: bool,
-    #[serde(default)]
-    author_only: bool,
-}
-
-impl CiteprocJsCite {
-    fn to_cite(&self) -> Cite<Markup> {
-        Cite {
-            ref_id: csl::Atom::from(self.id.as_str()),
-            prefix: self.prefix.as_ref().map(SmartString::from),
-            suffix: self.suffix.as_ref().map(SmartString::from),
-            locators: self.locators.clone(),
-            suppression: match (self.suppress_author, self.author_only) {
-                (false, true) => Some(Suppression::InText),
-                (true, false) => Some(Suppression::Rest),
-                (false, false) => None,
-                _ => panic!("multiple citation modes passed to CiteprocJsCite"),
-            },
+            cites: v,
+            mode,
         }
     }
 }
@@ -151,7 +111,7 @@ impl FromStr for Results {
                 // incorrect, but we don't actually know except by looking at the instructions what
                 // the right note number is
                 note: ClusterNumber::Note(IntraNote::Single(n)),
-                text: crate::normalise_html(&f),
+                text: super::normalise_html(&f),
             })(inp)
         }
         fn whole_thing(inp: &str) -> IResult<&str, Vec<CiteResult>> {
@@ -160,8 +120,6 @@ impl FromStr for Results {
         Ok(Results(whole_thing(s).unwrap().1))
     }
 }
-
-use serde::de::{Deserialize, Deserializer};
 
 pub enum InstructionMode {
     Composite,
@@ -184,32 +142,21 @@ impl<'de> Deserialize<'de> for InstructionMode {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
-#[serde(tag = "mode", rename = "kebab-case")]
-pub enum ModeProperties {
-    Composite {
-        #[serde(default)]
-        infix: String,
-    },
-    AuthorOnly,
-    SuppressAuthor,
-}
-
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Properties {
     #[serde(rename = "noteIndex", alias = "note")]
     note_index: u32,
-    #[serde(default, flatten)]
-    mode: Option<ModeProperties>,
+    #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+    mode: Option<ClusterMode>,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct ClusterInstruction {
     #[serde(rename = "citationID", alias = "id")]
     cluster_id: SmartString,
-    #[serde(rename = "citationItems", alias = "cites")]
-    citation_items: Vec<CiteprocJsCite>,
+    #[serde(rename = "citationItems", alias = "cites", with = "cite_compat_vec")]
+    citation_items: Vec<Cite<Markup>>,
     properties: Properties,
 }
 
@@ -269,7 +216,7 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Arrows,
                 // id,
                 note,
-                text: crate::normalise_html(&text),
+                text: super::normalise_html(&text),
             })
         }
         // for &id in self.current_note_numbers.keys() {
@@ -282,7 +229,7 @@ impl JsExecutor<'_> {
         //             kind: ResultKind::Dots,
         //             id,
         //             note,
-        //             text: crate::normalise_html(&text),
+        //             text: super::normalise_html(&text),
         //         })
         //     }
         // }
@@ -306,19 +253,25 @@ impl JsExecutor<'_> {
         self.proc.drain();
         let mut renum = Vec::new();
         for CiteprocJsInstruction { cluster, pre, post } in instructions {
-            let id = &cluster.cluster_id;
-            let note = cluster.properties.note_index;
-
-            let mut cites = Vec::new();
-            for cite_item in cluster.citation_items.iter() {
-                cites.push(cite_item.to_cite());
-            }
+            let ClusterInstruction {
+                cluster_id,
+                citation_items,
+                properties,
+            } = cluster;
+            let Properties { mode, note_index } = properties;
 
             renum.clear();
             self.to_renumbering(&mut renum, pre);
-            self.to_renumbering(&mut renum, &[PrePost(cluster.cluster_id.clone(), note)]);
+            self.to_renumbering(
+                &mut renum,
+                &[PrePost(cluster.cluster_id.clone(), *note_index)],
+            );
             self.to_renumbering(&mut renum, post);
-            self.proc.insert_cites_str(id, &cites);
+            self.proc.insert_cluster_str(ClusterStr {
+                id: cluster_id.clone(),
+                mode: mode.clone(),
+                cites: citation_items.to_vec(),
+            });
             self.proc.set_cluster_order(&renum).unwrap();
             for &ClusterPosition { id, .. } in &renum {
                 if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
@@ -381,7 +334,7 @@ enum Chunk {
 //     out
 // }
 
-pub fn parse_human_test(contents: &str) -> TestCase {
+pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> TestCase {
     use regex::Regex;
     lazy_static! {
         static ref BEGIN: Regex = Regex::new(r">>=+ ([A-Z\-]+) =+>>").unwrap();
@@ -450,7 +403,9 @@ pub fn parse_human_test(contents: &str) -> TestCase {
                 mode = mode.or_else(|| match m.as_str() {
                     "citation" => Some((Mode::Citation, SupportedFormat::TestHtml, false)),
                     "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml, false)),
-                    "bibliography-nosort" => Some((Mode::Bibliography, SupportedFormat::TestHtml, true)),
+                    "bibliography-nosort" => {
+                        Some((Mode::Bibliography, SupportedFormat::TestHtml, true))
+                    }
                     "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf, false)),
                     "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf, false)),
                     _ => panic!("unknown mode {}", m),
@@ -484,17 +439,18 @@ pub fn parse_human_test(contents: &str) -> TestCase {
         mode.map(|(m, _, _)| m).unwrap_or(Mode::Citation),
         mode.map(|(_, f, _)| Format(f))
             .unwrap_or(Format(SupportedFormat::TestHtml)),
+        csl_features,
         mode.map_or(false, |(_, _, nosort)| nosort),
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
         result
-            .map(|x| crate::normalise_html(&x))
+            .map(|x| super::normalise_html(&x))
             .expect("test case without a RESULT section"),
-        citation_items.map(|items: Vec<CitationItem>| {
+        citation_items.map(|items: Vec<CompatCitationItem>| {
             items
                 .into_iter()
                 .enumerate()
-                .map(|(n, c_item): (usize, CitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
+                .map(|(n, c_item): (usize, CompatCitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
                 .collect()
         }),
         process_citation_clusters.map(|inst2s| {

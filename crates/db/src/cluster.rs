@@ -47,6 +47,7 @@ impl PartialOrd for IntraNote {
 #[serde(rename_all = "camelCase")]
 #[derive(Clone, Copy, Debug)]
 pub enum ClusterNumber {
+    OutsideFlow,
     InText(u32),
     Note(IntraNote),
 }
@@ -72,6 +73,8 @@ impl PartialOrd for ClusterNumber {
     fn partial_cmp(&self, other: &ClusterNumber) -> Option<Ordering> {
         use ClusterNumber::*;
         match (self, other) {
+            (OutsideFlow, _) => None,
+            (_, OutsideFlow) => None,
             (InText(_), Note(_)) => Some(Ordering::Less),
             (Note(_), InText(_)) => Some(Ordering::Greater),
             (InText(a), InText(b)) => a.partial_cmp(b),

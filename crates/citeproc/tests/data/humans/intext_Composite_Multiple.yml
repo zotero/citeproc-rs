@@ -1,0 +1,74 @@
+mode: citation
+result: |
+  Smith finds no evidence to support this theory. (Jellybeans 1997, Barnacles 1999)
+  Smith, Sergeyevna and Tsybukin &amp; Jones all found the opposite. (Jellybeans 1997, Barnacles 1999; Pennies &amp; Dimes 1993; Piranhas 2003)
+input:
+  - id: smith-1
+    title: "Jellybeans"
+    issued: { raw: "1997" }
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: smith-2
+    title: "Barnacles"
+    issued: { raw: "1999" }
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: smith-3
+    title: "Pennies &amp; Dimes"
+    issued: { raw: "1993" }
+    author:
+      - { family: "Sergeyevna" }
+      - { family: "Tsybukin" }
+      # - { family: "Starchenko" }
+    type: book
+  - id: jones-1
+    title: "Piranhas"
+    issued: { raw: "2003" }
+    author:
+      - { family: "Jones" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "composite"
+    infix: "finds no evidence to support this theory."
+    cites:
+      - id: smith-1
+      - id: smith-2
+  - id: cluster-two
+    mode: "composite"
+    suppress-first: 0
+    infix: "all found the opposite."
+    cites:
+      - id: smith-1
+      - id: smith-2
+      - id: smith-3
+      - id: jones-1
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
+    <citation collapse="year" cite-group-delimiter=", ">
+      <layout delimiter="; " prefix="(" suffix=")">
+        <group delimiter=", ">
+          <names variable="author">
+            <name and="symbol" />
+          </names>
+          <group delimiter=" ">
+            <text variable="title" />
+            <date form="numeric" variable="issued" />
+          </group>
+        </group>
+      </layout>
+    </citation>
+    <intext and="symbol" >
+      <layout delimiter=", ">
+        <names variable="author">
+          <name et-al-min="3" et-al-use-first="2"  and="text" />
+        </names>
+      </layout>
+    </intext>
+  </style>

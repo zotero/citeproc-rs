@@ -9,8 +9,8 @@ mod utils;
 #[macro_use]
 mod wasm_result;
 mod options;
+use options::{GetFetcherError, WasmInitOptions};
 use wasm_result::*;
-use options::{WasmInitOptions, GetFetcherError};
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -48,21 +48,35 @@ pub struct Driver {
 pub enum DriverError {
     #[error("Unknown output format {0:?}")]
     UnknownOutputFormat(String),
+    #[error("Unknown CSL feature {0:?}")]
+    UnknownCSLFeature(String),
     /// Never serialized as a CiteprocRsDriverError, only serialized as a CslStyleError.
     #[error("Style error: {0}")]
     StyleError(#[from] csl::StyleError),
     #[error("JSON Deserialization Error: {0}")]
-    JsonError(#[from] #[serde(skip_serializing)] serde_json::Error),
+    JsonError(
+        #[from]
+        #[serde(skip_serializing)]
+        serde_json::Error,
+    ),
     #[error("Invalid fetcher object: {0}")]
     GetFetcherError(#[from] GetFetcherError),
     #[error("Non-Existent Cluster id: {0}")]
     NonExistentCluster(String),
     #[error("Reordering error: {0}")]
-    ReorderingError(#[from] #[serde(skip_serializing)] string_id::ReorderingError),
+    ReorderingError(
+        #[from]
+        #[serde(skip_serializing)]
+        string_id::ReorderingError,
+    ),
 
     // This should not be necessary
     #[error("Reordering error: {0}")]
-    ReorderingErrorNumericId(#[from] #[serde(skip_serializing)] citeproc::ReorderingError),
+    ReorderingErrorNumericId(
+        #[from]
+        #[serde(skip_serializing)]
+        citeproc::ReorderingError,
+    ),
 }
 
 #[wasm_bindgen]
@@ -85,6 +99,8 @@ impl Driver {
             let us_fetcher = Arc::new(utils::USFetcher);
             let options: WasmInitOptions = JsValue::into_serde(&options_js)?;
             let fetcher = Fetcher::from_options_object(&options_js)?;
+            let csl_features = csl::version::read_features(options.csl_features.iter().map(|x| x.as_str()))
+                .map_err(|x| DriverError::UnknownCSLFeature(x.to_owned()))?;
             let init = InitOptions {
                 style: options.style.as_ref(),
                 fetcher: Some(us_fetcher),
@@ -92,6 +108,7 @@ impl Driver {
                 bibliography_no_sort: options.bibliography_no_sort,
                 locale_override: options.locale_override,
                 test_mode: false,
+                csl_features: Some(csl_features),
                 ..Default::default()
             };
             let engine = Processor::new(init)?;
@@ -194,7 +211,6 @@ impl Driver {
         })
     }
 
-
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
     #[wasm_bindgen(js_name = "randomClusterId")]
     pub fn random_cluster_id(&self) -> String {
@@ -206,9 +222,9 @@ impl Driver {
     #[wasm_bindgen(js_name = "insertCluster")]
     pub fn insert_cluster(&self, cluster: JsValue) -> EmptyResult {
         typescript_serde_result(|| {
-            let cluster: string_id::Cluster<Markup> = cluster.into_serde()?;
+            let cluster: string_id::Cluster = cluster.into_serde()?;
             let mut eng = self.engine.borrow_mut();
-            eng.insert_cites_str(&cluster.id, &cluster.cites);
+            eng.insert_cluster_str(cluster);
             Ok(())
         })
     }
@@ -272,8 +288,10 @@ impl Driver {
             let preview = eng.preview_citation_cluster(
                 &cites,
                 PreviewPosition::MarkWithZeroStr(&positions),
-                Some(SupportedFormat::from_str(format)
-                    .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?),
+                Some(
+                    SupportedFormat::from_str(format)
+                        .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?,
+                ),
             );
             Ok(preview?)
         })
@@ -485,25 +503,24 @@ export type Locator = {
     locators: undefined;
 };
 
-export type CiteLocator = Locator | { locator: undefined; locators: Locator[] };
+export type CiteLocator = Locator | { locator: undefined; locators: Locator[]; };
+export type CiteMode = { mode?: "SuppressAuthor" | "AuthorOnly"; };
 
 export type Cite<Affix = string> = {
     id: string;
     prefix?: Affix;
     suffix?: Affix;
-    suppression?: "InText" | "Rest" | null;
-} & Partial<CiteLocator>;
+} & Partial<CiteLocator> & CiteMode;
 
-export type ClusterNumber = {
-    note: number | [number, number]
-} | {
-    inText: number
-};
-
+export type ClusterMode
+    = { mode: "Composite"; infix?: string; suppressFirst?: number; } 
+    | { mode: "SuppressAuthor"; suppressFirst?: number; }
+    | { mode: "AuthorOnly"; }
+    | {};
 export type Cluster = {
     id: string;
     cites: Cite[];
-};
+} & ClusterMode;
 
 export type ClusterPosition = {
     id: string;
@@ -520,7 +537,7 @@ export type Reference = {
     [key: string]: any;
 };
 
-export type CslType = "book" | "article" | "legal_case" | "article-journal";
+export type CslType = "book" | "article" | "legal_case" | "article-journal" | string;
 "#;
 
 // Bibliography handling
@@ -709,11 +726,27 @@ interface StyleMeta {
 };
 "#;
 
-result_type!(string_id::UpdateSummary, UpdateSummaryResult, "WasmResult<UpdateSummary>");
-result_type!(Vec<citeproc::BibEntry>, BibEntriesResult, "WasmResult<BibEntries>");
-result_type!(string_id::FullRender, FullRenderResult, "WasmResult<FullRender>");
+result_type!(
+    string_id::UpdateSummary,
+    UpdateSummaryResult,
+    "WasmResult<UpdateSummary>"
+);
+result_type!(
+    Vec<citeproc::BibEntry>,
+    BibEntriesResult,
+    "WasmResult<BibEntries>"
+);
+result_type!(
+    string_id::FullRender,
+    FullRenderResult,
+    "WasmResult<FullRender>"
+);
 result_type!(Driver, DriverResult, "WasmResult<Driver>");
-result_type!(Option<citeproc::BibliographyMeta>, BibliographyMetaResult, "WasmResult<BibliographyMeta>");
+result_type!(
+    Option<citeproc::BibliographyMeta>,
+    BibliographyMetaResult,
+    "WasmResult<BibliographyMeta>"
+);
 result_type!((), EmptyResult, "WasmResult<undefined>");
 result_type!(Arc<SmartString>, StringResult, "WasmResult<string>");
 result_type!(Vec<String>, StringArrayResult, "WasmResult<string[]>");

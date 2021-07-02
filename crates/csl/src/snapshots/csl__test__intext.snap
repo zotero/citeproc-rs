@@ -1,0 +1,33 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::from_node::parse_as_with::<InText>(::indoc::indoc!(r#\"<intext><layout><text variable=\"title\"/></layout></intext>\"#),\n                                          None).expect(\"did not parse\")"
+---
+InText {
+    layout: Layout {
+        affixes: None,
+        formatting: None,
+        delimiter: None,
+        elements: [
+            Text(
+                TextElement {
+                    source: Variable(
+                        Ordinary(
+                            Title,
+                        ),
+                        Long,
+                    ),
+                    formatting: None,
+                    affixes: None,
+                    quotes: false,
+                    strip_periods: false,
+                    text_case: None,
+                    display: None,
+                },
+            ),
+        ],
+        locale: [],
+    },
+    and: None,
+    cite_group_delimiter: None,
+    after_collapse_delimiter: None,
+}

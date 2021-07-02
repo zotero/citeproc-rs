@@ -1,5 +1,7 @@
 use crate::prelude::*;
-use citeproc_db::{CiteData, ClusterId, ClusterNumber, LocaleFetcher, PredefinedLocales, StyleDatabase};
+use citeproc_db::{
+    CiteData, ClusterId, ClusterNumber, LocaleFetcher, PredefinedLocales, StyleDatabase,
+};
 use citeproc_io::{output::markup::Markup, Cite, Reference};
 
 use csl::Style;
@@ -7,11 +9,14 @@ use std::sync::Arc;
 
 #[allow(dead_code)]
 pub fn with_test_style<T>(s: &str, f: impl Fn(Style) -> T) -> T {
-    let sty = Style::parse_for_test(&format!(
-        r#"<?xml version="1.0" encoding="utf-8"?>
+    let sty = Style::parse_for_test(
+        &format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 {}"#,
-        s
-    ))
+            s
+        ),
+        None,
+    )
     .unwrap();
     f(sty)
 }
@@ -32,8 +37,7 @@ pub fn test_style_layout(s: &str) -> String {
 }
 
 pub fn with_test_citation<T>(mut f: impl FnMut(Style) -> T, s: &str) -> T {
-    let sty = Style::parse_for_test(&test_style_layout(s))
-    .unwrap();
+    let sty = Style::parse_for_test(&test_style_layout(s), None).unwrap();
     f(sty)
 }
 
@@ -89,7 +93,7 @@ impl MockProcessor {
     }
 
     pub fn set_style_text(&mut self, style_text: &str) {
-        let style = Style::parse_for_test(style_text).unwrap();
+        let style = Style::parse_for_test(style_text, None).unwrap();
         use salsa::Durability;
         self.set_style_with_durability(Arc::new(style), Durability::MEDIUM);
     }
@@ -109,6 +113,7 @@ impl MockProcessor {
             }
             self.set_cluster_cites(cluster_id, Arc::new(ids));
             self.set_cluster_note_number(cluster_id, Some(note_number));
+            self.set_cluster_mode(cluster_id, None);
             cluster_ids.push(cluster_id);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
@@ -128,6 +133,7 @@ impl MockProcessor {
             new_cluster_ids.push(cluster_id);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
             self.set_cluster_note_number(cluster_id, None);
+            self.set_cluster_mode(cluster_id, None);
         }
 
         let mut ids = Vec::new();

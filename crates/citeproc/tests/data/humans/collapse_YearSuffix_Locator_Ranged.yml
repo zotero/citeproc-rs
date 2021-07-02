@@ -1,0 +1,62 @@
+mode: citation
+result: |
+  (Smith 1999a,b, 1999c --locator here--, 2000)
+  (Smith 1999a–c, 1999d --locator here--, 1999e, 2000)
+input:
+  - id: smith-1999-1
+    author: [{family: "Smith"}]
+    issued: { raw: "1999" }
+  - id: smith-1999-2
+    author: [{family: "Smith"}]
+    issued: { raw: "1999" }
+  - id: smith-1999-3
+    author: [{family: "Smith"}]
+    issued: { raw: "1999" }
+    locator: "25"
+  - id: smith-1999-4
+    author: [{family: "Smith"}]
+    issued: { raw: "1999" }
+  - id: smith-1999-5
+    author: [{family: "Smith"}]
+    issued: { raw: "1999" }
+  - id: smith-2000
+    author: [{family: "Smith"}]
+    issued: { raw: "2000" }
+clusters:
+  - id: cluster-one
+    cites:
+      - id: smith-1999-1
+      - id: smith-1999-2
+      - id: smith-1999-3
+        locator: "--locator here--"
+      - id: smith-2000
+  - id: cluster-two
+    cites:
+      - id: smith-1999-1
+      - id: smith-1999-2
+      - id: smith-1999-3
+      - id: smith-1999-4
+        locator: "--locator here--"
+      - id: smith-1999-5
+      - id: smith-2000
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
+    <locale>
+      <terms>
+        <term name="and"> et </term>
+      </terms>
+    </locale>
+    <citation collapse="year-suffix-ranged" year-suffix-delimiter="," disambiguate-add-year-suffix="true">
+      <layout delimiter="; " prefix="(" suffix=")">
+        <group delimiter=" ">
+          <names variable="author" />
+          <date variable="issued" form="numeric"/>
+          <text variable="locator" />
+        </group>
+      </layout>
+    </citation>
+  </style>

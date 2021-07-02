@@ -1,0 +1,56 @@
+mode: citation
+# the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
+result: |
+  Smith-intext
+  (Jellybeans; Jones, Scavengers)
+  (Jellybeans; Scavengers)
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: "ITEM-2"
+    title: "Scavengers"
+    author:
+      - { family: "Jones" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "author-only"
+    cites:
+      - id: ITEM-1
+  - id: cluster-two
+    mode: "suppress-author"
+    # only suppress the first one. (the default)
+    suppress-first: 1
+    cites:
+      - id: ITEM-1
+      - id: ITEM-2
+  - id: cluster-three
+    mode: "suppress-author"
+    # do both authors. 0 will do all of them
+    suppress-first: 2
+    cites:
+      - id: ITEM-1
+      - id: ITEM-2
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
+    <citation>
+      <layout delimiter="; " prefix="(" suffix=")">
+        <group delimiter=", ">
+          <names variable="author" />
+          <text variable="title" />
+        </group>
+      </layout>
+    </citation>
+    <intext>
+      <layout>
+        <names variable="author" suffix="-intext" />
+      </layout>
+    </intext>
+  </style>

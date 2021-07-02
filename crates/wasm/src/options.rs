@@ -11,6 +11,9 @@ pub struct WasmInitOptions {
     /// A full independent style.
     pub style: String,
 
+    #[serde(default)]
+    pub csl_features: Vec<String>,
+
     // Optional
     #[serde(default)]
     pub format: SupportedFormat,

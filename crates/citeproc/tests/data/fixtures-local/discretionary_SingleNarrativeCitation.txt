@@ -1,0 +1,114 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+>>[0] John Smith prepared (1999; Brown, 2000)
+<<===== RESULT =====<<
+
+
+>>===== CITATIONS =====>>
+[
+    [
+        {
+            "citationID": "CITATION-1", 
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }, 
+                {
+                    "id": "ITEM-2"
+                }
+            ], 
+            "properties": {
+                "infix": "prepared", 
+                "mode": "composite", 
+                "noteIndex": 0
+            }
+        }, 
+        [], 
+        []
+    ]
+]
+<<===== CITATIONS =====<<
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="in-text"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation collapse="year">
+    <layout delimiter="; " prefix="(" suffix=")">
+      <group delimiter=", ">
+        <names variable="author">
+          <name form="short"/>
+        </names>
+        <date variable="issued" date-parts="year" form="text"/>
+      </group>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <group delimiter=", ">
+        <names variable="author">
+          <name form="short"/>
+        </names>
+        <date variable="issued" date-parts="year" form="text"/>
+      </group>
+    </layout>
+  </bibliography>
+  <intext>
+    <layout>
+      <names variable="author">
+        <name/>
+      </names>
+    </layout>
+  </intext>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "id": "ITEM-1", 
+        "type": "book",
+        "title": "My Title",
+        "author": [
+            {
+                "family": "Smith", 
+                "given": "John"
+            }
+        ],
+        "issued": {
+            "date-parts": [
+               [1999]
+            ]
+        }
+    },
+    {
+        "id": "ITEM-2", 
+        "type": "book",
+        "title": "My Other Title",
+        "author": [
+            {
+                "family": "Brown", 
+                "given": "Gigi"
+            }
+        ],
+        "issued": {
+            "date-parts": [
+               [2000]
+            ]
+        }
+    }
+]
+<<===== INPUT =====<<

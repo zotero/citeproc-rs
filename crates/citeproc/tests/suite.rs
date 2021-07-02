@@ -23,7 +23,8 @@ cfg_if! {
     }
 }
 
-use test_utils::{humans::parse_human_test, yaml::parse_yaml_test};
+mod test_format;
+use test_format::{humans::parse_human_test, yaml::parse_yaml_test};
 
 use lazy_static::lazy_static;
 use pretty_assertions::assert_eq;
@@ -101,7 +102,7 @@ fn setup() {
 fn csl_test_suite(path: &Path) {
     setup();
     let input = read_to_string(path).unwrap();
-    let mut test_case = parse_human_test(&input);
+    let mut test_case = parse_human_test(&input, None);
     if let Some(res) = test_case.execute() {
         let pass = res == test_case.result;
         if !pass && is_snapshot(path) {
@@ -122,5 +123,29 @@ fn humans(path: &Path) {
     let mut test_case = parse_yaml_test(&input).unwrap();
     if let Some(res) = test_case.execute() {
         assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+    }
+}
+
+#[datatest::files("tests/data/fixtures-local", {
+    path in r"^(.*)\.txt" if !is_ignore,
+})]
+fn fixtures_local(path: &Path) {
+    setup();
+    let input = read_to_string(path).unwrap();
+    let mut test_case = parse_human_test(
+        &input,
+        Some(csl::Features {
+            custom_intext: true,
+            ..Default::default()
+        }),
+    );
+    if let Some(res) = test_case.execute() {
+        let pass = res == test_case.result;
+        if !pass && is_snapshot(path) {
+            let name = path.file_name().unwrap().to_string_lossy();
+            insta::assert_snapshot!(name.as_ref(), res);
+        } else {
+            assert_eq!(PrettyString(&res), PrettyString(&test_case.result));
+        }
     }
 }

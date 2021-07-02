@@ -31,8 +31,41 @@ fn features() {
 }
 
 #[test]
+fn intext() {
+    let features = Features {
+        custom_intext: true,
+        ..Default::default()
+    };
+    let options = ParseOptions {
+        allow_no_info: true,
+        features: Some(features),
+        ..Default::default()
+    };
+    assert_snapshot_parse!(
+        InText,
+        r#"<intext><layout><text variable="title"/></layout></intext>"#
+    );
+    assert_snapshot_parse!(
+        Style,
+        r#"<style class="in-text">
+            <citation><layout></layout></citation>
+            <intext><layout><text variable="title" /></layout></intext>
+        </style>"#,
+        options.clone()
+    );
+    assert_snapshot_err!(
+        Style,
+        r#"<style class="in-text">
+             <citation><layout></layout></citation>
+             <intext><layout></layout></intext>
+         </style>"#
+    );
+}
+
+#[test]
 fn unsupported_version() {
-    assert_snapshot_style_err!(
+    assert_snapshot_err!(
+        Style,
         r#"
         <style version="999.0" class="in-text">
             <citation><layout></layout></citation>
@@ -43,7 +76,8 @@ fn unsupported_version() {
 
 #[test]
 fn unrecognised_macros() {
-    assert_snapshot_style_err!(
+    assert_snapshot_err!(
+        Style,
         r#"
         <style version="1.0" class="in-text">
             <citation>
@@ -54,7 +88,8 @@ fn unrecognised_macros() {
         </style>
     "#
     );
-    assert_snapshot_style_err!(
+    assert_snapshot_err!(
+        Style,
         r#"
         <style version="1.0" class="in-text">
             <citation>
@@ -66,7 +101,8 @@ fn unrecognised_macros() {
         </style>
     "#
     );
-    assert_snapshot_style_err!(
+    assert_snapshot_err!(
+        Style,
         r#"
         <style version="1.0" class="in-text">
             <citation><layout></layout></citation>
@@ -79,7 +115,8 @@ fn unrecognised_macros() {
         </style>
     "#
     );
-    assert_snapshot_style_parse!(
+    assert_snapshot_parse!(
+        Style,
         r#"
         <style version="1.0" class="in-text">
             <macro name="known" />
@@ -105,11 +142,31 @@ fn missing_info() {
     ))
     .expect_err("should have failed with errors"));
     // But internally we can ignore it.
-    assert_snapshot_style_parse!(
+    assert_snapshot_parse!(
+        Style,
         r#"
         <style version="1.0.1" class="in-text">
             <citation><layout></layout></citation>
         </style>
+    "#
+    );
+}
+
+#[test]
+fn wrong_tag_name() {
+    assert_snapshot_err!(
+        Style,
+        r#"
+        <stylo version="1.0.1" class="in-text">
+            <citation><layout></layout></citation>
+        </stylo>
+    "#
+    );
+    assert_snapshot_err!(
+        Locale,
+        r#"
+        <localzzz xml:lang="en-US" version="1.0.1" class="in-text">
+        </localzzz>
     "#
     );
 }

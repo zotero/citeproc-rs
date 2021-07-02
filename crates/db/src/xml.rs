@@ -141,8 +141,10 @@ fn test_name_configurations() {
                 <text macro="blah" />
             </layout>
         </citation>
-    </style>"#
-    ).unwrap();
+    </style>"#,
+        None,
+    )
+    .unwrap();
     let confs = name_configurations_middle(&sty);
     let mut conf = Name::root_default();
     conf.et_al_min = Some(10);
@@ -191,9 +193,12 @@ pub trait LocaleDatabase: StyleDatabase + HasFetcher {
 }
 
 fn default_lang(db: &dyn LocaleDatabase) -> Lang {
-    db
-        .default_lang_override()
-        .unwrap_or_else(|| db.style().default_locale.clone().unwrap_or_else(Default::default))
+    db.default_lang_override().unwrap_or_else(|| {
+        db.style()
+            .default_locale
+            .clone()
+            .unwrap_or_else(Default::default)
+    })
 }
 
 fn default_locale(db: &dyn LocaleDatabase) -> Arc<Locale> {

@@ -4,14 +4,11 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-#[macro_use]
-extern crate serde_derive;
-
 pub use citeproc;
 pub use citeproc_proc;
 
+use citeproc::prelude::string_id::Cluster as ClusterStr;
 use citeproc::prelude::*;
-use citeproc::prelude::string_id::{Cluster as ClusterStr};
 use csl::Lang;
 
 use directories::ProjectDirs;
@@ -64,11 +61,12 @@ impl Default for Format {
 pub struct TestCase {
     pub mode: Mode,
     pub format: Format,
+    pub csl_features: Option<csl::Features>,
     pub bibliography_no_sort: bool,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
-    pub clusters: Option<Vec<Cluster<Markup>>>,
+    pub clusters: Option<Vec<Cluster>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     pub processor: Processor,
 }
@@ -92,6 +90,7 @@ impl Clone for TestCase {
         TestCase {
             processor,
             mode: self.mode.clone(),
+            csl_features: self.csl_features.clone(),
             format: self.format.clone(),
             bibliography_no_sort: self.bibliography_no_sort,
             csl: self.csl.clone(),
@@ -107,11 +106,12 @@ impl TestCase {
     pub fn new(
         mode: Mode,
         format: Format,
+        csl_features: Option<csl::Features>,
         bibliography_no_sort: bool,
         csl: String,
         input: Vec<Reference>,
         result: String,
-        clusters: Option<Vec<ClusterStr<Markup>>>,
+        clusters: Option<Vec<ClusterStr>>,
         process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
     ) -> Self {
         let mut processor = {
@@ -119,6 +119,7 @@ impl TestCase {
             Processor::new(InitOptions {
                 style: &csl,
                 fetcher: Some(fet),
+                csl_features: csl_features.clone(),
                 format: format.0,
                 test_mode: true,
                 bibliography_no_sort,
@@ -126,15 +127,15 @@ impl TestCase {
             })
             .expect("could not construct processor")
         };
-        let clusters = clusters
-            .map(|vec| {
-                vec.iter()
-                    .map(|str_cluster| Cluster {
-                        id: processor.new_cluster(&str_cluster.id),
-                        cites: str_cluster.cites.clone()
-                    })
-                    .collect()
-            });
+        let clusters = clusters.map(|vec| {
+            vec.into_iter()
+                .map(|str_cluster| Cluster {
+                    id: processor.new_cluster(&str_cluster.id),
+                    cites: str_cluster.cites,
+                    mode: str_cluster.mode,
+                })
+                .collect()
+        });
         processor.reset_references(input.clone());
         Warmup::maximum().execute(&mut processor);
         TestCase {
@@ -142,6 +143,7 @@ impl TestCase {
             format,
             bibliography_no_sort,
             csl,
+            csl_features,
             input,
             result,
             clusters,
@@ -178,7 +180,11 @@ impl TestCase {
                 for refr in self.input.iter() {
                     cites.push(Cite::basic(&*refr.id));
                 }
-                clusters_auto.push(Cluster { id: self.processor.random_cluster_id(), cites });
+                clusters_auto.push(Cluster {
+                    id: self.processor.random_cluster_id(),
+                    cites,
+                    mode: None,
+                });
                 &clusters_auto
             };
 
@@ -328,9 +334,4 @@ pub fn normalise_html(strg: &str) -> String {
     let mut rep = newlines.replace_all(&rep, ">\n<${1}div").into_owned();
     rep.truncate(rep.trim_end().trim_end_matches('\n').len());
     rep
-}
-
-#[test]
-fn test_normalise() {
-    assert_eq!(normalise_html("<div>\n  <div>"), "<div><div>".to_owned());
 }

@@ -4,11 +4,11 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::attr::*;
 use crate::error::{InvalidCsl, PartitionResults, StyleError};
 use crate::style::{DateForm, DatePart, Formatting, TextCase};
 use crate::terms::*;
 use crate::variables::NumberVariable;
+use crate::{attr::*, CslError, Severity};
 use crate::{AttrChecker, FromNode, FromNodeResult, ParseInfo, SmartString};
 use fnv::FnvHashMap;
 use roxmltree::{Document, Node};
@@ -121,6 +121,18 @@ impl FromNode for Locale {
     const CHILD_DESC: &'static str = "locale";
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let lang: Option<Lang> = FromNode::from_node(node, info)?;
+
+        if node.tag_name().name() != "locale" {
+            return Err(CslError(vec![InvalidCsl {
+                severity: Severity::Error,
+                range: node.range(),
+                message: format!(
+                    "root node must be a `<locale>` node, was `<{}>` instead",
+                    node.tag_name().name()
+                ),
+                hint: "".into(),
+            }]));
+        }
 
         // TODO: one slot for each date form, avoid allocations?
         let dates_vec = node

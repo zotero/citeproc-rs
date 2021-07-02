@@ -1,0 +1,14 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::from_node::parse_as_with::<Locale>(::indoc::indoc!(r#\"\n        <localzzz xml:lang=\"en-US\" version=\"1.0.1\" class=\"in-text\">\n        </localzzz>\n    \"#),\n                                          None).expect_err(\"should have failed with errors\")"
+---
+CslError(
+    [
+        InvalidCsl {
+            severity: Error,
+            range: 0..71,
+            message: "root node must be a `<locale>` node, was `<localzzz>` instead",
+            hint: "",
+        },
+    ],
+)

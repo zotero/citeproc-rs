@@ -988,11 +988,25 @@ impl Default for Citation {
 }
 
 impl Citation {
-    pub fn group_collapsing(&self) -> Option<(&str, Option<Collapse>)> {
-        let col = self.collapse;
+    /// Implements fallback to Year when disambiguate-add-year-suffix is false.
+    pub fn collapse_fallback(&self) -> Option<Collapse> {
+        let addyearsuf = self.disambiguate_add_year_suffix;
+        match self.collapse {
+            Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged) if !addyearsuf => Some(Collapse::Year),
+            x => x,
+        }
+    }
+    /// Returns `None` if neither cite-group-delimiter nor collapse is supplied.
+    ///
+    /// Returns `Some(None)` for only cite-group-delimiter and therefore grouping but no collapsing.
+    ///
+    /// Returns `Some(Some(collapse))` for grouping AND collapsing, with a particular collapse
+    /// setting.
+    pub fn group_collapsing(&self) -> Option<Option<Collapse>> {
+        let col = self.collapse_fallback();
         match self.cite_group_delimiter.as_ref() {
-            Some(cgd) => Some((cgd.as_ref(), col)),
-            None => col.map(|c| (", ", Some(c))),
+            Some(_) => Some(col),
+            None => col.map(Some)
         }
     }
 }
@@ -1009,6 +1023,15 @@ pub struct Bibliography {
     pub subsequent_author_substitute: Option<SmartString>,
     pub subsequent_author_substitute_rule: SubsequentAuthorSubstituteRule,
     pub names_delimiter: Option<SmartString>,
+}
+
+/// cs:intext element
+#[derive(Debug, Eq, Clone, PartialEq)]
+pub struct InText {
+    pub layout: Layout,
+    pub and: Option<NameAnd>,
+    pub cite_group_delimiter: Option<SmartString>,
+    pub after_collapse_delimiter: Option<SmartString>,
 }
 
 #[derive(AsRefStr, EnumProperty, EnumString, Debug, Copy, Clone, PartialEq, Eq)]
@@ -1128,6 +1151,7 @@ pub struct Style {
     pub macros: FnvHashMap<SmartString, Vec<Element>>,
     pub citation: Citation,
     pub bibliography: Option<Bibliography>,
+    pub intext: Option<InText>,
     pub info: Info,
     pub features: Features,
     pub name_inheritance: Name,
@@ -1148,7 +1172,8 @@ impl Default for Style {
             macros: Default::default(),
             citation: Default::default(),
             features: Default::default(),
-            bibliography: Default::default(),
+            bibliography: None,
+            intext: None,
             info: Default::default(),
             name_inheritance: Default::default(),
             names_delimiter: None,
@@ -1478,15 +1503,16 @@ pub enum CslType {
     Classic,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
-    Gazette,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
-    Hearing,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
-    Regulation,
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
     Video,
+
+    /// feature = "cslm_legal_types"
+    #[strum(props(feature = "cslm_legal_types"))]
+    Gazette,
+    /// feature = cslm_legal_types
+    #[strum(props(feature = "cslm_legal_types"))]
+    Hearing,
+    /// feature = cslm_legal_types
+    #[strum(props(feature = "cslm_legal_types"))]
+    Regulation,
 }
 impl EnumGetAttribute for CslType {}

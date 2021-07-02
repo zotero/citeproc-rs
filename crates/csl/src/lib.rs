@@ -47,36 +47,59 @@ use from_node::*;
 
 #[cfg(test)]
 macro_rules! assert_snapshot_parse {
+    (Style, $xml:literal, $o:expr) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(
+            ::indoc::indoc!($xml),
+            Some($o)
+        )
+        .expect("should have parsed successfully"));
+    };
+    (Style, $xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), None)
+            .expect("should have parsed successfully"));
+    };
+    ($ty:ty, $xml:literal, $options:expr) => {
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            Some($options)
+        )
+        .expect("did not parse"));
+    };
     ($ty:ty, $xml:literal) => {
-        ::insta::assert_debug_snapshot!(
-            $crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml)).expect("did not parse")
-        );
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            None
+        )
+        .expect("did not parse"));
     };
 }
 
 #[cfg(test)]
 macro_rules! assert_snapshot_err {
+    (Style, $xml:literal, $o:expr) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(
+            ::indoc::indoc!($xml),
+            Some($o)
+        )
+        .expect_err("should have failed with errors"));
+    };
+    (Style, $xml:literal) => {
+        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml), None)
+            .expect_err("should have failed with errors"));
+    };
+    ($ty:ty, $xml:literal, $options:expr) => {
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            Some($options)
+        )
+        .expect_err("should have failed with errors"));
+    };
     ($ty:ty, $xml:literal) => {
-        ::insta::assert_debug_snapshot!($crate::from_node::parse_as::<$ty>(::indoc::indoc!($xml))
-            .expect_err("should have failed with errors"));
-    };
-}
-
-/// Easier version wherein
-#[cfg(test)]
-macro_rules! assert_snapshot_style_parse {
-    ($xml:literal) => {
-        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
-            .expect("should have parsed successfully"));
-    };
-}
-
-#[allow(unused_macros)]
-#[cfg(test)]
-macro_rules! assert_snapshot_style_err {
-    ($xml:literal) => {
-        ::insta::assert_debug_snapshot!($crate::Style::parse_for_test(::indoc::indoc!($xml))
-            .expect_err("should have failed with errors"));
+        ::insta::assert_debug_snapshot!($crate::from_node::parse_as_with::<$ty>(
+            ::indoc::indoc!($xml),
+            None
+        )
+        .expect_err("should have failed with errors"));
     };
 }
 
@@ -129,6 +152,18 @@ impl Style {
         let doc = Document::parse(xml)?;
         let node = &doc.root_element();
 
+        if node.tag_name().name() != "style" {
+            return Err(StyleError::Invalid(CslError(vec![InvalidCsl {
+                severity: Severity::Error,
+                range: node.range(),
+                message: format!(
+                    "root node must be a `<style>` node, was `<{}>` instead",
+                    node.tag_name().name()
+                ),
+                hint: "".into(),
+            }])));
+        }
+
         // We don't know which features will be enabled yet, but we get that in
         // Style::from_node_custom
         let parse_info = ParseInfo {
@@ -163,12 +198,12 @@ impl Style {
         Ok(style)
     }
     #[doc(hidden)]
-    pub fn parse_for_test(xml: &str) -> Result<Self, StyleError> {
+    pub fn parse_for_test(xml: &str, options: Option<ParseOptions>) -> Result<Self, StyleError> {
         Self::parse_with_opts(
             xml,
             ParseOptions {
                 allow_no_info: true,
-                ..Default::default()
+                ..options.unwrap_or_else(Default::default)
             },
         )
     }
@@ -378,6 +413,26 @@ impl FromNode for SortSource {
     }
 }
 
+impl FromNode for InText {
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("intext")
+    }
+    const CHILD_DESC: &'static str = "intext";
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let mut errors = Vec::new();
+        let layout = exactly_one_child::<Layout>(node, &info, &mut errors);
+        if !errors.is_empty() {
+            return Err(CslError(errors));
+        }
+        Ok(InText {
+            layout: layout?,
+            cite_group_delimiter: attribute_option(node, "cite-group-delimiter", info)?,
+            and: attribute_option(node, "and", info)?,
+            after_collapse_delimiter: attribute_option(node, "after-collapse-delimiter", info)?,
+        })
+    }
+}
+
 impl FromNode for Bibliography {
     fn select_child(node: &Node) -> bool {
         node.has_tag_name("bibliography")
@@ -435,6 +490,10 @@ impl FromNode for Bibliography {
 }
 
 impl FromNode for Layout {
+    const CHILD_DESC: &'static str = "layout";
+    fn select_child(node: &Node) -> bool {
+        node.has_tag_name("layout")
+    }
     fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
         let elements = node
             .children()
@@ -1100,7 +1159,7 @@ impl FromNode for Names {
         let mut with = None;
         let mut institution = None;
         let mut substitute = None;
-        for child in node.children().filter(|node| node.is_element()) {
+        for child in node.children().filter(|child| child.is_element()) {
             let tag_name = child.tag_name().name();
             match tag_name {
                 "name" => write_slot_once(&child, info, &mut name)?,
@@ -1115,7 +1174,7 @@ impl FromNode for Names {
                 "with" => write_slot_once(&child, info, &mut with)?,
                 "substitute" => write_slot_once(&child, info, &mut substitute)?,
                 _ => {
-                    return Err(InvalidCsl::unknown_element(&child).into());
+                    return Err(InvalidCsl::unknown_element(node, &child).into());
                 }
             }
         }
@@ -1422,14 +1481,19 @@ impl FromNode for CslCslMVersionReq {
 }
 
 impl FromNode for Features {
-    fn from_node(node: &Node, _info: &ParseInfo) -> FromNodeResult<Self> {
+    fn from_node(node: &Node, info: &ParseInfo) -> FromNodeResult<Self> {
+        let mut features = info
+            .options
+            .features
+            .clone()
+            .unwrap_or_else(Default::default);
         let input = node
             .children()
             .filter(|n| n.is_element() && n.has_tag_name("feature"))
             .filter_map(|el| el.attribute("name"));
-        read_features(input).map_err(|s| {
-            InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)).into()
-        })
+        read_features_into(input, &mut features)
+            .map_err(|s| InvalidCsl::new(node, &format!("Unrecognised feature flag `{}`", s)))?;
+        Ok(features)
     }
     fn select_child(node: &Node) -> bool {
         node.has_tag_name("features")
@@ -1452,6 +1516,12 @@ impl FromNode for Features {
 //     };
 // }
 
+fn whitelist_child_nodes(node: &Node, whitelist: &[&str], errors: &mut Vec<InvalidCsl>) {
+    node.children()
+        .filter(|x| x.is_element() && !whitelist.contains(&x.tag_name().name()))
+        .for_each(|unspec_node| errors.push(InvalidCsl::unknown_element(node, &unspec_node)))
+}
+
 impl Style {
     fn from_node_custom(
         node: &Node,
@@ -1461,11 +1531,38 @@ impl Style {
         let version_req = CslVersionReq::from_node(node, default_info)?;
         let mut errors: Vec<InvalidCsl> = Vec::new();
 
+        let whitelist_intext: &[&str] = &[
+            "macro",        // 1
+            "info",         // 2
+            "features",     // 3
+            "citation",     // 4
+            "bibliography", // 5
+            "locale",       // 6
+            "intext",       // 7
+        ];
+        let whitelist: &[&str] = &whitelist_intext[..6];
+
         // Parse features first so we know how to interpret the rest.
         let features = max_one_child::<Features>(node, default_info, &mut errors)
             .ok()
             .flatten()
-            .unwrap_or_else(|| Features::new());
+            .unwrap_or_else(|| {
+                default_info
+                    .options
+                    .features
+                    .clone()
+                    .unwrap_or_else(Default::default)
+            });
+
+        whitelist_child_nodes(
+            node,
+            if features.custom_intext {
+                whitelist_intext
+            } else {
+                whitelist
+            },
+            &mut errors,
+        );
 
         // We will check again later (for MacroMap) if there are macros without names.
         let mut throwaway = Vec::new();
@@ -1485,6 +1582,11 @@ impl Style {
 
         let citation = exactly_one_child::<Citation>(node, &parse_info, &mut errors);
         let bibliography = max_one_child::<Bibliography>(node, &parse_info, &mut errors);
+        let intext = if parse_info.features.custom_intext {
+            max_one_child::<InText>(node, &parse_info, &mut errors)
+        } else {
+            Ok(None)
+        };
 
         let mut macros = HashMap::default();
         let mut locale_overrides = FnvHashMap::default();
@@ -1515,6 +1617,7 @@ impl Style {
             info: info_block,
             citation: citation?,
             bibliography: bibliography?,
+            intext: intext?,
             class: attribute_required(node, "class", &parse_info)?,
             default_locale: attribute_option(node, "default-locale", &parse_info)?,
             name_inheritance: Name::from_node(&node, &parse_info)?,

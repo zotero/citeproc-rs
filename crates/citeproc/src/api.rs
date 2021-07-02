@@ -6,14 +6,15 @@
 
 #![allow(dead_code)]
 
+use serde::{Deserialize, Serialize};
 use super::processor::Interner;
-use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{SmartString, Cite};
 use citeproc_db::ClusterId as ClusterIdInternal;
-use std::str::FromStr;
-use std::sync::Arc;
+use citeproc_io::output::{markup::Markup, OutputFormat};
+use citeproc_io::{Cite, ClusterMode, SmartString};
 use csl::Atom;
 use fnv::FnvHashMap;
+use std::str::FromStr;
+use std::sync::Arc;
 
 /// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
 /// identifier, but `citeproc_db` is not responsible for interning those ids.
@@ -29,10 +30,48 @@ impl ClusterId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Cluster<O: OutputFormat> {
-    pub id: ClusterId,
+/// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
+///
+///
+/// ```
+/// use serde::Deserialize;
+/// use citeproc_io::{Cite, ClusterMode, output::markup::Markup};
+/// use citeproc::Cluster;
+/// let json = r#"
+/// [ { "id": 1, "cites": [{ "id": "smith" }] }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "AuthorOnly" }
+/// , { "id": 2, "cites": [{ "id": "smith" }], "mode": "SuppressAuthor" }
+/// , { "id": 3, "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "SuppressAuthor", "suppressFirst": 2 }
+/// , { "id": 4, "cites": [{ "id": "smith" }], "mode": "Composite" }
+/// , { "id": 5, "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "Composite", "suppressFirst": 2 }
+/// ]"#;
+/// let clusters: Vec<Cluster<Markup, i32>> = serde_json::from_str(json).unwrap();
+/// use pretty_assertions::assert_eq;
+/// assert_eq!(clusters, vec![
+///     Cluster { id: 1, cites: vec![Cite::basic("smith")], mode: None, },
+///     Cluster { id: 2, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::AuthorOnly), },
+///     Cluster { id: 2, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::SuppressAuthor
+///     { suppress_first: 1 }), },
+///     Cluster { id: 3, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
+///               mode: Some(ClusterMode::SuppressAuthor { suppress_first: 2 }), },
+///     Cluster { id: 4, cites: vec![Cite::basic("smith")], mode: Some(ClusterMode::Composite
+///     { infix: None, suppress_first: 1 }), },
+///     Cluster { id: 5, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
+///               mode: Some(ClusterMode::Composite { infix: None, suppress_first: 2 }), },
+/// ])
+/// ```
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(bound(
+    serialize = "Id: serde::Serialize",
+    deserialize = "Id: serde::Deserialize<'de>"
+))]
+pub struct Cluster<O: OutputFormat = Markup, Id = ClusterId> {
+    pub id: Id,
     pub cites: Vec<Cite<O>>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ClusterMode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,17 +111,16 @@ impl ReorderingError {
 pub mod string_id {
     //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
     //! consumers.
-    use citeproc_io::{SmartString, output::{OutputFormat, markup::Markup}, Cite};
-    use std::sync::Arc;
-    use super::{BibliographyUpdate, BibEntry};
+    use super::{BibEntry, BibliographyUpdate};
+    use serde::{Deserialize, Serialize};
+    use citeproc_io::{
+        output::{markup::Markup, OutputFormat},
+        SmartString,
+    };
     use fnv::FnvHashMap;
+    use std::sync::Arc;
 
-    #[derive(Deserialize, Debug, Clone, PartialEq)]
-    #[serde(bound(deserialize = ""))]
-    pub struct Cluster<O: OutputFormat> {
-        pub id: SmartString,
-        pub cites: Vec<Cite<O>>,
-    }
+    pub type Cluster<O = Markup> = super::Cluster<O, SmartString>;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub struct ClusterPosition {
@@ -114,7 +152,6 @@ pub mod string_id {
         #[error("non-existent cluster id {0:?}")]
         NonExistentCluster(SmartString),
     }
-
 }
 
 #[derive(Clone, Serialize)]
@@ -252,4 +289,3 @@ pub enum PreviewPosition<'a> {
     MarkWithZero(&'a [ClusterPosition]),
     MarkWithZeroStr(&'a [string_id::ClusterPosition]),
 }
-

@@ -11,33 +11,35 @@
 use crate::prelude::*;
 
 use crate::api::{
-    string_id,
-    BibEntry, BibliographyMeta, BibliographyUpdate, IncludeUncited, SecondFieldAlign,
-    UpdateSummary, ClusterPosition, ClusterId,
-    ReorderingError,
+    string_id, BibEntry, BibliographyMeta, BibliographyUpdate, ClusterId, ClusterPosition,
+    IncludeUncited, ReorderingError, SecondFieldAlign, UpdateSummary,
 };
 use citeproc_db::{
-    ClusterId as ClusterIdInternal,
-    CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
+    CiteData, CiteDatabaseStorage, ClusterId as ClusterIdInternal, HasFetcher,
+    LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
-use indexmap::set::IndexSet;
 use citeproc_proc::db::IrDatabaseStorage;
 use citeproc_proc::BibNumber;
+use indexmap::set::IndexSet;
 
+use parking_lot::{Mutex, RwLock};
 use salsa::{Database, Durability, SweepStrategy};
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
 use std::sync::Arc;
-use parking_lot::{RwLock, Mutex};
 
 use csl::{Lang, Style, StyleError};
 
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Reference, SmartString};
+use citeproc_io::{Cite, ClusterMode, Reference, SmartString};
 use csl::Atom;
 
-use string_interner::{DefaultSymbol, StringInterner, backend::StringBackend};
-pub(crate) type Interner = StringInterner<DefaultSymbol, StringBackend<DefaultSymbol>, std::collections::hash_map::RandomState>;
+use string_interner::{backend::StringBackend, DefaultSymbol, StringInterner};
+pub(crate) type Interner = StringInterner<
+    DefaultSymbol,
+    StringBackend<DefaultSymbol>,
+    std::collections::hash_map::RandomState,
+>;
 
 #[allow(dead_code)]
 type MarkupBuild = <Markup as OutputFormat>::Build;
@@ -102,10 +104,12 @@ impl ImplementationDetails for Processor {
     fn get_formatter(&self) -> Markup {
         self.formatter.clone()
     }
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol) -> Option<SmartString> {
+    fn lookup_interned_string(
+        &self,
+        symbol: string_interner::DefaultSymbol,
+    ) -> Option<SmartString> {
         let reader = self.interner.read();
-        reader.resolve(symbol)
-            .map(SmartString::from)
+        reader.resolve(symbol).map(SmartString::from)
     }
 }
 
@@ -126,6 +130,11 @@ impl Default for SupportedFormat {
     }
 }
 
+/// ```
+/// use citeproc::InitOptions;
+///
+/// let _opts = InitOptions { style: "...", ..Default::default() };
+/// ```
 #[derive(Clone, Default)]
 pub struct InitOptions<'a> {
     pub format: SupportedFormat,
@@ -136,6 +145,8 @@ pub struct InitOptions<'a> {
     /// Mechanism for fetching the locale you provide, if necessary.
     pub fetcher: Option<Arc<dyn LocaleFetcher>>,
 
+    pub csl_features: Option<csl::Features>,
+
     /// Disables some formalities for test suite operation
     pub test_mode: bool,
 
@@ -143,7 +154,13 @@ pub struct InitOptions<'a> {
     pub bibliography_no_sort: bool,
 
     #[doc(hidden)]
-    pub use_default_default: (),
+    pub use_default_default: private::CannotConstruct,
+}
+
+mod private {
+    #[derive(Clone, Default)]
+    #[non_exhaustive]
+    pub struct CannotConstruct;
 }
 
 impl Processor {
@@ -162,6 +179,8 @@ impl Processor {
         };
         citeproc_db::safe_default(&mut db);
         citeproc_proc::safe_default(&mut db);
+        // XXX: currently impossible to preview a cluster with a ClusterMode applied
+        db.set_cluster_mode(preview_cluster_id.raw(), None);
         db
     }
 
@@ -173,18 +192,21 @@ impl Processor {
             locale_override,
             fetcher,
             format,
+            csl_features,
             test_mode,
             bibliography_no_sort,
             use_default_default: _,
         } = options;
 
-        let fetcher = fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
+        let fetcher =
+            fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
         let mut db = Processor::safe_default(fetcher);
         db.formatter = format.make_markup();
         let style = Style::parse_with_opts(
             &style,
             csl::ParseOptions {
                 allow_no_info: test_mode,
+                features: csl_features,
                 ..Default::default()
             },
         )?;
@@ -209,7 +231,11 @@ impl Processor {
     // which will have a new revision number for each built_cluster call.
     // Probably better to have this as a real query.
     pub fn compute(&self) -> Vec<(ClusterId, Arc<SmartString>)> {
-        fn upsert_diff(into_h: &mut FnvHashMap<ClusterId, Arc<SmartString>>, id: ClusterId, built: Arc<SmartString>) -> Option<(ClusterId, Arc<SmartString>)> {
+        fn upsert_diff(
+            into_h: &mut FnvHashMap<ClusterId, Arc<SmartString>>,
+            id: ClusterId,
+            built: Arc<SmartString>,
+        ) -> Option<(ClusterId, Arc<SmartString>)> {
             let mut diff = None;
             into_h
                 .entry(id)
@@ -219,10 +245,10 @@ impl Processor {
                     }
                     *existing = built.clone();
                 })
-            .or_insert_with(|| {
-                diff = Some((id, built.clone()));
-                built
-            });
+                .or_insert_with(|| {
+                    diff = Some((id, built.clone()));
+                    built
+                });
             diff
         }
 
@@ -249,7 +275,7 @@ impl Processor {
                     let mut into_hashmap = snap.0.last_clusters.lock();
                     upsert_diff(into_hashmap.deref_mut(), ClusterId::new(cluster.id), built)
                 })
-            .filter_map(|x| x)
+                .filter_map(|x| x)
                 .collect()
         };
         #[cfg(not(feature = "rayon"))]
@@ -261,7 +287,7 @@ impl Processor {
                     let built = self.built_cluster(cluster.id);
                     upsert_diff(&mut into_hashmap, ClusterId::new(cluster.id), built)
                 })
-            .collect()
+                .collect()
         };
 
         // Run salsa GC.
@@ -314,7 +340,12 @@ impl Processor {
     ///
     /// ```
     /// use citeproc::prelude::*;
-    /// let mut processor = Processor::new();
+    /// let options = InitOptions {
+    ///     style: r#"<style class="in-text"><citation><layout></layout></citation></style>"#,
+    ///     test_mode: true,
+    ///     ..Default::default()
+    /// };
+    /// let mut processor = Processor::new(options).unwrap();
     /// let a = processor.new_cluster("cluster-A");
     /// let b = processor.new_cluster("cluster-B");
     /// processor.insert_cites(a, &[Cite::basic("nonexistent-reference")]);
@@ -367,7 +398,11 @@ impl Processor {
         let keys = self.all_keys();
         let mut keys = IndexSet::clone(&keys);
         keys.insert(refr.id.clone());
-        self.set_reference_input_with_durability(refr.id.clone(), Arc::new(refr), Durability::MEDIUM);
+        self.set_reference_input_with_durability(
+            refr.id.clone(),
+            Arc::new(refr),
+            Durability::MEDIUM,
+        );
         self.set_all_keys_with_durability(Arc::new(keys), Durability::MEDIUM);
     }
 
@@ -389,10 +424,14 @@ impl Processor {
         self.set_all_uncited_with_durability(Arc::new(db_uncited), Durability::MEDIUM);
     }
 
-    pub fn init_clusters(&mut self, clusters: Vec<Cluster<Markup>>) {
+    pub fn init_clusters(&mut self, clusters: Vec<Cluster>) {
         let mut cluster_ids = Vec::new();
         for cluster in clusters {
-            let Cluster { id: cluster_id, cites, } = cluster;
+            let Cluster {
+                id: cluster_id,
+                cites,
+                mode,
+            } = cluster;
             let mut ids = Vec::with_capacity(cites.len());
             for (index, cite) in cites.into_iter().enumerate() {
                 let cite_id = self.cite(CiteData::RealCite {
@@ -402,19 +441,25 @@ impl Processor {
                 });
                 ids.push(cite_id);
             }
-            self.set_cluster_cites(cluster_id.raw(), Arc::new(ids));
-            self.set_cluster_note_number(cluster_id.raw(), None);
-            cluster_ids.push(cluster_id.raw());
+            let raw = cluster_id.raw();
+            self.set_cluster_cites(raw, Arc::new(ids));
+            self.set_cluster_note_number(raw, None);
+            self.set_cluster_mode(raw, mode);
+            cluster_ids.push(raw);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
 
-    pub fn init_clusters_str(&mut self, clusters: Vec<string_id::Cluster<Markup>>) {
+    pub fn init_clusters_str(&mut self, clusters: Vec<string_id::Cluster>) {
         let mut cluster_ids = Vec::new();
         let interner_arc = self.interner.clone();
         let mut interner = interner_arc.write();
         for cluster in clusters {
-            let string_id::Cluster { id: cluster_id, cites, } = cluster;
+            let string_id::Cluster {
+                id: cluster_id,
+                cites,
+                mode,
+            } = cluster;
             let cluster_id = ClusterId::new(interner.get_or_intern(cluster_id));
             let mut ids = Vec::with_capacity(cites.len());
             for (index, cite) in cites.into_iter().enumerate() {
@@ -425,9 +470,11 @@ impl Processor {
                 });
                 ids.push(cite_id);
             }
-            self.set_cluster_cites(cluster_id.raw(), Arc::new(ids));
-            self.set_cluster_note_number(cluster_id.raw(), None);
-            cluster_ids.push(cluster_id.raw());
+            let raw = cluster_id.raw();
+            self.set_cluster_cites(raw, Arc::new(ids));
+            self.set_cluster_note_number(raw, None);
+            self.set_cluster_mode(raw, mode);
+            cluster_ids.push(raw);
         }
         self.set_cluster_ids(Arc::new(cluster_ids));
     }
@@ -439,6 +486,7 @@ impl Processor {
         let raw = cluster_id.raw();
         self.set_cluster_cites(raw, Arc::new(Vec::new()));
         self.set_cluster_note_number(raw, None);
+        self.set_cluster_mode(raw, None);
         let cluster_ids = self.cluster_ids();
         let cluster_ids: Vec<_> = (*cluster_ids)
             .iter()
@@ -453,25 +501,57 @@ impl Processor {
         self.remove_cluster(cid);
     }
 
-    pub fn insert_cites(&mut self, cluster_id: ClusterId, cites: &[Cite<Markup>]) {
+    fn insert_cites_only(&mut self, cluster_id: ClusterId, cites: Vec<Cite<Markup>>) {
         let cluster_ids = self.cluster_ids();
-        if !cluster_ids.contains(&cluster_id.raw()) {
+        let raw = cluster_id.raw();
+        if !cluster_ids.contains(&raw) {
             let mut new_cluster_ids = (*cluster_ids).clone();
-            new_cluster_ids.push(cluster_id.raw());
+            new_cluster_ids.push(raw);
             self.set_cluster_ids(Arc::new(new_cluster_ids));
-            self.set_cluster_note_number(cluster_id.raw(), None);
+            self.set_cluster_note_number(raw, None);
+            self.set_cluster_mode(raw, None);
         }
 
         let mut ids = Vec::new();
-        for (index, cite) in cites.iter().enumerate() {
+        for (index, cite) in cites.into_iter().enumerate() {
             let cite_id = self.cite(CiteData::RealCite {
-                cluster: cluster_id.raw(),
+                cluster: raw,
                 index: index as u32,
-                cite: Arc::new(cite.clone()),
+                cite: Arc::new(cite),
             });
             ids.push(cite_id);
         }
-        self.set_cluster_cites(cluster_id.raw(), Arc::new(ids));
+        self.set_cluster_cites(raw, Arc::new(ids));
+    }
+
+    pub fn insert_cluster(&mut self, cluster: Cluster) {
+        let Cluster {
+            id: cluster_id,
+            cites,
+            mode,
+        } = cluster;
+        self.insert_cites_only(cluster_id, cites);
+        self.set_cluster_mode(cluster_id.raw(), mode);
+    }
+
+    fn intern_cluster(&mut self, cluster: string_id::Cluster) -> Cluster {
+        let string_id::Cluster { id, cites, mode } = cluster;
+        let interned = self.intern_cluster_id(id);
+        Cluster {
+            id: interned,
+            cites,
+            mode,
+        }
+    }
+
+    pub fn insert_cluster_str(&mut self, cluster: string_id::Cluster) {
+        let cluster = self.intern_cluster(cluster);
+        self.insert_cluster(cluster)
+    }
+
+    pub fn insert_cites(&mut self, cluster_id: ClusterId, cites: &[Cite<Markup>]) {
+        let cites = cites.to_owned();
+        self.insert_cites_only(cluster_id, cites);
     }
 
     pub fn insert_cites_str(&mut self, cluster_id: &str, cites: &[Cite<Markup>]) {
@@ -588,12 +668,14 @@ impl Processor {
             .map(|(k, v)| BibEntry {
                 id: k.clone(),
                 value: if v.is_empty() {
-                    Arc::new(SmartString::from("[CSL STYLE ERROR: reference with no printed form.]"))
+                    Arc::new(SmartString::from(
+                        "[CSL STYLE ERROR: reference with no printed form.]",
+                    ))
                 } else {
                     v.clone()
                 },
             })
-        .collect()
+            .collect()
     }
 
     pub fn get_reference(&self, ref_id: Atom) -> Option<Arc<Reference>> {
@@ -643,6 +725,7 @@ struct OneClusterState {
     cluster_note_number: Option<ClusterNumber>,
     /// The entry for my_id
     cluster_cites: Arc<Vec<CiteId>>,
+    cluster_mode: Option<ClusterMode>,
 }
 
 impl Processor {
@@ -654,6 +737,7 @@ impl Processor {
                 my_id: rc,
                 cluster_note_number: self.cluster_note_number(rc.raw()),
                 cluster_cites: self.cluster_cites(rc.raw()),
+                cluster_mode: self.cluster_mode(rc.raw()),
             });
         ClusterState {
             cluster_ids,
@@ -670,12 +754,15 @@ impl Processor {
         } = state;
         if let Some(OneClusterState {
             my_id,
-            cluster_note_number,
             cluster_cites,
+            cluster_note_number,
+            cluster_mode,
         }) = relevant_one
         {
-            self.set_cluster_note_number(my_id.raw(), cluster_note_number);
-            self.set_cluster_cites(my_id.raw(), cluster_cites);
+            let raw = my_id.raw();
+            self.set_cluster_cites(raw, cluster_cites);
+            self.set_cluster_note_number(raw, cluster_note_number);
+            self.set_cluster_mode(raw, cluster_mode);
         }
         if let Some(old_pos) = old_positions {
             for (id, num) in old_pos {
@@ -716,18 +803,19 @@ impl Processor {
                 let positions: Vec<_> = positions
                     .into_iter()
                     .map(|x| {
-                        let cid = x.id
-                            .as_ref()
-                            .map(|id| self.intern_cluster_id(id))
-                            .unwrap_or(self.preview_cluster_id);
-                        ClusterPosition { id: cid, note: x.note }
+                        let cid =
+                            x.id.as_ref()
+                                .map(|id| self.intern_cluster_id(id))
+                                .unwrap_or(self.preview_cluster_id);
+                        ClusterPosition {
+                            id: cid,
+                            note: x.note,
+                        }
                     })
                     .collect();
                 self.preview_marked_init(&positions)?
             }
-            PreviewPosition::MarkWithZero(positions) => {
-                self.preview_marked_init(positions)?
-            }
+            PreviewPosition::MarkWithZero(positions) => self.preview_marked_init(positions)?,
         };
         self.insert_cites(id, cites);
         let formatter = format
@@ -742,15 +830,20 @@ impl Processor {
         &mut self,
         positions: &[ClusterPosition],
     ) -> Result<(ClusterId, ClusterState), ReorderingError> {
-        if positions.iter().filter(|pos| pos.id == self.preview_cluster_id).count() != 1 {
+        if positions
+            .iter()
+            .filter(|pos| pos.id == self.preview_cluster_id)
+            .count()
+            != 1
+        {
             return Err(ReorderingError::DidNotSupplyZeroPosition);
         }
-        let mut vec = Vec::new();
+        let mut old_positions = Vec::new();
         // Save state first so we don't clobber its cluster_ids store
         let mut state = self.save_cluster_state(None);
-        self.set_cluster_order_inner(positions.iter(), |id, num| vec.push((id, num)))?;
-        vec.push((self.preview_cluster_id, None));
-        state.old_positions = Some(vec);
+        self.set_cluster_order_inner(positions.iter(), |id, num| old_positions.push((id, num)))?;
+        old_positions.push((self.preview_cluster_id, None));
+        state.old_positions = Some(old_positions);
         Ok((self.preview_cluster_id, state))
     }
 }
@@ -781,27 +874,35 @@ impl Processor {
     /// them will all have the same first-reference-note-number if FRNN is used in later cites.
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
-    pub fn set_cluster_order(&mut self, positions: &[ClusterPosition]) -> Result<(), ReorderingError> {
+    pub fn set_cluster_order(
+        &mut self,
+        positions: &[ClusterPosition],
+    ) -> Result<(), ReorderingError> {
         self.set_cluster_order_inner(positions.iter(), |_, _| {})
     }
 
-    pub fn set_cluster_order_str(&mut self, positions: &[string_id::ClusterPosition]) -> Result<(), string_id::ReorderingError> {
-        let positions = positions.iter()
-            .map({
-                // Move a clone of the arc into the iterator.
-                let interner = self.interner.clone();
-                let preview_id = self.preview_cluster_id;
-                move |pos| {
-                    let mut interner = interner.write();
-                    let string_id::ClusterPosition { id, note } = pos;
-                    let interned_id = id
-                        .as_ref()
-                        .map(|id| interner.get_or_intern(id))
-                        .map(ClusterId::new)
-                        .unwrap_or(preview_id);
-                    ClusterPosition { id: interned_id, note: *note }
+    pub fn set_cluster_order_str(
+        &mut self,
+        positions: &[string_id::ClusterPosition],
+    ) -> Result<(), string_id::ReorderingError> {
+        let positions = positions.iter().map({
+            // Move a clone of the arc into the iterator.
+            let interner = self.interner.clone();
+            let preview_id = self.preview_cluster_id;
+            move |pos| {
+                let mut interner = interner.write();
+                let string_id::ClusterPosition { id, note } = pos;
+                let interned_id = id
+                    .as_ref()
+                    .map(|id| interner.get_or_intern(id))
+                    .map(ClusterId::new)
+                    .unwrap_or(preview_id);
+                ClusterPosition {
+                    id: interned_id,
+                    note: *note,
                 }
-            });
+            }
+        });
         self.set_cluster_order_inner(positions, |_, _| {})
             .map_err(|e| {
                 let reader = self.interner.read();

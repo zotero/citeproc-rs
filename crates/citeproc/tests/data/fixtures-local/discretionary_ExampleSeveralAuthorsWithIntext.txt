@@ -1,0 +1,137 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+..[0] (<i>Fisher</i> &#38; <i>Ury</i> 1991)
+>>[1] Fisher and Ury (1991)
+<<===== RESULT =====<<
+
+
+>>===== CITATIONS =====>>
+[
+    [
+        {
+            "citationID": "CITATION-1",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "noteIndex": 0
+            }
+        },
+        [],
+        []
+    ],
+    [
+        {
+            "citationID": "CITATION-2",
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ],
+            "properties": {
+                "mode": "composite",
+                "noteIndex": 0
+            }
+        },
+        [["CITATION-1", 0]],
+        []
+    ]
+]
+<<===== CITATIONS =====<<
+
+
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="in-text"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation collapse="year">
+    <layout prefix="(" suffix=")" delimiter="; ">
+      <group delimiter=" ">
+        <names variable="author">
+          <name form="short" font-style="italic" and="symbol"/>
+        </names>
+        <date variable="issued" date-parts="year" form="text"/>
+      </group>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout prefix="(" suffix=")" delimiter="; ">
+      <group delimiter=" ">
+        <group delimiter=", ">
+          <names variable="author">
+            <name form="short" and="symbol"/>
+          </names>
+          <text variable="title"/>
+          <date variable="issued" date-parts="year" form="text" prefix="(" suffix=")"/>
+        </group>
+      </group>
+    </layout>
+  </bibliography>
+  <intext>
+    <layout>
+      <names variable="author">
+        <name and="text" form="short"/>
+      </names>
+    </layout>
+  </intext>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+	{
+        "id": "ITEM-1",
+		"type": "book",
+		"multi": {
+			"main": {},
+			"_keys": {}
+		},
+		"title": "Getting to Yes: Negotiating Agreement Without Giving In",
+		"publisher": "Penguin Books",
+		"edition": "Second edition",
+		"source": "Amazon.com",
+		"shortTitle": "Getting to Yes",
+		"author": [
+			{
+				"family": "Fisher",
+				"given": "Roger",
+				"multi": {
+					"_key": {}
+				}
+			},
+			{
+				"family": "Ury",
+				"given": "William",
+				"multi": {
+					"_key": {}
+				}
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"1991",
+					1,
+					31
+				]
+			]
+		}
+	}
+]
+<<===== INPUT =====<<

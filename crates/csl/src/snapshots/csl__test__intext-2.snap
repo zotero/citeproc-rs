@@ -1,0 +1,148 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"<style class=\"in-text\">\n            <citation><layout></layout></citation>\n            <intext><layout><text variable=\"title\" /></layout></intext>\n        </style>\"#),\n                             Some(options.clone())).expect(\"should have parsed successfully\")"
+---
+Style {
+    class: InText,
+    macros: {},
+    citation: Citation {
+        disambiguate_add_names: false,
+        disambiguate_add_givenname: false,
+        givenname_disambiguation_rule: ByCite,
+        disambiguate_add_year_suffix: false,
+        layout: Layout {
+            affixes: None,
+            formatting: None,
+            delimiter: None,
+            elements: [],
+            locale: [],
+        },
+        name_inheritance: Name {
+            and: None,
+            delimiter: None,
+            delimiter_precedes_et_al: None,
+            delimiter_precedes_last: None,
+            et_al_min: None,
+            et_al_use_first: None,
+            et_al_use_last: None,
+            et_al_subsequent_min: None,
+            et_al_subsequent_use_first: None,
+            form: None,
+            initialize: None,
+            initialize_with: None,
+            name_as_sort_order: None,
+            sort_separator: None,
+            formatting: None,
+            affixes: None,
+            name_part_given: None,
+            name_part_family: None,
+        },
+        names_delimiter: None,
+        near_note_distance: 5,
+        sort: None,
+        cite_group_delimiter: None,
+        year_suffix_delimiter: None,
+        after_collapse_delimiter: None,
+        collapse: None,
+    },
+    bibliography: None,
+    intext: Some(
+        InText {
+            layout: Layout {
+                affixes: None,
+                formatting: None,
+                delimiter: None,
+                elements: [
+                    Text(
+                        TextElement {
+                            source: Variable(
+                                Ordinary(
+                                    Title,
+                                ),
+                                Long,
+                            ),
+                            formatting: None,
+                            affixes: None,
+                            quotes: false,
+                            strip_periods: false,
+                            text_case: None,
+                            display: None,
+                        },
+                    ),
+                ],
+                locale: [],
+            },
+            and: None,
+            cite_group_delimiter: None,
+            after_collapse_delimiter: None,
+        },
+    ),
+    info: Info {
+        id: Identifier(
+            "default",
+        ),
+        updated: 2000-01-01T00:00:00+00:00,
+        title: LocalizedString {
+            value: "",
+            lang: None,
+        },
+        title_short: None,
+        rights: None,
+        summary: None,
+        parent: None,
+        links: [],
+        citation_format: None,
+        categories: [],
+        issn: None,
+        eissn: None,
+        issnl: None,
+    },
+    features: Features {
+        "custom_intext",
+    },
+    name_inheritance: Name {
+        and: None,
+        delimiter: None,
+        delimiter_precedes_et_al: None,
+        delimiter_precedes_last: None,
+        et_al_min: None,
+        et_al_use_first: None,
+        et_al_use_last: None,
+        et_al_subsequent_min: None,
+        et_al_subsequent_use_first: None,
+        form: None,
+        initialize: None,
+        initialize_with: None,
+        name_as_sort_order: None,
+        sort_separator: None,
+        formatting: None,
+        affixes: None,
+        name_part_given: None,
+        name_part_family: None,
+    },
+    names_delimiter: None,
+    locale_overrides: {},
+    default_locale: None,
+    version_req: CslVersionReq(
+        VersionReq {
+            ranges: [
+                Range {
+                    predicates: [
+                        Predicate {
+                            op: GtEq,
+                            major: 0,
+                            minor: 0,
+                            patch: 0,
+                            pre: [],
+                        },
+                    ],
+                    compat: Cargo,
+                },
+            ],
+            compat: Cargo,
+        },
+    ),
+    page_range_format: None,
+    demote_non_dropping_particle: DisplayAndSort,
+    initialize_with_hyphen: true,
+}

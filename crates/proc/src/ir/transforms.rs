@@ -1,7 +1,9 @@
+use crate::cluster::CiteInCluster;
 use crate::disamb::names::{replace_single_child, NameIR};
+use crate::helpers::slice_group_by::group_by_mut;
 use crate::names::NameToken;
 use crate::prelude::*;
-use citeproc_io::Cite;
+use citeproc_io::{CiteMode, ClusterMode};
 use std::mem;
 use std::sync::Arc;
 
@@ -9,10 +11,10 @@ use std::sync::Arc;
 // capitalize start of cluster //
 /////////////////////////////////
 
-impl<O: OutputFormat> IR<O> {
-    pub fn capitalize_first_term_of_cluster(root: NodeId, arena: &mut IrArena<O>, fmt: &O) {
-        if let Some(node) = IR::find_term_rendered_first(root, arena) {
-            let trf = match arena.get_mut(node).unwrap().get_mut().0 {
+impl<O: OutputFormat> IrTree<O> {
+    pub fn capitalize_first_term_of_cluster(&mut self, fmt: &O) {
+        if let Some(node) = self.tree_ref().find_term_rendered_first() {
+            let trf = match self.arena.get_mut(node).unwrap().get_mut().0 {
                 IR::Rendered(Some(CiteEdgeData::Term(ref mut b)))
                 | IR::Rendered(Some(CiteEdgeData::LocatorLabel(ref mut b)))
                 | IR::Rendered(Some(CiteEdgeData::FrnnLabel(ref mut b))) => b,
@@ -27,17 +29,21 @@ impl<O: OutputFormat> IR<O> {
             );
         }
     }
+}
+
+impl<O: OutputFormat> IrTreeRef<'_, O> {
     // Gotta find a a CiteEdgeData::Term/LocatorLabel/FrnnLabel
     // (the latter two are also terms, but a different kind for disambiguation).
-    fn find_term_rendered_first(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
-        match arena.get(node)?.get().0 {
+    fn find_term_rendered_first(&self) -> Option<NodeId> {
+        match self.arena.get(self.node)?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Term(_)))
             | IR::Rendered(Some(CiteEdgeData::LocatorLabel(_)))
-            | IR::Rendered(Some(CiteEdgeData::FrnnLabel(_))) => Some(node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => node
-                .children(arena)
+            | IR::Rendered(Some(CiteEdgeData::FrnnLabel(_))) => Some(self.node),
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => self
+                .node
+                .children(self.arena)
                 .next()
-                .and_then(|child| IR::find_term_rendered_first(child, arena)),
+                .and_then(|child| self.with_node(child).find_term_rendered_first()),
             _ => None,
         }
     }
@@ -138,90 +144,147 @@ impl<O: OutputFormat> IR<O> {
 // Cite Grouping & Collapsing //
 ////////////////////////////////
 
-impl<O: OutputFormat> IR<O> {
-    pub fn first_name_block(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
-        match arena.get(node)?.get().0 {
-            IR::Name(_) => Some(node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
-                // assumes it's the first one that appears
-                node.children(arena)
-                    .find_map(|child| IR::first_name_block(child, arena))
-            }
-            _ => None,
-        }
-    }
-
-    fn find_locator(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
-        match arena.get(node)?.get().0 {
-            IR::Rendered(Some(CiteEdgeData::Locator(_))) => Some(node),
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
+    pub fn find_locator(&self) -> Option<NodeId> {
+        match self.get_node()?.get().0 {
+            IR::Rendered(Some(CiteEdgeData::Locator(_))) => Some(self.node),
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
                 // Search backwards because it's likely to be near the end
-                node.reverse_children(arena)
-                    .find_map(|child| IR::find_locator(child, arena))
+                self.reverse_children()
+                    .find_map(|child| child.find_locator())
             }
             _ => None,
         }
     }
 
-    fn find_first_year(node: NodeId, arena: &IrArena<O>) -> Option<NodeId> {
-        match &arena.get(node)?.get().0 {
-            IR::Rendered(Some(CiteEdgeData::Year(_b))) => Some(node),
-            IR::Seq(_) | IR::ConditionalDisamb(_) => node
-                .children(arena)
-                .find_map(|child| IR::find_first_year(child, arena)),
+    pub fn first_names_block(&self) -> Option<NodeId> {
+        match self.get_node()?.get().0 {
+            IR::Name(_) => Some(self.node),
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
+                // assumes it's the first one that appears
+                self.children().find_map(|child| child.first_names_block())
+            }
             _ => None,
         }
     }
 
-    pub fn find_year_suffix(node: NodeId, arena: &IrArena<O>) -> Option<u32> {
-        IR::has_explicit_year_suffix(node, arena)
-            .or_else(|| IR::has_implicit_year_suffix(node, arena))
+    fn find_first_year(&self) -> Option<NodeId> {
+        match &self.get_node()?.get().0 {
+            IR::Rendered(Some(CiteEdgeData::Year(_b))) => Some(self.node),
+            IR::Seq(_) | IR::ConditionalDisamb(_) | IR::Substitute => {
+                self.children().find_map(|child| child.find_first_year())
+            }
+            _ => None,
+        }
     }
 
-    fn find_first_year_and_suffix(node: NodeId, arena: &IrArena<O>) -> Option<(NodeId, u32)> {
+    pub fn has_explicit_year_suffix(&self) -> Option<u32> {
+        match self.get_node()?.get().0 {
+            IR::YearSuffix(YearSuffix {
+                hook: YearSuffixHook::Explicit(_),
+                suffix_num: Some(n),
+                ..
+            }) if !self.is_empty() => Some(n),
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
+                // assumes it's the first one that appears
+                self.children()
+                    .find_map(|child| child.has_explicit_year_suffix())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn has_implicit_year_suffix(&self) -> Option<u32> {
+        match self.get_node()?.get().0 {
+            IR::YearSuffix(YearSuffix {
+                hook: YearSuffixHook::Plain,
+                suffix_num: Some(n),
+                ..
+            }) if !self.is_empty() => Some(n),
+            IR::ConditionalDisamb(_) | IR::Seq(_) | IR::Substitute => {
+                // assumes it's the first one that appears
+                self.children()
+                    .find_map(|child| child.has_implicit_year_suffix())
+            }
+            _ => None,
+        }
+    }
+
+    /// Rendered(None), empty YearSuffix or empty seq
+    pub fn is_empty(&self) -> bool {
+        let me = match self.get_node() {
+            Some(x) => x.get(),
+            None => return false,
+        };
+        match &me.0 {
+            IR::Rendered(opt) => opt.is_none(),
+            IR::Seq(_)
+            | IR::Name(_)
+            | IR::ConditionalDisamb(_)
+            | IR::YearSuffix(_)
+            | IR::Substitute => self.children().next().is_none(),
+            IR::NameCounter(_nc) => false,
+        }
+    }
+
+    pub fn find_year_suffix(&self) -> Option<u32> {
+        self.has_explicit_year_suffix()
+            .or_else(|| self.has_implicit_year_suffix())
+    }
+
+    pub fn find_first_year_and_suffix(&self) -> Option<(NodeId, u32)> {
         // if let Some(fy) = IR::find_first_year(node, arena) {
         //     debug!("fy, {:?}", arena.get(fy).unwrap().get().0);
         // }
         // if let Some(ys) = IR::find_year_suffix(node, arena) {
         //     debug!("ys, {:?}", ys);
         // }
-        Some((
-            IR::find_first_year(node, arena)?,
-            IR::find_year_suffix(node, arena)?,
-        ))
+        Some((self.find_first_year()?, self.find_year_suffix()?))
+    }
+}
+
+impl<O: OutputFormat> IrTree<O> {
+    pub fn suppress_names(&mut self) {
+        if let Some(fnb) = self.tree_ref().first_names_block() {
+            // TODO: check interaction of this with GroupVars of the parent seq
+            fnb.remove_subtree(&mut self.arena);
+        }
     }
 
+    pub fn suppress_year(&mut self) {
+        let has_explicit = self.tree_ref().has_explicit_year_suffix().is_some();
+        let has_implicit = self.tree_ref().has_implicit_year_suffix().is_some();
+        if !has_explicit && !has_implicit {
+            return;
+        }
+        self.mutable().suppress_first_year(has_explicit);
+    }
+}
+
+impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     /// Rest of the name: "if it has a year suffix"
-    fn suppress_first_year(
-        node: NodeId,
-        arena: &mut IrArena<O>,
-        has_explicit: bool,
-    ) -> Option<NodeId> {
-        match arena.get(node)?.get().0 {
+    fn suppress_first_year(&mut self, has_explicit: bool) -> Option<NodeId> {
+        match self.root_mut()?.get().0 {
             IR::Rendered(Some(CiteEdgeData::Year(_))) => {
-                arena.get_mut(node)?.get_mut().0 = IR::Rendered(None);
-                Some(node)
+                self.root_mut()?.get_mut().0 = IR::Rendered(None);
+                Some(self.node)
             }
-            IR::ConditionalDisamb(_) => {
-                // Not sure why this result is thrown away
-                IR::suppress_first_year(node, arena, has_explicit);
-                None
-            }
-            IR::Seq(_) => {
-                let mut iter = node.children(arena).fuse();
+            IR::ConditionalDisamb(_) => None,
+            IR::Seq(_) | IR::Substitute => {
+                let mut iter = self.node.children(self.arena).fuse();
                 let first_two = (iter.next(), iter.next());
                 // Check for the exact explicit year suffix IR output
                 let mut found = if iter.next().is_some() {
                     None
                 } else if let (Some(first), Some(second)) = first_two {
-                    match arena.get(second).unwrap().get() {
+                    match self.arena.get(second).unwrap().get() {
                         (IR::YearSuffix(_), GroupVars::Unresolved) if has_explicit => {
-                            IR::suppress_first_year(first, arena, has_explicit)
+                            self.with_node(first, |f| f.suppress_first_year(has_explicit))
                         }
                         (IR::YearSuffix(_), GroupVars::Important)
-                            if !has_explicit && !IR::is_empty(second, arena) =>
+                            if !has_explicit && !self.tree_at_node(second).is_empty() =>
                         {
-                            IR::suppress_first_year(first, arena, has_explicit)
+                            self.with_node(first, |f| f.suppress_first_year(has_explicit))
                         }
                         _ => None,
                     }
@@ -231,9 +294,9 @@ impl<O: OutputFormat> IR<O> {
 
                 // Otherwise keep looking in subtrees etc
                 if found.is_none() {
-                    let child_ids: Vec<_> = node.children(arena).collect();
+                    let child_ids: Vec<_> = self.node.children(self.arena).collect();
                     for child in child_ids {
-                        found = IR::suppress_first_year(child, arena, has_explicit);
+                        found = self.with_node(child, |ch| ch.suppress_first_year(has_explicit));
                         if found.is_some() {
                             break;
                         }
@@ -244,490 +307,261 @@ impl<O: OutputFormat> IR<O> {
             _ => None,
         }
     }
+}
 
-    pub fn has_implicit_year_suffix(node: NodeId, arena: &IrArena<O>) -> Option<u32> {
-        match arena.get(node)?.get().0 {
-            IR::YearSuffix(YearSuffix {
-                hook: YearSuffixHook::Plain,
-                suffix_num: Some(n),
-                ..
-            }) if !IR::is_empty(node, arena) => Some(n),
-
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
-                // assumes it's the first one that appears
-                node.children(arena)
-                    .find_map(|child| IR::has_implicit_year_suffix(child, arena))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn has_explicit_year_suffix(node: NodeId, arena: &IrArena<O>) -> Option<u32> {
-        match arena.get(node)?.get().0 {
-            IR::YearSuffix(YearSuffix {
-                hook: YearSuffixHook::Explicit(_),
-                suffix_num: Some(n),
-                ..
-            }) if !IR::is_empty(node, arena) => Some(n),
-
-            IR::ConditionalDisamb(_) | IR::Seq(_) => {
-                // assumes it's the first one that appears
-                node.children(arena)
-                    .find_map(|child| IR::has_explicit_year_suffix(child, arena))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn suppress_names(node: NodeId, arena: &mut IrArena<O>) {
-        if let Some(fnb) = IR::first_name_block(node, arena) {
+impl<O: OutputFormat> IrTree<O> {
+    pub fn suppress_author(&mut self) -> Option<NodeId> {
+        if let Some(node) = self.tree_ref().leading_names_block_or_title(false) {
             // TODO: check interaction of this with GroupVars of the parent seq
-            fnb.remove_subtree(arena);
+            node.detach(&mut self.arena);
+            Some(node)
+        } else {
+            None
         }
     }
-
-    pub fn suppress_year(node: NodeId, arena: &mut IrArena<O>) {
-        let has_explicit = IR::has_explicit_year_suffix(node, arena).is_some();
-        let has_implicit = IR::has_implicit_year_suffix(node, arena).is_some();
-        if !has_explicit && !has_implicit {
-            return;
+    pub fn author_only_strip_formatting(
+        &mut self,
+        suppress_author_orig_node: NodeId,
+        cite_pos: csl::Position,
+        fmt: &O,
+    ) -> Option<()> {
+        let arena = &mut self.arena;
+        match &mut arena.get_mut(suppress_author_orig_node)?.get_mut().0 {
+            IR::Seq(seq) if seq.formatting.is_some() => {
+                seq.formatting = None;
+            }
+            IR::Name(nir) => {
+                log::debug!("NIR found, stripping formatting");
+                if let Some(rebuilt) = nir.strip_formatting(fmt, cite_pos) {
+                    log::debug!("strip formatting rebuilt as {:?}", rebuilt);
+                    let label_after_name = nir
+                        .names_inheritance
+                        .label
+                        .as_ref()
+                        .map_or(false, |l| l.after_name);
+                    let built_label = nir.built_label.clone();
+                    let new_node = NameIR::rendered_ntbs_to_node(
+                        rebuilt,
+                        arena,
+                        false,
+                        label_after_name,
+                        built_label.as_ref(),
+                    );
+                    replace_single_child(suppress_author_orig_node, new_node, arena);
+                }
+            }
+            _ => {}
         }
-        IR::suppress_first_year(node, arena, has_explicit);
+        Some(())
     }
 }
 
-impl<O: OutputFormat<Output = SmartString>> IR<O> {
-    pub fn collapse_to_cnum(node: NodeId, arena: &IrArena<O>, fmt: &O) -> Option<u32> {
-        match &arena.get(node)?.get().0 {
-            IR::Rendered(Some(CiteEdgeData::CitationNumber(build))) => {
-                // TODO: just get it from the database
-                fmt.output(build.clone(), false).parse().ok()
-            }
-            IR::ConditionalDisamb(_) => node
-                .children(arena)
-                .find_map(|child| IR::collapse_to_cnum(child, arena, fmt)),
-            IR::Seq(_) => {
-                // assumes it's the first one that appears
-                if node.children(arena).count() != 1 {
-                    None
-                } else {
-                    node.children(arena)
-                        .next()
-                        .and_then(|child| IR::collapse_to_cnum(child, arena, fmt))
+impl<O: OutputFormat> NameIR<O> {
+    fn strip_formatting(&mut self, fmt: &O, cite_pos: csl::Position) -> Option<Vec<O::Build>> {
+        use core::mem::replace;
+        let old_ni = replace(&mut self.names_inheritance.formatting, None)
+            .or(replace(&mut self.names_inheritance.name.formatting, None))
+            .or(self
+                .names_inheritance
+                .name
+                .name_part_family
+                .as_mut()
+                .and_then(|x| replace(&mut x.formatting, None)))
+            .or(self
+                .names_inheritance
+                .name
+                .name_part_given
+                .as_mut()
+                .and_then(|x| replace(&mut x.formatting, None)));
+        for dn in self.disamb_names.iter_mut() {
+            match dn {
+                DisambNameRatchet::Person(pdnr) => {
+                    pdnr.data.el = self.names_inheritance.name.clone();
                 }
+                _ => {}
+            }
+        }
+        log::debug!(
+            "NameIR::strip_formatting found some formatting to remove ({:?}), rebuilding names block",
+            old_ni
+        );
+        if old_ni.is_some() {
+            let rebuilt = self.intermediate_custom(fmt, cite_pos, false, None, None)?;
+            Some(rebuilt)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
+    /// For author-only
+    ///
+    /// Returns the new node that should be considered the root.
+    ///
+    /// This strips away any formatting defined on any parent seq nodes, but that is acceptable; if
+    /// a style wishes to have text appear formatted even in an in-text reference, then it should
+    /// define an `<intext>` node.
+    pub fn leading_names_block_or_title(&self, in_substitute: bool) -> Option<NodeId> {
+        match self.get_node()?.get().0 {
+
+            // Name block? Yes.
+            IR::Name(_) => Some(self.node),
+
+            // to filter down to titles and match the text of the citeproc-js docs (2021-07-02)
+            // this would need to be IR::Rendered(Some(CiteEdgeData::Title(_))) => Some(self.node)
+            // however citeproc-js appears to allow any content rendered as a substitute of any
+            // names block to be extracted as author-only
+            //
+            // So we will simply return the Substitute node, which is returned by <Names as Proc>
+            // in place of a Seq of NameIR nodes.
+            IR::Substitute => Some(self.node),
+
+            IR::ConditionalDisamb(_) | IR::Seq(_) => {
+                // it must be at the start of the cite
+                self.children()
+                    .filter(|x| !x.is_empty())
+                    .nth(0)
+                    .and_then(|child| child.leading_names_block_or_title(in_substitute))
             }
             _ => None,
         }
     }
 }
 
-use crate::db::IrGen;
-use csl::Collapse;
-use std::collections::HashMap;
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct CnumIx {
-    pub cnum: u32,
-    pub ix: usize,
-    pub force_single: bool,
-}
-
-impl CnumIx {
-    fn new(c: u32, ix: usize) -> Self {
-        CnumIx {
-            cnum: c,
-            ix,
-            force_single: false,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum RangePiece {
-    /// If the length of the range is only two, it should be rendered with a comma anyway
-    Range(CnumIx, CnumIx),
-    Single(CnumIx),
-}
-
-impl RangePiece {
-    /// Return value is the previous value, to be emitted, if the next it couldn't be appended
-    fn attempt_append(&mut self, nxt: CnumIx) -> Option<RangePiece> {
-        *self = match self {
-            _ if nxt.force_single => return Some(std::mem::replace(self, RangePiece::Single(nxt))),
-            RangePiece::Single(prv) if prv.cnum == nxt.cnum - 1 => RangePiece::Range(*prv, nxt),
-            RangePiece::Range(_, end) if end.cnum == nxt.cnum - 1 => {
-                *end = nxt;
-                return None;
-            }
-            _ => return Some(std::mem::replace(self, RangePiece::Single(nxt))),
-        };
-        return None;
-    }
-}
-
-#[test]
-fn range_append() {
-    let mut range = RangePiece::Single(CnumIx::new(1, 1));
-    let emit = range.attempt_append(CnumIx::new(2, 2));
-    assert_eq!(
-        (range, emit),
-        (
-            RangePiece::Range(CnumIx::new(1, 1), CnumIx::new(2, 2)),
-            None
-        )
-    );
-    let mut range = RangePiece::Single(CnumIx::new(1, 1));
-    let emit = range.attempt_append(CnumIx::new(3, 2));
-    assert_eq!(
-        (range, emit),
-        (
-            RangePiece::Single(CnumIx::new(3, 2)),
-            Some(RangePiece::Single(CnumIx::new(1, 1)))
-        )
-    );
-}
-
-pub fn collapse_ranges(nums: &[CnumIx]) -> Vec<RangePiece> {
-    let mut pieces = Vec::new();
-    if let Some(init) = nums.first() {
-        let mut wip = RangePiece::Single(*init);
-        for &num in &nums[1..] {
-            if let Some(emit) = wip.attempt_append(num) {
-                pieces.push(emit);
-            }
-        }
-        pieces.push(wip);
-    }
-    pieces
-}
-
-#[test]
-fn range_collapse() {
-    let s = |cnum: u32| CnumIx::new(cnum, cnum as usize);
-    assert_eq!(
-        collapse_ranges(&[s(1), s(2), s(3)]),
-        vec![RangePiece::Range(s(1), s(3))]
-    );
-    assert_eq!(
-        collapse_ranges(&[s(1), s(2), CnumIx::new(4, 3)]),
-        vec![
-            RangePiece::Range(s(1), s(2)),
-            RangePiece::Single(CnumIx::new(4, 3))
-        ]
-    );
-}
-
-type MarkupBuild = <Markup as OutputFormat>::Build;
-pub struct Unnamed3<O: OutputFormat> {
-    pub cite: Arc<Cite<O>>,
-    pub cnum: Option<u32>,
-    pub gen4: Arc<IrGen>,
-    /// So we can look for punctuation at the end and use the format's quoting abilities
-    pub prefix_parsed: Option<MarkupBuild>,
-    /// First of a group of cites with the same name
-    pub is_first: bool,
-    /// Subsequent in a group of cites with the same name
-    pub should_collapse: bool,
-    /// First of a group of cites with the same year, all with suffixes
-    /// (same name implied)
-    pub first_of_ys: bool,
-    /// Subsequent in a group of cites with the same year, all with suffixes
-    /// (same name implied)
-    pub collapse_ys: bool,
-
-    pub year_suffix: Option<u32>,
-
-    /// Ranges of year suffixes (not alphabetic, in its base u32 form)
-    pub collapsed_year_suffixes: Vec<RangePiece>,
-
-    /// Ranges of citation numbers
-    pub collapsed_ranges: Vec<RangePiece>,
-
-    /// Tagging removed cites is cheaper than memmoving the rest of the Vec
-    pub vanished: bool,
-
-    pub has_locator: bool,
-}
-
-use std::fmt::{Debug, Formatter};
-
-impl<O: OutputFormat<Output = SmartString>> Debug for Unnamed3<O> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let fmt = &Markup::default();
-        f.debug_struct("Unnamed3")
-            .field("cite", &self.cite)
-            .field("cnum", &self.cnum)
-            .field(
-                "gen4",
-                &IR::flatten(self.gen4.root, &self.gen4.arena, fmt, None)
-                    .map(|x| fmt.output(x, false)),
-            )
-            .field("prefix_parsed", &self.prefix_parsed)
-            .field("has_locator", &self.has_locator)
-            .field("is_first", &self.is_first)
-            .field("should_collapse", &self.should_collapse)
-            .field("first_of_ys", &self.first_of_ys)
-            .field("collapse_ys", &self.collapse_ys)
-            .field("year_suffix", &self.year_suffix)
-            .field("collapsed_year_suffixes", &self.collapsed_year_suffixes)
-            .field("collapsed_ranges", &self.collapsed_ranges)
-            .field("vanished", &self.vanished)
-            .field("gen4_full", &self.gen4)
-            .finish()
-    }
-}
-
-impl Unnamed3<Markup> {
-    pub fn new(cite: Arc<Cite<Markup>>, cnum: Option<u32>, gen4: Arc<IrGen>, fmt: &Markup) -> Self {
-        let prefix_parsed = cite.prefix.as_opt_str().map(|p| {
-            fmt.ingest(
-                p,
-                &IngestOptions {
-                    is_external: true,
-                    ..Default::default()
-                },
-            )
-        });
-        Unnamed3 {
-            has_locator: cite.locators.is_some()
-                && IR::find_locator(gen4.root, &gen4.arena).is_some(),
-            cite,
-            gen4,
-            prefix_parsed,
-            cnum,
-            is_first: false,
-            should_collapse: false,
-            first_of_ys: false,
-            collapse_ys: false,
-            year_suffix: None,
-            collapsed_year_suffixes: Vec::new(),
-            collapsed_ranges: Vec::new(),
-            vanished: false,
-        }
-    }
-}
-
-pub fn group_and_collapse<O: OutputFormat<Output = SmartString>>(
+fn apply_author_only(
+    db: &dyn IrDatabase,
+    cite: &mut CiteInCluster<Markup>,
+    position: csl::Position,
     fmt: &Markup,
-    collapse: Option<Collapse>,
-    cites: &mut Vec<Unnamed3<O>>,
 ) {
-    // Neat trick: same_names[None] tracks cites without a cs:names block, which helps with styles
-    // that only include a year. (What kind of style is that?
-    // magic_ImplicitYearSuffixExplicitDelimiter.txt, I guess that's the only possible reason, but
-    // ok.)
-    let mut same_names: HashMap<Option<SmartString>, (usize, bool)> = HashMap::new();
-    let mut same_years: HashMap<SmartString, (usize, bool)> = HashMap::new();
+    let mut success = true;
+    if let Some(intext) = db.intext(cite.cite_id) {
+        // completely replace with the intext arena, no need to copy
+        // into the old arena in gen4.
+        cite.gen4 = intext;
+    } else if let Some(new_root) = cite.gen4.tree_ref().leading_names_block_or_title(false) {
+        let gen4 = Arc::make_mut(&mut cite.gen4);
+        let tree = gen4.tree_mut();
+        new_root.detach(&mut tree.arena);
+        tree.root.remove_subtree(&mut tree.arena);
+        tree.root = new_root;
 
-    // First, group cites with the same name
-    for ix in 0..cites.len() {
-        let gen4 = &cites[ix].gen4;
-        let rendered = IR::first_name_block(gen4.root, &gen4.arena)
-            .and_then(|fnb| IR::flatten(fnb, &gen4.arena, fmt, None))
-            .map(|flat| fmt.output(flat, false));
-        same_names
-            .entry(rendered)
-            .and_modify(|(oix, seen_once)| {
-                // Keep cites separated by affixes together
-                if cites.get(*oix).map_or(false, |u| u.cite.has_suffix())
-                    || cites.get(*oix + 1).map_or(false, |u| u.cite.has_prefix())
-                    || cites.get(ix - 1).map_or(false, |u| u.cite.has_suffix())
-                    || cites.get(ix).map_or(false, |u| u.cite.has_affix())
+        tree.author_only_strip_formatting(new_root, position, fmt);
+    } else {
+        success = false;
+    }
+    cite.destination = WhichStream::MainToIntext { success };
+}
+
+pub(crate) fn apply_cite_modes(
+    db: &dyn IrDatabase,
+    cites: &mut [CiteInCluster<Markup>],
+    fmt: &Markup,
+) {
+    for cite in cites {
+        match cite.cite.mode {
+            Some(CiteMode::AuthorOnly) => {
+                apply_author_only(db, cite, cite.position, fmt);
+            }
+            Some(CiteMode::SuppressAuthor) => {
+                let gen4 = Arc::make_mut(&mut cite.gen4);
+                let _discard = gen4.tree_mut().suppress_author();
+            }
+            None => {}
+        }
+    }
+}
+
+pub(crate) fn apply_cluster_mode(
+    db: &dyn IrDatabase,
+    mode: &ClusterMode,
+    cites: &mut [CiteInCluster<Markup>],
+    class: csl::StyleClass,
+    fmt: &Markup,
+) {
+    fn first_n_authors<'a>(
+        cites: &'a mut [CiteInCluster<Markup>],
+        suppress_first: u32,
+    ) -> impl Iterator<Item = &'a mut CiteInCluster<Markup>> + 'a {
+        let by_name = group_by_mut(cites, |a, b| a.by_name() == b.by_name());
+        let take = if suppress_first > 0 {
+            suppress_first as usize
+        } else {
+            core::usize::MAX
+        };
+        by_name.take(take).flatten()
+    }
+    match *mode {
+        ClusterMode::AuthorOnly => {
+            for cite in cites.iter_mut() {
+                apply_author_only(db, cite, cite.position, fmt);
+            }
+        }
+        ClusterMode::SuppressAuthor { suppress_first } => {
+            if class == csl::StyleClass::Note {
+                log::warn!(
+                    "attempt to use cluster mode suppress-author with a note style, will be no-op"
+                );
+                return;
+            }
+            let suppress_it = |cite: &mut CiteInCluster<Markup>| {
+                let gen4 = Arc::make_mut(&mut cite.gen4);
+                let _discard = gen4.tree_mut().suppress_author();
+                cite.destination = WhichStream::MainToCitation;
+            };
+
+            first_n_authors(cites, suppress_first).for_each(suppress_it);
+        }
+        ClusterMode::Composite { suppress_first, .. } => {
+            if class == csl::StyleClass::Note {
+                log::warn!(
+                    "attempt to use cluster mode composite with a note style, will be no-op"
+                );
+                return;
+            }
+            for CiteInCluster {
+                cite_id,
+                gen4,
+                destination,
+                position,
+                ..
+            } in first_n_authors(cites, suppress_first)
+            {
+                let gen4 = Arc::make_mut(gen4);
+                log::debug!("called Composite, with tree {:?}", gen4.tree_ref());
+                let intext_part = if let Some(mut removed_node) = gen4.tree_mut().suppress_author()
                 {
-                    *oix = ix;
-                    *seen_once = false;
-                    return;
-                }
-                if *oix < ix {
-                    if !*seen_once {
-                        cites[*oix].is_first = true;
+                    log::debug!(
+                        "removed node from composite: {}",
+                        gen4.tree().tree_at_node(removed_node),
+                    );
+                    if let Some(intext) = db.intext(*cite_id) {
+                        log::debug!("using <intext> node for composite: {}", intext.tree());
+                        let gen4_tree = gen4.tree_mut();
+                        removed_node.remove_subtree(&mut gen4_tree.arena);
+                        // this only fails if the tree root is not a valid node, but we need an
+                        // Option<NodeId> anyway, so leave it
+                        gen4.tree_mut().extend(intext.tree().tree_ref())
+                    } else {
+                        gen4.tree_mut()
+                            .author_only_strip_formatting(removed_node, *position, fmt);
+                        log::debug!(
+                            "reformatted node from composite: {}",
+                            gen4.tree().tree_at_node(removed_node),
+                        );
+                        Some(removed_node)
                     }
-                    *seen_once = true;
-                    cites[ix].should_collapse = true;
-                    let rotation = &mut cites[*oix + 1..ix + 1];
-                    rotation.rotate_right(1);
-                    *oix += 1;
-                }
-            })
-            .or_insert((ix, false));
-    }
-
-    if collapse.map_or(false, |c| {
-        c == Collapse::YearSuffixRanged || c == Collapse::YearSuffix
-    }) {
-        let mut top_ix = 0;
-        while top_ix < cites.len() {
-            if cites[top_ix].is_first {
-                let mut moved = 0;
-                let mut ix = top_ix;
-                while ix < cites.len() {
-                    if ix != top_ix && !cites[ix].should_collapse {
-                        break;
-                    }
-                    moved += 1;
-                    let year_and_suf =
-                        IR::find_first_year_and_suffix(cites[ix].gen4.root, &cites[ix].gen4.arena)
-                            .and_then(|(ys_node, suf)| {
-                                let flat = IR::flatten(ys_node, &cites[ix].gen4.arena, fmt, None)?;
-                                Some((fmt.output(flat, false), suf))
-                            });
-                    if let Some((y, suf)) = year_and_suf {
-                        cites[ix].year_suffix = Some(suf);
-                        same_years
-                            .entry(y)
-                            .and_modify(|(oix, seen_once)| {
-                                if *oix == ix - 1 {
-                                    if !*seen_once {
-                                        cites[*oix].first_of_ys = true;
-                                    }
-                                    cites[ix].collapse_ys = true;
-                                    *seen_once = true;
-                                } else {
-                                    *seen_once = false;
-                                }
-                                *oix = ix;
-                            })
-                            .or_insert((ix, false));
-                    }
-                    ix += 1;
-                }
-                top_ix += moved;
-            }
-            top_ix += 1;
-        }
-    }
-
-    if collapse == Some(Collapse::CitationNumber) {
-        // XXX: Gotta factor in that some might have prefixes and suffixes
-        if let Some((first, rest)) = cites.split_first_mut() {
-            first.is_first = true;
-            for r in rest {
-                r.should_collapse = true;
-            }
-        }
-    }
-
-    if let Some(collapse) = collapse {
-        match collapse {
-            Collapse::CitationNumber => {
-                let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.is_first {
-                            let following = rest.iter_mut().take_while(|u| u.should_collapse);
-
-                            let mut cnums = Vec::new();
-                            if let Some(cnum) = u.cnum {
-                                cnums.push(CnumIx::new(cnum, ix));
-                            }
-                            let mut count = 0;
-                            for (nix, cite) in following.enumerate() {
-                                if let Some(cnum) = cite.cnum {
-                                    cnums.push(CnumIx {
-                                        cnum,
-                                        ix: ix + nix + 1,
-                                        force_single: cite.has_locator,
-                                    })
-                                }
-                                cite.vanished = true;
-                                count += 1;
-                            }
-                            ix += count;
-                            u.collapsed_ranges = collapse_ranges(&cnums);
-                        }
-                    }
-                    ix += 1;
-                }
-            }
-            Collapse::Year => {
-                let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.is_first {
-                            let following = rest.iter_mut().take_while(|u| u.should_collapse);
-                            let mut count = 0;
-                            for cite in following {
-                                let gen4 = Arc::make_mut(&mut cite.gen4);
-                                IR::suppress_names(gen4.root, &mut gen4.arena);
-                                count += 1;
-                            }
-                            ix += count;
-                        }
-                    }
-                    ix += 1;
-                }
-            }
-            Collapse::YearSuffixRanged | Collapse::YearSuffix => {
-                let mut ix = 0;
-                while ix < cites.len() {
-                    let slice = &mut cites[ix..];
-                    if let Some((u, rest)) = slice.split_first_mut() {
-                        if u.is_first {
-                            let following = rest.iter_mut().take_while(|u| u.should_collapse);
-                            for cite in following {
-                                let gen4 = Arc::make_mut(&mut cite.gen4);
-                                IR::suppress_names(gen4.root, &mut gen4.arena)
-                            }
-                        }
-                        if u.first_of_ys {
-                            let following = rest.iter_mut().take_while(|u| u.collapse_ys);
-
-                            if collapse == Collapse::YearSuffixRanged {
-                                // Potentially confusing; 'cnums' here are year suffixes in u32 form.
-                                let mut cnums = Vec::new();
-                                if let Some(cnum) = u.year_suffix {
-                                    cnums.push(CnumIx::new(cnum, ix));
-                                }
-                                for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix {
-                                        cnums.push(CnumIx {
-                                            cnum,
-                                            ix: ix + nix + 1,
-                                            force_single: cite.has_locator,
-                                        });
-                                    }
-                                    cite.vanished = true;
-                                    if !cite.has_locator {
-                                        let gen4 = Arc::make_mut(&mut cite.gen4);
-                                        IR::suppress_year(gen4.root, &mut gen4.arena);
-                                    }
-                                }
-                                u.collapsed_year_suffixes = collapse_ranges(&cnums);
-                            } else {
-                                if let Some(cnum) = u.year_suffix {
-                                    u.collapsed_year_suffixes
-                                        .push(RangePiece::Single(CnumIx::new(cnum, ix)));
-                                }
-                                for (nix, cite) in following.enumerate() {
-                                    if let Some(cnum) = cite.year_suffix {
-                                        u.collapsed_year_suffixes.push(RangePiece::Single(
-                                            CnumIx {
-                                                cnum,
-                                                ix: ix + nix + 1,
-                                                force_single: cite.has_locator,
-                                            },
-                                        ));
-                                    }
-                                    cite.vanished = true;
-                                    let gen4 = Arc::make_mut(&mut cite.gen4);
-                                    IR::suppress_year(gen4.root, &mut gen4.arena);
-                                }
-                            }
-                        }
-                    }
-                    ix += 1;
-                }
+                } else {
+                    None
+                };
+                *destination = WhichStream::MainToCitationPlusIntext(intext_part);
             }
         }
     }
 }
 
-////////////////////////////////
-// Cite Grouping & Collapsing //
-////////////////////////////////
-
+use crate::cluster::WhichStream;
 use crate::disamb::names::DisambNameRatchet;
 use citeproc_io::PersonName;
 use csl::SubsequentAuthorSubstituteRule as SasRule;
@@ -743,8 +577,8 @@ pub enum ReducedNameToken<'a, B> {
     Space,
 }
 
-impl<'a, T: Debug> Debug for ReducedNameToken<'a, T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+impl<'a, T: core::fmt::Debug> core::fmt::Debug for ReducedNameToken<'a, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             ReducedNameToken::Name(p) => write!(f, "{:?}", p.family),
             ReducedNameToken::Literal(b) => write!(f, "{:?}", b),
@@ -1026,7 +860,7 @@ fn test_mixed_numeric() {
         "#,
             layout
         );
-        Style::parse_for_test(&txt).unwrap()
+        Style::parse_for_test(&txt, None).unwrap()
     };
     let style = mk(r#"<group delimiter=". "> <text variable="citation-number" /> </group>"#);
     let found = style_is_mixed_numeric(&style, CiteOrBib::Bibliography);
@@ -1096,10 +930,24 @@ fn find_left_right_layout<O: OutputFormat>(
                     .as_ref()
                     .map_or(false, |af| !af.prefix.is_empty() || !af.suffix.is_empty()) =>
         {
-            let left = node.first_child()
-                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::LeftMargin), .. }))));
-            let right = node.last_child()
-                .filter(|c| matches!(arena.get(*c).map(|x| &x.get().0), Some(IR::Seq(IrSeq { display: Some(DisplayMode::RightInline), .. }))));
+            let left = node.first_child().filter(|c| {
+                matches!(
+                    arena.get(*c).map(|x| &x.get().0),
+                    Some(IR::Seq(IrSeq {
+                        display: Some(DisplayMode::LeftMargin),
+                        ..
+                    }))
+                )
+            });
+            let right = node.last_child().filter(|c| {
+                matches!(
+                    arena.get(*c).map(|x| &x.get().0),
+                    Some(IR::Seq(IrSeq {
+                        display: Some(DisplayMode::RightInline),
+                        ..
+                    }))
+                )
+            });
             Some(LeftRightLayout {
                 left,
                 right,
@@ -1110,10 +958,7 @@ fn find_left_right_layout<O: OutputFormat>(
     }
 }
 
-pub fn fix_left_right_layout_affixes<O: OutputFormat>(
-    root: NodeId,
-    arena: &mut IrArena<O>,
-) {
+pub fn fix_left_right_layout_affixes<O: OutputFormat>(root: NodeId, arena: &mut IrArena<O>) {
     let LeftRightLayout {
         left,
         right,
@@ -1230,10 +1075,9 @@ fn test_left_right_layout() {
         },
     );
 
-    let mut irgen = IrGen::new(layout, arena, IrState::new());
-    dbg!(&irgen);
+    let mut tree = dbg!(IrTree::new(layout, arena));
 
-    let found = find_left_right_layout(layout, &mut irgen.arena);
+    let found = find_left_right_layout(tree.root, &mut tree.arena);
     assert_eq!(
         found,
         Some(LeftRightLayout {
@@ -1243,14 +1087,14 @@ fn test_left_right_layout() {
         })
     );
 
-    let blob = irgen
+    let blob = tree
         .arena
         .blob(CiteEdgeData::Output(fmt.plain("blob")), GroupVars::Plain);
-    right.insert_before(blob, &mut irgen.arena);
+    right.insert_before(blob, &mut tree.arena);
 
-    dbg!(&irgen);
+    dbg!(&tree);
 
-    let found = find_left_right_layout(layout, &mut irgen.arena);
+    let found = find_left_right_layout(tree.root, &mut tree.arena);
     assert_eq!(
         found,
         Some(LeftRightLayout {
@@ -1260,9 +1104,9 @@ fn test_left_right_layout() {
         })
     );
 
-    fix_left_right_layout_affixes(layout, &mut irgen.arena);
+    fix_left_right_layout_affixes(layout, &mut tree.arena);
 
-    let flat = IR::flatten(layout, &irgen.arena, &fmt, None).unwrap();
+    let flat = tree.tree_ref().flatten(&fmt, None).unwrap();
     let s = fmt.output(flat, false);
     assert_eq!(
         &s,

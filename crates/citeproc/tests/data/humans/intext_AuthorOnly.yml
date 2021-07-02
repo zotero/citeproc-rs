@@ -1,0 +1,38 @@
+mode: citation
+# the first one is author only for Smith, and the second suppresses Smith but keeps Jones' name
+result: |
+  Smith
+  title=Jellybeans; Jones, title=Scavengers
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: "ITEM-2"
+    title: "Scavengers"
+    author:
+      - { family: "Jones" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "author-only"
+    cites:
+      - id: ITEM-1
+  - id: cluster-two
+    mode: "suppress-author"
+    cites:
+      - id: ITEM-1
+      - id: ITEM-2
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="author" />
+          <text variable="title" prefix="title=" />
+        </group>
+      </layout>
+    </citation>
+  </style>

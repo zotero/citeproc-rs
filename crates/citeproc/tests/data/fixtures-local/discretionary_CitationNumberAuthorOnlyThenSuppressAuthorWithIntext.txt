@@ -1,0 +1,156 @@
+>>== MODE ==>>
+citation
+<<== MODE ==<<
+
+
+
+
+>>== RESULT ==>>
+..[0] John Smith
+..[1] <i>[1]</i>
+>>[2] <i>[2]</i>
+<<== RESULT ==<<
+
+>>===== CITATIONS =====>>
+[
+    [
+        {
+            "citationID": "CITATION-1", 
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ], 
+            "properties": {
+                "mode": "author-only", 
+                "noteIndex": 0
+            }
+        }, 
+        [], 
+        []
+    ], 
+    [
+        {
+            "citationID": "CITATION-2", 
+            "citationItems": [
+                {
+                    "id": "ITEM-1"
+                }
+            ], 
+            "properties": {
+                "mode": "suppress-author", 
+                "noteIndex": 0
+            }
+        }, 
+        [
+            [
+                "CITATION-1", 
+                0
+            ]
+        ], 
+        []
+    ], 
+    [
+        {
+            "citationID": "CITATION-3", 
+            "citationItems": [
+                {
+                    "id": "ITEM-2"
+                }
+            ], 
+            "properties": {
+                "noteIndex": 0
+            }
+        }, 
+        [
+            [
+                "CITATION-1", 
+                0
+            ], 
+            [
+                "CITATION-2", 
+                0
+            ]
+        ], 
+        []
+    ]
+]
+<<===== CITATIONS =====<<
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="in-text"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+  <citation>
+    <layout font-style="italic">
+      <text prefix="[" suffix="]" variable="citation-number"/>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <group delimiter=" ">
+        <text variable="citation-number" suffix="." />
+        <text variable="title" />
+      </group>
+    </layout>
+  </bibliography>
+  <intext>
+    <layout>
+      <names variable="author">
+        <name/>
+      </names>
+    </layout>
+  </intext>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "author": [
+            {
+                "family": "Smith", 
+                "given": "John", 
+                "static-ordering": false
+            }
+        ], 
+        "id": "ITEM-1", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2005"
+                ]
+            ]
+        }, 
+        "title": "Book A", 
+        "type": "book"
+    }, 
+    {
+        "author": [
+            {
+                "family": "Jones", 
+                "given": "Robert", 
+                "static-ordering": false
+            }
+        ], 
+        "id": "ITEM-2", 
+        "issued": {
+            "date-parts": [
+                [
+                    "2000"
+                ]
+            ]
+        }, 
+        "title": "Book B", 
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<

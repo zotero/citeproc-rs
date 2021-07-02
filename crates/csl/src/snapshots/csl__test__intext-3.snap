@@ -1,0 +1,16 @@
+---
+source: crates/csl/src/test.rs
+expression: "crate::Style::parse_for_test(::indoc::indoc!(r#\"<style class=\"in-text\">\n             <citation><layout></layout></citation>\n             <intext><layout></layout></intext>\n         </style>\"#),\n                             None).expect_err(\"should have failed with errors\")"
+---
+Invalid(
+    CslError(
+        [
+            InvalidCsl {
+                severity: Error,
+                range: 71..105,
+                message: "Unknown element <intext> as child of <style>",
+                hint: "requires <feature name=\"intext\"/> to be enabled",
+            },
+        ],
+    ),
+)

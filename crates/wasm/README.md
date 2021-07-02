@@ -490,6 +490,62 @@ assemble the positions array as you would a call to `setClusterOrder` with
 exactly the operation you're previewing applied.
 
 
+### `AuthorOnly`, `SuppressAuthor` & `Composite`
+
+`@citeproc-rs/wasm` supports these flags on clusters (all 3) and cites (except
+`Composite`), in a similar way to `citeproc-js`. See the [`citeproc-js`
+documentation on Special Citation
+Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
+for reference.
+
+```javascript
+// only two modes for cites
+let citeAO = { id: "jones2006", mode: "AuthorOnly" };
+let citeSA = { id: "jones2006", mode: "SuppressAuthor" };
+
+// additional options for clusters
+let clusterAO       = { id: "one", cites: [...], mode: "AuthorOnly" };
+let clusterSA       = { id: "one", cites: [...], mode: "SuppressAuthor" };
+let clusterSA_First = { id: "one", cites: [...], mode: "SuppressAuthor", suppressFirst: 3 };
+let clusterC        = { id: "one", cites: [...], mode: "Composite" };
+let clusterC_Infix  = { id: "one", cites: [...], mode: "Composite", infix: ", whose book" };
+let clusterC_Full   = { id: "one", cites: [...], mode: "Composite", infix: ", whose books", suppressFirst: 0 };
+```
+
+It does support one extra option with `SuppressAuthor` and `Composite` on
+clusters: `suppressFirst`, which limits the effect to the first N name groups
+(or if cite grouping is disabled, first N names). Setting it to 0 means
+unlimited.
+
+#### `<intext>` element with `AuthorOnly` etc.
+
+`citeproc-rs` supports the `<intext>` element described in the `citeproc-js`
+docs linked above, but it is not enabled by default. It also supports `<intext
+and="symbol">` or `and="text"`, which will swap out the last intext layout
+delimiter (`<layout delimiter="; ">`) for either the ampersand or the `and`
+term.
+
+If you want to use the `<intext>` element in CSL, you may either:
+
+##### Option 1: Add a feature flag to the style wishing to use it
+
+```xml
+<style class="in-text">
+    <features>
+        <feature name="custom-intext" />
+    </features>
+    ...
+</style>
+```
+
+AFAIK no other processors support this syntax yet.
+
+##### Option 2: Enable the `custom-intext` feature for all styles via `Driver.new`
+
+```javascript
+let driver = Driver.new({ ..., cslFeatures: ["custom-intext"] }).unwrap();
+// ... driver.free();
+```
 
 ### Non-Interactive use, or re-hydrating a previously created document
 

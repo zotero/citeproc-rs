@@ -129,7 +129,7 @@ fn test() {
     let get_stream = |ind: usize| {
         let id = cite_ids[ind];
         let gen0 = db.ir_gen0(id);
-        IR::to_edge_stream(gen0.root, &gen0.arena, &db.get_formatter())
+        gen0.tree_ref().to_edge_stream(&db.get_formatter())
     };
 
     let cite_edges = get_stream(0);

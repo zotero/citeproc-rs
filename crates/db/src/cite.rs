@@ -10,7 +10,7 @@ use super::xml::{LocaleDatabase, StyleDatabase};
 use std::sync::Arc;
 
 use citeproc_io::output::markup::Markup;
-use citeproc_io::{Cite, Reference};
+use citeproc_io::{Cite, ClusterMode, Reference};
 use csl::Atom;
 
 use indexmap::set::IndexSet;
@@ -33,6 +33,9 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
 
     #[salsa::input]
     fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
+
+    #[salsa::input]
+    fn cluster_mode(&self, key: ClusterId) -> Option<ClusterMode>;
 
     #[salsa::input]
     fn cluster_cites(&self, key: ClusterId) -> Arc<Vec<CiteId>>;
@@ -187,9 +190,14 @@ fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
 }
 
 pub fn get_cluster_data(db: &dyn CiteDatabase, id: ClusterId) -> Option<ClusterData> {
-    db.cluster_note_number(id).map(|number| ClusterData {
-        id,
-        number,
-        cites: db.cluster_cites(id),
+    db.cluster_note_number(id).map(|mut number| {
+        if let Some(ClusterMode::AuthorOnly) = db.cluster_mode(id) {
+            number = ClusterNumber::OutsideFlow;
+        }
+        ClusterData {
+            id,
+            number,
+            cites: db.cluster_cites(id),
+        }
     })
 }

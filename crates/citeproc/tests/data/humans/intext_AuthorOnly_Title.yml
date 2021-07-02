@@ -1,0 +1,66 @@
+mode: citation
+result: |
+  Title inside substitute
+  1997
+  Authority inside substitute
+  1997
+  [NO_PRINTED_FORM]
+  Archive outside substitute, 1997
+  [NO_PRINTED_FORM]
+  Title outside substitute, Archive, 1997
+input:
+  - id: TitleInsideSubstitute
+    title: Title inside substitute
+    issued: { raw: "1997" }
+  - id: AuthorityInsideSubstitute
+    authority: Authority inside substitute
+    issued: { raw: "1997" }
+  - id: ArchiveOutsideSubstitute
+    archive: Archive outside substitute
+    issued: { raw: "1997" }
+  - id: ArchiveWithTitleOutside
+    archive: Archive
+    title: Title outside substitute
+    issued: { raw: "1997" }
+clusters:
+  - - id: TitleInsideSubstitute
+      author-only: true
+  - - id: TitleInsideSubstitute
+      suppress-author: true
+  - - id: AuthorityInsideSubstitute
+      author-only: true
+  - - id: AuthorityInsideSubstitute
+      suppress-author: true
+  - - id: ArchiveOutsideSubstitute
+      author-only: true
+  - - id: ArchiveOutsideSubstitute
+      suppress-author: true
+  - - id: ArchiveWithTitleOutside
+      author-only: true
+  - - id: ArchiveWithTitleOutside
+      suppress-author: true
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="editor">
+            <substitute>
+              <!-- any variable, not limited to title, works as long as it's substituted for a name -->
+              <text variable="authority" />
+
+              <!-- render title outside substitute in ArchiveWithTitleOutside -->
+              <choose><if variable="archive" /><else>
+                <text variable="title" />
+              </else></choose>
+            </substitute>
+          </names>
+          <!-- but outside a substitute, no -->
+          <text variable="title" />
+          <text variable="archive" />
+          <date variable="issued" form="numeric" />
+        </group>
+      </layout>
+    </citation>
+  </style>

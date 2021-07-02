@@ -22,13 +22,16 @@ macro_rules! assert_cluster {
 
 fn test_db(style: Option<&str>) -> Processor {
     Processor::new(InitOptions {
-        style: style.unwrap_or(r#"<style version="1.0" class="in-text">
+        style: style.unwrap_or(
+            r#"<style version="1.0" class="in-text">
                                     <citation><layout></layout></citation>
-                                  </style>"#),
+                                  </style>"#,
+        ),
         format: SupportedFormat::Plain,
         test_mode: true,
         ..Default::default()
-    }).unwrap()
+    })
+    .unwrap()
 }
 
 fn insert_basic_refs(db: &mut Processor, ref_ids: &[&str]) {
@@ -53,6 +56,7 @@ fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
         clusters.push(Cluster {
             id,
             cites: vec![Cite::basic(ref_ids[i - 1])],
+            mode: None,
         });
         order.push(ClusterPosition {
             id,
@@ -65,7 +69,7 @@ fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
 
 mod position {
     use super::*;
-    
+
     use csl::Position;
 
     fn test_ibid_1_2(
@@ -80,10 +84,12 @@ mod position {
             Cluster {
                 id: one,
                 cites: vec![Cite::basic("one")],
+                mode: None,
             },
             Cluster {
                 id: two,
                 cites: vec![Cite::basic("one")],
+                mode: None,
             },
         ]);
         db.set_cluster_order(&ordering(one, two)).unwrap();
@@ -99,16 +105,18 @@ mod position {
     #[test]
     fn cite_positions_note_ibid() {
         test_ibid_1_2(
-            |one, two| vec![
-                ClusterPosition {
-                    id: one,
-                    note: Some(1),
-                },
-                ClusterPosition {
-                    id: two,
-                    note: Some(2),
-                },
-            ],
+            |one, two| {
+                vec![
+                    ClusterPosition {
+                        id: one,
+                        note: Some(1),
+                    },
+                    ClusterPosition {
+                        id: two,
+                        note: Some(2),
+                    },
+                ]
+            },
             (Position::First, None),
             (Position::IbidNear, Some(1)),
         )
@@ -117,11 +125,19 @@ mod position {
     #[test]
     fn cite_positions_intext_ibid() {
         test_ibid_1_2(
-            |one, two| vec![
-                // both in-text
-                ClusterPosition { id: one, note: None },
-                ClusterPosition { id: two, note: None },
-            ],
+            |one, two| {
+                vec![
+                    // both in-text
+                    ClusterPosition {
+                        id: one,
+                        note: None,
+                    },
+                    ClusterPosition {
+                        id: two,
+                        note: None,
+                    },
+                ]
+            },
             (Position::First, None),
             // No FRNN as not in a note!
             (Position::Ibid, None),
@@ -131,13 +147,18 @@ mod position {
     #[test]
     fn cite_positions_mixed_noibid() {
         test_ibid_1_2(
-            |one, two| vec![
-                ClusterPosition { id: one, note: None },
-                ClusterPosition {
-                    id: two,
-                    note: Some(1),
-                },
-            ],
+            |one, two| {
+                vec![
+                    ClusterPosition {
+                        id: one,
+                        note: None,
+                    },
+                    ClusterPosition {
+                        id: two,
+                        note: Some(1),
+                    },
+                ]
+            },
             (Position::First, None),
             (Position::First, None),
         );
@@ -146,13 +167,18 @@ mod position {
     #[test]
     fn cite_positions_mixed_notefirst() {
         test_ibid_1_2(
-            |one, two| vec![
-                ClusterPosition {
-                    id: one,
-                    note: Some(1),
-                },
-                ClusterPosition { id: two, note: None },
-            ],
+            |one, two| {
+                vec![
+                    ClusterPosition {
+                        id: one,
+                        note: Some(1),
+                    },
+                    ClusterPosition {
+                        id: two,
+                        note: None,
+                    },
+                ]
+            },
             (Position::First, None),
             // XXX: should probably preserve relative ordering of notes and in-text clusters,
             // so that this gets (Position::Subsequent, Some(1))
@@ -179,7 +205,6 @@ mod position {
 
 mod preview {
     use super::*;
-    
 
     const STYLE: &'static str = r##"
     <style class="note" version="1.0.1">
@@ -221,7 +246,8 @@ mod preview {
         let two = cid(&mut db, 2);
         assert_cluster!(db.get_cluster(two), Some("Book two"));
         let cites = vec![Cite::basic("one")];
-        let preview = db.preview_citation_cluster(&cites, PreviewPosition::ReplaceCluster(two), None);
+        let preview =
+            db.preview_citation_cluster(&cites, PreviewPosition::ReplaceCluster(two), None);
         assert_cluster!(db.get_cluster(two), Some("Book two"));
         assert_cluster!(preview.ok(), Some("Book one, ibid"));
     }

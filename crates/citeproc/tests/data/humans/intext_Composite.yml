@@ -1,0 +1,35 @@
+mode: citation
+result: |
+  Smith whose paper title=Jellybeans
+input:
+  - id: "ITEM-1"
+    title: "Jellybeans"
+    author:
+      - { family: "Smith" }
+    type: book
+  - id: "ITEM-2"
+    title: "Scavengers"
+    author:
+      - { family: "Jones" }
+    type: book
+clusters:
+  - id: cluster-one
+    mode: "composite"
+    infix: " whose paper "
+    cites:
+      - id: ITEM-1
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <features>
+      <feature name="custom-intext" />
+    </features>
+    <citation>
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="author" />
+          <text variable="title" prefix="title=" />
+        </group>
+      </layout>
+    </citation>
+  </style>

@@ -1,0 +1,123 @@
+>>===== MODE =====>>
+citation
+<<===== MODE =====<<
+
+
+
+>>===== RESULT =====>>
+..[0] Blevins (editor)
+>>[1] Dropsie (translator)
+<<===== RESULT =====<<
+
+
+>>===== CITATIONS =====>>
+[
+    [
+        {
+            "citationID": "CITATION-1", 
+            "citationItems": [
+                {
+                    "id": "ITEM-1", 
+                    "suppress-author": true
+                }
+            ], 
+            "properties": {
+                "noteIndex": 1
+            }
+        }, 
+        [], 
+        []
+    ], 
+    [
+        {
+            "citationID": "CITATION-2", 
+            "citationItems": [
+                {
+                    "id": "ITEM-2", 
+                    "suppress-author": true
+                }
+            ], 
+            "properties": {
+                "noteIndex": 2
+            }
+        }, 
+        [
+            [
+                "CITATION-1", 
+                1
+            ]
+        ], 
+        []
+    ]
+]
+<<===== CITATIONS =====<<
+
+
+>>===== CSL =====>>
+<style 
+      xmlns="http://purl.org/net/xbiblio/csl"
+      class="note"
+      version="1.0">
+  <info>
+    <id />
+    <title />
+    <updated>2009-08-10T04:49:00+09:00</updated>
+  </info>
+   <citation>
+     <layout delimiter="; ">
+       <group delimiter="+">
+         <names variable="author">
+           <name form="short" />
+           <label prefix=" (" suffix=")"/>
+         </names>
+         <names variable="editor">
+           <name form="short" />
+           <label prefix=" (" suffix=")"/>
+         </names>
+         <names variable="translator">
+           <name form="short" />
+           <label prefix=" (" suffix=")"/>
+         </names>
+       </group>
+     </layout>
+  </citation>
+</style>
+<<===== CSL =====<<
+
+
+>>===== INPUT =====>>
+[
+    {
+        "author": [
+            {
+                "family": "Aalto", 
+                "given": "Alan"
+            }
+        ], 
+        "editor": [
+            {
+                "family": "Blevins", 
+                "given": "Butthead"
+            }
+        ], 
+        "id": "ITEM-1", 
+        "type": "book"
+    },
+    {
+        "editor": [
+            {
+                "family": "Colostomy", 
+                "given": "Colin"
+            }
+        ],
+        "translator": [
+            {
+                "family": "Dropsie", 
+                "given": "David"
+            }
+        ], 
+        "id": "ITEM-2", 
+        "type": "book"
+    }
+]
+<<===== INPUT =====<<

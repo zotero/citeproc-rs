@@ -64,14 +64,14 @@ impl<'de> Visitor<'de> for CowStrVisitor {
 ///
 /// ## Usage
 ///
-/// ```no_run
+/// ```ignore
 /// use std::borrow::Cow;
 /// #[derive(serde_derive::Deserialize)]
 /// struct MyStruct<'a> {
 ///     #[serde(borrow, deserialize_with = "deserialize_cow_str")]
 ///     field: Cow<'a, str>,
 /// }
-///
+/// ```
 pub fn deserialize_cow_str<'de, D>(deserializer: D) -> Result<Cow<'de, str>, D::Error>
 where
     D: Deserializer<'de>,

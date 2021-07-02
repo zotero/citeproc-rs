@@ -137,8 +137,8 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn seq(&self, nodes: impl Iterator<Item = Self::Build>) -> Self::Build {
-        itertools::concat(nodes)
+    fn seq(&self, nodes: impl IntoIterator<Item = Self::Build>) -> Self::Build {
+        itertools::concat(nodes.into_iter())
     }
 
     #[inline]

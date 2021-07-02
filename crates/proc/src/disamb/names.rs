@@ -11,8 +11,8 @@ use csl::{
 };
 use fnv::FnvHashMap;
 use petgraph::graph::NodeIndex;
-use std::sync::Arc;
 use smallvec::SmallVec;
+use std::sync::Arc;
 
 impl Disambiguation<Markup> for Names {
     fn ref_ir(
@@ -802,4 +802,15 @@ pub fn replace_single_child<O: OutputFormat>(
         existing.remove_subtree(arena);
     }
     of_node.append(with, arena);
+}
+
+impl<O: OutputFormat> IrTree<O> {
+    /// Useful since names blocks only ever have an IrSeq under them.
+    /// (Except when doing subsequent-author-substitute, but that's after suppression.)
+    pub fn replace_single_child(&mut self, of_node: NodeId, with: NodeId) {
+        if let Some(existing) = of_node.children(&self.arena).next() {
+            existing.remove_subtree(&mut self.arena);
+        }
+        of_node.append(with, &mut self.arena);
+    }
 }

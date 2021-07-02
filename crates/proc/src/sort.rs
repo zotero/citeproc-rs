@@ -1,7 +1,7 @@
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
-use citeproc_db::{ClusterData, ClusterId};
-use citeproc_io::DateOrRange;
+use citeproc_db::{ClusterData, ClusterId, ClusterNumber};
+use citeproc_io::{ClusterMode, DateOrRange};
 use csl::{style::*, terms::*, variables::*, Atom};
 use fnv::FnvHashMap;
 use std::sync::Arc;
@@ -178,7 +178,12 @@ pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
 }
 
 pub fn cluster_data_sorted(db: &dyn IrDatabase, id: ClusterId) -> Option<ClusterData> {
-    db.cluster_note_number(id).map(|number| {
+    db.cluster_note_number(id).map(|mut number| {
+        // mode = AuthorOnly means number should be ignored, cluster placed outside flow of
+        // document.
+        if let Some(ClusterMode::AuthorOnly) = db.cluster_mode(id) {
+            number = ClusterNumber::OutsideFlow;
+        }
         // Order of operations: bib gets sorted first, so cites can be sorted by
         // citation-number.
         let sorted_refs_arc = db.sorted_refs();
@@ -593,11 +598,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     fn names(&mut self, names: &Names) -> Self::Output {
         let node =
             crate::names::intermediate(names, self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
-            gv,
-        )
+        let tree = IrTreeRef::new(node, &self.arena);
+        let gv = tree.get_node().unwrap().get().1;
+        (tree.flatten(&self.ctx.format, None).unwrap_or_default(), gv)
     }
 
     // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
@@ -605,11 +608,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     //
     fn date(&mut self, date: &BodyDate) -> Self::Output {
         let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let gv = self.arena.get(node).unwrap().get().1;
-        (
-            IR::flatten(node, &self.arena, &self.ctx.format, None).unwrap_or_default(),
-            gv,
-        )
+        let tree = IrTreeRef::new(node, &self.arena);
+        let gv = tree.get_node().unwrap().get().1;
+        (tree.flatten(&self.ctx.format, None).unwrap_or_default(), gv)
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {

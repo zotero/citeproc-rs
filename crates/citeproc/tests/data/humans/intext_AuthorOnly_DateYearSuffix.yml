@@ -1,0 +1,38 @@
+mode: citation
+result: |
+  1997a
+  Title
+  1997b
+  Title
+input:
+  - id: Original
+    title: Title
+    issued: { raw: "1997" }
+  - id: Mirror
+    title: Title
+    issued: { raw: "1997" }
+clusters:
+  - - id: Original
+      author-only: true
+  - - id: Original
+      suppress-author: true
+  - - id: Mirror
+      author-only: true
+  - - id: Mirror
+      suppress-author: true
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; ">
+        <group delimiter=", ">
+          <names variable="editor">
+            <substitute>
+              <date variable="issued" form="numeric" />
+            </substitute>
+          </names>
+          <text variable="title" />
+        </group>
+      </layout>
+    </citation>
+  </style>

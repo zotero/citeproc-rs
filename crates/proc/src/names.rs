@@ -272,10 +272,12 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                         .name_override
                         .replace_name_overrides_for_substitute(names_inheritance.clone());
                     let node = el.intermediate(db, &mut new_state, ctx, arena);
-                    if !IR::is_empty(node, arena) {
+                    if !IrTree::is_empty(node, arena) {
                         new_state.name_override.restore_name_overrides(old);
+                        let wrapper = arena.new_node((IR::Substitute, GroupVars::Important));
+                        wrapper.append(node, arena);
                         *state = new_state;
-                        return node;
+                        return wrapper;
                     }
                 }
             }
@@ -348,10 +350,12 @@ pub fn intermediate<'c, O: OutputFormat, I: OutputFormat>(
                     .name_override
                     .replace_name_overrides_for_substitute(names_inheritance.clone());
                 let node = el.intermediate(db, &mut new_state, ctx, arena);
-                if !IR::is_empty(node, arena) {
+                if !IrTree::is_empty(node, arena) {
                     new_state.name_override.restore_name_overrides(old);
+                    let wrapper = arena.new_node((IR::Substitute, GroupVars::Important));
+                    wrapper.append(node, arena);
                     *state = new_state;
-                    return node;
+                    return wrapper;
                 }
             }
         }
