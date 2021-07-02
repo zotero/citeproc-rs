@@ -65,6 +65,13 @@ function run(testCase) {
     CITATIONS: parsed['process-citation-clusters'],
     'CITATION-ITEMS': parsed.clusters && parsed.clusters.map(clust => {
       if (clust.cites) {
+        if (clust.mode === 'composite') {
+            console.warn("cluster has mode that will be thrown out:", clust.mode);
+        }
+        if (clust.mode === 'suppress-author' || clust.mode === 'author-only') {
+            console.warn("cluster has mode that will be applied to every cite instead:", clust.mode);
+            return clust.cites.map(cite => ({ [clust.mode]: true, ...cite }));
+        }
         // under `- cites:`
         return clust.cites;
       }

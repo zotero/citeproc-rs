@@ -404,15 +404,19 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     /// define an `<intext>` node.
     pub fn leading_names_block_or_title(&self, in_substitute: bool) -> Option<NodeId> {
         match self.get_node()?.get().0 {
+
+            // Name block? Yes.
             IR::Name(_) => Some(self.node),
-            IR::Rendered(Some(CiteEdgeData::Title(_))) if in_substitute => Some(self.node),
-            IR::Substitute => {
-                // it must be at the start of the cite
-                self.children()
-                    .filter(|x| !x.is_empty())
-                    .nth(0)
-                    .and_then(|child| child.leading_names_block_or_title(true))
-            }
+
+            // to filter down to titles and match the text of the citeproc-js docs (2021-07-02)
+            // this would need to be IR::Rendered(Some(CiteEdgeData::Title(_))) => Some(self.node)
+            // however citeproc-js appears to allow any content rendered as a substitute of any
+            // names block to be extracted as author-only
+            //
+            // So we will simply return the Substitute node, which is returned by <Names as Proc>
+            // in place of a Seq of NameIR nodes.
+            IR::Substitute => Some(self.node),
+
             IR::ConditionalDisamb(_) | IR::Seq(_) => {
                 // it must be at the start of the cite
                 self.children()
