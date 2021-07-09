@@ -1,18 +1,64 @@
 #![allow(non_camel_case_types)]
 
+// #[macro_use]
+extern crate ffi_helpers;
+
 use citeproc::prelude::{InitOptions as RsInitOptions, Processor as RustProcessor, *};
 use csl::{Lang, Locale};
 
 #[macro_use]
+mod errors;
+#[macro_use]
 mod macros;
+use macros::nullify_on_panic;
+mod nullable;
+
+use thiserror::Error;
+
+#[derive(Debug, Copy, Clone, Error, PartialEq)]
+pub enum FFIError {
+    #[error("A null pointer was passed in where it wasn't expected")]
+    NullPointer,
+    #[error("{0}")]
+    Reordering(#[source] citeproc::ReorderingError),
+    #[error("caught panic unwinding")]
+    CaughtPanic,
+    #[error("attempted to use a poisoned Processor")]
+    Poisoned,
+}
+
+export_error_handling_functions!();
+
+use std::sync::Once;
+static INITIALISED_LOG_CRATE: Once = Once::new();
+
+/// Initialises the Rust `log` crate globally. No-op when called a second time.
+#[no_mangle]
+pub extern "C" fn citeproc_rs_log_init() {
+    INITIALISED_LOG_CRATE.call_once(|| {
+        env_logger::init();
+    });
+}
 
 use libc::{c_char, c_void};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 /// Wrapper for a Processor, initialized with one style and any required locales
-pub struct Processor(RustProcessor);
+/// Contains an Option<citeproc_rs::Processor>, because to survive panics we want to be able to
+/// write a safe value that won't be in an inconsistent state after panicking.
+pub struct Processor(Option<RustProcessor>);
 
+/// This writes the safe state (None) and also drops the processor and all its memory. If you
+/// attempt to use it again, you'll get an error.
+impl macros::MakeUnwindSafe for Processor {
+    fn make_unwind_safe(&mut self) {
+        self.0 = None;
+    }
+}
+
+/// A callback signature that is expected to write a string into `slot` via
+/// [citeproc_rs_locale_slot_write]
 type LocaleFetchCallback =
     Option<unsafe extern "C" fn(context: *mut c_void, slot: *mut LocaleSlot, *const c_char)>;
 
@@ -59,7 +105,8 @@ struct LocaleStorage {
 }
 
 ffi_fn! {
-    fn citeproc_rs_write_locale_slot(slot: *mut LocaleSlot, locale_xml: *const c_char, locale_xml_len: usize) {
+    fn citeproc_rs_locale_slot_write(slot: *mut LocaleSlot, locale_xml: *const c_char, locale_xml_len: usize) {
+        null_pointer_check!(slot);
         // Safety: we asked for this to be passed back transparently.
         let slot = unsafe { &mut *slot };
         // Safety: we asked folks to give us an XML string.
@@ -67,6 +114,8 @@ ffi_fn! {
         // We'll parse it here as well so you catch errors before they become invisible as
         // mysteriously missing locales
         let _ = Locale::parse(locale_xml).expect("could not parse locale xml");
+        null_pointer_check!(slot.storage);
+        null_pointer_check!(slot.lang);
         // Safety: we control slot
         let storage = unsafe { &mut *slot.storage };
         let lang = unsafe { &*slot.lang };
@@ -121,7 +170,7 @@ ffi_fn! {
                 proc.store_locales(locales)
             }
         }
-        Box::into_raw(Box::new(Processor(proc)))
+        Box::into_raw(Box::new(Processor(Some(proc))))
     }
 }
 
@@ -143,29 +192,38 @@ ffi_fn! {
     }
 }
 
-ffi_fn! {
+ffi_fn_nullify! {
     /// let reference: [String: Any] = [ "id": "blah", "type": "book", ... ];
     /// in Swift, JSONSerialization.data(reference).withUnsafeBytes({ rBytes in
     ///     format_one(processor, rBytes.baseAddress, rBytes.count)
     /// })
     ///
     /// May return null.
-    fn citeproc_rs_processor_format_one(processor: *mut Processor, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
+    fn citeproc_rs_processor_format_one(#[nullify_on_panic] processor: *mut Processor, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
         let ref_json = unsafe { utf8_from_raw!(ref_bytes, ref_bytes_len) };
         let reference: Reference = serde_json::from_str(ref_json).unwrap();
         let id = reference.id.clone();
         let proc = unsafe { &mut (*processor).0 };
-        proc.insert_reference(reference);
-        let cluster = proc.preview_cluster_id();
-        let result = proc.preview_citation_cluster(
-            &[Cite::basic(id)],
-            PreviewPosition::MarkWithZero(&[ClusterPosition { id: cluster, note: None }]),
-            None,
-        );
-        if let Ok(result) = result {
-            let c = CString::new(result.as_bytes()).unwrap();
-            c.into_raw()
+        if let Some(proc) = proc.as_mut() {
+            proc.insert_reference(reference);
+            let cluster = proc.preview_cluster_id();
+            let result = proc.preview_citation_cluster(
+                &[Cite::basic(id)],
+                PreviewPosition::MarkWithZero(&[ClusterPosition { id: cluster, note: None }]),
+                None,
+            );
+            match result {
+                Ok(result) => {
+                    let c = CString::new(result.as_bytes()).unwrap();
+                    c.into_raw()
+                },
+                Err(e) => {
+                    errors::update_last_error(FFIError::Reordering(e));
+                    std::ptr::null_mut()
+                }
+            }
         } else {
+            errors::update_last_error(FFIError::Poisoned);
             std::ptr::null_mut()
         }
     }

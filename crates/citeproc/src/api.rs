@@ -81,7 +81,7 @@ pub struct ClusterPosition {
     pub note: Option<u32>,
 }
 
-#[derive(Debug, Copy, Clone, thiserror::Error)]
+#[derive(Debug, Copy, Clone, thiserror::Error, PartialEq)]
 pub enum ReorderingError {
     #[error(
         "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"

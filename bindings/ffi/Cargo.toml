@@ -15,3 +15,7 @@ csl = { path = "../../crates/csl" }
 citeproc = { path = "../../crates/citeproc" }
 libc = "0.2.90"
 serde_json = "1.0.64"
+log = "0.4.14"
+ffi_helpers = "0.2.0"
+thiserror = "1.0.26"
+env_logger = "0.8.4"

@@ -291,7 +291,7 @@ dependencies = [
  "datatest",
  "directories",
  "dlmalloc",
- "env_logger",
+ "env_logger 0.7.1",
  "fnv",
  "indexmap",
  "insta",
@@ -345,8 +345,12 @@ version = "0.0.1"
 dependencies = [
  "citeproc",
  "csl",
+ "env_logger 0.8.4",
+ "ffi_helpers",
  "libc",
+ "log",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -355,7 +359,7 @@ version = "0.1.0"
 dependencies = [
  "cervine",
  "csl",
- "env_logger",
+ "env_logger 0.7.1",
  "fnv",
  "html5ever",
  "itertools 0.9.0",
@@ -389,7 +393,7 @@ dependencies = [
  "citeproc-db",
  "citeproc-io",
  "csl",
- "env_logger",
+ "env_logger 0.7.1",
  "fnv",
  "indextree",
  "itertools 0.9.0",
@@ -715,7 +719,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
- "humantime",
+ "humantime 1.3.0",
+ "log",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
+dependencies = [
+ "atty",
+ "humantime 2.1.0",
  "log",
  "regex",
  "termcolor",
@@ -756,6 +773,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9a4820f0ccc8a7afd67c39a0f1a0f4b07ca1725164271a64939d7aeb9af065"
 dependencies = [
  "log",
+]
+
+[[package]]
+name = "ffi_helpers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36a21261040ffbc3999698b39170d6e951f2823dd9ad7b50469309156060a50c"
+dependencies = [
+ "failure",
+ "failure_derive",
+ "libc",
 ]
 
 [[package]]
@@ -902,6 +930,12 @@ checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
 dependencies = [
  "quick-error",
 ]
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "idna"
@@ -1123,11 +1157,11 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.11"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fabed175da42fed1fa0746b0ea71f412aa9d35e76e95e59b192c64b9dc2bf8b"
+checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
 ]
 
 [[package]]
@@ -2121,18 +2155,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.22"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e9ae34b84616eedaaf1e9dd6026dbe00dcafa92aa0c8077cb69df1fcfe5e53e"
+checksum = "93119e4feac1cbe6c798c34d3a53ea0026b0b1de6a120deef895137c0529bfe2"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.22"
+version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba20f23e85b10754cd195504aebf6a27e2e6cbe28c17778a0c930724628dd56"
+checksum = "060d69a0afe7796bf42e9e2ff91f5ee691fb15c53d38b4b62a9a53eb23164745"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2194,7 +2228,7 @@ dependencies = [
  "clap",
  "csl",
  "directories",
- "env_logger",
+ "env_logger 0.7.1",
  "git2",
  "once_cell",
  "regex",

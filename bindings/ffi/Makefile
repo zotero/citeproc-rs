@@ -70,6 +70,8 @@ bin/client: build/examples/client.c.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
 bin/client_cpp: build/examples/client_cpp.cpp.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
+bin/panicking: build/examples/panicking.c.o
+	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
 
 .PHONY: examples
 examples: $(example_bins)

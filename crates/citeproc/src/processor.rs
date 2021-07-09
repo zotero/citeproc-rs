@@ -22,7 +22,7 @@ use citeproc_proc::db::IrDatabaseStorage;
 use citeproc_proc::BibNumber;
 use indexmap::set::IndexSet;
 
-use parking_lot::{Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use salsa::{Database, Durability, SweepStrategy};
 #[cfg(feature = "rayon")]
 use salsa::{ParallelDatabase, Snapshot};
@@ -108,7 +108,7 @@ impl ImplementationDetails for Processor {
         &self,
         symbol: string_interner::DefaultSymbol,
     ) -> Option<SmartString> {
-        let reader = self.interner.read();
+        let reader = self.interner.read().unwrap();
         reader.resolve(symbol).map(SmartString::from)
     }
 }
@@ -272,7 +272,7 @@ impl Processor {
                 .par_iter()
                 .map_with(self.snap(), |snap, cluster| {
                     let built = snap.0.built_cluster(cluster.id);
-                    let mut into_hashmap = snap.0.last_clusters.lock();
+                    let mut into_hashmap = snap.0.last_clusters.lock().unwrap();
                     upsert_diff(into_hashmap.deref_mut(), ClusterId::new(cluster.id), built)
                 })
                 .filter_map(|x| x)
@@ -280,7 +280,7 @@ impl Processor {
         };
         #[cfg(not(feature = "rayon"))]
         let result = {
-            let mut into_hashmap = self.last_clusters.lock();
+            let mut into_hashmap = self.last_clusters.lock().unwrap();
             clusters
                 .iter()
                 .filter_map(|cluster| {
@@ -306,7 +306,7 @@ impl Processor {
     pub fn batched_updates_str(&self) -> string_id::UpdateSummary {
         let delta = self.compute();
         let mut delta_str = Vec::with_capacity(delta.len());
-        let interner = self.interner.read();
+        let interner = self.interner.read().unwrap();
         for (cid, neu) in delta {
             if let Some(resolved) = interner.resolve(cid.raw()) {
                 delta_str.push((SmartString::from(resolved), neu));
@@ -327,7 +327,7 @@ impl Processor {
     }
 
     fn intern_cluster_id(&self, string: impl AsRef<str>) -> ClusterId {
-        let mut w = self.interner.write();
+        let mut w = self.interner.write().unwrap();
         ClusterId::new(w.get_or_intern(string))
     }
 
@@ -361,7 +361,7 @@ impl Processor {
 
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
     pub fn random_cluster_id_str(&self) -> SmartString {
-        let interner = self.interner.read();
+        let interner = self.interner.read().unwrap();
         loop {
             let smart_string = crate::random_cluster_id();
             if interner.get(&smart_string).is_none() {
@@ -373,7 +373,7 @@ impl Processor {
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
     pub fn random_cluster_id(&self) -> ClusterId {
         let rand_id = self.random_cluster_id_str();
-        ClusterId::new(self.interner.write().get_or_intern(rand_id))
+        ClusterId::new(self.interner.write().unwrap().get_or_intern(rand_id))
     }
 
     pub fn reset_references(&mut self, refs: Vec<Reference>) {
@@ -453,7 +453,7 @@ impl Processor {
     pub fn init_clusters_str(&mut self, clusters: Vec<string_id::Cluster>) {
         let mut cluster_ids = Vec::new();
         let interner_arc = self.interner.clone();
-        let mut interner = interner_arc.write();
+        let mut interner = interner_arc.write().unwrap();
         for cluster in clusters {
             let string_id::Cluster {
                 id: cluster_id,
@@ -607,7 +607,7 @@ impl Processor {
         if self.get_style().bibliography.is_none() {
             return None;
         }
-        let mut last_bibliography = self.last_bibliography.lock();
+        let mut last_bibliography = self.last_bibliography.lock().unwrap();
         let new = self.get_bibliography_map();
         let old = std::mem::replace(&mut *last_bibliography, SavedBib::new());
         let mut update = BibliographyUpdate::new();
@@ -645,7 +645,7 @@ impl Processor {
 
     pub fn all_clusters_str(&self) -> FnvHashMap<SmartString, Arc<MarkupOutput>> {
         let cluster_ids = self.cluster_ids();
-        let interner = self.interner.read();
+        let interner = self.interner.read().unwrap();
         let mut mapping = FnvHashMap::default();
         mapping.reserve(cluster_ids.len());
         for &raw in cluster_ids.iter() {
@@ -890,7 +890,7 @@ impl Processor {
             let interner = self.interner.clone();
             let preview_id = self.preview_cluster_id;
             move |pos| {
-                let mut interner = interner.write();
+                let mut interner = interner.write().unwrap();
                 let string_id::ClusterPosition { id, note } = pos;
                 let interned_id = id
                     .as_ref()
@@ -905,7 +905,7 @@ impl Processor {
         });
         self.set_cluster_order_inner(positions, |_, _| {})
             .map_err(|e| {
-                let reader = self.interner.read();
+                let reader = self.interner.read().unwrap();
                 e.to_external(&reader)
             })
     }

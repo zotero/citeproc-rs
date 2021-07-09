@@ -19,7 +19,7 @@ LIT_LEN(en_us, "<locale version=\"1.0\" xml:lang=\"en-US\">\n"
 
 void locale_fetch_callback(void *context, citeproc_rs::LocaleSlot *slot, const char *lang) {
         printf("context carried: %s\n", *((char **)context));
-        citeproc_rs::citeproc_rs_write_locale_slot(slot, en_us, en_us_len);
+        citeproc_rs::citeproc_rs_locale_slot_write(slot, en_us, en_us_len);
 }
 
 int main() {
