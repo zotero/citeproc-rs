@@ -3,13 +3,15 @@
 
 language = "C"
 include_guard = "_CITEPROC_RS_H"
-cpp_compat = true
-documentation_style = "c"
 
 [parse.expand]
 crates = ["citeproc-ffi"]
 
-# [export.rename]
-# "Exec" = "hyper_executor"
-# "Io" = "hyper_io"
-# "Task" = "hyper_task"
+[export]
+prefix = "citeproc_rs_"
+rename_items = "snake_case"
+
+[enum]
+# OUTPUT_FORMAT_HTML.
+rename_variants = "ScreamingSnakeCase"
+prefix_with_name = true

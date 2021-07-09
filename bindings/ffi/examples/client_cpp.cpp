@@ -1,9 +1,8 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <string.h>
+#include <iostream>
+#include <exception>
+#include <string>
 
-#include "citeproc_rs.h"
+#include "citeproc_rs.hpp"
 
 // length excluding null terminator
 #define STRLEN(s) (sizeof(s)/sizeof(s[0]) - 1)
@@ -18,22 +17,22 @@ LIT_LEN(en_us, "<locale version=\"1.0\" xml:lang=\"en-US\">\n"
                 "<terms> </terms>"
                 "</locale>");
 
-void locale_fetch_callback(void *context, citeproc_rs_locale_slot *slot, const char *lang) {
+void locale_fetch_callback(void *context, citeproc_rs::LocaleSlot *slot, const char *lang) {
         printf("context carried: %s\n", *((char **)context));
-        citeproc_rs_write_locale_slot(slot, en_us, en_us_len);
+        citeproc_rs::citeproc_rs_write_locale_slot(slot, en_us, en_us_len);
 }
 
 int main() {
-        char *context_ex = "example context";
+        const char *context_ex = "example context";
         void *context = (void *) &context_ex;
-        citeproc_rs_init_options init = {
+        citeproc_rs::InitOptions init = {
                 .style = style,
                 .style_len = style_len,
                 .locale_fetch_context = context,
                 .locale_fetch_callback = locale_fetch_callback,
-                .format = CITEPROC_RS_OUTPUT_FORMAT_HTML,
+                .format = citeproc_rs::OutputFormat::html,
         };
-        citeproc_rs_processor *proc = citeproc_rs_processor_new(init);
+        citeproc_rs::Processor *proc = citeproc_rs::citeproc_rs_processor_new(init);
 
         const char *ref_json = "{"
                 "\"id\": \"item\","
@@ -41,11 +40,11 @@ int main() {
                 "\"title\": \"the title\""
         "}";
         size_t ref_json_len = strlen(ref_json);
-        char *result = citeproc_rs_processor_format_one(proc, ref_json, ref_json_len);
+        char *result = citeproc_rs::citeproc_rs_processor_format_one(proc, ref_json, ref_json_len);
         if (result) {
                 assert(strcmp(result, "the title") == 0);
                 printf("success: %s\n", result);
         }
-        citeproc_rs_string_free(result);
-        citeproc_rs_processor_free(proc);
+        citeproc_rs::citeproc_rs_string_free(result);
+        citeproc_rs::citeproc_rs_processor_free(proc);
 }

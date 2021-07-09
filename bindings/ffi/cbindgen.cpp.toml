@@ -1,0 +1,23 @@
+# See https://github.com/eqrion/cbindgen/blob/master/docs.md#cbindgentoml
+# for detailed documentation
+
+language = "C++"
+include_guard = "_CITEPROC_RS_HPP"
+
+namespaces = ["citeproc_rs"]
+
+[parse.expand]
+crates = ["citeproc-ffi"]
+
+[export]
+rename_items = "none"
+
+[fn]
+prefix = ""
+
+[enum]
+rename_variants = "SnakeCase"
+derive_helper_methods = true
+
+[export.rename]
+"citeproc_rs" = "processor"

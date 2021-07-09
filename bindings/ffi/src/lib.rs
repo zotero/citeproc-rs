@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use citeproc::prelude::*;
+use citeproc::prelude::{InitOptions as RsInitOptions, Processor as RustProcessor, *};
 use csl::{Lang, Locale};
 
 #[macro_use]
@@ -11,9 +11,9 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 /// Wrapper for a Processor, initialized with one style and any required locales
-pub struct citeproc_rs(Processor);
+pub struct Processor(RustProcessor);
 
-type citeproc_fetch_locale_callback =
+type LocaleFetchCallback =
     Option<unsafe extern "C" fn(context: *mut c_void, slot: *mut LocaleSlot, *const c_char)>;
 
 pub struct LocaleSlot {
@@ -21,14 +21,14 @@ pub struct LocaleSlot {
     lang: *const Lang,
 }
 
-struct FFILocaleFetcher {
+struct LocaleFetcher {
     context: *mut c_void,
-    callback: citeproc_fetch_locale_callback,
+    callback: LocaleFetchCallback,
     storage: LocaleStorage,
 }
 
-impl FFILocaleFetcher {
-    /// get `to_fetch` from `Processor::get_langs_in_use()`
+impl LocaleFetcher {
+    /// get `to_fetch` from `RustProcessor::get_langs_in_use()`
     fn build(mut self, to_fetch: &[Lang]) -> LocaleStorage {
         use std::io::Write;
         let mut string_repr = Vec::<u8>::with_capacity(20);
@@ -75,54 +75,44 @@ ffi_fn! {
     }
 }
 
-// impl LocaleFetcher for FFILocaleFetcher {
-//     fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
-//     }
-//
-//     fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError> {
-//     }
-// }
-
-// fn utf8_from_raw<'a>(style: &'a *const c_char, style_len: usize) -> &'a str {
-// }
-
 #[repr(u8)]
-pub enum citeproc_rs_output_format {
-    HTML = 0,
-    RTF = 1,
-    PLAIN = 2,
+pub enum OutputFormat {
+    Html,
+    Rtf,
+    Plain,
 }
 
 #[repr(C)]
-pub struct citeproc_rs_init_options {
+pub struct InitOptions {
     style: *const c_char,
     style_len: usize,
     locale_fetch_context: *mut libc::c_void,
-    locale_fetch_callback: citeproc_fetch_locale_callback,
-    format: citeproc_rs_output_format,
+    locale_fetch_callback: LocaleFetchCallback,
+    format: OutputFormat,
 }
 
 ffi_fn! {
-    fn citeproc_rs_new(init: citeproc_rs_init_options) -> *mut citeproc_rs {
+    /// Creates a new Processor from InitOptions.
+    fn citeproc_rs_processor_new(init: InitOptions) -> *mut Processor {
         let style = unsafe { utf8_from_raw!(init.style, init.style_len) };
-        let rs_init = InitOptions {
+        let rs_init = RsInitOptions {
             format: match init.format {
-                citeproc_rs_output_format::HTML => SupportedFormat::Html,
-                citeproc_rs_output_format::RTF => SupportedFormat::Rtf,
-                citeproc_rs_output_format::PLAIN => SupportedFormat::Plain,
+                OutputFormat::Html => SupportedFormat::Html,
+                OutputFormat::Rtf => SupportedFormat::Rtf,
+                OutputFormat::Plain => SupportedFormat::Plain,
             },
             style,
             fetcher: Some(Arc::new(PredefinedLocales::bundled_en_us())),
             ..Default::default()
         };
-        let mut proc = match Processor::new(rs_init) {
+        let mut proc = match RustProcessor::new(rs_init) {
             Ok(p) => p,
             Err(e) => panic!("{}", e),
         };
         let langs = proc.get_langs_in_use();
         if !langs.is_empty() {
             if let Some(_) = init.locale_fetch_callback {
-                let ffi_locales = FFILocaleFetcher {
+                let ffi_locales = LocaleFetcher {
                     callback: init.locale_fetch_callback,
                     context: init.locale_fetch_context,
                     storage: LocaleStorage { locales: Vec::with_capacity(langs.len()) },
@@ -131,20 +121,21 @@ ffi_fn! {
                 proc.store_locales(locales)
             }
         }
-        Box::into_raw(Box::new(citeproc_rs(proc)))
+        Box::into_raw(Box::new(Processor(proc)))
     }
 }
 
 ffi_fn! {
-    fn citeproc_rs_free(ptr: *mut citeproc_rs) {
-        if !ptr.is_null() {
-            drop(unsafe { Box::from_raw(ptr) });
+    /// Frees a Processor.
+    fn citeproc_rs_processor_free(processor: *mut Processor) {
+        if !processor.is_null() {
+            drop(unsafe { Box::from_raw(processor) });
         }
     }
 }
 
 ffi_fn! {
-    /// Frees a string returned from citeproc_rs_ API.
+    /// Frees a string returned from  API.
     fn citeproc_rs_string_free(ptr: *mut c_char) {
         if !ptr.is_null() {
             drop(unsafe { CString::from_raw(ptr) });
@@ -155,11 +146,11 @@ ffi_fn! {
 ffi_fn! {
     /// let reference: [String: Any] = [ "id": "blah", "type": "book", ... ];
     /// in Swift, JSONSerialization.data(reference).withUnsafeBytes({ rBytes in
-    ///     citeproc_rs_format_one(processor, rBytes.baseAddress, rBytes.count)
+    ///     format_one(processor, rBytes.baseAddress, rBytes.count)
     /// })
     ///
     /// May return null.
-    fn citeproc_rs_format_one(processor: *mut citeproc_rs, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
+    fn citeproc_rs_processor_format_one(processor: *mut Processor, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
         let ref_json = unsafe { utf8_from_raw!(ref_bytes, ref_bytes_len) };
         let reference: Reference = serde_json::from_str(ref_json).unwrap();
         let id = reference.id.clone();
@@ -179,4 +170,3 @@ ffi_fn! {
         }
     }
 }
-
