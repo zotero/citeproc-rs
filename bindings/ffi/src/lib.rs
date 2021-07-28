@@ -1,9 +1,9 @@
 #![allow(non_camel_case_types)]
 
 // #[macro_use]
-extern crate ffi_helpers;
+// extern crate ffi_helpers;
 
-use citeproc::prelude::{InitOptions as RsInitOptions, Processor as RustProcessor, *};
+use citeproc::prelude::{InitOptions as RsInitOptions, *};
 use csl::{Lang, Locale};
 
 #[macro_use]
@@ -15,19 +15,55 @@ mod nullable;
 
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone, Error, PartialEq)]
+#[derive(Debug, Error)]
+#[repr(C)]
 pub enum FFIError {
     #[error("A null pointer was passed in where it wasn't expected")]
     NullPointer,
-    #[error("{0}")]
-    Reordering(#[source] citeproc::ReorderingError),
-    #[error("caught panic unwinding")]
-    CaughtPanic,
-    #[error("attempted to use a poisoned Processor")]
+    #[error("caught panic unwinding: {message}")]
+    CaughtPanic {
+        message: String,
+        #[cfg(feature = "backtrace")]
+        backtrace: Option<std::backtrace::Backtrace>,
+    },
+    #[error("attempted to use a driver after a panic poisoned it")]
     Poisoned,
+    #[error("{0}")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("{0}")]
+    Reordering(#[from] citeproc::ReorderingError),
 }
 
-export_error_handling_functions!();
+#[repr(i32)]
+pub enum ErrorCode {
+    None = 0,
+    NullPointer = 1,
+    CaughtPanic = 2,
+    Poisoned = 3,
+    Utf8 = 4,
+    Reordering = 5,
+}
+
+impl FFIError {
+    pub(crate) fn from_caught_panic(e: Box<dyn std::any::Any + Send>) -> Self {
+        let message = e.downcast::<String>().map(|x| *x).unwrap_or_else(|x| {
+            x.downcast_ref::<&str>()
+                .map(|x| *x)
+                .unwrap_or("<catch_unwind held non-string object>")
+                .into()
+        });
+        FFIError::CaughtPanic { message }
+    }
+    pub(crate) fn code(&self) -> ErrorCode {
+        match self {
+            Self::NullPointer => ErrorCode::NullPointer,
+            Self::CaughtPanic { .. } => ErrorCode::CaughtPanic,
+            Self::Poisoned => ErrorCode::Poisoned,
+            Self::Utf8(_) => ErrorCode::Utf8,
+            Self::Reordering(_) => ErrorCode::Reordering,
+        }
+    }
+}
 
 use std::sync::Once;
 static INITIALISED_LOG_CRATE: Once = Once::new();
@@ -44,14 +80,14 @@ use libc::{c_char, c_void};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-/// Wrapper for a Processor, initialized with one style and any required locales
+/// Wrapper for a driver, initialized with one style and any required locales
 /// Contains an Option<citeproc_rs::Processor>, because to survive panics we want to be able to
 /// write a safe value that won't be in an inconsistent state after panicking.
-pub struct Processor(Option<RustProcessor>);
+pub struct Driver(Option<Processor>);
 
 /// This writes the safe state (None) and also drops the processor and all its memory. If you
 /// attempt to use it again, you'll get an error.
-impl macros::MakeUnwindSafe for Processor {
+impl macros::MakeUnwindSafe for Driver {
     fn make_unwind_safe(&mut self) {
         self.0 = None;
     }
@@ -74,7 +110,7 @@ struct LocaleFetcher {
 }
 
 impl LocaleFetcher {
-    /// get `to_fetch` from `RustProcessor::get_langs_in_use()`
+    /// get `to_fetch` from `Processor::get_langs_in_use()`
     fn build(mut self, to_fetch: &[Lang]) -> LocaleStorage {
         use std::io::Write;
         let mut string_repr = Vec::<u8>::with_capacity(20);
@@ -84,7 +120,7 @@ impl LocaleFetcher {
             }
             write!(&mut string_repr, "{}\0", lang).expect("in-memory write should not fail");
             let lang_str_ref = CStr::from_bytes_with_nul(string_repr.as_ref())
-                .expect("definitely formatted this CStr with a null byte?");
+                .expect("definitely formatted thistruct s CStr with a null byte?");
             let mut slot = LocaleSlot {
                 storage: &mut self.storage,
                 lang,
@@ -142,7 +178,7 @@ pub struct InitOptions {
 
 ffi_fn! {
     /// Creates a new Processor from InitOptions.
-    fn citeproc_rs_processor_new(init: InitOptions) -> *mut Processor {
+    fn citeproc_rs_driver_new(init: InitOptions) -> *mut Driver {
         let style = unsafe { utf8_from_raw!(init.style, init.style_len) };
         let rs_init = RsInitOptions {
             format: match init.format {
@@ -154,7 +190,7 @@ ffi_fn! {
             fetcher: Some(Arc::new(PredefinedLocales::bundled_en_us())),
             ..Default::default()
         };
-        let mut proc = match RustProcessor::new(rs_init) {
+        let mut proc = match Processor::new(rs_init) {
             Ok(p) => p,
             Err(e) => panic!("{}", e),
         };
@@ -170,15 +206,15 @@ ffi_fn! {
                 proc.store_locales(locales)
             }
         }
-        Box::into_raw(Box::new(Processor(Some(proc))))
+        Box::into_raw(Box::new(Driver(Some(proc))))
     }
 }
 
 ffi_fn! {
     /// Frees a Processor.
-    fn citeproc_rs_processor_free(processor: *mut Processor) {
-        if !processor.is_null() {
-            drop(unsafe { Box::from_raw(processor) });
+    fn citeproc_rs_driver_free(driver: *mut Driver) {
+        if !driver.is_null() {
+            drop(unsafe { Box::from_raw(driver) });
         }
     }
 }
@@ -195,15 +231,15 @@ ffi_fn! {
 ffi_fn_nullify! {
     /// let reference: [String: Any] = [ "id": "blah", "type": "book", ... ];
     /// in Swift, JSONSerialization.data(reference).withUnsafeBytes({ rBytes in
-    ///     format_one(processor, rBytes.baseAddress, rBytes.count)
+    ///     format_one(driver, rBytes.baseAddress, rBytes.count)
     /// })
     ///
     /// May return null.
-    fn citeproc_rs_processor_format_one(#[nullify_on_panic] processor: *mut Processor, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
+    fn citeproc_rs_driver_format_one(#[nullify_on_panic] driver: *mut Driver, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
         let ref_json = unsafe { utf8_from_raw!(ref_bytes, ref_bytes_len) };
         let reference: Reference = serde_json::from_str(ref_json).unwrap();
         let id = reference.id.clone();
-        let proc = unsafe { &mut (*processor).0 };
+        let proc = unsafe { &mut (*driver).0 };
         if let Some(proc) = proc.as_mut() {
             proc.insert_reference(reference);
             let cluster = proc.preview_cluster_id();
@@ -218,13 +254,11 @@ ffi_fn_nullify! {
                     c.into_raw()
                 },
                 Err(e) => {
-                    errors::update_last_error(FFIError::Reordering(e));
-                    std::ptr::null_mut()
+                    errors::update_last_error(FFIError::Reordering(e))
                 }
             }
         } else {
-            errors::update_last_error(FFIError::Poisoned);
-            std::ptr::null_mut()
+            errors::update_last_error(FFIError::Poisoned)
         }
     }
 }

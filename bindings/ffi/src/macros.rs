@@ -8,8 +8,7 @@ macro_rules! utf8_from_raw {
         let string = match std::str::from_utf8(slice) {
             Ok(s) => s,
             Err(e) => {
-                crate::errors::update_last_error(e);
-                return crate::nullable::Nullable::NULL;
+                return crate::errors::update_last_error(e.into());
             }
         };
         string
@@ -69,14 +68,11 @@ macro_rules! ffi_fn_nullify {
                 $body
             }) {
                 Ok(v) => v,
-                Err(_) => {
+                Err(e) => {
                     $($arg.make_unwind_safe();)*
-                    // TODO: We shouldn't abort, but rather figure out how to
-                    // convert into the return type that the function errored.
                     log::error!("panic unwind caught");
                     // std::process::abort();
-                    crate::errors::update_last_error($crate::FFIError::CaughtPanic);
-                    crate::nullable::Nullable::NULL
+                    return crate::errors::update_last_error($crate::FFIError::from_caught_panic(e));
                 }
             }
         }
@@ -140,7 +136,7 @@ impl<T> Clone for PointerSetNull<T> {
 impl<T> Copy for PointerSetNull<T> {}
 impl<T> MakeUnwindSafe for PointerSetNull<T>
 where
-    T: Sized + MakeUnwindSafe
+    T: Sized + MakeUnwindSafe,
 {
     fn make_unwind_safe(&mut self) {
         let ptr = self.0;

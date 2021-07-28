@@ -346,7 +346,6 @@ dependencies = [
  "citeproc",
  "csl",
  "env_logger 0.8.4",
- "ffi_helpers",
  "libc",
  "log",
  "serde_json",
@@ -773,17 +772,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9a4820f0ccc8a7afd67c39a0f1a0f4b07ca1725164271a64939d7aeb9af065"
 dependencies = [
  "log",
-]
-
-[[package]]
-name = "ffi_helpers"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36a21261040ffbc3999698b39170d6e951f2823dd9ad7b50469309156060a50c"
-dependencies = [
- "failure",
- "failure_derive",
- "libc",
 ]
 
 [[package]]

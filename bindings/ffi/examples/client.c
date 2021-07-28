@@ -33,7 +33,7 @@ int main() {
                 .locale_fetch_callback = locale_fetch_callback,
                 .format = CITEPROC_RS_OUTPUT_FORMAT_HTML,
         };
-        citeproc_rs_processor *proc = citeproc_rs_processor_new(init);
+        citeproc_rs_driver *proc = citeproc_rs_driver_new(init);
 
         const char *ref_json = "{"
                 "\"id\": \"item\","
@@ -41,11 +41,11 @@ int main() {
                 "\"title\": \"the title\""
         "}";
         size_t ref_json_len = strlen(ref_json);
-        char *result = citeproc_rs_processor_format_one(proc, ref_json, ref_json_len);
+        char *result = citeproc_rs_driver_format_one(proc, ref_json, ref_json_len);
         if (result) {
                 assert(strcmp(result, "the title") == 0);
                 printf("success: %s\n", result);
         }
         citeproc_rs_string_free(result);
-        citeproc_rs_processor_free(proc);
+        citeproc_rs_driver_free(proc);
 }

@@ -133,8 +133,7 @@ macro_rules! null_pointer_check {
         #[allow(unused_imports)]
         use $crate::nullable::Nullable;
         if <_ as $crate::nullable::Nullable>::is_null(&$ptr) {
-            $crate::errors::update_last_error($crate::FFIError::NullPointer);
-            return $null;
+            $crate::errors::update_last_error($crate::FFIError::NullPointer)
         }
     }};
 }
