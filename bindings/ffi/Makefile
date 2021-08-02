@@ -42,7 +42,7 @@ $(MODULE_MAPS_HPP):
 LDFLAGS = -L$(RPATH) -Wl,-rpath,$(RPATH)
 LIBS = -lciteproc_rs
 CFLAGS = -I./modules/c/include
-CXXFLAGS = -std=c++11 -I./modules/cpp/include
+CXXFLAGS = -std=c++11 -stdlib=libc++ -I./modules/cpp/include
 # this also works, but it's a bit bleeding edge
 # CXXFLAGS = -std=c++2a -stdlib=libc++ -fmodules -fbuiltin-module-map -fimplicit-modules \
 	-fmodule-map-file=modules/cpp/include/module.modulemap
@@ -67,14 +67,16 @@ build/examples/%.c.o: examples/%.c
 	$(CC) -c $(CFLAGS) $(CPPFLAGS) -o $@ -MMD -MFbuild/examples/$*.c.d $<
 
 bin/client: build/examples/client.c.o
-	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
 bin/client_cpp: build/examples/client_cpp.cpp.o
-	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
 bin/panicking: build/examples/panicking.c.o
-	$(CC) $(LDFLAGS) -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
 
 .PHONY: examples
-examples: $(example_bins)
+examples: bin $(example_bins)
+bin:
+	mkdir -p bin
 
 .PHONY: clean
 clean:

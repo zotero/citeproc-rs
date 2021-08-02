@@ -1,9 +1,10 @@
 //! from crates.io/crates/ffi_helpers, with failure replaced with std::error::Error
 
 use crate::nullable::Nullable;
-use libc::c_char;
+use libc::{c_char, c_void};
 use std::{cell::RefCell, slice};
 
+use crate::buffer;
 use crate::{ErrorCode, FFIError};
 
 thread_local! {
@@ -12,7 +13,7 @@ thread_local! {
 
 /// Clear the `LAST_ERROR`.
 #[no_mangle]
-pub extern fn citeproc_rs_clear_last_error() {
+pub extern "C" fn citeproc_rs_clear_last_error() {
     let _ = take_last_error();
 }
 
@@ -22,22 +23,69 @@ pub fn take_last_error() -> Option<FFIError> {
 }
 
 /// Update the `thread_local` error, taking ownership of the `Error`.
+pub fn clear_last_error() {
+    let _ = take_last_error();
+}
+
+/// Update the `thread_local` error, taking ownership of the `Error`.
 pub fn update_last_error<N: Nullable>(err: FFIError) -> N {
     LAST_ERROR.with(|prev| *prev.borrow_mut() = Some(err));
     N::NULL
 }
 
+/// Update the `thread_local` error, taking ownership of the `Error`.
+pub fn update_last_error_return_code(err: FFIError) -> ErrorCode {
+    let code = err.code();
+    LAST_ERROR.with(|prev| *prev.borrow_mut() = Some(err));
+    code
+}
+
+/// Update the `thread_local` error, taking ownership of the `Error`.
+pub fn update_last_error_option(err: Option<FFIError>) -> ErrorCode {
+    let code = err.as_ref().map_or(ErrorCode::None, |x| x.code());
+    LAST_ERROR.with(|prev| *prev.borrow_mut() = err);
+    code
+}
+
+/// Returns either [ErrorCode::None] or [ErrorCode::BufferOps].
+#[no_mangle]
+pub unsafe extern "C" fn citeproc_rs_last_error_utf8(
+    buffer_ops: buffer::BufferOps,
+    user_data: *mut c_void,
+) -> ErrorCode {
+    let mut buffer = buffer::BufferWriter::new(buffer_ops, user_data);
+    buffer.clear();
+    let fmt_result = LAST_ERROR.with(|prev| {
+        prev.borrow()
+            .as_ref()
+            .map(|last_error| {
+                let formatted = last_error.to_string();
+                buffer.copy_to_user_noalloc(formatted.as_bytes()).map(|_| formatted.len())
+            })
+            .unwrap_or(Ok(0usize))
+    });
+    match fmt_result {
+        Ok(_bytes_written) => ErrorCode::None,
+        Err(_nul_error) => ErrorCode::BufferOps,
+    }
+}
+
 /// Return the error code for the last error. If you clear the error, this will give you
 /// [ErrorCode::None] (= `0`).
 #[no_mangle]
-pub extern fn citeproc_rs_last_error_code() -> ErrorCode {
-    LAST_ERROR.with(|current| current.borrow().as_ref().map_or(ErrorCode::None, |x| x.code()))
+pub extern "C" fn citeproc_rs_last_error_code() -> ErrorCode {
+    LAST_ERROR.with(|current| {
+        current
+            .borrow()
+            .as_ref()
+            .map_or(ErrorCode::None, |x| x.code())
+    })
 }
 
 /// Get the length of the last error message in bytes when encoded as UTF-8,
 /// including the trailing null. If the error is cleared, this returns 0.
 #[no_mangle]
-pub extern fn citeproc_rs_last_error_length() -> usize {
+pub extern "C" fn citeproc_rs_last_error_length() -> usize {
     LAST_ERROR.with(|prev| {
         prev.borrow()
             .as_ref()
@@ -49,7 +97,7 @@ pub extern fn citeproc_rs_last_error_length() -> usize {
 /// Get the length of the last error message in bytes when encoded as UTF-16,
 /// including the trailing null.
 #[no_mangle]
-pub extern fn citeproc_rs_last_error_length_utf16() -> usize {
+pub extern "C" fn citeproc_rs_last_error_length_utf16() -> usize {
     LAST_ERROR.with(|prev| {
         prev.borrow()
             .as_ref()
@@ -72,7 +120,7 @@ pub fn error_message() -> Option<String> {
 ///
 /// The provided buffer must be valid to write up to `length` bytes into.
 #[no_mangle]
-pub unsafe extern fn citeproc_rs_error_message_utf8(buf: *mut c_char, length: usize) -> isize {
+pub unsafe extern "C" fn citeproc_rs_error_message_utf8(buf: *mut c_char, length: usize) -> isize {
     crate::null_pointer_check!(buf);
     let buffer = slice::from_raw_parts_mut(buf as *mut u8, length as usize);
 
@@ -89,7 +137,7 @@ pub unsafe extern fn citeproc_rs_error_message_utf8(buf: *mut c_char, length: us
 /// The provided buffer must be valid to write `length` bytes into. That's not `length`
 /// UTF-16-encoded characters.
 #[no_mangle]
-pub unsafe extern fn citeproc_rs_error_message_utf16(buf: *mut u16, length: usize) -> isize {
+pub unsafe extern "C" fn citeproc_rs_error_message_utf16(buf: *mut u16, length: usize) -> isize {
     crate::null_pointer_check!(buf);
     let buffer = slice::from_raw_parts_mut(buf, length as usize);
 

@@ -11,14 +11,16 @@ mod errors;
 #[macro_use]
 mod macros;
 use macros::nullify_on_panic;
+mod buffer;
 mod nullable;
 
+use nullable::FromErrorCode;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 #[repr(C)]
 pub enum FFIError {
-    #[error("A null pointer was passed in where it wasn't expected")]
+    #[error("a null pointer was passed in where it wasn't expected")]
     NullPointer,
     #[error("caught panic unwinding: {message}")]
     CaughtPanic {
@@ -26,14 +28,21 @@ pub enum FFIError {
         #[cfg(feature = "backtrace")]
         backtrace: Option<std::backtrace::Backtrace>,
     },
-    #[error("attempted to use a driver after a panic poisoned it")]
+    #[error("poisoned: attempted to use a driver after a panic poisoned it")]
     Poisoned,
-    #[error("{0}")]
+    #[error("utf8 error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
-    #[error("{0}")]
+    #[error("reordering error: {0}")]
     Reordering(#[from] citeproc::ReorderingError),
+    #[error("buffer ops error: no buffer ops set or general  buffer write error")]
+    BufferOps,
+    #[error("null byte error: {0}")]
+    NullByte(#[from] buffer::NulError),
+    #[error("serde json conversion error: {0}")]
+    SerdeJson(#[from] serde_json::Error),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum ErrorCode {
     None = 0,
@@ -42,6 +51,9 @@ pub enum ErrorCode {
     Poisoned = 3,
     Utf8 = 4,
     Reordering = 5,
+    BufferOps = 6,
+    NullByte = 7,
+    SerdeJson = 8,
 }
 
 impl FFIError {
@@ -60,7 +72,10 @@ impl FFIError {
             Self::CaughtPanic { .. } => ErrorCode::CaughtPanic,
             Self::Poisoned => ErrorCode::Poisoned,
             Self::Utf8(_) => ErrorCode::Utf8,
+            Self::NullByte(..) => ErrorCode::NullByte,
             Self::Reordering(_) => ErrorCode::Reordering,
+            Self::BufferOps => ErrorCode::BufferOps,
+            Self::SerdeJson(_) => ErrorCode::SerdeJson,
         }
     }
 }
@@ -80,16 +95,24 @@ use libc::{c_char, c_void};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-/// Wrapper for a driver, initialized with one style and any required locales
+use crate::buffer::BufferWriter;
+
+/// Wrapper for a driver, initialized with one style and any required locales.
+///
+/// Not thread safe.
+///
 /// Contains an Option<citeproc_rs::Processor>, because to survive panics we want to be able to
 /// write a safe value that won't be in an inconsistent state after panicking.
-pub struct Driver(Option<Processor>);
+pub struct Driver {
+    processor: Option<Processor>,
+    buffer_ops: buffer::BufferOps,
+}
 
 /// This writes the safe state (None) and also drops the processor and all its memory. If you
 /// attempt to use it again, you'll get an error.
 impl macros::MakeUnwindSafe for Driver {
     fn make_unwind_safe(&mut self) {
-        self.0 = None;
+        self.processor = None;
     }
 }
 
@@ -174,6 +197,7 @@ pub struct InitOptions {
     locale_fetch_context: *mut libc::c_void,
     locale_fetch_callback: LocaleFetchCallback,
     format: OutputFormat,
+    buffer_ops: buffer::BufferOps,
 }
 
 ffi_fn! {
@@ -206,7 +230,10 @@ ffi_fn! {
                 proc.store_locales(locales)
             }
         }
-        Box::into_raw(Box::new(Driver(Some(proc))))
+        Box::into_raw(Box::new(Driver {
+            processor: Some(proc),
+            buffer_ops: init.buffer_ops,
+        }))
     }
 }
 
@@ -220,7 +247,7 @@ ffi_fn! {
 }
 
 ffi_fn! {
-    /// Frees a string returned from  API.
+    /// Frees a CString returned from an API or one written using [CSTRING_BUFFER_OPS].
     fn citeproc_rs_string_free(ptr: *mut c_char) {
         if !ptr.is_null() {
             drop(unsafe { CString::from_raw(ptr) });
@@ -228,37 +255,114 @@ ffi_fn! {
     }
 }
 
+fn result_to_error_code<F, T>(mut closure: F) -> T
+where
+    F: FnMut() -> Result<T, FFIError>,
+    T: FromErrorCode,
+{
+    let result = closure();
+    match result {
+        Ok(value) => {
+            errors::clear_last_error();
+            return value;
+        }
+        Err(e) => {
+            let code = errors::update_last_error_return_code(e);
+            T::from_error_code(code)
+        }
+    }
+}
+
+use core::ptr::NonNull;
+
+unsafe fn borrow_raw_ptr_mut<'a, T>(ptr: *mut T) -> Result<&'a mut T, FFIError> {
+    let ptr = NonNull::new(ptr).ok_or(FFIError::NullPointer)?;
+    Ok(&mut *ptr.as_ptr())
+}
+
+unsafe fn utf8_slice_non_null<'a, T>(ptr: *const T, len: usize) -> Result<&'a [T], FFIError> {
+    if !ptr.is_null() {
+        Ok(core::slice::from_raw_parts(ptr, len))
+    } else {
+        Err(FFIError::NullPointer)
+    }
+}
+
+unsafe fn borrow_utf8_slice_non_null<'a>(
+    ptr: *const c_char,
+    len: usize,
+) -> Result<&'a str, FFIError> {
+    if !ptr.is_null() {
+        let ptr = ptr.cast::<u8>();
+        let slice = core::slice::from_raw_parts(ptr, len);
+        let string = core::str::from_utf8(slice)?;
+        Ok(string)
+    } else {
+        Err(FFIError::NullPointer)
+    }
+}
+
 ffi_fn_nullify! {
-    /// let reference: [String: Any] = [ "id": "blah", "type": "book", ... ];
-    /// in Swift, JSONSerialization.data(reference).withUnsafeBytes({ rBytes in
-    ///     format_one(driver, rBytes.baseAddress, rBytes.count)
-    /// })
+    fn citeproc_rs_driver_format_bibliography(#[nullify_on_panic] driver: *mut Driver, user_buf: *mut c_void) -> ErrorCode {
+        result_to_error_code(|| {
+            let driver = unsafe { borrow_raw_ptr_mut(driver) } ?;
+            let mut buffer = unsafe { BufferWriter::new(driver.buffer_ops, user_buf) };
+            buffer.clear();
+            buffer.write_str("<b>success_write</b>")?;
+            buffer.write_str("this has a null byte here \0 rest")?;
+            Ok(ErrorCode::None)
+        })
+    }
+}
+
+ffi_fn_nullify! {
+    /// Inserts a reference and formats a single cluster with a single cite to that reference using preview_citation_cluster.
+    /// The reference in the processor will be overwritten and won't be restored afterward.
     ///
-    /// May return null.
-    fn citeproc_rs_driver_format_one(#[nullify_on_panic] driver: *mut Driver, ref_bytes: *const c_char, ref_bytes_len: usize) -> *mut c_char {
-        let ref_json = unsafe { utf8_from_raw!(ref_bytes, ref_bytes_len) };
-        let reference: Reference = serde_json::from_str(ref_json).unwrap();
-        let id = reference.id.clone();
-        let proc = unsafe { &mut (*driver).0 };
-        if let Some(proc) = proc.as_mut() {
+    /// Writes the result into user_buf using the buffer_ops interface.
+    ///
+    /// Returns an error code indicative of what the LAST_ERROR will contain when checked.
+    fn citeproc_rs_driver_preview_reference(#[nullify_on_panic] driver: *mut Driver, ref_json: *const c_char, ref_json_len: usize, user_buf: *mut c_void) -> ErrorCode {
+        result_to_error_code(|| {
+            // SAFETY: We assume people have passed a valid Driver pointer over FFI.
+            let driver = unsafe { borrow_raw_ptr_mut(driver) } ?;
+            let proc = driver.processor.as_mut().ok_or(FFIError::Poisoned)?;
+
+            // SAFETY: we asked folks to give us a JSON string.
+            let ref_json = unsafe { borrow_utf8_slice_non_null(ref_json, ref_json_len) } ?;
+            let reference: Reference = serde_json::from_str(ref_json)?;
+            let id = reference.id.clone();
+
+            let mut buffer = unsafe { BufferWriter::new(driver.buffer_ops, user_buf) };
+
             proc.insert_reference(reference);
             let cluster = proc.preview_cluster_id();
             let result = proc.preview_citation_cluster(
                 &[Cite::basic(id)],
                 PreviewPosition::MarkWithZero(&[ClusterPosition { id: cluster, note: None }]),
                 None,
-            );
-            match result {
-                Ok(result) => {
-                    let c = CString::new(result.as_bytes()).unwrap();
-                    c.into_raw()
-                },
-                Err(e) => {
-                    errors::update_last_error(FFIError::Reordering(e))
-                }
-            }
-        } else {
-            errors::update_last_error(FFIError::Poisoned)
-        }
+            )?;
+            buffer.clear();
+            buffer.write_str(&result)?;
+            Ok(ErrorCode::None)
+        })
+    }
+}
+
+ffi_fn_nullify! {
+    /// Inserts a reference.
+    ///
+    /// Returns an error code indicative of what the LAST_ERROR will contain when checked.
+    fn citeproc_rs_driver_insert_reference(#[nullify_on_panic] driver: *mut Driver, ref_json: *const c_char, ref_json_len: usize) -> ErrorCode {
+        result_to_error_code(|| {
+            // SAFETY: We assume people have passed a valid Driver pointer over FFI.
+            let driver = unsafe { borrow_raw_ptr_mut(driver) } ?;
+            let proc = driver.processor.as_mut().ok_or(FFIError::Poisoned)?;
+            // SAFETY: we asked folks to give us a JSON string.
+            let ref_json = unsafe { borrow_utf8_slice_non_null(ref_json, ref_json_len) } ?;
+            let reference: Reference = serde_json::from_str(ref_json)?;
+            proc.insert_reference(reference);
+            Ok(ErrorCode::None)
+        })
     }
 }

@@ -23,6 +23,8 @@ void locale_fetch_callback(void *context, citeproc_rs_locale_slot *slot, const c
         citeproc_rs_locale_slot_write(slot, en_us, en_us_len);
 }
 
+const citeproc_rs_buffer_ops buffer_ops = citeproc_rs_managed_buffer_ops;
+
 int main() {
         char *context_ex = "example context";
         void *context = (void *) &context_ex;
@@ -32,6 +34,7 @@ int main() {
                 .locale_fetch_context = context,
                 .locale_fetch_callback = locale_fetch_callback,
                 .format = CITEPROC_RS_OUTPUT_FORMAT_HTML,
+                .buffer_ops = buffer_ops,
         };
         citeproc_rs_driver *proc = citeproc_rs_driver_new(init);
 
@@ -41,11 +44,24 @@ int main() {
                 "\"title\": \"the title\""
         "}";
         size_t ref_json_len = strlen(ref_json);
-        char *result = citeproc_rs_driver_format_one(proc, ref_json, ref_json_len);
-        if (result) {
-                assert(strcmp(result, "the title") == 0);
-                printf("success: %s\n", result);
+        char *rendered = NULL;
+        char *err = NULL;
+
+        citeproc_rs_error_code code;
+
+        code = citeproc_rs_driver_preview_reference(proc, ref_json, ref_json_len, &rendered);
+        if (code == CITEPROC_RS_ERROR_CODE_NONE) {
+                assert(strcmp(rendered, "the title") == 0);
+                printf("success: %s\n", rendered);
+        } else {
+                citeproc_rs_last_error_utf8(buffer_ops, &err);
+                printf("err: %s", err);
         }
-        citeproc_rs_string_free(result);
+        // we allocated these two with managed in the buffer_write_callback
+        // calling free on NULL is fine
+        citeproc_rs_string_free(rendered);
+        citeproc_rs_string_free(err);
+        // but this one is allocated via rust Box and needs to be deallocated using Box::from_raw
+        // so just pass it back, the library knows what to do.
         citeproc_rs_driver_free(proc);
 }

@@ -8,7 +8,9 @@ macro_rules! utf8_from_raw {
         let string = match std::str::from_utf8(slice) {
             Ok(s) => s,
             Err(e) => {
-                return crate::errors::update_last_error(e.into());
+                return $crate::nullable::FromErrorCode::from_error_code(
+                    $crate::errors::update_last_error_return_code(e.into()),
+                );
             }
         };
         string
@@ -72,7 +74,9 @@ macro_rules! ffi_fn_nullify {
                     $($arg.make_unwind_safe();)*
                     log::error!("panic unwind caught");
                     // std::process::abort();
-                    return crate::errors::update_last_error($crate::FFIError::from_caught_panic(e));
+                    return $crate::nullable::FromErrorCode::from_error_code(
+                        $crate::errors::update_last_error_return_code($crate::FFIError::from_caught_panic(e))
+                    );
                 }
             }
         }

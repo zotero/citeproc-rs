@@ -1,3 +1,5 @@
+use crate::ErrorCode;
+
 /// An object which has an "obviously invalid" value, for use with the
 /// [`null_pointer_check!()`][npc] macro.
 ///
@@ -30,6 +32,20 @@ impl<T> Nullable for *const T {
 
     #[inline]
     fn is_null(&self) -> bool { *self == Self::NULL }
+}
+
+pub trait FromErrorCode {
+    fn from_error_code(code: ErrorCode) -> Self;
+}
+impl<N> FromErrorCode for N where N: Nullable {
+    fn from_error_code(_code: ErrorCode) -> Self {
+        Nullable::NULL
+    }
+}
+impl FromErrorCode for ErrorCode {
+    fn from_error_code(code: ErrorCode) -> Self {
+        code.into()
+    }
 }
 
 impl<T> Nullable for *mut T {
@@ -124,16 +140,14 @@ impl Nullable for () {
 ///
 /// [`NULL`]: trait.Nullable.html#associatedconstant.NULL
 /// [`NullPointer`]: struct.NullPointer.html
+#[doc(hidden)]
 #[macro_export]
 macro_rules! null_pointer_check {
-    ($ptr:expr) => {
-        $crate::null_pointer_check!($ptr, Nullable::NULL)
-    };
-    ($ptr:expr, $null:expr) => {{
-        #[allow(unused_imports)]
-        use $crate::nullable::Nullable;
+    ($ptr:expr) => {{
         if <_ as $crate::nullable::Nullable>::is_null(&$ptr) {
-            $crate::errors::update_last_error($crate::FFIError::NullPointer)
+            let code: $crate::ErrorCode = 
+                $crate::errors::update_last_error_return_code($crate::FFIError::NullPointer);
+            return $crate::nullable::FromErrorCode::from_error_code(code);
         }
     }};
 }
