@@ -444,6 +444,7 @@ impl Default for OrdinalMatch {
 #[strum(serialize_all = "kebab_case")]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 #[non_exhaustive]
+#[repr(u32)]
 pub enum LocatorType {
     Book,
     Chapter,
