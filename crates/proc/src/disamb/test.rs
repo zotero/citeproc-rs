@@ -117,7 +117,8 @@ fn test() {
     println!("{}", dfa2.debug_graph(db));
 
     db.insert_references(vec![refr, refr2]);
-    let mut interner = string_interner::StringInterner::default();
+    use citeproc_db::ClusterId;
+    let mut interner = string_interner::StringInterner::<ClusterId>::new();
     let id = interner.get_or_intern("1");
     db.init_clusters(vec![(
         id,
