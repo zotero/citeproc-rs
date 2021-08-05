@@ -26,7 +26,7 @@ use indextree::NodeId;
 
 pub trait ImplementationDetails {
     fn get_formatter(&self) -> Markup;
-    fn lookup_interned_string(&self, symbol: string_interner::DefaultSymbol)
+    fn lookup_cluster_id(&self, symbol: ClusterId)
         -> Option<SmartString>;
 }
 

@@ -6,29 +6,15 @@
 
 #![allow(dead_code)]
 
-use serde::{Deserialize, Serialize};
 use super::processor::Interner;
-use citeproc_db::ClusterId as ClusterIdInternal;
+use citeproc_db::ClusterId;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterMode, SmartString};
 use csl::Atom;
 use fnv::FnvHashMap;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
-
-/// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
-/// identifier, but `citeproc_db` is not responsible for interning those ids.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ClusterId(ClusterIdInternal);
-
-impl ClusterId {
-    pub(crate) fn new(internal: ClusterIdInternal) -> Self {
-        ClusterId(internal)
-    }
-    pub(crate) fn raw(&self) -> ClusterIdInternal {
-        self.0
-    }
-}
 
 /// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
 ///
@@ -112,12 +98,12 @@ pub mod string_id {
     //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
     //! consumers.
     use super::{BibEntry, BibliographyUpdate};
-    use serde::{Deserialize, Serialize};
     use citeproc_io::{
         output::{markup::Markup, OutputFormat},
         SmartString,
     };
     use fnv::FnvHashMap;
+    use serde::{Deserialize, Serialize};
     use std::sync::Arc;
 
     pub type Cluster<O = Markup> = super::Cluster<O, SmartString>;

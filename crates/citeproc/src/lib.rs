@@ -29,7 +29,15 @@ pub mod prelude {
     pub use citeproc_proc::db::{ImplementationDetails, IrDatabase};
     pub use citeproc_db::PredefinedLocales;
     pub use csl::Atom;
+
+    pub use citeproc_db::ClusterId;
+    pub use citeproc_io::{ClusterMode, CiteMode, Locator, Locators, NumberLike};
 }
+
+#[doc(no_inline)]
+pub use citeproc_io as io;
+#[doc(no_inline)]
+pub use csl;
 
 pub fn random_cluster_id() -> citeproc_io::SmartString {
     use rand::distributions::Alphanumeric;

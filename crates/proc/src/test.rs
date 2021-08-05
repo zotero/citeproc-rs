@@ -60,9 +60,9 @@ impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         self.formatter.clone()
     }
-    fn lookup_interned_string(
+    fn lookup_cluster_id(
         &self,
-        _symbol: string_interner::DefaultSymbol,
+        _symbol: ClusterId,
     ) -> Option<SmartString> {
         None
     }
