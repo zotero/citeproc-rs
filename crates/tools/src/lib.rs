@@ -424,7 +424,7 @@ fn get_cmd_run(rest: &[String], release: bool) -> String {
     let rest = rest.join(" ");
     let release = if release { " --release" } else { "" };
     let mut cmd = format!(
-        "cargo test --package citeproc{} --test suite --features test-jemalloc -- ",
+        "cargo test --package citeproc{} --features test-allocator --test suite -- ",
         release
     );
     cmd.push_str(&rest);
@@ -433,7 +433,7 @@ fn get_cmd_run(rest: &[String], release: bool) -> String {
 
 fn get_cmd(rest: &[String]) -> String {
     let rest = rest.join(" ");
-    let mut cmd = "cargo test -Z unstable-options --package citeproc --test suite --features test-jemalloc -- -Z unstable-options --format json -- ".to_owned();
+    let mut cmd = "cargo test -Z unstable-options --package citeproc --test suite -- -Z unstable-options --format json -- ".to_owned();
     cmd.push_str(&rest);
     cmd
 }
