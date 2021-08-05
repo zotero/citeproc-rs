@@ -9,11 +9,11 @@
 
 use cfg_if::cfg_if;
 cfg_if! {
-    if #[cfg(feature="test-jemalloc")] {
+    if #[cfg(all(feature="test-allocator-jemalloc", feature="jemallocator"))] {
         use jemallocator::Jemalloc;
         #[global_allocator]
         static A: Jemalloc = Jemalloc;
-    } else if #[cfg(feature="test-dlmalloc")] {
+    } else if #[cfg(all(feature="test-allocator-dlmalloc", feature="dlmalloc"))] {
         #[global_allocator]
         static A: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
     } else {

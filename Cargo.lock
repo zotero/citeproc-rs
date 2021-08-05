@@ -295,7 +295,6 @@ dependencies = [
  "fnv",
  "indexmap",
  "insta",
- "jemallocator",
  "lazy_static",
  "log",
  "nom 6.1.2",
@@ -628,7 +627,7 @@ dependencies = [
 [[package]]
 name = "datatest"
 version = "0.6.4"
-source = "git+https://github.com/cormacrelf/datatest?branch=main#0c12efabd3c0d1769b62d241f51aced05b35df11"
+source = "git+https://github.com/cormacrelf/datatest?branch=compile_fail#96d0154a9cda88feae720c434302b412b7d2be66"
 dependencies = [
  "ctor",
  "datatest-derive",
@@ -643,7 +642,7 @@ dependencies = [
 [[package]]
 name = "datatest-derive"
 version = "0.6.4"
-source = "git+https://github.com/cormacrelf/datatest?branch=main#0c12efabd3c0d1769b62d241f51aced05b35df11"
+source = "git+https://github.com/cormacrelf/datatest?branch=compile_fail#96d0154a9cda88feae720c434302b412b7d2be66"
 dependencies = [
  "proc-macro2",
  "quote",
