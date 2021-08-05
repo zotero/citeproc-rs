@@ -404,7 +404,6 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     /// define an `<intext>` node.
     pub fn leading_names_block_or_title(&self, in_substitute: bool) -> Option<NodeId> {
         match self.get_node()?.get().0 {
-
             // Name block? Yes.
             IR::Name(_) => Some(self.node),
 
@@ -530,8 +529,7 @@ pub(crate) fn apply_cluster_mode(
             {
                 let gen4 = Arc::make_mut(gen4);
                 log::debug!("called Composite, with tree {:?}", gen4.tree_ref());
-                let intext_part = if let Some(mut removed_node) = gen4.tree_mut().suppress_author()
-                {
+                let intext_part = if let Some(removed_node) = gen4.tree_mut().suppress_author() {
                     log::debug!(
                         "removed node from composite: {}",
                         gen4.tree().tree_at_node(removed_node),

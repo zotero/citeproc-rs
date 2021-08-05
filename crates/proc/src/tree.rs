@@ -1,5 +1,3 @@
-use crate::db::IrGen;
-use csl::Collapse;
 use indextree::Arena;
 
 use crate::prelude::*;
@@ -10,6 +8,7 @@ pub(crate) struct IrTree<O: OutputFormat = Markup> {
     pub(crate) arena: IrArena<O>,
 }
 
+#[allow(dead_code)]
 impl<O: OutputFormat> IrTree<O> {
     pub(crate) fn new(root: NodeId, arena: IrArena<O>) -> Self {
         Self { root, arena }
@@ -43,6 +42,8 @@ impl<O: OutputFormat> IrTree<O> {
         self.arena.get_mut(self.root)
     }
 }
+
+#[allow(dead_code)]
 impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     pub(crate) fn new(node: NodeId, arena: &'a IrArena<O>) -> Self {
         Self { node, arena }
@@ -86,6 +87,7 @@ pub(crate) struct IrTreeMut<'a, O: OutputFormat = Markup> {
     pub arena: &'a mut IrArena<O>,
 }
 
+#[allow(dead_code)]
 impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     pub(crate) fn children<'b>(&'b self) -> impl Iterator<Item = IrTreeRef<'b, O>> + 'b {
         let Self { node, arena } = self;
@@ -116,6 +118,7 @@ impl<'a> core::ops::Deref for IrTreeMut<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     pub(crate) fn root_mut(&mut self) -> Option<&mut indextree::Node<(IR<O>, GroupVars)>> {
         self.arena.get_mut(self.node)
@@ -207,6 +210,7 @@ fn arena_copy_tree<T: Clone>(
     Some(dst_root)
 }
 
+#[allow(dead_code)]
 impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     pub(crate) fn list_year_suffix_hooks(&self) -> Vec<NodeId> {
         fn list_ysh_inner<O: OutputFormat>(tree: IrTreeRef<O>, vec: &mut Vec<NodeId>) {
@@ -228,6 +232,7 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     }
 }
 
+#[allow(dead_code)]
 impl<O: OutputFormat> IrTree<O> {
     pub(crate) fn mutable(&mut self) -> IrTreeMut<O> {
         IrTreeMut {
@@ -240,6 +245,7 @@ impl<O: OutputFormat> IrTree<O> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     pub(crate) fn tree_at_node(&self, node: NodeId) -> IrTreeRef<O> {
         IrTreeRef {

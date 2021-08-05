@@ -454,7 +454,6 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             _ => val,
         };
     }
-    let cloned_gen = gen_date.clone();
     let do_single =
         |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
             let mut seen_one = false;

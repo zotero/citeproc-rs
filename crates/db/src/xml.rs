@@ -286,7 +286,6 @@ cfg_if::cfg_if! {
         pub trait LocaleFetcher: RefUnwindSafe {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
-                use std::str::FromStr;
                 let s = self.fetch_string(lang).ok()??;
                 Some(Locale::parse(&s).ok()?)
             }
