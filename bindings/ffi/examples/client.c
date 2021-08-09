@@ -30,8 +30,25 @@ void locale_fetch_callback(void *context, citeproc_rs_locale_slot *slot, const c
 
 const citeproc_rs_buffer_ops buffer_ops = citeproc_rs_cstring_buffer_ops;
 
+void log_write(void *user_data, citeproc_rs_log_level level, const uint8_t *modpath, size_t modpath_len, const uint8_t *message, size_t message_len) {
+    printf("[%.*s] %.*s\n", (int) modpath_len, modpath, (int) message_len, message);
+}
+
+const citeproc_rs_ffi_logger_v_table logger_ops = (citeproc_rs_ffi_logger_v_table) {
+    .write = log_write,
+    .flush = NULL,
+};
+
+// provided by citeproc-ffi
+void test_log_msg(size_t l, const char *a, size_t len);
+
 int main() {
-        citeproc_rs_log_init();
+
+        LIT_LEN(log_filter, "debug");
+        citeproc_rs_set_logger(NULL, logger_ops, CITEPROC_RS_LEVEL_FILTER_WARN, log_filter, log_filter_len);
+
+        test_log_msg(1, "hi", 2);
+
         char *context_ex = "example context";
         void *context = (void *) &context_ex;
         char *rendered = NULL;

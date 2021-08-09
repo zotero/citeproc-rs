@@ -22,6 +22,21 @@ enum class ErrorCode : int32_t {
   indexing = 9,
   cluster_not_in_flow = 10,
   invalid_style = 11,
+  set_logger = 12,
+};
+
+enum class LevelFilter : uintptr_t {
+  off,
+  /// Corresponds to the `Error` log level.
+  error,
+  /// Corresponds to the `Warn` log level.
+  warn,
+  /// Corresponds to the `Info` log level.
+  info,
+  /// Corresponds to the `Debug` log level.
+  debug,
+  /// Corresponds to the `Trace` log level.
+  trace,
 };
 
 enum class LocatorType : uint32_t {
@@ -49,6 +64,14 @@ enum class LocatorType : uint32_t {
   title,
   unpublished,
   supplement,
+};
+
+enum class LogLevel : uintptr_t {
+  error = 1,
+  warn,
+  info,
+  debug,
+  trace,
 };
 
 enum class OutputFormat : uint8_t {
@@ -100,7 +123,6 @@ using ClearCallback = void(*)(void *user_data);
 /// If your write callback expects a `char **`, then you must supply a `char **`. If your write
 /// callback expects a C++ `std::string *`, then you must supply a `std::string *`.
 struct BufferOps {
-  /// Docs here
   WriteCallback write;
   ClearCallback clear;
 };
@@ -125,6 +147,15 @@ struct ClusterPosition {
   bool is_note;
   /// Ignored if is_note is NOT set
   uint32_t note_number;
+};
+
+using LoggerWriteCallback = void(*)(void *user_data, LogLevel level, const uint8_t *module_path, uintptr_t module_path_len, const uint8_t *src, uintptr_t src_len);
+
+using LoggerFlushCallback = void(*)(void *user_data);
+
+struct FFILoggerVTable {
+  LoggerWriteCallback write;
+  LoggerFlushCallback flush;
 };
 
 /// Either a positive-or-0 u32, or a negative ErrorCode. Represented as an i64.
@@ -263,6 +294,18 @@ ErrorCode citeproc_rs_last_error_utf8(BufferOps buffer_ops,
 /// The provided buffer must be valid to write `length` bytes into. That's not `length`
 /// UTF-16-encoded characters.
  intptr_t citeproc_rs_last_error_utf16(uint16_t *buf, uintptr_t length);
+
+///
+/// # Safety
+///
+/// Instance must remain alive for the rest of the program's execution, and it also must be safe to
+/// send across threads and to access from multiple concurrent threads.
+
+ErrorCode citeproc_rs_set_logger(void *instance,
+                                 FFILoggerVTable vtable,
+                                 LevelFilter min_severity,
+                                 const char *filters,
+                                 uintptr_t filters_len);
 
 /// Frees a FFI-consumer-owned CString written using [CSTRING_BUFFER_OPS].
  void citeproc_rs_cstring_free(char *ptr);

@@ -16,11 +16,10 @@ macro_rules! ffi_fn {
             match panic::catch_unwind(AssertUnwindSafe(move || $body)) {
                 Ok(v) => v,
                 Err(e) => {
-                    // TODO: We shouldn't abort, but rather figure out how to
-                    // convert into the return type that the function errored.
-                    eprintln!("panic unwind caught, returning error");
+                    let err = $crate::FFIError::from_caught_panic(e);
+                    log::error!("{}", err);
                     return $crate::nullable::FromErrorCode::from_error_code(
-                        $crate::errors::update_last_error_return_code($crate::FFIError::from_caught_panic(e))
+                        $crate::errors::update_last_error_return_code(err)
                     );
                 }
             }
@@ -55,10 +54,10 @@ macro_rules! ffi_fn_nullify {
                 Ok(v) => v,
                 Err(e) => {
                     $($arg.make_unwind_safe();)*
-                    log::error!("panic unwind caught");
-                    // std::process::abort();
+                    let err = $crate::FFIError::from_caught_panic(e);
+                    log::error!("{}", err);
                     return $crate::nullable::FromErrorCode::from_error_code(
-                        $crate::errors::update_last_error_return_code($crate::FFIError::from_caught_panic(e))
+                        $crate::errors::update_last_error_return_code(err)
                     );
                 }
             }

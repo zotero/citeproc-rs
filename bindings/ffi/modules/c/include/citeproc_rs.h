@@ -19,8 +19,34 @@ enum citeproc_rs_error_code {
   CITEPROC_RS_ERROR_CODE_INDEXING = 9,
   CITEPROC_RS_ERROR_CODE_CLUSTER_NOT_IN_FLOW = 10,
   CITEPROC_RS_ERROR_CODE_INVALID_STYLE = 11,
+  CITEPROC_RS_ERROR_CODE_SET_LOGGER = 12,
 };
 typedef int32_t citeproc_rs_error_code;
+
+enum citeproc_rs_level_filter {
+  CITEPROC_RS_LEVEL_FILTER_OFF,
+  /**
+   * Corresponds to the `Error` log level.
+   */
+  CITEPROC_RS_LEVEL_FILTER_ERROR,
+  /**
+   * Corresponds to the `Warn` log level.
+   */
+  CITEPROC_RS_LEVEL_FILTER_WARN,
+  /**
+   * Corresponds to the `Info` log level.
+   */
+  CITEPROC_RS_LEVEL_FILTER_INFO,
+  /**
+   * Corresponds to the `Debug` log level.
+   */
+  CITEPROC_RS_LEVEL_FILTER_DEBUG,
+  /**
+   * Corresponds to the `Trace` log level.
+   */
+  CITEPROC_RS_LEVEL_FILTER_TRACE,
+};
+typedef uintptr_t citeproc_rs_level_filter;
 
 enum citeproc_rs_locator_type {
   CITEPROC_RS_LOCATOR_TYPE_BOOK,
@@ -49,6 +75,15 @@ enum citeproc_rs_locator_type {
   CITEPROC_RS_LOCATOR_TYPE_SUPPLEMENT,
 };
 typedef uint32_t citeproc_rs_locator_type;
+
+enum citeproc_rs_log_level {
+  CITEPROC_RS_LOG_LEVEL_ERROR = 1,
+  CITEPROC_RS_LOG_LEVEL_WARN,
+  CITEPROC_RS_LOG_LEVEL_INFO,
+  CITEPROC_RS_LOG_LEVEL_DEBUG,
+  CITEPROC_RS_LOG_LEVEL_TRACE,
+};
+typedef uintptr_t citeproc_rs_log_level;
 
 enum citeproc_rs_output_format {
   CITEPROC_RS_OUTPUT_FORMAT_HTML,
@@ -112,9 +147,6 @@ typedef void (*citeproc_rs_clear_callback)(void *user_data);
  * callback expects a C++ `std::string *`, then you must supply a `std::string *`.
  */
 typedef struct citeproc_rs_buffer_ops {
-  /**
-   * Docs here
-   */
   citeproc_rs_write_callback write;
   citeproc_rs_clear_callback clear;
 } citeproc_rs_buffer_ops;
@@ -148,6 +180,15 @@ typedef struct citeproc_rs_cluster_position {
    */
   uint32_t note_number;
 } citeproc_rs_cluster_position;
+
+typedef void (*citeproc_rs_logger_write_callback)(void *user_data, citeproc_rs_log_level level, const uint8_t *module_path, uintptr_t module_path_len, const uint8_t *src, uintptr_t src_len);
+
+typedef void (*citeproc_rs_logger_flush_callback)(void *user_data);
+
+typedef struct citeproc_rs_ffi_logger_v_table {
+  citeproc_rs_logger_write_callback write;
+  citeproc_rs_logger_flush_callback flush;
+} citeproc_rs_ffi_logger_v_table;
 
 /**
  * Either a positive-or-0 u32, or a negative ErrorCode. Represented as an i64.
@@ -311,6 +352,19 @@ uintptr_t citeproc_rs_last_error_length_utf16(void);
  * UTF-16-encoded characters.
  */
 intptr_t citeproc_rs_last_error_utf16(uint16_t *buf, uintptr_t length);
+
+/**
+ *
+ * # Safety
+ *
+ * Instance must remain alive for the rest of the program's execution, and it also must be safe to
+ * send across threads and to access from multiple concurrent threads.
+ */
+citeproc_rs_error_code citeproc_rs_set_logger(void *instance,
+                                              struct citeproc_rs_ffi_logger_v_table vtable,
+                                              citeproc_rs_level_filter min_severity,
+                                              const char *filters,
+                                              uintptr_t filters_len);
 
 /**
  * Frees a FFI-consumer-owned CString written using [CSTRING_BUFFER_OPS].

@@ -22,6 +22,31 @@ typedef CF_ENUM(int32_t, CRErrorCode) {
   CRErrorCode_Indexing = 9,
   CRErrorCode_ClusterNotInFlow = 10,
   CRErrorCode_InvalidStyle = 11,
+  CRErrorCode_SetLogger = 12,
+};
+
+typedef CF_ENUM(uintptr_t, CRLevelFilter) {
+  CRLevelFilter_Off,
+  /**
+   * Corresponds to the `Error` log level.
+   */
+  CRLevelFilter_Error,
+  /**
+   * Corresponds to the `Warn` log level.
+   */
+  CRLevelFilter_Warn,
+  /**
+   * Corresponds to the `Info` log level.
+   */
+  CRLevelFilter_Info,
+  /**
+   * Corresponds to the `Debug` log level.
+   */
+  CRLevelFilter_Debug,
+  /**
+   * Corresponds to the `Trace` log level.
+   */
+  CRLevelFilter_Trace,
 };
 
 typedef CF_ENUM(uint32_t, CRLocatorType) {
@@ -49,6 +74,14 @@ typedef CF_ENUM(uint32_t, CRLocatorType) {
   CRLocatorType_Title,
   CRLocatorType_Unpublished,
   CRLocatorType_Supplement,
+};
+
+typedef CF_ENUM(uintptr_t, CRLogLevel) {
+  CRLogLevel_Error = 1,
+  CRLogLevel_Warn,
+  CRLogLevel_Info,
+  CRLogLevel_Debug,
+  CRLogLevel_Trace,
 };
 
 typedef CF_ENUM(uint8_t, CROutputFormat) {
@@ -112,9 +145,6 @@ typedef void (*CRClearCallback)(void *user_data);
  * callback expects a C++ `std::string *`, then you must supply a `std::string *`.
  */
 typedef struct CRBufferOps {
-  /**
-   * Docs here
-   */
   CRWriteCallback write;
   CRClearCallback clear;
 } CRBufferOps;
@@ -148,6 +178,15 @@ typedef struct CRClusterPosition {
    */
   uint32_t note_number;
 } CRClusterPosition;
+
+typedef void (*CRLoggerWriteCallback)(void *user_data, CRLogLevel level, const uint8_t *module_path, uintptr_t module_path_len, const uint8_t *src, uintptr_t src_len);
+
+typedef void (*CRLoggerFlushCallback)(void *user_data);
+
+typedef struct CRFFILoggerVTable {
+  CRLoggerWriteCallback write;
+  CRLoggerFlushCallback flush;
+} CRFFILoggerVTable;
 
 /**
  * Either a positive-or-0 u32, or a negative ErrorCode. Represented as an i64.
@@ -316,6 +355,23 @@ uintptr_t citeproc_rs_last_error_length_utf16(void) CF_SWIFT_NAME(citeproc_rs_la
  */
 intptr_t citeproc_rs_last_error_utf16(uint16_t *buf,
                                       uintptr_t length) CF_SWIFT_NAME(citeproc_rs_last_error_utf16(buf:length:));
+
+/**
+ *
+ * # Safety
+ *
+ * Instance must remain alive for the rest of the program's execution, and it also must be safe to
+ * send across threads and to access from multiple concurrent threads.
+ */
+CRErrorCode citeproc_rs_set_logger(void *instance,
+                                   struct CRFFILoggerVTable vtable,
+                                   CRLevelFilter min_severity,
+                                   const char *filters,
+                                   uintptr_t filters_len) CF_SWIFT_NAME(citeproc_rs_set_logger(instance:vtable:min_severity:filters:filters_len:));
+
+void test_log_msg(CRLogLevel level,
+                  const char *msg,
+                  uintptr_t msg_len) CF_SWIFT_NAME(test_log_msg(level:msg:msg_len:));
 
 /**
  * Frees a FFI-consumer-owned CString written using [CSTRING_BUFFER_OPS].

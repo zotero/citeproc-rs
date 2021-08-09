@@ -11,6 +11,7 @@ use rust::{Processor, Reference};
 mod errors;
 #[macro_use]
 mod macros;
+pub mod logger;
 use macros::nullify_on_panic;
 pub(crate) mod util;
 use util::*;
@@ -35,11 +36,7 @@ pub enum FFIError {
     #[error("a null pointer was passed in where it wasn't expected")]
     NullPointer,
     #[error("caught panic unwinding: {message}")]
-    CaughtPanic {
-        message: String,
-        #[cfg(feature = "backtrace")]
-        backtrace: Option<std::backtrace::Backtrace>,
-    },
+    CaughtPanic { message: String },
     #[error("poisoned: attempted to use a driver after a panic poisoned it")]
     Poisoned,
     #[error("utf8 error: {0}")]
@@ -58,6 +55,8 @@ pub enum FFIError {
     ClusterNotInFlow(rust::ClusterId),
     #[error("style error: {0}")]
     InvalidStyle(#[from] csl::StyleError),
+    #[error("could not set logger: {0}")]
+    SetLogger(#[from] log::SetLoggerError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -75,6 +74,7 @@ pub enum ErrorCode {
     Indexing = 9,
     ClusterNotInFlow = 10,
     InvalidStyle = 11,
+    SetLogger = 12,
 }
 
 impl FFIError {
@@ -100,6 +100,7 @@ impl FFIError {
             Self::Indexing { .. } => ErrorCode::Indexing,
             Self::ClusterNotInFlow(_) => ErrorCode::ClusterNotInFlow,
             Self::InvalidStyle(_) => ErrorCode::InvalidStyle,
+            Self::SetLogger(_) => ErrorCode::SetLogger,
         }
     }
 }
@@ -242,6 +243,7 @@ impl OutputFormat {
 ffi_fn! {
     /// Creates a new Processor from InitOptions. Free with [citeproc_rs_driver_free].
     fn citeproc_rs_driver_new(init: InitOptions) -> *mut Driver {
+
         result_to_error_code(|| {
             let style = unsafe { borrow_utf8_slice(init.style, init.style_len) }?;
             let rs_init = rust::InitOptions {
@@ -429,13 +431,13 @@ ffi_fn_nullify! {
 #[cfg(feature = "testability")]
 ffi_fn! {
     fn test_panic() -> ErrorCode {
-        panic!("oh no! we panicked!")
+        panic!("test_panic {}", 755);
     }
 }
 
 #[cfg(feature = "testability")]
 ffi_fn_nullify! {
     fn test_panic_poison_driver(#[nullify_on_panic] _driver: *mut Driver) -> ErrorCode {
-        panic!("oh no! we panicked!")
+        panic!("test_panic_poison_driver {}", 755);
     }
 }
