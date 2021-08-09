@@ -48,8 +48,9 @@ CXXFLAGS = -std=c++11 -stdlib=libc++ -I./modules/cpp/include
 	-fmodule-map-file=modules/cpp/include/module.modulemap
 
 # technically this will not capture all times cargo wants to rebuild
+.PHONY: $(DYLIB)
 $(DYLIB): $(RUST_FFI_SOURCES)
-	cargo build -p citeproc-ffi
+	cargo build -p citeproc-ffi --features testability
 
 examples = $(wildcard examples/*.c) $(wildcard examples/*.cpp)
 example_bins = $(patsubst examples/%.cpp,bin/%,$(patsubst examples/%.c,bin/%,$(examples)))

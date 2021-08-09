@@ -57,7 +57,7 @@ int main() {
         "}";
         std::string rendered;
         std::string err;
-        ErrorCode code = citeproc_rs_driver_preview_reference(proc, ref_json.data(), ref_json.length(), &rendered);
+        ErrorCode code = citeproc_rs_driver_preview_reference(proc, ref_json.data(), ref_json.length(), OutputFormat::html, &rendered);
         if (code == ErrorCode::none) {
                 assert(rendered.compare("the title") == 0);
                 std::cout << "success: " << rendered << std::endl;

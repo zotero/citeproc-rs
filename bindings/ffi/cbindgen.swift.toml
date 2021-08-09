@@ -8,9 +8,10 @@ header = "#define CF_SWIFT_NAME(_name) __attribute__((swift_name(#_name)))"
 
 [parse.expand]
 crates = ["citeproc-ffi"]
+features = ["testability"]
 
 [export]
-prefix = "CiteprocRs"
+prefix = "CR"
 rename_items = "None"
 
 [fn]
@@ -28,5 +29,6 @@ swift_name_macro = "CF_SWIFT_NAME"
 # }
 [enum]
 swift_enum_macro = "CF_ENUM"
-rename_variants = "PascalCase"
+# rename_variants = "PascalCase"
 prefix_with_name = true
+prefix_underscore = true

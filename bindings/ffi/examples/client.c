@@ -11,7 +11,12 @@
 
 LIT_LEN(style, "<style xmlns=\"http://purl.org/net/xbiblio/csl\" class=\"note\" version=\"1.0\" default-locale=\"en-GB\">"
                "<info><id>id</id><title>title</title><updated>2015-10-10T23:31:02+00:00</updated></info>"
-               "<citation><layout><text variable=\"title\" /></layout></citation></style>");
+               "<citation><layout delimiter=\"; \"><group delimiter=\", \"><names variable=\"author\" /><date variable=\"issued\" form=\"numeric\" /></group></layout></citation>"
+               "<bibliography><layout><group delimiter=\", \">"
+               "<names variable=\"author\" />"
+               "<text variable=\"title\" font-style=\"italic\" />"
+               "</group></layout></bibliography>"
+               "</style>");
 
 LIT_LEN(en_us, "<locale version=\"1.0\" xml:lang=\"en-US\">\n"
                 "<info> <updated>2015-10-10T23:31:02+00:00</updated> </info>"
@@ -23,11 +28,23 @@ void locale_fetch_callback(void *context, citeproc_rs_locale_slot *slot, const c
         citeproc_rs_locale_slot_write(slot, en_us, en_us_len);
 }
 
-const citeproc_rs_buffer_ops buffer_ops = citeproc_rs_managed_buffer_ops;
+const citeproc_rs_buffer_ops buffer_ops = citeproc_rs_cstring_buffer_ops;
 
 int main() {
+        citeproc_rs_log_init();
         char *context_ex = "example context";
         void *context = (void *) &context_ex;
+        char *rendered = NULL;
+
+        char *err = NULL;
+        citeproc_rs_error_code code;
+#define handle_error(code) if (code) { \
+        citeproc_rs_last_error_utf8(buffer_ops, &err); \
+        printf("error (%s line %d): %s\n", __FILE__, __LINE__, err); \
+        return 1; \
+}
+
+
         citeproc_rs_init_options init = {
                 .style = style,
                 .style_len = style_len,
@@ -36,32 +53,71 @@ int main() {
                 .format = CITEPROC_RS_OUTPUT_FORMAT_HTML,
                 .buffer_ops = buffer_ops,
         };
-        citeproc_rs_driver *proc = citeproc_rs_driver_new(init);
+        citeproc_rs_driver *driver = citeproc_rs_driver_new(init);
+        if (!driver) {
+                citeproc_rs_last_error_utf8(buffer_ops, &err);
+                printf("err creating driver: %s\n", err);
+                return 1;
+        }
 
         const char *ref_json = "{"
                 "\"id\": \"item\","
                 "\"type\": \"book\","
-                "\"title\": \"the title\""
+                "\"issued\": { \"raw\": \"1951\" },"
+                "\"title\": \"The Origins of Totalitarianism\","
+                "\"author\": [{ \"given\": \"Hannah\", \"family\": \"Arendt\" }]"
         "}";
         size_t ref_json_len = strlen(ref_json);
-        char *rendered = NULL;
-        char *err = NULL;
 
-        citeproc_rs_error_code code;
+        handle_error(citeproc_rs_driver_preview_reference(
+                                driver, ref_json, ref_json_len,
+                                CITEPROC_RS_OUTPUT_FORMAT_HTML, &rendered));
+        printf("previewed reference: %s\n", rendered);
+        assert(strcmp(rendered, "Hannah Arendt, <i>The Origins of Totalitarianism</i>") == 0);
 
-        code = citeproc_rs_driver_preview_reference(proc, ref_json, ref_json_len, &rendered);
-        if (code == CITEPROC_RS_ERROR_CODE_NONE) {
-                assert(strcmp(rendered, "the title") == 0);
-                printf("success: %s\n", rendered);
-        } else {
-                citeproc_rs_last_error_utf8(buffer_ops, &err);
-                printf("err: %s", err);
-        }
-        // we allocated these two with managed in the buffer_write_callback
-        // calling free on NULL is fine
-        citeproc_rs_string_free(rendered);
-        citeproc_rs_string_free(err);
+        // we're happy with that, but previewing doesn't save it.
+        // so we'll insert the reference properly:
+        handle_error(citeproc_rs_driver_insert_reference(driver, ref_json, ref_json_len));
+
+        citeproc_rs_cluster_id id = 1;
+        citeproc_rs_cluster *cluster = citeproc_rs_cluster_new(id);
+
+        // we'll make two of the same
+        // technically these return values can all be negative error codes too
+        // but let's just ignore that here
+        LIT_LEN(ref_id, "item");
+        uint32_t cite_1 = (uint32_t) citeproc_rs_cluster_cite_new(cluster, ref_id, ref_id_len);
+        uint32_t cite_2 = (uint32_t) citeproc_rs_cluster_cite_new(cluster, ref_id, ref_id_len);
+
+        // configure the first cite
+        LIT_LEN(prefix, "prefix: ");
+        handle_error(citeproc_rs_cluster_cite_set_prefix(cluster, cite_1, prefix, prefix_len));
+
+        handle_error(citeproc_rs_driver_insert_cluster(driver, cluster));
+
+        citeproc_rs_cluster_position *positions = malloc(1 * sizeof(citeproc_rs_cluster_position));
+        positions[0] = (citeproc_rs_cluster_position) {
+                .id = id,
+                .is_preview_marker = false,
+                .is_note = true,
+                .note_number = 1,
+        };
+
+        handle_error(citeproc_rs_driver_set_cluster_order(driver, positions, 1));
+        free(positions);
+
+        handle_error(citeproc_rs_driver_format_cluster(driver, id, &rendered));
+        printf("cluster %d: %s\n", id, rendered);
+
+        handle_error(citeproc_rs_driver_format_bibliography(driver, &rendered));
+        printf("bibliography: \n%s\n", rendered);
+
+        // we allocated these with cstring in the buffer_write_callback
+        // if not though, calling free on NULL is fine
+        citeproc_rs_cstring_free(rendered);
+        citeproc_rs_cstring_free(err);
+
         // but this one is allocated via rust Box and needs to be deallocated using Box::from_raw
         // so just pass it back, the library knows what to do.
-        citeproc_rs_driver_free(proc);
+        citeproc_rs_driver_free(driver);
 }
