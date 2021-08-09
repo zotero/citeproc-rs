@@ -117,9 +117,11 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
                 .get(a)
                 .expect("must have an citation_number entry for every bibliography item")
                 .clone();
+            let refr_arc = db.reference(a.clone());
             let demoting = with_bib_context(
                 db,
                 a.clone(),
+                refr_arc.as_deref(),
                 a_cnum.cited_only(),
                 None,
                 None,
@@ -635,9 +637,11 @@ fn sort_string_bibliography(
     macro_name: SmartString,
     key: SortKey,
 ) -> Option<Arc<SmartString>> {
+    let refr_arc = db.reference(ref_id.clone());
     with_bib_context(
         db,
-        ref_id.clone(),
+        ref_id,
+        refr_arc.as_ref(),
         None,
         Some(key),
         None,

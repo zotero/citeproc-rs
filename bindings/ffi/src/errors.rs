@@ -1,7 +1,11 @@
-//! from crates.io/crates/ffi_helpers, with failure replaced with std::error::Error
+//! Functions for getting and setting the `LAST_ERROR`, a thread-local error slot.
+//!
+//! FFI consumers can use the extern "C" functions here to access this error,
+//!
+//! from crates.io/crates/ffi_helpers, with a single FFIError type instead
 
 use crate::nullable::Nullable;
-use libc::{c_char, c_void};
+use libc::c_void;
 use std::{cell::RefCell, slice};
 
 use crate::buffer;
@@ -11,43 +15,46 @@ thread_local! {
     static LAST_ERROR: RefCell<Option<FFIError>> = RefCell::new(None);
 }
 
-/// Clear the `LAST_ERROR`.
+/// Clear the last error (thread local).
 #[no_mangle]
-pub extern "C" fn citeproc_rs_clear_last_error() {
+pub extern "C" fn citeproc_rs_last_error_clear() {
     let _ = take_last_error();
 }
 
 /// Take the most recent error, clearing `LAST_ERROR` in the process.
-pub fn take_last_error() -> Option<FFIError> {
+pub(crate) fn take_last_error() -> Option<FFIError> {
     LAST_ERROR.with(|prev| prev.borrow_mut().take())
 }
 
 /// Update the `thread_local` error, taking ownership of the `Error`.
-pub fn clear_last_error() {
+pub(crate) fn clear_last_error() {
     let _ = take_last_error();
 }
 
 /// Update the `thread_local` error, taking ownership of the `Error`.
-pub fn update_last_error<N: Nullable>(err: FFIError) -> N {
+#[allow(dead_code)]
+pub(crate) fn update_last_error<N: Nullable>(err: FFIError) -> N {
     LAST_ERROR.with(|prev| *prev.borrow_mut() = Some(err));
     N::NULL
 }
 
 /// Update the `thread_local` error, taking ownership of the `Error`.
-pub fn update_last_error_return_code(err: FFIError) -> ErrorCode {
+pub(crate) fn update_last_error_return_code(err: FFIError) -> ErrorCode {
     let code = err.code();
     LAST_ERROR.with(|prev| *prev.borrow_mut() = Some(err));
     code
 }
 
-/// Update the `thread_local` error, taking ownership of the `Error`.
-pub fn update_last_error_option(err: Option<FFIError>) -> ErrorCode {
-    let code = err.as_ref().map_or(ErrorCode::None, |x| x.code());
-    LAST_ERROR.with(|prev| *prev.borrow_mut() = err);
-    code
-}
-
-/// Returns either [ErrorCode::None] or [ErrorCode::BufferOps].
+/// Peek at the last error (thread local) and write its Display string using the [crate::buffer] system.
+///
+/// Accepts a struct of buffer operations and a pointer to the user's buffer instance.
+///
+/// Returns either [ErrorCode::None] (success) or [ErrorCode::BufferOps] (failure, because of a
+/// nul byte somewhere in the error message itself).
+///
+/// ## Safety
+///
+/// Refer to [crate::buffer::BufferOps]
 #[no_mangle]
 pub unsafe extern "C" fn citeproc_rs_last_error_utf8(
     buffer_ops: buffer::BufferOps,
@@ -60,7 +67,9 @@ pub unsafe extern "C" fn citeproc_rs_last_error_utf8(
             .as_ref()
             .map(|last_error| {
                 let formatted = last_error.to_string();
-                buffer.copy_to_user_noalloc(formatted.as_bytes()).map(|_| formatted.len())
+                buffer
+                    .copy_to_user_noalloc(formatted.as_bytes())
+                    .map(|_| formatted.len())
             })
             .unwrap_or(Ok(0usize))
     });
@@ -82,19 +91,7 @@ pub extern "C" fn citeproc_rs_last_error_code() -> ErrorCode {
     })
 }
 
-/// Get the length of the last error message in bytes when encoded as UTF-8,
-/// including the trailing null. If the error is cleared, this returns 0.
-#[no_mangle]
-pub extern "C" fn citeproc_rs_last_error_length() -> usize {
-    LAST_ERROR.with(|prev| {
-        prev.borrow()
-            .as_ref()
-            .map(|e| e.to_string().len() + 1)
-            .unwrap_or(0)
-    })
-}
-
-/// Get the length of the last error message in bytes when encoded as UTF-16,
+/// Get the length of the last error message (thread local) in bytes when encoded as UTF-16,
 /// including the trailing null.
 #[no_mangle]
 pub extern "C" fn citeproc_rs_last_error_length_utf16() -> usize {
@@ -106,25 +103,9 @@ pub extern "C" fn citeproc_rs_last_error_length_utf16() -> usize {
     })
 }
 
-/// Peek at the most recent error and get its error message as a Rust `String`.
-pub fn error_message() -> Option<String> {
+/// Peek at the last error (thread local) and get its error message as a Rust `String`.
+pub(crate) fn error_message() -> Option<String> {
     LAST_ERROR.with(|prev| prev.borrow().as_ref().map(|e| e.to_string()))
-}
-
-/// Peek at the most recent error and write its error message (`Display` impl)
-/// into the provided buffer as a UTF-8 encoded string.
-///
-/// This returns the number of bytes written, or `-1` if there was an error.
-///
-/// # Safety
-///
-/// The provided buffer must be valid to write up to `length` bytes into.
-#[no_mangle]
-pub unsafe extern "C" fn citeproc_rs_error_message_utf8(buf: *mut c_char, length: usize) -> isize {
-    crate::null_pointer_check!(buf);
-    let buffer = slice::from_raw_parts_mut(buf as *mut u8, length as usize);
-
-    copy_error_into_buffer(buffer, |msg| msg.into())
 }
 
 /// Peek at the most recent error and write its error message (`Display` impl)
@@ -137,7 +118,7 @@ pub unsafe extern "C" fn citeproc_rs_error_message_utf8(buf: *mut c_char, length
 /// The provided buffer must be valid to write `length` bytes into. That's not `length`
 /// UTF-16-encoded characters.
 #[no_mangle]
-pub unsafe extern "C" fn citeproc_rs_error_message_utf16(buf: *mut u16, length: usize) -> isize {
+pub unsafe extern "C" fn citeproc_rs_last_error_utf16(buf: *mut u16, length: usize) -> isize {
     crate::null_pointer_check!(buf);
     let buffer = slice::from_raw_parts_mut(buf, length as usize);
 
@@ -193,7 +174,6 @@ macro_rules! export_c_symbol {
 mod tests {
     use super::*;
     use std::str;
-    use thiserror::Error;
 
     fn clear_last_error() {
         let _ = LAST_ERROR.with(|e| e.borrow_mut().take());
@@ -220,41 +200,29 @@ mod tests {
     }
 
     #[test]
-    fn get_the_last_error_messages_length() {
-        clear_last_error();
-
-        let err_msg = FFIError::NullPointer.to_string();
-        let should_be = err_msg.len() + 1;
-
-        let () = update_last_error(FFIError::NullPointer);
-
-        // Get a valid error message's length
-        let got = citeproc_rs_last_error_length();
-        assert_eq!(got, should_be);
-
-        // Then clear the error message and make sure we get 0
-        clear_last_error();
-        let got = citeproc_rs_last_error_length();
-        assert_eq!(got, 0);
-    }
-
-    #[test]
-    fn write_the_last_error_message_into_a_buffer() {
+    fn write_the_last_error_into_a_buffer() {
         clear_last_error();
 
         let err_msg = FFIError::NullPointer.to_string();
 
         let () = update_last_error(FFIError::NullPointer);
 
-        let mut buffer: Vec<u8> = vec![0; 100];
-        let bytes_written = unsafe {
-            citeproc_rs_error_message_utf8(buffer.as_mut_ptr() as *mut c_char, buffer.len() as _)
+        use std::ffi::CString;
+        let buffer = CString::new("").unwrap();
+
+        let mut buffer_raw = CString::into_raw(buffer);
+        let output = unsafe {
+            let buffer_ptr = &mut buffer_raw as *mut *mut i8 as *mut c_void;
+            let _ =
+                citeproc_rs_last_error_utf8(crate::buffer::cstring::CSTRING_BUFFER_OPS, buffer_ptr);
+            CString::from_raw(buffer_raw)
         };
 
+        let bytes_written = output.as_bytes_with_nul().len();
         assert!(bytes_written > 0);
-        assert_eq!(bytes_written as usize, err_msg.len() + 1);
+        assert_eq!(bytes_written, err_msg.len() + 1);
 
-        let msg = str::from_utf8(&buffer[..bytes_written as usize - 1]).unwrap();
+        let msg = str::from_utf8(output.as_bytes()).unwrap();
         assert_eq!(msg, err_msg);
     }
 }

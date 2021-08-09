@@ -44,7 +44,7 @@ fn insert_basic_refs(db: &mut Processor, ref_ids: &[&str]) {
 }
 
 fn cid(db: &mut Processor, n: u32) -> ClusterId {
-    db.new_cluster(n.to_string())
+    db.cluster_id(n.to_string())
 }
 
 fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {

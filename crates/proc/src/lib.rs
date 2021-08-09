@@ -46,6 +46,7 @@ mod walker;
 
 pub use crate::cluster::built_cluster_before_output;
 pub use crate::db::safe_default;
+pub use crate::db::bib_item_preview;
 pub use crate::sort::BibNumber;
 
 pub(crate) mod prelude {

@@ -62,7 +62,9 @@ pub struct Cluster<O: OutputFormat = Markup, Id = ClusterId> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterPosition {
-    pub id: ClusterId,
+    /// If this is None, the piece is the preview marker for [PreviewPosition::MarkWithZero].
+    /// You should only supply one of those.
+    pub id: Option<ClusterId>,
     /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
     pub note: Option<u32>,
 }
@@ -73,6 +75,8 @@ pub enum ReorderingError {
         "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
     )]
     NonMonotonicNoteNumber(u32),
+    #[error("call to set_cluster_order must not provide a preview position")]
+    ClusterOrderWithZero,
     #[error("call to preview_citation_cluster must provide exactly one preview position")]
     DidNotSupplyZeroPosition,
     #[error("non-existent cluster {0:?}")]

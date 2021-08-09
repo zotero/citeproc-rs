@@ -8,6 +8,10 @@ edition = "2018"
 name = "citeproc_rs"
 crate-type = ["cdylib", "staticlib"]
 
+[features]
+# enable a couple of introspective test functions
+testability = []
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

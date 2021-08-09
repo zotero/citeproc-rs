@@ -1,41 +1,52 @@
 use libc::c_void;
-use std::ffi::CString;
+
+pub mod cstring;
 
 /// A vtable to allow citeproc-rs to manipulate your own kind of buffer for the output.
+///
 /// You could define one using realloc and the C standard library's string manipulations with your
-/// own zero terminators etc, but you could also just use [MANAGED_BUFFER_OPS] and let Rust's
+/// own zero terminators etc, but you could also just use [cstring::CSTRING_BUFFER_OPS] and let Rust's
 /// `std::ffi::CString` do the hard work.
 ///
 /// In C++ and other FFI-compatible higher level languages this is much easier. Just use any
 /// growable string or buffer type and implement the two functions in a couple of lines each.
 ///
 /// You will get valid UTF-8 if you correctly write out all the bytes.
+///
+/// ## Safety
+///
+/// When using BufferOps, the only thing you *must* ensure is that the callback functions access
+/// the user data pointer consistently with the actual user data pointers passed to Rust.
+///
+/// If your write callback expects a `char **`, then you must supply a `char **`. If your write
+/// callback expects a C++ `std::string *`, then you must supply a `std::string *`.
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct BufferOps {
-    write: WriteCallback,
-    clear: ClearCallback,
+    pub write: WriteCallback,
+    pub clear: ClearCallback,
 }
-
-pub const MANAGED_BUFFER_OPS: BufferOps = BufferOps {
-    write: citeproc_rs_cstring_write,
-    clear: citeproc_rs_cstring_clear,
-};
 
 /// Should write src_len bytes from src into some structure referenced by user_data.
 /// The bytes are guaranteed not to contain a zero.
-pub type WriteCallback = unsafe extern "C" fn(user_data: *mut c_void, src: *const u8, src_len: usize);
+pub type WriteCallback =
+    unsafe extern "C" fn(user_data: *mut c_void, src: *const u8, src_len: usize);
 /// Should clear the buffer in the structure referenced by user_data.
 pub type ClearCallback = unsafe extern "C" fn(user_data: *mut c_void);
 
-pub struct BufferWriter {
+/// A way to invoke BufferOps on matching user data.
+pub(crate) struct BufferWriter {
     callbacks: BufferOps,
     user_buf_ptr: *mut c_void,
 }
 
+/// An error wherein citeproc attempted to write a null byte into a user buffer.
+///
+/// Just a clone of [std::ffi::NulError] that has a constructor. For some reason the only way to
+/// construct that is by creating a CString, but we want to avoid nulls in user-supplied
+/// implementations.
 #[derive(Debug)]
 pub struct NulError(usize, Vec<u8>);
-
 impl std::error::Error for NulError {}
 impl core::fmt::Display for NulError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -44,88 +55,6 @@ impl core::fmt::Display for NulError {
             "cannot write string with null byte at position {}: {:?}",
             self.0, self.1
         )
-    }
-}
-
-/// If you use this as your buffer_write_callback, then you must call `citeproc_rs_string_free` on
-/// the resulting buffers.
-#[no_mangle]
-#[allow(unused_unsafe)]
-pub unsafe extern "C" fn citeproc_rs_cstring_write(
-    user_data: *mut c_void,
-    src: *const u8,
-    src_len: usize,
-) {
-    // user_data shouldn't be null but we will fail gracefully.
-    if user_data.is_null() || src.is_null() {
-        return;
-    }
-    let user_data_ptr = user_data.cast::<*mut libc::c_char>();
-    // SAFETY: we checked it for null.
-    let user_data_contents = unsafe { *user_data_ptr };
-    let cstring = if user_data_contents.is_null() {
-        None
-    } else {
-        Some(CString::from_raw(user_data_contents))
-    };
-
-    // SAFETY: This is safe as long as we call this with a Rust slice decomposition.
-    let bytes = unsafe { core::slice::from_raw_parts(src, src_len) };
-
-    let mut vec = cstring.map_or_else(Vec::new, |x| x.into_bytes());
-    // don't do two resizes, just one please
-    vec.reserve_exact(bytes.len() + 1);
-    vec.extend_from_slice(bytes);
-
-    // and convert back.
-    // the unchecked part refers to whether it contain any interior zero bytes.
-    // SAFETY: we check in `copy_to_user` that there are no zeroes each time we write.
-    // this method does push a 0 on the end, unconditionally.
-    let cstring = unsafe { CString::from_vec_unchecked(vec) };
-
-    // We have to write out the CString again as it may have reallocated itself.
-    // SAFETY: same as the deref in user_data_contents
-    unsafe {
-        core::ptr::write(user_data_ptr, cstring.into_raw());
-    }
-}
-
-#[no_mangle]
-#[allow(unused_unsafe)]
-pub unsafe extern "C" fn citeproc_rs_cstring_clear(
-    user_data: *mut c_void,
-) {
-    // user_data shouldn't be null but we will fail gracefully.
-    if user_data.is_null() {
-        return;
-    }
-    let user_data_ptr = user_data.cast::<*mut libc::c_char>();
-    // SAFETY: we checked it for null.
-    let user_data_contents = unsafe { *user_data_ptr };
-    // *user_data could be null as well. first time use.
-    let cstring = if user_data_contents.is_null() {
-        None
-    } else {
-        Some(CString::from_raw(user_data_contents))
-    };
-
-    // Clear it.
-    // You may be thinking, if CString reads itself from a raw pointer and gets its length using
-    // strlen, then how does preserving this memory help us at all? Won't it come back with zero
-    // length?
-    //
-    // Answer -- CString::into_raw uses Box::<[T]>::into_raw, which is a _fat pointer_.
-    // It stores a capacity value alongside the pointer somewhere, and recovers it in
-    // Box/CString::from_raw.
-    let mut vec = cstring.map_or_else(Vec::new, |x| x.into_bytes());
-    vec.clear();
-    // SAFETY: no internal zeroes, because it's empty.
-    let cstring = unsafe { CString::from_vec_unchecked(vec) };
-
-    // Write null to it. W
-    // SAFETY: we checked user_data for null before.
-    unsafe {
-        core::ptr::write(user_data_ptr, cstring.into_raw());
     }
 }
 

@@ -31,13 +31,18 @@ impl<T> Nullable for *const T {
     const NULL: Self = std::ptr::null();
 
     #[inline]
-    fn is_null(&self) -> bool { *self == Self::NULL }
+    fn is_null(&self) -> bool {
+        *self == Self::NULL
+    }
 }
 
 pub trait FromErrorCode {
     fn from_error_code(code: ErrorCode) -> Self;
 }
-impl<N> FromErrorCode for N where N: Nullable {
+impl<N> FromErrorCode for N
+where
+    N: Nullable,
+{
     fn from_error_code(_code: ErrorCode) -> Self {
         Nullable::NULL
     }
@@ -52,7 +57,9 @@ impl<T> Nullable for *mut T {
     const NULL: Self = std::ptr::null_mut();
 
     #[inline]
-    fn is_null(&self) -> bool { *self == Self::NULL }
+    fn is_null(&self) -> bool {
+        *self == Self::NULL
+    }
 }
 
 impl_nullable_integer!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
@@ -61,14 +68,18 @@ impl<T> Nullable for Option<T> {
     const NULL: Self = None;
 
     #[inline]
-    fn is_null(&self) -> bool { self.is_none() }
+    fn is_null(&self) -> bool {
+        self.is_none()
+    }
 }
 
 impl Nullable for () {
     const NULL: Self = ();
 
     #[inline]
-    fn is_null(&self) -> bool { true }
+    fn is_null(&self) -> bool {
+        true
+    }
 }
 
 /// Check if we've been given a null pointer, if so we'll return early.
@@ -145,7 +156,7 @@ impl Nullable for () {
 macro_rules! null_pointer_check {
     ($ptr:expr) => {{
         if <_ as $crate::nullable::Nullable>::is_null(&$ptr) {
-            let code: $crate::ErrorCode = 
+            let code: $crate::ErrorCode =
                 $crate::errors::update_last_error_return_code($crate::FFIError::NullPointer);
             return $crate::nullable::FromErrorCode::from_error_code(code);
         }

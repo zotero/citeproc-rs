@@ -201,7 +201,7 @@ impl JsExecutor<'_> {
         }
     }
     fn get_id(&mut self, string_id: &str) -> ClusterId {
-        self.proc.new_cluster(string_id)
+        self.proc.cluster_id(string_id)
     }
 
     pub fn get_results(&self) -> Results {

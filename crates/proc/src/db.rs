@@ -18,7 +18,7 @@ use crate::sort::BibNumber;
 use crate::{CiteContext, DisambPass, IrState, Proc, IR};
 use citeproc_db::{CiteData, ClusterData, ClusterId, ClusterNumber, IntraNote};
 use citeproc_io::output::{markup::Markup, OutputFormat};
-use citeproc_io::{Cite, Name};
+use citeproc_io::{Cite, Name, Reference};
 use csl::GivenNameDisambiguationRule as GNDR;
 use csl::{Atom, Bibliography, Position, SortKey};
 
@@ -1260,6 +1260,7 @@ pub fn with_cite_context<T>(
 pub fn with_bib_context<T>(
     db: &dyn IrDatabase,
     ref_id: Atom,
+    refr: Option<&Reference>,
     bib_number: Option<u32>,
     sort_key: Option<SortKey>,
     year_suffix: Option<u32>,
@@ -1270,10 +1271,9 @@ pub fn with_bib_context<T>(
     let bib = style.bibliography.as_ref()?;
     let locale = db.default_locale();
     let cite = Cite::basic(ref_id.clone());
-    let refr_arc = db.reference(ref_id);
     let null_ref = citeproc_io::Reference::empty("empty_ref".into(), csl::CslType::Article);
-    let (refr, is_ref_missing) = if let Some(arc) = refr_arc.as_ref() {
-        (arc.as_ref(), false)
+    let (refr, is_ref_missing) = if let Some(r) = refr {
+        (r, false)
     } else {
         (&null_ref, true)
     };
@@ -1309,10 +1309,46 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
         .expect("sorted_refs should contain a bib_item key")
         .get();
 
+    let refr_arc = db.reference(ref_id.clone());
+
+    bib_item_gen0_acontextual(db, ref_id, refr_arc.as_deref(), Some(bib_number))
+}
+
+fn format_single_bib_item(ir_gen: Option<&IrGen>, fmt: &Markup, piq: bool) -> SmartString {
+    ir_gen
+        .and_then(|ir_gen| {
+            let flat = ir_gen
+                .tree_ref()
+                .flatten(&fmt, None)?;
+            let string = fmt.output(flat, piq);
+            if string.is_empty() {
+                return None;
+            }
+            Some(string)
+        })
+        .unwrap_or_else(|| CSL_STYLE_ERROR.into())
+}
+
+fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
+    let fmt = db.get_formatter();
+    let gen0_arc = db.bib_item_gen0(ref_id);
+    Arc::new(format_single_bib_item(gen0_arc.as_deref(), &fmt, get_piq(db)))
+}
+
+/// Similar to bib_item, but uses a given Reference instead of a ref_id known to the db
+/// And doesn't cache. And allows custom fmt arg.
+pub fn bib_item_preview(db: &dyn IrDatabase, ref_id: Atom, refr: &Reference, fmt: &Markup) -> SmartString {
+    // Pretend it's the first item in the bibliography
+    let gen0_arc = bib_item_gen0_acontextual(db, ref_id, Some(refr), Some(1));
+    format_single_bib_item(gen0_arc.as_deref(), fmt, get_piq(db))
+}
+
+fn bib_item_gen0_acontextual(db: &dyn IrDatabase, ref_id: Atom, refr: Option<&Reference>, bib_number: Option<u32>) -> Option<Arc<IrGen>> {
     with_bib_context(
         db,
         ref_id.clone(),
-        Some(bib_number),
+        refr,
+        bib_number,
         None,
         None,
         |bib, mut ctx| {
@@ -1350,6 +1386,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
             transforms::fix_left_right_layout_affixes(tree.root, &mut tree.arena);
 
             if tree.tree_ref().is_empty() {
+                log::warn!("tree empty for bibliography ref {}", &ref_id);
                 None
             } else {
                 Some(Arc::new(IrGen::new(tree, state)))
@@ -1409,22 +1446,6 @@ fn first_cite_used_disambiguate_true(db: &dyn IrDatabase, ref_id: Atom) -> bool 
         let gen4 = db.ir_fully_disambiguated(id);
         gen4.used_disambiguate_true
     })
-}
-
-fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
-    let fmt = db.get_formatter();
-    if let Some(gen0) = db.bib_item_gen0(ref_id) {
-        let flat = gen0
-            .tree_ref()
-            .flatten(&fmt, None)
-            .unwrap_or_else(|| fmt.plain(""));
-        // in a bibliography, we do the affixes etc inside Layout, so they're not here
-        let string = fmt.output(flat, get_piq(db));
-        Arc::new(string)
-    } else {
-        // Whatever
-        Arc::new(fmt.output(fmt.plain(""), get_piq(db)))
-    }
 }
 
 fn get_bibliography_map(db: &dyn IrDatabase) -> Arc<FnvHashMap<Atom, Arc<MarkupOutput>>> {
