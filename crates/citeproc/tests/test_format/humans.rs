@@ -245,7 +245,7 @@ impl JsExecutor<'_> {
             } else {
                 Some(note_number)
             };
-            renum.push(ClusterPosition { id, note })
+            renum.push(ClusterPosition { id: Some(id), note })
         }
     }
 
@@ -274,8 +274,10 @@ impl JsExecutor<'_> {
             });
             self.proc.set_cluster_order(&renum).unwrap();
             for &ClusterPosition { id, .. } in &renum {
-                if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
-                    self.current_note_numbers.insert(id, actual_note);
+                if let Some(id) = id {
+                    if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
+                        self.current_note_numbers.insert(id, actual_note);
+                    }
                 }
             }
         }

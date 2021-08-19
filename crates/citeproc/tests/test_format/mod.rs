@@ -193,7 +193,7 @@ impl TestCase {
                 .iter()
                 .enumerate()
                 .map(|(ix, cluster)| ClusterPosition {
-                    id: cluster.id,
+                    id: Some(cluster.id),
                     note: Some(ix as u32 + 1),
                 })
                 .collect();
