@@ -26,8 +26,7 @@ use indextree::NodeId;
 
 pub trait ImplementationDetails {
     fn get_formatter(&self) -> Markup;
-    fn lookup_cluster_id(&self, symbol: ClusterId)
-        -> Option<SmartString>;
+    fn lookup_cluster_id(&self, symbol: ClusterId) -> Option<SmartString>;
 }
 
 // trait ParallelIrDatabase {
@@ -320,6 +319,7 @@ pub struct IrGen {
     pub(crate) tree: IrTree<Markup>,
     pub(crate) state: IrState,
     pub(crate) used_disambiguate_true: bool,
+    pub(crate) disambiguation_finished: bool,
 }
 
 use std::fmt;
@@ -333,11 +333,12 @@ impl fmt::Debug for IrGen {
 }
 
 impl IrGen {
-    pub(crate) fn new(tree: IrTree<Markup>, state: IrState) -> Self {
+    pub(crate) fn new(tree: IrTree<Markup>, state: IrState, disambiguation_finished: bool) -> Self {
         IrGen {
             tree,
             state,
             used_disambiguate_true: false,
+            disambiguation_finished,
         }
     }
     pub(crate) fn tree(&self) -> &IrTree {
@@ -360,7 +361,7 @@ fn ref_not_found(db: &dyn IrDatabase, ref_id: &Atom, log: bool) -> Arc<IrGen> {
         IR::Rendered(Some(CiteEdgeData::Output(db.get_formatter().plain("???")))),
         GroupVars::Plain,
     ));
-    Arc::new(IrGen::new(IrTree::new(root, arena), IrState::new()))
+    Arc::new(IrGen::new(IrTree::new(root, arena), IrState::new(), true))
 }
 
 // IR gen0 depends on:
@@ -981,7 +982,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let root = style
         .citation
         .intermediate(db, &mut state, &ctx, &mut arena);
-    let irgen = IrGen::new(IrTree::new(root, arena), state);
+    let irgen = IrGen::new(IrTree::new(root, arena), state, false);
     Arc::new(irgen)
 }
 
@@ -1000,28 +1001,16 @@ fn ir_gen2_matching_refs(db: &dyn IrDatabase, id: CiteId) -> Arc<Vec<Atom>> {
     Arc::new(refs)
 }
 
-enum IrGenCow {
-    Arc(Arc<IrGen>),
-    Cloned(IrGen),
+struct IrGenCow {
+    arc: Arc<IrGen>,
 }
 
 impl IrGenCow {
     fn to_mut(&mut self) -> &mut IrGen {
-        *self = match self {
-            IrGenCow::Arc(arc) => {
-                let cloned = arc.as_ref().clone();
-                IrGenCow::Cloned(cloned)
-            }
-            IrGenCow::Cloned(gen) => return gen,
-        };
-        // takes Cloned branch next time
-        self.to_mut()
+        Arc::make_mut(&mut self.arc)
     }
     fn into_arc(self) -> Arc<IrGen> {
-        match self {
-            IrGenCow::Arc(arc) => arc,
-            IrGenCow::Cloned(gen) => Arc::new(gen),
-        }
+        self.arc
     }
 }
 
@@ -1029,56 +1018,69 @@ use std::ops::Deref;
 impl Deref for IrGenCow {
     type Target = IrGen;
     fn deref(&self) -> &Self::Target {
-        match self {
-            IrGenCow::Arc(arc) => arc.as_ref(),
-            IrGenCow::Cloned(gen) => gen,
-        }
+        self.arc.deref()
     }
 }
 
 impl IrGenCow {
+    fn new(arc: Arc<IrGen>) -> Self {
+        Self { arc }
+    }
     /// Returned true indicates the cite is now unambiguous.
-    fn disambiguate_add_names(
-        &mut self,
-        db: &dyn IrDatabase,
-        ctx: &mut CiteContext<Markup>,
-    ) -> bool {
+    fn disambiguate_add_names(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if self.disambiguation_finished {
+            return;
+        }
         if ctx.style.citation.disambiguate_add_names {
             // Clone ir0; disambiguate by adding names
             let cloned = self.to_mut();
-            let unambiguous = disambiguate_add_names(db, cloned.tree_mut(), ctx, false);
-            unambiguous
-        } else {
-            false
+            cloned.disambiguation_finished =
+                disambiguate_add_names(db, cloned.tree_mut(), ctx, false);
         }
     }
 
     fn disambiguate_add_given_name(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if self.disambiguation_finished {
+            return;
+        }
         if ctx.style.citation.disambiguate_add_givenname {
             let cloned = self.to_mut();
             let also_add_names = ctx.style.citation.disambiguate_add_names;
             disambiguate_add_givennames(db, cloned.tree_mut(), ctx, also_add_names);
         }
     }
-    fn disambiguate_add_year_suffix(
-        &mut self,
-        db: &dyn IrDatabase,
-        ctx: &mut CiteContext<Markup>,
-    ) -> bool {
+    fn disambiguate_add_year_suffix(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        // the other disambiguate_ routines would exit here if disambiguation_finished was true,
+        // but whether we apply year suffixes is actually unconditional at this point.
+        // Year suffixes have been produced already through db.year_suffix_for(refId).
         if ctx.style.citation.disambiguate_add_year_suffix {
             let year_suffix = match db.year_suffix_for(ctx.cite.ref_id.clone()) {
                 Some(y) => y,
-                _ => return false,
+                _ => return,
             };
             let cloned = self.to_mut();
             ctx.disamb_pass = Some(DisambPass::AddYearSuffix(year_suffix));
             disambiguate_add_year_suffix(cloned.tree_mut(), &ctx, year_suffix);
-            is_unambiguous(db, cloned.tree_ref(), &ctx.reference.id)
-        } else {
-            false
+            // if it's already unambiguous on names alone, then adding year suffixes is hardly
+            // going to improve it. So avoid the cost.
+            if !self.disambiguation_finished {
+                self.update_is_ambiguous(db, ctx);
+            }
         }
     }
+
+    fn update_is_ambiguous(&mut self, db: &dyn IrDatabase, ctx: &CiteContext<Markup>) {
+        let gen = self.arc.deref();
+        let unambiguous = is_unambiguous(db, gen.tree_ref(), &ctx.reference.id);
+        if unambiguous != self.disambiguation_finished {
+            self.to_mut().disambiguation_finished = unambiguous;
+        }
+    }
+
     fn disambiguate_conditionals(&mut self, db: &dyn IrDatabase, ctx: &mut CiteContext<Markup>) {
+        if self.disambiguation_finished {
+            return;
+        }
         let cloned = self.to_mut();
         ctx.disamb_pass = Some(DisambPass::Conditionals);
         cloned.used_disambiguate_true = true;
@@ -1095,14 +1097,9 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut ctx;
     preamble!(style, locale, cite, refr, ctx, db, id, None);
 
-    let mut irgen = IrGenCow::Arc(db.ir_gen0(id));
-    if is_unambiguous(db, irgen.tree_ref(), &ctx.reference.id) {
-        return irgen.into_arc();
-    }
-    let successful = irgen.disambiguate_add_names(db, &mut ctx);
-    if successful {
-        return irgen.into_arc();
-    }
+    let mut irgen = IrGenCow::new(db.ir_gen0(id));
+    irgen.update_is_ambiguous(db, &ctx);
+    irgen.disambiguate_add_names(db, &mut ctx);
     irgen.disambiguate_add_given_name(db, &mut ctx);
     irgen.into_arc()
 }
@@ -1116,11 +1113,8 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     preamble!(style, locale, cite, refr, ctx, db, id, None);
 
     // Start with the given names done.
-    let mut irgen = IrGenCow::Arc(db.ir_gen2_add_given_name(id));
-    let successful = irgen.disambiguate_add_year_suffix(db, &mut ctx);
-    if successful {
-        return irgen.into_arc();
-    }
+    let mut irgen = IrGenCow::new(db.ir_gen2_add_given_name(id));
+    irgen.disambiguate_add_year_suffix(db, &mut ctx);
     irgen.disambiguate_conditionals(db, &mut ctx);
     irgen.into_arc()
 }
@@ -1317,9 +1311,7 @@ fn bib_item_gen0(db: &dyn IrDatabase, ref_id: Atom) -> Option<Arc<IrGen>> {
 fn format_single_bib_item(ir_gen: Option<&IrGen>, fmt: &Markup, piq: bool) -> SmartString {
     ir_gen
         .and_then(|ir_gen| {
-            let flat = ir_gen
-                .tree_ref()
-                .flatten(&fmt, None)?;
+            let flat = ir_gen.tree_ref().flatten(&fmt, None)?;
             let string = fmt.output(flat, piq);
             if string.is_empty() {
                 return None;
@@ -1332,18 +1324,32 @@ fn format_single_bib_item(ir_gen: Option<&IrGen>, fmt: &Markup, piq: bool) -> Sm
 fn bib_item(db: &dyn IrDatabase, ref_id: Atom) -> Arc<MarkupOutput> {
     let fmt = db.get_formatter();
     let gen0_arc = db.bib_item_gen0(ref_id);
-    Arc::new(format_single_bib_item(gen0_arc.as_deref(), &fmt, get_piq(db)))
+    Arc::new(format_single_bib_item(
+        gen0_arc.as_deref(),
+        &fmt,
+        get_piq(db),
+    ))
 }
 
 /// Similar to bib_item, but uses a given Reference instead of a ref_id known to the db
 /// And doesn't cache. And allows custom fmt arg.
-pub fn bib_item_preview(db: &dyn IrDatabase, ref_id: Atom, refr: &Reference, fmt: &Markup) -> SmartString {
+pub fn bib_item_preview(
+    db: &dyn IrDatabase,
+    ref_id: Atom,
+    refr: &Reference,
+    fmt: &Markup,
+) -> SmartString {
     // Pretend it's the first item in the bibliography
     let gen0_arc = bib_item_gen0_acontextual(db, ref_id, Some(refr), Some(1));
     format_single_bib_item(gen0_arc.as_deref(), fmt, get_piq(db))
 }
 
-fn bib_item_gen0_acontextual(db: &dyn IrDatabase, ref_id: Atom, refr: Option<&Reference>, bib_number: Option<u32>) -> Option<Arc<IrGen>> {
+fn bib_item_gen0_acontextual(
+    db: &dyn IrDatabase,
+    ref_id: Atom,
+    refr: Option<&Reference>,
+    bib_number: Option<u32>,
+) -> Option<Arc<IrGen>> {
     with_bib_context(
         db,
         ref_id.clone(),
@@ -1389,7 +1395,8 @@ fn bib_item_gen0_acontextual(db: &dyn IrDatabase, ref_id: Atom, refr: Option<&Re
                 log::warn!("tree empty for bibliography ref {}", &ref_id);
                 None
             } else {
-                Some(Arc::new(IrGen::new(tree, state)))
+                // Disambiguation is over already
+                Some(Arc::new(IrGen::new(tree, state, true)))
             }
         },
         |bib, ctx, _just_empty_output| {
@@ -1431,7 +1438,8 @@ fn bib_item_gen0_acontextual(db: &dyn IrDatabase, ref_id: Atom, refr: Option<&Re
             // divs in split_first_field
             transforms::fix_left_right_layout_affixes(tree.root, &mut tree.arena);
 
-            Some(Arc::new(IrGen::new(tree, state)))
+            // Disambiguation is over already
+            Some(Arc::new(IrGen::new(tree, state, true)))
         },
     )
 }
@@ -1773,7 +1781,8 @@ fn intext(db: &dyn IrDatabase, id: CiteId) -> Option<Arc<IrGen>> {
         let mut state = IrState::new();
         let mut arena = IrArena::new();
         let root = intext.intermediate(db, &mut state, &ctx, &mut arena);
-        let irgen = IrGen::new(IrTree::new(root, arena), state);
+        // disambiguation cannot be done on <intext>
+        let irgen = IrGen::new(IrTree::new(root, arena), state, true);
         Arc::new(irgen)
     })
 }
