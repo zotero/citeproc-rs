@@ -4,17 +4,24 @@ set -ex
 
 : "${LIBNAME:=libciteproc_rs}"
 : "${TARGET:=../../target}"
-: "${OUTPATH:=$TARGET/xcodeframework}"
+: "${OUTPATH:=$TARGET/xcframework}"
 : "${OUTNAME:=CiteprocRs}"
 # needs PR https://github.com/rust-lang/rust/pull/87699
-# install with `rustup install $TOOLCHAIN && rustup component add rust-src $`
+# install with `rustup install $TOOLCHAIN && rustup component add rust-src --toolchain $TOOLCHAIN`
 : "${TOOLCHAIN:=nightly-2021-08-30}"
 : "${CONFIGURATION:=test}"
 
-export IPHONEOS_DEPLOYMENT_TARGET=14.1
+export IPHONEOS_DEPLOYMENT_TARGET=13.0
 export MACOSX_DEPLOYMENT_TARGET=10.9
 
 env
+
+PLATFORMS="
+apple-darwin
+apple-ios
+apple-ios-sim
+apple-ios-macabi
+"
 
 # test is an alias for debug, but it adds --features testability
 if [ "$CONFIGURATION" = "test" ]; then
@@ -27,12 +34,6 @@ fi
 
 : "${PROFDIR:=$CONFIGURATION}"
 
-PLATFORMS="
-apple-darwin
-apple-ios
-apple-ios-sim
-apple-ios-macabi
-"
 # PLATFORMS="apple-darwin apple-ios"
 # PLATFORMS="apple-ios"
 
@@ -81,6 +82,7 @@ do
 
   suffix=$(< $suffixes/$PLATFORM)
   lipo_output="$OUTPATH/$LIBNAME-$suffix.a"
+  rm -f $lipo_output
   lipo -create $lipo_args -output "$lipo_output"
 
   xc_args="$xc_args -library $lipo_output"
