@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -ex
+set -euxo pipefail
 
 : "${LIBNAME:=libciteproc_rs}"
 : "${TARGET:=../../target}"
@@ -8,19 +8,19 @@ set -ex
 : "${OUTNAME:=CiteprocRs}"
 # needs PR https://github.com/rust-lang/rust/pull/87699
 # install with `rustup install $TOOLCHAIN && rustup component add rust-src --toolchain $TOOLCHAIN`
-: "${TOOLCHAIN:=nightly-2021-08-30}"
+# : "${TOOLCHAIN:=nightly-2021-08-30}"
 : "${CONFIGURATION:=test}"
 
 export IPHONEOS_DEPLOYMENT_TARGET=13.0
 export MACOSX_DEPLOYMENT_TARGET=10.9
 
+rustup show
 env
 
 PLATFORMS="
 apple-darwin
 apple-ios
 apple-ios-sim
-apple-ios-macabi
 "
 
 # test is an alias for debug, but it adds --features testability
@@ -60,8 +60,8 @@ echo "x86_64" > $subarchs/x86_64
 
 trap "rm -rf -- $suffixes $targets $subarchs" EXIT
 
-mkdir -p "$OUTPATH"
-rm -rf "$OUTPATH/$OUTNAME.xcframework"
+mkdir -p "$OUTPATH/$CONFIGURATION"
+rm -rf "$OUTPATH/$CONFIGURATION/$OUTNAME.xcframework"
 
 xc_args=""
 for PLATFORM in $PLATFORMS
@@ -70,9 +70,13 @@ do
   for TRIPLE in $(< $targets/$PLATFORM)
   do
     BUILD_STD=""
-    rustup target add $TRIPLE --toolchain $TOOLCHAIN || BUILD_STD="-Z unstable-options -Z build-std"
+    RELEASE=""
+    rustup target add $TRIPLE || BUILD_STD="-Z unstable-options -Z build-std"
+    if [ "$CONFIGURATION" = "release" ]; then
+      RELEASE="--release"
+    fi
 
-    cargo +$TOOLCHAIN build -p citeproc-ffi \
+    cargo build -p citeproc-ffi $RELEASE \
         --target "$TRIPLE" \
         $FEATURES $BUILD_STD
 
@@ -81,7 +85,7 @@ do
   done
 
   suffix=$(< $suffixes/$PLATFORM)
-  lipo_output="$OUTPATH/$LIBNAME-$suffix.a"
+  lipo_output="$OUTPATH/$CONFIGURATION/$LIBNAME-$suffix.a"
   rm -f $lipo_output
   lipo -create $lipo_args -output "$lipo_output"
 
@@ -89,5 +93,5 @@ do
   xc_args="$xc_args -headers ../ffi/modules/swift/include"
 done
 
-xcodebuild -create-xcframework $xc_args -output "$OUTPATH/$OUTNAME.xcframework"
+xcodebuild -create-xcframework $xc_args -output "$OUTPATH/$CONFIGURATION/$OUTNAME.xcframework"
 
