@@ -12,7 +12,7 @@ set -euxo pipefail
 : "${CONFIGURATION:=test}"
 
 export IPHONEOS_DEPLOYMENT_TARGET=13.0
-export MACOSX_DEPLOYMENT_TARGET=10.9
+export MACOSX_DEPLOYMENT_TARGET=10.10
 
 rustup show
 env
