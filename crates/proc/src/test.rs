@@ -5,6 +5,7 @@ use citeproc_db::{
 use citeproc_io::{output::markup::Markup, Cite, Reference};
 
 use csl::Style;
+use fnv::FnvHashSet;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -96,7 +97,8 @@ impl MockProcessor {
     }
 
     pub fn init_clusters(&mut self, clusters: Vec<(ClusterId, ClusterNumber, Vec<Cite<Markup>>)>) {
-        let mut cluster_ids = Vec::new();
+        let mut cluster_ids = FnvHashSet::default();
+        cluster_ids.reserve(clusters.len());
         for cluster in clusters {
             let (cluster_id, note_number, cites) = cluster;
             let mut ids = Vec::new();
@@ -111,9 +113,9 @@ impl MockProcessor {
             self.set_cluster_cites(cluster_id, Arc::new(ids));
             self.set_cluster_note_number(cluster_id, Some(note_number));
             self.set_cluster_mode(cluster_id, None);
-            cluster_ids.push(cluster_id);
+            cluster_ids.insert(cluster_id);
         }
-        self.set_cluster_ids(Arc::new(cluster_ids));
+        self.set_all_cluster_ids(Arc::new(cluster_ids));
     }
 
     pub fn insert_references(&mut self, refs: Vec<Reference>) {
@@ -126,11 +128,11 @@ impl MockProcessor {
 
     #[allow(dead_code)]
     pub fn insert_cites(&mut self, cluster_id: ClusterId, cites: &[Cite<Markup>]) {
-        let cluster_ids = self.cluster_ids();
-        if !cluster_ids.contains(&cluster_id) {
-            let mut new_cluster_ids = (*cluster_ids).clone();
-            new_cluster_ids.push(cluster_id);
-            self.set_cluster_ids(Arc::new(new_cluster_ids));
+        let all_cluster_ids = self.all_cluster_ids();
+        if !all_cluster_ids.contains(&cluster_id) {
+            let mut new_all = (*all_cluster_ids).clone();
+            new_all.insert(cluster_id);
+            self.set_all_cluster_ids(Arc::new(new_all));
             self.set_cluster_note_number(cluster_id, None);
             self.set_cluster_mode(cluster_id, None);
         }

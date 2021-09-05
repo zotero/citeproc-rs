@@ -38,6 +38,7 @@ cfg_if! {
                 .level_for("salsa", LevelFilter::Warn)
                 .level_for("salsa::derived", LevelFilter::Warn)
                 .level_for("html5ever", LevelFilter::Off)
+                .level_for("citeproc::processor", LevelFilter::Info)
                 .format(|out, message, record| {
                     out.finish(format_args!(
                         "[{}][{}] {}",

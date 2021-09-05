@@ -168,7 +168,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
 }
 
 pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
-    let cluster_ids = db.cluster_ids();
+    let cluster_ids = db.clusters_ordered();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
         // No number? Not considered to be in document, position participant.
