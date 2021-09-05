@@ -91,7 +91,7 @@ jobs:
           set-output npm_dry_run "$DRY_RUN"
 
           if $IS_TAGGED_RELEASE; then
-            TAG=${GITHUB_REF#refs/tags/}
+            TAG=${GITHUB_REF#refs/tags/wasm-}
             IFS='-' read -ra PLAIN_VERSION POST_HYPHEN <<< "$TAG"
             if ! [ -z "$POST_HYPHEN" ]; then
               # i.e. there was a -alpha.1 appended, use the `next` dist tag
