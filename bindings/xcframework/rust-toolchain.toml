@@ -1,0 +1,16 @@
+[toolchain]
+# needs PR https://github.com/rust-lang/rust/pull/87699
+channel = "nightly-2021-08-30"
+profile = "minimal"
+components = [ "rust-src" ]
+targets = [
+  # intel & arm macs
+  "x86_64-apple-darwin", "aarch64-apple-darwin",
+  # ios devices
+  "aarch64-apple-ios",
+  # ios simulator (odd one out -- no such target x86_64-apple-ios-sim)
+  "x86_64-apple-ios", "aarch64-apple-ios-sim",
+  # intel & arm catalyst
+  # "x86_64-apple-ios-macabi", "aarch64-apple-ios-macabi",
+]
+

@@ -14,6 +14,7 @@ default-members = [
   "crates/proc",
   "crates/wasm",
   "crates/citeproc",
+  "bindings/ffi",
 ]
 resolver = "2"
 
