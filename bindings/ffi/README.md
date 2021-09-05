@@ -1,8 +1,10 @@
 # ffi interface to `citeproc-rs`
 
 ```sh
-# prerequisite
-cargo install --force cbindgen
+# prerequisite (using a fork at the moment)
+git clone https://github.com/cormacrelf/cbindgen.git
+cd cbindgen
+cargo install --force --path .
 
 # from this ffi directory
 make
