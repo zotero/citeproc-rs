@@ -126,6 +126,8 @@ impl MockProcessor {
         }
         self.set_all_keys(Arc::new(keys));
     }
+
+    #[allow(dead_code)]
     pub fn insert_cites(&mut self, cluster_id: ClusterId, cites: &[Cite<Markup>]) {
         let cluster_ids = self.cluster_ids();
         if !cluster_ids.contains(&cluster_id) {

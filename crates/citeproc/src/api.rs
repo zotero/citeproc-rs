@@ -60,6 +60,8 @@ pub struct Cluster<O: OutputFormat = Markup, Id = ClusterId> {
     pub mode: Option<ClusterMode>,
 }
 
+/// Similar to [[ClusterPosition]] but with the ability to describe a preview marker by supplying
+/// `id: None`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterPosition {
     /// If this is None, the piece is the preview marker for [PreviewPosition::MarkWithZero].
@@ -67,6 +69,33 @@ pub struct ClusterPosition {
     pub id: Option<ClusterId>,
     /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
     pub note: Option<u32>,
+}
+
+impl ClusterPosition {
+    pub fn in_text(id: ClusterId) -> Self {
+        Self {
+            id: Some(id),
+            note: None,
+        }
+    }
+    pub fn note(id: ClusterId, note: u32) -> Self {
+        Self {
+            id: Some(id),
+            note: Some(note),
+        }
+    }
+    pub fn preview_in_text() -> Self {
+        Self {
+            id: None,
+            note: None,
+        }
+    }
+    pub fn preview_note(note: u32) -> Self {
+        Self {
+            id: None,
+            note: Some(note),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, thiserror::Error, PartialEq)]
@@ -118,6 +147,33 @@ pub mod string_id {
         /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub note: Option<u32>,
+    }
+
+    impl ClusterPosition {
+        pub fn in_text(id: SmartString) -> Self {
+            Self {
+                id: Some(id),
+                note: None,
+            }
+        }
+        pub fn note(id: SmartString, note: u32) -> Self {
+            Self {
+                id: Some(id),
+                note: Some(note),
+            }
+        }
+        pub fn preview_in_text() -> Self {
+            Self {
+                id: None,
+                note: None,
+            }
+        }
+        pub fn preview_note(note: u32) -> Self {
+            Self {
+                id: None,
+                note: Some(note),
+            }
+        }
     }
 
     #[derive(Default, Debug, Clone, Serialize)]

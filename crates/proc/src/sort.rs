@@ -641,7 +641,7 @@ fn sort_string_bibliography(
     with_bib_context(
         db,
         ref_id,
-        refr_arc.as_ref(),
+        refr_arc.as_deref(),
         None,
         Some(key),
         None,

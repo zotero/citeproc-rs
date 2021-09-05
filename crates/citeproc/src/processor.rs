@@ -319,10 +319,6 @@ impl Processor {
         self.set_all_keys_with_durability(Arc::new(IndexSet::new()), Durability::MEDIUM);
     }
 
-    pub fn preview_cluster_id(&self) -> ClusterId {
-        self.preview_cluster_id
-    }
-
     /// Gives you an interned cluster id to work with. Use this to insert cites, call
     /// `set_cluster_order`, and generally identify clusters in your document.
     ///
@@ -339,8 +335,8 @@ impl Processor {
     /// processor.insert_cites(a, &[Cite::basic("nonexistent-reference")]);
     /// processor.insert_cites(b, &[Cite::basic("nonexistent-reference")]);
     /// processor.set_cluster_order(&[
-    ///     ClusterPosition { id: a, note: None },
-    ///     ClusterPosition { id: b, note: None },
+    ///     ClusterPosition::in_text(a),
+    ///     ClusterPosition::in_text(b),
     /// ]);
     /// ```
     pub fn cluster_id(&self, string: impl AsRef<str>) -> ClusterId {

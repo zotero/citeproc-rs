@@ -58,10 +58,7 @@ fn insert_ascending_notes(db: &mut Processor, ref_ids: &[&str]) {
             cites: vec![Cite::basic(ref_ids[i - 1])],
             mode: None,
         });
-        order.push(ClusterPosition {
-            id,
-            note: Some(i as u32),
-        });
+        order.push(ClusterPosition::note(id, i as u32));
     }
     db.init_clusters(clusters);
     db.set_cluster_order(&order).unwrap();
@@ -107,14 +104,8 @@ mod position {
         test_ibid_1_2(
             |one, two| {
                 vec![
-                    ClusterPosition {
-                        id: one,
-                        note: Some(1),
-                    },
-                    ClusterPosition {
-                        id: two,
-                        note: Some(2),
-                    },
+                    ClusterPosition::note(one, 1),
+                    ClusterPosition::note(two, 2),
                 ]
             },
             (Position::First, None),
@@ -128,14 +119,8 @@ mod position {
             |one, two| {
                 vec![
                     // both in-text
-                    ClusterPosition {
-                        id: one,
-                        note: None,
-                    },
-                    ClusterPosition {
-                        id: two,
-                        note: None,
-                    },
+                    ClusterPosition::in_text(one),
+                    ClusterPosition::in_text(two),
                 ]
             },
             (Position::First, None),
@@ -149,14 +134,8 @@ mod position {
         test_ibid_1_2(
             |one, two| {
                 vec![
-                    ClusterPosition {
-                        id: one,
-                        note: None,
-                    },
-                    ClusterPosition {
-                        id: two,
-                        note: Some(1),
-                    },
+                    ClusterPosition::in_text(one),
+                    ClusterPosition::note(two, 1),
                 ]
             },
             (Position::First, None),
@@ -169,14 +148,8 @@ mod position {
         test_ibid_1_2(
             |one, two| {
                 vec![
-                    ClusterPosition {
-                        id: one,
-                        note: Some(1),
-                    },
-                    ClusterPosition {
-                        id: two,
-                        note: None,
-                    },
+                    ClusterPosition::note(one, 1),
+                    ClusterPosition::in_text(two),
                 ]
             },
             (Position::First, None),
@@ -258,20 +231,10 @@ mod preview {
         let cites = vec![Cite::basic("one")];
         let one = cid(&mut db, 1);
         let two = cid(&mut db, 2);
-        let marker = db.preview_cluster_id();
         let positions = &[
-            ClusterPosition {
-                id: one,
-                note: Some(1),
-            },
-            ClusterPosition {
-                id: two,
-                note: Some(2),
-            },
-            ClusterPosition {
-                id: marker,
-                note: Some(3),
-            }, // Append at the end
+            ClusterPosition::note(one, 1),
+            ClusterPosition::note(two, 2),
+            ClusterPosition::preview_note(3), // Append at the end
         ];
         let preview =
             db.preview_citation_cluster(&cites, PreviewPosition::MarkWithZero(positions), None);
@@ -286,27 +249,16 @@ mod preview {
         let cites = vec![Cite::basic("one"), Cite::basic("three")];
         let one = cid(&mut db, 1);
         let two = cid(&mut db, 2);
-        let marker = db.preview_cluster_id();
         let positions = &[
-            ClusterPosition {
-                id: marker,
-                note: Some(1),
-            }, // Insert into the first note, at the start.
-            ClusterPosition {
-                id: one,
-                note: Some(1),
-            },
-            ClusterPosition {
-                id: two,
-                note: Some(2),
-            },
+            ClusterPosition::preview_note(1), // Insert into the first note, at the start.
+            ClusterPosition::note(one, 1),
+            ClusterPosition::note(two, 2),
         ];
         let preview =
             db.preview_citation_cluster(&cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book one; Book three"));
         assert_cluster!(db.get_cluster(one), Some("Book one"));
         assert_cluster!(db.get_cluster(two), Some("Book two"));
-        assert_cluster!(db.get_cluster(marker), None);
     }
 
     #[test]
@@ -315,23 +267,15 @@ mod preview {
         let cites = vec![Cite::basic("three")];
         let one = cid(&mut db, 1);
         let two = cid(&mut db, 2);
-        let marker = db.preview_cluster_id();
         let positions = &[
-            ClusterPosition {
-                id: marker,
-                note: Some(1),
-            }, // Replace cluster #1
-            ClusterPosition {
-                id: two,
-                note: Some(2),
-            },
+            ClusterPosition::preview_note(1), // Replace cluster #1
+            ClusterPosition::note(two, 2),
         ];
         let preview =
             db.preview_citation_cluster(&cites, PreviewPosition::MarkWithZero(positions), None);
         assert_cluster!(preview.ok(), Some("Book three"));
         assert_cluster!(db.get_cluster(one), Some("Book one"));
         assert_cluster!(db.get_cluster(two), Some("Book two"));
-        assert_cluster!(db.get_cluster(marker), None);
     }
 }
 
