@@ -117,9 +117,11 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
                 .get(a)
                 .expect("must have an citation_number entry for every bibliography item")
                 .clone();
+            let refr_arc = db.reference(a.clone());
             let demoting = with_bib_context(
                 db,
                 a.clone(),
+                refr_arc.as_deref(),
                 a_cnum.cited_only(),
                 None,
                 None,
@@ -166,7 +168,7 @@ pub fn sorted_refs(db: &dyn IrDatabase) -> Arc<(Vec<Atom>, FnvHashMap<Atom, BibN
 }
 
 pub fn clusters_cites_sorted(db: &dyn IrDatabase) -> Arc<Vec<ClusterData>> {
-    let cluster_ids = db.cluster_ids();
+    let cluster_ids = db.clusters_ordered();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
         // No number? Not considered to be in document, position participant.
@@ -635,9 +637,11 @@ fn sort_string_bibliography(
     macro_name: SmartString,
     key: SortKey,
 ) -> Option<Arc<SmartString>> {
+    let refr_arc = db.reference(ref_id.clone());
     with_bib_context(
         db,
-        ref_id.clone(),
+        ref_id,
+        refr_arc.as_deref(),
         None,
         Some(key),
         None,

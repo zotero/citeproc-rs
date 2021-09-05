@@ -1,0 +1,17 @@
+# See https://github.com/eqrion/cbindgen/blob/master/docs.md#cbindgentoml
+# for detailed documentation
+
+language = "C"
+include_guard = "_CITEPROC_RS_H"
+
+[parse.expand]
+crates = ["citeproc-ffi"]
+
+[export]
+prefix = "citeproc_rs_"
+rename_items = "snake_case"
+
+[enum]
+# OUTPUT_FORMAT_HTML.
+rename_variants = "ScreamingSnakeCase"
+prefix_with_name = true

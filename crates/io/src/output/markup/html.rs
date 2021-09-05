@@ -4,13 +4,13 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::String;
 use super::InlineElement;
 use super::MarkupWriter;
+use super::MaybeTrimStart;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use crate::String;
 use csl::Formatting;
-use super::MaybeTrimStart;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct HtmlOptions {

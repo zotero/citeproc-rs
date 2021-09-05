@@ -41,7 +41,7 @@ use serde::de::{Deserialize, Deserializer};
 ///     basic_mode("smith", CiteMode::AuthorOnly),
 /// ])
 /// ```
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", bound(deserialize = ""))]
 pub struct Cite<O: OutputFormat> {
     #[serde(rename = "id", deserialize_with = "get_ref_id")]
@@ -60,6 +60,28 @@ pub struct Cite<O: OutputFormat> {
 
     #[serde(default, flatten)]
     pub mode: Option<CiteMode>,
+}
+
+use std::fmt;
+
+impl<O: OutputFormat> fmt::Debug for Cite<O> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Cite(")?;
+        write!(f, "{:?}", AsRef::<str>::as_ref(&self.ref_id))?;
+        if let Some(prefix) = self.prefix.as_ref() {
+            write!(f, ", prefix: {:?}", prefix)?;
+        }
+        if let Some(suffix) = self.suffix.as_ref() {
+            write!(f, ", suffix: {:?}", suffix)?;
+        }
+        if let Some(locators) = self.locators.as_ref() {
+            write!(f, ", locators: {:?}", locators)?;
+        }
+        if let Some(mode) = self.mode.as_ref() {
+            write!(f, ", mode: {:?}", mode)?;
+        }
+        write!(f, ")")
+    }
 }
 
 /// Designed for use with `#[serde(with = "...")]`.
@@ -164,6 +186,8 @@ impl Locators {
             Locators::Multiple { locators } => locators.get(0),
         }
     }
+    // Used by get_locators
+    #[allow(dead_code)]
     fn into_option(self) -> Option<Self> {
         match self {
             Locators::Multiple { locators } => {
@@ -192,6 +216,9 @@ impl Locators {
 
     /// Single length locators arrays => Some(Locators::Single)
     /// Zero length => None
+    ///
+    /// Not yet used, pending CSL 1.1 locator array
+    #[allow(dead_code)]
     fn get_locators<'de, D>(d: D) -> Result<Option<Locators>, D::Error>
     where
         D: Deserializer<'de>,

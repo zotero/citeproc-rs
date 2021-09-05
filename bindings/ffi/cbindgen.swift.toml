@@ -1,0 +1,34 @@
+# See https://github.com/eqrion/cbindgen/blob/master/docs.md#cbindgentoml
+# for detailed documentation
+
+language = "C"
+include_guard = "_CITEPROC_RS_H"
+sys_includes = ["CoreFoundation/CoreFoundation.h"]
+header = "#define CF_SWIFT_NAME(_name) __attribute__((swift_name(#_name)))"
+
+[parse.expand]
+crates = ["citeproc-ffi"]
+features = ["testability"]
+
+[export]
+prefix = "CR"
+rename_items = "None"
+
+[fn]
+swift_name_macro = "CF_SWIFT_NAME"
+
+# with these enum options combined, you get
+# typedef CF_ENUM(uint8_t, RustName) {
+#     RustNameVariantName,
+#     RustNameVariant2
+# };
+# which in is interpreted as follows in Swift:
+# enum RustName: uint8_t {
+#     case variant_name
+#     case variant_2
+# }
+[enum]
+swift_enum_macro = "CF_ENUM"
+# rename_variants = "PascalCase"
+prefix_with_name = true
+prefix_underscore = true

@@ -296,7 +296,9 @@ impl Markup {
         move_punctuation(&mut flipped, punctuation_in_quote);
         let mut dest = String::new();
         match *self {
-            Markup::Html(options) => HtmlWriter::new(&mut dest, options).write_inlines(&flipped, false),
+            Markup::Html(options) => {
+                HtmlWriter::new(&mut dest, options).write_inlines(&flipped, false)
+            }
             Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped, false),
             Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped, false),
         }
@@ -395,4 +397,3 @@ impl MaybeTrimStart for str {
         }
     }
 }
-

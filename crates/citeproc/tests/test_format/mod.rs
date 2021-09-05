@@ -130,7 +130,7 @@ impl TestCase {
         let clusters = clusters.map(|vec| {
             vec.into_iter()
                 .map(|str_cluster| Cluster {
-                    id: processor.new_cluster(&str_cluster.id),
+                    id: processor.cluster_id(&str_cluster.id),
                     cites: str_cluster.cites,
                     mode: str_cluster.mode,
                 })
@@ -193,7 +193,7 @@ impl TestCase {
                 .iter()
                 .enumerate()
                 .map(|(ix, cluster)| ClusterPosition {
-                    id: cluster.id,
+                    id: Some(cluster.id),
                     note: Some(ix as u32 + 1),
                 })
                 .collect();

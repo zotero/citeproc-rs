@@ -38,6 +38,7 @@ cfg_if! {
                 .level_for("salsa", LevelFilter::Warn)
                 .level_for("salsa::derived", LevelFilter::Warn)
                 .level_for("html5ever", LevelFilter::Off)
+                .level_for("citeproc::processor", LevelFilter::Info)
                 .format(|out, message, record| {
                     out.finish(format_args!(
                         "[{}][{}] {}",
@@ -55,7 +56,6 @@ cfg_if! {
         }
     }
 }
-
 
 /// Import JS items
 /// 1. the global namespace, under no-modules
@@ -82,7 +82,7 @@ macro_rules! js_import {
 }
 
 /// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.WasmResult(...)`
-/// either from 
+/// either from
 /// 1. that namespace, under zotero
 /// 2. the global namespace, under no-modules
 /// 3. the src/js/include.js file itself as an ES module in the other setups

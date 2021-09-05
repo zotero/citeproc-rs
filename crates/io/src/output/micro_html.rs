@@ -1,7 +1,7 @@
-use crate::String;
 use super::FormatCmd;
 use crate::output::LocalizedQuotes;
 use crate::IngestOptions;
+use crate::String;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum MicroNode {
@@ -174,10 +174,10 @@ fn test_sanitize() {
 
 use html5ever::driver::ParseOpts;
 use html5ever::interface::QualName;
-use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::{local_name, parse_fragment, Namespace};
+use markup5ever_rcdom::{Handle, NodeData, RcDom};
 
 struct TagParser {
     dom: RcDom,

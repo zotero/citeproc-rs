@@ -268,9 +268,14 @@ fn merged_locale(db: &dyn LocaleDatabase, key: Lang) -> Arc<Locale> {
     )
 }
 
+use std::panic::RefUnwindSafe;
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "parallel")] {
-        pub trait LocaleFetcher: Send + Sync {
+        /// Must be RefUnwindSafe because LocaleFetcher is typically stored in an Arc, and we want
+        /// to have citeproc::Processor be unwind safe as well. RefUnwindSafe basically means
+        /// safe to have a reference to in an Arc that crosses a catch_panic boundary.
+        pub trait LocaleFetcher: Send + Sync + RefUnwindSafe {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
                 let s = self.fetch_string(lang).ok()??;
@@ -278,10 +283,9 @@ cfg_if::cfg_if! {
             }
         }
     } else {
-        pub trait LocaleFetcher {
+        pub trait LocaleFetcher: RefUnwindSafe {
             fn fetch_string(&self, lang: &Lang) -> Result<Option<String>, LocaleFetchError>;
             fn fetch_locale(&self, lang: &Lang) -> Option<Locale> {
-                use std::str::FromStr;
                 let s = self.fetch_string(lang).ok()??;
                 Some(Locale::parse(&s).ok()?)
             }

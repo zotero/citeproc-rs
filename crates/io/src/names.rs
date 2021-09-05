@@ -4,7 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::{String, SmartCow, lazy};
+use crate::{lazy, SmartCow, String};
 
 #[derive(Default, Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -78,13 +78,11 @@ impl From<NameInput> for Name {
             // uniformly. They can still be created by using
             // the Rust API directly, so this has to be
             // removed at some point.
-            NameInput::Literal { literal } => {
-                Name::Person(PersonName {
-                    is_latin_cyrillic: is_latin_cyrillic(&literal),
-                    family: Some(literal),
-                    ..Default::default()
-                })
-            }
+            NameInput::Literal { literal } => Name::Person(PersonName {
+                is_latin_cyrillic: is_latin_cyrillic(&literal),
+                family: Some(literal),
+                ..Default::default()
+            }),
             NameInput::Person(pn) => Name::Person(pn.into()),
         }
     }
@@ -215,7 +213,6 @@ fn trim_last(string: &mut String) {
 
 impl From<PersonNameInput> for PersonName {
     fn from(input: PersonNameInput) -> Self {
-
         let is_latin_cyrillic = pn_is_latin_cyrillic(&input);
 
         let PersonNameInput {
@@ -455,11 +452,7 @@ impl TrimInPlace for String {
         // Logic-wise, this copy allows copying between overlapping regions.
         // It's essentially libc's memmove.
         unsafe {
-            core::ptr::copy(
-                start,
-                self.as_bytes_mut().as_mut_ptr(),
-                len,
-            );
+            core::ptr::copy(start, self.as_bytes_mut().as_mut_ptr(), len);
         }
         self.truncate(len);
     }
@@ -473,11 +466,7 @@ impl TrimInPlace for String {
         }
         // See trim_in_place's unsafe block
         unsafe {
-            core::ptr::copy(
-                start,
-                self.as_bytes_mut().as_mut_ptr(),
-                len,
-            );
+            core::ptr::copy(start, self.as_bytes_mut().as_mut_ptr(), len);
         }
         self.truncate(len);
     }
@@ -524,4 +513,3 @@ fn test_is_latin() {
     };
     assert!(pn_is_latin_cyrillic(&pn));
 }
-

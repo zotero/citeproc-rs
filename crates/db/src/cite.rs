@@ -13,6 +13,8 @@ use citeproc_io::output::markup::Markup;
 use citeproc_io::{Cite, ClusterMode, Reference};
 use csl::Atom;
 
+use fnv::FnvHashSet;
+
 use indexmap::set::IndexSet;
 
 #[salsa::query_group(CiteDatabaseStorage)]
@@ -29,7 +31,10 @@ pub trait CiteDatabase: LocaleDatabase + StyleDatabase {
     // fn uncited_ordered(&self) -> Arc<IndexSet<Atom>>;
 
     #[salsa::input]
-    fn cluster_ids(&self) -> Arc<Vec<ClusterId>>;
+    fn all_cluster_ids(&self) -> Arc<FnvHashSet<ClusterId>>;
+
+    #[salsa::input]
+    fn clusters_ordered(&self) -> Arc<Vec<ClusterId>>;
 
     #[salsa::input]
     fn cluster_note_number(&self, key: ClusterId) -> Option<ClusterNumber>;
@@ -178,7 +183,7 @@ fn all_cite_ids(db: &dyn CiteDatabase) -> Arc<Vec<CiteId>> {
 }
 
 fn clusters_sorted(db: &dyn CiteDatabase) -> Arc<Vec<ClusterData>> {
-    let cluster_ids = db.cluster_ids();
+    let cluster_ids = db.clusters_ordered();
     let mut clusters: Vec<_> = cluster_ids
         .iter()
         // No number? Not considered to be in document, position participant.

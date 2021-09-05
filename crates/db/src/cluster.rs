@@ -5,10 +5,33 @@
 // Copyright © 2020 Corporation for Digital Scholarship
 
 use serde_derive::Deserialize;
+use string_interner::symbol::Symbol;
 
-use string_interner::DefaultSymbol;
+/// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
+/// identifier, but `citeproc_db` is not responsible for interning those ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct ClusterId(pub u32);
 
-pub type ClusterId = DefaultSymbol;
+impl ClusterId {
+    pub fn new(inner: u32) -> Self {
+        Self(inner)
+    }
+    pub fn raw(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl Symbol for ClusterId {
+    fn try_from_usize(index: usize) -> Option<Self> {
+        use core::convert::TryInto;
+        index.try_into().ok().map(Self)
+    }
+
+    fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+}
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord)]
 #[serde(untagged)]

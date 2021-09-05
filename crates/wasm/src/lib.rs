@@ -220,7 +220,7 @@ impl Driver {
 
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(&self, cluster: JsValue) -> EmptyResult {
+    pub fn insert_cluster(&self, cluster: TCluster) -> EmptyResult {
         typescript_serde_result(|| {
             let cluster: string_id::Cluster = cluster.into_serde()?;
             let mut eng = self.engine.borrow_mut();
@@ -245,7 +245,7 @@ impl Driver {
     #[wasm_bindgen(js_name = "initClusters")]
     pub fn init_clusters(&self, clusters: Box<[JsValue]>) -> EmptyResult {
         typescript_serde_result(|| {
-            let clusters: Vec<_> = utils::read_js_array_2(clusters)?;
+            let clusters: Vec<string_id::Cluster> = utils::read_js_array_2(clusters)?;
             self.engine.borrow_mut().init_clusters_str(clusters);
             Ok(())
         })
@@ -286,7 +286,7 @@ impl Driver {
             let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
             let mut eng = self.engine.borrow_mut();
             let preview = eng.preview_citation_cluster(
-                &cites,
+                PreviewCluster::new(cites, None),
                 PreviewPosition::MarkWithZeroStr(&positions),
                 Some(
                     SupportedFormat::from_str(format)
@@ -506,10 +506,10 @@ export type Locator = {
 export type CiteLocator = Locator | { locator: undefined; locators: Locator[]; };
 export type CiteMode = { mode?: "SuppressAuthor" | "AuthorOnly"; };
 
-export type Cite<Affix = string> = {
+export type Cite = {
     id: string;
-    prefix?: Affix;
-    suffix?: Affix;
+    prefix?: string;
+    suffix?: string;
 } & Partial<CiteLocator> & CiteMode;
 
 export type ClusterMode
@@ -517,8 +517,13 @@ export type ClusterMode
     | { mode: "SuppressAuthor"; suppressFirst?: number; }
     | { mode: "AuthorOnly"; }
     | {};
+
 export type Cluster = {
     id: string;
+    cites: Cite[];
+} & ClusterMode;
+
+export type PreviewCluster {
     cites: Cite[];
 } & ClusterMode;
 
@@ -754,6 +759,10 @@ result_type!(StyleMeta, StyleMetaResult, "WasmResult<StyleMeta>");
 
 #[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(typescript_type = "Cluster")]
+    pub type TCluster;
+    #[wasm_bindgen(typescript_type = "PreviewCluster")]
+    pub type TPreviewCluster;
     #[wasm_bindgen(typescript_type = "IncludeUncited")]
     pub type TIncludeUncited;
     #[wasm_bindgen(typescript_type = "Reference")]

@@ -6,29 +6,15 @@
 
 #![allow(dead_code)]
 
-use serde::{Deserialize, Serialize};
 use super::processor::Interner;
-use citeproc_db::ClusterId as ClusterIdInternal;
+use citeproc_db::ClusterId;
 use citeproc_io::output::{markup::Markup, OutputFormat};
 use citeproc_io::{Cite, ClusterMode, SmartString};
 use csl::Atom;
 use fnv::FnvHashMap;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
-
-/// A symbol that identifies a cluster; a newtyped u32. This corresponds to an interned string
-/// identifier, but `citeproc_db` is not responsible for interning those ids.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ClusterId(ClusterIdInternal);
-
-impl ClusterId {
-    pub(crate) fn new(internal: ClusterIdInternal) -> Self {
-        ClusterId(internal)
-    }
-    pub(crate) fn raw(&self) -> ClusterIdInternal {
-        self.0
-    }
-}
 
 /// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
 ///
@@ -60,7 +46,7 @@ impl ClusterId {
 ///     { infix: None, suppress_first: 1 }), },
 ///     Cluster { id: 5, cites: vec![Cite::basic("smith"), Cite::basic("jones")],
 ///               mode: Some(ClusterMode::Composite { infix: None, suppress_first: 2 }), },
-/// ])
+/// ]);
 /// ```
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(bound(
@@ -74,19 +60,109 @@ pub struct Cluster<O: OutputFormat = Markup, Id = ClusterId> {
     pub mode: Option<ClusterMode>,
 }
 
+impl<Id> Cluster<Markup, Id> {
+    pub fn new(id: Id, cites: Vec<Cite<Markup>>, mode: Option<ClusterMode>) -> Self {
+        Self { id, cites, mode }
+    }
+}
+
+#[doc(hidden)] trait SkipIdField { fn skip(&self) -> bool; }
+impl SkipIdField for () { fn skip(&self) -> bool { true } }
+impl SkipIdField for ClusterId { fn skip(&self) -> bool { false } }
+impl SkipIdField for SmartString { fn skip(&self) -> bool { false } }
+
+/// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
+///
+/// A cluster with no id. [[Cluster::preview]]
+///
+/// ```
+/// use serde::Deserialize;
+/// use citeproc_io::{Cite, ClusterMode, output::markup::Markup};
+/// use citeproc::PreviewCluster;
+/// let json = r#"
+/// [ { "cites": [{ "id": "smith" }] }
+/// , { "cites": [{ "id": "smith" }], "mode": "AuthorOnly" }
+/// , { "cites": [{ "id": "smith" }], "mode": "SuppressAuthor" }
+/// , { "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "SuppressAuthor", "suppressFirst": 2 }
+/// , { "cites": [{ "id": "smith" }], "mode": "Composite" }
+/// , { "cites": [{ "id": "smith" }, { "id": "jones" }],
+///     "mode": "Composite", "suppressFirst": 2 }
+/// ]"#;
+/// let clusters: Vec<PreviewCluster> = serde_json::from_str(json).unwrap();
+/// use pretty_assertions::assert_eq;
+/// assert_eq!(clusters, vec![
+///     PreviewCluster::new(vec![Cite::basic("smith")], None),
+///     PreviewCluster::new(vec![Cite::basic("smith")], Some(ClusterMode::AuthorOnly)),
+///     PreviewCluster::new(vec![Cite::basic("smith")], Some(ClusterMode::SuppressAuthor { suppress_first: 1 })),
+///     PreviewCluster::new(vec![Cite::basic("smith"), Cite::basic("jones")], Some(ClusterMode::SuppressAuthor { suppress_first: 2 })),
+///     PreviewCluster::new(vec![Cite::basic("smith")], Some(ClusterMode::Composite { infix: None, suppress_first: 1 })),
+///     PreviewCluster::new(vec![Cite::basic("smith"), Cite::basic("jones")], Some(ClusterMode::Composite { infix: None, suppress_first: 2 })), ]);
+/// ```
+///
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct PreviewCluster {
+    pub cites: Vec<Cite<Markup>>,
+    #[serde(flatten, default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<ClusterMode>,
+}
+
+impl PreviewCluster {
+    /// Makes a preview cluster, with no ID. Pass to [[crate::Processor::preview_citation_cluster]]
+    pub fn new(cites: Vec<Cite<Markup>>, mode: Option<ClusterMode>) -> Self {
+        Self {
+            cites,
+            mode,
+        }
+    }
+}
+
+/// Similar to [[ClusterPosition]] but with the ability to describe a preview marker by supplying
+/// `id: None`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterPosition {
-    pub id: ClusterId,
+    /// If this is None, the piece is the preview marker for [PreviewPosition::MarkWithZero].
+    /// You should only supply one of those.
+    pub id: Option<ClusterId>,
     /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
     pub note: Option<u32>,
 }
 
-#[derive(Debug, Copy, Clone, thiserror::Error)]
+impl ClusterPosition {
+    pub fn in_text(id: ClusterId) -> Self {
+        Self {
+            id: Some(id),
+            note: None,
+        }
+    }
+    pub fn note(id: ClusterId, note: u32) -> Self {
+        Self {
+            id: Some(id),
+            note: Some(note),
+        }
+    }
+    pub fn preview_in_text() -> Self {
+        Self {
+            id: None,
+            note: None,
+        }
+    }
+    pub fn preview_note(note: u32) -> Self {
+        Self {
+            id: None,
+            note: Some(note),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, thiserror::Error, PartialEq)]
 pub enum ReorderingError {
     #[error(
         "set_cluster_order called with a note number {0} that was out of order (e.g. [1, 2, 3, 1])"
     )]
     NonMonotonicNoteNumber(u32),
+    #[error("call to set_cluster_order must not provide a preview position")]
+    ClusterOrderWithZero,
     #[error("call to preview_citation_cluster must provide exactly one preview position")]
     DidNotSupplyZeroPosition,
     #[error("non-existent cluster {0:?}")]
@@ -112,12 +188,12 @@ pub mod string_id {
     //! This is the API using string IDs only, useful for exposing citeproc-rs to non-Rust
     //! consumers.
     use super::{BibEntry, BibliographyUpdate};
-    use serde::{Deserialize, Serialize};
     use citeproc_io::{
         output::{markup::Markup, OutputFormat},
         SmartString,
     };
     use fnv::FnvHashMap;
+    use serde::{Deserialize, Serialize};
     use std::sync::Arc;
 
     pub type Cluster<O = Markup> = super::Cluster<O, SmartString>;
@@ -126,8 +202,35 @@ pub mod string_id {
     pub struct ClusterPosition {
         pub id: Option<SmartString>,
         /// If this is None, the piece is an in-text cluster. If it is Some, it is a note cluster.
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         pub note: Option<u32>,
+    }
+
+    impl ClusterPosition {
+        pub fn in_text(id: SmartString) -> Self {
+            Self {
+                id: Some(id),
+                note: None,
+            }
+        }
+        pub fn note(id: SmartString, note: u32) -> Self {
+            Self {
+                id: Some(id),
+                note: Some(note),
+            }
+        }
+        pub fn preview_in_text() -> Self {
+            Self {
+                id: None,
+                note: None,
+            }
+        }
+        pub fn preview_note(note: u32) -> Self {
+            Self {
+                id: None,
+                note: Some(note),
+            }
+        }
     }
 
     #[derive(Default, Debug, Clone, Serialize)]

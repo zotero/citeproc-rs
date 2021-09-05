@@ -992,7 +992,9 @@ impl Citation {
     pub fn collapse_fallback(&self) -> Option<Collapse> {
         let addyearsuf = self.disambiguate_add_year_suffix;
         match self.collapse {
-            Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged) if !addyearsuf => Some(Collapse::Year),
+            Some(Collapse::YearSuffix) | Some(Collapse::YearSuffixRanged) if !addyearsuf => {
+                Some(Collapse::Year)
+            }
             x => x,
         }
     }
@@ -1006,7 +1008,7 @@ impl Citation {
         let col = self.collapse_fallback();
         match self.cite_group_delimiter.as_ref() {
             Some(_) => Some(col),
-            None => col.map(Some)
+            None => col.map(Some),
         }
     }
 }

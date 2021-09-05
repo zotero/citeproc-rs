@@ -6,7 +6,7 @@ pub(crate) mod sup_sub;
 #[rustfmt::skip]
 #[allow(dead_code)]
 mod latin_cyrillic;
-use self::latin_cyrillic::{COMMON, CYRILLIC, GREEK, LATIN, ARABIC};
+use self::latin_cyrillic::{ARABIC, COMMON, CYRILLIC, GREEK, LATIN};
 
 pub fn char_is_latin_cyrillic(c: char) -> bool {
     LATIN.contains_char(c)

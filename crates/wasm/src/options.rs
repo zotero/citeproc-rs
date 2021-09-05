@@ -1,8 +1,8 @@
-use serde::Deserialize;
-use wasm_bindgen::prelude::*;
+use crate::Fetcher;
 use citeproc::prelude::*;
 use csl::Lang;
-use crate::Fetcher;
+use serde::Deserialize;
+use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,7 +24,6 @@ pub struct WasmInitOptions {
     #[serde(default)]
     pub bibliography_no_sort: bool,
 }
-
 
 #[wasm_bindgen]
 extern "C" {
@@ -73,4 +72,3 @@ impl Fetcher {
         Ok(Some(fetcher))
     }
 }
-

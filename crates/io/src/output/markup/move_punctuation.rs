@@ -1,6 +1,6 @@
-use crate::String;
 use super::InlineElement;
 use crate::output::micro_html::MicroNode;
+use crate::String;
 
 #[test]
 fn normalise() {
@@ -29,11 +29,7 @@ fn smash_string_push(base: &mut String, suff: &str) {
     let s_starts_punc = strim.chars().nth(0).map_or(false, is_punc);
     if !b_ends_punc || !s_starts_punc {
         base.truncate(trimmed_len + std::cmp::max(b_spaces, 1));
-        let suff = if b_spaces > 0 {
-            strim
-        } else {
-            suff
-        };
+        let suff = if b_spaces > 0 { strim } else { suff };
         base.push_str(suff);
         return;
     }
@@ -85,7 +81,11 @@ fn smash_just_punc(base: &mut String, suff: &mut String) {
     let btrim = base.trim_end_matches(smash_trim);
     let mut trimmed_len = btrim.len();
     let b_spaces = base.len() - trimmed_len;
-    let mut strim_len = suff.chars().take_while(|&c| smash_trim(c)).map(|c| c.len_utf8()).sum();
+    let mut strim_len = suff
+        .chars()
+        .take_while(|&c| smash_trim(c))
+        .map(|c| c.len_utf8())
+        .sum();
     let strim = &suff[strim_len..];
     let b_ends_punc = btrim.chars().rev().nth(0).map_or(false, is_punc);
     let s_starts_punc = strim.chars().nth(0).map_or(false, is_punc);
@@ -654,10 +654,7 @@ fn find_right_quote_inside_micro<'b>(
     next: &'b mut String,
 ) -> Option<RightQuoteInsertionPoint<'b>> {
     match micro {
-        MicroNode::Quoted {
-            children,
-            ..
-        } => {
+        MicroNode::Quoted { children, .. } => {
             // prefer to dive deeper, and catch "'inner quotes,'" too.
             // This is a limitation of NLL borrowck analysis at the moment, but will be
             // solved with Polonius: https://users.rust-lang.org/t/solved-borrow-doesnt-drop-returning-this-value-requires-that/24182
@@ -949,15 +946,11 @@ pub fn ends_with_full_stop(els: &[InlineElement], top: bool) -> bool {
             let is_single_word = words.next().is_none();
             (txt.is_empty() || txt.trim_end().ends_with(".")) && !is_single_word
         }
-        InlineElement::Text(txt) => {
-            txt.trim_end().ends_with(".")
-        }
-        InlineElement::Formatted(inlines, _) |
-        InlineElement::Quoted { inlines, .. } => {
+        InlineElement::Text(txt) => txt.trim_end().ends_with("."),
+        InlineElement::Formatted(inlines, _) | InlineElement::Quoted { inlines, .. } => {
             ends_with_full_stop(inlines, false)
         }
-        InlineElement::Anchor { .. } |
-        InlineElement::Div(..) => true,
+        InlineElement::Anchor { .. } | InlineElement::Div(..) => true,
 
         InlineElement::Micro(micros) => {
             return micro_ends_fs(micros, top);
@@ -976,15 +969,11 @@ pub fn ends_with_full_stop(els: &[InlineElement], top: bool) -> bool {
                         let is_single_word = words.next().is_none();
                         (txt.is_empty() || txt.trim_end().ends_with(".")) && !is_single_word
                     }
-                    MicroNode::Text(txt) => {
-                        txt.trim_end().ends_with(".")
-                    }
-                    MicroNode::Formatted(children, _) |
-                    MicroNode::NoDecor(children) |
-                    MicroNode::NoCase(children) |
-                    MicroNode::Quoted { children, .. } => {
-                        micro_ends_fs(children, false)
-                    }
+                    MicroNode::Text(txt) => txt.trim_end().ends_with("."),
+                    MicroNode::Formatted(children, _)
+                    | MicroNode::NoDecor(children)
+                    | MicroNode::NoCase(children)
+                    | MicroNode::Quoted { children, .. } => micro_ends_fs(children, false),
                 }
             }
         }

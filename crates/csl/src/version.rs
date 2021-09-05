@@ -346,9 +346,7 @@ pub fn read_features_into<'a>(
 }
 
 #[cfg(feature = "serde")]
-use serde::de::{
-    DeserializeSeed, Deserializer, Error, Unexpected, Visitor,
-};
+use serde::de::{DeserializeSeed, Deserializer, Error, Unexpected, Visitor};
 
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for Features {

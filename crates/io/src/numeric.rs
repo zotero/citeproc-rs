@@ -12,7 +12,11 @@ pub mod roman;
 
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum NumericValue<'a> {
-    Tokens(Cow<'a, str>, Vec<NumericToken>, /* is_num i.e. parsed perfectly */ bool),
+    Tokens(
+        Cow<'a, str>,
+        Vec<NumericToken>,
+        /* is_num i.e. parsed perfectly */ bool,
+    ),
     /// For values that could not be parsed.
     Str(Cow<'a, str>),
 }
@@ -149,7 +153,10 @@ impl<'a> NumericValue<'a> {
     fn parse_full(input: &'a str, and_term: &'a str) -> Self {
         if let Ok((remainder, mut parsed)) = num_tokens(and_term)(input) {
             if remainder.is_empty() {
-                if parsed.iter().any(|x| matches!(x, Num(_) | Roman(..) | Affixed(..))) {
+                if parsed
+                    .iter()
+                    .any(|x| matches!(x, Num(_) | Roman(..) | Affixed(..)))
+                {
                     NumericValue::Tokens(input.into(), parsed, true)
                 } else {
                     NumericValue::Str(input.into())
@@ -242,7 +249,10 @@ fn esc<'a>(
         // For whatever reason, escaped() accepts "" even if the inner parser does not.
         // So we have to guard it
         if i.len() == 0 {
-            return Err(nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Escaped)));
+            return Err(nom::Err::Error(nom::error::Error::new(
+                i,
+                nom::error::ErrorKind::Escaped,
+            )));
         }
         escaped(f, '\\', one_of(r#"\ ,&-\u{2013}"#))(i)
     }
@@ -309,46 +319,49 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
     let (rem, res) = fold_many1(
         alt((map(num_pre, Blk::alpha), map_parser(digit1, Blk::num))),
         Acc::Len(0),
-        |acc, neu| {
-            match neu {
-                Blk::Num(new_num_len, new_num) => match acc {
-                    Acc::Len(prefix) => Acc::LenNum {
-                        prefix,
-                        num_len: new_num_len,
-                        num: new_num,
-                        post_num_len: 0,
-                    },
-                    Acc::LenNum {
-                        prefix,
-                        num_len: old_num_len,
-                        num: _,
-                        post_num_len,
-                    } => Acc::LenNum {
-                        prefix: prefix + old_num_len + post_num_len,
-                        num_len: new_num_len,
-                        num: new_num,
-                        post_num_len: 0,
-                    },
+        |acc, neu| match neu {
+            Blk::Num(new_num_len, new_num) => match acc {
+                Acc::Len(prefix) => Acc::LenNum {
+                    prefix,
+                    num_len: new_num_len,
+                    num: new_num,
+                    post_num_len: 0,
                 },
-                Blk::Alpha(len) => match acc {
-                    Acc::Len(prefix) => Acc::Len(prefix + len),
-                    Acc::LenNum {
-                        prefix,
-                        num_len,
-                        num,
-                        post_num_len,
-                    } => Acc::LenNum {
-                        prefix,
-                        num_len,
-                        num,
-                        post_num_len: post_num_len + len,
-                    },
+                Acc::LenNum {
+                    prefix,
+                    num_len: old_num_len,
+                    num: _,
+                    post_num_len,
+                } => Acc::LenNum {
+                    prefix: prefix + old_num_len + post_num_len,
+                    num_len: new_num_len,
+                    num: new_num,
+                    post_num_len: 0,
                 },
-            }
+            },
+            Blk::Alpha(len) => match acc {
+                Acc::Len(prefix) => Acc::Len(prefix + len),
+                Acc::LenNum {
+                    prefix,
+                    num_len,
+                    num,
+                    post_num_len,
+                } => Acc::LenNum {
+                    prefix,
+                    num_len,
+                    num,
+                    post_num_len: post_num_len + len,
+                },
+            },
         },
     )(inp)?;
     let token = match res {
-        Acc::Len(_len) => return Err(nom::Err::Error(NomError::new(inp, nom::error::ErrorKind::Many1))),
+        Acc::Len(_len) => {
+            return Err(nom::Err::Error(NomError::new(
+                inp,
+                nom::error::ErrorKind::Many1,
+            )))
+        }
         Acc::LenNum {
             prefix,
             num_len,
@@ -359,7 +372,7 @@ fn num_alpha_num(inp: &str) -> IResult<&str, NumericToken> {
                 Num(num)
             } else {
                 let pre = unescape(&inp[..prefix]);
-                let suf = unescape(&inp[prefix + num_len .. prefix + num_len + post_num_len]);
+                let suf = unescape(&inp[prefix + num_len..prefix + num_len + post_num_len]);
                 Affixed(pre, num, suf)
             }
         }
@@ -384,7 +397,10 @@ fn roman_numeral(inp: &str) -> IResult<&str, NumericToken> {
             ),
         ));
     }
-    Err(nom::Err::Error(nom::error::Error::new(inp, nom::error::ErrorKind::ParseTo)))
+    Err(nom::Err::Error(nom::error::Error::new(
+        inp,
+        nom::error::ErrorKind::ParseTo,
+    )))
 }
 
 fn num_ish(inp: &str) -> IResult<&str, NumericToken> {
@@ -426,16 +442,7 @@ fn test_num_token_parser() {
     );
     assert_eq!(
         num_tokens("et")("2 - 5, 9, edition"),
-        Ok((
-            ", edition",
-            vec![
-                nn(2),
-                Hyphen,
-                nn(5),
-                Comma,
-                nn(9),
-            ]
-        ))
+        Ok((", edition", vec![nn(2), Hyphen, nn(5), Comma, nn(9),]))
     );
 }
 

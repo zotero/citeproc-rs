@@ -8,7 +8,9 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
-use citeproc_io::{output::markup::Markup, Cite, cite_compat_vec, ClusterMode, Reference, SmartString};
+use citeproc_io::{
+    cite_compat_vec, output::markup::Markup, Cite, ClusterMode, Reference, SmartString,
+};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer};
@@ -22,7 +24,12 @@ pub enum CompatCitationItem {
     Map {
         #[serde(with = "cite_compat_vec")]
         cites: Vec<Cite<Markup>>,
-        #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+        #[serde(
+            flatten,
+            default,
+            deserialize_with = "ClusterMode::compat_opt",
+            skip_serializing_if = "Option::is_none"
+        )]
         mode: Option<ClusterMode>,
     },
 }
@@ -147,7 +154,12 @@ impl<'de> Deserialize<'de> for InstructionMode {
 struct Properties {
     #[serde(rename = "noteIndex", alias = "note")]
     note_index: u32,
-    #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        flatten,
+        default,
+        deserialize_with = "ClusterMode::compat_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     mode: Option<ClusterMode>,
 }
 
@@ -201,7 +213,7 @@ impl JsExecutor<'_> {
         }
     }
     fn get_id(&mut self, string_id: &str) -> ClusterId {
-        self.proc.new_cluster(string_id)
+        self.proc.cluster_id(string_id)
     }
 
     pub fn get_results(&self) -> Results {
@@ -245,7 +257,7 @@ impl JsExecutor<'_> {
             } else {
                 Some(note_number)
             };
-            renum.push(ClusterPosition { id, note })
+            renum.push(ClusterPosition { id: Some(id), note })
         }
     }
 
@@ -274,8 +286,10 @@ impl JsExecutor<'_> {
             });
             self.proc.set_cluster_order(&renum).unwrap();
             for &ClusterPosition { id, .. } in &renum {
-                if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
-                    self.current_note_numbers.insert(id, actual_note);
+                if let Some(id) = id {
+                    if let Some(actual_note) = self.proc.get_cluster_note_number(id) {
+                        self.current_note_numbers.insert(id, actual_note);
+                    }
                 }
             }
         }
@@ -450,7 +464,9 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
             items
                 .into_iter()
                 .enumerate()
-                .map(|(n, c_item): (usize, CompatCitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
+                .map(|(n, c_item): (usize, CompatCitationItem)| {
+                    c_item.to_note_cluster(n as u32 + 1u32)
+                })
                 .collect()
         }),
         process_citation_clusters.map(|inst2s| {

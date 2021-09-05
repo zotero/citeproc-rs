@@ -7,8 +7,7 @@
 use super::humans::{CiteprocJsInstruction, CompatCitationItem};
 use super::{Format, Mode, TestCase};
 use anyhow::Error;
-use citeproc_io::{output::markup::Markup, Cite, ClusterMode, Reference};
-use citeproc::string_id::Cluster as ClusterStr;
+use citeproc_io::Reference;
 use serde::Deserialize;
 
 pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {

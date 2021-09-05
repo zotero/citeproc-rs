@@ -20,6 +20,7 @@ pub use self::processor::{InitOptions, Processor};
 pub mod prelude {
     pub use crate::api::*;
     pub use crate::processor::{InitOptions, Processor};
+    pub use citeproc_db::PredefinedLocales;
     pub use citeproc_db::{
         CiteDatabase, CiteId, ClusterNumber, IntraNote, LocaleDatabase, LocaleFetchError,
         LocaleFetcher, StyleDatabase,
@@ -28,7 +29,15 @@ pub mod prelude {
     pub use citeproc_io::{Cite, Reference, SmartString};
     pub use citeproc_proc::db::{ImplementationDetails, IrDatabase};
     pub use csl::Atom;
+
+    pub use citeproc_db::ClusterId;
+    pub use citeproc_io::{CiteMode, ClusterMode, Locator, Locators, NumberLike};
 }
+
+#[doc(no_inline)]
+pub use citeproc_io as io;
+#[doc(no_inline)]
+pub use csl;
 
 pub fn random_cluster_id() -> citeproc_io::SmartString {
     use rand::distributions::Alphanumeric;
