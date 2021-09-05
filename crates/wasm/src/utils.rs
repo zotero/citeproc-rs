@@ -56,7 +56,6 @@ cfg_if! {
     }
 }
 
-
 /// Import JS items
 /// 1. the global namespace, under no-modules
 /// 2. the src/js/include.js file itself as an ES module in the other setups
@@ -82,7 +81,7 @@ macro_rules! js_import {
 }
 
 /// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.WasmResult(...)`
-/// either from 
+/// either from
 /// 1. that namespace, under zotero
 /// 2. the global namespace, under no-modules
 /// 3. the src/js/include.js file itself as an ES module in the other setups

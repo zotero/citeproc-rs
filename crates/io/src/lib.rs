@@ -39,6 +39,8 @@ pub use output::micro_html::micro_html_to_string;
 #[doc(inline)]
 pub use self::cite::*;
 #[doc(inline)]
+pub use self::cluster::*;
+#[doc(inline)]
 pub use self::date::*;
 #[doc(inline)]
 pub use self::names::*;
@@ -46,8 +48,6 @@ pub use self::names::*;
 pub use self::numeric::*;
 #[doc(inline)]
 pub use self::reference::*;
-#[doc(inline)]
-pub use self::cluster::*;
 
 use self::output::LocalizedQuotes;
 use csl::TextCase;
@@ -83,10 +83,10 @@ impl IngestOptions {
     pub(crate) fn for_affixes() -> Self {
         IngestOptions {
             no_parse_quotes: true,
-            ..Default::default() 
+            ..Default::default()
         }
     }
 }
 
-mod text_case;
 pub mod lazy;
+mod text_case;

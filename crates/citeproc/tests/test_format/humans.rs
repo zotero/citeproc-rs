@@ -8,7 +8,9 @@ use super::{Format, Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
-use citeproc_io::{output::markup::Markup, Cite, cite_compat_vec, ClusterMode, Reference, SmartString};
+use citeproc_io::{
+    cite_compat_vec, output::markup::Markup, Cite, ClusterMode, Reference, SmartString,
+};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer};
@@ -22,7 +24,12 @@ pub enum CompatCitationItem {
     Map {
         #[serde(with = "cite_compat_vec")]
         cites: Vec<Cite<Markup>>,
-        #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+        #[serde(
+            flatten,
+            default,
+            deserialize_with = "ClusterMode::compat_opt",
+            skip_serializing_if = "Option::is_none"
+        )]
         mode: Option<ClusterMode>,
     },
 }
@@ -147,7 +154,12 @@ impl<'de> Deserialize<'de> for InstructionMode {
 struct Properties {
     #[serde(rename = "noteIndex", alias = "note")]
     note_index: u32,
-    #[serde(flatten, default, deserialize_with = "ClusterMode::compat_opt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        flatten,
+        default,
+        deserialize_with = "ClusterMode::compat_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     mode: Option<ClusterMode>,
 }
 
@@ -452,7 +464,9 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
             items
                 .into_iter()
                 .enumerate()
-                .map(|(n, c_item): (usize, CompatCitationItem)| c_item.to_note_cluster(n as u32 + 1u32))
+                .map(|(n, c_item): (usize, CompatCitationItem)| {
+                    c_item.to_note_cluster(n as u32 + 1u32)
+                })
                 .collect()
         }),
         process_citation_clusters.map(|inst2s| {

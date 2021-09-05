@@ -18,7 +18,10 @@ pub(crate) fn lazy_uppercase_owned(s: String) -> String {
     lazy_char_transform_owned(s, |c| c.to_uppercase())
 }
 
-pub fn lazy_char_transform_owned<I: Iterator<Item = char>>(s: String, f: impl Fn(char) -> I) -> String {
+pub fn lazy_char_transform_owned<I: Iterator<Item = char>>(
+    s: String,
+    f: impl Fn(char) -> I,
+) -> String {
     let cow = lazy_char_transform(s.as_ref(), f);
     match cow {
         SmartCow::Borrowed(_) => s,
@@ -72,7 +75,11 @@ pub fn lazy_replace_char_if_owned(orig: String, pred: impl Fn(char) -> bool, wit
     }
 }
 
-pub fn lazy_replace_char_if<'a>(s: &'a str, pred: impl Fn(char) -> bool, with: &str) -> SmartCow<'a> {
+pub fn lazy_replace_char_if<'a>(
+    s: &'a str,
+    pred: impl Fn(char) -> bool,
+    with: &str,
+) -> SmartCow<'a> {
     transform(s, |rest| {
         let next = next_char(rest).expect("only called when there is remaining input");
         if pred(next) {
@@ -118,4 +125,3 @@ fn transform(
 
     SmartCow::Owned(copied)
 }
-

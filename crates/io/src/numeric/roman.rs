@@ -73,9 +73,8 @@ pub fn to(n: u32) -> Option<String> {
 
 #[test]
 fn test_to_roman() {
-    let roman =
-        "i ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi xvii xviii xix xx xxi xxii"
-            .split(' ');
+    let roman = "i ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi xvii xviii xix xx xxi xxii"
+        .split(' ');
     for (i, x) in roman.enumerate() {
         let n = (i + 1) as u32;
         assert_eq!(to(n).unwrap(), x);

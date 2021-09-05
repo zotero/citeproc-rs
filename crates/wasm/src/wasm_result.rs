@@ -5,32 +5,32 @@ pub trait TypescriptResult: From<WasmResult> {
 }
 
 macro_rules! result_type {
-  ($ty:ty, $name:ident, $stringified:literal) => {
-    #[wasm_bindgen]
-    extern "C" {
-      #[wasm_bindgen(typescript_type = $stringified)]
-      pub type $name;
-    }
-    impl From<$crate::wasm_result::WasmResult> for $name {
-      fn from(other: $crate::wasm_result::WasmResult) -> Self {
-        let jsv: JsValue = other.into();
-        $name::from(jsv)
-      }
-    }
-    impl TypescriptResult for $name {
-        type RustType = $ty;
-    }
-  };
+    ($ty:ty, $name:ident, $stringified:literal) => {
+        #[wasm_bindgen]
+        extern "C" {
+            #[wasm_bindgen(typescript_type = $stringified)]
+            pub type $name;
+        }
+        impl From<$crate::wasm_result::WasmResult> for $name {
+            fn from(other: $crate::wasm_result::WasmResult) -> Self {
+                let jsv: JsValue = other.into();
+                $name::from(jsv)
+            }
+        }
+        impl TypescriptResult for $name {
+            type RustType = $ty;
+        }
+    };
 }
 
 #[allow(dead_code)]
 mod helper {
-    use wasm_bindgen::prelude::*;
+    use super::TypescriptResult;
+    use crate::{CiteprocRsDriverError, CiteprocRsError, CslStyleError, DriverError};
+    use csl::StyleError;
     use js_sys::Error as JsError;
     use serde::Serialize;
-    use super::TypescriptResult;
-    use crate::{DriverError, CiteprocRsDriverError, CiteprocRsError, CslStyleError};
-    use csl::StyleError;
+    use wasm_bindgen::prelude::*;
 
     crate::js_import_class_constructor! {
         pub type WasmResult;
@@ -46,12 +46,8 @@ mod helper {
     {
         let res = f();
         let out = match res {
-            Ok(ok) => {
-                WasmResult::new(ok.into())
-            }
-            Err(e) => {
-                WasmResult::new(JsError::new(&e.to_string()).into())
-            }
+            Ok(ok) => WasmResult::new(ok.into()),
+            Err(e) => WasmResult::new(JsError::new(&e.to_string()).into()),
         };
         out
     }
@@ -66,7 +62,7 @@ mod helper {
                 string.push_str(&conv_err.to_string());
                 string.push_str(") ");
                 CiteprocRsError::new(string.into()).into()
-            },
+            }
         }
     }
 
@@ -85,7 +81,7 @@ mod helper {
                     string.push_str(&conv_err.to_string());
                     string.push_str(") ");
                     CiteprocRsError::new(string.into()).into()
-                },
+                }
             }
         }
     }
@@ -93,12 +89,8 @@ mod helper {
     impl From<Result<JsValue, DriverError>> for WasmResult {
         fn from(res: Result<JsValue, DriverError>) -> Self {
             match res {
-                Ok(ok) => {
-                    WasmResult::new(ok.into())
-                }
-                Err(e) => {
-                    WasmResult::new(e.to_js_error())
-                }
+                Ok(ok) => WasmResult::new(ok.into()),
+                Err(e) => WasmResult::new(e.to_js_error()),
             }
         }
     }
@@ -117,15 +109,10 @@ mod helper {
         R::RustType: Serialize,
         F: FnOnce() -> Result<R::RustType, DriverError>,
     {
-        let res = f()
-            .and_then(|rust| {
-                JsValue::from_serde(&rust)
-                    .map_err(DriverError::from)
-            });
+        let res = f().and_then(|rust| JsValue::from_serde(&rust).map_err(DriverError::from));
         let out: WasmResult = res.into();
         out.into()
     }
-
 }
 
 #[allow(dead_code)]
@@ -133,9 +120,9 @@ mod raw {
     //! Alternative impl with no Javascript dependency but no methods available
     //! on the returned objects.
 
-    use wasm_bindgen::prelude::*;
     use js_sys::Error as JsError;
     use serde::Serialize;
+    use wasm_bindgen::prelude::*;
 
     pub type WasmResult = JsValue;
 
@@ -202,4 +189,3 @@ mod raw {
         out.into()
     }
 }
-

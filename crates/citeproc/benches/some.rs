@@ -78,7 +78,11 @@ fn basic_cluster_get_cite_id(proc: &mut Processor, cluster_id: ClusterId, id: &s
     id
 }
 
-fn invalidate_rebuild_cluster(proc: &mut Processor, id: ClusterId, cite_id: CiteId) -> Arc<SmartString> {
+fn invalidate_rebuild_cluster(
+    proc: &mut Processor,
+    id: ClusterId,
+    cite_id: CiteId,
+) -> Arc<SmartString> {
     use citeproc_proc::db;
     db::IrGen0Query.in_db_mut(proc).invalidate(&cite_id);
     db::IrGen2AddGivenNameQuery
@@ -102,7 +106,7 @@ fn bench_build_cluster(b: &mut Bencher, style: &str) {
     let cite_id = basic_cluster_get_cite_id(&mut proc, 1, "id_1");
     let cluster_id = ClusterId::new(1);
     proc.set_cluster_order(&[ClusterPosition::note(cluster_id, 1)])
-    .unwrap();
+        .unwrap();
     b.iter(move || invalidate_rebuild_cluster(&mut proc, cluster_id, cite_id));
     // b.iter_batched_ref(make, |proc| proc.built_cluster(1), BatchSize::SmallInput)
 }

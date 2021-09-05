@@ -17,9 +17,15 @@ pub fn parse_quotes(mut original: Vec<MicroNode>, options: &IngestOptions) -> Ve
 impl LocalizedQuotes {
     fn force(kind: SFQuoteKind, punctuation_in_quote: bool) -> Self {
         let only_one = match kind {
-            SFQuoteKind::SingleOpen | SFQuoteKind::SingleClose => ("\u{2018}".into(), "\u{2019}".into()),
-            SFQuoteKind::DoubleOpen | SFQuoteKind::DoubleClose => ("\u{201C}".into(), "\u{201D}".into()),
-            SFQuoteKind::FrenchClose | SFQuoteKind::FrenchOpen => ("\u{ab}".into(), "\u{bb}".into()),
+            SFQuoteKind::SingleOpen | SFQuoteKind::SingleClose => {
+                ("\u{2018}".into(), "\u{2019}".into())
+            }
+            SFQuoteKind::DoubleOpen | SFQuoteKind::DoubleClose => {
+                ("\u{201C}".into(), "\u{201D}".into())
+            }
+            SFQuoteKind::FrenchClose | SFQuoteKind::FrenchOpen => {
+                ("\u{ab}".into(), "\u{bb}".into())
+            }
         };
         LocalizedQuotes {
             outer: only_one.clone(),
@@ -30,7 +36,11 @@ impl LocalizedQuotes {
 }
 
 /// For `flipflop_LeadingMarkupWithApostrophe.txt`
-fn override_if_external(options: &IngestOptions, kind: SFQuoteKind, shape: Shape) -> LocalizedQuotes {
+fn override_if_external(
+    options: &IngestOptions,
+    kind: SFQuoteKind,
+    shape: Shape,
+) -> LocalizedQuotes {
     if !options.is_external || shape == Shape::Straight {
         options.quotes.clone()
     } else {
@@ -194,17 +204,25 @@ fn stamp<'a>(
                     EventOwned::Text(txt) => stack.push_string(txt),
                     EventOwned::SmartMidwordInvertedComma(_) => stack.push_str("\u{2019}"),
                     EventOwned::SmartQuoteSingleOpen(shape) => {
-                        stack.stack.push((SFQuoteKind::SingleOpen, shape, Vec::new()));
+                        stack
+                            .stack
+                            .push((SFQuoteKind::SingleOpen, shape, Vec::new()));
                     }
                     EventOwned::SmartQuoteDoubleOpen(shape) => {
-                        stack.stack.push((SFQuoteKind::DoubleOpen, shape, Vec::new()));
+                        stack
+                            .stack
+                            .push((SFQuoteKind::DoubleOpen, shape, Vec::new()));
                     }
                     EventOwned::SmartQuoteSingleClose(shape) => {
                         if let Some((SFQuoteKind::SingleOpen, _, _)) = stack.stack.last() {
                             let (_, _, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: override_if_external(options, SFQuoteKind::SingleClose, shape),
+                                localized: override_if_external(
+                                    options,
+                                    SFQuoteKind::SingleClose,
+                                    shape,
+                                ),
                                 children,
                             });
                         } else {
@@ -216,7 +234,11 @@ fn stamp<'a>(
                             let (_, _, children) = stack.stack.pop().unwrap();
                             stack.push(MicroNode::Quoted {
                                 is_inner: false,
-                                localized: override_if_external(options, SFQuoteKind::DoubleClose, shape),
+                                localized: override_if_external(
+                                    options,
+                                    SFQuoteKind::DoubleClose,
+                                    shape,
+                                ),
                                 children,
                             });
                         } else {
@@ -224,7 +246,9 @@ fn stamp<'a>(
                         }
                     }
                     EventOwned::SmartQuoteFrenchOpen => {
-                        stack.stack.push((SFQuoteKind::FrenchOpen, Shape::Curly, Vec::new()));
+                        stack
+                            .stack
+                            .push((SFQuoteKind::FrenchOpen, Shape::Curly, Vec::new()));
                     }
                     EventOwned::SmartQuoteFrenchClose => {
                         if let Some((SFQuoteKind::FrenchOpen, _, _)) = stack.stack.last() {
@@ -233,7 +257,11 @@ fn stamp<'a>(
                                 // The french locale uses guillemets as the outer quotes, so we'll
                                 // do the same.
                                 is_inner: false,
-                                localized: override_if_external(options, SFQuoteKind::FrenchClose, Shape::Curly),
+                                localized: override_if_external(
+                                    options,
+                                    SFQuoteKind::FrenchClose,
+                                    Shape::Curly,
+                                ),
                                 children,
                             });
                         } else {
@@ -718,11 +746,7 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
 
     // Beginning and end of line == whitespace.
     let next_char = suffix.chars().filter(not_italic_ish).nth(0);
-    let prev_char = prefix
-        .chars()
-        .rev()
-        .filter(not_italic_ish)
-        .nth(0);
+    let prev_char = prefix.chars().rev().filter(not_italic_ish).nth(0);
 
     let next_white = next_char.map(|x| x.is_whitespace());
     let prev_white = prev_char.map(|x| x.is_whitespace());
@@ -750,7 +774,9 @@ fn quote_kind(character: char, prefix: &str, suffix: &str) -> Option<SmartQuoteK
         Some(SmartQuoteKind::Close)
     } else if prev_white.unwrap_or(true) && !next_white.unwrap_or(true) {
         Some(SmartQuoteKind::Open)
-    } else if next_white.unwrap_or(true) && (prev_char == '.' || prev_char == ',' || prev_char == '!') {
+    } else if next_white.unwrap_or(true)
+        && (prev_char == '.' || prev_char == ',' || prev_char == '!')
+    {
         Some(SmartQuoteKind::Close)
     } else if is_punctuation(prev_char) && not_term_punc(next_char) {
         Some(SmartQuoteKind::Close)

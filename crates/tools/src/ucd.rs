@@ -174,7 +174,7 @@ pub fn build_superscript_trie() -> Result<()> {
         .spawn()?
         .wait()?;
     if !status.success() {
-        return Err(anyhow::anyhow!("failed to execute ucd.sh"))
+        return Err(anyhow::anyhow!("failed to execute ucd.sh"));
     }
     let ucd = parse_ucd_file("/tmp/ucd/Superscript.txt")?;
     let mut membership = BTreeSet::new();

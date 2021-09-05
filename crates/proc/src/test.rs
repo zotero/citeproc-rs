@@ -60,10 +60,7 @@ impl ImplementationDetails for MockProcessor {
     fn get_formatter(&self) -> Markup {
         self.formatter.clone()
     }
-    fn lookup_cluster_id(
-        &self,
-        _symbol: ClusterId,
-    ) -> Option<SmartString> {
+    fn lookup_cluster_id(&self, _symbol: ClusterId) -> Option<SmartString> {
         None
     }
 }

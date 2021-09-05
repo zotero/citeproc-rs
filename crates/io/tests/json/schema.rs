@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct JsonSchema {
@@ -128,8 +128,9 @@ pub struct Common {
     examples: Option<Vec<Value>>,
 }
 
-
-fn bool_true() -> bool { true }
+fn bool_true() -> bool {
+    true
+}
 
 // not necessary
 // use json_pointer::JsonPointer;
@@ -137,4 +138,3 @@ fn bool_true() -> bool { true }
 //     let s = String::deserialize(d)?;
 //     s.parse().map_err(|_e| serde::de::Error::invalid_value(serde::de::Unexpected::Str(&s), &"json pointer"))
 // }
-

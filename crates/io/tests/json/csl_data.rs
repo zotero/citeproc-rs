@@ -1,25 +1,24 @@
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use serde::Deserialize;
 
-use super::schema::{SchemaNode, JsonSchema, Primitive};
+use super::schema::{JsonSchema, Primitive, SchemaNode};
 
 #[derive(Deserialize, Debug)]
 #[serde(transparent)]
 pub struct CslDataSchema(JsonSchema);
 
-
 impl SchemaNode {
     fn match_ref(&self, ref_name: &str) -> bool {
         if let SchemaNode::Ref { pointer } = self {
-            return pointer == ref_name
+            return pointer == ref_name;
         }
         false
     }
     fn unwrap_object(&self) -> &HashMap<String, SchemaNode> {
         match self {
             SchemaNode::Object { properties, .. } => properties,
-            _ => panic!("could not unwrap object from SchemaNode: {:?}", self)
+            _ => panic!("could not unwrap object from SchemaNode: {:?}", self),
         }
     }
 }
@@ -32,14 +31,10 @@ impl CslDataSchema {
 
     pub fn variables(&self) -> &HashMap<String, SchemaNode> {
         match &self.0.inner {
-            SchemaNode::Array { items, .. } => {
-                match &**items {
-                    SchemaNode::Object { properties, .. } => {
-                        return properties
-                    }
-                    _ => panic!("csl-data.json was an array of something other than an object"),
-                }
-            }
+            SchemaNode::Array { items, .. } => match &**items {
+                SchemaNode::Object { properties, .. } => return properties,
+                _ => panic!("csl-data.json was an array of something other than an object"),
+            },
             _ => panic!("csl-data.json schema didn't have an array as the top level element"),
         }
     }
@@ -57,7 +52,10 @@ impl CslDataSchema {
 
     pub fn named_schema(&self, pointer: &str) -> &SchemaNode {
         let name = pointer.trim_start_matches("#/definitions/");
-        self.0.definitions.get(name).unwrap_or_else(|| panic!("{} not defined in definitions section", name))
+        self.0
+            .definitions
+            .get(name)
+            .unwrap_or_else(|| panic!("{} not defined in definitions section", name))
     }
 
     /// Comes with an additional "year" property that's not in the spec.
@@ -66,10 +64,13 @@ impl CslDataSchema {
         if let SchemaNode::AnyOf { any_of, .. } = date_schema {
             let obj = any_of.get(1).expect("date-schema only had one anyOf?");
             let mut obj = obj.unwrap_object().clone();
-            obj.insert("year".to_owned(), SchemaNode::Multi {
-                types: vec![Primitive::String, Primitive::Number],
-                common: Default::default(),
-            });
+            obj.insert(
+                "year".to_owned(),
+                SchemaNode::Multi {
+                    types: vec![Primitive::String, Primitive::Number],
+                    common: Default::default(),
+                },
+            );
             obj
         } else {
             panic!("date-variable schema is not anyOf")

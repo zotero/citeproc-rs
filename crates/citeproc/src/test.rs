@@ -102,12 +102,7 @@ mod position {
     #[test]
     fn cite_positions_note_ibid() {
         test_ibid_1_2(
-            |one, two| {
-                vec![
-                    ClusterPosition::note(one, 1),
-                    ClusterPosition::note(two, 2),
-                ]
-            },
+            |one, two| vec![ClusterPosition::note(one, 1), ClusterPosition::note(two, 2)],
             (Position::First, None),
             (Position::IbidNear, Some(1)),
         )
@@ -132,12 +127,7 @@ mod position {
     #[test]
     fn cite_positions_mixed_noibid() {
         test_ibid_1_2(
-            |one, two| {
-                vec![
-                    ClusterPosition::in_text(one),
-                    ClusterPosition::note(two, 1),
-                ]
-            },
+            |one, two| vec![ClusterPosition::in_text(one), ClusterPosition::note(two, 1)],
             (Position::First, None),
             (Position::First, None),
         );
@@ -146,12 +136,7 @@ mod position {
     #[test]
     fn cite_positions_mixed_notefirst() {
         test_ibid_1_2(
-            |one, two| {
-                vec![
-                    ClusterPosition::note(one, 1),
-                    ClusterPosition::in_text(two),
-                ]
-            },
+            |one, two| vec![ClusterPosition::note(one, 1), ClusterPosition::in_text(two)],
             (Position::First, None),
             // XXX: should probably preserve relative ordering of notes and in-text clusters,
             // so that this gets (Position::Subsequent, Some(1))

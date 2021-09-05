@@ -1,6 +1,6 @@
-use crate::String;
 use super::micro_html::MicroNode;
 use super::FormatCmd;
+use crate::String;
 
 #[derive(Debug, Copy, Clone)]
 enum SupSub {

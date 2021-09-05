@@ -4,13 +4,13 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use crate::String;
 use super::InlineElement;
 use super::MarkupWriter;
+use super::MaybeTrimStart;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use crate::String;
 use csl::Formatting;
-use super::MaybeTrimStart;
 
 #[derive(Debug)]
 pub struct PlainWriter<'a> {
@@ -42,7 +42,8 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 localized,
                 children,
             } => {
-                self.dest.push_str(localized.opening(*is_inner).trim_start_if(trim_start));
+                self.dest
+                    .push_str(localized.opening(*is_inner).trim_start_if(trim_start));
                 self.write_micros(children, false);
                 self.dest.push_str(localized.closing(*is_inner));
             }
