@@ -5,14 +5,15 @@
 // Copyright © 2018 Corporation for Digital Scholarship
 
 use crate::String;
+use edtf::level_1::{Certainty, Edtf, Matcher, Terminal};
 use std::cmp::Ordering;
 
-/// TODO: parse 2018-3-17 as if it were '03'
+pub(crate) use edtf::level_1::Date;
 
 // This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
 // then we'd just use chrono::DateTime and support ISO input
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct Date {
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub struct LegacyDate {
     /// think 10,000 BC; it's a signed int
     /// "not present" is expressed by not having a date in the first place
     pub year: i32,
@@ -27,32 +28,11 @@ pub struct Date {
     pub circa: bool,
 }
 
-impl PartialOrd for Date {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for Date {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let mut cmp = self.year.cmp(&other.year);
-        if self.month < 13 && other.month < 13 {
-            // less specific comes first, so zeroes (absent) can just be compared directly
-            cmp = cmp.then(self.month.cmp(&other.month))
-        }
-        cmp.then(self.day.cmp(&other.day))
-    }
-}
-
 impl PartialOrd for DateOrRange {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (DateOrRange::Literal { .. }, _) | (_, DateOrRange::Literal { .. }) => None,
-            (DateOrRange::Single(a), DateOrRange::Single(b)) => Some(a.cmp(b)),
-            (DateOrRange::Range(a1, a2), DateOrRange::Single(b)) => Some(a1.cmp(b).then(a2.cmp(b))),
-            (DateOrRange::Single(a), DateOrRange::Range(b1, b2)) => Some(a.cmp(b1).then(a.cmp(b2))),
-            (DateOrRange::Range(a1, a2), DateOrRange::Range(b1, b2)) => {
-                Some(a1.cmp(b1).then(a2.cmp(b2)))
-            }
+            _ => None,
         }
     }
 }
@@ -60,17 +40,15 @@ impl PartialOrd for DateOrRange {
 #[test]
 fn test_date_ord() {
     // years only
-    assert!(Date::new(2000, 0, 0) < Date::new(2001, 0, 0));
+    assert!(Date::from_ymd(2000, 0, 0) < Date::from_ymd(2001, 0, 0));
     // Less specific comes first (2000 < May 2000 < 1 May 2000)
-    assert!(Date::new(2000, 0, 0) < Date::new(2000, 5, 0));
-    assert!(Date::new(2000, 5, 0) < Date::new(2000, 5, 1));
+    assert!(Date::from_ymd(2000, 0, 0) < Date::from_ymd(2000, 5, 0));
+    assert!(Date::from_ymd(2000, 5, 0) < Date::from_ymd(2000, 5, 1));
 
-    assert!(Date::new(2000, 0, 0) < Date::new(2001, 0, 0));
+    assert!(Date::from_ymd(2000, 0, 0) < Date::from_ymd(2001, 0, 0));
 }
 
-// TODO: implement PartialOrd?
-
-impl Date {
+impl LegacyDate {
     pub fn has_month(&self) -> bool {
         self.month != 0
     }
@@ -78,12 +56,12 @@ impl Date {
         self.day != 0
     }
     pub fn new_circa(y: i32, m: u32, d: u32) -> Self {
-        let mut d = Date::new(y, m, d);
+        let mut d = LegacyDate::new(y, m, d);
         d.circa = true;
         d
     }
     pub fn new(y: i32, m: u32, d: u32) -> Self {
-        Date {
+        LegacyDate {
             year: y,
             month: m,
             day: d,
@@ -93,7 +71,7 @@ impl Date {
     pub fn from_parts(parts: &[i32]) -> Option<Self> {
         let m = *parts.get(1).unwrap_or(&0);
         let d = *parts.get(2).unwrap_or(&0);
-        Some(Date {
+        Some(LegacyDate {
             year: *parts.get(0)?,
             month: if m >= 1 && m <= 16 { m as u32 } else { 0 },
             day: if d >= 1 && d <= 31 { d as u32 } else { 0 },
@@ -115,14 +93,13 @@ impl Date {
 // TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day }
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum DateOrRange {
-    Single(Date),
-    Range(Date, Date),
+    Edtf(Edtf),
     Literal { literal: String, circa: bool },
 }
 
 impl DateOrRange {
     pub fn new(year: i32, month: u32, day: u32) -> Self {
-        DateOrRange::Single(Date::new(year, month, day))
+        Self::Edtf(Edtf::Date(Date::from_ymd(year, month, day)))
     }
     pub fn with_circa(mut self, circa: bool) -> Self {
         self.set_circa(circa);
@@ -130,66 +107,102 @@ impl DateOrRange {
     }
     pub fn set_circa(&mut self, circa: bool) {
         match self {
-            DateOrRange::Single(d) => d.circa = circa,
-            DateOrRange::Range(d1, d2) => {
-                d1.circa = circa;
-                d2.circa = circa;
-            }
+            DateOrRange::Edtf(edtf) => match edtf {
+                Edtf::Date(d) => *d = d.and_certainty(Certainty::Uncertain),
+                _ => {}
+            },
             DateOrRange::Literal { circa: c, .. } => *c = circa,
         }
     }
     pub fn is_uncertain_date(&self) -> bool {
         match *self {
-            DateOrRange::Single(d) => d.circa,
-            DateOrRange::Range(d1, d2) => d1.circa || d2.circa,
+            DateOrRange::Edtf(edtf) => match edtf.as_matcher() {
+                Matcher::Date(_, certainty) => certainty != Certainty::Certain,
+                Matcher::Interval(Terminal::Fixed(_, certainty), _)
+                | Matcher::Interval(_, Terminal::Fixed(_, certainty)) => {
+                    certainty != Certainty::Certain
+                }
+                _ => false,
+            },
             DateOrRange::Literal { circa, .. } => circa,
         }
     }
     pub fn single(&self) -> Option<Date> {
-        if let DateOrRange::Single(d) = self {
+        if let DateOrRange::Edtf(Edtf::Date(d)) = self {
             Some(*d)
         } else {
             None
         }
     }
-    pub fn single_or_first(&self) -> Option<Date> {
+    fn as_edtf(&self) -> Option<&Edtf> {
         match self {
-            DateOrRange::Single(d) => Some(*d),
-            DateOrRange::Range(d, _) => Some(*d),
+            Self::Edtf(edtf) => Some(edtf),
+            _ => None,
+        }
+    }
+    pub fn single_or_first(&self) -> Option<Date> {
+        match self.as_edtf()?.as_matcher() {
+            // These are a bit awkward -- it seems that more often than not, we want the actual
+            // Date object and not the precision/certainty pair, because we can always get that
+            // if it's needed.
+            Matcher::Date(d, _) => Date::from_precision_opt(d),
+            Matcher::Interval(Terminal::Fixed(d, _), _) => Date::from_precision_opt(d),
+            Matcher::Interval(_, Terminal::Fixed(d, _)) => Date::from_precision_opt(d),
             _ => None,
         }
     }
     pub fn from_parts(parts: &[&[i32]]) -> Option<Self> {
-        if parts.is_empty() {
-            None
-        } else if parts.len() == 1 {
-            Some(DateOrRange::Single(Date::from_parts(parts[0])?))
-        } else {
-            Some(DateOrRange::Range(
-                Date::from_parts(parts[0])?,
-                Date::from_parts(parts[1])?,
-            ))
-        }
+        Some(match parts {
+            [single] => Edtf::Date(date_from_parts(single)?),
+            // it's fine if people want to tack 2 million extra date-parts arrays on the end
+            // go ahead, make my day
+            [from, to, ..] => Edtf::Interval(date_from_parts(from)?, date_from_parts(to)?),
+            _ => return None,
+        })
+        .map(DateOrRange::Edtf)
+    }
+}
+
+fn date_from_parts(parts: &[i32]) -> Option<Date> {
+    let m = *parts.get(1).unwrap_or(&0);
+    let d = *parts.get(2).unwrap_or(&0);
+    let year = *parts.get(0)?;
+    let month = if (1..=12).contains(&m) {
+        m as u32
+    } else if (13..=16).contains(&m) {
+        m as u32 + 8
+    } else if (21..=24).contains(&m) {
+        m as u32
+    } else {
+        0
+    };
+    let day = if d >= 1 && d <= 31 { d as u32 } else { 0 };
+    Some(Date::from_ymd_opt(year, month, day)?)
+}
+
+impl From<Edtf> for DateOrRange {
+    fn from(d: Edtf) -> Self {
+        Self::Edtf(d)
     }
 }
 
 impl From<Date> for DateOrRange {
     fn from(d: Date) -> Self {
-        Self::Single(d)
+        Self::Edtf(d.into())
     }
 }
 
 impl From<(Date, Date)> for DateOrRange {
-    fn from(d: (Date, Date)) -> Self {
-        Self::Range(d.0, d.1)
+    fn from(interval: (Date, Date)) -> Self {
+        Self::Edtf(interval.into())
     }
 }
 
-impl FromStr for DateOrRange {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+impl DateOrRange {
+    /// The loosely specified citeproc-js convention
+    pub(crate) fn from_raw_str(s: &str) -> Result<Self, ()> {
         if let Ok((_left_overs, parsed)) = range(s.as_bytes()) {
-            Ok(parsed)
+            Ok(Self::Edtf(parsed))
         } else {
             Err(())
         }
@@ -200,37 +213,37 @@ impl FromStr for DateOrRange {
 #[test]
 fn test_date_parsing() {
     assert_eq!(
-        DateOrRange::from_str("-1998-09-21"),
+        DateOrRange::from_raw_str("-1998-09-21"),
         Ok(DateOrRange::new(-1998, 9, 21))
     );
     assert_eq!(
-        DateOrRange::from_str("+1998-09-21"),
+        DateOrRange::from_raw_str("+1998-09-21"),
         Ok(DateOrRange::new(1998, 9, 21))
     );
     assert_eq!(
-        DateOrRange::from_str("1998-09-21"),
+        DateOrRange::from_raw_str("1998-09-21"),
         Ok(DateOrRange::new(1998, 9, 21))
     );
     assert_eq!(
-        DateOrRange::from_str("1998-09"),
+        DateOrRange::from_raw_str("1998-09"),
         Ok(DateOrRange::new(1998, 9, 0))
     );
     assert_eq!(
-        DateOrRange::from_str("1998"),
+        DateOrRange::from_raw_str("1998"),
         Ok(DateOrRange::new(1998, 0, 0))
     );
     assert_eq!(
-        DateOrRange::from_str("1998trailing"),
+        DateOrRange::from_raw_str("1998trailing"),
         Ok(DateOrRange::new(1998, 0, 0))
     );
     // can't parse 13 as a month, default to no month
     assert_eq!(
-        DateOrRange::from_str("1998-13"),
+        DateOrRange::from_raw_str("1998-13"),
         Ok(DateOrRange::new(1998, 0, 0))
     );
     // can't parse 34 as a day, default to no day
     assert_eq!(
-        DateOrRange::from_str("1998-12-34"),
+        DateOrRange::from_raw_str("1998-12-34"),
         Ok(DateOrRange::new(1998, 12, 0))
     );
 }
@@ -239,32 +252,32 @@ fn test_date_parsing() {
 #[test]
 fn test_range_parsing() {
     assert_eq!(
-        DateOrRange::from_str("1998-09-21/2001-08-16"),
-        Ok(DateOrRange::Range(
-            Date::new(1998, 9, 21),
-            Date::new(2001, 8, 16)
-        ))
+        DateOrRange::from_raw_str("1998-09-21/2001-08-16"),
+        Ok(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 21),
+            Date::from_ymd(2001, 8, 16)
+        )))
     );
     assert_eq!(
-        DateOrRange::from_str("1998-09-21/2001-08"),
-        Ok(DateOrRange::Range(
-            Date::new(1998, 9, 21),
-            Date::new(2001, 8, 0)
-        ))
+        DateOrRange::from_raw_str("1998-09-21/2001-08"),
+        Ok(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 21),
+            Date::from_ymd(2001, 8, 0)
+        )))
     );
     assert_eq!(
-        DateOrRange::from_str("1998-09/2001-08-01"),
-        Ok(DateOrRange::Range(
-            Date::new(1998, 9, 0),
-            Date::new(2001, 8, 1)
-        ))
+        DateOrRange::from_raw_str("1998-09/2001-08-01"),
+        Ok(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 0),
+            Date::from_ymd(2001, 8, 1)
+        )))
     );
     assert_eq!(
-        DateOrRange::from_str("1998/2001"),
-        Ok(DateOrRange::Range(
-            Date::new(1998, 0, 0),
-            Date::new(2001, 0, 0)
-        ))
+        DateOrRange::from_raw_str("1998/2001"),
+        Ok(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 0, 0),
+            Date::from_ymd(2001, 0, 0)
+        )))
     );
 }
 
@@ -285,31 +298,31 @@ fn test_from_parts() {
     );
     assert_eq!(
         DateOrRange::from_parts(&[&[1998, 9, 21], &[2001, 8, 16]]),
-        Some(DateOrRange::Range(
-            Date::new(1998, 9, 21),
-            Date::new(2001, 8, 16)
-        ))
+        Some(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 21),
+            Date::from_ymd(2001, 8, 16)
+        )))
     );
     assert_eq!(
         DateOrRange::from_parts(&[&[1998, 9, 21], &[2001, 8]]),
-        Some(DateOrRange::Range(
-            Date::new(1998, 9, 21),
-            Date::new(2001, 8, 0)
-        ))
+        Some(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 21),
+            Date::from_ymd(2001, 8, 0)
+        )))
     );
     assert_eq!(
         DateOrRange::from_parts(&[&[1998, 9], &[2001, 8, 1]]),
-        Some(DateOrRange::Range(
-            Date::new(1998, 9, 0),
-            Date::new(2001, 8, 1)
-        ))
+        Some(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 9, 0),
+            Date::from_ymd(2001, 8, 1)
+        )))
     );
     assert_eq!(
         DateOrRange::from_parts(&[&[1998], &[2001]]),
-        Some(DateOrRange::Range(
-            Date::new(1998, 0, 0),
-            Date::new(2001, 0, 0)
-        ))
+        Some(DateOrRange::Edtf(Edtf::Interval(
+            Date::from_ymd(1998, 0, 0),
+            Date::from_ymd(2001, 0, 0)
+        )))
     );
 }
 
@@ -456,32 +469,40 @@ fn month_day(inp: &[u8]) -> IResult<&[u8], MonthDay> {
     ))
 }
 
-fn ymd_date(inp: &[u8]) -> IResult<&[u8], Date> {
+fn ymd_date(inp: &[u8]) -> IResult<&[u8], Option<Date>> {
     let (rem1, y) = year(inp)?;
     let (rem2, md) = opt(month_day)(rem1)?;
     Ok((
         rem2,
         match md {
-            None => Date::new(y, 0, 0),
-            Some(MonthDay::MonthDay(m, d)) => Date::new(y, m, d),
-            Some(MonthDay::Month(m)) => Date::new(y, m, 0),
+            None => Date::from_ymd_opt(y, 0, 0),
+            Some(MonthDay::MonthDay(m, d)) => Date::from_ymd_opt(y, m, d),
+            Some(MonthDay::Month(m)) => Date::from_ymd_opt(y, m, 0),
         },
     ))
 }
 
-fn and_ymd(inp: &[u8]) -> IResult<&[u8], Date> {
+fn and_ymd(inp: &[u8]) -> IResult<&[u8], Option<Date>> {
     let (rem1, _) = tag("/")(inp)?;
     Ok(ymd_date(rem1)?)
 }
 
-fn range(inp: &[u8]) -> IResult<&[u8], DateOrRange> {
-    let (rem1, d1) = ymd_date(inp)?;
+fn parse_error(inp: &[u8]) -> nom::Err<nom::error::Error<&[u8]>> {
+    nom::Err::Error(nom::error::Error::new(inp, nom::error::ErrorKind::ParseTo))
+}
+
+fn range(inp: &[u8]) -> IResult<&[u8], Edtf> {
+    let (rem1, first) = ymd_date(inp)?;
+    let d1 = first.ok_or_else(|| parse_error(inp))?;
     let (rem2, d2o) = opt(and_ymd)(rem1)?;
     Ok((
         rem2,
         match d2o {
-            None => DateOrRange::Single(d1),
-            Some(d2) => DateOrRange::Range(d1, d2),
+            None => Edtf::Date(d1),
+            Some(d2) => {
+                let d2 = d2.ok_or_else(|| parse_error(rem1))?;
+                Edtf::Interval(d1, d2)
+            }
         },
     ))
 }

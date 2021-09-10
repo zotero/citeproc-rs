@@ -17,6 +17,7 @@ mod var {
     pub use csl::Variable::{Title, TitleShort};
     pub use csl::{DateVariable, NameVariable, NumberVariable, Variable};
 }
+use edtf::level_1::Date;
 
 use citeproc_io::*;
 use var::*;
@@ -132,11 +133,7 @@ test_parse!(
     year_keyed_dates,
     r#" { "id": 1, "issued": { "year": 2000 } } "#,
     |r: Reference| {
-        assert_key!(
-            r.date,
-            Issued,
-            Some(DateOrRange::Single(Date::new(2000, 0, 0)))
-        );
+        assert_key!(r.date, Issued, Some(Date::from_ymd(2000, 0, 0).into()));
     }
 );
 test_parse!(
@@ -150,11 +147,7 @@ test_parse!(
     parse_neg_year,
     r#" { "id": 1, "issued": { "year": -1000 } } "#,
     |r: Reference| {
-        assert_key!(
-            r.date,
-            Issued,
-            Some(DateOrRange::Single(Date::new(-1000, 0, 0)))
-        );
+        assert_key!(r.date, Issued, Some(Date::from_ymd(-1000, 0, 0).into()));
     }
 );
 
@@ -394,7 +387,7 @@ fn test_date_combos() {
     let literal = "January 17, 2019";
     let raw = "1970";
     let date_parts = &[1995, 8, 1];
-    let date_parts_exact = DateOrRange::Single(Date::from_parts(date_parts).unwrap());
+    let date_parts_exact = DateOrRange::from_parts(&[date_parts]).unwrap();
     let edtf = "2020-01";
     let useful_values: &[(&str, Value)] = &[
         ("literal", json!(literal)),
@@ -423,7 +416,7 @@ fn test_date_combos() {
     // raw is only 1970, so we get 1970 + season-01
     tests.insert(
         mk_set(&["raw", "season"]),
-        Some(Date::new(1970, 13, 0).into()),
+        Some(Date::from_ymd(1970, 21, 0).into()),
     );
     // date-parts is a full date. what do we do here? I suppose if there's a season, just ignore it.
     tests.insert(
@@ -440,11 +433,12 @@ fn test_date_combos() {
     );
     tests.insert(
         mk_set(&["raw", "circa", "season"]),
-        Some(DateOrRange::from(Date::new(1970, 13, 0)).with_circa(true)),
+        Some(Date::parse("1970-21?").unwrap().into()),
+        // Some(DateOrRange::from(LegacyDate::new(1970, 13, 0)).with_circa(true)),
     );
     tests.insert(
         mk_set(&["year", "circa", "season"]),
-        Some(DateOrRange::from(Date::new(1967, 13, 0)).with_circa(true)),
+        Some(Date::parse("1967-21?").unwrap().into()),
     );
 
     let get_useful = |s: &str| -> Value {

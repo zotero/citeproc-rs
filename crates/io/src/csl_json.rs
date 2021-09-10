@@ -11,7 +11,8 @@
 mod cow_str;
 
 use crate::names::Name;
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use edtf::level_1::{Edtf, Matcher, Precision};
+use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Unexpected, Visitor};
 use serde::de::{Error, IgnoredAny};
 use std::borrow::Cow;
 use std::fmt;
@@ -391,7 +392,7 @@ impl<'de> Deserialize<'de> for OptDate {
                         0
                     };
                     let day = if day >= 1 && day <= 31 { day } else { 0 };
-                    Ok(OptDate(Some(Date::new(year, month as u32, day as u32))))
+                    Ok(OptDate(Date::from_ymd_opt(year, month as u32, day as u32)))
                 } else {
                     Ok(OptDate(None))
                 }
@@ -422,9 +423,9 @@ impl<'de> Deserialize<'de> for DateParts {
                 if let Some(OptDate(Some(from))) = seq.next_element()? {
                     let result = match seq.next_element()? {
                         Some(OptDate(Some(to))) => {
-                            Ok(DateParts(Some(DateOrRange::Range(from, to))))
+                            Ok(DateParts(Some(DateOrRange::Edtf(Edtf::Interval(from, to)))))
                         }
-                        _ => Ok(DateParts(Some(DateOrRange::Single(from)))),
+                        _ => Ok(DateParts(Some(DateOrRange::Edtf(Edtf::Date(from))))),
                     };
                     // ignore any additional date arrays (nonsense)
                     while let Some(_) = seq.next_element::<IgnoredAny>()? {}
@@ -438,7 +439,44 @@ impl<'de> Deserialize<'de> for DateParts {
     }
 }
 
-/// TODO:implement seasons
+fn set_season_year_precision<E>(edtf: &mut Edtf, season: NumberLike) -> Result<(), E>
+where
+    E: de::Error,
+{
+    match edtf.as_matcher() {
+        Matcher::Date(Precision::Year(y), _) => {
+            let mut season = season
+                .to_number()
+                .map_err(|e| E::custom(format!("season {:?} was not an integer: {}", season, e)))
+                .and_then(|unsigned| {
+                    // must be in range 1..=4
+                    if !(1..=4).contains(&unsigned) {
+                        Err(E::custom(format!(
+                            "season {} was not in range [1, 4]",
+                            unsigned
+                        )))
+                    } else {
+                        Ok(unsigned as u32)
+                    }
+                })?;
+            // normalise to 21, 22, 23, 24
+            if season < 5 {
+                season += 20;
+            }
+            if (21..=24).contains(&season) {
+                *edtf = Date::from_ym(y, season).into();
+            } else {
+                log::warn!(
+                    "CSL-JSON warning: unknown season value {}, ignoring",
+                    season
+                );
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 impl<'de> Deserialize<'de> for MaybeDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -471,28 +509,22 @@ impl<'de> Deserialize<'de> for MaybeDate {
             where
                 E: de::Error,
             {
-                FromStr::from_str(value)
+                Edtf::from_str(value)
+                    .map(DateOrRange::Edtf)
                     .or_else(|_| {
                         Ok(DateOrRange::Literal {
                             literal: value.into(),
                             circa: false,
                         })
                     })
-                    .map(|x| MaybeDate(Some(x)))
+                    .map(|dor| MaybeDate(Some(dor)))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                FromStr::from_str(&value)
-                    .or_else(|_| {
-                        Ok(DateOrRange::Literal {
-                            literal: value.into(),
-                            circa: false,
-                        })
-                    })
-                    .map(|x| MaybeDate(Some(x)))
+                self.visit_str(&value)
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
@@ -507,7 +539,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         DateType::Raw => {
                             let v: Cow<'de, str> = map.next_value()?;
                             if found.is_none() {
-                                found = Some(DateOrRange::from_str(&v).unwrap_or_else(|_| {
+                                found = Some(DateOrRange::from_raw_str(&v).unwrap_or_else(|_| {
                                     DateOrRange::Literal {
                                         literal: v.as_ref().into(),
                                         circa: false,
@@ -534,9 +566,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                             }
                         }
                         DateType::Edtf => {
-                            log::warn!("unimplemented: edtf date support");
-                            let _: IgnoredAny = map.next_value()?;
-                            continue;
+                            found = Some(DateOrRange::Edtf(map.next_value()?));
                         }
                         DateType::Season => found_season = Some(map.next_value()?),
                         DateType::Circa => {
@@ -548,13 +578,13 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         }
                         DateType::Year => {
                             if let Ok(year) = map.next_value() {
-                                let date = Date {
-                                    year,
-                                    month: 0,
-                                    day: 0,
-                                    circa: false,
-                                };
-                                found = Some(DateOrRange::Single(date));
+                                let date = Date::from_ymd_opt(year, 0, 0).ok_or_else(|| {
+                                    serde::de::Error::invalid_value(
+                                        Unexpected::Signed(year as i64),
+                                        &"out of range",
+                                    )
+                                })?;
+                                found = Some(DateOrRange::Edtf(Edtf::Date(date)));
                             }
                         }
                         DateType::Unknown(k) => {
@@ -563,48 +593,26 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         }
                     }
                 }
-                Ok(found
-                    .ok_or(())
-                    // .ok_or_else(|| de::Error::missing_field("raw|literal|etc"))
+                let result: Result<Self::Value, V::Error> = found
+                    .ok_or_else(|| V::Error::missing_field("raw|literal|edtf|etc"))
                     .and_then(|mut found| {
                         if let Some(season) = found_season {
-                            if let DateOrRange::Single(ref mut date) = found {
-                                if !date.has_day() && !date.has_month() {
-                                    let season = season
-                                        .to_number()
-                                        .map_err(|e| {
-                                            V::Error::custom(format!(
-                                                "season {:?} was not an integer: {}",
-                                                season, e
-                                            ))
-                                        })
-                                        .and_then(|unsigned| {
-                                            if unsigned < 1 || unsigned > 4 {
-                                                Err(V::Error::custom(format!(
-                                                    "season {} was not in range [1, 4]",
-                                                    unsigned
-                                                )))
-                                            } else {
-                                                Ok(unsigned as u32)
-                                            }
-                                        });
-                                    if let Ok(mut season) = season {
-                                        if season > 20 {
-                                            // handle 21, 22, 23, 24
-                                            season -= 20;
-                                        }
-                                        date.month = season + 12;
-                                    }
-                                }
+                            if let DateOrRange::Edtf(ref mut edtf) = found {
+                                set_season_year_precision::<V::Error>(edtf, season)?;
                             }
                         }
                         if let Some(circa) = found_circa {
                             found.set_circa(circa)
                         }
                         Ok(MaybeDate(Some(found)))
-                    })
-                    .ok()
-                    .unwrap_or(MaybeDate(None)))
+                    });
+                match result {
+                    Ok(x) => Ok(x),
+                    Err(e) => {
+                        log::warn!("CSL-JSON warning: {}", e);
+                        Ok(MaybeDate(None))
+                    }
+                }
             }
         }
 
