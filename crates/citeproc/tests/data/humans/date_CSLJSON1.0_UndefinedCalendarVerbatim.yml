@@ -1,0 +1,72 @@
+# We have never specified what calendar CSL-JSON uses, so we must render all dates verbatim.
+#
+# Verbatim zero year is probably best left invalid. You shouldn't interpret it
+# as the ISO calendar does only for the year zero, but verbatim for everything
+# else.
+
+mode: citation
+result: >
+  raw, modern = August 7, 2000;
+  raw, pre-gregorian = August 7, 1AD;
+  raw, zero = 0000-08-07;
+  raw, negative = August 7, 100BC;
+  date-parts, modern = August 7, 2000;
+  date-parts, pre-gregorian = August 7, 1400;
+  date-parts, zero = INVALID;
+  date-parts, negative = August 7, 100BC
+
+input:
+  - id: rm
+    title: "raw, modern"
+    issued:
+      raw: '2000-08-07'
+  - id: rp
+    title: "raw, pre-gregorian"
+    issued:
+      raw: '0001-08-07'
+  - id: rz
+    title: "raw, zero"
+    issued:
+      raw: '0000-08-07'
+  - id: rn
+    title: "raw, negative"
+    issued:
+      raw: '-0100-08-07'
+  - id: dpm
+    title: "date-parts, modern"
+    issued:
+      date-parts: [[2000, 8, 7]]
+  - id: dpp
+    title: "date-parts, pre-gregorian"
+    issued:
+      date-parts: [[1400, 8, 7]]
+  - id: dpz
+    title: "date-parts, zero"
+    issued:
+      date-parts: [[0, 8, 7]]
+  - id: dpn
+    title: "date-parts, negative"
+    issued:
+      date-parts: [[-100, 8, 7]]
+
+csl:
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+    <info><title>..</title><id>id</id><updated>2010-01-27T20:08:03+00:00</updated>
+    </info>
+    <macro name="author">
+      <names variable="author"></names>
+    </macro>
+    <citation>
+      <layout delimiter="; ">
+        <text variable="title" suffix=" = " />
+        <choose>
+          <if variable="issued">
+            <date variable="issued" form="text" />
+          </if>
+          <else>
+            <text value="INVALID" />
+          </else>
+        </choose>
+      </layout>
+    </citation>
+  </style>

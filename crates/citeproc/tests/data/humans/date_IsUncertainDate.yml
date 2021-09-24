@@ -9,7 +9,7 @@ input:
     issued:
       raw: 1995-08-07
       circa: "true"
-  - id: 2
+  - id: 3
     issued:
       raw: 1995-08-07
       circa: 1
