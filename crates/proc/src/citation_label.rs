@@ -93,10 +93,8 @@ fn test_write_label() {
             ..Default::default()
         })],
     );
-    refr.date.insert(
-        DateVariable::Issued,
-        Date::from_ymd(1995, 0, 0).into(),
-    );
+    refr.date
+        .insert(DateVariable::Issued, Date::from_ymd(1995, 0, 0).into());
     assert_eq!(trigraph.make_label(&refr), "Jobs95".to_owned());
     refr.name.insert(
         NameVariable::Author,

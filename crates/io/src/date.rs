@@ -6,16 +6,27 @@
 
 use crate::String;
 use edtf::level_1::{Certainty, Edtf};
-use std::cmp::Ordering;
 
 pub(crate) use edtf::level_1::Date;
+pub use sorting::OrderedDate;
 
 mod calendar;
 mod parts;
 mod raw;
+mod sorting;
 
-// This is a fairly primitive date type, possible CSL-extensions could get more fine-grained, and
-// then we'd just use chrono::DateTime and support ISO input
+/// The Eq implementation here is the default/Rust-derived one.
+/// If you want one that matches the way dates are sorted in CSL output, use [OrderedDate].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DateOrRange {
+    Edtf(Edtf),
+    NoCal(LegacyDate),
+    NoCalRange(LegacyDate, LegacyDate),
+    Literal { literal: String, circa: bool },
+}
+
+/// This is a fairly primitive date type, which is not defined to be on any calendar in particular.
+/// It must be rendered verbatim
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct LegacyDate {
     /// think 10,000 BC; it's a signed int
@@ -30,15 +41,6 @@ pub struct LegacyDate {
     pub day: u32,
     /// aka is_uncertain_date
     pub circa: bool,
-}
-
-impl PartialOrd for DateOrRange {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (DateOrRange::Literal { .. }, _) | (_, DateOrRange::Literal { .. }) => None,
-            _ => None,
-        }
-    }
 }
 
 #[test]
@@ -94,17 +96,8 @@ impl LegacyDate {
     // }
 }
 
-// TODO: implement deserialize for date-parts array, date-parts raw, { year, month, day }
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum DateOrRange {
-    Edtf(Edtf),
-    Literal { literal: String, circa: bool },
-}
-
+/// is-uncertain-date, aka circa or approximate
 impl DateOrRange {
-    pub fn new(year: i32, month: u32, day: u32) -> Self {
-        Self::Edtf(Edtf::Date(Date::from_ymd(year, month, day)))
-    }
     pub fn with_circa(mut self, circa: bool) -> Self {
         self.set_circa(circa);
         self
@@ -116,11 +109,16 @@ impl DateOrRange {
                 _ => {}
             },
             DateOrRange::Literal { circa: c, .. } => *c = circa,
+            Self::NoCal(nocal) => nocal.circa = true,
+            Self::NoCalRange(from, to) => {
+                from.circa = true;
+                to.circa = true;
+            }
         }
     }
     pub fn is_uncertain_date(&self) -> bool {
         match self {
-            DateOrRange::Edtf(edtf) => match edtf {
+            Self::Edtf(edtf) => match edtf {
                 Edtf::Date(d) => d.certainty() != Certainty::Certain,
                 Edtf::Interval(d1, d2) => {
                     d1.certainty() != Certainty::Certain && d2.certainty() != Certainty::Certain
@@ -129,8 +127,17 @@ impl DateOrRange {
                 Edtf::IntervalTo(_, d2) => d2.certainty() != Certainty::Certain,
                 _ => false,
             },
-            DateOrRange::Literal { circa, .. } => *circa,
+            Self::Literal { circa, .. } => *circa,
+            Self::NoCal(nocal) => nocal.circa,
+            Self::NoCalRange(from, to) => from.circa || to.circa,
         }
+    }
+}
+
+/// Constructors, Accessors
+impl DateOrRange {
+    pub fn new(year: i32, month: u32, day: u32) -> Self {
+        Self::Edtf(Edtf::Date(Date::from_ymd(year, month, day)))
     }
     pub fn single(&self) -> Option<Date> {
         if let DateOrRange::Edtf(Edtf::Date(d)) = self {
@@ -176,4 +183,3 @@ impl From<(Date, Date)> for DateOrRange {
         Self::Edtf(interval.into())
     }
 }
-

@@ -107,7 +107,6 @@ fn test_from_parts() {
         DateOrRange::from_csl_date_parts_arrays(&[&[1998], &[2001]]),
         Some(DateOrRange::Edtf(Edtf::Interval(
             Date::from_ymd(1998, 0, 0),
-            Date::from_ymd(2001, 0, 0)
-        )))
+            Date::from_ymd(2001, 0, 0))))
     );
 }

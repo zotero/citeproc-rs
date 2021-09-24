@@ -270,7 +270,7 @@ enum Demoted {
 use natural_sort::NaturalCmp;
 
 /// This implements the part of the spec
-#[derive(Debug, Eq)]
+#[derive(Debug)]
 struct Demoting {
     fake_cnum: Option<u32>,
     items: Vec<SortItem>,
@@ -278,9 +278,11 @@ struct Demoting {
 
 impl PartialEq for Demoting {
     fn eq(&self, other: &Self) -> bool {
-        self.items == other.items
+        self.cmp(other).is_eq()
     }
 }
+
+impl Eq for Demoting {}
 
 impl PartialOrd for Demoting {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -304,7 +306,10 @@ impl Ord for Demoting {
                 (OrdinaryVariable(a), OrdinaryVariable(b)) => compare_demoting_none(a.as_ref(), b.as_ref()),
                 (Number(a), Number(b)) => compare_demoting_none(a.as_ref(), b.as_ref()),
                 (Names(a), Names(b)) => compare_demoting_none(a.as_ref(), b.as_ref()),
-                (Date(a), Date(b)) => compare_demoting_none(a.as_ref(), b.as_ref()),
+                (Date(a), Date(b)) => compare_demoting_none(
+                    a.as_ref().map(DateOrRange::csl_sort).as_ref(),
+                    b.as_ref().map(DateOrRange::csl_sort).as_ref()
+                ),
                 _ => unreachable!("SortItems should be constructed in the same order producing the exact same sequence"),
             };
             ord = match (dir, demoted) {
