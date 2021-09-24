@@ -279,6 +279,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chronology"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "citeproc"
 version = "0.0.1"
 dependencies = [
@@ -360,6 +369,7 @@ version = "0.1.0"
 dependencies = [
  "cervine",
  "chrono",
+ "chronology",
  "csl",
  "edtf",
  "env_logger 0.7.1",
