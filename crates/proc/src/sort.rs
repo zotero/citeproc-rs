@@ -612,7 +612,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
         let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
         let tree = IrTreeRef::new(node, &self.arena);
         let gv = tree.get_node().unwrap().get().1;
-        (tree.flatten(&self.ctx.format, None).unwrap_or_default(), gv)
+        let flat = tree.flatten(&self.ctx.format, None).unwrap_or_default();
+        log::debug!("date sort string {}", flat);
+        (flat, gv)
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {
@@ -653,14 +655,12 @@ fn sort_string_bibliography(
 #[test]
 fn test_date_as_macro_strip_delims() {
     use crate::test::MockProcessor;
+    use citeproc_io::edtf::Date;
     let mut db = MockProcessor::new();
     let mut refr = citeproc_io::Reference::empty("ref_id".into(), CslType::Book);
-    use citeproc_io::{Date, DateOrRange};
     refr.ordinary.insert(Variable::Title, String::from("title"));
-    refr.date.insert(
-        DateVariable::Issued,
-        DateOrRange::Single(Date::new(2000, 1, 1)),
-    );
+    refr.date
+        .insert(DateVariable::Issued, Date::from_ymd(2000, 1, 1).into());
     db.insert_references(vec![refr]);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">

@@ -349,7 +349,7 @@ impl<'de> Deserialize<'de> for DateInt {
     }
 }
 
-struct OptDate(Option<Date>);
+struct OptDate(Option<(i32, u32, u32)>);
 
 impl<'de> Deserialize<'de> for OptDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -392,7 +392,7 @@ impl<'de> Deserialize<'de> for OptDate {
                         0
                     };
                     let day = if day >= 1 && day <= 31 { day } else { 0 };
-                    Ok(OptDate(Date::from_ymd_opt(year, month as u32, day as u32)))
+                    Ok(OptDate(Some((year, month as u32, day as u32))))
                 } else {
                     Ok(OptDate(None))
                 }
@@ -423,9 +423,9 @@ impl<'de> Deserialize<'de> for DateParts {
                 if let Some(OptDate(Some(from))) = seq.next_element()? {
                     let result = match seq.next_element()? {
                         Some(OptDate(Some(to))) => {
-                            Ok(DateParts(Some(DateOrRange::Edtf(Edtf::Interval(from, to)))))
+                            Ok(DateParts(DateOrRange::from_csl_date_parts(from, Some(to))))
                         }
-                        _ => Ok(DateParts(Some(DateOrRange::Edtf(Edtf::Date(from))))),
+                        _ => Ok(DateParts(DateOrRange::from_csl_date_parts(from, None))),
                     };
                     // ignore any additional date arrays (nonsense)
                     while let Some(_) = seq.next_element::<IgnoredAny>()? {}

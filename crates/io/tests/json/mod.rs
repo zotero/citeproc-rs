@@ -387,7 +387,7 @@ fn test_date_combos() {
     let literal = "January 17, 2019";
     let raw = "1970";
     let date_parts = &[1995, 8, 1];
-    let date_parts_exact = DateOrRange::from_parts(&[date_parts]).unwrap();
+    let date_parts_exact = DateOrRange::from_csl_date_parts_arrays(&[date_parts]).unwrap();
     let edtf = "2020-01";
     let useful_values: &[(&str, Value)] = &[
         ("literal", json!(literal)),

@@ -4,7 +4,6 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use super::MonthForm;
 use crate::error::*;
 use crate::version::Features;
 #[cfg(feature = "serde")]
@@ -175,38 +174,6 @@ impl GenderedTermSelector {
             },
             v => Some(GenderedTermSelector::Number(v, form)),
         }
-    }
-
-    pub fn from_month_u32(month_or_season: u32, form: MonthForm) -> Option<Self> {
-        let term_form = match form {
-            MonthForm::Long => TermForm::Long,
-            MonthForm::Short => TermForm::Short,
-            // Not going to be using the terms anyway
-            _ => return None,
-        };
-        if month_or_season == 0 || month_or_season > 16 {
-            return None;
-        }
-        let sel = if month_or_season > 12 {
-            // it's a season; 1 -> Spring, etc
-            let season = month_or_season - 12;
-            GenderedTermSelector::Season(
-                match season {
-                    1 => SeasonTerm::Season01,
-                    2 => SeasonTerm::Season02,
-                    3 => SeasonTerm::Season03,
-                    4 => SeasonTerm::Season04,
-                    _ => return None,
-                },
-                term_form,
-            )
-        } else {
-            GenderedTermSelector::Month(
-                MonthTerm::from_u32(month_or_season).expect("we know it's a month now"),
-                term_form,
-            )
-        };
-        Some(sel)
     }
 
     pub fn normalise(self) -> Self {
@@ -714,6 +681,8 @@ pub enum MonthTerm {
     Month11,
     #[strum(serialize = "month-12")]
     Month12,
+    #[strum(serialize = "month-unspecified")]
+    MonthUnspecified,
 }
 
 impl MonthTerm {

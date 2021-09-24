@@ -25,6 +25,7 @@ mod cite;
 mod cluster;
 mod csl_json;
 mod date;
+pub use edtf::level_1 as edtf;
 mod names;
 pub use names::TrimInPlace;
 mod numeric;

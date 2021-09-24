@@ -64,7 +64,7 @@ impl Trigraph {
                         _ => None,
                     }) {
                         // Probably behaves weirdly for BC dates
-                        write!(string, "{:02}", single.year % (10i32.pow(year_digits))).unwrap();
+                        write!(string, "{:02}", single.year() % (10i32.pow(year_digits))).unwrap();
                     }
                 }
             }
@@ -82,7 +82,7 @@ impl Default for Trigraph {
 
 #[test]
 fn test_write_label() {
-    use citeproc_io::{Date, DateOrRange};
+    use citeproc_io::{edtf::Date, DateOrRange};
     let trigraph = Trigraph::default();
     use csl::CslType;
     let mut refr = Reference::empty("ref_id".into(), CslType::Book);
@@ -95,7 +95,7 @@ fn test_write_label() {
     );
     refr.date.insert(
         DateVariable::Issued,
-        DateOrRange::Single(Date::new(1995, 0, 0)),
+        Date::from_ymd(1995, 0, 0).into(),
     );
     assert_eq!(trigraph.make_label(&refr), "Jobs95".to_owned());
     refr.name.insert(

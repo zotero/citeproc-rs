@@ -7,6 +7,7 @@
 use crate::prelude::*;
 
 use crate::ir::ConditionalDisambIR;
+use citeproc_io::edtf::{self, Edtf};
 use citeproc_io::DateOrRange;
 use csl::{AnyVariable, DateVariable};
 use csl::{Choose, Cond, CondSet, Conditions, CslType, Element, Else, IfThen, Match, Position};
@@ -335,36 +336,80 @@ pub trait CondChecker {
     fn features(&self) -> &Features;
     fn has_year_only(&self, dvar: DateVariable) -> bool {
         self.get_date(dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.month == 0 && d.day == 0,
-                DateOrRange::Range(d1, d2) => {
-                    d1.month == 0 && d1.day == 0 && d2.month == 0 && d2.day == 0
+            .and_then(DateOrRange::as_edtf)
+            .map(|edtf| {
+                fn date_is_year_only(date: &edtf::Date) -> bool {
+                    match date.precision() {
+                        edtf::Precision::Year(_)
+                        | edtf::Precision::Decade(_)
+                        | edtf::Precision::Century(_) => true,
+                        _ => false,
+                    }
                 }
-                _ => false,
+                match edtf {
+                    Edtf::Date(d) | Edtf::IntervalFrom(d, _) | Edtf::IntervalTo(_, d) => {
+                        date_is_year_only(d)
+                    }
+                    Edtf::Interval(d1, d2) => date_is_year_only(d1) && date_is_year_only(d2),
+                    Edtf::YYear(_) => true,
+                    _ => false,
+                }
             })
             .unwrap_or(false)
     }
     fn has_month_or_season(&self, dvar: DateVariable) -> bool {
         self.get_date(dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.month != 0,
-                DateOrRange::Range(d1, d2) => {
-                    // XXX: is OR the right operator here?
-                    d1.month != 0 || d2.month != 0
+            .and_then(DateOrRange::as_edtf)
+            .map(|edtf| {
+                fn hmors(date: &edtf::Date) -> bool {
+                    match date.precision() {
+                        edtf::Precision::Day(..)
+                        | edtf::Precision::Month(..)
+                        | edtf::Precision::DayOfMonth(..) => true,
+                        // controversial; these are XX months
+                        edtf::Precision::MonthOfYear(..) | edtf::Precision::DayOfYear(_) => true,
+                        // or season
+                        edtf::Precision::Season(..) => true,
+                        edtf::Precision::Century(_)
+                        | edtf::Precision::Decade(_)
+                        | edtf::Precision::Year(_) => false,
+                    }
                 }
-                _ => false,
+                match edtf {
+                    Edtf::DateTime(_) => true,
+                    Edtf::Date(date) => hmors(date),
+                    Edtf::Interval(d1, d2) => hmors(d1) || hmors(d2),
+                    Edtf::IntervalFrom(date, _) | Edtf::IntervalTo(_, date) => hmors(date),
+                    Edtf::YYear(_) => false,
+                }
             })
             .unwrap_or(false)
     }
     fn has_day(&self, dvar: DateVariable) -> bool {
         self.get_date(dvar)
-            .map(|dor| match dor {
-                DateOrRange::Single(d) => d.day != 0,
-                DateOrRange::Range(d1, d2) => {
-                    // XXX: is OR the right operator here?
-                    d1.day != 0 || d2.day != 0
+            .and_then(DateOrRange::as_edtf)
+            .map(|edtf| {
+                fn date_has_day(date: &edtf::Date) -> bool {
+                    match date.precision() {
+                        edtf::Precision::Day(..) => true,
+                        // controversial; these are XX days
+                        edtf::Precision::DayOfMonth(..) | edtf::Precision::DayOfYear(_) => true,
+                        // or season
+                        edtf::Precision::Century(_)
+                        | edtf::Precision::Decade(_)
+                        | edtf::Precision::Month(..)
+                        | edtf::Precision::MonthOfYear(..)
+                        | edtf::Precision::Season(..)
+                        | edtf::Precision::Year(_) => false,
+                    }
                 }
-                _ => false,
+                match edtf {
+                    Edtf::DateTime(_) => true,
+                    Edtf::Date(d) => date_has_day(d),
+                    Edtf::Interval(d1, d2) => date_has_day(d1) || date_has_day(d2),
+                    Edtf::IntervalFrom(d, _) | Edtf::IntervalTo(_, d) => date_has_day(d),
+                    Edtf::YYear(_) => false,
+                }
             })
             .unwrap_or(false)
     }
