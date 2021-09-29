@@ -46,7 +46,7 @@ fn date_from_csl_json_parts(parts: (i32, u32, u32)) -> Option<Date> {
     };
     let day = if d >= 1 && d <= 31 { d as u32 } else { 0 };
 
-    calendar::date_from_parts_ymd(year, month, day)
+    calendar::date_from_csl_json_parts_ymd(year, month, day)
 }
 
 fn date_from_parts_array(parts: &[i32]) -> Option<Date> {
@@ -64,7 +64,7 @@ fn date_from_parts_array(parts: &[i32]) -> Option<Date> {
     };
     let day = if d >= 1 && d <= 31 { d as u32 } else { 0 };
 
-    calendar::date_from_parts_ymd(year, month, day)
+    calendar::date_from_csl_json_parts_ymd(year, month, day)
 }
 
 #[cfg(test)]

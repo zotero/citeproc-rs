@@ -238,9 +238,9 @@ fn ymd_date(inp: &[u8]) -> IResult<&[u8], Option<Date>> {
     Ok((
         rem2,
         match md {
-            None => calendar::date_from_parts_ymd(y, 0, 0),
-            Some(MonthDay::MonthDay(m, d)) => calendar::date_from_parts_ymd(y, m, d),
-            Some(MonthDay::Month(m)) => calendar::date_from_parts_ymd(y, m, 0),
+            None => calendar::date_from_csl_json_parts_ymd(y, 0, 0),
+            Some(MonthDay::MonthDay(m, d)) => calendar::date_from_csl_json_parts_ymd(y, m, d),
+            Some(MonthDay::Month(m)) => calendar::date_from_csl_json_parts_ymd(y, m, 0),
         },
     ))
 }

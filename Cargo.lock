@@ -403,6 +403,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags",
  "cfg-if 0.1.10",
+ "chrono",
  "chronology",
  "citeproc-db",
  "citeproc-io",

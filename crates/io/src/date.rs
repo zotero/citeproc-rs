@@ -20,8 +20,6 @@ mod sorting;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DateOrRange {
     Edtf(Edtf),
-    NoCal(LegacyDate),
-    NoCalRange(LegacyDate, LegacyDate),
     Literal { literal: String, circa: bool },
 }
 
@@ -109,11 +107,6 @@ impl DateOrRange {
                 _ => {}
             },
             DateOrRange::Literal { circa: c, .. } => *c = circa,
-            Self::NoCal(nocal) => nocal.circa = true,
-            Self::NoCalRange(from, to) => {
-                from.circa = true;
-                to.circa = true;
-            }
         }
     }
     pub fn is_uncertain_date(&self) -> bool {
@@ -128,8 +121,6 @@ impl DateOrRange {
                 _ => false,
             },
             Self::Literal { circa, .. } => *circa,
-            Self::NoCal(nocal) => nocal.circa,
-            Self::NoCalRange(from, to) => from.circa || to.circa,
         }
     }
 }

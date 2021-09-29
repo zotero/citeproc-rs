@@ -4,6 +4,11 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+mod stamp;
+
+use chronology::Era;
+use stamp::{ExtendedStamp, Stamp};
+
 use crate::prelude::*;
 
 use crate::number::render_ordinal;
@@ -496,96 +501,87 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             _ => val,
         };
     }
-    let do_single =
-        |builder: &mut PartBuilder<O>, single: &Date, delim: &str, arena: &mut IrArena<O>| {
-            let mut seen_one = false;
-            for dp in parts.iter() {
-                if let Some((_form, either)) = {
-                    let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
-                    if sorting || matches {
-                        let is_filtered =
-                            !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
-                        dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered)
-                    } else {
-                        None
-                    }
-                } {
-                    if seen_one && !delim.is_empty() {
-                        builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
-                    }
-                    seen_one = true;
-                    builder.push_either(arena, either);
+    let do_single = |builder: &mut PartBuilder<O>,
+                     single: &ExtendedStamp,
+                     delim: &str,
+                     arena: &mut IrArena<O>| {
+        let mut seen_one = false;
+        for dp in parts.iter() {
+            if let Some((_form, either)) = {
+                let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
+                if sorting || matches {
+                    let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
+                    dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered)
+                } else {
+                    None
                 }
+            } {
+                if seen_one && !delim.is_empty() {
+                    builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
+                }
+                seen_one = true;
+                builder.push_either(arena, either);
             }
-        };
+        }
+    };
 
-    match &val {
-        DateOrRange::Edtf(edtf) => match edtf {
-            Edtf::DateTime(dt) => {
-                let single = Date::from_complete(dt.date());
-                let delim = gen_date.overall_delimiter.clone();
-                let mut builder = PartBuilder::new(gen_date, len_hint);
-                do_single(&mut builder, &single, &delim, arena);
-                Some(builder.into_either(fmt))
-            }
-            Edtf::Date(single) => {
-                let delim = gen_date.overall_delimiter.clone();
-                let mut builder = PartBuilder::new(gen_date, len_hint);
-                do_single(&mut builder, single, &delim, arena);
-                Some(builder.into_either(fmt))
-            }
-            Edtf::YYear(_) => todo!("YYear"),
-            Edtf::IntervalFrom(..) => todo!("IntervalFrom"),
-            Edtf::IntervalTo(..) => todo!("IntervalTo"),
-            Edtf::Interval(first, second) => {
-                let sorting = gen_date.sorting;
-                let delim = gen_date.overall_delimiter.clone();
-                if sorting {
-                    let mut builder = PartBuilder::new(gen_date, len_hint);
-                    do_single(&mut builder, first, &delim, arena);
-                    builder.push_either(arena, Either::Build(Some(fmt.plain("/"))));
-                    do_single(&mut builder, second, &delim, arena);
-                    return Some(builder.into_either(fmt));
-                }
-                let tokens =
-                    DateRangePartsIter::new(gen_date.sorting, parts, selector, first, second);
-                let mut builder = PartBuilder::new(gen_date, len_hint);
-                let mut seen_one = false;
-                //yeah nice
-                let mut last_rdel = false;
-                for token in tokens {
-                    match token {
-                        DateToken::RangeDelim(mut range_delim) => {
-                            if sorting {
-                                range_delim = "/";
-                            }
-                            builder.push_either(arena, Either::Build(Some(fmt.plain(range_delim))));
-                            last_rdel = true;
+    let stamp = Stamp::from_date_or_range(&val);
+    match stamp {
+        Stamp::Date(single) => {
+            let delim = gen_date.overall_delimiter.clone();
+            let mut builder = PartBuilder::new(gen_date, len_hint);
+            do_single(&mut builder, &single, &delim, arena);
+            Some(builder.into_either(fmt))
+        }
+        Stamp::Range { from, to } => {
+            let sorting = gen_date.sorting;
+            let delim = gen_date.overall_delimiter.clone();
+
+            // if sorting {
+            //     let mut builder = PartBuilder::new(gen_date, len_hint);
+            //     do_single(&mut builder, first, &delim, arena);
+            //     builder.push_either(arena, Either::Build(Some(fmt.plain("/"))));
+            //     do_single(&mut builder, second, &delim, arena);
+            //     return Some(builder.into_either(fmt));
+            // }
+
+            let tokens = DateRangePartsIter::new(gen_date.sorting, parts, selector, from, to);
+            let mut builder = PartBuilder::new(gen_date, len_hint);
+            let mut seen_one = false;
+            //yeah nice
+            let mut last_rdel = false;
+            for token in tokens {
+                match token {
+                    DateToken::RangeDelim(mut range_delim) => {
+                        if sorting {
+                            range_delim = "/";
                         }
-                        DateToken::Part(date, part, is_max_diff) => {
-                            if !last_rdel && seen_one && !delim.is_empty() {
-                                builder.push_either(arena, Either::Build(Some(fmt.plain(&delim))))
-                            }
-                            last_rdel = false;
-                            if let Some((_form, either)) = dp_render_either(
-                                var,
-                                part,
-                                ctx.clone(),
-                                arena,
-                                date,
-                                is_max_diff,
-                                false,
-                            ) {
-                                builder.push_either(arena, either);
-                            }
+                        builder.push_either(arena, Either::Build(Some(fmt.plain(range_delim))));
+                        last_rdel = true;
+                    }
+                    DateToken::Part(date, part, is_max_diff) => {
+                        if !last_rdel && seen_one && !delim.is_empty() {
+                            builder.push_either(arena, Either::Build(Some(fmt.plain(&delim))))
+                        }
+                        last_rdel = false;
+                        if let Some((_form, either)) = dp_render_either(
+                            var,
+                            part,
+                            ctx.clone(),
+                            arena,
+                            date,
+                            is_max_diff,
+                            false,
+                        ) {
+                            builder.push_either(arena, either);
                         }
                     }
-                    seen_one = true;
                 }
-                Some(builder.into_either(fmt))
+                seen_one = true;
             }
-        },
-        DateOrRange::Literal { literal, circa: _ } => {
+            Some(builder.into_either(fmt))
+        }
+        Stamp::Literal(literal) => {
             let options = IngestOptions {
                 text_case: gen_date.overall_text_case,
                 ..Default::default()
@@ -770,16 +766,19 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: GenericContext<'c, O, I>,
     arena: &mut IrArena<O>,
-    date: &Date,
+    stamp: &ExtendedStamp,
     is_max_diff: bool,
     is_filtered: bool,
 ) -> Option<(DatePartForm, Either<O>)> {
     let fmt = ctx.format();
-    if let Some(key) = ctx.sort_key() {
-        let string = dp_render_sort_string(part, date, key, is_filtered);
-        return string.map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))));
-    }
-    let string = dp_render_string(part, &ctx, date);
+
+    // if let Some(key) = ctx.sort_key() {
+    //     let string = dp_render_sort_string(part, stamp, key, is_filtered);
+    //     return string.map(|s| (part.form, Either::Build(Some(fmt.text_node(s, None)))));
+    // }
+
+    let string = dp_render_string(part, &ctx, stamp);
+
     string
         .map(|s| {
             let mut affixes = part.affixes.clone();
@@ -789,6 +788,9 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
                 }
             }
             if let DatePartForm::Year(_) = part.form {
+                // Accessed should not get the year suffix hook treatment.
+                // It is not related to the publishing of a webpage, so shouldn't be used to
+                // identify it among similar bibliography entries.
                 if var == DateVariable::Accessed {
                     let b = fmt.affixed_text(s, part.formatting, affixes.as_ref());
                     Either::Build(Some(b))
@@ -833,40 +835,40 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
         .map(|x| (part.form, x))
 }
 
-fn dp_render_sort_string(
-    part: &DatePart,
-    date: &Date,
-    _key: &SortKey,
-    is_filtered: bool,
-) -> Option<SmartString> {
-    match part.form {
-        DatePartForm::Year(_) => Some(smart_format!("{:04}_", date.year())),
-        DatePartForm::Month(..) => {
-            if is_filtered {
-                return None;
-            }
-            // Sort strings do not compare seasons
-            if let Some(month) = date.month() {
-                Some(smart_format!("{:02}", month))
-            } else {
-                Some("00".into())
-            }
-        }
-        DatePartForm::Day(_) => {
-            if is_filtered {
-                return None;
-            }
-            if let Some(day) = date.day() {
-                Some(smart_format!("{:02}", day))
-            } else {
-                Some("00".into())
-            }
-        }
-    }
-}
+// fn dp_render_sort_string(
+//     part: &DatePart,
+//     stamp: &ExtendedStamp,
+//     _key: &SortKey,
+//     is_filtered: bool,
+// ) -> Option<SmartString> {
+//     match part.form {
+//         DatePartForm::Year(_) => Some(smart_format!("{:04}_", stamp.year())),
+//         DatePartForm::Month(..) => {
+//             if is_filtered {
+//                 return None;
+//             }
+//             // Sort strings do not compare seasons
+//             if let Some(month) = stamp.month() {
+//                 Some(smart_format!("{:02}", month))
+//             } else {
+//                 Some("00".into())
+//             }
+//         }
+//         DatePartForm::Day(_) => {
+//             if is_filtered {
+//                 return None;
+//             }
+//             if let Some(day) = stamp.day() {
+//                 Some(smart_format!("{:02}", day))
+//             } else {
+//                 Some("00".into())
+//             }
+//         }
+//     }
+// }
 
 /// Renders a year assuming it's been converted from ISO, which has year 0000 = 1BC.
-fn render_nonzero_year(year: i32, form: YearForm, locale: &Locale) -> SmartString {
+fn render_nonzero_year(year: u32, era: Era, form: YearForm, locale: &Locale) -> SmartString {
     let mut s = SmartString::new();
     if year == 0 {
         // Open year range
@@ -877,7 +879,7 @@ fn render_nonzero_year(year: i32, form: YearForm, locale: &Locale) -> SmartStrin
         (YearForm::Short, true) => write!(s, "{:02}", year.abs() % 100).unwrap(),
         (YearForm::Long, _) | (YearForm::Short, false) => write!(s, "{}", year.abs()).unwrap(),
     }
-    if year < 0 {
+    if era == Era::BCE {
         let sel = SimpleTermSelector::Misc(MiscTerm::Bc, TermFormExtended::Long);
         let sel = TextTermSelector::Simple(sel);
         if let Some(bc) = locale.get_text_term(sel, false) {
@@ -897,36 +899,21 @@ fn render_nonzero_year(year: i32, form: YearForm, locale: &Locale) -> SmartStrin
     s
 }
 
+fn nonzero(md: u32) -> Option<u32> {
+    Some(md).filter(|x| x != 0)
+}
+
 fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: &GenericContext<'c, O, I>,
-    date: &Date,
+    stamp: &ExtendedStamp,
 ) -> Option<SmartString> {
     let locale = ctx.locale();
-    match part.form {
-        DatePartForm::Year(form) => Some(render_nonzero_year(date.year(), form, ctx.locale())),
-        DatePartForm::Month(form, strip_periods) => match form {
-            MonthForm::Numeric => date.month().map(|m| smart_format!("{}", m)),
-            MonthForm::NumericLeadingZeros => date.month().map(|m| smart_format!("{:02}", m)),
-            _ => if let Some(month) = date.month() {
-                let sel = gts_from_month(month, form)?;
-                let string: SmartString = locale
-                    .gendered_terms
-                    .get(&sel)
-                    .map(|gt| gt.0.singular().into())
-                    .unwrap_or_else(|| {
-                        let fallback = if form == MonthForm::Short {
-                            MONTHS_SHORT
-                        } else {
-                            MONTHS_LONG
-                        };
-                        match month {
-                            Component::Value(m) => fallback[m as usize].into(),
-                            Component::Unspecified => "unspecified".into(),
-                        }
-                    });
-                Some(string)
-            } else if let Some(season) = date.season() {
+    match *stamp {
+        ExtendedStamp::Season { year, era, season } => match part.form {
+            DatePartForm::Year(form) => Some(render_nonzero_year(year, era, form, ctx.locale())),
+            DatePartForm::Day(..) => None,
+            DatePartForm::Month(form, strip_periods) => {
                 let sel = gts_from_season(season, form)?;
                 let string: SmartString = locale
                     .gendered_terms
@@ -941,54 +928,86 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                         fallback[season as u32 as usize].into()
                     });
                 Some(string)
-            } else {
-                None
             }
-            .map(|string| {
-                if strip_periods {
-                    lazy::lazy_replace_char_owned(string, '.', "")
-                } else {
-                    string
-                }
-            }),
         },
-        DatePartForm::Day(form) => {
-            let day = match date.day()? {
-                Component::Value(val) => val,
-                // TODO: make this a term
-                Component::Unspecified => return Some("unspecified".into()),
-            };
-            match form {
-                DayForm::NumericLeadingZeros => Some(smart_format!("{:02}", day)),
-                DayForm::Ordinal
-                    if !locale
-                        .options_node
-                        .limit_day_ordinals_to_day_1
-                        .unwrap_or(false)
-                        || day == 1 =>
-                {
-                    use citeproc_io::NumericToken;
-                    // The 'target noun' is the month term.
-                    // if day is specified, according to edtf, so is month. So month() isn't None.
-                    date.month()
-                        .and_then(Component::value)
-                        .and_then(MonthTerm::from_u32)
-                        .map(|month| locale.get_month_gender(month))
-                        .map(|gender| {
-                            // the specific number variable does not matter as the tokens do not
-                            // contain any hyphens to pick \u{2013} for
-                            render_ordinal(
-                                &[NumericToken::Num(day)],
-                                locale,
-                                NumberVariable::Number,
-                                None,
-                                gender,
-                                false,
-                            )
-                        })
+        ExtendedStamp::Date {
+            year,
+            era,
+            month,
+            day,
+            period,
+        } => {
+            match part.form {
+                DatePartForm::Year(form) => {
+                    Some(render_nonzero_year(year, era, form, ctx.locale()))
                 }
-                // Numeric or ordinal with limit-day-ordinals-to-day-1
-                DayForm::Numeric | DayForm::Ordinal => Some(smart_format!("{}", day)),
+                DatePartForm::Month(form, strip_periods) => {
+                    let month = month?;
+                    match form {
+                        MonthForm::Numeric => Some(smart_format!("{}", month)),
+                        MonthForm::NumericLeadingZeros => smart_format!("{:02}", month),
+                        _ => {
+                            let sel = gts_from_month(month, form)?;
+                            let string: SmartString = locale
+                                .gendered_terms
+                                .get(&sel)
+                                .map(|gt| gt.0.singular())
+                                .unwrap_or_else(|| {
+                                    let fallback = if form == MonthForm::Short {
+                                        MONTHS_SHORT
+                                    } else {
+                                        MONTHS_LONG
+                                    };
+                                    fallback
+                                        .get(month as usize)
+                                        .expect("month not in range 1..=12")
+                                })
+                                .into();
+                            Some(if strip_periods {
+                                lazy::lazy_replace_char_owned(string, '.', "")
+                            } else {
+                                string
+                            })
+                        }
+                        _ => None,
+                    }
+                }
+                DatePartForm::Day(form) => {
+                    let day = day?;
+                    match form {
+                        DayForm::NumericLeadingZeros => Some(smart_format!("{:02}", day)),
+                        DayForm::Ordinal
+                            if !locale
+                                .options_node
+                                .limit_day_ordinals_to_day_1
+                                .unwrap_or(false)
+                                || day == 1 =>
+                        {
+                            use citeproc_io::NumericToken;
+                            // The 'target noun' is the month term.
+                            // if day is specified, according to edtf, so is month. So month() isn't None.
+                            stamp
+                                .month()
+                                .and_then(Component::value)
+                                .and_then(MonthTerm::from_u32)
+                                .map(|month| locale.get_month_gender(month))
+                                .map(|gender| {
+                                    // the specific number variable does not matter as the tokens do not
+                                    // contain any hyphens to pick \u{2013} for
+                                    render_ordinal(
+                                        &[NumericToken::Num(day)],
+                                        locale,
+                                        NumberVariable::Number,
+                                        None,
+                                        gender,
+                                        false,
+                                    )
+                                })
+                        }
+                        // Numeric or ordinal with limit-day-ordinals-to-day-1
+                        DayForm::Numeric | DayForm::Ordinal => Some(smart_format!("{}", day)),
+                    }
+                }
             }
         }
     }
@@ -1074,18 +1093,15 @@ fn gts_from_season(season: Season, form: MonthForm) -> Option<GenderedTermSelect
     };
     Some(GenderedTermSelector::Season(season, term_form))
 }
-fn gts_from_month(month: Component, form: MonthForm) -> Option<GenderedTermSelector> {
+
+fn gts_from_month(month: u32, form: MonthForm) -> Option<GenderedTermSelector> {
     let term_form = match form {
         MonthForm::Long => TermForm::Long,
         MonthForm::Short => TermForm::Short,
         // Not going to be using the terms anyway
         _ => return None,
     };
-    let month_term = match month {
-        Component::Value(val) => {
-            MonthTerm::from_u32(val).expect("month was out of range for MonthTerm::from_u32")
-        }
-        Component::Unspecified => MonthTerm::MonthUnspecified,
-    };
+    let month_term =
+        MonthTerm::from_u32(month).expect("month was out of range for MonthTerm::from_u32");
     Some(GenderedTermSelector::Month(month_term, term_form))
 }

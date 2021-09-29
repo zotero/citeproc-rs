@@ -176,7 +176,7 @@ enum Stamp<'a> {
     Literal(&'a str),
 }
 
-struct StampError;
+pub struct StampError;
 
 fn date_stamp(date: &DateOrRange) -> Result<Stamp, StampError> {
     match date {
@@ -200,27 +200,21 @@ fn date_stamp(date: &DateOrRange) -> Result<Stamp, StampError> {
             }
         },
         DateOrRange::Literal { literal, .. } => Ok(Stamp::Literal(literal.as_str())),
-        DateOrRange::NoCal(date) => Ok(Stamp::Single(nocal_date_stamp(date)?)),
-        DateOrRange::NoCalRange(from, to) => {
-            let from = nocal_date_stamp(from)?;
-            let to = nocal_date_stamp(to)?;
-            Ok(Stamp::Range(from, to))
-        }
     }
 }
 
-fn nocal_date_stamp(date: &LegacyDate) -> Result<YmdStamp, StampError> {
-    let mut year = date.year;
-    // we prevent year == 0 in CSL-JSON input.
-    if year == 0 {
-        return Err(StampError);
-    }
-    // we also make -1=1BC into an ISO-style year.
-    if year < 0 {
-        year += 1;
-    }
-    Ok(YmdStamp(year, date.month, date.day))
-}
+// fn nocal_date_stamp(date: &LegacyDate) -> Result<YmdStamp, StampError> {
+//     let mut year = date.year;
+//     // we prevent year == 0 in CSL-JSON input.
+//     if year == 0 {
+//         return Err(StampError);
+//     }
+//     // we also make -1=1BC into an ISO-style year.
+//     if year < 0 {
+//         year += 1;
+//     }
+//     Ok(YmdStamp(year, date.month, date.day))
+// }
 
 fn edtf_incomplete_sort_stamp(year: i32, month: u32) -> YmdStamp {
     YmdStamp(year, month, 0)
@@ -231,8 +225,8 @@ fn edtf_date_sort_stamp(date: &Date) -> Result<YmdStamp, StampError> {
         Precision::Day(..) => {
             let iso = date.to_chrono().ok_or(StampError)?;
             let proleptic: Gregorian = iso.to_gregorian();
-            let (y, ce, m, d) = proleptic.basic_stamp();
-            let iso_year = chronology::year_ce_to_iso(y, ce);
+            let (y, era, m, d) = proleptic.basic_stamp();
+            let iso_year = chronology::year_era_to_iso(y, era);
             Ok(YmdStamp(iso_year, m, d))
         }
         Precision::Season(y, s) => {
