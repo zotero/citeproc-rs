@@ -1,3 +1,4 @@
+use crate::choose::CondChecker;
 use crate::db::{with_bib_context, with_cite_context};
 use crate::prelude::*;
 use citeproc_db::{ClusterData, ClusterId, ClusterNumber};
@@ -613,13 +614,27 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
     // The spec is not functional. Specificlly, negative/BCE years won't work. So the year must be
     // interpreted as a number, and the rest can still be a string. Hence CmpDate below.
     //
-    fn date(&mut self, date: &BodyDate) -> Self::Output {
-        let node = date.intermediate(self.db, &mut self.state, &self.ctx, &mut self.arena);
-        let tree = IrTreeRef::new(node, &self.arena);
-        let gv = tree.get_node().unwrap().get().1;
-        let flat = tree.flatten(&self.ctx.format, None).unwrap_or_default();
-        log::debug!("date sort string {}", flat);
-        (flat, gv)
+    fn date(&mut self, body_date: &BodyDate) -> Self::Output {
+        let var = body_date.variable();
+        let formatted = self.ctx.get_date(var).and_then(|date| {
+            let mut string = SmartString::new();
+            let generic_ctx = GenericContext::Cit(&self.ctx);
+            let parts = crate::date::parts_to_include(body_date, generic_ctx);
+            // wrap it in the natural_sort affixes for dates
+            use self::natural_sort::{DATE_END_STR, DATE_START_STR};
+            string.push_str(DATE_START_STR);
+            date.sort_string(parts, &mut string);
+            if &string == DATE_START_STR {
+                // we didn't render anything in there
+                None
+            } else {
+                string.push_str(DATE_END_STR);
+                Some(string)
+            }
+        });
+        log::trace!("date sort string {:?}", formatted);
+        let gv = GroupVars::rendered_if(formatted.is_some());
+        (formatted.unwrap_or_else(Default::default), gv)
     }
 
     fn text_macro(&mut self, text: &TextElement, name: &SmartString) -> Self::Output {

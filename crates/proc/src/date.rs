@@ -9,7 +9,7 @@ use crate::prelude::*;
 use crate::number::render_ordinal;
 use citeproc_io::{
     edtf::{Component, Date, Edtf, Season},
-    lazy, DateOrRange,
+    lazy, DateOrRange, IncludeParts,
 };
 use csl::terms::*;
 use csl::LocaleDate;
@@ -335,6 +335,42 @@ impl<'a> GenericDateBits<'a> {
     }
 }
 
+pub fn parts_to_include<'c, O: OutputFormat, I: OutputFormat>(
+    body_date: &BodyDate,
+    ctx: GenericContext<'c, O, I>,
+) -> IncludeParts {
+    fn from_date_parts(date_parts: &[DatePart]) -> IncludeParts {
+        let mut parts = IncludeParts::NONE;
+        for part in date_parts {
+            match part.form {
+                DatePartForm::Day(..) => parts.day = true,
+                DatePartForm::Month(..) => parts.month = true,
+                DatePartForm::Year(..) => parts.year = true,
+            }
+        }
+        parts
+    }
+    match body_date {
+        BodyDate::Indep(indep) => from_date_parts(&indep.date_parts),
+        BodyDate::Local(localized) => {
+            let locale_date = ctx.locale().dates.get(&localized.form).unwrap();
+            let mut parts = from_date_parts(&locale_date.date_parts);
+            // then filter by the selection made on the localized body date
+            match localized.parts_selector {
+                DateParts::Year => {
+                    parts.month = false;
+                    parts.day = false;
+                }
+                DateParts::YearMonth => {
+                    parts.day = false;
+                }
+                DateParts::YearMonthDay => {}
+            }
+            parts
+        }
+    }
+}
+
 fn intermediate_generic_local<'c, O, I>(
     local: &LocalizedDate,
     ctx: GenericContext<'c, O, I>,
@@ -482,6 +518,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                 }
             }
         };
+
     match &val {
         DateOrRange::Edtf(edtf) => match edtf {
             Edtf::DateTime(dt) => {
@@ -514,6 +551,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                     DateRangePartsIter::new(gen_date.sorting, parts, selector, first, second);
                 let mut builder = PartBuilder::new(gen_date, len_hint);
                 let mut seen_one = false;
+                //yeah nice
                 let mut last_rdel = false;
                 for token in tokens {
                     match token {

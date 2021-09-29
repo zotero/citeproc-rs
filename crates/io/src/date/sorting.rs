@@ -1,22 +1,30 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::convert::TryInto;
 use std::ops::DerefMut;
 use std::{fmt, hash};
 
 use super::{DateOrRange, LegacyDate};
+use crate::String;
 use edtf::level_1::{Date, Edtf, Precision};
 
 use chronology::Gregorian;
 use chronology::{historical::Stampable, CalendarTo};
 
-#[derive(Clone)]
-pub struct OrderedDate<'a>(pub &'a DateOrRange);
-
 impl DateOrRange {
+    /// Gives a struct that sorts in CSL order
     pub fn csl_sort(&self) -> OrderedDate {
         OrderedDate(self)
     }
+
+    /// Produces a string
+    pub fn sort_string(&self, include: IncludeParts, into: &mut impl fmt::Write) {
+        date_stamp_fmt(self, include, into).unwrap();
+    }
 }
+
+#[derive(Copy, Clone)]
+pub struct OrderedDate<'a>(&'a DateOrRange);
 
 impl fmt::Debug for OrderedDate<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -65,7 +73,7 @@ where
     DATE_CMP_A.with(|a_buf| {
         let mut a = a_buf.borrow_mut();
         a.clear();
-        date_sort_stamp(d1, include, a.deref_mut()).ok()?;
+        date_stamp_fmt(d1, include, a.deref_mut()).ok()?;
         Some(f(a.as_str()))
     })
 }
@@ -77,23 +85,25 @@ fn with_date_bufs<F, T>(
     mut f: F,
 ) -> Option<T>
 where
-    F: FnMut(&str, &str) -> T,
+    F: FnMut(Option<&str>, Option<&str>) -> T,
 {
     DATE_CMP_A.with(|a_buf| {
         let mut a = a_buf.borrow_mut();
         a.clear();
-        date_sort_stamp(d1, include, a.deref_mut()).ok()?;
+        let a_ok = date_stamp_fmt(d1, include, a.deref_mut()).is_ok();
         DATE_CMP_B.with(|b_buf| {
             let mut b = b_buf.borrow_mut();
             b.clear();
-            date_sort_stamp(d2, include, b.deref_mut()).ok()?;
-            Some(f(a.as_str(), b.as_str()))
+            let b_ok = date_stamp_fmt(d2, include, b.deref_mut()).is_ok();
+            let a = a_ok.then(|| a.as_str());
+            let b = b_ok.then(|| b.as_str());
+            Some(f(a, b))
         })
     })
 }
 
 fn partial_eq_filtered(d1: &DateOrRange, d2: &DateOrRange, include: IncludeParts) -> Option<bool> {
-    with_date_bufs(d1, d2, include, |a, b| a.eq(b))
+    with_date_bufs(d1, d2, include, |a, b| a.eq(&b))
 }
 
 fn partial_cmp_filtered(
@@ -101,7 +111,7 @@ fn partial_cmp_filtered(
     d2: &DateOrRange,
     include: IncludeParts,
 ) -> Option<Ordering> {
-    with_date_bufs(d1, d2, include, |a, b| a.cmp(b))
+    with_date_bufs(d1, d2, include, |a, b| a.cmp(&b))
 }
 
 fn cmp_filtered(d1: &DateOrRange, d2: &DateOrRange, include: IncludeParts) -> Ordering {
@@ -117,26 +127,31 @@ fn eq_filtered(d1: &DateOrRange, d2: &DateOrRange, include: IncludeParts) -> boo
 }
 
 #[derive(Copy, Clone)]
-struct IncludeParts {
-    year: bool,
-    month: bool,
-    day: bool,
+pub struct IncludeParts {
+    pub year: bool,
+    pub month: bool,
+    pub day: bool,
 }
 
 impl IncludeParts {
-    const ALL: Self = IncludeParts {
+    pub const NONE: Self = IncludeParts {
+        year: false,
+        month: false,
+        day: false,
+    };
+    pub const ALL: Self = IncludeParts {
         year: true,
         month: true,
         day: true,
     };
 }
 
-fn date_sort_stamp(
+fn date_stamp_fmt(
     date: &DateOrRange,
     include: IncludeParts,
     f: &mut impl fmt::Write,
 ) -> fmt::Result {
-    match date_comparison_ymd(date).map_err(|_| fmt::Error)? {
+    match date_stamp(date).map_err(|_| fmt::Error)? {
         Stamp::Literal(s) => f.write_str(s)?,
         Stamp::Range(from, to) => {
             from.write_stamp(include, f)?;
@@ -151,8 +166,10 @@ fn date_sort_stamp(
 /// Verbatim dates have -1=1BC year to converted to ISO year, but everything else same
 /// ISO dates must be converted to proleptic gregorian (or whatever calendar display people say
 /// they want, that's TODO)
+#[derive(Copy, Clone)]
 struct YmdStamp(i32, u32, u32);
 
+#[derive(Copy, Clone)]
 enum Stamp<'a> {
     Single(YmdStamp),
     Range(YmdStamp, YmdStamp),
@@ -161,7 +178,7 @@ enum Stamp<'a> {
 
 struct StampError;
 
-fn date_comparison_ymd(date: &DateOrRange) -> Result<Stamp, StampError> {
+fn date_stamp(date: &DateOrRange) -> Result<Stamp, StampError> {
     match date {
         DateOrRange::Edtf(edtf) => match edtf {
             Edtf::Date(d) => Ok(Stamp::Single(edtf_date_sort_stamp(d)?)),
@@ -177,7 +194,10 @@ fn date_comparison_ymd(date: &DateOrRange) -> Result<Stamp, StampError> {
                 let date = Date::from_complete(dt.date());
                 Ok(Stamp::Single(edtf_date_sort_stamp(&date)?))
             }
-            Edtf::YYear(_) => todo!(),
+            Edtf::YYear(y) => {
+                let as_i32: i32 = y.value().try_into().map_err(|_| StampError)?;
+                Ok(Stamp::Single(YmdStamp(as_i32, 0, 0)))
+            }
         },
         DateOrRange::Literal { literal, .. } => Ok(Stamp::Literal(literal.as_str())),
         DateOrRange::NoCal(date) => Ok(Stamp::Single(nocal_date_stamp(date)?)),
@@ -226,9 +246,6 @@ fn edtf_date_sort_stamp(date: &Date) -> Result<YmdStamp, StampError> {
 }
 
 impl YmdStamp {
-    fn new(iso_year: i32, month: u32, day: u32) -> YmdStamp {
-        YmdStamp(iso_year, month, day)
-    }
     /// This prints our own date format for sorting, it's mostly proleptic gregorian if you use
     /// proleptic gregorian dates.
     fn write_stamp(&self, include: IncludeParts, f: &mut impl fmt::Write) -> fmt::Result {

@@ -8,7 +8,7 @@ use crate::String;
 use edtf::level_1::{Certainty, Edtf};
 
 pub(crate) use edtf::level_1::Date;
-pub use sorting::OrderedDate;
+pub use sorting::{IncludeParts, OrderedDate};
 
 mod calendar;
 mod parts;

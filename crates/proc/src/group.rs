@@ -41,7 +41,7 @@ pub enum GroupVars {
 
 impl Default for GroupVars {
     fn default() -> Self {
-        GroupVars::new()
+        Plain
     }
 }
 
@@ -50,7 +50,7 @@ use self::GroupVars::*;
 impl GroupVars {
     #[inline]
     pub fn new() -> Self {
-        Plain
+        GroupVars::default()
     }
 
     #[inline]
