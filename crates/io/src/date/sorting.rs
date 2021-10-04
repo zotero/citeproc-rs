@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::ops::DerefMut;
 use std::{fmt, hash};
 
-use super::{DateOrRange, LegacyDate};
+use super::DateOrRange;
 use crate::String;
 use edtf::level_1::{Date, Edtf, Precision};
 
@@ -32,16 +32,9 @@ impl fmt::Debug for OrderedDate<'_> {
     }
 }
 
-impl hash::Hash for OrderedDate<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        with_date_buf(&self.0, IncludeParts::ALL, |as_str| as_str.hash(state))
-            .expect("hashing OrderedDate failed")
-    }
-}
-
 impl PartialEq for OrderedDate<'_> {
     fn eq(&self, other: &Self) -> bool {
-        eq_filtered(&self.0, &other.0, IncludeParts::ALL)
+        self.cmp(other).is_eq()
     }
 }
 impl Eq for OrderedDate<'_> {}
@@ -54,7 +47,46 @@ impl PartialOrd for OrderedDate<'_> {
 
 impl Ord for OrderedDate<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        cmp_filtered(&self.0, &other.0, IncludeParts::ALL)
+        use super::DateOrRange as R;
+        let (a, b) = (&self.0, &other.0);
+        match (a, b) {
+            (R::Literal { literal: a, .. }, R::Literal { literal: b, .. }) => a.cmp(b),
+            (_, R::Literal { .. }) | (R::Literal { .. }, _) => {
+                cmp_filtered(a, b, IncludeParts::ALL)
+            }
+            (R::Edtf(a), R::Edtf(b)) => cmp_edtfs(a, b),
+        }
+    }
+}
+
+fn cmp_edtfs(a: &Edtf, b: &Edtf) -> Ordering {
+    edtf_start_date(a)
+        .cmp(&edtf_start_date(b))
+        .then_with(|| edtf_end_date(a).cmp(&edtf_end_date(b)))
+}
+
+fn edtf_start_date(edtf: &Edtf) -> Option<Date> {
+    match edtf {
+        Edtf::Date(d) => Some(*d),
+        Edtf::Interval(d, _) => Some(*d),
+        Edtf::IntervalFrom(d, _) => Some(*d),
+        // this sorts first, which makes sense
+        Edtf::IntervalTo(_, _) => None,
+        Edtf::DateTime(d) => Some(Date::from_complete(d.date())),
+        Edtf::YYear(y) => {
+            // not super important
+            let yi32: i32 = y.value().try_into().ok()?;
+            Date::from_ymd_opt(yi32, 0, 0)
+        }
+    }
+}
+
+fn edtf_end_date(edtf: &Edtf) -> Option<Date> {
+    match edtf {
+        Edtf::Date(_) | Edtf::DateTime(_) | Edtf::YYear(_) => edtf_start_date(edtf),
+        Edtf::Interval(_, d) => Some(*d),
+        Edtf::IntervalFrom(_, _) => None,
+        Edtf::IntervalTo(_, d) => Some(*d),
     }
 }
 
@@ -97,6 +129,7 @@ where
             let b_ok = date_stamp_fmt(d2, include, b.deref_mut()).is_ok();
             let a = a_ok.then(|| a.as_str());
             let b = b_ok.then(|| b.as_str());
+            log::debug!("comparing dates via OrderedDate: {:?} {:?}", a, b);
             Some(f(a, b))
         })
     })
@@ -222,13 +255,7 @@ fn edtf_incomplete_sort_stamp(year: i32, month: u32) -> YmdStamp {
 
 fn edtf_date_sort_stamp(date: &Date) -> Result<YmdStamp, StampError> {
     match date.precision() {
-        Precision::Day(..) => {
-            let iso = date.to_chrono().ok_or(StampError)?;
-            let proleptic: Gregorian = iso.to_gregorian();
-            let (y, era, m, d) = proleptic.basic_stamp();
-            let iso_year = chronology::year_era_to_iso(y, era);
-            Ok(YmdStamp(iso_year, m, d))
-        }
+        Precision::Day(y, m, d) => Ok(YmdStamp(y, m, d)),
         Precision::Season(y, s) => {
             // iffy month-like seasons here
             Ok(YmdStamp(y, s as u32, 0))
@@ -244,7 +271,10 @@ impl YmdStamp {
     /// proleptic gregorian dates.
     fn write_stamp(&self, include: IncludeParts, f: &mut impl fmt::Write) -> fmt::Result {
         if include.year {
-            write!(f, "{:04}_", self.0)?;
+            if self.0 < 0 {
+                write!(f, "-")?;
+            }
+            write!(f, "{:04}_", self.0.abs())?;
         }
         if include.month {
             write!(f, "{:02}", self.1)?;
