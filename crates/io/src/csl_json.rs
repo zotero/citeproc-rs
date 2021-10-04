@@ -607,7 +607,6 @@ impl<'de> Deserialize<'de> for MaybeDate {
             }
         }
 
-        const DATE_TYPES: &[&str] = &["date-parts", "season", "circa", "literal", "raw"];
-        deserializer.deserialize_struct("DateOrRange", DATE_TYPES, DateVisitor)
+        deserializer.deserialize_any(DateVisitor)
     }
 }

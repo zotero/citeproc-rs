@@ -479,7 +479,6 @@ fn test_date_combos() {
 }
 
 #[test]
-#[ignore = "EDTF dates not implemented yet"]
 fn test_edtf_date() {
     setup();
     let _edtf_schema = get_schema().named_schema(CslDataSchema::EDTF_DATATYPE);
