@@ -937,7 +937,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             match part.form {
                 DatePartForm::Year(_) => {
                     // TODO: there should be a term for this.
-                    Some("...".into())
+                    Some("".into())
                 }
                 _ => None,
             }

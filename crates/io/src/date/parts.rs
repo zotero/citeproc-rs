@@ -1,3 +1,5 @@
+use edtf::level_1::Terminal;
+
 use super::{calendar, Date, DateOrRange, Edtf};
 
 impl DateOrRange {
@@ -22,10 +24,14 @@ impl DateOrRange {
     ) -> Option<Self> {
         Some(match to {
             None => Edtf::Date(date_from_csl_json_parts(from)?),
-            Some(to) => Edtf::Interval(
-                date_from_csl_json_parts(from)?,
-                date_from_csl_json_parts(to)?,
-            ),
+            Some((0, 0, 0)) => Edtf::IntervalFrom(date_from_csl_json_parts(from)?, Terminal::Open),
+            Some(to) => match from {
+                (0, 0, 0) => Edtf::IntervalTo(Terminal::Open, date_from_csl_json_parts(to)?),
+                _ => Edtf::Interval(
+                    date_from_csl_json_parts(from)?,
+                    date_from_csl_json_parts(to)?,
+                ),
+            },
         })
         .map(DateOrRange::Edtf)
     }
@@ -107,6 +113,7 @@ fn test_from_parts() {
         DateOrRange::from_csl_date_parts_arrays(&[&[1998], &[2001]]),
         Some(DateOrRange::Edtf(Edtf::Interval(
             Date::from_ymd(1998, 0, 0),
-            Date::from_ymd(2001, 0, 0))))
+            Date::from_ymd(2001, 0, 0)
+        )))
     );
 }
