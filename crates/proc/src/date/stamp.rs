@@ -127,30 +127,47 @@ impl Stamp {
                 Self::from_canon(stamp, iso.year())
             }
             Precision::DayOfMonth(y, m) | Precision::Month(y, m) => {
-                // using day = 1, it's guaranteed not to fail by being e.g. february 31
-                let iso = Iso::from_ymd(y, m, 1);
-                let historical = iso.to_historical(Canon);
-                let mut canon = historical.stamp();
-                // erase the day
-                canon.day = 0;
-                Self::from_canon(canon, iso.year())
+                let (year, era) = chronology::iso_to_year_era(y);
+                let crossover = Iso::from_ymd(1582, 10, 15);
+                let jan1 = Iso::from_ymd(y, m, 1);
+                let period = if jan1 >= crossover {
+                    CalendarInUse::Gregorian
+                } else {
+                    CalendarInUse::Julian
+                };
+                Self::Date {
+                    year,
+                    era,
+                    iso_year: y,
+                    month: Some(m),
+                    day: None,
+                    period,
+                }
             }
             // Render Decade/Century as plain years (e.g. 1990, 1900) for now
+            // Same for dayofyear
             Precision::Decade(y)
-                | Precision::Century(y)
-
-                // Same for dayofyear
-                | Precision::DayOfYear(y)
-                | Precision::MonthOfYear(y)
-                | Precision::Year(y) => {
-                    // XXX incorrect
-                    let iso = Iso::from_ymd(y, 1, 1);
-                    let historical = iso.to_historical(Canon);
-                    let mut stamp = historical.stamp();
-                    stamp.month = 0;
-                    stamp.day = 0;
-                    Self::from_canon(stamp, iso.year())
+            | Precision::Century(y)
+            | Precision::DayOfYear(y)
+            | Precision::MonthOfYear(y)
+            | Precision::Year(y) => {
+                let (year, era) = chronology::iso_to_year_era(y);
+                let crossover = Iso::from_ymd(1582, 10, 15);
+                let jan1 = Iso::from_ymd(y, 1, 1);
+                let period = if jan1 >= crossover {
+                    CalendarInUse::Gregorian
+                } else {
+                    CalendarInUse::Julian
+                };
+                Self::Date {
+                    year,
+                    era,
+                    iso_year: y,
+                    month: None,
+                    day: None,
+                    period,
                 }
+            }
             Precision::Season(y, season) => {
                 let (year, era) = chronology::iso_to_year_era(y);
                 Stamp::Season { year, iso_year: y, era, season }
