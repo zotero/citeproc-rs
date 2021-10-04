@@ -944,10 +944,10 @@ const MONTHS_SHORT: &[&str] = &[
     "Autumn",
     "Winter",
     // 17..=20
-    "undefined",
-    "undefined",
-    "undefined",
-    "undefined",
+    "Spring",
+    "Summer",
+    "Autumn",
+    "Winter",
     // 21..=24
     "Spring",
     "Summer",

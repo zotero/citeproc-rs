@@ -681,8 +681,6 @@ pub enum MonthTerm {
     Month11,
     #[strum(serialize = "month-12")]
     Month12,
-    #[strum(serialize = "month-unspecified")]
-    MonthUnspecified,
 }
 
 impl MonthTerm {
