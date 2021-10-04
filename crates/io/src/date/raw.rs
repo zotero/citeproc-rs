@@ -31,7 +31,8 @@ impl DateOrRange {
 fn test_date_parsing() {
     assert_eq!(
         DateOrRange::from_raw_str("-1998-09-21"),
-        Ok(DateOrRange::new(-1998, 9, 21))
+        Ok(DateOrRange::new(-1997, 9, 4)),
+        "should interpret ~2000BC as a julian date, resulting in very different ISO"
     );
     assert_eq!(
         DateOrRange::from_raw_str("+1998-09-21"),
