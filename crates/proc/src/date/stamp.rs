@@ -170,7 +170,12 @@ impl Stamp {
             }
             Precision::Season(y, season) => {
                 let (year, era) = chronology::iso_to_year_era(y);
-                Stamp::Season { year, iso_year: y, era, season }
+                Stamp::Season {
+                    year,
+                    iso_year: y,
+                    era,
+                    season,
+                }
             }
         }
     }

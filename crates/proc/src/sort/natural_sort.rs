@@ -42,13 +42,6 @@ pub const CITATION_NUM_START_STR: &str = "\u{E004}";
 pub const CITATION_NUM_END: char = '\u{E005}';
 pub const CITATION_NUM_END_STR: &str = "\u{E005}";
 
-pub fn date_affixes() -> Affixes {
-    Affixes {
-        prefix: DATE_START_STR.into(),
-        suffix: DATE_END_STR.into(),
-    }
-}
-
 pub fn num_affixes() -> Affixes {
     Affixes {
         prefix: NUM_START_STR.into(),
@@ -104,35 +97,12 @@ impl<'a> PartialOrd for CmpDate<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
-enum CmpRange<'a> {
-    Single(CmpDate<'a>),
-    Range(CmpDate<'a>, CmpDate<'a>),
-}
-
-impl<'a> Ord for CmpRange<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (CmpRange::Single(a), CmpRange::Single(b)) => a.cmp(b),
-            (CmpRange::Single(a), CmpRange::Range(b, _c)) => a.cmp(b),
-            (CmpRange::Range(a, _b), CmpRange::Single(c)) => a.cmp(c),
-            (CmpRange::Range(a, b), CmpRange::Range(c, d)) => a.cmp(c).then_with(|| b.cmp(d)),
-        }
-    }
-}
-
-impl<'a> PartialOrd for CmpRange<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 use csl::Affixes;
 use nom::{
     branch::alt,
-    bytes::complete::{take_while, take_while1, take_while_m_n},
+    bytes::complete::{take_until, take_while1, take_while_m_n},
     character::complete::char,
-    combinator::{map, opt},
+    combinator::map,
     sequence::delimited,
     IResult,
 };
@@ -143,56 +113,24 @@ fn to_u32(s: &str) -> u32 {
     FromStr::from_str(s).unwrap()
 }
 
-fn to_i32(s: &str) -> i32 {
-    FromStr::from_str(s).unwrap()
-}
-
 fn take_8_digits(inp: &str) -> IResult<&str, &str> {
     take_while_m_n(1, 8, |c: char| c.is_ascii_digit())(inp)
 }
 
-fn year_prefix(inp: &str) -> IResult<&str, char> {
-    alt((char('+'), char('-')))(inp)
-}
-
-fn year(inp: &str) -> IResult<&str, i32> {
-    let (rem1, pref) = opt(year_prefix)(inp)?;
-    let (rem2, y) = take_while1(|c: char| c.is_ascii_digit())(rem1)?;
-    let (rem3, _) = char('_')(rem2)?;
-    Ok((
-        rem3,
-        match pref {
-            Some('-') => -to_i32(y),
-            _ => to_i32(y),
-        },
-    ))
-}
-
-fn date(inp: &str) -> IResult<&str, CmpDate> {
-    let (rem1, year) = opt(year)(inp)?;
-    fn still_date(c: char) -> bool {
-        c != DATE_END && c != '/'
-    }
-    let (rem2, rest) = take_while(still_date)(rem1)?;
-    Ok((rem2, CmpDate { year, rest }))
-}
-
 fn range(inp: &str) -> IResult<&str, Token> {
-    let (rem1, _) = char(DATE_START)(inp)?;
-    let (rem2, first) = date(rem1)?;
-    fn and_ymd(inp: &str) -> IResult<&str, CmpDate> {
-        let (rem1, _) = char('/')(inp)?;
-        Ok(date(rem1)?)
-    }
-    let (rem3, d2) = opt(and_ymd)(rem2)?;
-    let (rem4, _) = char(DATE_END)(rem3)?;
-    Ok((
-        rem4,
-        Token::Date(match d2 {
-            None => CmpRange::Single(first),
-            Some(d) => CmpRange::Range(first, d),
-        }),
-    ))
+    let (rem, _) = char(DATE_START)(inp)?;
+    let (rem, internal) = take_until(DATE_END_STR)(rem)?;
+    let parsed = if let Some(edtf) = Edtf::parse(internal).ok() {
+        OrderedDate::Edtf(edtf)
+    } else {
+        // this is a very rare case, because we do not write the DATE_START/END delimiters
+        // around literal ordereddates. But if for whatever reason this has happened,
+        // OrderedDate can handle it by writing a comparison EDTF into a string and sorting
+        // against that
+        OrderedDate::Literal(internal)
+    };
+    let (rem, _) = char(DATE_END)(rem)?;
+    Ok((rem, Token::Date(parsed)))
 }
 
 fn citation_number(inp: &str) -> IResult<&str, Token> {
@@ -231,7 +169,7 @@ enum Token<'a> {
     Str(&'a str),
     Num(u32),
     CitationNumber(u32),
-    Date(CmpRange<'a>),
+    Date(OrderedDate<'a>),
 }
 
 impl<'a> PartialOrd for Token<'a> {
@@ -264,7 +202,7 @@ impl<'a> Iterator for TokenIterator<'a> {
     }
 }
 
-use citeproc_io::SmartString;
+use citeproc_io::{edtf::Edtf, OrderedDate, SmartString};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NaturalCmp(SmartString);
@@ -309,46 +247,43 @@ fn natural_cmp_strings() {
     assert_eq!(natural_cmp("a", "z"), Ordering::Less, "a - z");
     assert_eq!(natural_cmp("z", "a"), Ordering::Greater, "z - a");
     assert_eq!(
-        natural_cmp("a\u{E000}2009_0407\u{E001}", "a\u{E000}2008_0407\u{E001}"),
+        natural_cmp("a\u{E000}2009-04-07\u{E001}", "a\u{E000}2008-04-07\u{E001}"),
         Ordering::Greater,
         "2009 > 2008"
     );
     assert_eq!(
-        natural_cmp("a\u{E000}2009_0507\u{E001}", "a\u{E000}2009_0407\u{E001}"),
+        natural_cmp("a\u{E000}2009-05-07\u{E001}", "a\u{E000}2009-04-07\u{E001}"),
         Ordering::Greater
     );
     assert_eq!(
-        natural_cmp("a\u{E000}-0100_\u{E001}", "a\u{E000}0100_\u{E001}"),
+        natural_cmp("a\u{E000}-0100\u{E001}", "a\u{E000}0100\u{E001}"),
         Ordering::Less,
         "100BC < 100AD"
     );
 
     // 2000, May 2000, May 1st 2000
     assert_eq!(
-        natural_cmp("a\u{E000}2000_\u{E001}", "a\u{E000}2000_04\u{E001}"),
+        natural_cmp("a\u{E000}2000\u{E001}", "a\u{E000}2000-04\u{E001}"),
         Ordering::Less,
         "2000 < May 2000"
     );
     assert_eq!(
-        natural_cmp("a\u{E000}2000_04\u{E001}", "a\u{E000}2000_0401\u{E001}"),
+        natural_cmp("a\u{E000}2000-04\u{E001}", "a\u{E000}2000-04-01\u{E001}"),
         Ordering::Less,
         "May 2000 < May 1st 2000"
     );
 
     assert_eq!(
         natural_cmp(
-            "a\u{E000}2009_0407/0000_0000\u{E001}",
-            "a\u{E000}2009_0407/2010_0509\u{E001}"
+            "a\u{E000}2009-04-07\u{E001}",
+            "a\u{E000}2009-04-07/2010-05-09\u{E001}"
         ),
         Ordering::Less,
         "2009 < 2009/2010"
     );
 
     assert_eq!(
-        natural_cmp(
-            "\u{e000}-044_0315/0000_00\u{e001}",
-            "\u{e000}-100_0713/0000_00\u{e001}"
-        ),
+        natural_cmp("\u{e000}-0044-03-15\u{e001}", "\u{e000}-0100-07-13\u{e001}"),
         Ordering::Greater,
         "44BC > 100BC"
     );

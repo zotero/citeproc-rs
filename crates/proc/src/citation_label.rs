@@ -82,7 +82,7 @@ impl Default for Trigraph {
 
 #[test]
 fn test_write_label() {
-    use citeproc_io::{edtf::Date, DateOrRange};
+    use citeproc_io::edtf::Date;
     let trigraph = Trigraph::default();
     use csl::CslType;
     let mut refr = Reference::empty("ref_id".into(), CslType::Book);

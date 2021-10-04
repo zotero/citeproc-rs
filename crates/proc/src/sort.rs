@@ -620,17 +620,12 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
             let mut string = SmartString::new();
             let generic_ctx = GenericContext::Cit(&self.ctx);
             let parts = crate::date::parts_to_include(body_date, generic_ctx);
+            log::debug!("using date parts {:?} to sort dates via macro", parts);
             // wrap it in the natural_sort affixes for dates
             use self::natural_sort::{DATE_END_STR, DATE_START_STR};
-            string.push_str(DATE_START_STR);
-            date.sort_string(parts, &mut string);
-            if &string == DATE_START_STR {
-                // we didn't render anything in there
-                None
-            } else {
-                string.push_str(DATE_END_STR);
-                Some(string)
-            }
+            date.csl_sort()
+                .sort_string(parts, &mut string, DATE_START_STR, DATE_END_STR);
+            Some(string).filter(|x| !x.is_empty())
         });
         log::trace!("date sort string {:?}", formatted);
         let gv = GroupVars::rendered_if(formatted.is_some());
@@ -681,6 +676,13 @@ fn test_date_as_macro_strip_delims() {
     refr.ordinary.insert(Variable::Title, String::from("title"));
     refr.date
         .insert(DateVariable::Issued, Date::from_ymd(2000, 1, 1).into());
+    refr.date.insert(
+        DateVariable::Accessed,
+        DateOrRange::Literal {
+            literal: "no date delimiters".into(),
+            circa: false,
+        },
+    );
     db.insert_references(vec![refr]);
     db.set_style_text(r#"<?xml version="1.0" encoding="utf-8"?>
         <style version="1.0" class="note">
@@ -703,6 +705,9 @@ fn test_date_as_macro_strip_delims() {
            </macro>
            <macro name="local">
                <date variable="issued" date-parts="year" form="numeric"/>
+           </macro>
+           <macro name="literal">
+               <date variable="accessed" date-parts="year" form="numeric"/>
            </macro>
            <macro name="term">
              <text term="anonymous"/>
@@ -732,7 +737,7 @@ fn test_date_as_macro_strip_delims() {
             "indep".into(),
             SortKey::macro_named("indep")
         ),
-        Some(Arc::new("title\u{e000}2000_01/0000_00\u{e001}".into()))
+        Some(Arc::new("title\u{e000}2000-01\u{e001}".into()))
     );
 
     assert_eq!(
@@ -742,7 +747,7 @@ fn test_date_as_macro_strip_delims() {
             "local".into(),
             SortKey::macro_named("local")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
+        Some(Arc::new("\u{e000}2000\u{e001}".into()))
     );
 
     assert_eq!(
@@ -752,7 +757,7 @@ fn test_date_as_macro_strip_delims() {
             "year-date".into(),
             SortKey::macro_named("year-date")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
+        Some(Arc::new("\u{e000}2000\u{e001}".into()))
     );
 
     assert_eq!(
@@ -762,7 +767,7 @@ fn test_date_as_macro_strip_delims() {
             "year-date-choose".into(),
             SortKey::macro_named("year-date-choose")
         ),
-        Some(Arc::new("\u{e000}2000_/0000_\u{e001}".into()))
+        Some(Arc::new("\u{e000}2000\u{e001}".into()))
     );
 
     assert_eq!(
@@ -773,5 +778,15 @@ fn test_date_as_macro_strip_delims() {
             SortKey::macro_named("term")
         ),
         Some(Arc::new("anonymous".into()))
+    );
+
+    assert_eq!(
+        sort_string_bibliography(
+            &db,
+            "ref_id".into(),
+            "literal".into(),
+            SortKey::macro_named("literal")
+        ),
+        Some(Arc::new("no date delimiters".into()))
     );
 }
