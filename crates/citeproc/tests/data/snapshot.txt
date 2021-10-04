@@ -53,12 +53,6 @@ flipflop_NumericField.txt
 # So this snapshot has full-width nbsp (\u{a0}/&#8203;/&#x160;) instead.
 punctuation_FrenchOrthography.txt
 
-# Test implies i.e. month = 17 means Spring, implying 17-20 are also valid seasons,
-# i.e. if month > 12 && month < 25 { season = (month - 12) % 4 }
-# There is no reason for this to be the case. There's CSL-JSON's 13..=16 range,
-# and also EDTF's 21..=24 range, but no usage of the range in between.
-date_VariousInvalidDates.txt
-
 # The spec says "The 'locator' variable is always rendered with an en-dash replacing any hyphens."
 # The test suite doesn't do this for one of them here.
 label_CollapsedPageNumberPluralDetection.txt

@@ -383,15 +383,6 @@ impl<'de> Deserialize<'de> for OptDate {
 
                     // ignore any additional entries in the array
                     while let Some(_) = seq.next_element::<IgnoredAny>()? {}
-
-                    let month = if month >= 1 && month <= 16 {
-                        month
-                    } else if month >= 21 && month <= 24 {
-                        month - 8
-                    } else {
-                        0
-                    };
-                    let day = if day >= 1 && day <= 31 { day } else { 0 };
                     Ok(OptDate(Some((year, month as u32, day as u32))))
                 } else {
                     Ok(OptDate(None))

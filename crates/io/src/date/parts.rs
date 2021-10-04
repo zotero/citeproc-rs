@@ -45,6 +45,8 @@ fn date_from_csl_json_parts(parts: (i32, u32, u32)) -> Option<Date> {
         m
     } else if (13..=16).contains(&m) {
         m + 8
+    } else if (17..=20).contains(&m) {
+        m + 4
     } else if (21..=24).contains(&m) {
         m
     } else {
