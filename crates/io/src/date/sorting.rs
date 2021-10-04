@@ -159,7 +159,7 @@ fn eq_filtered(d1: &DateOrRange, d2: &DateOrRange, include: IncludeParts) -> boo
     )
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct IncludeParts {
     pub year: bool,
     pub month: bool,
@@ -280,7 +280,7 @@ impl YmdStamp {
             write!(f, "{:02}", self.1)?;
         }
         if include.day {
-            write!(f, "{:02}", self.1)?;
+            write!(f, "{:02}", self.2)?;
         }
         Ok(())
     }
