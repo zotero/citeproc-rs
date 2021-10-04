@@ -17,7 +17,7 @@ mod var {
     pub use csl::Variable::{Title, TitleShort};
     pub use csl::{DateVariable, NameVariable, NumberVariable, Variable};
 }
-use edtf::level_1::Date;
+use ::edtf::level_1::Date;
 
 use citeproc_io::*;
 use var::*;

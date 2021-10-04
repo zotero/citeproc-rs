@@ -13,7 +13,7 @@ result: >
   edtf, modern = August 7, 2000;
   edtf, pre-gregorian = July 29, 1400;
   edtf, zero = August 9, 1BC;
-  edtf, negative = August 9, 101BC;
+  edtf, negative = August 9, 101BC
 
 input:
   - id: em

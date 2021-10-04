@@ -7,13 +7,13 @@
 mod stamp;
 
 use chronology::Era;
-use stamp::{ExtendedStamp, Stamp};
+use stamp::{RangeStamp, Stamp};
 
 use crate::prelude::*;
 
 use crate::number::render_ordinal;
 use citeproc_io::{
-    edtf::{Component, Date, Edtf, Season},
+    edtf::{Date, Edtf, Season},
     lazy, DateOrRange, IncludeParts,
 };
 use csl::terms::*;
@@ -22,7 +22,7 @@ use csl::LocaleDate;
 use csl::RangeDelimiter;
 use csl::{
     BodyDate, DatePart, DatePartForm, DateParts, DateVariable, DayForm, IndependentDate, Locale,
-    LocalizedDate, MonthForm, NumberVariable, SortKey, YearForm,
+    LocalizedDate, MonthForm, NumberVariable, YearForm,
 };
 #[cfg(test)]
 use pretty_assertions::assert_eq;
@@ -501,50 +501,40 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             _ => val,
         };
     }
-    let do_single = |builder: &mut PartBuilder<O>,
-                     single: &ExtendedStamp,
-                     delim: &str,
-                     arena: &mut IrArena<O>| {
-        let mut seen_one = false;
-        for dp in parts.iter() {
-            if let Some((_form, either)) = {
-                let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
-                if sorting || matches {
-                    let is_filtered = !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
-                    dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered)
-                } else {
-                    None
-                }
-            } {
-                if seen_one && !delim.is_empty() {
-                    builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
-                }
-                seen_one = true;
-                builder.push_either(arena, either);
-            }
-        }
-    };
 
-    let stamp = Stamp::from_date_or_range(&val);
+    let do_single =
+        |builder: &mut PartBuilder<O>, single: &Stamp, delim: &str, arena: &mut IrArena<O>| {
+            let mut seen_one = false;
+            for dp in parts.iter() {
+                if let Some((_form, either)) = {
+                    let matches = selector.map_or(true, |sel| dp_matches(dp, sel));
+                    if sorting || matches {
+                        let is_filtered =
+                            !matches && ctx.sort_key().map_or(false, |k| k.is_macro());
+                        dp_render_either(var, dp, ctx.clone(), arena, single, false, is_filtered)
+                    } else {
+                        None
+                    }
+                } {
+                    if seen_one && !delim.is_empty() {
+                        builder.push_either(arena, Either::Build(Some(fmt.plain(delim))))
+                    }
+                    seen_one = true;
+                    builder.push_either(arena, either);
+                }
+            }
+        };
+
+    let stamp = RangeStamp::from_date_or_range(&val);
     match stamp {
-        Stamp::Date(single) => {
+        RangeStamp::Date(single) => {
             let delim = gen_date.overall_delimiter.clone();
             let mut builder = PartBuilder::new(gen_date, len_hint);
             do_single(&mut builder, &single, &delim, arena);
             Some(builder.into_either(fmt))
         }
-        Stamp::Range { from, to } => {
-            let sorting = gen_date.sorting;
+        RangeStamp::Range(from, to) => {
             let delim = gen_date.overall_delimiter.clone();
-
-            // if sorting {
-            //     let mut builder = PartBuilder::new(gen_date, len_hint);
-            //     do_single(&mut builder, first, &delim, arena);
-            //     builder.push_either(arena, Either::Build(Some(fmt.plain("/"))));
-            //     do_single(&mut builder, second, &delim, arena);
-            //     return Some(builder.into_either(fmt));
-            // }
-
             let tokens = DateRangePartsIter::new(gen_date.sorting, parts, selector, from, to);
             let mut builder = PartBuilder::new(gen_date, len_hint);
             let mut seen_one = false;
@@ -569,7 +559,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
                             part,
                             ctx.clone(),
                             arena,
-                            date,
+                            &date,
                             is_max_diff,
                             false,
                         ) {
@@ -581,7 +571,7 @@ fn build_parts<'c, O: OutputFormat, I: OutputFormat>(
             }
             Some(builder.into_either(fmt))
         }
-        Stamp::Literal(literal) => {
+        RangeStamp::Literal(literal) => {
             let options = IngestOptions {
                 text_case: gen_date.overall_text_case,
                 ..Default::default()
@@ -598,7 +588,7 @@ type IsMaxDiff = bool;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum DateToken<'a> {
-    Part(&'a Date, &'a DatePart, IsMaxDiff),
+    Part(Stamp, &'a DatePart, IsMaxDiff),
     RangeDelim(&'a str),
 }
 
@@ -614,6 +604,7 @@ enum WhichDelim {
     Month = 2,
     Year = 3,
 }
+
 impl WhichDelim {
     fn matches_form(&self, form: &DatePartForm) -> bool {
         *self == WhichDelim::from_form(form)
@@ -625,22 +616,25 @@ impl WhichDelim {
             DatePartForm::Year(_) => WhichDelim::Year,
         }
     }
-    fn diff(parts: &[DatePart], first: &Date, second: &Date) -> Self {
+    fn max_if_different(self, component: Self, first: &Stamp, second: &Stamp) -> Self {
+        if first.get_component(component) != second.get_component(component) {
+            self.max(component)
+        } else {
+            self
+        }
+    }
+    fn diff(parts: &[DatePart], first: &Stamp, second: &Stamp) -> Self {
         // Find the biggest differing date part
         let mut max_diff = WhichDelim::None;
         for part in parts {
-            use std::cmp::max;
-            match part.form {
-                DatePartForm::Day(_) if first.day() != second.day() => {
-                    max_diff = max(max_diff, WhichDelim::Day)
+            max_diff = match part.form {
+                DatePartForm::Day(..) => max_diff.max_if_different(WhichDelim::Day, first, second),
+                DatePartForm::Month(..) => {
+                    max_diff.max_if_different(WhichDelim::Month, first, second)
                 }
-                DatePartForm::Month(..) if first.month() != second.month() => {
-                    max_diff = max(max_diff, WhichDelim::Month)
+                DatePartForm::Year(..) => {
+                    max_diff.max_if_different(WhichDelim::Year, first, second)
                 }
-                DatePartForm::Year(_) if first.year() != second.year() => {
-                    max_diff = max(max_diff, WhichDelim::Year)
-                }
-                _ => {}
             }
         }
         max_diff
@@ -652,12 +646,12 @@ impl<'a> DateRangePartsIter<'a> {
         sorting: bool,
         parts: &'a [DatePart],
         selector: Option<DateParts>,
-        first: &'a Date,
-        second: &'a Date,
+        first: Stamp,
+        second: Stamp,
     ) -> Self {
         let mut vec = Vec::with_capacity(parts.len() + 2);
 
-        let max_diff = WhichDelim::diff(parts, first, second);
+        let max_diff = WhichDelim::diff(parts, &first, &second);
         let matches = |part: &DatePart| {
             if let Some(selector) = selector {
                 // Don't filter out if we're sorting -- just render zeroes later
@@ -723,32 +717,32 @@ fn test_range_dp_sequence() {
     let month = &parts[1];
     let year = &parts[2];
 
-    let first = Date::from_ymd(1998, 3, 27);
-    let second = Date::from_ymd(1998, 3, 29);
-    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
+    let first: Stamp = Date::from_ymd(1998, 3, 27).into();
+    let second: Stamp = Date::from_ymd(1998, 3, 29).into();
+    let iter = DateRangePartsIter::new(false, &parts, None, first, second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
-            DateToken::Part(&first, day, true),
+            DateToken::Part(first, day, true),
             DateToken::RangeDelim(".."),
-            DateToken::Part(&second, day, false),
-            DateToken::Part(&first, month, false),
-            DateToken::Part(&first, year, false),
+            DateToken::Part(second, day, false),
+            DateToken::Part(first, month, false),
+            DateToken::Part(first, year, false),
         ]
     );
 
-    let first = Date::from_ymd(1998, 3, 27);
-    let second = Date::from_ymd(1998, 4, 29);
-    let iter = DateRangePartsIter::new(false, &parts, None, &first, &second);
+    let first = Date::from_ymd(1998, 3, 27).into();
+    let second = Date::from_ymd(1998, 4, 29).into();
+    let iter = DateRangePartsIter::new(false, &parts, None, first, second);
     assert_eq!(
         iter.collect::<Vec<_>>(),
         vec![
-            DateToken::Part(&first, day, false),
-            DateToken::Part(&first, month, true),
+            DateToken::Part(first, day, false),
+            DateToken::Part(first, month, true),
             DateToken::RangeDelim("-"),
-            DateToken::Part(&second, day, false),
-            DateToken::Part(&second, month, false),
-            DateToken::Part(&first, &parts[2], false),
+            DateToken::Part(second, day, false),
+            DateToken::Part(second, month, false),
+            DateToken::Part(first, &parts[2], false),
         ]
     );
 }
@@ -766,7 +760,7 @@ fn dp_render_either<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: GenericContext<'c, O, I>,
     arena: &mut IrArena<O>,
-    stamp: &ExtendedStamp,
+    stamp: &Stamp,
     is_max_diff: bool,
     is_filtered: bool,
 ) -> Option<(DatePartForm, Either<O>)> {
@@ -876,8 +870,8 @@ fn render_nonzero_year(year: u32, era: Era, form: YearForm, locale: &Locale) -> 
     }
     // Only do short form ('07) for four-digit years
     match (form, year > 1000) {
-        (YearForm::Short, true) => write!(s, "{:02}", year.abs() % 100).unwrap(),
-        (YearForm::Long, _) | (YearForm::Short, false) => write!(s, "{}", year.abs()).unwrap(),
+        (YearForm::Short, true) => write!(s, "{:02}", year % 100).unwrap(),
+        (YearForm::Long, _) | (YearForm::Short, false) => write!(s, "{}", year).unwrap(),
     }
     if era == Era::BCE {
         let sel = SimpleTermSelector::Misc(MiscTerm::Bc, TermFormExtended::Long);
@@ -900,17 +894,22 @@ fn render_nonzero_year(year: u32, era: Era, form: YearForm, locale: &Locale) -> 
 }
 
 fn nonzero(md: u32) -> Option<u32> {
-    Some(md).filter(|x| x != 0)
+    Some(md).filter(|&x| x != 0)
 }
 
 fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
     part: &DatePart,
     ctx: &GenericContext<'c, O, I>,
-    stamp: &ExtendedStamp,
+    stamp: &Stamp,
 ) -> Option<SmartString> {
     let locale = ctx.locale();
     match *stamp {
-        ExtendedStamp::Season { year, era, season } => match part.form {
+        Stamp::Season {
+            year,
+            iso_year: _,
+            era,
+            season,
+        } => match part.form {
             DatePartForm::Year(form) => Some(render_nonzero_year(year, era, form, ctx.locale())),
             DatePartForm::Day(..) => None,
             DatePartForm::Month(form, strip_periods) => {
@@ -927,15 +926,29 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                         };
                         fallback[season as u32 as usize].into()
                     });
-                Some(string)
+                Some(if strip_periods {
+                    lazy::lazy_replace_char_owned(string, '.', "")
+                } else {
+                    string
+                })
             }
         },
-        ExtendedStamp::Date {
+        Stamp::RangeOpen => {
+            match part.form {
+                DatePartForm::Year(_) => {
+                    // TODO: there should be a term for this.
+                    Some("...".into())
+                }
+                _ => None,
+            }
+        }
+        Stamp::Date {
             year,
             era,
+            iso_year: _,
             month,
             day,
-            period,
+            period: _,
         } => {
             match part.form {
                 DatePartForm::Year(form) => {
@@ -945,7 +958,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                     let month = month?;
                     match form {
                         MonthForm::Numeric => Some(smart_format!("{}", month)),
-                        MonthForm::NumericLeadingZeros => smart_format!("{:02}", month),
+                        MonthForm::NumericLeadingZeros => Some(smart_format!("{:02}", month)),
                         _ => {
                             let sel = gts_from_month(month, form)?;
                             let string: SmartString = locale
@@ -986,9 +999,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
                             use citeproc_io::NumericToken;
                             // The 'target noun' is the month term.
                             // if day is specified, according to edtf, so is month. So month() isn't None.
-                            stamp
-                                .month()
-                                .and_then(Component::value)
+                            month
                                 .and_then(MonthTerm::from_u32)
                                 .map(|month| locale.get_month_gender(month))
                                 .map(|gender| {

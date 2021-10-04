@@ -7,6 +7,7 @@
 //! This file looks like it does the same thing as `crates/io/src/date/sorting.rs`.
 //! However, it is subtly different: sorting tries to put all dates on one timeline
 
+use chrono::Datelike;
 use chronology::historical::{CalendarInUse, Canon, Stampable, StampedDate};
 use chronology::{CalendarTo, Era, Gregorian, Iso};
 use citeproc_io::edtf::Season;
@@ -15,24 +16,24 @@ use citeproc_io::{
     DateOrRange,
 };
 
+use super::WhichDelim;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Stamp<'a> {
+pub(crate) enum RangeStamp<'a> {
     // TODO: DateTime stamp. This should be a proper CSL feature too.
-    Date(ExtendedStamp),
-    Range {
-        from: Option<ExtendedStamp>,
-        to: Option<ExtendedStamp>,
-    },
+    Date(Stamp),
+    Range(Stamp, Stamp),
     Literal(&'a str),
 }
 
 /// Single variant for now, but can be extended to, e.g. `Decade(i32)`,
 /// `Century(i32)`,
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ExtendedStamp {
+pub(crate) enum Stamp {
     Date {
         year: u32,
         era: Era,
+        iso_year: i32,
         month: Option<u32>,
         day: Option<u32>,
         period: CalendarInUse,
@@ -41,24 +42,41 @@ pub(crate) enum ExtendedStamp {
         year: u32,
         era: Era,
         season: Season,
+        iso_year: i32,
     },
+    // if you wanted to handle `1999/` differently from `1999/..`, add `RangeUnknown`,
+    RangeOpen,
 }
 
-impl From<CanonStamp> for ExtendedStamp {
-    fn from(canon: CanonStamp) -> Self {
-        let CanonStamp {
-            year,
-            era,
-            month,
-            day,
-            period,
-        } = canon;
-        Self::Date {
-            year,
-            era,
-            month: super::nonzero(month),
-            day: super::nonzero(day),
-            period,
+impl Stamp {
+    pub(super) fn get_component(&self, part: WhichDelim) -> Option<i32> {
+        match *self {
+            Self::Date {
+                year: _,
+                era: _,
+                iso_year,
+                month,
+                day,
+                period: _,
+            } => match part {
+                WhichDelim::Day => day.map(|x| x as i32),
+                WhichDelim::Month => month.map(|x| x as i32),
+                WhichDelim::Year => Some(iso_year),
+                WhichDelim::None => None,
+            },
+            Self::Season {
+                year: _,
+                era: _,
+                iso_year,
+                season,
+            } => match part {
+                WhichDelim::Month => Some(season as u32 as i32),
+                WhichDelim::Year => Some(iso_year),
+                _ => None,
+            },
+            Self::RangeOpen => match part {
+                _ => None,
+            },
         }
     }
 }
@@ -70,61 +88,98 @@ struct AllTime;
 
 type CanonStamp = StampedDate<CalendarInUse>;
 
-/// In which we decide how to render all the exotic EDTF formats.
-///
-/// This is largely unspecified by CSL.
-fn stamp_edtf_date(date: &edtf::Date) -> ExtendedStamp {
-    match date.precision() {
-        Precision::Day(..) => {
-            let complete = date
-                .complete()
-                .expect("date.complete() should be available, given Precision::Day");
-            let iso = complete.to_chrono();
-            let historical = iso.to_historical(Canon);
-            let stamp = historical.stamp();
-            stamp.into()
-        }
-        Precision::DayOfMonth(y, m) | Precision::Month(y, m) => {
-            // using day = 1, it's guaranteed not to fail by being e.g. february 31
-            let iso = Iso::from_ymd(y, m, 1);
-            let historical = iso.to_historical(Canon);
-            let mut stamp = historical.stamp();
-            // erase the day
-            stamp.day = 0;
-            stamp.into()
-        }
-        // Render Decade/Century as plain years (e.g. 1990, 1900) for now
-        Precision::Decade(y)
-        | Precision::Century(y)
+impl From<edtf::Date> for Stamp {
+    fn from(date: edtf::Date) -> Self {
+        Self::from_edtf_date(&date)
+    }
+}
 
-        // Same for dayofyear
-        | Precision::DayOfYear(y)
-        | Precision::MonthOfYear(y)
-        | Precision::Year(y) => {
-            // using month=1,day=1, you just get day 1 of that year
-            let iso = Iso::from_ymd(y, 1, 1);
-            let historical = iso.to_historical(Canon);
-            let mut stamp = historical.stamp();
-            stamp.month = 0;
-            stamp.day = 0;
-            stamp.into()
+impl Stamp {
+    fn from_canon(canon: CanonStamp, iso_year: i32) -> Self {
+        let CanonStamp {
+            year,
+            era,
+            month,
+            day,
+            period,
+        } = canon;
+        Self::Date {
+            year,
+            era,
+            iso_year,
+            month: super::nonzero(month),
+            day: super::nonzero(day),
+            period,
         }
-        Precision::Season(y, season) => {
-            let (year, era) = chronology::iso_to_year_era(y);
-            ExtendedStamp::Season { year, era, season }
+    }
+    /// In which we decide how to render all the exotic EDTF formats.
+    ///
+    /// This is largely unspecified by CSL.
+    pub(super) fn from_edtf_date(date: &edtf::Date) -> Self {
+        match date.precision() {
+            Precision::Day(..) => {
+                let complete = date
+                    .complete()
+                    .expect("date.complete() should be available, given Precision::Day");
+                let iso = complete.to_chrono();
+                let historical = iso.to_historical(Canon);
+                let stamp = historical.stamp();
+                Self::from_canon(stamp, iso.year())
+            }
+            Precision::DayOfMonth(y, m) | Precision::Month(y, m) => {
+                // using day = 1, it's guaranteed not to fail by being e.g. february 31
+                let iso = Iso::from_ymd(y, m, 1);
+                let historical = iso.to_historical(Canon);
+                let mut canon = historical.stamp();
+                // erase the day
+                canon.day = 0;
+                Self::from_canon(canon, iso.year())
+            }
+            // Render Decade/Century as plain years (e.g. 1990, 1900) for now
+            Precision::Decade(y)
+                | Precision::Century(y)
+
+                // Same for dayofyear
+                | Precision::DayOfYear(y)
+                | Precision::MonthOfYear(y)
+                | Precision::Year(y) => {
+                    // XXX incorrect
+                    let iso = Iso::from_ymd(y, 1, 1);
+                    let historical = iso.to_historical(Canon);
+                    let mut stamp = historical.stamp();
+                    stamp.month = 0;
+                    stamp.day = 0;
+                    Self::from_canon(stamp, iso.year())
+                }
+            Precision::Season(y, season) => {
+                let (year, era) = chronology::iso_to_year_era(y);
+                Stamp::Season { year, iso_year: y, era, season }
+            }
         }
     }
 }
 
-impl Stamp<'_> {
+impl<'a> RangeStamp<'a> {
     fn from_iso(iso: chronology::Iso) -> Self {
         let gregorian = Gregorian::from(iso);
         let stamp = gregorian.historical_date_stamp(AllTime);
-        Stamp::Date(stamp)
+        let stamp = Stamp::Date {
+            iso_year: iso.year(),
+            year: stamp.year,
+            month: Some(stamp.month),
+            day: Some(stamp.day),
+            era: stamp.era,
+            period: CalendarInUse::Gregorian,
+        };
+        RangeStamp::Date(stamp)
+    }
+    fn from_edtf_date(date: &edtf::Date) -> Self {
+        let stamp = Stamp::from_edtf_date(date);
+        RangeStamp::Date(stamp)
     }
     fn from_edtf(edtf: &Edtf) -> Self {
         match edtf {
-            Edtf::Date(date) => Stamp::from_edtf_date(date),
+            Edtf::Date(date) => RangeStamp::from_edtf_date(date),
             Edtf::DateTime(edtf_dt) => {
                 // this part determines which date will end up being rendered, when you have a
                 // timestamp in a specific time zone attached.
@@ -136,10 +191,10 @@ impl Stamp<'_> {
                 let naive_date = chrono_dt.date();
                 // let naive_time = chrono_dt.time();
                 // let offset = edtf_dt.time().offset();
-                Stamp::from_iso(naive_date)
+                RangeStamp::from_iso(naive_date)
             }
             Edtf::YYear(yy) => {
-                let mut yy = *yy;
+                let yy = *yy;
                 // nobody is actually using this for citations... hopefully
                 let yy64 = yy.year();
                 let yy32 = if yy64 > i32::MAX as i64 {
@@ -149,7 +204,7 @@ impl Stamp<'_> {
                 } else {
                     yy64 as i32
                 };
-                let (era, year) = chronology::iso_to_year_era(yy32);
+                let (year, era) = chronology::iso_to_year_era(yy32);
                 let cal = match era {
                     // there are no yy years even close to Canon crossover
                     Era::CE => CalendarInUse::Gregorian,
@@ -157,27 +212,27 @@ impl Stamp<'_> {
                 };
                 // only year
                 let stamp = CanonStamp::new(year, era, 0, 0, cal);
-                Stamp::Date(stamp.into())
+                RangeStamp::Date(Stamp::from_canon(stamp, yy32))
             }
             Edtf::Interval(from, to) => {
-                let from = Some(stamp_edtf_date(from));
-                let to = Some(stamp_edtf_date(to));
-                Stamp::Range { from, to }
+                let from = Stamp::from_edtf_date(from);
+                let to = Stamp::from_edtf_date(to);
+                RangeStamp::Range(from, to)
             }
             Edtf::IntervalFrom(from, _) => {
-                let from = Some(stamp_edtf_date(from));
-                Stamp::Range { from, to: None }
+                let from = Stamp::from_edtf_date(from);
+                RangeStamp::Range(from, Stamp::RangeOpen)
             }
             Edtf::IntervalTo(_, to) => {
-                let to = Some(stamp_edtf_date(to));
-                Stamp::Range { from: None, to }
+                let to = Stamp::from_edtf_date(to);
+                RangeStamp::Range(Stamp::RangeOpen, to)
             }
         }
     }
-    pub(crate) fn from_date_or_range(dor: &DateOrRange) -> Self {
+    pub(crate) fn from_date_or_range(dor: &'a DateOrRange) -> Self {
         match dor {
-            DateOrRange::Edtf(e) => Stamp::from_edtf(e),
-            DateOrRange::Literal { literal, circa: _ } => Stamp::Literal(literal),
+            DateOrRange::Edtf(e) => RangeStamp::from_edtf(e),
+            DateOrRange::Literal { literal, circa: _ } => RangeStamp::Literal(literal),
         }
     }
 }

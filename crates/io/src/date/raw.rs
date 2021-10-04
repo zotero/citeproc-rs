@@ -17,7 +17,7 @@ use nom::{
 
 impl DateOrRange {
     /// The loosely specified citeproc-js convention
-    pub(crate) fn from_raw_str(s: &str) -> Result<Self, ()> {
+    pub fn from_raw_str(s: &str) -> Result<Self, ()> {
         if let Ok((_left_overs, parsed)) = parse_raw_str(s.as_bytes()) {
             Ok(Self::Edtf(parsed))
         } else {
