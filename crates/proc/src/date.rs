@@ -847,7 +847,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             iso_year: _,
             month,
             day,
-            period: _, // we don't currently render "old style" indicators
+            period: _, // we don't currently render "new style" indicators
         } => {
             match part.form {
                 DatePartForm::Year(form) => {

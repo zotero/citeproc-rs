@@ -10,7 +10,7 @@
 use std::convert::TryInto;
 
 use chrono::Datelike;
-use chronology::historical::{CalendarInUse, DateInterpreter, Stampable, StampedDate};
+use chronology::historical::{DateInterpreter, Stampable, StampedDate};
 use chronology::{CalendarTo, CommonEra, Era, Gregorian, Iso};
 use citeproc_io::edtf::Season;
 use citeproc_io::{
@@ -21,7 +21,7 @@ use citeproc_io::{
 use super::WhichDelim;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum RangeStamp<'a, Period = AlwaysGregorian> {
+pub(crate) enum RangeStamp<'a, Period = DateStyle> {
     // TODO: DateTime stamp. This should be a proper CSL feature too.
     Date(Stamp<Period>),
     Range(Stamp<Period>, Stamp<Period>),
@@ -31,7 +31,7 @@ pub(crate) enum RangeStamp<'a, Period = AlwaysGregorian> {
 /// Single variant for now, but can be extended to, e.g. `Decade(i32)`,
 /// `Century(i32)`,
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Stamp<Period = AlwaysGregorian> {
+pub(crate) enum Stamp<Period = DateStyle> {
     Date {
         year: u32,
         era: Era,
@@ -92,12 +92,32 @@ impl Stamp {
 // We don't need more than one era (yet), because we're only doing [Canon], which is a
 // single-era calendar. (chronology's era is separate from CE/BCE).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct AlwaysGregorian;
+pub struct AlwaysGregorian {
+    modern_from: Iso,
+}
+
+impl AlwaysGregorian {
+    fn new(modern_from: Iso) -> Self {
+        Self { modern_from }
+    }
+    fn date_style_ym(&self, iso_year: i32, month: u32) -> DateStyle {
+        self.calendar_in_use(Iso::from_ymd(iso_year, month, 1))
+    }
+    fn date_style_y(&self, _iso_year: i32) -> DateStyle {
+        DateStyle::Unnecessary
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DateStyle {
+    Modern,
+    Unnecessary,
+    PrintNewStyle,
+}
 
 impl DateInterpreter for AlwaysGregorian {
     type Interpretation = Option<Iso>;
-
-    type Period = Self;
+    type Period = DateStyle;
 
     fn interpret(&self, year: u32, era: Era, month: u32, day: u32) -> Self::Interpretation {
         Gregorian::from_ce_date_opt((), year, era, month, day).map(|x| x.to_iso())
@@ -118,8 +138,12 @@ impl DateInterpreter for AlwaysGregorian {
         interpretation
     }
 
-    fn calendar_in_use(&self, _iso: Iso) -> Self::Period {
-        AlwaysGregorian
+    fn calendar_in_use(&self, iso: Iso) -> Self::Period {
+        if iso >= self.modern_from {
+            DateStyle::Modern
+        } else {
+            DateStyle::PrintNewStyle
+        }
     }
 
     fn stamp(&self, iso: Iso, kind: Self::Period) -> StampedDate<Self::Period> {
@@ -193,7 +217,7 @@ trait EdtfStamper: DateInterpreter {
         }
     }
     /// Ties it all together
-    fn stamp_edtf(&self, edtf: &Edtf) -> RangeStamp<Self::Period> {
+    fn stamp_edtf(&self, edtf: &Edtf) -> RangeStamp<'static, Self::Period> {
         match edtf {
             Edtf::Date(date) => RangeStamp::Date(self.stamp_edtf_date(date)),
             Edtf::DateTime(edtf_dt) => {
@@ -239,7 +263,7 @@ impl EdtfStamper for AlwaysGregorian {
             iso_year,
             month: super::nonzero(month),
             day: None,
-            period: AlwaysGregorian,
+            period: self.date_style_ym(iso_year, month),
         }
     }
 
@@ -251,7 +275,7 @@ impl EdtfStamper for AlwaysGregorian {
             iso_year,
             month: None,
             day: None,
-            period: AlwaysGregorian,
+            period: self.date_style_y(iso_year),
         }
     }
 
@@ -265,38 +289,16 @@ impl EdtfStamper for AlwaysGregorian {
             iso_year,
             month: None,
             day: None,
-            period: AlwaysGregorian,
+            period: DateStyle::Unnecessary,
         }
-    }
-}
-
-impl Stamp {
-    fn from_canon(canon: StampedDate<AlwaysGregorian>, iso_year: i32) -> Self {
-        let StampedDate {
-            year,
-            era,
-            month,
-            day,
-            period: _,
-        } = canon;
-        Self::Date {
-            year,
-            era,
-            iso_year,
-            month: super::nonzero(month),
-            day: super::nonzero(day),
-            period: AlwaysGregorian,
-        }
-    }
-    fn from_edtf_date(date: &edtf::Date) -> Self {
-        AlwaysGregorian.stamp_edtf_date(date)
     }
 }
 
 impl<'a> RangeStamp<'a> {
     pub(crate) fn from_date_or_range(dor: &'a DateOrRange) -> Self {
+        let greg = AlwaysGregorian::new(Iso::from_ymd(1582, 10, 15));
         match dor {
-            DateOrRange::Edtf(e) => AlwaysGregorian.stamp_edtf(e),
+            DateOrRange::Edtf(e) => greg.stamp_edtf(e),
             DateOrRange::Literal { literal, circa: _ } => RangeStamp::Literal(literal),
         }
     }
