@@ -56,8 +56,7 @@
 
 use super::Date;
 use chronology::{
-    historical::{Canon, Historical},
-    Era, Iso,
+    CommonEra, Era, Gregorian, Iso,
 };
 use std::convert::TryInto;
 
@@ -76,9 +75,7 @@ pub(crate) fn date_from_csl_json_parts_ymd(year: i32, month: u32, day: u32) -> O
     // This is where the magic happens. When day is specified, we interpret the whole thing in a
     // full-on calendar.
     if (1..=12).contains(&month) && day != 0 {
-        // This could be configurable to `chronology::historical::GregorianAdoption` instead
-        let calendar = Canon;
-        let system = Historical::interpret(year_abs, era, month, day, calendar)?;
+        let system = Gregorian::from_ce_date_opt((), year_abs, era, month, day)?;
         let iso: Iso = system.try_into().ok()?;
         let date: Date = iso.try_into().ok()?;
         Some(date)

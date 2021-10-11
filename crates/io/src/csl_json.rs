@@ -11,7 +11,7 @@
 mod cow_str;
 
 use crate::names::Name;
-use edtf::level_1::{Edtf, Matcher, Precision};
+use edtf::level_1::{Edtf, Precision};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Unexpected, Visitor};
 use serde::de::{Error, IgnoredAny};
 use std::borrow::Cow;
@@ -434,35 +434,40 @@ fn set_season_year_precision<E>(edtf: &mut Edtf, season: NumberLike) -> Result<(
 where
     E: de::Error,
 {
-    match edtf.as_matcher() {
-        Matcher::Date(Precision::Year(y), _) => {
-            let mut season = season
-                .to_number()
-                .map_err(|e| E::custom(format!("season {:?} was not an integer: {}", season, e)))
-                .and_then(|unsigned| {
-                    // must be in range 1..=4
-                    if !(1..=4).contains(&unsigned) {
-                        Err(E::custom(format!(
-                            "season {} was not in range [1, 4]",
-                            unsigned
-                        )))
-                    } else {
-                        Ok(unsigned as u32)
-                    }
-                })?;
-            // normalise to 21, 22, 23, 24
-            if season < 5 {
-                season += 20;
+    match edtf {
+        Edtf::Date(date) => match date.precision() {
+            Precision::Year(y) => {
+                let mut season = season
+                    .to_number()
+                    .map_err(|e| {
+                        E::custom(format!("season {:?} was not an integer: {}", season, e))
+                    })
+                    .and_then(|unsigned| {
+                        // must be in range 1..=4
+                        if !(1..=4).contains(&unsigned) {
+                            Err(E::custom(format!(
+                                "season {} was not in range [1, 4]",
+                                unsigned
+                            )))
+                        } else {
+                            Ok(unsigned as u32)
+                        }
+                    })?;
+                // normalise to 21, 22, 23, 24
+                if season < 5 {
+                    season += 20;
+                }
+                if (21..=24).contains(&season) {
+                    *edtf = Date::from_ym(y, season).into();
+                } else {
+                    log::warn!(
+                        "CSL-JSON warning: unknown season value {}, ignoring",
+                        season
+                    );
+                }
             }
-            if (21..=24).contains(&season) {
-                *edtf = Date::from_ym(y, season).into();
-            } else {
-                log::warn!(
-                    "CSL-JSON warning: unknown season value {}, ignoring",
-                    season
-                );
-            }
-        }
+            _ => {}
+        },
         _ => {}
     }
     Ok(())

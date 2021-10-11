@@ -717,7 +717,9 @@ checksum = "134951f4028bdadb9b84baf4232681efbf277da25144b9b0ad65df75946c422b"
 
 [[package]]
 name = "edtf"
-version = "0.1.2-alpha.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c8c7ddbaf21c07ce5f0984965be8b1da04810eab46451ef8d2692595d7e701a"
 dependencies = [
  "chrono",
  "nom 7.0.0",

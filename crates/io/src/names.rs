@@ -439,21 +439,53 @@ pub trait TrimInPlace {
     fn trim_start_in_place(self: &'_ mut Self);
     fn trim_end_in_place(self: &'_ mut Self);
 }
-impl TrimInPlace for String {
+
+impl TrimInPlace for smartstring::SmartString<smartstring::LazyCompact> {
     fn trim_in_place(self: &'_ mut Self) {
-        let (start, len): (*const u8, usize) = {
+        let (src, len): (*const u8, usize) = {
             let self_trimmed: &str = self.trim();
             (self_trimmed.as_ptr(), self_trimmed.len())
         };
         if len == self.len() {
             return;
         }
-        // Safety: src and dst here are both valid for len * size_of::<u8>() bytes.
-        // Logic-wise, this copy allows copying between overlapping regions.
-        // It's essentially libc's memmove.
+
+        // Safety: for as_bytes_mut, we must ensure the contents of dst are valid UTF8 when the
+        // borrow ends and next we use the `str`. When we copy `start..start+len` into dst, the
+        // first `len` bytes will be valid UTF8. There will potentially be invalid UTF8 in the
+        // trailing bytes which were not overwritten, but these will promptly be truncated off. We
+        // don't use the `str` until after that. It is OK that the borrow ends before the
+        // truncate(len), because truncate(len) will not look at any bytes after `len`.
+        let dst_bytes = unsafe { self.as_bytes_mut() };
+        let dst = dst_bytes.as_mut_ptr();
+
+        // Safety: src and dst here must both be valid for len * size_of::<u8>() bytes.
+        //
+        // In a SmartString, either the underlying storage is currently a String, or it's currently
+        // inline. In either case, `len` is guaranteed to be less than the total size of the
+        // storage, so we can write `len` bytes into `dst` safely. We can also read `len` bytes from
+        // `src`; `len` is the length of the slice we got `src` from.
+        //
+        // "       abcdefghijklmnopqrstuvwxyz      "|
+        //  ---------------------------------------
+        //  | dst  | src
+        //         |<--       len        -->|
+        // "abcdefghijklmnopqrstuvwxyztuvwxyz      "
+        //  |<--       len        -->|
+        //
+        // (core::ptr::copy allows copying between overlapping regions. It's libc memmove.)
         unsafe {
-            core::ptr::copy(start, self.as_bytes_mut().as_mut_ptr(), len);
+            core::ptr::copy(src, dst, len);
         }
+        // We have:
+        //
+        // "abcdefghijklmnopqrstuvwxyztuvwxyz      "
+        //  ---------------------------------------
+        //  |<--       internal length         -->|
+        //  |<--       len        -->|
+        //
+        //  then truncate(len) gives:
+        // "abcdefghijklmnopqrstuvwxyz"
         self.truncate(len);
     }
     fn trim_start_in_place(self: &'_ mut Self) {
