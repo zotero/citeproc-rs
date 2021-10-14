@@ -105,6 +105,7 @@ impl Driver {
                 style: options.style.as_ref(),
                 fetcher: Some(us_fetcher),
                 format: options.format,
+                format_options: options.format_options,
                 bibliography_no_sort: options.bibliography_no_sort,
                 locale_override: options.locale_override,
                 test_mode: false,

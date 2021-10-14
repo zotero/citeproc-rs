@@ -5,6 +5,17 @@ use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", remote = "FormatOptions")]
+struct JsFormatOptions {
+    #[serde(default = "bool_true")]
+    link_anchors: bool,
+}
+
+fn bool_true() -> bool {
+    true
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WasmInitOptions {
     // Required
@@ -17,6 +28,10 @@ pub struct WasmInitOptions {
     // Optional
     #[serde(default)]
     pub format: SupportedFormat,
+
+    #[serde(default, with = "JsFormatOptions")]
+    pub format_options: FormatOptions,
+
     /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
     #[serde(default)]
     pub locale_override: Option<Lang>,
