@@ -8,6 +8,7 @@ use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
+use core::fmt::{self, Write};
 use csl::Formatting;
 
 #[derive(Debug)]
@@ -18,10 +19,7 @@ pub struct RtfWriter<'a> {
 
 impl<'a> RtfWriter<'a> {
     pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
-        RtfWriter {
-            dest,
-            options,
-        }
+        RtfWriter { dest, options }
     }
 }
 
@@ -31,8 +29,17 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
     }
 
     fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
-        todo!()
+        super::write_url(
+            self.dest,
+            url_verbatim,
+            url,
+            in_attr,
+            |b, s| write!(b, "{}", rtf_escape_url(s)),
+            |b, s| Ok(rtf_escape_into(s, b)),
+        )
+        .unwrap();
     }
+
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
             let tag = cmd.rtf_tag();
@@ -165,7 +172,6 @@ fn rtf_escape_into(s: &str, buf: &mut String) {
             _unicode => {
                 let slice = c.encode_utf16(&mut utf16_buffer);
                 for &u16c in slice.iter() {
-                    use std::fmt::Write;
                     // The spec says 'most control words' accept signed 16-bit, but Word and
                     // TextEdit both produce unsigned 16-bit, and even convert signed to unsigned
                     // when saving. So we'll do that here. (citeproc-js does this too.)
@@ -178,21 +184,121 @@ fn rtf_escape_into(s: &str, buf: &mut String) {
     }
 }
 
-#[cfg(test)]
-fn rtf_escape(s: &str) -> String {
-    let mut buf = String::new();
-    rtf_escape_into(s, &mut buf);
-    buf
+use nom::{bytes::complete as nbc, IResult, Parser};
+
+enum Encodable<'a> {
+    Chunk(&'a str),
+    Esc(&'static str),
 }
 
-#[test]
-fn test_rtf_escape_unicode() {
-    let tab = "Hello \t";
-    assert_eq!(&rtf_escape(tab), r"Hello \tab ");
+/// Try to gobble up as many non-escaping characters as possible.
+fn scan_encodable<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '<' | '>' | '&' | '"' | '\''))
+        .map(Encodable::Chunk)
+        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
+        .or(nbc::tag(">").map(|_| Encodable::Esc("&gt;")))
+        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
+        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
+        .parse(remain)
+}
 
-    let heart = "Hello \u{2764}";
-    assert_eq!(&rtf_escape(heart), r"Hello \uc0\u10084 ");
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS, NON_ALPHANUMERIC};
 
-    let poop = "Hello 💩";
-    assert_eq!(&rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
+/// The standard URL set is here: https://url.spec.whatwg.org/#fragment-percent-encode-set
+/// But for RTF, you apparently have to be much more aggressive.
+const PERCENT_ENCODABLE: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'\'')
+    .add(b'%')
+    .add(b'\\')
+    .add(b'<')
+    .add(b'>')
+    .add(b'[')
+    .add(b']')
+    .add(b'\\')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
+const RE_ENCODE_URL: &AsciiSet = &PERCENT_ENCODABLE.remove(b'%');
+
+struct RtfUrlEscaper<'a>(&'a str);
+
+impl fmt::Display for RtfUrlEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        utf8_percent_encode(self.0, RE_ENCODE_URL).fmt(f)
+    }
+}
+
+fn rtf_escape_url(s: &str) -> RtfUrlEscaper {
+    RtfUrlEscaper(s)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn rtf_escape(s: &str) -> String {
+        let mut buf = String::new();
+        rtf_escape_into(s, &mut buf);
+        buf
+    }
+
+    macro_rules! assert_eq {
+        ($a:expr, $b:expr) => {
+            ::pretty_assertions::assert_eq!(PrettyString($a), PrettyString($b))
+        };
+    }
+
+    #[test]
+    fn test_rtf_escape_unicode() {
+        let tab = "Hello \t";
+        assert_eq!(&rtf_escape(tab), r"Hello \tab ");
+
+        let heart = "Hello \u{2764}";
+        assert_eq!(&rtf_escape(heart), r"Hello \uc0\u10084 ");
+
+        let poop = "Hello 💩";
+        assert_eq!(&rtf_escape(poop), r"Hello \uc0\u55357 \uc0\u56489 ");
+    }
+
+    #[test]
+    fn test_rtf_escape_url() {
+        let crunchy_url_text = r"https://google.com/?”×{}\\{\hello}";
+        assert_eq!(
+            &rtf_escape(crunchy_url_text),
+            r"https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\\\{\\hello\}"
+        );
+
+        let fmt_url = |url_str: &str, in_attr: bool| {
+            let mut dest = String::new();
+            let url = url::Url::parse(url_str).unwrap();
+            RtfWriter::new(&mut dest, Default::default()).write_url(url_str, &url, in_attr);
+            dest
+        };
+
+        let crunchy_valid_url = r#"https://google.com/"hi{\}"_?attr\=[]"#;
+        // apparently backslashes are normalised to a forward slash in the url lirary if it's not in
+        // the query string, so the first %5C can be replaced with a /
+        // assert_eq!(&fmt_url(crunchy_valid_url, true), "https://google.com/%22hi%7B%5C%7D%22_?attr%5C=%5B%5D")
+        assert_eq!(
+            &fmt_url(crunchy_valid_url, true),
+            "https://google.com/%22hi%7B/%7D%22_?attr%5C=%5B%5D"
+        )
+    }
+
+    /// See the main citeproc/tests/suite.rs
+    #[derive(PartialEq, Eq)]
+    #[doc(hidden)]
+    pub struct PrettyString<'a>(pub &'a str);
+
+    /// Make diff to display string as multi-line string
+    impl<'a> fmt::Debug for PrettyString<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str(self.0)
+        }
+    }
 }

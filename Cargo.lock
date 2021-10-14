@@ -355,6 +355,7 @@ dependencies = [
  "nom 6.1.2",
  "once_cell",
  "pandoc_types",
+ "percent-encoding",
  "phf",
  "pretty_assertions",
  "regex",
