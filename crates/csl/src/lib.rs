@@ -1010,6 +1010,10 @@ impl DatePart {
                 bool::attribute_default_val(node, "strip-periods", info, false)?,
             ),
             DatePartName::Day => DatePartForm::Day(attribute_optional(node, "form", info)?),
+            DatePartName::Style => DatePartForm::Style(
+                attribute_optional(node, "form", info)?,
+                bool::attribute_default_val(node, "strip-periods", info, false)?,
+            ),
         };
         Ok(DatePart {
             form,

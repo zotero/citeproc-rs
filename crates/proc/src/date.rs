@@ -26,6 +26,8 @@ use pretty_assertions::assert_eq;
 use std::fmt::Write;
 use std::mem;
 
+use self::stamp::DateStyle;
+
 #[derive(Debug)]
 enum Either<O: OutputFormat> {
     Build(Option<O::Build>),
@@ -333,6 +335,7 @@ pub fn parts_to_include<'c, O: OutputFormat, I: OutputFormat>(
                 DatePartForm::Day(..) => parts.day = true,
                 DatePartForm::Month(..) => parts.month = true,
                 DatePartForm::Year(..) => parts.year = true,
+                DatePartForm::Style(..) => {}
             }
         }
         parts
@@ -552,6 +555,7 @@ impl WhichDelim {
             DatePartForm::Day(_) => WhichDelim::Day,
             DatePartForm::Month(..) => WhichDelim::Month,
             DatePartForm::Year(_) => WhichDelim::Year,
+            DatePartForm::Style(..) => WhichDelim::None,
         }
     }
     fn max_if_different(self, component: Self, first: &Stamp, second: &Stamp) -> Self {
@@ -573,6 +577,7 @@ impl WhichDelim {
                 DatePartForm::Year(..) => {
                     max_diff.max_if_different(WhichDelim::Year, first, second)
                 }
+                DatePartForm::Style(..) => max_diff,
             }
         }
         max_diff
@@ -689,6 +694,7 @@ fn dp_matches(part: &DatePart, selector: DateParts) -> bool {
         DatePartForm::Day(_) => selector == DateParts::YearMonthDay,
         DatePartForm::Month(..) => selector != DateParts::Year,
         DatePartForm::Year(_) => true,
+        DatePartForm::Style(..) => true,
     }
 }
 
@@ -811,6 +817,7 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
         } => match part.form {
             DatePartForm::Year(form) => Some(render_nonzero_year(year, era, form, ctx.locale())),
             DatePartForm::Day(..) => None,
+            DatePartForm::Style(..) => None,
             DatePartForm::Month(form, strip_periods) => {
                 let sel = gts_from_season(season, form)?;
                 let string: SmartString = locale
@@ -847,12 +854,16 @@ fn dp_render_string<'c, O: OutputFormat, I: OutputFormat>(
             iso_year: _,
             month,
             day,
-            period: _, // we don't currently render "new style" indicators
+            period,
         } => {
             match part.form {
                 DatePartForm::Year(form) => {
                     Some(render_nonzero_year(year, era, form, ctx.locale()))
                 }
+                DatePartForm::Style(..) => match period {
+                    DateStyle::Modern | DateStyle::Unnecessary => None,
+                    DateStyle::PrintNewStyle => Some("N.S.".into()),
+                },
                 DatePartForm::Month(form, strip_periods) => {
                     let month = month?;
                     match form {

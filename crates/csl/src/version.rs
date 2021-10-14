@@ -266,6 +266,8 @@ declare_features!(
     (active, legal_locators, "1.0.1", None, None),
     /// `<text term="unpublished">`
     (active, term_unpublished, "1.0.1", None, None),
+    /// `<date-part name="style">` => `N.S.`
+    (active, new_style_dates, "1.1.0", None, None),
 );
 
 // status, name, first added version, tracking issue, edition, None

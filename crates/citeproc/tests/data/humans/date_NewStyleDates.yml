@@ -1,0 +1,57 @@
+mode: citation
+result: >
+  edtf, modern = August 7, 2000;
+  edtf, year = 1300;
+  edtf, early = October 1582 (N.S.);
+  edtf, pre-gregorian = August 7, 1400 (N.S.);
+  edtf, zero = August 7, 1BC (N.S.);
+  edtf, negative = August 7, 101BC (N.S.)
+
+input:
+  - id: em
+    title: "edtf, modern"
+    issued:
+      edtf: 2000-08-07
+  - id: eyear
+    title: "edtf, year"
+    issued:
+      edtf: '1300'
+  - id: ea
+    title: "edtf, early"
+    issued:
+      edtf: 1582-10
+  - id: ep
+    title: "edtf, pre-gregorian"
+    issued:
+      edtf: 1400-08-07
+  - id: ez
+    title: "edtf, zero"
+    issued:
+      edtf: 0000-08-07
+  - id: en
+    title: "edtf, negative"
+    issued:
+      edtf: -0100-08-07
+
+csl:
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+    <info><title>..</title><id>id</id><updated>2010-01-27T20:08:03+00:00</updated>
+    </info>
+    <features>
+      <feature name="new-style-dates" />
+    </features>
+    <macro name="author">
+      <names variable="author"></names>
+    </macro>
+    <citation>
+      <layout delimiter="; ">
+        <text variable="title" suffix=" = " />
+        <date variable="issued" delimiter=" ">
+          <date-part name="month" form="long" />
+          <date-part name="day" form="numeric" suffix="," />
+          <date-part name="year" />
+          <date-part name="style" prefix="(" suffix=")" />
+        </date>
+      </layout>
+    </citation>
+  </style>

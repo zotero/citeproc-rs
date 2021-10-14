@@ -1267,6 +1267,8 @@ pub(crate) enum DatePartName {
     Day,
     Month,
     Year,
+    #[strum(props(feature = "new_style_dates"))]
+    Style,
 }
 impl EnumGetAttribute for DatePartName {}
 
@@ -1325,6 +1327,7 @@ pub enum DatePartForm {
     Day(DayForm),
     Month(MonthForm, StripPeriods),
     Year(YearForm),
+    Style(YearForm, StripPeriods),
 }
 
 impl DatePartForm {
@@ -1335,6 +1338,7 @@ impl DatePartForm {
             DatePartForm::Year(..) => 0,
             DatePartForm::Month(..) => 1,
             DatePartForm::Day(_) => 2,
+            DatePartForm::Style(..) => 3,
         }
     }
 }
