@@ -102,11 +102,6 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor {
-                url: _, content, ..
-            } => {
-                self.write_inlines(content, trim_start);
-            }
             Linked(link) => {
                 self.write_link("", link, "", "", self.options);
             }

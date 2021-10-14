@@ -418,8 +418,7 @@ impl IngestOptions {
                 InlineElement::Quoted {
                     inlines: content, ..
                 }
-                | InlineElement::Div(_, content)
-                | InlineElement::Anchor { content, .. } => {
+                | InlineElement::Div(_, content) => {
                     seen_one = self.apply_text_case_inner(content.as_mut(), seen_one, is_uppercase)
                         || seen_one;
                 }
@@ -537,9 +536,6 @@ fn any_inlines<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, inlines: &[Inline
         InlineElement::Micro(micros) => any_micros(f, invert, micros.as_ref()),
         InlineElement::Quoted { inlines, .. }
         | InlineElement::Div(_, inlines)
-        | InlineElement::Anchor {
-            content: inlines, ..
-        }
         | InlineElement::Formatted(inlines, _) => any_inlines(f, invert, inlines.as_ref()) ^ invert,
         InlineElement::Linked(_) => false,
     }) ^ invert

@@ -223,7 +223,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         in_bibliography: bool,
     ) -> Self::Build;
 
-    fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build;
     fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build;
     fn try_link_id(&self, var: csl::Variable, id_str: &str, options: &IngestOptions)
         -> Self::Build;

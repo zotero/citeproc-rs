@@ -108,9 +108,6 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { url, content, .. } => {
-                self.write_anchor(r#"<a href=""#, url, r#"">"#, content, "</a>", self.options)
-            }
             Linked(link) => self.write_link(r#"<a href=""#, link, r#"">"#, "</a>", self.options),
         }
     }

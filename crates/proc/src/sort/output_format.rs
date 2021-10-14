@@ -100,11 +100,6 @@ impl OutputFormat for SortStringFormat {
     }
 
     #[inline]
-    fn hyperlinked(&self, a: Self::Build, _target: Option<&str>) -> Self::Build {
-        a
-    }
-
-    #[inline]
     fn is_empty(&self, a: &Self::Build) -> bool {
         a.is_empty()
     }

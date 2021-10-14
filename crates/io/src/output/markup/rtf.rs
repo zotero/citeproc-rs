@@ -118,16 +118,6 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { url, content, .. } => {
-                self.write_anchor(
-                    r#"{\field{\*\fldinst{HYPERLINK ""#,
-                    url,
-                    r#""}}{\fldrslt "#,
-                    content,
-                    "}}",
-                    self.options,
-                );
-            }
             Linked(link) => {
                 self.write_link(
                     r#"{\field{\*\fldinst{HYPERLINK ""#,

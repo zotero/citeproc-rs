@@ -80,11 +80,6 @@ pub enum InlineElement {
     },
     Text(String),
     Linked(Link),
-    Anchor {
-        title: String,
-        url: String,
-        content: Vec<InlineElement>,
-    },
     Div(DisplayMode, Vec<InlineElement>),
 }
 
@@ -225,19 +220,6 @@ impl OutputFormat for Markup {
             localized: quotes,
             inlines: b,
         }]
-    }
-
-    #[inline]
-    fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build {
-        if let Some(target) = target {
-            vec![InlineElement::Anchor {
-                title: "".into(),
-                url: target.into(),
-                content: a,
-            }]
-        } else {
-            a
-        }
     }
 
     #[inline]
@@ -436,41 +418,6 @@ pub trait MarkupWriter {
                 }
             }
         }
-    }
-    fn write_anchor(
-        &mut self,
-        a_href: &str,
-        url_verbatim: &str,
-        href_close: &str,
-        content: &[InlineElement],
-        a_close: &str,
-        options: FormatOptions,
-    ) {
-        match Url::parse(url_verbatim) {
-            Ok(url) if allow_url_scheme(url.scheme()) => {
-                if options.link_anchors {
-                    self.write_raw(a_href);
-                    self.write_url(url_verbatim, &url, true);
-                    self.write_raw(href_close);
-                    self.write_inlines(content, false);
-                    self.write_raw(a_close);
-                } else {
-                    self.write_url(url_verbatim, &url, false);
-                }
-                return;
-            }
-            Ok(url) => {
-                warn!(
-                    "refusing to render url anchor for scheme {} on url {}",
-                    url.scheme(),
-                    url
-                );
-            }
-            Err(e) => {
-                warn!("invalid url due to {}: {}", e, url_verbatim);
-            }
-        }
-        self.write_inlines(content, false);
     }
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
