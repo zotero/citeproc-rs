@@ -221,7 +221,7 @@ fn rtf_escape(s: &str) -> RtfEscaper {
     RtfEscaper(s)
 }
 
-use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS, NON_ALPHANUMERIC};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 
 /// The standard URL set is here: https://url.spec.whatwg.org/#fragment-percent-encode-set
 /// But for RTF, you apparently have to be much more aggressive.
@@ -320,3 +320,5 @@ mod test {
         }
     }
 }
+
+

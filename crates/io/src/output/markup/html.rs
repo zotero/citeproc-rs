@@ -6,9 +6,9 @@
 
 use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::FormatCmd;
-use crate::output::{markup::Link, micro_html::MicroNode};
+use crate::output::micro_html::MicroNode;
 use crate::String;
-use core::fmt::{self, Display, Write};
+use core::fmt::{self, Write};
 use csl::Formatting;
 use url::Url;
 
@@ -229,3 +229,5 @@ fn escape_html_attribute(attr_inner: &str) -> HtmlAttrEscaper {
 fn escape_html(text: &str) -> HtmlEscaper {
     HtmlEscaper { text }
 }
+
+
