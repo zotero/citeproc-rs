@@ -1,0 +1,20 @@
+
+# See issue #123
+mode: citation
+result: <a href="https://example.com/?&quot;">https:&#x2f;&#x2f;example.com&#x2f;?&quot;</a>
+
+input:
+  - id: ITEM-1
+    type: book
+    url: 'https://example.com/?"'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <text variable="URL" />
+      </layout>
+    </citation>
+  </style>

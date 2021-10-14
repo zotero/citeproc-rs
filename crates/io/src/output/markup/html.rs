@@ -52,8 +52,7 @@ impl<'a> HtmlWriter<'a> {
 
 impl<'a> MarkupWriter for HtmlWriter<'a> {
     fn write_escaped(&mut self, text: &str) {
-        use v_htmlescape::escape;
-        self.dest.push_str(&escape(text).to_string());
+        write!(self.dest, "{}", v_htmlescape::escape(text)).unwrap();
     }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
@@ -135,8 +134,7 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
             Anchor { url, content, .. } => {
                 if self.options.link_anchors {
                     self.dest.push_str(r#"<a href=""#);
-                    // TODO: HTML-quoted-escape? the url?
-                    self.dest.push_str(&url.trim());
+                    escape_attribute(self.dest, url.trim()).unwrap();
                     self.dest.push_str(r#"">"#);
                     self.write_inlines(content, false);
                     self.dest.push_str("</a>");
@@ -187,31 +185,33 @@ impl FormatCmd {
     }
 }
 
-// impl InlineElement {
-// fn is_disp(&self, disp: DisplayMode) -> bool {
-//     match *self {
-//         Div(display, _) => disp == display,
-//         _ => false,
-//     }
-// }
-// fn collapsing_left_margin(inlines: &[InlineElement], s: &mut s) {
-//     use super::InlineElement::*;
-//     let mut iter = inlines.iter().peekable();
-//     while let Some(i) = iter.next() {
-//         let peek = iter.peek();
-//         match i {
-//             Div(display, inlines) => {
-//                 if display == DisplayMode::LeftMargin {
-//                     if let Some(peek) = iter.peek() {
-//                         if !peek.is_disp(DisplayMode::RightInline) {
-//                             Div(DisplayMode::Block)
-//                             continue;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//         i.to_html_inner(&mut s, options);
-//     }
-// }
-// }
+use nom::{bytes::complete as nbc, IResult, Parser};
+
+enum Encodable<'a> {
+    Chunk(&'a str),
+    Esc(&'static str),
+}
+
+/// Try to gobble up as many non-escaping characters as possible.
+///
+/// Works for attributes surrounded by double quotes, not single.
+fn scan_encodable_a<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '<' | '&' | '"'))
+        .map(Encodable::Chunk)
+        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
+        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
+        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .parse(remain)
+}
+
+fn escape_attribute<F: fmt::Write>(f: &mut F, attr_inner: &str) -> fmt::Result {
+    let mut remain = attr_inner;
+    while let Ok((rest, chunk)) = scan_encodable_a(remain) {
+        remain = rest;
+        match chunk {
+            Encodable::Chunk(s) => f.write_str(s)?,
+            Encodable::Esc(s) => f.write_str(s)?,
+        }
+    }
+    Ok(())
+}
