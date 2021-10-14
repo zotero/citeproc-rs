@@ -4,9 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
-use super::MarkupWriter;
-use super::MaybeTrimStart;
+use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
@@ -15,11 +13,13 @@ use csl::Formatting;
 #[derive(Debug)]
 pub struct PlainWriter<'a> {
     dest: &'a mut String,
+    #[allow(unused)]
+    options: FormatOptions,
 }
 
 impl<'a> PlainWriter<'a> {
-    pub fn new(dest: &'a mut String) -> Self {
-        PlainWriter { dest }
+    pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
+        PlainWriter { dest, options }
     }
 }
 

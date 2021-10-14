@@ -18,7 +18,7 @@ mod rtf;
 use self::rtf::RtfWriter;
 
 mod html;
-use self::html::{HtmlOptions, HtmlWriter};
+use self::html::HtmlWriter;
 
 mod plain;
 use self::plain::PlainWriter;
@@ -37,9 +37,30 @@ use crate::String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {
-    Html(HtmlOptions),
-    Rtf,
-    Plain,
+    Html(FormatOptions),
+    Rtf(FormatOptions),
+    Plain(FormatOptions),
+}
+
+/// Controls how the output is formatted.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct FormatOptions {
+    /// See CSL 1.1, Appendix VI -- enable or disable making urls clickable. Default is enabled.
+    pub link_anchors: bool,
+}
+
+impl Default for FormatOptions {
+    fn default() -> Self {
+        FormatOptions { link_anchors: true }
+    }
+}
+
+impl FormatOptions {
+    pub fn test_suite() -> Self {
+        FormatOptions {
+            link_anchors: false,
+        }
+    }
 }
 
 /// TODO: serialize and deserialize using an HTML parser?
@@ -67,22 +88,22 @@ pub enum InlineElement {
 
 impl Markup {
     pub fn html() -> Self {
-        Markup::Html(HtmlOptions::default())
+        Markup::Html(FormatOptions::default())
     }
     pub fn test_html() -> Self {
-        Markup::Html(HtmlOptions::test_suite())
+        Markup::Html(FormatOptions::test_suite())
     }
     pub fn rtf() -> Self {
-        Markup::Rtf
+        Markup::Rtf(FormatOptions::default())
     }
     pub fn plain() -> Self {
-        Markup::Plain
+        Markup::Plain(FormatOptions::default())
     }
 }
 
 impl Default for Markup {
     fn default() -> Self {
-        Markup::Html(HtmlOptions::default())
+        Markup::Html(FormatOptions::default())
     }
 }
 
@@ -103,8 +124,8 @@ impl OutputFormat for Markup {
     fn meta(&self) -> Self::BibMeta {
         let (pre, post) = match self {
             Markup::Html(_) => ("<div class=\"csl-bib-body\">", "</div>"),
-            Markup::Rtf => ("", ""),
-            Markup::Plain => ("", ""),
+            Markup::Rtf(_) => ("", ""),
+            Markup::Plain(_) => ("", ""),
         };
         MarkupBibMeta {
             markup_pre: pre.into(),
@@ -232,8 +253,8 @@ impl OutputFormat for Markup {
     fn stack_preorder(&self, dest: &mut String, stack: &[FormatCmd]) {
         match *self {
             Markup::Html(options) => HtmlWriter::new(dest, options).stack_preorder(stack),
-            Markup::Rtf => PlainWriter::new(dest).stack_preorder(stack),
-            Markup::Plain => PlainWriter::new(dest).stack_preorder(stack),
+            Markup::Rtf(options) => PlainWriter::new(dest, options).stack_preorder(stack),
+            Markup::Plain(options) => PlainWriter::new(dest, options).stack_preorder(stack),
         }
     }
 
@@ -241,8 +262,8 @@ impl OutputFormat for Markup {
     fn stack_postorder(&self, dest: &mut String, stack: &[FormatCmd]) {
         match *self {
             Markup::Html(options) => HtmlWriter::new(dest, options).stack_postorder(stack),
-            Markup::Rtf => PlainWriter::new(dest).stack_postorder(stack),
-            Markup::Plain => PlainWriter::new(dest).stack_postorder(stack),
+            Markup::Rtf(options) => PlainWriter::new(dest, options).stack_postorder(stack),
+            Markup::Plain(options) => PlainWriter::new(dest, options).stack_postorder(stack),
         }
     }
 
@@ -299,8 +320,12 @@ impl Markup {
             Markup::Html(options) => {
                 HtmlWriter::new(&mut dest, options).write_inlines(&flipped, false)
             }
-            Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped, false),
-            Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped, false),
+            Markup::Rtf(options) => {
+                RtfWriter::new(&mut dest, options).write_inlines(&flipped, false)
+            }
+            Markup::Plain(options) => {
+                PlainWriter::new(&mut dest, options).write_inlines(&flipped, false)
+            }
         }
         dest
     }

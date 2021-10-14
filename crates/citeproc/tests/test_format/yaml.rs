@@ -5,8 +5,9 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::humans::{CiteprocJsInstruction, CompatCitationItem};
-use super::{Format, Mode, TestCase};
+use super::{Mode, TestCase};
 use anyhow::Error;
+use citeproc::{FormatOptions, SupportedFormat};
 use citeproc_io::Reference;
 use serde::Deserialize;
 
@@ -19,15 +20,40 @@ pub fn parse_yaml_test(s: &str) -> Result<TestCase, Error> {
 #[serde(rename_all = "kebab-case")]
 pub struct YamlTestCase {
     pub mode: Mode,
-    #[serde(default)]
-    pub format: Format,
-    #[serde(default)]
-    pub csl_features: Option<csl::Features>,
+    #[serde(default, flatten)]
+    pub options: TestInitOptions,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
     pub clusters: Option<Vec<CompatCitationItem>>,
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
+}
+
+#[derive(Deserialize)]
+#[serde(remote = "FormatOptions", rename_all = "kebab-case")]
+struct KebabFormatOpts {
+    #[serde(default = "bool_true")]
+    link_anchors: bool,
+}
+
+fn bool_true() -> bool {
+    true
+}
+
+#[derive(Debug, Deserialize, PartialEq, Default, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct TestInitOptions {
+    #[serde(default)]
+    pub csl_features: Option<csl::Features>,
+    // Optional
+    #[serde(default)]
+    pub format: SupportedFormat,
+    #[serde(default, with = "KebabFormatOpts")]
+    pub format_options: FormatOptions,
+    /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
+    #[serde(default)]
+    pub locale_override: Option<csl::Lang>,
+    /// Disables sorting on the bibliography
     #[serde(default)]
     pub bibliography_no_sort: bool,
 }
@@ -36,9 +62,7 @@ impl From<YamlTestCase> for TestCase {
     fn from(yaml: YamlTestCase) -> Self {
         TestCase::new(
             yaml.mode,
-            yaml.format,
-            yaml.csl_features,
-            yaml.bibliography_no_sort,
+            yaml.options,
             yaml.csl,
             yaml.input,
             super::normalise_html(&yaml.result),

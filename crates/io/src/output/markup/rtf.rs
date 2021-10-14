@@ -4,9 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
-use super::MarkupWriter;
-use super::MaybeTrimStart;
+use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
@@ -15,11 +13,15 @@ use csl::Formatting;
 #[derive(Debug)]
 pub struct RtfWriter<'a> {
     dest: &'a mut String,
+    options: FormatOptions,
 }
 
 impl<'a> RtfWriter<'a> {
-    pub fn new(dest: &'a mut String) -> Self {
-        RtfWriter { dest }
+    pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
+        RtfWriter {
+            dest,
+            options,
+        }
     }
 }
 

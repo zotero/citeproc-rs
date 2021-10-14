@@ -4,7 +4,9 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::{Format, Mode, TestCase};
+use crate::test_format::yaml::TestInitOptions;
+
+use super::{Mode, TestCase};
 
 use citeproc::prelude::*;
 use citeproc::string_id::Cluster as ClusterStr;
@@ -415,10 +417,10 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
         match chunk {
             Chunk::Mode(m) => {
                 mode = mode.or_else(|| match m.as_str() {
-                    "citation" => Some((Mode::Citation, SupportedFormat::TestHtml, false)),
-                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::TestHtml, false)),
+                    "citation" => Some((Mode::Citation, SupportedFormat::Html, false)),
+                    "bibliography" => Some((Mode::Bibliography, SupportedFormat::Html, false)),
                     "bibliography-nosort" => {
-                        Some((Mode::Bibliography, SupportedFormat::TestHtml, true))
+                        Some((Mode::Bibliography, SupportedFormat::Html, true))
                     }
                     "citation-rtf" => Some((Mode::Citation, SupportedFormat::Rtf, false)),
                     "bibliography-rtf" => Some((Mode::Bibliography, SupportedFormat::Rtf, false)),
@@ -451,10 +453,16 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
 
     TestCase::new(
         mode.map(|(m, _, _)| m).unwrap_or(Mode::Citation),
-        mode.map(|(_, f, _)| Format(f))
-            .unwrap_or(Format(SupportedFormat::TestHtml)),
-        csl_features,
-        mode.map_or(false, |(_, _, nosort)| nosort),
+        TestInitOptions {
+            format: mode.map(|(_, f, _)| f).unwrap_or(SupportedFormat::Html),
+            format_options: FormatOptions {
+                // disable these for txt format tests
+                link_anchors: false,
+            },
+            csl_features,
+            bibliography_no_sort: mode.map_or(false, |(_, _, nosort)| nosort),
+            locale_override: None,
+        },
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
         result

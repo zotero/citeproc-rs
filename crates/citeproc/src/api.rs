@@ -66,10 +66,25 @@ impl<Id> Cluster<Markup, Id> {
     }
 }
 
-#[doc(hidden)] trait SkipIdField { fn skip(&self) -> bool; }
-impl SkipIdField for () { fn skip(&self) -> bool { true } }
-impl SkipIdField for ClusterId { fn skip(&self) -> bool { false } }
-impl SkipIdField for SmartString { fn skip(&self) -> bool { false } }
+#[doc(hidden)]
+trait SkipIdField {
+    fn skip(&self) -> bool;
+}
+impl SkipIdField for () {
+    fn skip(&self) -> bool {
+        true
+    }
+}
+impl SkipIdField for ClusterId {
+    fn skip(&self) -> bool {
+        false
+    }
+}
+impl SkipIdField for SmartString {
+    fn skip(&self) -> bool {
+        false
+    }
+}
 
 /// See [Special Citation Forms](https://citeproc-js.readthedocs.io/en/latest/running.html#special-citation-forms)
 ///
@@ -110,10 +125,7 @@ pub struct PreviewCluster {
 impl PreviewCluster {
     /// Makes a preview cluster, with no ID. Pass to [[crate::Processor::preview_citation_cluster]]
     pub fn new(cites: Vec<Cite<Markup>>, mode: Option<ClusterMode>) -> Self {
-        Self {
-            cites,
-            mode,
-        }
+        Self { cites, mode }
     }
 }
 
@@ -339,21 +351,28 @@ impl Default for IncludeUncited {
     }
 }
 
+#[doc(inline)]
+pub use citeproc_io::output::markup::FormatOptions;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SupportedFormat {
     Html,
     Rtf,
     Plain,
-    TestHtml,
+}
+
+impl Default for SupportedFormat {
+    fn default() -> Self {
+        Self::Html
+    }
 }
 
 impl SupportedFormat {
-    pub fn make_markup(&self) -> Markup {
+    pub(crate) fn make_markup(&self, options: FormatOptions) -> Markup {
         match self {
-            SupportedFormat::Html => Markup::html(),
-            SupportedFormat::Rtf => Markup::rtf(),
-            SupportedFormat::Plain => Markup::plain(),
-            SupportedFormat::TestHtml => Markup::test_html(),
+            SupportedFormat::Html => Markup::Html(options),
+            SupportedFormat::Rtf => Markup::Rtf(options),
+            SupportedFormat::Plain => Markup::Plain(options),
         }
     }
 }

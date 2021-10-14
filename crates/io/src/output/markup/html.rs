@@ -4,48 +4,21 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
-use super::MarkupWriter;
-use super::MaybeTrimStart;
+use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
+use core::fmt::{self, Write};
 use csl::Formatting;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct HtmlOptions {
-    // TODO: is it enough to have one set of localized quotes for the entire style?
-    // quotes: LocalizedQuotes,
-    use_b_for_strong: bool,
-    link_anchors: bool,
-}
-
-impl Default for HtmlOptions {
-    fn default() -> Self {
-        HtmlOptions {
-            use_b_for_strong: false,
-            link_anchors: true,
-        }
-    }
-}
-
-impl HtmlOptions {
-    pub fn test_suite() -> Self {
-        HtmlOptions {
-            use_b_for_strong: true,
-            link_anchors: false,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct HtmlWriter<'a> {
     dest: &'a mut String,
-    options: HtmlOptions,
+    options: FormatOptions,
 }
 
 impl<'a> HtmlWriter<'a> {
-    pub fn new(dest: &'a mut String, options: HtmlOptions) -> Self {
+    pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
         HtmlWriter { dest, options }
     }
 }
@@ -147,7 +120,7 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
 }
 
 impl FormatCmd {
-    fn html_tag(self, options: &HtmlOptions) -> (&'static str, &'static str) {
+    fn html_tag(self, options: &FormatOptions) -> (&'static str, &'static str) {
         match self {
             FormatCmd::DisplayBlock => ("div", r#" class="csl-block""#),
             FormatCmd::DisplayIndent => ("div", r#" class="csl-indent""#),
@@ -158,13 +131,7 @@ impl FormatCmd {
             FormatCmd::FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
             FormatCmd::FontStyleNormal => ("span", r#" style="font-style:normal;""#),
 
-            FormatCmd::FontWeightBold => {
-                if options.use_b_for_strong {
-                    ("b", "")
-                } else {
-                    ("strong", "")
-                }
-            }
+            FormatCmd::FontWeightBold => ("b", ""),
             FormatCmd::FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
             FormatCmd::FontWeightLight => ("span", r#" style="font-weight:light;""#),
 

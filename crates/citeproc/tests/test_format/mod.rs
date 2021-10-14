@@ -23,7 +23,8 @@ pub mod humans;
 // pub mod toml;
 pub mod yaml;
 
-use humans::{CiteprocJsInstruction, JsExecutor, Results};
+use self::humans::{CiteprocJsInstruction, JsExecutor, Results};
+use self::yaml::TestInitOptions;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -50,19 +51,9 @@ impl<'de> Deserialize<'de> for Mode {
     }
 }
 
-#[derive(Deserialize, Copy, Clone, Debug, PartialEq)]
-pub struct Format(SupportedFormat);
-impl Default for Format {
-    fn default() -> Self {
-        Format(SupportedFormat::TestHtml)
-    }
-}
-
 pub struct TestCase {
     pub mode: Mode,
-    pub format: Format,
-    pub csl_features: Option<csl::Features>,
-    pub bibliography_no_sort: bool,
+    pub init: TestInitOptions,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -78,9 +69,12 @@ impl Clone for TestCase {
             Processor::new(InitOptions {
                 style: &self.csl,
                 fetcher: Some(fet),
-                format: self.format.0,
                 test_mode: true,
-                bibliography_no_sort: self.bibliography_no_sort,
+                format: self.init.format,
+                format_options: self.init.format_options,
+                bibliography_no_sort: self.init.bibliography_no_sort,
+                csl_features: self.init.csl_features.clone(),
+                locale_override: None,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -90,9 +84,7 @@ impl Clone for TestCase {
         TestCase {
             processor,
             mode: self.mode.clone(),
-            csl_features: self.csl_features.clone(),
-            format: self.format.clone(),
-            bibliography_no_sort: self.bibliography_no_sort,
+            init: self.init.clone(),
             csl: self.csl.clone(),
             input: self.input.clone(),
             result: self.result.clone(),
@@ -105,9 +97,7 @@ impl Clone for TestCase {
 impl TestCase {
     pub fn new(
         mode: Mode,
-        format: Format,
-        csl_features: Option<csl::Features>,
-        bibliography_no_sort: bool,
+        init: TestInitOptions,
         csl: String,
         input: Vec<Reference>,
         result: String,
@@ -119,10 +109,12 @@ impl TestCase {
             Processor::new(InitOptions {
                 style: &csl,
                 fetcher: Some(fet),
-                csl_features: csl_features.clone(),
-                format: format.0,
                 test_mode: true,
-                bibliography_no_sort,
+                format: init.format,
+                format_options: init.format_options,
+                csl_features: init.csl_features.clone(),
+                bibliography_no_sort: init.bibliography_no_sort,
+                locale_override: None,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -140,10 +132,8 @@ impl TestCase {
         Warmup::maximum().execute(&mut processor);
         TestCase {
             mode,
-            format,
-            bibliography_no_sort,
+            init,
             csl,
-            csl_features,
             input,
             result,
             clusters,
