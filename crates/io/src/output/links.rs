@@ -37,7 +37,7 @@ macro_rules! linkid {
         }
     };
 }
-linkid!(pub Doi, "doi:", "DOI:", "http://doi.org/", "http://doi.org/");
+linkid!(pub Doi, "doi:", "DOI:", "http://doi.org/", "https://doi.org/");
 linkid!(
     pub Pmcid,
     "pmid:",

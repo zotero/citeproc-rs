@@ -429,7 +429,7 @@ pub trait MarkupWriter {
                     self.write_raw(a_href);
                     self.write_url("/", url, true);
                     self.write_raw(href_close);
-                    self.write_escaped(id);
+                    self.write_url("/", url, true);
                     self.write_raw(a_close);
                 } else {
                     self.write_escaped(id);

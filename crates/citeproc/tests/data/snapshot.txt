@@ -69,3 +69,6 @@ label_CollapsedPageNumberPluralDetection.txt
 # In order to preserve consistency with "composite = author-only + suppress-author",
 # citeproc-rs decides that dates are not eligible for extraction/suppression.
 discretionary_AuthorOnly.txt
+
+# citeproc-rs does better, the duplicate doi url prefix is avoided
+textcase_RepeatedTitleBug.txt
