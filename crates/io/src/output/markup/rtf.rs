@@ -25,7 +25,7 @@ impl<'a> RtfWriter<'a> {
 
 impl<'a> MarkupWriter for RtfWriter<'a> {
     fn write_escaped(&mut self, text: &str) {
-        rtf_escape_into(text, self.dest);
+        write!(self.dest, "{}", rtf_escape(text)).unwrap()
     }
 
     fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
@@ -34,8 +34,8 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
             url_verbatim,
             url,
             in_attr,
-            |b, s| write!(b, "{}", rtf_escape_url(s)),
-            |b, s| Ok(rtf_escape_into(s, b)),
+            |b, s| write!(b, "{}", rtf_escape_url_in_attr(s)),
+            |b, s| write!(b, "{}", rtf_escape(s)),
         )
         .unwrap();
     }
@@ -93,7 +93,8 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
         use super::InlineElement::*;
         match inline {
             Text(text) => {
-                rtf_escape_into(text.trim_start_if(trim_start), self.dest);
+                let trimmed = text.trim_start_if(trim_start);
+                write!(self.dest, "{}", rtf_escape(trimmed)).unwrap()
             }
             Div(display, inlines) => {
                 self.stack_formats(inlines, Formatting::default(), Some(*display))
@@ -158,49 +159,61 @@ impl FormatCmd {
     }
 }
 
-fn rtf_escape_into(s: &str, buf: &mut String) {
-    let mut utf16_buffer = [0; 2];
-    for c in s.chars() {
-        match c {
-            '\\' | '{' | '}' => {
-                buf.push('\\');
-                buf.push(c);
-            }
-            '\t' => buf.push_str("\\tab "),
-            '\n' => buf.push_str("\\line "),
-            '\x20'..='\x7e' => buf.push(c),
-            _unicode => {
-                let slice = c.encode_utf16(&mut utf16_buffer);
-                for &u16c in slice.iter() {
-                    // The spec says 'most control words' accept signed 16-bit, but Word and
-                    // TextEdit both produce unsigned 16-bit, and even convert signed to unsigned
-                    // when saving. So we'll do that here. (citeproc-js does this too.)
-                    //
-                    // Terminates the \uN keyword with a space, where citeproc-js uses \uN{}
-                    let _result = write!(buf, "\\uc0\\u{} ", u16c);
-                }
-            }
-        }
-    }
-}
-
-use nom::{bytes::complete as nbc, IResult, Parser};
+use nom::{bytes::complete as nbc, character::complete::anychar, IResult, Parser};
 
 enum Encodable<'a> {
     Chunk(&'a str),
     Esc(&'static str),
+    Unicode(char),
 }
 
 /// Try to gobble up as many non-escaping characters as possible.
 fn scan_encodable<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
-    nbc::take_till1(|x| matches!(x, '<' | '>' | '&' | '"' | '\''))
-        .map(Encodable::Chunk)
-        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
-        .or(nbc::tag(">").map(|_| Encodable::Esc("&gt;")))
-        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
-        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
-        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
-        .parse(remain)
+    nbc::take_till1(|x| match x {
+        '\\' | '{' | '}' | '\n' | '\t' => true,
+        '\x20'..='\x7e' => false,
+        _ => true,
+    })
+    .map(Encodable::Chunk)
+    .or(nbc::tag("\\").map(|_| Encodable::Esc("\\\\")))
+    .or(nbc::tag("{").map(|_| Encodable::Esc("\\{")))
+    .or(nbc::tag("}").map(|_| Encodable::Esc("\\}")))
+    .or(nbc::tag("\t").map(|_| Encodable::Esc("\\tab ")))
+    .or(nbc::tag("\n").map(|_| Encodable::Esc("\\line ")))
+    .or(anychar.map(Encodable::Unicode))
+    .parse(remain)
+}
+
+struct RtfEscaper<'a>(&'a str);
+
+impl fmt::Display for RtfEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut utf16_buffer = [0; 2];
+        let mut remain = self.0;
+        while let Ok((rest, chunk)) = scan_encodable(remain) {
+            remain = rest;
+            match chunk {
+                Encodable::Chunk(s) => f.write_str(s)?,
+                Encodable::Esc(s) => f.write_str(s)?,
+                Encodable::Unicode(c) => {
+                    let slice = c.encode_utf16(&mut utf16_buffer);
+                    for &u16c in slice.iter() {
+                        // The spec says 'most control words' accept signed 16-bit, but Word and
+                        // TextEdit both produce unsigned 16-bit, and even convert signed to unsigned
+                        // when saving. So we'll do that here. (citeproc-js does this too.)
+                        //
+                        // Terminates the \uN keyword with a space, where citeproc-js uses \uN{}
+                        write!(f, "\\uc0\\u{} ", u16c)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn rtf_escape(s: &str) -> RtfEscaper {
+    RtfEscaper(s)
 }
 
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS, NON_ALPHANUMERIC};
@@ -233,7 +246,7 @@ impl fmt::Display for RtfUrlEscaper<'_> {
     }
 }
 
-fn rtf_escape_url(s: &str) -> RtfUrlEscaper {
+fn rtf_escape_url_in_attr(s: &str) -> RtfUrlEscaper {
     RtfUrlEscaper(s)
 }
 
@@ -243,7 +256,7 @@ mod test {
 
     fn rtf_escape(s: &str) -> String {
         let mut buf = String::new();
-        rtf_escape_into(s, &mut buf);
+        write!(&mut buf, "{}", super::rtf_escape(s)).unwrap();
         buf
     }
 
