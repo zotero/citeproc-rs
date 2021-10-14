@@ -27,6 +27,19 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
     fn write_escaped(&mut self, text: &str) {
         self.dest.push_str(text);
     }
+
+    fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
+        super::write_url(
+            self.dest,
+            url_verbatim,
+            url,
+            in_attr,
+            |b, s| Ok(b.push_str(s)),
+            |b, s| Ok(b.push_str(s)),
+        )
+        .unwrap()
+    }
+
     fn stack_preorder(&mut self, _stack: &[FormatCmd]) {}
 
     fn stack_postorder(&mut self, _stack: &[FormatCmd]) {}

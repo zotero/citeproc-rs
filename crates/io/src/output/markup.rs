@@ -13,6 +13,7 @@ use csl::{
     DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextCase, TextDecoration,
     VerticalAlignment,
 };
+use url::Url;
 
 mod rtf;
 use self::rtf::RtfWriter;
@@ -333,6 +334,9 @@ impl Markup {
 
 pub trait MarkupWriter {
     fn write_escaped(&mut self, text: &str);
+    /// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
+    /// if not desired).
+    fn write_url(&mut self, url_verbatim: &str, url: &Url, in_attr: bool);
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
 
@@ -421,4 +425,42 @@ impl MaybeTrimStart for str {
             self
         }
     }
+}
+
+use core::fmt::{self, Write};
+
+thread_local! {
+    static ESC_BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+/// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
+/// if not desired).
+fn write_url(
+    f: &mut String,
+    url_verbatim: &str,
+    url: &Url,
+    in_attr: bool,
+    escape_in_attribute: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
+    escape: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
+) -> fmt::Result {
+    ESC_BUF.with(|tls_buf| {
+        let mut tls_buf = tls_buf.borrow_mut();
+        tls_buf.clear();
+        write!(tls_buf, "{}", url)?;
+        if in_attr {
+            escape_in_attribute(f, &tls_buf)?;
+        } else {
+            // outside the href, be faithful to the user's intention re any
+            // trailing slash or absence thereof.
+            // normally, Url will write a trailing slash for "special" https://
+            // etc schemes, in line with WHATWG URL.
+            if url.has_host() && matches!(url.scheme(), "https" | "http") {
+                if !url_verbatim.ends_with('/') && tls_buf.ends_with('/') {
+                    tls_buf.pop();
+                }
+            }
+            escape(f, &tls_buf)?;
+        }
+        Ok(())
+    })
 }

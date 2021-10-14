@@ -114,12 +114,12 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                     Ok(url) if allow_url_scheme(url.scheme()) => {
                         if self.options.link_anchors {
                             self.dest.push_str(r#"<a href=""#);
-                            write_url(self.dest, url_verbatim, &url, true).unwrap();
+                            self.write_url(url_verbatim, &url, true);
                             self.dest.push_str(r#"">"#);
                             self.write_inlines(content, false);
                             self.dest.push_str("</a>");
                         } else {
-                            write_url(self.dest, url_verbatim, &url, false).unwrap();
+                            self.write_url(url_verbatim, &url, false);
                         }
                         return;
                     }
@@ -138,34 +138,20 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
             }
         }
     }
+
+    fn write_url(&mut self, url_verbatim: &str, url: &Url, in_attr: bool) {
+        super::write_url(
+            self.dest,
+            url_verbatim,
+            url,
+            in_attr,
+            |b, s| write!(b, "{}", escape_html_attribute(s)),
+            |b, s| write!(b, "{}", escape_html(s)),
+        )
+        .unwrap()
+    }
 }
 
-thread_local! {
-    static ESC_BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
-}
-
-fn write_url(f: &mut impl fmt::Write, url_verbatim: &str, url: &Url, in_attr: bool) -> fmt::Result {
-    ESC_BUF.with(|buf| {
-        let mut buf = buf.borrow_mut();
-        buf.clear();
-        write!(buf, "{}", url)?;
-        if in_attr {
-            write!(f, "{}", escape_html_attribute(&buf))?;
-        } else {
-            // outside the href, be faithful to the user's intention re any
-            // trailing slash or absence thereof.
-            // normally, Url will write a trailing slash for "special" https://
-            // etc schemes, in line with WHATWG URL.
-            if url.has_host() && matches!(url.scheme(), "https" | "http") {
-                if !url_verbatim.ends_with('/') && buf.ends_with('/') {
-                    buf.pop();
-                }
-            }
-            write!(f, "{}", escape_html(&buf))?;
-        }
-        Ok(())
-    })
-}
 fn allow_url_scheme(scheme: &str) -> bool {
     // see https://security.stackexchange.com/questions/148428/which-url-schemes-are-dangerous-xss-exploitable
     // list from wordpress https://developer.wordpress.org/reference/functions/wp_allowed_protocols/
@@ -255,11 +241,11 @@ impl fmt::Display for HtmlEscaper<'_> {
     }
 }
 
-struct AttrEscaper<'a> {
+struct HtmlAttrEscaper<'a> {
     attr_inner: &'a str,
 }
 
-impl fmt::Display for AttrEscaper<'_> {
+impl fmt::Display for HtmlAttrEscaper<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut remain = self.attr_inner;
         while let Ok((rest, chunk)) = scan_encodable_attr(remain) {
@@ -273,10 +259,10 @@ impl fmt::Display for AttrEscaper<'_> {
     }
 }
 
-fn escape_html_attribute<'a>(attr_inner: &'a str) -> impl fmt::Display + 'a {
-    AttrEscaper { attr_inner }
+fn escape_html_attribute(attr_inner: &str) -> HtmlAttrEscaper {
+    HtmlAttrEscaper { attr_inner }
 }
 
-fn escape_html<'a>(text: &'a str) -> impl fmt::Display + 'a {
+fn escape_html(text: &str) -> HtmlEscaper {
     HtmlEscaper { text }
 }

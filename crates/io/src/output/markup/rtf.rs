@@ -29,6 +29,10 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
     fn write_escaped(&mut self, text: &str) {
         rtf_escape_into(text, self.dest);
     }
+
+    fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
+        todo!()
+    }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
             let tag = cmd.rtf_tag();
