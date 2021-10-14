@@ -143,8 +143,9 @@ impl TestCase {
     }
     pub fn execute(&mut self) -> Option<String> {
         let mut res = String::new();
+        self.result = normalise_html(&self.result, &self.init);
         if let Some(ref instructions) = &self.process_citation_clusters {
-            if self.mode == Mode::Citation {
+            if self.mode == Mode::Citation && self.init.normalise {
                 self.result.push_str("\n");
             }
             let mut executor = JsExecutor::new(&mut self.processor);
@@ -154,10 +155,10 @@ impl TestCase {
             match self.mode {
                 Mode::Citation => {
                     let desired = Results::from_str(&self.result).unwrap();
-                    self.result = desired.output_independent();
-                    Some(actual.output_independent())
+                    self.result = desired.output_independent(&self.init);
+                    Some(actual.output_independent(&self.init))
                 }
-                Mode::Bibliography => Some(get_bib_string(&self.processor)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor, &self.init)),
             }
         // turns out it's easier to just produce the string the same way
         } else {
@@ -204,15 +205,15 @@ impl TestCase {
                     // Because citeproc-rs is a bit keen to escape things
                     // Slashes are fine if they're not next to angle braces
                     // let's hope they're not
-                    Some(normalise_html(&res))
+                    Some(normalise_html(&res, &self.init))
                 }
-                Mode::Bibliography => Some(get_bib_string(&self.processor)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor, &self.init)),
             }
         }
     }
 }
 
-fn get_bib_string(proc: &Processor) -> String {
+fn get_bib_string(proc: &Processor, options: &TestInitOptions) -> String {
     let bib = proc.get_bibliography();
     let fmt = &proc.formatter;
     let mut string = String::new();
@@ -231,7 +232,7 @@ fn get_bib_string(proc: &Processor) -> String {
         }
     }
     string.push_str("\n</div>\n");
-    normalise_html(&string)
+    normalise_html(&string, options)
 }
 
 struct Filesystem {
@@ -308,7 +309,10 @@ macro_rules! regex {
     }};
 }
 
-pub fn normalise_html(strg: &str) -> String {
+pub fn normalise_html(strg: &str, options: &TestInitOptions) -> String {
+    if !options.normalise {
+        return strg.to_string();
+    }
     let rep = strg
         .replace("&#x2f;", "/")
         .replace("&#x27;", "'")

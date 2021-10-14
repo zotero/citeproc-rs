@@ -29,15 +29,15 @@ pub struct YamlTestCase {
     pub process_citation_clusters: Option<Vec<CiteprocJsInstruction>>,
 }
 
+fn bool_true() -> bool {
+    true
+}
+
 #[derive(Deserialize)]
 #[serde(remote = "FormatOptions", rename_all = "kebab-case")]
 struct KebabFormatOpts {
     #[serde(default = "bool_true")]
     link_anchors: bool,
-}
-
-fn bool_true() -> bool {
-    true
 }
 
 #[derive(Debug, Deserialize, PartialEq, Default, Clone)]
@@ -56,6 +56,10 @@ pub struct TestInitOptions {
     /// Disables sorting on the bibliography
     #[serde(default)]
     pub bibliography_no_sort: bool,
+
+    // not in InitOptions, only for tests
+    #[serde(default = "bool_true")]
+    pub normalise: bool,
 }
 
 impl From<YamlTestCase> for TestCase {
@@ -65,7 +69,7 @@ impl From<YamlTestCase> for TestCase {
             yaml.options,
             yaml.csl,
             yaml.input,
-            super::normalise_html(&yaml.result),
+            yaml.result,
             yaml.clusters.map(|cls| {
                 cls.into_iter()
                     .enumerate()

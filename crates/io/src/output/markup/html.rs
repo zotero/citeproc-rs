@@ -8,8 +8,9 @@ use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
-use core::fmt::{self, Write};
+use core::fmt::{self, Display, Write};
 use csl::Formatting;
+use url::Url;
 
 #[derive(Debug)]
 pub struct HtmlWriter<'a> {
@@ -25,7 +26,7 @@ impl<'a> HtmlWriter<'a> {
 
 impl<'a> MarkupWriter for HtmlWriter<'a> {
     fn write_escaped(&mut self, text: &str) {
-        write!(self.dest, "{}", v_htmlescape::escape(text)).unwrap();
+        write!(self.dest, "{}", escape_html(text)).unwrap();
     }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
@@ -104,23 +105,79 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { url, content, .. } => {
-                if self.options.link_anchors {
-                    self.dest.push_str(r#"<a href=""#);
-                    escape_attribute(self.dest, url.trim()).unwrap();
-                    self.dest.push_str(r#"">"#);
-                    self.write_inlines(content, false);
-                    self.dest.push_str("</a>");
-                } else {
-                    self.dest.push_str(&url.trim());
+            Anchor {
+                url: url_verbatim,
+                content,
+                ..
+            } => {
+                match Url::parse(url_verbatim) {
+                    Ok(url) if allow_url_scheme(url.scheme()) => {
+                        if self.options.link_anchors {
+                            self.dest.push_str(r#"<a href=""#);
+                            write_url(self.dest, url_verbatim, &url, true).unwrap();
+                            self.dest.push_str(r#"">"#);
+                            self.write_inlines(content, false);
+                            self.dest.push_str("</a>");
+                        } else {
+                            write_url(self.dest, url_verbatim, &url, false).unwrap();
+                        }
+                        return;
+                    }
+                    Ok(url) => {
+                        warn!(
+                            "refusing to render url anchor for scheme {} on url {}",
+                            url.scheme(),
+                            url
+                        );
+                    }
+                    Err(e) => {
+                        warn!("invalid url due to {}: {}", e, url_verbatim);
+                    }
                 }
+                write!(self.dest, "{}", escape_html(url_verbatim)).unwrap();
             }
         }
     }
 }
 
+thread_local! {
+    static ESC_BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+fn write_url(f: &mut impl fmt::Write, url_verbatim: &str, url: &Url, in_attr: bool) -> fmt::Result {
+    ESC_BUF.with(|buf| {
+        let mut buf = buf.borrow_mut();
+        buf.clear();
+        write!(buf, "{}", url)?;
+        if in_attr {
+            write!(f, "{}", escape_html_attribute(&buf))?;
+        } else {
+            // outside the href, be faithful to the user's intention re any
+            // trailing slash or absence thereof.
+            // normally, Url will write a trailing slash for "special" https://
+            // etc schemes, in line with WHATWG URL.
+            if url.has_host() && matches!(url.scheme(), "https" | "http") {
+                if !url_verbatim.ends_with('/') && buf.ends_with('/') {
+                    buf.pop();
+                }
+            }
+            write!(f, "{}", escape_html(&buf))?;
+        }
+        Ok(())
+    })
+}
+fn allow_url_scheme(scheme: &str) -> bool {
+    // see https://security.stackexchange.com/questions/148428/which-url-schemes-are-dangerous-xss-exploitable
+    // list from wordpress https://developer.wordpress.org/reference/functions/wp_allowed_protocols/
+    [
+        "https", "http", "ftp", "ftps", "mailto", "news", "irc", "irc6", "ircs", "gopher", "nntp",
+        "feed", "telnet", "mms", "rtsp", "sms", "svn", "tel", "fax", "xmpp", "webcal", "urn",
+    ]
+    .contains(&scheme)
+}
+
 impl FormatCmd {
-    fn html_tag(self, options: &FormatOptions) -> (&'static str, &'static str) {
+    fn html_tag(self, _options: &FormatOptions) -> (&'static str, &'static str) {
         match self {
             FormatCmd::DisplayBlock => ("div", r#" class="csl-block""#),
             FormatCmd::DisplayIndent => ("div", r#" class="csl-indent""#),
@@ -160,25 +217,66 @@ enum Encodable<'a> {
 }
 
 /// Try to gobble up as many non-escaping characters as possible.
-///
-/// Works for attributes surrounded by double quotes, not single.
-fn scan_encodable_a<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
-    nbc::take_till1(|x| matches!(x, '<' | '&' | '"'))
+fn scan_encodable_attr<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '"' | '\''))
         .map(Encodable::Chunk)
-        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
-        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
         .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
         .parse(remain)
 }
 
-fn escape_attribute<F: fmt::Write>(f: &mut F, attr_inner: &str) -> fmt::Result {
-    let mut remain = attr_inner;
-    while let Ok((rest, chunk)) = scan_encodable_a(remain) {
-        remain = rest;
-        match chunk {
-            Encodable::Chunk(s) => f.write_str(s)?,
-            Encodable::Esc(s) => f.write_str(s)?,
+/// Try to gobble up as many non-escaping characters as possible.
+fn scan_encodable<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '<' | '>' | '&' | '"' | '\''))
+        .map(Encodable::Chunk)
+        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
+        .or(nbc::tag(">").map(|_| Encodable::Esc("&gt;")))
+        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
+        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
+        .parse(remain)
+}
+
+struct HtmlEscaper<'a> {
+    text: &'a str,
+}
+
+impl fmt::Display for HtmlEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut remain = self.text;
+        while let Ok((rest, chunk)) = scan_encodable(remain) {
+            remain = rest;
+            match chunk {
+                Encodable::Chunk(s) => f.write_str(s)?,
+                Encodable::Esc(s) => f.write_str(s)?,
+            }
         }
+        Ok(())
     }
-    Ok(())
+}
+
+struct AttrEscaper<'a> {
+    attr_inner: &'a str,
+}
+
+impl fmt::Display for AttrEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut remain = self.attr_inner;
+        while let Ok((rest, chunk)) = scan_encodable_attr(remain) {
+            remain = rest;
+            match chunk {
+                Encodable::Chunk(s) => f.write_str(s)?,
+                Encodable::Esc(s) => f.write_str(s)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+fn escape_html_attribute<'a>(attr_inner: &'a str) -> impl fmt::Display + 'a {
+    AttrEscaper { attr_inner }
+}
+
+fn escape_html<'a>(text: &'a str) -> impl fmt::Display + 'a {
+    HtmlEscaper { text }
 }

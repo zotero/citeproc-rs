@@ -14,6 +14,7 @@ use citeproc_io::{
     cite_compat_vec, output::markup::Markup, Cite, ClusterMode, Reference, SmartString,
 };
 
+use core::fmt::Write;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Deserializer};
 use std::mem;
@@ -66,7 +67,7 @@ pub struct CiteResult {
 pub struct Results(pub Vec<CiteResult>);
 
 impl Results {
-    pub fn output_independent(&self) -> String {
+    pub fn output_independent(&self, options: &TestInitOptions) -> String {
         let mut output = String::new();
         for (n, res) in self.0.iter().enumerate() {
             // Whether or not something is recomputed is not part of the CSL spec. We will simply
@@ -77,9 +78,9 @@ impl Results {
             //     ".."
             // });
             output.push_str("[");
-            output.push_str(&format!("{}", n));
+            write!(&mut output, "{}", n).unwrap();
             output.push_str("] ");
-            output.push_str(&res.text);
+            output.push_str(&super::normalise_html(&res.text, options));
             output.push_str("\n");
         }
         output
@@ -120,7 +121,7 @@ impl FromStr for Results {
                 // incorrect, but we don't actually know except by looking at the instructions what
                 // the right note number is
                 note: ClusterNumber::Note(IntraNote::Single(n)),
-                text: super::normalise_html(&f),
+                text: f.to_string(),
             })(inp)
         }
         fn whole_thing(inp: &str) -> IResult<&str, Vec<CiteResult>> {
@@ -230,7 +231,7 @@ impl JsExecutor<'_> {
                 kind: ResultKind::Arrows,
                 // id,
                 note,
-                text: super::normalise_html(&text),
+                text: text.to_string(),
             })
         }
         // for &id in self.current_note_numbers.keys() {
@@ -451,23 +452,28 @@ pub fn parse_human_test(contents: &str, csl_features: Option<csl::Features>) -> 
         }
     }
 
+    let options = TestInitOptions {
+        format: mode.map(|(_, f, _)| f).unwrap_or(SupportedFormat::Html),
+        format_options: FormatOptions {
+            // disable these for txt format tests
+            link_anchors: false,
+        },
+        csl_features,
+        bibliography_no_sort: mode.map_or(false, |(_, _, nosort)| nosort),
+        locale_override: None,
+        normalise: true,
+    };
+
+    let norm_result = result
+        .map(|x| super::normalise_html(&x, &options))
+        .expect("test case without a RESULT section");
+
     TestCase::new(
         mode.map(|(m, _, _)| m).unwrap_or(Mode::Citation),
-        TestInitOptions {
-            format: mode.map(|(_, f, _)| f).unwrap_or(SupportedFormat::Html),
-            format_options: FormatOptions {
-                // disable these for txt format tests
-                link_anchors: false,
-            },
-            csl_features,
-            bibliography_no_sort: mode.map_or(false, |(_, _, nosort)| nosort),
-            locale_override: None,
-        },
+        options,
         csl.expect("test case without a CSL section"),
         input.expect("test case without an INPUT section"),
-        result
-            .map(|x| super::normalise_html(&x))
-            .expect("test case without a RESULT section"),
+        norm_result,
         citation_items.map(|items: Vec<CompatCitationItem>| {
             items
                 .into_iter()

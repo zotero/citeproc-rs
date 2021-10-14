@@ -1,12 +1,15 @@
-# See issue #123
+# https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html, rule #2
+# Never render a url beginning with `javascript:` as an `<a href="...">`.
 mode: citation
+format-options:
+  link-anchors: true
 normalise: false
-result: <a href="https://example.com/?%22">https://example.com/?&quot;</a>
+result: 'javascript:alert(&quot;pwned&quot;)'
 
 input:
   - id: ITEM-1
     type: book
-    url: 'https://example.com/?"'
+    url: 'javascript:alert("pwned")'
 
 csl: |
   <?xml version="1.0" encoding="utf-8"?>
