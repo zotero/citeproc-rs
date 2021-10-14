@@ -5,8 +5,8 @@ normalise: false
 # if it's in an attribute at all, parse as a proper URL and simply use URL
 # %-encoding.
 #
-# #notice, however, that inside the anchor, we escape as normal html.
-result: <a href="https://example.com/?%22%3C&">https://example.com/?&quot;&lt;&amp;</a>
+# notice, however, that inside the <a> tag, we escape & as normal html.
+result: <a href="https://example.com/?%22%3C&">https://example.com/?%22%3C&amp;</a>
 
 input:
   - id: ITEM-1

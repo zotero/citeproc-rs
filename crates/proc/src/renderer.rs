@@ -328,14 +328,27 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         hyper: Option<Variable>,
     ) -> O::Build {
         let fmt = self.fmt();
-        let mut b = fmt.ingest(string, &options);
+        let mut b = self.try_link(string, text, options, hyper);
         b = fmt.with_format(b, text.formatting);
-        if let Some(hyper) = hyper {
-            let maybe_link = hyper.hyperlink(string);
-            b = fmt.hyperlinked(b, maybe_link)
-        }
         b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes_if(text.quotes));
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
+    }
+
+    fn try_link(
+        &self,
+        string: &str,
+        text: &TextElement,
+        options: &IngestOptions,
+        hyper: Option<Variable>,
+    ) -> O::Build {
+        let fmt = self.fmt();
+        match hyper {
+            Some(Variable::URL) => fmt.try_link_full(string, options),
+            Some(var @ (Variable::DOI | Variable::PMCID | Variable::PMID)) => {
+                fmt.try_link_id(var, string, options)
+            }
+            _ => fmt.ingest(string, options),
+        }
     }
 
     pub fn name_label(

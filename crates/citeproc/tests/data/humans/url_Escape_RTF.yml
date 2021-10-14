@@ -2,8 +2,10 @@
 mode: citation
 normalise: false
 format: rtf
+# result: >-
+#   {\field{\*\fldinst{HYPERLINK "https://google.com/?%E2%80%9D%C3%97%7B%7D%5C%7B%5Chello%7D"}}{\fldrslt https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\{\\hello\}}}
 result: >-
-  {\field{\*\fldinst{HYPERLINK "https://google.com/?%E2%80%9D%C3%97%7B%7D%5C%7B%5Chello%7D"}}{\fldrslt https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\{\\hello\}}}
+  {\field{\*\fldinst{HYPERLINK "https://google.com/?%E2%80%9D%C3%97%7B%7D%5C%7B%5Chello%7D"}}{\fldrslt https://google.com/?%E2%80%9D%C3%97\{\}\\\{\\hello\}}}
 
 input:
   - id: a

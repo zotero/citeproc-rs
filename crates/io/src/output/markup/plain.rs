@@ -5,6 +5,7 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
+use crate::output::markup::Link;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
@@ -101,9 +102,26 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { content, .. } => {
+            Anchor {
+                url: _, content, ..
+            } => {
                 self.write_inlines(content, trim_start);
             }
+            Linked(link) => {
+                self.write_link("", link, "", "", self.options);
+            }
+        }
+    }
+    fn write_link(&mut self, _: &str, link: &Link, _: &str, _: &str, _: FormatOptions) {
+        match link {
+            Link::Url {
+                url,
+                trailing_slash,
+            } => {
+                let verb = if *trailing_slash { "/" } else { "blah" };
+                self.write_url(verb, url, false);
+            }
+            Link::Id { id, url: _ } => self.write_escaped(id),
         }
     }
 }

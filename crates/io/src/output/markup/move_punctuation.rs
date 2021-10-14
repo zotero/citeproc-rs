@@ -950,7 +950,7 @@ pub fn ends_with_full_stop(els: &[InlineElement], top: bool) -> bool {
         InlineElement::Formatted(inlines, _) | InlineElement::Quoted { inlines, .. } => {
             ends_with_full_stop(inlines, false)
         }
-        InlineElement::Anchor { .. } | InlineElement::Div(..) => true,
+        InlineElement::Anchor { .. } | InlineElement::Div(..) | InlineElement::Linked(_) => true,
 
         InlineElement::Micro(micros) => {
             return micro_ends_fs(micros, top);

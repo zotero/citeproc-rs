@@ -287,6 +287,8 @@ impl Variable {
         match self {
             Variable::URL => Some(value),
             Variable::DOI => Some(value),
+            Variable::PMCID => Some(value),
+            Variable::PMID => Some(value),
             _ => None,
         }
     }

@@ -5,8 +5,8 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
-use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
+use crate::output::{markup::Link, micro_html::MicroNode};
 use crate::String;
 use core::fmt::{self, Display, Write};
 use csl::Formatting;
@@ -111,6 +111,7 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
             Anchor { url, content, .. } => {
                 self.write_anchor(r#"<a href=""#, url, r#"">"#, content, "</a>", self.options)
             }
+            Linked(link) => self.write_link(r#"<a href=""#, link, r#"">"#, "</a>", self.options),
         }
     }
 

@@ -79,6 +79,7 @@ pub enum InlineElement {
         inlines: Vec<InlineElement>,
     },
     Text(String),
+    Linked(Link),
     Anchor {
         title: String,
         url: String,
@@ -86,6 +87,19 @@ pub enum InlineElement {
     },
     Div(DisplayMode, Vec<InlineElement>),
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub enum Link {
+    /// handles a full valid url only
+    Url { url: Url, trailing_slash: bool },
+    /// e.g. a DOI that only puts the full url in a link.
+    /// The url is an optional addition, if we are rendering anchors.
+    Id { url: Url, id: String },
+    // TODO: allow internal linking (e.g. first-reference-note-number)
+    // Href(String),
+}
+
+impl InlineElement {}
 
 impl Markup {
     pub fn html() -> Self {
@@ -215,8 +229,6 @@ impl OutputFormat for Markup {
 
     #[inline]
     fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build {
-        // TODO: allow internal linking using the Attr parameter (e.g.
-        // first-reference-note-number)
         if let Some(target) = target {
             vec![InlineElement::Anchor {
                 title: "".into(),
@@ -226,6 +238,41 @@ impl OutputFormat for Markup {
         } else {
             a
         }
+    }
+
+    #[inline]
+    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build {
+        let parsed = Url::parse(full_url);
+        if let Err(e) = &parsed {
+            warn!("invalid url due to {}: {}", e, full_url);
+        }
+        parsed
+            .map(|url| {
+                InlineElement::Linked(Link::Url {
+                    url,
+                    trailing_slash: full_url.ends_with("/"),
+                })
+            })
+            .map(|x| vec![x])
+            .unwrap_or_else(|_e| self.ingest(full_url, options))
+    }
+
+    #[inline]
+    fn try_link_id(&self, var: csl::Variable, id: &str, options: &IngestOptions) -> Self::Build {
+        use super::links::*;
+        match var {
+            csl::Variable::DOI => Doi::parse(id),
+            csl::Variable::PMCID => Pmcid::parse(id),
+            csl::Variable::PMID => Pmid::parse(id),
+            csl::Variable::URL => Url::parse(id)
+                .map(|url| Link::Url {
+                    url,
+                    trailing_slash: id.ends_with("/"),
+                })
+                .map(|link| vec![InlineElement::Linked(link)]),
+            _ => Ok(self.ingest(id, options)),
+        }
+        .unwrap_or_else(|_e| self.ingest(id, options))
     }
 
     #[inline]
@@ -340,6 +387,55 @@ pub trait MarkupWriter {
     fn buf(&mut self) -> &mut String;
     fn write_raw(&mut self, s: &str) {
         self.buf().push_str(s)
+    }
+    fn write_link(
+        &mut self,
+        a_href: &str,
+        link: &Link,
+        href_close: &str,
+        a_close: &str,
+        options: FormatOptions,
+    ) {
+        match link {
+            Link::Url {
+                url,
+                trailing_slash,
+            } if allow_url_scheme(url.scheme()) => {
+                let verb = if *trailing_slash { "/" } else { "blah" };
+                if options.link_anchors {
+                    self.write_raw(a_href);
+                    self.write_url(verb, &url, true);
+                    self.write_raw(href_close);
+                    self.write_url("/", &url, false);
+                    self.write_raw(a_close);
+                } else {
+                    self.write_url(verb, &url, false);
+                }
+            }
+            Link::Url {
+                url,
+                trailing_slash,
+            } => {
+                let verb = if *trailing_slash { "/" } else { "blah" };
+                warn!(
+                    "refusing to render url anchor for scheme {} on url {}",
+                    url.scheme(),
+                    url
+                );
+                self.write_url(verb, &url, false);
+            }
+            Link::Id { id, url } => {
+                if options.link_anchors {
+                    self.write_raw(a_href);
+                    self.write_url("/", url, true);
+                    self.write_raw(href_close);
+                    self.write_escaped(id);
+                    self.write_raw(a_close);
+                } else {
+                    self.write_escaped(id);
+                }
+            }
+        }
     }
     fn write_anchor(
         &mut self,

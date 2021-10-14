@@ -435,6 +435,7 @@ impl IngestOptions {
                 InlineElement::Formatted(content, _) => {
                     seen_one = seen_one || self.contains_word(content.as_ref());
                 }
+                InlineElement::Linked(_) => {}
             }
         }
         seen_one
@@ -540,6 +541,7 @@ fn any_inlines<F: Fn(&str) -> bool + Copy>(f: F, invert: bool, inlines: &[Inline
             content: inlines, ..
         }
         | InlineElement::Formatted(inlines, _) => any_inlines(f, invert, inlines.as_ref()) ^ invert,
+        InlineElement::Linked(_) => false,
     }) ^ invert
 }
 

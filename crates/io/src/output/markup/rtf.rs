@@ -128,6 +128,15 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                     self.options,
                 );
             }
+            Linked(link) => {
+                self.write_link(
+                    r#"{\field{\*\fldinst{HYPERLINK ""#,
+                    link,
+                    r#""}}{\fldrslt "#,
+                    "}}",
+                    self.options,
+                );
+            }
         }
     }
 }

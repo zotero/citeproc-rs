@@ -10,6 +10,7 @@ use std::marker::{Send, Sync};
 use crate::IngestOptions;
 use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 
+pub mod links;
 #[cfg(feature = "markup")]
 pub mod markup;
 pub mod micro_html;
@@ -223,6 +224,9 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
     ) -> Self::Build;
 
     fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build;
+    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build;
+    fn try_link_id(&self, var: csl::Variable, id_str: &str, options: &IngestOptions)
+        -> Self::Build;
 
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);
