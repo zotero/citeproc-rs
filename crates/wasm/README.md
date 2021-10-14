@@ -283,6 +283,9 @@ let fetcher =  ...; // see below
 let driverResult = Driver.new({
     style: "<style version=\"1.0\" class=\"note\" ... > ... </style>",
     format: "html", // optional, html is the default
+    formatOptions: { // optional
+        linkAnchors: true, // optional, default true
+    },
     localeOverride: "de-DE", // optional, like setting default-locale on the style
     // bibliographyNoSort: true // disables sorting on the bibliography
     fetcher,
