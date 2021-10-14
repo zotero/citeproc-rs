@@ -1,15 +1,13 @@
-# https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html, rule #2
-# Never render a url beginning with `javascript:` as an `<a href="...">`.
+# See issue #123
 mode: citation
-format-options:
-  link-anchors: true
 normalise: false
-result: javascript:alert(1337.toString())
+format: rtf
+result: >-
+  {\field{\*\fldinst{HYPERLINK "https://google.com/?%E2%80%9D%C3%97%7B%7D%5C%7B%5Chello%7D"}}{\fldrslt https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\{\\hello\}}}
 
 input:
-  - id: ITEM-1
-    type: book
-    url: javascript:alert(1337.toString())
+  - id: a
+    url: 'https://google.com/?”×{}\{\hello}'
 
 csl: |
   <?xml version="1.0" encoding="utf-8"?>

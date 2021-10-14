@@ -337,6 +337,45 @@ pub trait MarkupWriter {
     /// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
     /// if not desired).
     fn write_url(&mut self, url_verbatim: &str, url: &Url, in_attr: bool);
+    fn buf(&mut self) -> &mut String;
+    fn write_raw(&mut self, s: &str) {
+        self.buf().push_str(s)
+    }
+    fn write_anchor(
+        &mut self,
+        a_href: &str,
+        url_verbatim: &str,
+        href_close: &str,
+        content: &[InlineElement],
+        a_close: &str,
+        options: FormatOptions,
+    ) {
+        match Url::parse(url_verbatim) {
+            Ok(url) if allow_url_scheme(url.scheme()) => {
+                if options.link_anchors {
+                    self.write_raw(a_href);
+                    self.write_url(url_verbatim, &url, true);
+                    self.write_raw(href_close);
+                    self.write_inlines(content, false);
+                    self.write_raw(a_close);
+                } else {
+                    self.write_url(url_verbatim, &url, false);
+                }
+                return;
+            }
+            Ok(url) => {
+                warn!(
+                    "refusing to render url anchor for scheme {} on url {}",
+                    url.scheme(),
+                    url
+                );
+            }
+            Err(e) => {
+                warn!("invalid url due to {}: {}", e, url_verbatim);
+            }
+        }
+        self.write_inlines(content, false);
+    }
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
 
@@ -463,4 +502,14 @@ fn write_url(
         }
         Ok(())
     })
+}
+
+fn allow_url_scheme(scheme: &str) -> bool {
+    // see https://security.stackexchange.com/questions/148428/which-url-schemes-are-dangerous-xss-exploitable
+    // list from wordpress https://developer.wordpress.org/reference/functions/wp_allowed_protocols/
+    [
+        "https", "http", "ftp", "ftps", "mailto", "news", "irc", "irc6", "ircs", "gopher", "nntp",
+        "feed", "telnet", "mms", "rtsp", "sms", "svn", "tel", "fax", "xmpp", "webcal", "urn",
+    ]
+    .contains(&scheme)
 }

@@ -24,6 +24,10 @@ impl<'a> PlainWriter<'a> {
 }
 
 impl<'a> MarkupWriter for PlainWriter<'a> {
+    fn buf(&mut self) -> &mut String {
+        self.dest
+    }
+
     fn write_escaped(&mut self, text: &str) {
         self.dest.push_str(text);
     }

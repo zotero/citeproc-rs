@@ -25,6 +25,9 @@ impl<'a> HtmlWriter<'a> {
 }
 
 impl<'a> MarkupWriter for HtmlWriter<'a> {
+    fn buf(&mut self) -> &mut String {
+        self.dest
+    }
     fn write_escaped(&mut self, text: &str) {
         write!(self.dest, "{}", escape_html(text)).unwrap();
     }
@@ -105,36 +108,8 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor {
-                url: url_verbatim,
-                content,
-                ..
-            } => {
-                match Url::parse(url_verbatim) {
-                    Ok(url) if allow_url_scheme(url.scheme()) => {
-                        if self.options.link_anchors {
-                            self.dest.push_str(r#"<a href=""#);
-                            self.write_url(url_verbatim, &url, true);
-                            self.dest.push_str(r#"">"#);
-                            self.write_inlines(content, false);
-                            self.dest.push_str("</a>");
-                        } else {
-                            self.write_url(url_verbatim, &url, false);
-                        }
-                        return;
-                    }
-                    Ok(url) => {
-                        warn!(
-                            "refusing to render url anchor for scheme {} on url {}",
-                            url.scheme(),
-                            url
-                        );
-                    }
-                    Err(e) => {
-                        warn!("invalid url due to {}: {}", e, url_verbatim);
-                    }
-                }
-                write!(self.dest, "{}", escape_html(url_verbatim)).unwrap();
+            Anchor { url, content, .. } => {
+                self.write_anchor(r#"<a href=""#, url, r#"">"#, content, "</a>", self.options)
             }
         }
     }
@@ -150,16 +125,6 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
         )
         .unwrap()
     }
-}
-
-fn allow_url_scheme(scheme: &str) -> bool {
-    // see https://security.stackexchange.com/questions/148428/which-url-schemes-are-dangerous-xss-exploitable
-    // list from wordpress https://developer.wordpress.org/reference/functions/wp_allowed_protocols/
-    [
-        "https", "http", "ftp", "ftps", "mailto", "news", "irc", "irc6", "ircs", "gopher", "nntp",
-        "feed", "telnet", "mms", "rtsp", "sms", "svn", "tel", "fax", "xmpp", "webcal", "urn",
-    ]
-    .contains(&scheme)
 }
 
 impl FormatCmd {

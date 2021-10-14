@@ -24,6 +24,10 @@ impl<'a> RtfWriter<'a> {
 }
 
 impl<'a> MarkupWriter for RtfWriter<'a> {
+    fn buf(&mut self) -> &mut String {
+        self.dest
+    }
+
     fn write_escaped(&mut self, text: &str) {
         write!(self.dest, "{}", rtf_escape(text)).unwrap()
     }
@@ -115,12 +119,14 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
                 self.write_escaped(localized.closing(*is_inner));
             }
             Anchor { url, content, .. } => {
-                // TODO: quoted-escape the url?
-                self.dest.push_str(r#"{\field{\*\fldinst HYPERLINK \""#);
-                self.dest.push_str(&url);
-                self.dest.push_str(r#""}{\fldrslt "#);
-                self.write_inlines(content, true);
-                self.dest.push_str("}}");
+                self.write_anchor(
+                    r#"{\field{\*\fldinst{HYPERLINK ""#,
+                    url,
+                    r#""}}{\fldrslt "#,
+                    content,
+                    "}}",
+                    self.options,
+                );
             }
         }
     }
@@ -280,10 +286,10 @@ mod test {
 
     #[test]
     fn test_rtf_escape_url() {
-        let crunchy_url_text = r"https://google.com/?”×{}\\{\hello}";
+        let crunchy_url_text = r"https://google.com/?”×{}\{\hello}";
         assert_eq!(
             &rtf_escape(crunchy_url_text),
-            r"https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\\\{\\hello\}"
+            r"https://google.com/?\uc0\u8221 \uc0\u215 \{\}\\\{\\hello\}"
         );
 
         let fmt_url = |url_str: &str, in_attr: bool| {
