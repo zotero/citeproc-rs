@@ -5,7 +5,21 @@ expression: "StyleMeta::parse(::indoc::indoc!(r#\"\n            <style version=\
 StyleMeta {
     info: Info {
         id: Url(
-            "https://example.com/mystyle",
+            Url {
+                scheme: "https",
+                cannot_be_a_base: false,
+                username: "",
+                password: None,
+                host: Some(
+                    Domain(
+                        "example.com",
+                    ),
+                ),
+                port: None,
+                path: "/mystyle",
+                query: None,
+                fragment: None,
+            },
         ),
         updated: 2020-01-01T00:00:00+00:00,
         title: LocalizedString {

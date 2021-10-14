@@ -1,10 +1,24 @@
 ---
 source: crates/csl/src/style/info.rs
-expression: "crate::from_node::parse_as::<Info>(::indoc::indoc!(r#\"\n            <info>\n                <id>https://example.com/kitchen-sink</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title xml:lang=\"en-AU\">My Style</title>\n                <title-short xml:lang=\"en-AU\">MS</title-short>\n                <summary xml:lang=\"en-AU\">Sum</summary>\n                <rights license=\"license-uri\" xml:lang=\"en-AU\">Rights to use</rights>\n                <link rel=\"self\" href=\"https://example.com/self\" xml:lang=\"en-AU\" />\n                <link rel=\"documentation\" href=\"https://example.com/documentation\" xml:lang=\"en-AU\" />\n                <link rel=\"template\" href=\"https://example.com/template\" xml:lang=\"en-AU\" />\n                <!-- link rel = independent-parent -->\n                <category citation-format=\"author-date\"/>\n                <category field=\"medicine\"/>\n                <issn>issn</issn>\n                <eissn>eissn</eissn>\n                <issnl>issnl</issnl>\n            </info>\n        \"#)).expect(\"did not parse\")"
+expression: "crate::from_node::parse_as_with::<Info>(::indoc::indoc!(r#\"\n            <info>\n                <id>https://example.com/kitchen-sink</id>\n                <updated>2020-01-01T00:00:00Z</updated>\n                <title xml:lang=\"en-AU\">My Style</title>\n                <title-short xml:lang=\"en-AU\">MS</title-short>\n                <summary xml:lang=\"en-AU\">Sum</summary>\n                <rights license=\"license-uri\" xml:lang=\"en-AU\">Rights to use</rights>\n                <link rel=\"self\" href=\"https://example.com/self\" xml:lang=\"en-AU\" />\n                <link rel=\"documentation\" href=\"https://example.com/documentation\" xml:lang=\"en-AU\" />\n                <link rel=\"template\" href=\"https://example.com/template\" xml:lang=\"en-AU\" />\n                <!-- link rel = independent-parent -->\n                <category citation-format=\"author-date\"/>\n                <category field=\"medicine\"/>\n                <issn>issn</issn>\n                <eissn>eissn</eissn>\n                <issnl>issnl</issnl>\n            </info>\n        \"#),\n                                        None).expect(\"did not parse\")"
 ---
 Info {
     id: Url(
-        "https://example.com/kitchen-sink",
+        Url {
+            scheme: "https",
+            cannot_be_a_base: false,
+            username: "",
+            password: None,
+            host: Some(
+                Domain(
+                    "example.com",
+                ),
+            ),
+            port: None,
+            path: "/kitchen-sink",
+            query: None,
+            fragment: None,
+        },
     ),
     updated: 2020-01-01T00:00:00+00:00,
     title: LocalizedString {
@@ -66,7 +80,21 @@ Info {
     links: [
         Link {
             href: Url(
-                "https://example.com/self",
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "example.com",
+                        ),
+                    ),
+                    port: None,
+                    path: "/self",
+                    query: None,
+                    fragment: None,
+                },
             ),
             rel: RelSelf,
             lang: Some(
@@ -80,7 +108,21 @@ Info {
         },
         Link {
             href: Url(
-                "https://example.com/documentation",
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "example.com",
+                        ),
+                    ),
+                    port: None,
+                    path: "/documentation",
+                    query: None,
+                    fragment: None,
+                },
             ),
             rel: Documentation,
             lang: Some(
@@ -94,7 +136,21 @@ Info {
         },
         Link {
             href: Url(
-                "https://example.com/template",
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "example.com",
+                        ),
+                    ),
+                    port: None,
+                    path: "/template",
+                    query: None,
+                    fragment: None,
+                },
             ),
             rel: Template,
             lang: Some(
