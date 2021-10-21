@@ -78,10 +78,10 @@ Usage: $0 subcommand [args]
 AUTOCONFIRM=false
 CONFIRM_COLOUR="${CYAN}"
 info() {
-  echo "==> $1" >/dev/stdout
+  echo "==> $@" >/dev/stderr
 }
 warning() {
-  echo -e "${YELLOW}==> $1${CLEAR}" >/dev/stdout
+  echo -e "${YELLOW}==> $@${CLEAR}" >/dev/stderr
 }
 confirm() {
   local MSG="==> $1"
@@ -164,7 +164,7 @@ HEADER_4_LABELS=( \
   --unreleased-label   "Unreleased:" )
 
 wrapper () {
-  argv=( "$@" )
+  local argv=( "$@" )
   local GIT_REMOTE="origin"
   local GH_OWNER=""
   local GH_REPO=""
@@ -216,13 +216,13 @@ wrapper () {
   parse_params() {
     local SUB="$1"
     shift
-    argv=( "$@" )
+    local argv=( "$@" )
 
     parse_common () {
-      argv=( "$@" )
+      local argv=( "$@" )
       case "$1" in
         --since-tag) SINCE_TAG_MANUAL=true; SINCE_TAG=(--since-tag "$2"); return 2;;
-        --since-commit) echo "$2" + "${argv[@]}"; SINCE_TAG=(--release-branch master --since-commit "$2"); return 2;;
+        --since-commit) info "$2" + "${argv[@]}"; SINCE_TAG=(--release-branch master --since-commit "$2"); return 2;;
         --existing)
           EXISTING=true; FUTURE_TAG=""; NO_UNRELEASED=true; EXISTING_TAG="$2"; return 2;;
         --tag)
@@ -261,10 +261,10 @@ wrapper () {
       GENERATE=true
       OUTPUT="CHANGELOG.md"
       while [[ "$#" > 0 ]]; do
-        argv=( "$@" )
-        case $1 in
+        local argv=( "$@" )
+        case "$1" in
           --raw) RAW=true; shift;;
-          --base) BASE="$2"; return 2;;
+          --base) BASE="$2"; shift 2;;
           --output) OUTPUT="$2"; shift;;
           *) parse_common "${argv[@]}"; shift $?;;
         esac
@@ -275,12 +275,12 @@ wrapper () {
     parse_release () {
       OUTPUT="CHANGELOG.md"
       while [[ "$#" > 0 ]]; do 
-        argv=( "$@" )
-        case $1 in
+        local argv=( "$@" )
+        case "$1" in
           --internal) INTERNAL="$2"; shift 2;;
           # --generate|-g) GENERATE=true; shift;;
           -i|--interactive) EDIT=true; GENERATE=true; shift;;
-          --grip) GRIP=true; needs grip "(brew install grip)" shift;;
+          --grip) GRIP=true; needs grip "(brew install grip)"; shift;;
           --yes|-y) YES=true; shift;;
           *) parse_common "${argv[@]}"; shift $?;;
         esac
@@ -290,6 +290,8 @@ wrapper () {
     if [[ "$SUB" == "changelog" ]]; then
       parse_changelog "${argv[@]}"
     elif [[ "$SUB" == "release" ]]; then
+      parse_release "${argv[@]}"
+    elif [[ "$SUB" == "sync" ]]; then
       parse_release "${argv[@]}"
     else
       usage "unrecognised subcommand: $SUB"
@@ -306,8 +308,8 @@ wrapper () {
       usage "can't specify --tag/--future-release and --existing together"
     fi
     if $FUTURE; then
-      FUTURE_RELEASE=(--future-release "$V_PREFIX${FUTURE_TAG#$V_PREFIX}")
-      echo "using ${FUTURE_RELEASE[@]}"
+      FUTURE_TAG="$V_PREFIX${FUTURE_TAG#$V_PREFIX}"
+      FUTURE_RELEASE=(--future-release "$FUTURE_TAG")
     fi
     INCLUDE_TAGS_REGEX=(--include-tags-regex "$V_PREFIX_REGEX")
 
@@ -316,7 +318,7 @@ wrapper () {
     fi
 
     if $FUTURE; then
-      INSERT_TAG="$V_PREFIX${FUTURE_TAG#$V_PREFIX}"
+      INSERT_TAG="$FUTURE_TAG"
     elif $EXISTING; then
       INSERT_TAG="$EXISTING_TAG"
     fi
@@ -331,6 +333,14 @@ wrapper () {
           bail "cannot use release without --tag <tag>"
         fi
         echo "$FUTURE_TAG"
+        return 1
+        ;;
+      path) # return the path to the changelog path
+        echo "$(pwd)/$OUTPUT"
+        return 1
+        ;;
+      prefix) # return the path to the changelog path
+        echo "$V_PREFIX"
         return 1
         ;;
     esac
@@ -383,7 +393,7 @@ wrapper () {
       AREA_LABELS=$AREA_LABELS,A-core
       function join_by { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
       # which issues/PRs to include at all
-      echo "${AREA[@]}"
+      info "areas: ${AREA[@]}"
       local AREAS_PREFIXED=$(join_by ',' "${AREA[@]/#/A-}")
       INCLUDE_LABELS=(--include-labels "$AREAS_PREFIXED")
     fi
@@ -461,14 +471,16 @@ case $SUB in
 
   release)
     needs chandler "(gem install chandler)"
-    wrapper release --internal check "$argv[@]"
-    TAG=$(wrapper release --internal tag "$argv[@]")
+    wrapper release --internal check "${argv[@]}"
+    TAG=$(wrapper release --internal tag "${argv[@]}")
     AUTOCONFIRM=$(wrapper release --internal yes "${argv[@]}")
     GIT_REMOTE=$(wrapper release --internal remote "${argv[@]}")
     GH_OWNER_REPO=$(wrapper release --internal repo "${argv[@]}")
     # write the changelog
     # TODO: since_tag is wrong
     wrapper release "${argv[@]}"
+    info "working directory: $PWD"
+    exit
 
     if confirm "add CHANGELOG.md and create release commit? (if not, just tags current commit)"; then
       git add CHANGELOG.md
@@ -518,6 +530,23 @@ case $SUB in
     else
       info "skipped chandler push"
     fi
+    ;;
+
+  sync)
+    needs chandler "(gem install chandler)"
+    wrapper sync --internal check "${argv[@]}"
+    TAG=$(wrapper sync --internal tag "${argv[@]}")
+    AUTOCONFIRM=$(wrapper sync --internal yes "${argv[@]}")
+    GIT_REMOTE=$(wrapper sync --internal remote "${argv[@]}")
+    GH_OWNER_REPO=$(wrapper sync --internal repo "${argv[@]}")
+    OUTPUT_PATH="$(wrapper sync --internal path "${argv[@]}")"
+    CH_PREFIX="$(wrapper sync --internal prefix "${argv[@]}")"
+    cd "$GIT_ROOT"
+    info "syncing  $OUTPUT_PATH"
+
+    # just push all of them so any changelog edits you make are synced. it doesn't take that long.
+    confirm "sync CHANGELOG.md to GitHub Releases (dry run)?" --bail
+    env CHANDLER_GITHUB_API_TOKEN=$GITHUB_TOKEN chandler push --dry-run --tag-prefix=${CH_PREFIX} --changelog=${OUTPUT_PATH} --github=${CHANDLER_TARGET:-$GH_OWNER_REPO}
     ;;
   *) usage "unrecognised subcommand $SUB";;
 esac
