@@ -14,7 +14,7 @@ bail() {
 }
 
 # cd to git repository root
-cd "$(git rev-parse --show-toplevel || bail "not in git repository")"
+GIT_ROOT="$(git rev-parse --show-toplevel || bail "not in git repository" && pwd)"
 
 usage() {
   if [ -n "${1:-}" ]; then
@@ -40,6 +40,10 @@ Usage: $0 subcommand [args]
     --tag vX.X.X      What tag to list unreleased entries under
     --remote          Which git remote to use (default \"origin\", assumes it has a GitHub URL and gets repo owner/name from it)
     --help            Show usage
+    --config CONFIG   Use a predefined configuration (wasm, citeproc, ffi).
+    --area AREA       Use A-AREA to filter PRs/Issues by label. Also --areas. Impliedly includes 'core'.
+    --name NAME       Set the heading to '# Changelog (NAME)'
+    --prefix PREFIX   Use 'PREFIX-' as a tag prefix, e.g. 'wasm-' for wasm-vX.X.X tags
 
   changelog [args]
 
@@ -65,6 +69,9 @@ Usage: $0 subcommand [args]
     --grip              Preview the interactive-edited DRAFT_CHANGELOG.md with \`grip\` (brew install grip)
     --yes               Skip all confirmation prompts (potentially destructive)
 "
+  if [ -n "${1:-}" ]; then
+    echo -e "${RED}👉 $1${CLEAR}\n";
+  fi
   exit 0
 }
 
@@ -143,7 +150,21 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
   bail "no GITHUB_TOKEN env variable or netrc entry for api.github.com found"
 fi
 
+# this is for accessibility. The defaults are **bolded** but should probably be <h4>.
+# --summary-label ""
+HEADER_4_LABELS=( \
+  --breaking-label     "#### Breaking changes:" \
+  --enhancement-label  "#### Implemented enhancements:" \
+  --bugs-label         "#### Fixed bugs:" \
+  --deprecated-label   "#### Deprecated:" \
+  --removed-label      "#### Removed:" \
+  --security-label     "#### Security fixes:" \
+  --issues-label       "#### Closed issues:" \
+  --pr-label           "#### Merged pull requests:" \
+  --unreleased-label   "Unreleased:" )
+
 wrapper () {
+  argv=( "$@" )
   local GIT_REMOTE="origin"
   local GH_OWNER=""
   local GH_REPO=""
@@ -153,16 +174,20 @@ wrapper () {
   # args to pass to github_changelog_generator
   local FUTURE_RELEASE=""
   local INSERT_TAG="Unreleased"
-  local SINCE_TAG=""
+  local SINCE_TAG=()
   if ! git describe --abbrev=0 &>/dev/null; then
     confirm 'no tags in repo, `git describe --abbrev=0` found nothing.
     Continue by creating first ever release?:' --bail
   else
-    SINCE_TAG="--since-tag $(git describe --abbrev=0)"
+    SINCE_TAG=(--since-tag $(git describe --abbrev=0))
   fi
-  local REST=""
+  local REST=()
   local OUTPUT="CHANGELOG.md"
   local BASE="CHANGELOG.md"
+  local AREA=( )
+  local PREFIX=( --include-tags-regex "^v\d" )
+  local INCLUDE_LABELS=()
+  local HEADER=""
 
   # previewing
   local FUTURE=false
@@ -175,56 +200,84 @@ wrapper () {
   local EDIT=false
   local GENERATE=false
 
-  local UNRELEASED_ARG=""
+  local UNRELEASED_ARG=()
   local INSERT_TAG_REGEX=""
 
   parse_params() {
-    local SUB=$1
+    local SUB="$1"
     shift
+    argv=( "$@" )
 
     parse_common () {
+      argv=( "$@" )
       case "$1" in
-        --since) SINCE_TAG="--since-tag $2"; return 1;;
+        --since-tag) SINCE_TAG=(--since-tag "$2"); return 2;;
+        --since-commit) echo "$2" + "${argv[@]}"; SINCE_TAG=(--release-branch master --since-commit "$2"); return 2;;
         --existing)
           EXISTING=true; FUTURE_TAG=""; NO_UNRELEASED=true; EXISTING_TAG="$2"; return 2;;
         --tag)
           FUTURE=true; NO_UNRELEASED=false;
-          EXISTING_TAG=""; FUTURE_TAG="$2"; FUTURE_RELEASE="--future-release $2"; return 2;;
+          EXISTING_TAG=""; FUTURE_TAG="$2"; FUTURE_RELEASE=(--future-release "$2"); return 2;;
         --remote) GIT_REMOTE="$2"; return 2;;
-        --) shift; REST="$@"; return $#;;
-        --help) usage "$SUB: Unknown parameter passed: $1";;
-          *) return 1;;
+        --area|--areas)
+          IFS=',' read -r -a AREA <<< "$2";
+          return 2;;
+        --name) HEADER="# Changelog ($2)"; return 2;;
+        --prefix) PREFIX=( --include-tags-regex "^$2-" ); return 2;;
+        --config|--configuration|-c)
+          local name=""
+          local area_name=""
+          local regex=""
+          case "$2" in
+            citeproc) name="crates/citeproc"; area_name="crates/citeproc"; regex="^v\d";;
+            wasm) name="@citeproc-rs/wasm"; area_name="wasm"; regex="^wasm-";;
+            ffi) name="ffi"; area_name="ffi"; regex="^ffi-";;
+            *) usage "unknown -c configuration \"$2\"";;
+          esac;
+          HEADER="# Changelog ($name)";
+          AREA=( "$area_name" );
+          PREFIX=( --include-tags-regex "$regex" );
+          return 2;;
+        --) len=$#; shift; REST=("$@"); return $len;;
+        --help|-h) usage;;
+        *) usage "$SUB: Unknown parameter passed: $1";;
       esac;
     }
 
     parse_changelog() {
       GENERATE=true
       OUTPUT="CHANGELOG.md"
-      while [[ "$#" > 0 ]]; do case $1 in
-        --raw) RAW=true; shift;;
-        --base) BASE="$2"; return 2;;
-        --output) OUTPUT="$2"; shift;;
-        *) parse_common $@; shift $?;;
-      esac; done
+      while [[ "$#" > 0 ]]; do
+        argv=( "$@" )
+        case $1 in
+          --raw) RAW=true; shift;;
+          --base) BASE="$2"; return 2;;
+          --output) OUTPUT="$2"; shift;;
+          *) parse_common "${argv[@]}"; shift $?;;
+        esac
+      done
     }
 
     # unused, for if you want to build a tool to create a github release
     parse_release () {
       OUTPUT="CHANGELOG.md"
-      while [[ "$#" > 0 ]]; do case $1 in
-        --internal) INTERNAL="$2"; shift 2;;
-        # --generate|-g) GENERATE=true; shift;;
-        -i|--interactive) EDIT=true; GENERATE=true; shift;;
-        --grip) GRIP=true; needs grip "(brew install grip)" shift;;
-        --yes|-y) YES=true; shift;;
-        *) parse_common $@; shift $?;;
-      esac; done
+      while [[ "$#" > 0 ]]; do 
+        argv=( "$@" )
+        case $1 in
+          --internal) INTERNAL="$2"; shift 2;;
+          # --generate|-g) GENERATE=true; shift;;
+          -i|--interactive) EDIT=true; GENERATE=true; shift;;
+          --grip) GRIP=true; needs grip "(brew install grip)" shift;;
+          --yes|-y) YES=true; shift;;
+          *) parse_common "${argv[@]}"; shift $?;;
+        esac
+      done
     }
 
     if [[ "$SUB" == "changelog" ]]; then
-      parse_changelog $@
+      parse_changelog "${argv[@]}"
     elif [[ "$SUB" == "release" ]]; then
-      parse_release $@
+      parse_release "${argv[@]}"
     else
       usage "unrecognised subcommand: $SUB"
     fi
@@ -266,11 +319,17 @@ wrapper () {
     fi
 
     INSERT_TAG_REGEX=$(printf "$INSERT_TAG" | sed 's/\./\\\\./g')
-    if $NO_UNRELEASED; then UNRELEASED_ARG="--no-unreleased"; fi
+    if $NO_UNRELEASED; then UNRELEASED_ARG=(--no-unreleased); fi
+
+    if ! [ "${#AREA[@]}" -eq 0 ] && [ -z "$HEADER" ]; then
+      HEADER="# Changelog (${AREA[0]})"
+    fi
+
+    AREA+=( core )
   }
 
   set +e
-  parse_params $@
+  parse_params "${argv[@]}"
   if [ $? = 1 ]; then
     return 0
   fi
@@ -295,14 +354,32 @@ wrapper () {
   # }
 
   execute_gen () {
+    BUG_LABELS=I-schema,I-spec,I-bug,I-packaging,I-build
+    AREA_LABELS=A-ci,A-docs
+    if ! [ -z "$AREA" ]; then
+      # for --issue-line-labels: which labels to show in the markdown
+      AREA_LABELS=$AREA_LABELS,A-core
+      function join_by { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
+      # which issues/PRs to include at all
+      echo "${AREA[@]}"
+      local AREAS_PREFIXED=$(join_by ',' "${AREA[@]/#/A-}")
+      INCLUDE_LABELS=(--include-labels "$AREAS_PREFIXED")
+    fi
     if ! $NO_FETCH; then
       github_changelog_generator -u $GH_OWNER -p $GH_REPO -t $GITHUB_TOKEN \
-        $FUTURE_RELEASE \
-        $UNRELEASED_ARG \
-        $SINCE_TAG \
+        "${FUTURE_RELEASE[@]}" \
+        "${UNRELEASED_ARG[@]}" \
+        "${SINCE_TAG[@]}" \
         --base "$BASE" \
         --output "$TMP_OUT" \
-        $REST
+        --header-label "$HEADER" \
+        "${PREFIX[@]}" \
+        "${HEADER_4_LABELS[@]}" \
+        "${INCLUDE_LABELS[@]}" \
+        --issue-line-labels $AREA_LABELS,$BUG_LABELS \
+        --bug-labels $BUG_LABELS \
+        --no-author \
+        "${REST[@]}"
     else
       cp "$BASE" "$TMP_OUT"
     fi
@@ -341,7 +418,7 @@ wrapper () {
       mv DRAFT_CHANGELOG.md "$OUTPUT"
 
     elif $RAW; then
-      github_changelog_generator -u $GH_OWNER -p $GH_REPO -t $GITHUB_TOKEN $REST
+      github_changelog_generator -u $GH_OWNER -p $GH_REPO -t $GITHUB_TOKEN "${REST[@]}"
     else
       execute_gen
       mv "$TMP_OUT" "$OUTPUT"
@@ -351,24 +428,25 @@ wrapper () {
 
 SUB="$1"
 shift
+argv=( "$@" )
 case $SUB in
   --help|-h) usage ;;
 
   changelog)
     needs github_changelog_generator "(gem install github_changelog_generator)"
-    wrapper changelog $@
+    wrapper changelog "${argv[@]}"
     ;;
 
   release)
     needs chandler "(gem install chandler)"
-    wrapper release --internal check $@
-    TAG=$(wrapper release --internal tag $@)
-    AUTOCONFIRM=$(wrapper release --internal yes $@)
-    GIT_REMOTE=$(wrapper release --internal remote $@)
-    GH_OWNER_REPO=$(wrapper release --internal repo $@)
+    wrapper release --internal check "$argv[@]"
+    TAG=$(wrapper release --internal tag "$argv[@]")
+    AUTOCONFIRM=$(wrapper release --internal yes "${argv[@]}")
+    GIT_REMOTE=$(wrapper release --internal remote "${argv[@]}")
+    GH_OWNER_REPO=$(wrapper release --internal repo "${argv[@]}")
     # write the changelog
     # TODO: since_tag is wrong
-    wrapper release $@
+    wrapper release "${argv[@]}"
 
     if confirm "add CHANGELOG.md and create release commit? (if not, just tags current commit)"; then
       git add CHANGELOG.md
