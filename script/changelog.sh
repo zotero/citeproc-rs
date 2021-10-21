@@ -14,7 +14,7 @@ bail() {
 }
 
 # cd to git repository root
-GIT_ROOT="$(git rev-parse --show-toplevel || bail "not in git repository" && pwd)"
+GIT_ROOT=$(git rev-parse --show-toplevel || bail "not in git repository")
 
 usage() {
   if [ -n "${1:-}" ]; then
@@ -172,20 +172,30 @@ wrapper () {
   local GRIP=false
 
   # args to pass to github_changelog_generator
-  local FUTURE_RELEASE=""
+  local FUTURE_RELEASE=()
   local INSERT_TAG="Unreleased"
   local SINCE_TAG=()
-  if ! git describe --abbrev=0 &>/dev/null; then
-    confirm 'no tags in repo, `git describe --abbrev=0` found nothing.
-    Continue by creating first ever release?:' --bail
-  else
-    SINCE_TAG=(--since-tag $(git describe --abbrev=0))
-  fi
+  local SINCE_TAG_MANUAL=false
+
+  since_tag_auto() {
+    # $1 is a glob, mustn't be a regex
+    local GLOB="$1"
+    if ! git describe --match "$GLOB" --abbrev=0 &>/dev/null; then
+      confirm "no tags in repo, \`git describe --match \"$GLOB\" --abbrev=0\` found nothing.
+    Continue by creating first ever release?:" --bail
+    else
+      SINCE_TAG=(--since-tag $(git describe --match "$GLOB" --abbrev=0))
+    fi
+  }
+
   local REST=()
   local OUTPUT="CHANGELOG.md"
   local BASE="CHANGELOG.md"
   local AREA=( )
-  local PREFIX=( --include-tags-regex "^v\d" )
+  local V_PREFIX=""
+  local V_PREFIX_REGEX="^v\d"
+  local V_GLOB="v[0-9]*"
+  local INCLUDE_TAGS_REGEX=( --include-tags-regex "$V_PREFIX_REGEX" )
   local INCLUDE_LABELS=()
   local HEADER=""
 
@@ -211,32 +221,35 @@ wrapper () {
     parse_common () {
       argv=( "$@" )
       case "$1" in
-        --since-tag) SINCE_TAG=(--since-tag "$2"); return 2;;
+        --since-tag) SINCE_TAG_MANUAL=true; SINCE_TAG=(--since-tag "$2"); return 2;;
         --since-commit) echo "$2" + "${argv[@]}"; SINCE_TAG=(--release-branch master --since-commit "$2"); return 2;;
         --existing)
           EXISTING=true; FUTURE_TAG=""; NO_UNRELEASED=true; EXISTING_TAG="$2"; return 2;;
         --tag)
           FUTURE=true; NO_UNRELEASED=false;
-          EXISTING_TAG=""; FUTURE_TAG="$2"; FUTURE_RELEASE=(--future-release "$2"); return 2;;
+          EXISTING_TAG=""; FUTURE_TAG="$2"; return 2;;
         --remote) GIT_REMOTE="$2"; return 2;;
         --area|--areas)
           IFS=',' read -r -a AREA <<< "$2";
           return 2;;
         --name) HEADER="# Changelog ($2)"; return 2;;
-        --prefix) PREFIX=( --include-tags-regex "^$2-" ); return 2;;
+        --prefix) V_PREFIX="$2"; V_PREFIX_REGEX="^$2-"; V_GLOB="$V_PREFIX-v[0-9]*"; return 2;;
         --config|--configuration|-c)
-          local name=""
-          local area_name=""
-          local regex=""
+          local name=""; local area_name=""; local prefix=""; local regex=""; local glob="";
           case "$2" in
-            citeproc) name="crates/citeproc"; area_name="crates/citeproc"; regex="^v\d";;
-            wasm) name="@citeproc-rs/wasm"; area_name="wasm"; regex="^wasm-";;
-            ffi) name="ffi"; area_name="ffi"; regex="^ffi-";;
+            citeproc) cd "$GIT_ROOT/crates/citeproc";
+              name="crates/citeproc"; area_name="crates/citeproc"; prefix=""; regex="^v\d"; glob="v[0-9]*";;
+            wasm) cd "$GIT_ROOT/crates/wasm";
+              name="@citeproc-rs/wasm"; area_name="wasm"; prefix="wasm-"; regex="^wasm-v\d"; glob="wasm-v[0-9]*";;
+            ffi) cd "$GIT_ROOT/bindings/ffi";
+              name="ffi"; area_name="ffi"; prefix="ffi-"; regex="^ffi-v\d"; glob="ffi-v[0-9]*";;
             *) usage "unknown -c configuration \"$2\"";;
           esac;
           HEADER="# Changelog ($name)";
           AREA=( "$area_name" );
-          PREFIX=( --include-tags-regex "$regex" );
+          V_PREFIX="$prefix";
+          V_PREFIX_REGEX="$regex";
+          V_GLOB="$glob"
           return 2;;
         --) len=$#; shift; REST=("$@"); return $len;;
         --help|-h) usage;;
@@ -292,9 +305,18 @@ wrapper () {
     if $FUTURE && $EXISTING; then
       usage "can't specify --tag/--future-release and --existing together"
     fi
+    if $FUTURE; then
+      FUTURE_RELEASE=(--future-release "$V_PREFIX${FUTURE_TAG#$V_PREFIX}")
+      echo "using ${FUTURE_RELEASE[@]}"
+    fi
+    INCLUDE_TAGS_REGEX=(--include-tags-regex "$V_PREFIX_REGEX")
+
+    if ! $SINCE_TAG_MANUAL; then
+      since_tag_auto "$V_GLOB"
+    fi
 
     if $FUTURE; then
-      INSERT_TAG="$FUTURE_TAG"
+      INSERT_TAG="$V_PREFIX${FUTURE_TAG#$V_PREFIX}"
     elif $EXISTING; then
       INSERT_TAG="$EXISTING_TAG"
     fi
@@ -373,7 +395,7 @@ wrapper () {
         --base "$BASE" \
         --output "$TMP_OUT" \
         --header-label "$HEADER" \
-        "${PREFIX[@]}" \
+        "${INCLUDE_TAGS_REGEX[@]}" \
         "${HEADER_4_LABELS[@]}" \
         "${INCLUDE_LABELS[@]}" \
         --issue-line-labels $AREA_LABELS,$BUG_LABELS \
