@@ -33,11 +33,11 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
         self.dest.push_str(text);
     }
 
-    fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
+    fn write_url(&mut self, url: &url::Url, trailing_slash: bool, in_attr: bool) {
         super::write_url(
             self.dest,
-            url_verbatim,
             url,
+            trailing_slash,
             in_attr,
             |b, s| Ok(b.push_str(s)),
             |b, s| Ok(b.push_str(s)),
@@ -113,8 +113,7 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 url,
                 trailing_slash,
             } => {
-                let verb = if *trailing_slash { "/" } else { "blah" };
-                self.write_url(verb, url, false);
+                self.write_url(url, *trailing_slash, false);
             }
             Link::Id { id, url: _ } => self.write_escaped(id),
         }

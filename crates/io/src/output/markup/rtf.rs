@@ -32,11 +32,11 @@ impl<'a> MarkupWriter for RtfWriter<'a> {
         write!(self.dest, "{}", rtf_escape(text)).unwrap()
     }
 
-    fn write_url(&mut self, url_verbatim: &str, url: &url::Url, in_attr: bool) {
+    fn write_url(&mut self, url: &url::Url, trailing_slash: bool, in_attr: bool) {
         super::write_url(
             self.dest,
-            url_verbatim,
             url,
+            trailing_slash,
             in_attr,
             |b, s| write!(b, "{}", rtf_escape_url_in_attr(s)),
             |b, s| write!(b, "{}", rtf_escape(s)),
@@ -294,7 +294,7 @@ mod test {
         let fmt_url = |url_str: &str, in_attr: bool| {
             let mut dest = String::new();
             let url = url::Url::parse(url_str).unwrap();
-            RtfWriter::new(&mut dest, Default::default()).write_url(url_str, &url, in_attr);
+            RtfWriter::new(&mut dest, Default::default()).write_url(&url, url_str.ends_with('/'), in_attr);
             dest
         };
 

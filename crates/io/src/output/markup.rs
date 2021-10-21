@@ -365,7 +365,7 @@ pub trait MarkupWriter {
     fn write_escaped(&mut self, text: &str);
     /// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
     /// if not desired).
-    fn write_url(&mut self, url_verbatim: &str, url: &Url, in_attr: bool);
+    fn write_url(&mut self, url: &Url, trailing_slash: bool, in_attr: bool);
     fn buf(&mut self) -> &mut String;
     fn write_raw(&mut self, s: &str) {
         self.buf().push_str(s)
@@ -383,35 +383,34 @@ pub trait MarkupWriter {
                 url,
                 trailing_slash,
             } if allow_url_scheme(url.scheme()) => {
-                let verb = if *trailing_slash { "/" } else { "blah" };
                 if options.link_anchors {
                     self.write_raw(a_href);
-                    self.write_url(verb, &url, true);
+                    self.write_url(url, *trailing_slash, true);
                     self.write_raw(href_close);
-                    self.write_url("/", &url, false);
+                    self.write_url(url, *trailing_slash, false);
                     self.write_raw(a_close);
                 } else {
-                    self.write_url(verb, &url, false);
+                    self.write_url(url, *trailing_slash, false);
                 }
             }
             Link::Url {
                 url,
                 trailing_slash,
             } => {
-                let verb = if *trailing_slash { "/" } else { "blah" };
+                // This catches, e.g. `javascript:alert("hello")`
                 warn!(
                     "refusing to render url anchor for scheme {} on url {}",
                     url.scheme(),
                     url
                 );
-                self.write_url(verb, &url, false);
+                self.write_url(&url, *trailing_slash, false);
             }
             Link::Id { id, url } => {
                 if options.link_anchors {
                     self.write_raw(a_href);
-                    self.write_url("/", url, true);
+                    self.write_url(url, false, true);
                     self.write_raw(href_close);
-                    self.write_url("/", url, true);
+                    self.write_url(url, false, true);
                     self.write_raw(a_close);
                 } else {
                     self.write_escaped(id);
@@ -519,8 +518,8 @@ thread_local! {
 /// if not desired).
 fn write_url(
     f: &mut String,
-    url_verbatim: &str,
     url: &Url,
+    trailing_slash: bool,
     in_attr: bool,
     escape_in_attribute: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
     escape: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
@@ -537,7 +536,7 @@ fn write_url(
             // normally, Url will write a trailing slash for "special" https://
             // etc schemes, in line with WHATWG URL.
             if url.has_host() && matches!(url.scheme(), "https" | "http") {
-                if !url_verbatim.ends_with('/') && tls_buf.ends_with('/') {
+                if !trailing_slash && tls_buf.ends_with('/') {
                     tls_buf.pop();
                 }
             }

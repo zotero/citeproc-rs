@@ -4,7 +4,7 @@ format-options:
 normalise: false
 result: >-
   https//example. ,
-  <a href="https://example./">https://example./</a> ,
+  <a href="https://example./">https://example.</a> ,
   invalid url example.com/?&quot;&lt;
 
 input:

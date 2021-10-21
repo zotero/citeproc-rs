@@ -112,11 +112,11 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
         }
     }
 
-    fn write_url(&mut self, url_verbatim: &str, url: &Url, in_attr: bool) {
+    fn write_url(&mut self, url: &Url, trailing_slash: bool, in_attr: bool) {
         super::write_url(
             self.dest,
-            url_verbatim,
             url,
+            trailing_slash,
             in_attr,
             |b, s| write!(b, "{}", escape_html_attribute(s)),
             |b, s| write!(b, "{}", escape_html(s)),
