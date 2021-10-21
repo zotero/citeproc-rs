@@ -5,8 +5,8 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
-use crate::output::FormatCmd;
 use crate::output::micro_html::MicroNode;
+use crate::output::FormatCmd;
 use crate::String;
 use core::fmt::{self, Write};
 use csl::Formatting;
@@ -229,5 +229,3 @@ fn escape_html_attribute(attr_inner: &str) -> HtmlAttrEscaper {
 fn escape_html(text: &str) -> HtmlEscaper {
     HtmlEscaper { text }
 }
-
-

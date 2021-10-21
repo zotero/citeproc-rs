@@ -127,7 +127,6 @@ impl NumberLike {
 enum CircaValue {
     Str(String),
     Num(i32),
-    // TODO: add this
     Bool(bool),
 }
 
@@ -438,7 +437,6 @@ impl<'de> Deserialize<'de> for DateParts {
     }
 }
 
-/// TODO:implement seasons
 impl<'de> Deserialize<'de> for MaybeDate {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

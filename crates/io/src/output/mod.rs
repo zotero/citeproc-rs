@@ -121,7 +121,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
     ///
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
 
-    // TODO: make formatting an Option<Formatting>
     fn text_node(&self, s: String, formatting: Option<Formatting>) -> Self::Build;
 
     /// Group some text nodes. You might want to optimise for the case where delimiter is empty.
@@ -194,7 +193,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         };
         let mut pre_and_content = if let Some(prefix) = affixes.as_ref().map(|a| &a.prefix) {
             if !prefix.is_empty() {
-                // TODO: use the localized quotes.
                 self.seq(once(self.ingest(prefix, &IngestOptions::for_affixes())).chain(once(b)))
             } else {
                 b
