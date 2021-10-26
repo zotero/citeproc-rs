@@ -8,10 +8,11 @@ var suite = describe.skip;
 if (global.browser) {
     suite = describe;
 }
+// firefox could be first-booting itself. Give it time.
+jest.setTimeout(60000);
+
 suite("Integration tests for Firefox ESR 60.9", () => {
     test("no-modules build works end to end", async () => {
-        // firefox could be first-booting itself. Give it time.
-        jest.setTimeout(60000);
         await browser.get("file://" + __dirname + '/index.html');
         let fail = browser.wait(until.elementLocated(By.id('failure')), 10000);
         let succ = browser.wait(until.elementLocated(By.id('success')), 10000);
