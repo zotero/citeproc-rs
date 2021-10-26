@@ -1,3 +1,5 @@
+// https://github.com/GoogleChromeLabs/wasm-feature-detect
+import * as features from "https://unpkg.com/wasm-feature-detect@1.2.10?module";
 const { Driver } = wasm_bindgen;
 
 const mkNoteStyle = (inner, bibliography) => {
@@ -13,7 +15,7 @@ const mkNoteStyle = (inner, bibliography) => {
           ${inner}
         </layout>
       </citation>
-      ${ bibliography != null ? bibliography : "" }
+      ${bibliography != null ? bibliography : ""}
     </style>
     `;
 }
@@ -29,7 +31,7 @@ class Fetcher {
     }
 }
 
-async function run() {
+async function test_citeproc_rs() {
     await wasm_bindgen('./pkg-nomod/_no_modules/citeproc_rs_wasm_bg.wasm');
 
     const fetcher = new Fetcher();
@@ -40,14 +42,68 @@ async function run() {
     }).unwrap();
 
     console.log("--- Successfully loaded wasm driver. You can now use it. ---")
-    driver.insertReference({id: "citekey", title: "Hello", language: 'fr-FR'}).unwrap();
-    driver.initClusters([{id: "one", cites: [{id: "citekey"}]}]).unwrap();
-    driver.setClusterOrder([ {id: "one"} ]).unwrap();
+    driver.insertReference({ id: "citekey", title: "Hello", language: 'fr-FR' }).unwrap();
+    driver.initClusters([{ id: "one", cites: [{ id: "citekey" }] }]).unwrap();
+    driver.setClusterOrder([{ id: "one" }]).unwrap();
     await driver.fetchLocales();
     let result = driver.builtCluster("one").unwrap();
     console.log("Built a cite cluster:", result);
 }
 
-run()
+// this tests the current Firefox ESR's wasm support
+async function test_wasm_support() {
+    let allChecks = await Promise.all(
+        Object.keys(features).map(async name => {
+            let feat = features[name];
+            let supported = await feat();
+            return { name, supported }
+        })
+    );
+
+    let resolved = {};
+    allChecks.forEach((check) => {
+        let { name, supported } = check;
+        resolved[name] = supported;
+    });
+
+    // ESR 60.9 supports none of the newer features, but
+    // you would expect to have to change a few of these
+    // when newer ESRs are used in Zotero.
+    let expected = {
+        mutableGlobals: false,
+        bigInt: false,
+        bulkMemory: false,
+        exceptions: false,
+        memory64: false,
+        multiValue: false,
+        referenceTypes: false,
+        saturatedFloatToInt: false,
+        signExtensions: false,
+        simd: false,
+        tailCall: false,
+        threads: false,
+    };
+
+    let results = Object.keys(resolved).map(key => {
+        return {
+            key,
+            expected: expected[key],
+            resolved: resolved[key],
+        };
+    });
+
+    let failed = results.filter(x => x.expected !== x.resolved);
+    if (failed.length > 0) {
+        throw new Error("wasm support mismatch: " + JSON.stringify(failed))
+    }
+
+}
+
+async function suite() {
+    await test_citeproc_rs();
+    await test_wasm_support();
+}
+
+suite()
     .then(() => document.write('<p id="success">success</p>'))
     .catch((e) => document.write('<p id="failure">' + e.message + '</p>'));
