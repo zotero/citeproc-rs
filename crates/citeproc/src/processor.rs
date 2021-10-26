@@ -17,6 +17,7 @@ use crate::api::{
 use citeproc_db::{
     CiteData, CiteDatabaseStorage, HasFetcher, LocaleDatabaseStorage, StyleDatabaseStorage, Uncited,
 };
+use citeproc_io::output::markup::FormatOptions;
 use citeproc_proc::db::IrDatabaseStorage;
 use citeproc_proc::BibNumber;
 use indexmap::set::IndexSet;
@@ -67,6 +68,7 @@ pub struct Processor {
     storage: salsa::Storage<Self>,
     pub fetcher: Arc<dyn LocaleFetcher>,
     pub formatter: Markup,
+    format_options: FormatOptions,
     last_bibliography: Arc<Mutex<SavedBib>>,
     last_clusters: Arc<Mutex<FnvHashMap<ClusterId, Arc<SmartString>>>>,
     interner: Arc<RwLock<Interner>>,
@@ -81,6 +83,7 @@ impl ParallelDatabase for Processor {
         Snapshot::new(Processor {
             storage: self.storage.snapshot(),
             fetcher: self.fetcher.clone(),
+            format_options: self.format_options.clone(),
             formatter: self.formatter.clone(),
             last_bibliography: self.last_bibliography.clone(),
             last_clusters: self.last_clusters.clone(),
@@ -117,12 +120,6 @@ impl Clone for Snap {
     }
 }
 
-impl Default for SupportedFormat {
-    fn default() -> Self {
-        SupportedFormat::Html
-    }
-}
-
 /// ```
 /// use citeproc::InitOptions;
 ///
@@ -131,6 +128,7 @@ impl Default for SupportedFormat {
 #[derive(Clone, Default)]
 pub struct InitOptions<'a> {
     pub format: SupportedFormat,
+    pub format_options: FormatOptions,
     /// A full independent style.
     pub style: &'a str,
     /// You might get this from a dependent style via `StyleMeta::parse(dependent_xml_string)`
@@ -138,12 +136,14 @@ pub struct InitOptions<'a> {
     /// Mechanism for fetching the locale you provide, if necessary.
     pub fetcher: Option<Arc<dyn LocaleFetcher>>,
 
+    /// Which csl features to enable globally. Using the `<features>` declaration is highly
+    /// preferred, but unfortunately it is not part of CSL yet.
     pub csl_features: Option<csl::Features>,
 
     /// Disables some formalities for test suite operation
     pub test_mode: bool,
 
-    /// Disables sorting on the bibliography
+    /// Disables sorting on the bibliography (enabled by default)
     pub bibliography_no_sort: bool,
 
     #[doc(hidden)]
@@ -164,6 +164,7 @@ impl Processor {
             storage: Default::default(),
             fetcher,
             formatter: Markup::default(),
+            format_options: FormatOptions::default(),
             last_bibliography: Arc::new(Mutex::new(SavedBib::new())),
             last_clusters: Arc::new(Mutex::new(Default::default())),
             // This uses DefaultBackend, which is
@@ -185,6 +186,7 @@ impl Processor {
             locale_override,
             fetcher,
             format,
+            format_options,
             csl_features,
             test_mode,
             bibliography_no_sort,
@@ -194,7 +196,8 @@ impl Processor {
         let fetcher =
             fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
         let mut db = Processor::safe_default(fetcher);
-        db.formatter = format.make_markup();
+        db.format_options = format_options;
+        db.formatter = format.make_markup(db.format_options);
         let style = Style::parse_with_opts(
             &style,
             csl::ParseOptions {
@@ -809,7 +812,7 @@ impl Processor {
         // we do set_cluster_note_number in preview_marked_init
 
         let formatter = format
-            .map(|fmt| fmt.make_markup())
+            .map(|fmt| fmt.make_markup(self.format_options))
             .unwrap_or_else(|| self.formatter.clone());
         let markup = citeproc_proc::db::built_cluster_preview(self, id, &formatter);
         let cluster_cites_sorted = self.cluster_cites_sorted(id);
@@ -831,7 +834,7 @@ impl Processor {
         let arc = Arc::new(refr);
         self.set_reference_input(preview_ref_id.clone(), arc.clone());
         let formatter = format
-            .map(|fmt| fmt.make_markup())
+            .map(|fmt| fmt.make_markup(self.format_options))
             .unwrap_or_else(|| self.formatter.clone());
         citeproc_proc::bib_item_preview(self, preview_ref_id.clone(), arc.as_ref(), &formatter)
     }
@@ -949,7 +952,11 @@ impl Processor {
             if let Some(nn) = piece.note {
                 if let Some(ref mut note) = this_note {
                     if nn < note.0 {
-                        log::error!("reordering error: non-monotonic note number: {:?} < {:?}", nn, note.0);
+                        log::error!(
+                            "reordering error: non-monotonic note number: {:?} < {:?}",
+                            nn,
+                            note.0
+                        );
                         return Err(ReorderingError::NonMonotonicNoteNumber(nn));
                     }
                     if let Some(id) = piece.id {

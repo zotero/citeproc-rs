@@ -4,56 +4,32 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
-use super::MarkupWriter;
-use super::MaybeTrimStart;
+use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
+use core::fmt::{self, Write};
 use csl::Formatting;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct HtmlOptions {
-    // TODO: is it enough to have one set of localized quotes for the entire style?
-    // quotes: LocalizedQuotes,
-    use_b_for_strong: bool,
-    link_anchors: bool,
-}
-
-impl Default for HtmlOptions {
-    fn default() -> Self {
-        HtmlOptions {
-            use_b_for_strong: false,
-            link_anchors: true,
-        }
-    }
-}
-
-impl HtmlOptions {
-    pub fn test_suite() -> Self {
-        HtmlOptions {
-            use_b_for_strong: true,
-            link_anchors: false,
-        }
-    }
-}
+use url::Url;
 
 #[derive(Debug)]
 pub struct HtmlWriter<'a> {
     dest: &'a mut String,
-    options: HtmlOptions,
+    options: FormatOptions,
 }
 
 impl<'a> HtmlWriter<'a> {
-    pub fn new(dest: &'a mut String, options: HtmlOptions) -> Self {
+    pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
         HtmlWriter { dest, options }
     }
 }
 
 impl<'a> MarkupWriter for HtmlWriter<'a> {
+    fn buf(&mut self) -> &mut String {
+        self.dest
+    }
     fn write_escaped(&mut self, text: &str) {
-        use v_htmlescape::escape;
-        self.dest.push_str(&escape(text).to_string());
+        write!(self.dest, "{}", escape_html(text)).unwrap();
     }
     fn stack_preorder(&mut self, stack: &[FormatCmd]) {
         for cmd in stack.iter() {
@@ -132,24 +108,25 @@ impl<'a> MarkupWriter for HtmlWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { url, content, .. } => {
-                if self.options.link_anchors {
-                    self.dest.push_str(r#"<a href=""#);
-                    // TODO: HTML-quoted-escape? the url?
-                    self.dest.push_str(&url.trim());
-                    self.dest.push_str(r#"">"#);
-                    self.write_inlines(content, false);
-                    self.dest.push_str("</a>");
-                } else {
-                    self.dest.push_str(&url.trim());
-                }
-            }
+            Linked(link) => self.write_link(r#"<a href=""#, link, r#"">"#, "</a>", self.options),
         }
+    }
+
+    fn write_url(&mut self, url: &Url, trailing_slash: bool, in_attr: bool) {
+        super::write_url(
+            self.dest,
+            url,
+            trailing_slash,
+            in_attr,
+            |b, s| write!(b, "{}", escape_html_attribute(s)),
+            |b, s| write!(b, "{}", escape_html(s)),
+        )
+        .unwrap()
     }
 }
 
 impl FormatCmd {
-    fn html_tag(self, options: &HtmlOptions) -> (&'static str, &'static str) {
+    fn html_tag(self, _options: &FormatOptions) -> (&'static str, &'static str) {
         match self {
             FormatCmd::DisplayBlock => ("div", r#" class="csl-block""#),
             FormatCmd::DisplayIndent => ("div", r#" class="csl-indent""#),
@@ -160,13 +137,7 @@ impl FormatCmd {
             FormatCmd::FontStyleOblique => ("span", r#" style="font-style:oblique;""#),
             FormatCmd::FontStyleNormal => ("span", r#" style="font-style:normal;""#),
 
-            FormatCmd::FontWeightBold => {
-                if options.use_b_for_strong {
-                    ("b", "")
-                } else {
-                    ("strong", "")
-                }
-            }
+            FormatCmd::FontWeightBold => ("b", ""),
             FormatCmd::FontWeightNormal => ("span", r#" style="font-weight:normal;""#),
             FormatCmd::FontWeightLight => ("span", r#" style="font-weight:light;""#),
 
@@ -187,31 +158,74 @@ impl FormatCmd {
     }
 }
 
-// impl InlineElement {
-// fn is_disp(&self, disp: DisplayMode) -> bool {
-//     match *self {
-//         Div(display, _) => disp == display,
-//         _ => false,
-//     }
-// }
-// fn collapsing_left_margin(inlines: &[InlineElement], s: &mut s) {
-//     use super::InlineElement::*;
-//     let mut iter = inlines.iter().peekable();
-//     while let Some(i) = iter.next() {
-//         let peek = iter.peek();
-//         match i {
-//             Div(display, inlines) => {
-//                 if display == DisplayMode::LeftMargin {
-//                     if let Some(peek) = iter.peek() {
-//                         if !peek.is_disp(DisplayMode::RightInline) {
-//                             Div(DisplayMode::Block)
-//                             continue;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//         i.to_html_inner(&mut s, options);
-//     }
-// }
-// }
+use nom::{bytes::complete as nbc, IResult, Parser};
+
+enum Encodable<'a> {
+    Chunk(&'a str),
+    Esc(&'static str),
+}
+
+/// Try to gobble up as many non-escaping characters as possible.
+fn scan_encodable_attr<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '"' | '\''))
+        .map(Encodable::Chunk)
+        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
+        .parse(remain)
+}
+
+/// Try to gobble up as many non-escaping characters as possible.
+fn scan_encodable<'a>(remain: &'a str) -> IResult<&'a str, Encodable<'a>> {
+    nbc::take_till1(|x| matches!(x, '<' | '>' | '&' | '"' | '\''))
+        .map(Encodable::Chunk)
+        .or(nbc::tag("<").map(|_| Encodable::Esc("&lt;")))
+        .or(nbc::tag(">").map(|_| Encodable::Esc("&gt;")))
+        .or(nbc::tag("&").map(|_| Encodable::Esc("&amp;")))
+        .or(nbc::tag("\"").map(|_| Encodable::Esc("&quot;")))
+        .or(nbc::tag("'").map(|_| Encodable::Esc("&#x27;")))
+        .parse(remain)
+}
+
+struct HtmlEscaper<'a> {
+    text: &'a str,
+}
+
+impl fmt::Display for HtmlEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut remain = self.text;
+        while let Ok((rest, chunk)) = scan_encodable(remain) {
+            remain = rest;
+            match chunk {
+                Encodable::Chunk(s) => f.write_str(s)?,
+                Encodable::Esc(s) => f.write_str(s)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+struct HtmlAttrEscaper<'a> {
+    attr_inner: &'a str,
+}
+
+impl fmt::Display for HtmlAttrEscaper<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut remain = self.attr_inner;
+        while let Ok((rest, chunk)) = scan_encodable_attr(remain) {
+            remain = rest;
+            match chunk {
+                Encodable::Chunk(s) => f.write_str(s)?,
+                Encodable::Esc(s) => f.write_str(s)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+fn escape_html_attribute(attr_inner: &str) -> HtmlAttrEscaper {
+    HtmlAttrEscaper { attr_inner }
+}
+
+fn escape_html(text: &str) -> HtmlEscaper {
+    HtmlEscaper { text }
+}

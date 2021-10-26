@@ -1,0 +1,25 @@
+# See issue #123
+mode: citation
+normalise: false
+# no need to escape & inside an attribute. For the double quotes themselves,
+# if it's in an attribute at all, parse as a proper URL and simply use URL
+# %-encoding.
+#
+# notice, however, that inside the <a> tag, we escape & as normal html.
+result: <a href="https://example.com/?%22%3C&">https://example.com/?%22%3C&amp;</a>
+
+input:
+  - id: ITEM-1
+    type: book
+    url: 'https://example.com/?"<&'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <text variable="URL" />
+      </layout>
+    </citation>
+  </style>

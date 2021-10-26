@@ -4,9 +4,8 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
-use super::MarkupWriter;
-use super::MaybeTrimStart;
+use super::{FormatOptions, InlineElement, MarkupWriter, MaybeTrimStart};
+use crate::output::markup::Link;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use crate::String;
@@ -15,18 +14,37 @@ use csl::Formatting;
 #[derive(Debug)]
 pub struct PlainWriter<'a> {
     dest: &'a mut String,
+    #[allow(unused)]
+    options: FormatOptions,
 }
 
 impl<'a> PlainWriter<'a> {
-    pub fn new(dest: &'a mut String) -> Self {
-        PlainWriter { dest }
+    pub fn new(dest: &'a mut String, options: FormatOptions) -> Self {
+        PlainWriter { dest, options }
     }
 }
 
 impl<'a> MarkupWriter for PlainWriter<'a> {
+    fn buf(&mut self) -> &mut String {
+        self.dest
+    }
+
     fn write_escaped(&mut self, text: &str) {
         self.dest.push_str(text);
     }
+
+    fn write_url(&mut self, url: &url::Url, trailing_slash: bool, in_attr: bool) {
+        super::write_url(
+            self.dest,
+            url,
+            trailing_slash,
+            in_attr,
+            |b, s| Ok(b.push_str(s)),
+            |b, s| Ok(b.push_str(s)),
+        )
+        .unwrap()
+    }
+
     fn stack_preorder(&mut self, _stack: &[FormatCmd]) {}
 
     fn stack_postorder(&mut self, _stack: &[FormatCmd]) {}
@@ -84,9 +102,20 @@ impl<'a> MarkupWriter for PlainWriter<'a> {
                 self.write_inlines(inlines, false);
                 self.write_escaped(localized.closing(*is_inner));
             }
-            Anchor { content, .. } => {
-                self.write_inlines(content, trim_start);
+            Linked(link) => {
+                self.write_link("", link, "", "", self.options);
             }
+        }
+    }
+    fn write_link(&mut self, _: &str, link: &Link, _: &str, _: &str, _: FormatOptions) {
+        match link {
+            Link::Url {
+                url,
+                trailing_slash,
+            } => {
+                self.write_url(url, *trailing_slash, false);
+            }
+            Link::Id { id, url: _ } => self.write_escaped(id),
         }
     }
 }

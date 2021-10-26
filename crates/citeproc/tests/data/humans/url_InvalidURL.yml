@@ -1,0 +1,27 @@
+mode: citation
+format-options:
+  link-anchors: true
+normalise: false
+result: >-
+  https//example. ,
+  <a href="https://example./">https://example.</a> ,
+  invalid url example.com/?&quot;&lt;
+
+input:
+  - id: a
+    url: 'https//example.'
+  - id: ab
+    url: 'https:/example.'
+  - id: abc
+    url: 'invalid url example.com/?"<'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout delimiter=" , ">
+        <text variable="URL" />
+      </layout>
+    </citation>
+  </style>

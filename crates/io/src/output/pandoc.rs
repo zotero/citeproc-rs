@@ -128,20 +128,6 @@ impl OutputFormat for Pandoc {
         vec![Inline::Quoted(qt, b)]
     }
 
-    fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build {
-        // TODO: allow internal linking using the Attr parameter (e.g.
-        // first-reference-note-number)
-        if let Some(target) = target {
-            vec![Inline::Link(
-                Default::default(),
-                a,
-                Target(target.to_string(), "".to_string()),
-            )]
-        } else {
-            a
-        }
-    }
-
     fn output(&self, inter: Vec<Inline>) -> Vec<Inline> {
         let null = FlipFlopState::default();
         flip_flop_inlines(&inter, &null)

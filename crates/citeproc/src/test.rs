@@ -76,8 +76,10 @@ mod cluster_order {
         db.insert_cluster(Cluster::new(one, vec![Cite::basic("r1")], None));
         db.insert_cluster(Cluster::new(two, vec![Cite::basic("r2")], None));
         // inserting a cluster should not affect the cluster_ids.
-        db.set_cluster_order(&[ClusterPosition::in_text(one)]).unwrap();
-        db.set_cluster_order(&[ClusterPosition::in_text(one), ClusterPosition::in_text(two)]).unwrap();
+        db.set_cluster_order(&[ClusterPosition::in_text(one)])
+            .unwrap();
+        db.set_cluster_order(&[ClusterPosition::in_text(one), ClusterPosition::in_text(two)])
+            .unwrap();
     }
 }
 

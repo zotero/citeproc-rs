@@ -1,0 +1,21 @@
+# See issue #123
+mode: citation
+normalise: false
+format: rtf
+result: >-
+  {\field{\*\fldinst{HYPERLINK "https://google.com/?%E2%80%9D%C3%97%7B%7D%5C%7B%5Chello%7D"}}{\fldrslt https://google.com/?%E2%80%9D%C3%97\{\}\\\{\\hello\}}}
+
+input:
+  - id: a
+    url: 'https://google.com/?”×{}\{\hello}'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <text variable="URL" />
+      </layout>
+    </citation>
+  </style>

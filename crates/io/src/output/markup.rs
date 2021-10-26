@@ -13,12 +13,13 @@ use csl::{
     DisplayMode, FontStyle, FontVariant, FontWeight, Formatting, TextCase, TextDecoration,
     VerticalAlignment,
 };
+use url::Url;
 
 mod rtf;
 use self::rtf::RtfWriter;
 
 mod html;
-use self::html::{HtmlOptions, HtmlWriter};
+use self::html::HtmlWriter;
 
 mod plain;
 use self::plain::PlainWriter;
@@ -37,9 +38,30 @@ use crate::String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Markup {
-    Html(HtmlOptions),
-    Rtf,
-    Plain,
+    Html(FormatOptions),
+    Rtf(FormatOptions),
+    Plain(FormatOptions),
+}
+
+/// Controls how the output is formatted.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct FormatOptions {
+    /// See CSL 1.1, Appendix VI -- enable or disable making urls clickable. Default is enabled.
+    pub link_anchors: bool,
+}
+
+impl Default for FormatOptions {
+    fn default() -> Self {
+        FormatOptions { link_anchors: true }
+    }
+}
+
+impl FormatOptions {
+    pub fn test_suite() -> Self {
+        FormatOptions {
+            link_anchors: false,
+        }
+    }
 }
 
 /// TODO: serialize and deserialize using an HTML parser?
@@ -57,32 +79,41 @@ pub enum InlineElement {
         inlines: Vec<InlineElement>,
     },
     Text(String),
-    Anchor {
-        title: String,
-        url: String,
-        content: Vec<InlineElement>,
-    },
+    Linked(Link),
     Div(DisplayMode, Vec<InlineElement>),
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub enum Link {
+    /// handles a full valid url only
+    Url { url: Url, trailing_slash: bool },
+    /// e.g. a DOI that only puts the full url in a link.
+    /// The url is an optional addition, if we are rendering anchors.
+    Id { url: Url, id: String },
+    // TODO: allow internal linking (e.g. first-reference-note-number)
+    // Href(String),
+}
+
+impl InlineElement {}
+
 impl Markup {
     pub fn html() -> Self {
-        Markup::Html(HtmlOptions::default())
+        Markup::Html(FormatOptions::default())
     }
     pub fn test_html() -> Self {
-        Markup::Html(HtmlOptions::test_suite())
+        Markup::Html(FormatOptions::test_suite())
     }
     pub fn rtf() -> Self {
-        Markup::Rtf
+        Markup::Rtf(FormatOptions::default())
     }
     pub fn plain() -> Self {
-        Markup::Plain
+        Markup::Plain(FormatOptions::default())
     }
 }
 
 impl Default for Markup {
     fn default() -> Self {
-        Markup::Html(HtmlOptions::default())
+        Markup::Html(FormatOptions::default())
     }
 }
 
@@ -103,8 +134,8 @@ impl OutputFormat for Markup {
     fn meta(&self) -> Self::BibMeta {
         let (pre, post) = match self {
             Markup::Html(_) => ("<div class=\"csl-bib-body\">", "</div>"),
-            Markup::Rtf => ("", ""),
-            Markup::Plain => ("", ""),
+            Markup::Rtf(_) => ("", ""),
+            Markup::Plain(_) => ("", ""),
         };
         MarkupBibMeta {
             markup_pre: pre.into(),
@@ -192,18 +223,38 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build {
-        // TODO: allow internal linking using the Attr parameter (e.g.
-        // first-reference-note-number)
-        if let Some(target) = target {
-            vec![InlineElement::Anchor {
-                title: "".into(),
-                url: target.into(),
-                content: a,
-            }]
-        } else {
-            a
+    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build {
+        let parsed = Url::parse(full_url);
+        if let Err(e) = &parsed {
+            warn!("invalid url due to {}: {}", e, full_url);
         }
+        parsed
+            .map(|url| {
+                InlineElement::Linked(Link::Url {
+                    url,
+                    trailing_slash: full_url.ends_with("/"),
+                })
+            })
+            .map(|x| vec![x])
+            .unwrap_or_else(|_e| self.ingest(full_url, options))
+    }
+
+    #[inline]
+    fn try_link_id(&self, var: csl::Variable, id: &str, options: &IngestOptions) -> Self::Build {
+        use super::links::*;
+        match var {
+            csl::Variable::DOI => Doi::parse(id),
+            csl::Variable::PMCID => Pmcid::parse(id),
+            csl::Variable::PMID => Pmid::parse(id),
+            csl::Variable::URL => Url::parse(id)
+                .map(|url| Link::Url {
+                    url,
+                    trailing_slash: id.ends_with("/"),
+                })
+                .map(|link| vec![InlineElement::Linked(link)]),
+            _ => Ok(self.ingest(id, options)),
+        }
+        .unwrap_or_else(|_e| self.ingest(id, options))
     }
 
     #[inline]
@@ -232,8 +283,8 @@ impl OutputFormat for Markup {
     fn stack_preorder(&self, dest: &mut String, stack: &[FormatCmd]) {
         match *self {
             Markup::Html(options) => HtmlWriter::new(dest, options).stack_preorder(stack),
-            Markup::Rtf => PlainWriter::new(dest).stack_preorder(stack),
-            Markup::Plain => PlainWriter::new(dest).stack_preorder(stack),
+            Markup::Rtf(options) => PlainWriter::new(dest, options).stack_preorder(stack),
+            Markup::Plain(options) => PlainWriter::new(dest, options).stack_preorder(stack),
         }
     }
 
@@ -241,8 +292,8 @@ impl OutputFormat for Markup {
     fn stack_postorder(&self, dest: &mut String, stack: &[FormatCmd]) {
         match *self {
             Markup::Html(options) => HtmlWriter::new(dest, options).stack_postorder(stack),
-            Markup::Rtf => PlainWriter::new(dest).stack_postorder(stack),
-            Markup::Plain => PlainWriter::new(dest).stack_postorder(stack),
+            Markup::Rtf(options) => PlainWriter::new(dest, options).stack_postorder(stack),
+            Markup::Plain(options) => PlainWriter::new(dest, options).stack_postorder(stack),
         }
     }
 
@@ -299,8 +350,12 @@ impl Markup {
             Markup::Html(options) => {
                 HtmlWriter::new(&mut dest, options).write_inlines(&flipped, false)
             }
-            Markup::Rtf => RtfWriter::new(&mut dest).write_inlines(&flipped, false),
-            Markup::Plain => PlainWriter::new(&mut dest).write_inlines(&flipped, false),
+            Markup::Rtf(options) => {
+                RtfWriter::new(&mut dest, options).write_inlines(&flipped, false)
+            }
+            Markup::Plain(options) => {
+                PlainWriter::new(&mut dest, options).write_inlines(&flipped, false)
+            }
         }
         dest
     }
@@ -308,6 +363,61 @@ impl Markup {
 
 pub trait MarkupWriter {
     fn write_escaped(&mut self, text: &str);
+    /// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
+    /// if not desired).
+    fn write_url(&mut self, url: &Url, trailing_slash: bool, in_attr: bool);
+    fn buf(&mut self) -> &mut String;
+    fn write_raw(&mut self, s: &str) {
+        self.buf().push_str(s)
+    }
+    fn write_link(
+        &mut self,
+        a_href: &str,
+        link: &Link,
+        href_close: &str,
+        a_close: &str,
+        options: FormatOptions,
+    ) {
+        match link {
+            Link::Url {
+                url,
+                trailing_slash,
+            } if allow_url_scheme(url.scheme()) => {
+                if options.link_anchors {
+                    self.write_raw(a_href);
+                    self.write_url(url, *trailing_slash, true);
+                    self.write_raw(href_close);
+                    self.write_url(url, *trailing_slash, false);
+                    self.write_raw(a_close);
+                } else {
+                    self.write_url(url, *trailing_slash, false);
+                }
+            }
+            Link::Url {
+                url,
+                trailing_slash,
+            } => {
+                // This catches, e.g. `javascript:alert("hello")`
+                warn!(
+                    "refusing to render url anchor for scheme {} on url {}",
+                    url.scheme(),
+                    url
+                );
+                self.write_url(&url, *trailing_slash, false);
+            }
+            Link::Id { id, url } => {
+                if options.link_anchors {
+                    self.write_raw(a_href);
+                    self.write_url(url, false, true);
+                    self.write_raw(href_close);
+                    self.write_url(url, false, true);
+                    self.write_raw(a_close);
+                } else {
+                    self.write_escaped(id);
+                }
+            }
+        }
+    }
     fn stack_preorder(&mut self, stack: &[FormatCmd]);
     fn stack_postorder(&mut self, stack: &[FormatCmd]);
 
@@ -396,4 +506,52 @@ impl MaybeTrimStart for str {
             self
         }
     }
+}
+
+use core::fmt::{self, Write};
+
+thread_local! {
+    static ESC_BUF: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+/// Write a url; if outside an `href` attribute, modify the output slightly (remove trailing slash
+/// if not desired).
+fn write_url(
+    f: &mut String,
+    url: &Url,
+    trailing_slash: bool,
+    in_attr: bool,
+    escape_in_attribute: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
+    escape: for<'tls> fn(&mut String, &'tls str) -> fmt::Result,
+) -> fmt::Result {
+    ESC_BUF.with(|tls_buf| {
+        let mut tls_buf = tls_buf.borrow_mut();
+        tls_buf.clear();
+        write!(tls_buf, "{}", url)?;
+        if in_attr {
+            escape_in_attribute(f, &tls_buf)?;
+        } else {
+            // outside the href, be faithful to the user's intention re any
+            // trailing slash or absence thereof.
+            // normally, Url will write a trailing slash for "special" https://
+            // etc schemes, in line with WHATWG URL.
+            if url.has_host() && matches!(url.scheme(), "https" | "http") {
+                if !trailing_slash && tls_buf.ends_with('/') {
+                    tls_buf.pop();
+                }
+            }
+            escape(f, &tls_buf)?;
+        }
+        Ok(())
+    })
+}
+
+fn allow_url_scheme(scheme: &str) -> bool {
+    // see https://security.stackexchange.com/questions/148428/which-url-schemes-are-dangerous-xss-exploitable
+    // list from wordpress https://developer.wordpress.org/reference/functions/wp_allowed_protocols/
+    [
+        "https", "http", "ftp", "ftps", "mailto", "news", "irc", "irc6", "ircs", "gopher", "nntp",
+        "feed", "telnet", "mms", "rtsp", "sms", "svn", "tel", "fax", "xmpp", "webcal", "urn",
+    ]
+    .contains(&scheme)
 }

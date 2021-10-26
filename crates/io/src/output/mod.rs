@@ -10,6 +10,7 @@ use std::marker::{Send, Sync};
 use crate::IngestOptions;
 use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 
+pub mod links;
 #[cfg(feature = "markup")]
 pub mod markup;
 pub mod micro_html;
@@ -120,7 +121,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
     ///
     /// [Spec](https://docs.citationstyles.org/en/stable/specification.html#affixes)
 
-    // TODO: make formatting an Option<Formatting>
     fn text_node(&self, s: String, formatting: Option<Formatting>) -> Self::Build;
 
     /// Group some text nodes. You might want to optimise for the case where delimiter is empty.
@@ -193,7 +193,6 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         };
         let mut pre_and_content = if let Some(prefix) = affixes.as_ref().map(|a| &a.prefix) {
             if !prefix.is_empty() {
-                // TODO: use the localized quotes.
                 self.seq(once(self.ingest(prefix, &IngestOptions::for_affixes())).chain(once(b)))
             } else {
                 b
@@ -222,7 +221,9 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         in_bibliography: bool,
     ) -> Self::Build;
 
-    fn hyperlinked(&self, a: Self::Build, target: Option<&str>) -> Self::Build;
+    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build;
+    fn try_link_id(&self, var: csl::Variable, id_str: &str, options: &IngestOptions)
+        -> Self::Build;
 
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);

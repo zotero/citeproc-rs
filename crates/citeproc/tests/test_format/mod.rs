@@ -23,7 +23,8 @@ pub mod humans;
 // pub mod toml;
 pub mod yaml;
 
-use humans::{CiteprocJsInstruction, JsExecutor, Results};
+use self::humans::{CiteprocJsInstruction, JsExecutor, Results};
+use self::yaml::TestInitOptions;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -50,19 +51,9 @@ impl<'de> Deserialize<'de> for Mode {
     }
 }
 
-#[derive(Deserialize, Copy, Clone, Debug, PartialEq)]
-pub struct Format(SupportedFormat);
-impl Default for Format {
-    fn default() -> Self {
-        Format(SupportedFormat::TestHtml)
-    }
-}
-
 pub struct TestCase {
     pub mode: Mode,
-    pub format: Format,
-    pub csl_features: Option<csl::Features>,
-    pub bibliography_no_sort: bool,
+    pub init: TestInitOptions,
     pub csl: String,
     pub input: Vec<Reference>,
     pub result: String,
@@ -78,9 +69,12 @@ impl Clone for TestCase {
             Processor::new(InitOptions {
                 style: &self.csl,
                 fetcher: Some(fet),
-                format: self.format.0,
                 test_mode: true,
-                bibliography_no_sort: self.bibliography_no_sort,
+                format: self.init.format,
+                format_options: self.init.format_options,
+                bibliography_no_sort: self.init.bibliography_no_sort,
+                csl_features: self.init.csl_features.clone(),
+                locale_override: None,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -90,9 +84,7 @@ impl Clone for TestCase {
         TestCase {
             processor,
             mode: self.mode.clone(),
-            csl_features: self.csl_features.clone(),
-            format: self.format.clone(),
-            bibliography_no_sort: self.bibliography_no_sort,
+            init: self.init.clone(),
             csl: self.csl.clone(),
             input: self.input.clone(),
             result: self.result.clone(),
@@ -105,9 +97,7 @@ impl Clone for TestCase {
 impl TestCase {
     pub fn new(
         mode: Mode,
-        format: Format,
-        csl_features: Option<csl::Features>,
-        bibliography_no_sort: bool,
+        init: TestInitOptions,
         csl: String,
         input: Vec<Reference>,
         result: String,
@@ -119,10 +109,12 @@ impl TestCase {
             Processor::new(InitOptions {
                 style: &csl,
                 fetcher: Some(fet),
-                csl_features: csl_features.clone(),
-                format: format.0,
                 test_mode: true,
-                bibliography_no_sort,
+                format: init.format,
+                format_options: init.format_options,
+                csl_features: init.csl_features.clone(),
+                bibliography_no_sort: init.bibliography_no_sort,
+                locale_override: None,
                 ..Default::default()
             })
             .expect("could not construct processor")
@@ -140,10 +132,8 @@ impl TestCase {
         Warmup::maximum().execute(&mut processor);
         TestCase {
             mode,
-            format,
-            bibliography_no_sort,
+            init,
             csl,
-            csl_features,
             input,
             result,
             clusters,
@@ -153,8 +143,9 @@ impl TestCase {
     }
     pub fn execute(&mut self) -> Option<String> {
         let mut res = String::new();
+        self.result = normalise_html(&self.result, &self.init);
         if let Some(ref instructions) = &self.process_citation_clusters {
-            if self.mode == Mode::Citation {
+            if self.mode == Mode::Citation && self.init.normalise {
                 self.result.push_str("\n");
             }
             let mut executor = JsExecutor::new(&mut self.processor);
@@ -164,10 +155,10 @@ impl TestCase {
             match self.mode {
                 Mode::Citation => {
                     let desired = Results::from_str(&self.result).unwrap();
-                    self.result = desired.output_independent();
-                    Some(actual.output_independent())
+                    self.result = desired.output_independent(&self.init);
+                    Some(actual.output_independent(&self.init))
                 }
-                Mode::Bibliography => Some(get_bib_string(&self.processor)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor, &self.init)),
             }
         // turns out it's easier to just produce the string the same way
         } else {
@@ -214,15 +205,15 @@ impl TestCase {
                     // Because citeproc-rs is a bit keen to escape things
                     // Slashes are fine if they're not next to angle braces
                     // let's hope they're not
-                    Some(normalise_html(&res))
+                    Some(normalise_html(&res, &self.init))
                 }
-                Mode::Bibliography => Some(get_bib_string(&self.processor)),
+                Mode::Bibliography => Some(get_bib_string(&self.processor, &self.init)),
             }
         }
     }
 }
 
-fn get_bib_string(proc: &Processor) -> String {
+fn get_bib_string(proc: &Processor, options: &TestInitOptions) -> String {
     let bib = proc.get_bibliography();
     let fmt = &proc.formatter;
     let mut string = String::new();
@@ -241,7 +232,7 @@ fn get_bib_string(proc: &Processor) -> String {
         }
     }
     string.push_str("\n</div>\n");
-    normalise_html(&string)
+    normalise_html(&string, options)
 }
 
 struct Filesystem {
@@ -318,7 +309,10 @@ macro_rules! regex {
     }};
 }
 
-pub fn normalise_html(strg: &str) -> String {
+pub fn normalise_html(strg: &str, options: &TestInitOptions) -> String {
+    if !options.normalise {
+        return strg.to_string();
+    }
     let rep = strg
         .replace("&#x2f;", "/")
         .replace("&#x27;", "'")

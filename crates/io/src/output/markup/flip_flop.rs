@@ -120,19 +120,6 @@ fn flip_flop(
             })
         }
 
-        InlineElement::Anchor {
-            ref title,
-            ref url,
-            ref content,
-        } => {
-            let nodes = state.flip_flop_inlines(content);
-            Ok(InlineElement::Anchor {
-                title: title.clone(),
-                url: url.clone(),
-                content: nodes,
-            })
-        }
-
         InlineElement::Div(dm, ref inlines) => {
             let nodes = state.flip_flop_inlines(inlines);
             Ok(InlineElement::Div(dm, nodes))

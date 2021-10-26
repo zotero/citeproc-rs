@@ -100,11 +100,6 @@ impl OutputFormat for SortStringFormat {
     }
 
     #[inline]
-    fn hyperlinked(&self, a: Self::Build, _target: Option<&str>) -> Self::Build {
-        a
-    }
-
-    #[inline]
     fn is_empty(&self, a: &Self::Build) -> bool {
         a.is_empty()
     }
@@ -144,5 +139,21 @@ impl OutputFormat for SortStringFormat {
         let is_uppercase = !build.chars().any(|c| c.is_lowercase());
         let string = std::mem::replace(build, SmartString::new());
         *build = options.transform_case(string, false, true, is_uppercase);
+    }
+
+    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build {
+        full_url.into()
+    }
+
+    fn try_link_id(&self, var: csl::Variable, id: &str, options: &IngestOptions) -> Self::Build {
+        use citeproc_io::output::links::*;
+        match var {
+            csl::Variable::DOI => Doi::trim(id),
+            csl::Variable::PMCID => Pmcid::trim(id),
+            csl::Variable::PMID => Pmid::trim(id),
+            csl::Variable::URL => id,
+            _ => id,
+        }
+        .into()
     }
 }

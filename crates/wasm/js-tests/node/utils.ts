@@ -60,11 +60,11 @@ export const boringFetcher = new Fetcher(
 );
 
 export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
-    let style = cfg.style || mkNoteStyle('<text variable="title" />');
-    let fetcher = cfg.fetcher || boringFetcher;
-    let format = cfg.format || "plain";
-    let cslFeatures = cfg.cslFeatures || [];
-    let driver = Driver.new({ style, fetcher, format, cslFeatures }).unwrap();
+    cfg.style = cfg.style || mkNoteStyle('<text variable="title" />');
+    cfg.fetcher = cfg.fetcher || boringFetcher;
+    cfg.format = cfg.format || "plain";
+    cfg.cslFeatures = cfg.cslFeatures || [];
+    let driver = Driver.new(cfg).unwrap();
     callback(driver);
     driver.free();
 };

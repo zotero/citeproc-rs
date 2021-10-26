@@ -1,0 +1,23 @@
+# https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html, rule #2
+# Never render a url beginning with `javascript:` as an `<a href="...">`.
+mode: citation
+format-options:
+  link-anchors: true
+normalise: false
+result: javascript:alert(1337.toString())
+
+input:
+  - id: ITEM-1
+    type: book
+    url: javascript:alert(1337.toString())
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout>
+        <text variable="URL" />
+      </layout>
+    </citation>
+  </style>

@@ -1,5 +1,5 @@
 import { withDriver, oneOneOne, mkNoteStyle, mkInTextStyle, checkUpdatesLen } from './utils';
-import {UpdateSummary, Driver} from '@citeproc-rs/wasm';
+import { UpdateSummary, Driver } from '@citeproc-rs/wasm';
 
 describe("Driver", () => {
 
@@ -14,7 +14,7 @@ describe("Driver", () => {
             expect(driver).not.toBeNull();
             oneOneOne(driver);
             driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE" });
-            driver.initClusters([{id: "one", cites: [{id: "citekey"}]}]);
+            driver.initClusters([{ id: "one", cites: [{ id: "citekey" }] }]);
             driver.setClusterOrder([{ id: "one" }]);
             let res = driver.builtCluster("one").unwrap();
             expect(res).toBe("TEST_TITLE");
@@ -44,7 +44,7 @@ describe("batchedUpdates", () => {
     );
 
     test('fullRender works', () => {
-        withDriver({style: bibStyle}, driver => {
+        withDriver({ style: bibStyle }, driver => {
             oneOneOne(driver);
             let full = driver.fullRender().unwrap();
             expect(full.allClusters).toHaveProperty("one", "TEST_TITLE");
@@ -53,7 +53,7 @@ describe("batchedUpdates", () => {
     });
 
     test('update queue generally', () => {
-        withDriver({style: bibStyle}, driver => {
+        withDriver({ style: bibStyle }, driver => {
             let once: UpdateSummary, twice: UpdateSummary;
 
             // Initially empty
@@ -91,7 +91,7 @@ describe("batchedUpdates", () => {
             expect(once).toEqual(twice); checkUpdatesLen(once, 0, 0);
 
             // Add it to the document, and it's a different story
-            driver.setClusterOrder([ {id:"one"},{id:"123"} ]).unwrap();
+            driver.setClusterOrder([{ id: "one" }, { id: "123" }]).unwrap();
             once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
             expect(once).not.toEqual(twice); checkUpdatesLen(twice, 0, 0);
             expect(once.clusters).toContainEqual(["123", "ADDED"]);
@@ -134,8 +134,8 @@ describe("previewCitationCluster", () => {
         pccSetup((driver, [one, two]) => {
             // between the other two
             let pcc = driver.previewCitationCluster(
-                [ { id: "r1" } ],
-                [{ id: one }, { }, { id: two }],
+                [{ id: "r1" }],
+                [{ id: one }, {}, { id: two }],
                 "plain"
             ).unwrap();
             expect(pcc).toEqual("ibid");
@@ -146,14 +146,14 @@ describe("previewCitationCluster", () => {
         pccSetup((driver, [one, two]) => {
             // replacing #1
             var pcc = driver.previewCitationCluster(
-                [ { id: "r1" } ],
-                [{ }, { id: two }],
+                [{ id: "r1" }],
+                [{}, { id: two }],
                 "plain"
             ).unwrap();
             expect(pcc).toEqual("ONE");
             // replacing #1, with note numbers isntead
             pcc = driver.previewCitationCluster(
-                [ { id: "r1" } ],
+                [{ id: "r1" }],
                 [{ note: 1, }, { id: two, note: 5 }],
                 "plain"
             ).unwrap();
@@ -161,9 +161,9 @@ describe("previewCitationCluster", () => {
         })
     })
 
-    test("should error when supplying unsupported output format",() => {
+    test("should error when supplying unsupported output format", () => {
         pccSetup((driver, [one, two]) => {
-            let res = driver.previewCitationCluster([{id: "r1"}], [{}], "plaintext");
+            let res = driver.previewCitationCluster([{ id: "r1" }], [{}], "plaintext");
             expect(() => res.unwrap()).toThrow("Unknown output format \"plaintext\"");
         })
     })
@@ -185,8 +185,8 @@ describe("AuthorOnly and friends", () => {
         withDriver({ style }, driver => {
             let one = "cluster-one";
             let two = "cluster-two";
-            oneOneOne(driver, { title: "ONE", id: "r1", author: [{family: "Smith"}] }, "cluster-one");
-            oneOneOne(driver, { title: "TWO", id: "r2", author: [{family: "Jones"}] }, "cluster-two");
+            oneOneOne(driver, { title: "ONE", id: "r1", author: [{ family: "Smith" }] }, "cluster-one");
+            oneOneOne(driver, { title: "TWO", id: "r2", author: [{ family: "Jones" }] }, "cluster-two");
             driver.setClusterOrder([{ id: one }, { id: two }]).unwrap();
             callback(driver, [one, two]);
         })
@@ -216,7 +216,7 @@ describe("AuthorOnly and friends", () => {
     describe("on a Cluster", () => {
         test("should accept mode: SuppressAuthor", () => {
             withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "SuppressAuthor", cites: [{ id: "r1"}, {id: "r2"}] }).unwrap();
+                driver.insertCluster({ id: one, mode: "SuppressAuthor", cites: [{ id: "r1" }, { id: "r2" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("ONE; Jones, TWO");
                 driver.insertCluster({ id: one, mode: "SuppressAuthor", suppressFirst: 2, cites: [{ id: "r1", }, { id: "r2" }] }).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toEqual("ONE; TWO");
@@ -254,17 +254,44 @@ describe("AuthorOnly and friends", () => {
 
     describe("<intext> element", () => {
         test("should parse when custom-intext feature is enabled via Driver.new", () => {
-            withDriver({style: styleWithIntext, cslFeatures: ["custom-intext"]}, driver => {
+            withDriver({ style: styleWithIntext, cslFeatures: ["custom-intext"] }, driver => {
                 let one = "cluster-one";
                 driver.insertReference({ id: "r1", title: "hi", })
                 driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] }).unwrap();
-                driver.setClusterOrder([{ id: one}]).unwrap();
+                driver.setClusterOrder([{ id: one }]).unwrap();
                 expect(driver.builtCluster(one).unwrap()).toBe("intext element");
             });
         });
         test("should fail to parse when custom-intext feature is not enabled via Driver.new", () => {
-            let driver_is_err = Driver.new({style: styleWithIntext, cslFeatures: []}).is_err();
+            let driver_is_err = Driver.new({ style: styleWithIntext, cslFeatures: [] }).is_err();
             expect(driver_is_err).toBe(true);
+        });
+    });
+});
+
+describe("initialiser", () => {
+    let urlStyle = mkInTextStyle(
+        `
+        <group delimiter=", ">
+            <text variable="url" />
+        </group>
+        `,
+    );
+
+    test("enables linkAnchors by default", () => {
+        withDriver({ style: urlStyle, format: "html" }, driver => {
+            let one = "cluster-one";
+            oneOneOne(driver, { title: "ONE", id: "r1", url: "https://example.com/nice?work=buddy&q=5" }, one);
+            driver.setClusterOrder([{ id: one }]).unwrap();
+            expect(driver.builtCluster(one).unwrap()).toEqual(`<a href="https://example.com/nice?work=buddy&q=5">https://example.com/nice?work=buddy&amp;q=5</a>`)
+        });
+    });
+    test("can disable linkAnchors", () => {
+        withDriver({ style: urlStyle, format: "html", formatOptions: { linkAnchors: false } }, driver => {
+            let one = "cluster-one";
+            oneOneOne(driver, { title: "ONE", id: "r1", url: "https://example.com/nice?work=buddy&q=5" }, one);
+            driver.setClusterOrder([{ id: one }]).unwrap();
+            expect(driver.builtCluster(one).unwrap()).toEqual(`https://example.com/nice?work=buddy&amp;q=5`)
         });
     });
 });

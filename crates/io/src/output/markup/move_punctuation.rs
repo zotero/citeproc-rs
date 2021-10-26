@@ -229,9 +229,6 @@ pub fn normalise_text_elements(slice: &mut Vec<InlineElement>) {
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-            | InlineElement::Anchor {
-                content: inlines, ..
-            }
             | InlineElement::Formatted(inlines, _) => normalise_text_elements(inlines),
             InlineElement::Micro(micros) => normalise_text_elements_micro(micros),
             _ => {}
@@ -313,9 +310,6 @@ pub fn move_punctuation(slice: &mut Vec<InlineElement>, punctuation_in_quote: Op
         match inl {
             InlineElement::Quoted { inlines, .. }
             | InlineElement::Div(_, inlines)
-            | InlineElement::Anchor {
-                content: inlines, ..
-            }
             | InlineElement::Formatted(inlines, _) => {
                 move_punctuation(inlines, punctuation_in_quote)
             }
@@ -950,7 +944,7 @@ pub fn ends_with_full_stop(els: &[InlineElement], top: bool) -> bool {
         InlineElement::Formatted(inlines, _) | InlineElement::Quoted { inlines, .. } => {
             ends_with_full_stop(inlines, false)
         }
-        InlineElement::Anchor { .. } | InlineElement::Div(..) => true,
+        InlineElement::Div(..) | InlineElement::Linked(_) => true,
 
         InlineElement::Micro(micros) => {
             return micro_ends_fs(micros, top);
