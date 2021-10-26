@@ -9,16 +9,16 @@
     "build": "./build.sh"
   },
   "dependencies": {
-    "@types/jest": "^26.0.14"
+    "@types/jest": "^27.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.11.6",
     "@babel/preset-env": "^7.11.5",
     "@babel/preset-typescript": "^7.10.4",
-    "babel-jest": "^26.3.0",
-    "geckodriver": "^1.22.3",
-    "jest": "^26.4.2",
-    "jest-environment-node": "^26.6.2",
+    "babel-jest": "^27.3.1",
+    "geckodriver": "^2.0.4",
+    "jest": "^27.3.1",
+    "jest-environment-node": "^27.3.1",
     "selenium-webdriver": "^4.0.0-beta.3"
   }
 }
