@@ -1,0 +1,27 @@
+mode: citation
+format-options:
+  link-anchors: true
+normalise: false
+result: >-
+  <a href="https://doi.org/10.1109/5.771073">https://doi.org/10.1109/5.771073</a> ,
+  <a href="https://doi.org/10.1109/5.771073">https://doi.org/10.1109/5.771073</a> ,
+  <a href="https://doi.org/10.1109/5.771073">https://doi.org/10.1109/5.771073</a>
+
+input:
+  - id: a
+    doi: '10.1109/5.771073'
+  - id: ab
+    doi: 'doi:10.1109/5.771073'
+  - id: ac
+    doi: 'https://doi.org/10.1109/5.771073'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout delimiter=" , ">
+        <text variable="doi" prefix="https://doi.org/" />
+      </layout>
+    </citation>
+  </style>
