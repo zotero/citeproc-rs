@@ -1,10 +1,12 @@
 # https://github.com/zotero/citeproc-rs/issues/129
 mode: citation
 normalise: false
-result: " &lt;https://example.com/path"
+result: " &lt;https://example.com/weird-invalid-tag; &lt;b&gt;meek&lt;/b&gt; full tag"
 input:
   - id: 1
-    title: "path"
+    title: "weird-invalid-tag"
+  - id: 2
+    URL: "full tag"
 csl:
   <style class="in-text" version="1.0">
     <info><title>title</title><id>id</id><updated>2010-01-27T20:08:03+00:00</updated>
@@ -15,6 +17,7 @@ csl:
     <citation>
       <layout delimiter="; ">
           <text prefix=" &lt;https://example.com/" variable="title" />
+          <text prefix="&lt;b&gt;meek&lt;/b&gt; " variable="URL" />
       </layout>
     </citation>
   </style>
