@@ -125,14 +125,14 @@ macro_rules! linkid {
 }
 linkid!(pub Doi, "doi:", "DOI:", "http://doi.org/", "https://doi.org/");
 linkid!(
-    pub Pmcid,
+    pub Pmid,
     "pmid:",
     "PMID:",
     "http://www.ncbi.nlm.nih.gov/pubmed/",
     "https://www.ncbi.nlm.nih.gov/pubmed/"
 );
 linkid!(
-    pub Pmid,
+    pub Pmcid,
     "pmcid:",
     "PMCID:",
     "http://www.ncbi.nlm.nih.gov/pmc/articles/",
