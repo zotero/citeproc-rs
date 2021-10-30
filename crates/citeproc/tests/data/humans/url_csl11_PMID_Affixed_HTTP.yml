@@ -1,0 +1,33 @@
+mode: citation
+format-options:
+  link-anchors: true
+normalise: false
+result: >-
+  <a href="https://www.ncbi.nlm.nih.gov/pubmed/34684596">https://www.ncbi.nlm.nih.gov/pubmed/34684596</a> ,
+  <a href="https://www.ncbi.nlm.nih.gov/pubmed/34684596">https://www.ncbi.nlm.nih.gov/pubmed/34684596</a> ,
+  <a href="https://www.ncbi.nlm.nih.gov/pubmed/34684596">https://www.ncbi.nlm.nih.gov/pubmed/34684596</a> ,
+  <a href="https://www.ncbi.nlm.nih.gov/pubmed/34684596">https://www.ncbi.nlm.nih.gov/pubmed/34684596</a> ,
+  <a href="https://www.ncbi.nlm.nih.gov/pubmed/34684596">https://www.ncbi.nlm.nih.gov/pubmed/34684596</a>
+
+input:
+  - id: pa
+    pmid: '34684596'
+  - id: pn
+    pmid: 34684596
+  - id: pb
+    pmid: 'pmid:34684596'
+  - id: pbb
+    pmid: 'PMID:34684596'
+  - id: pc
+    pmid: 'http://www.ncbi.nlm.nih.gov/pubmed/34684596'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout delimiter=" , ">
+        <text variable="pmid" prefix="http://www.ncbi.nlm.nih.gov/pubmed/" />
+      </layout>
+    </citation>
+  </style>

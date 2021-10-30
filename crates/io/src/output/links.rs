@@ -66,25 +66,15 @@ pub fn try_link_affixed_opt(
 trait LinkId {
     const LOWER: &'static str;
     const UPPER: &'static str;
-    const HTTP: &'static str;
-    const HTTPS: &'static str;
-    fn trim_start(s: &str) -> &str {
-        // at most, strip one of the four, once
-        s.strip_prefix(Self::HTTPS)
-            .or(s.strip_prefix(Self::HTTP))
-            .or(s.strip_prefix(Self::LOWER))
-            .or(s.strip_prefix(Self::UPPER))
-            .unwrap_or(s)
-    }
-    fn trim_end_https(s: &str) -> Option<&str> {
-        s.strip_suffix(Self::HTTPS).or(s.strip_suffix(Self::HTTP))
-    }
+    const CANONICAL_HTTPS: &'static str;
+    fn trim_start(s: &str) -> &str;
+    fn trim_end_https(s: &str) -> Option<&str>;
     fn parse(
         s: &str,
         affixes: Option<&Affixes>,
     ) -> Result<(Link, Option<Affixes>), url::ParseError> {
         let trimmed_id = Self::trim_start(s);
-        let url = Url::parse(Self::HTTPS)?;
+        let url = Url::parse(Self::CANONICAL_HTTPS)?;
         let url = url.join(trimmed_id)?;
 
         // If we do strip `https://...` out of the affixes, then something like this would break if
@@ -97,13 +87,13 @@ trait LinkId {
         // In a very technical sense, this is incorrect as the prefix should not normally receive
         // the formatting that the variable content does; however, in this case, the intention is
         // clear as we only ever add `https://....`. This will also convert any use of HTTP by
-        // *styles* to HTTPS.
+        // *styles* to CANONICAL_HTTPS.
         let overridden = affixes
             .map(|a| trim_affixes(a, Self::trim_end_https))
             .flatten();
         let id = if overridden.is_some() {
             let mut id = String::new();
-            id.push_str(Self::HTTPS);
+            id.push_str(Self::CANONICAL_HTTPS);
             id.push_str(trimmed_id);
             id
         } else {
@@ -112,29 +102,71 @@ trait LinkId {
         Ok((Link::Id { url, id }, overridden))
     }
 }
+
 macro_rules! linkid {
-    ($vis:vis $name:ident, $lower:literal, $upper:literal, $http:literal, $https:literal) => {
+    (
+        $vis:vis $name:ident,
+        LOWER = $lower:literal,
+        UPPER = $upper:literal,
+        CANONICAL_HTTPS = $https:literal,
+        OTHER_HTTP = [$($http:literal,)*]
+    ) => {
         $vis struct $name;
         impl LinkId for $name {
             const LOWER: &'static str = $lower;
             const UPPER: &'static str = $upper;
-            const HTTP: &'static str = $http;
-            const HTTPS: &'static str = $https;
+            const CANONICAL_HTTPS: &'static str = $https;
+
+            fn trim_start(s: &str) -> &str {
+                // at most, strip one of these, once
+                s.strip_prefix(Self::CANONICAL_HTTPS)
+                    .or(s.strip_prefix(Self::LOWER))
+                    .or(s.strip_prefix(Self::UPPER))
+                    $(.or(s.strip_prefix($http)))*
+                    .unwrap_or(s)
+            }
+
+            fn trim_end_https(s: &str) -> Option<&str> {
+                s.strip_suffix(Self::CANONICAL_HTTPS)
+                $(.or(s.strip_suffix($http)))*
+            }
         }
     };
 }
-linkid!(pub Doi, "doi:", "DOI:", "http://doi.org/", "https://doi.org/");
+
+linkid!(
+    pub Doi,
+    LOWER = "doi:",
+    UPPER =  "DOI:",
+    CANONICAL_HTTPS = "https://doi.org/",
+    OTHER_HTTP = [
+        "http://doi.org/",
+    ]
+);
+
 linkid!(
     pub Pmid,
-    "pmid:",
-    "PMID:",
-    "http://www.ncbi.nlm.nih.gov/pubmed/",
-    "https://www.ncbi.nlm.nih.gov/pubmed/"
+    LOWER = "pmid:",
+    UPPER = "PMID:",
+    CANONICAL_HTTPS = "https://www.ncbi.nlm.nih.gov/pubmed/",
+    OTHER_HTTP = [
+        "http://www.ncbi.nlm.nih.gov/pubmed/",
+        // These days all your pmid links get redirected to links like these
+        // So probably at some point we should update the CANONICAL_HTTPS link
+        "http://pubmed.ncbi.nlm.nih.gov/",
+        "https://pubmed.ncbi.nlm.nih.gov/",
+    ]
 );
+
 linkid!(
     pub Pmcid,
-    "pmcid:",
-    "PMCID:",
-    "http://www.ncbi.nlm.nih.gov/pmc/articles/",
-    "https://www.ncbi.nlm.nih.gov/pmc/articles/"
+    LOWER = "pmcid:",
+    UPPER = "PMCID:",
+    CANONICAL_HTTPS = "https://www.ncbi.nlm.nih.gov/pmc/articles/",
+    OTHER_HTTP = [
+        "http://www.ncbi.nlm.nih.gov/pmc/articles/",
+        // in case you're using PMC Labs
+        "https://www.ncbi.nlm.nih.gov/labs/pmc/articles/",
+        "http://www.ncbi.nlm.nih.gov/labs/pmc/articles/",
+    ]
 );
