@@ -75,14 +75,16 @@ pub struct IngestOptions {
     /// fields on a reference it's very different.
     pub is_external: bool,
 
-    /// For affixes.
+    /// For names
     pub no_parse_quotes: bool,
+    /// For affixes in a csl style, etc. No HTML parsing, but does parse super/subscript.
+    pub is_attribute: bool,
 }
 
 impl IngestOptions {
     pub(crate) fn for_affixes() -> Self {
         IngestOptions {
-            no_parse_quotes: true,
+            is_attribute: true,
             ..Default::default()
         }
     }

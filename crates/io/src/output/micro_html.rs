@@ -30,17 +30,19 @@ impl MicroNode {
     }
 }
 
-use crate::output::markup::parse_quotes;
-
 impl MicroNode {
-    /// TODO: catch errors and get the input back as a String
     pub fn parse(fragment: &str, options: &IngestOptions) -> Vec<MicroNode> {
-        let mut tag_parser = TagParser::new(&fragment);
-        let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
-        if !options.no_parse_quotes {
-            parse_quotes(result, options)
+        if options.is_attribute {
+            let plain = options.plain(fragment);
+            super::superscript::parse_sup_sub(&plain)
         } else {
-            result
+            let mut tag_parser = TagParser::new(&fragment);
+            let result: Vec<MicroNode> = tag_parser.walk(&MicroHtmlReader { options });
+            if options.no_parse_quotes {
+                result
+            } else {
+                super::parse_quotes::parse_quotes(result, options)
+            }
         }
     }
 }

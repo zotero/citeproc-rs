@@ -4,7 +4,7 @@
 //
 // Copyright © 2019 Corporation for Digital Scholarship
 
-use super::InlineElement;
+use crate::output::markup::InlineElement;
 use crate::output::micro_html::MicroNode;
 use crate::output::FormatCmd;
 use csl::{FontStyle, FontVariant, FontWeight, Formatting, TextDecoration, VerticalAlignment};

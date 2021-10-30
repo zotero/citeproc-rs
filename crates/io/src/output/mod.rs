@@ -10,17 +10,17 @@ use std::marker::{Send, Sync};
 use crate::IngestOptions;
 use csl::{Atom, Locale, QuoteTerm, SimpleTermSelector};
 
-pub mod links;
 #[cfg(feature = "markup")]
 pub mod markup;
-pub mod micro_html;
+
 // #[cfg(feature = "pandoc")]
 // pub mod pandoc;
-mod superscript;
 
-// pub use self::pandoc::Pandoc;
-// pub use self::plain::PlainText;
-// pub use self::markup::Markup;
+pub mod links;
+pub mod micro_html;
+mod parse_quotes;
+mod puncttable;
+mod superscript;
 
 use csl::{Affixes, DisplayMode, Formatting};
 use serde::{de::DeserializeOwned, Serialize};
