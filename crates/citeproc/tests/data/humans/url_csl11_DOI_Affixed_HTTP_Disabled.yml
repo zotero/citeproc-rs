@@ -1,0 +1,28 @@
+mode: citation
+format-options:
+  link-anchors: false
+normalise: false
+result: >-
+  prefixed https://doi.org/10.1109/5.771073 ,
+  prefixed https://doi.org/10.1109/5.771073 ,
+  prefixed https://doi.org/10.1109/5.771073
+
+input:
+  - id: a
+    doi: '10.1109/5.771073'
+  - id: ab
+    doi: 'doi:10.1109/5.771073'
+  - id: ac
+    doi: 'https://doi.org/10.1109/5.771073'
+
+csl: |
+  <?xml version="1.0" encoding="utf-8"?>
+  <style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0.1" default-locale="en-US">
+    <info><id>https://cormacrelf.net/citeproc-rs/test-style</id><title>test-style</title></info>
+    <citation>
+      <layout delimiter=" , ">
+        <!-- note this is http, it will still get canonicalised to https  -->
+        <text variable="doi" prefix="prefixed http://doi.org/" />
+      </layout>
+    </citation>
+  </style>
