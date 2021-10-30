@@ -31,7 +31,6 @@ impl MicroNode {
 }
 
 impl MicroNode {
-    /// TODO: catch errors and get the input back as a String
     pub fn parse(fragment: &str, options: &IngestOptions) -> Vec<MicroNode> {
         if options.is_attribute {
             let plain = options.plain(fragment);
@@ -42,7 +41,7 @@ impl MicroNode {
             if options.no_parse_quotes {
                 result
             } else {
-                super::markup::parse_quotes(result, options)
+                super::parse_quotes::parse_quotes(result, options)
             }
         }
     }
