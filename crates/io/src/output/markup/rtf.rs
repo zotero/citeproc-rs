@@ -294,7 +294,11 @@ mod test {
         let fmt_url = |url_str: &str, in_attr: bool| {
             let mut dest = String::new();
             let url = url::Url::parse(url_str).unwrap();
-            RtfWriter::new(&mut dest, Default::default()).write_url(&url, url_str.ends_with('/'), in_attr);
+            RtfWriter::new(&mut dest, Default::default()).write_url(
+                &url,
+                url_str.ends_with('/'),
+                in_attr,
+            );
             dest
         };
 

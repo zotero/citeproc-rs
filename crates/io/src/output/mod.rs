@@ -106,6 +106,8 @@ pub enum FormatCmd {
 
 use std::hash::Hash;
 
+use self::links::Link;
+
 pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::Debug {
     type Input: std::fmt::Debug + DeserializeOwned + Default + Clone + Send + Sync + Eq + Hash;
     type Build: std::fmt::Debug + Default + Clone + Send + Sync + Eq;
@@ -221,9 +223,7 @@ pub trait OutputFormat: Send + Sync + Clone + Default + PartialEq + std::fmt::De
         in_bibliography: bool,
     ) -> Self::Build;
 
-    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build;
-    fn try_link_id(&self, var: csl::Variable, id_str: &str, options: &IngestOptions)
-        -> Self::Build;
+    fn link(&self, link: Link) -> Self::Build;
 
     fn stack_preorder(&self, s: &mut String, stack: &[FormatCmd]);
     fn stack_postorder(&self, s: &mut String, stack: &[FormatCmd]);

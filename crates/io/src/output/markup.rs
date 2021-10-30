@@ -5,6 +5,7 @@
 // Copyright © 2019 Corporation for Digital Scholarship
 
 use self::InlineElement::*;
+use super::links::Link;
 use super::micro_html::MicroNode;
 use super::{FormatCmd, LocalizedQuotes, OutputFormat};
 use crate::utils::JoinMany;
@@ -78,17 +79,6 @@ pub enum InlineElement {
     Text(String),
     Linked(Link),
     Div(DisplayMode, Vec<InlineElement>),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
-pub enum Link {
-    /// handles a full valid url only
-    Url { url: Url, trailing_slash: bool },
-    /// e.g. a DOI that only puts the full url in a link.
-    /// The url is an optional addition, if we are rendering anchors.
-    Id { url: Url, id: String },
-    // TODO: allow internal linking (e.g. first-reference-note-number)
-    // Href(String),
 }
 
 impl InlineElement {}
@@ -220,38 +210,8 @@ impl OutputFormat for Markup {
     }
 
     #[inline]
-    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build {
-        let parsed = Url::parse(full_url);
-        if let Err(e) = &parsed {
-            warn!("invalid url due to {}: {}", e, full_url);
-        }
-        parsed
-            .map(|url| {
-                InlineElement::Linked(Link::Url {
-                    url,
-                    trailing_slash: full_url.ends_with("/"),
-                })
-            })
-            .map(|x| vec![x])
-            .unwrap_or_else(|_e| self.ingest(full_url, options))
-    }
-
-    #[inline]
-    fn try_link_id(&self, var: csl::Variable, id: &str, options: &IngestOptions) -> Self::Build {
-        use super::links::*;
-        match var {
-            csl::Variable::DOI => Doi::parse(id),
-            csl::Variable::PMCID => Pmcid::parse(id),
-            csl::Variable::PMID => Pmid::parse(id),
-            csl::Variable::URL => Url::parse(id)
-                .map(|url| Link::Url {
-                    url,
-                    trailing_slash: id.ends_with("/"),
-                })
-                .map(|link| vec![InlineElement::Linked(link)]),
-            _ => Ok(self.ingest(id, options)),
-        }
-        .unwrap_or_else(|_e| self.ingest(id, options))
+    fn link(&self, link: Link) -> Self::Build {
+        vec![InlineElement::Linked(link)]
     }
 
     #[inline]
