@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use citeproc_io::output::links::Link;
 use citeproc_io::output::{
     micro_html::micro_html_to_string, FormatCmd, LocalizedQuotes, OutputFormat,
 };
@@ -141,19 +142,11 @@ impl OutputFormat for SortStringFormat {
         *build = options.transform_case(string, false, true, is_uppercase);
     }
 
-    fn try_link_full(&self, full_url: &str, options: &IngestOptions) -> Self::Build {
-        full_url.into()
-    }
-
-    fn try_link_id(&self, var: csl::Variable, id: &str, options: &IngestOptions) -> Self::Build {
-        use citeproc_io::output::links::*;
-        match var {
-            csl::Variable::DOI => Doi::trim(id),
-            csl::Variable::PMCID => Pmcid::trim(id),
-            csl::Variable::PMID => Pmid::trim(id),
-            csl::Variable::URL => id,
-            _ => id,
+    fn link(&self, link: Link) -> Self::Build {
+        match link {
+            Link::Url { url, .. } | Link::Id { url, .. } => {
+                smart_format!("{}", url)
+            }
         }
-        .into()
     }
 }

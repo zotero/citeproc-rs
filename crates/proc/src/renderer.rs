@@ -328,21 +328,31 @@ impl<'c, O: OutputFormat, I: OutputFormat> Renderer<'c, O, I> {
         hyper: Option<Variable>,
     ) -> O::Build {
         let fmt = self.fmt();
-        let mut b = self.try_link(string, options, hyper);
+        let mut affixes = text.affixes.as_ref();
+        let (mut b, fixed_af) = self.try_link(string, options, hyper, affixes);
+        affixes = fixed_af.as_ref().or(affixes);
         b = fmt.with_format(b, text.formatting);
-        b = fmt.affixed_quoted(b, text.affixes.as_ref(), self.quotes_if(text.quotes));
+        b = fmt.affixed_quoted(b, affixes, self.quotes_if(text.quotes));
         fmt.with_display(b, text.display, self.ctx.in_bibliography())
     }
 
-    fn try_link(&self, string: &str, options: &IngestOptions, hyper: Option<Variable>) -> O::Build {
+    fn try_link(
+        &self,
+        string: &str,
+        options: &IngestOptions,
+        hyper: Option<Variable>,
+        affixes: Option<&Affixes>,
+    ) -> (O::Build, Option<Affixes>) {
         let fmt = self.fmt();
-        match hyper {
-            Some(Variable::URL) => fmt.try_link_full(string, options),
-            Some(var @ Variable::DOI)
-            | Some(var @ Variable::PMCID)
-            | Some(var @ Variable::PMID) => fmt.try_link_id(var, string, options),
-            _ => fmt.ingest(string, options),
+        if let Some(var) = hyper {
+            if let Some((link, fixed_af)) =
+                citeproc_io::output::links::try_link_affixed_opt(var, string, affixes)
+            {
+                let linked = fmt.link(link);
+                return (linked, fixed_af);
+            }
         }
+        (fmt.ingest(string, options), None)
     }
 
     pub fn name_label(
