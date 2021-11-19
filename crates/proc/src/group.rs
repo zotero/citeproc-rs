@@ -39,6 +39,26 @@ pub enum GroupVars {
     UnresolvedPlain,
 }
 
+#[test]
+fn test_important_seq() {
+    let f = |slice: &[GroupVars]| {
+        slice
+            .iter()
+            .fold(GroupVars::Plain, |a, b| a.neighbour(*b))
+            .promote_plain()
+    };
+    assert_eq!(f(&[Important, Missing]), Important);
+    assert_eq!(f(&[Unresolved, Missing]), UnresolvedMissing);
+    assert_eq!(f(&[Unresolved, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[Unresolved, Plain, Important]), Important);
+    assert_eq!(f(&[Unresolved, Missing, Important]), Important);
+    assert_eq!(f(&[Important, Unresolved, Missing]), Important);
+    // plains in a group end up being important.
+    assert_eq!(f(&[Plain, Plain, Plain]), Important);
+    assert_eq!(f(&[Unresolved, Plain, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[UnresolvedMissing, Plain, Plain]), UnresolvedMissing);
+}
+
 impl Default for GroupVars {
     fn default() -> Self {
         GroupVars::new()
@@ -125,6 +145,19 @@ impl GroupVars {
         }
     }
 
+    /// Resets the group vars so that G(Missing, G(Plain)) will
+    /// render the Plain part. Groups shouldn't look inside inner
+    /// groups to make themselves not render.
+    ///
+    /// https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
+    #[inline]
+    pub fn promote_plain(self) -> Self {
+        match self {
+            Plain | Important => Important,
+            _ => self,
+        }
+    }
+
     #[inline]
     pub fn should_render_tree(self) -> bool {
         self != Missing && self != UnresolvedMissing && self != Unresolved
@@ -135,18 +168,23 @@ impl GroupVars {
         self,
         ir: T,
     ) -> (T, Self) {
-        let default = T::default();
+        // self here is children_gvs.fold(Plain, neighbour).
+        let def = T::default();
+
         if self == Missing {
-            (default, GroupVars::Missing)
-        } else if ir == default {
-            (default, GroupVars::Plain)
-        } else {
-            // "reset" the group vars so that G(Plain, G(Missing)) will
-            // render the Plain part. Groups shouldn't look inside inner
-            // groups.
+            // if it's missing, we replace any (clearly Plain-only) nodes we wrote into the seq,
+            // with the default for the seq type.
             //
-            // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
-            (ir, if self == Plain { Important } else { self })
+            // Note that this does not affect UnresolvedMissing. That output is kept.
+            (def, GroupVars::Missing)
+        } else if ir == def {
+            // if it's empty (== default implies empty), then we treat the seq node as Plain for
+            // the purposes of groups higher up.
+            (ir, GroupVars::Plain)
+        } else {
+            // otherwise, if it's Plain, make it Important. This means G(Missing, G(Plain)) will
+            // render the Plain part.
+            (ir, self.promote_plain())
         }
     }
 }
