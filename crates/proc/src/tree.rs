@@ -1,6 +1,6 @@
-use indextree::Arena;
-
 use crate::prelude::*;
+use core::fmt;
+use indextree::Arena;
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct IrTree<O: OutputFormat = Markup> {
@@ -56,16 +56,21 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     }
 }
 
-impl<O: OutputFormat> std::fmt::Display for IrTree<O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<O: OutputFormat> fmt::Display for IrTree<O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.tree_ref().fmt(f)
     }
 }
 
-impl<O: OutputFormat> std::fmt::Debug for IrTree<O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<O: OutputFormat> fmt::Debug for IrTree<O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.tree_ref().fmt(f)
-        // <IrTreeRef<'_, _> as std::fmt::Debug>::fmt(&self.as_reference(), f)
+    }
+}
+
+impl<O: OutputFormat> fmt::Debug for IrTreeMut<'_, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <IrTreeRef<'_, _> as fmt::Debug>::fmt(&self.as_ref(), f)
     }
 }
 
@@ -134,14 +139,14 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     }
 }
 
-impl<'a, O: OutputFormat> std::fmt::Display for IrTreeRef<'a, O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a, O: OutputFormat> fmt::Display for IrTreeRef<'a, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn go<O2: OutputFormat>(
             indent: u32,
             node: NodeId,
             arena: &IrArena<O2>,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
                 write!(f, "    ")?;
@@ -155,14 +160,14 @@ impl<'a, O: OutputFormat> std::fmt::Display for IrTreeRef<'a, O> {
     }
 }
 
-impl<'a, O: OutputFormat> std::fmt::Debug for IrTreeRef<'a, O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a, O: OutputFormat> fmt::Debug for IrTreeRef<'a, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn go<O2: OutputFormat>(
             indent: u32,
             node: NodeId,
             arena: &IrArena<O2>,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
                 write!(f, "    ")?;
