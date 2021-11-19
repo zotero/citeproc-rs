@@ -983,7 +983,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
         .citation
         .intermediate(db, &mut state, &ctx, &mut arena);
     let irgen = IrGen::new(IrTree::new(root, arena), state, false);
-    log::debug!("ir_gen0: {:?}", irgen);
+    log::debug!("ir_gen0: {}", irgen.tree);
     Arc::new(irgen)
 }
 
@@ -1102,7 +1102,7 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     irgen.update_is_ambiguous(db, &ctx);
     irgen.disambiguate_add_names(db, &mut ctx);
     irgen.disambiguate_add_given_name(db, &mut ctx);
-    log::debug!("ir_gen2_add_given_name: {:?}", irgen.deref());
+    log::debug!("ir_gen2_add_given_name: {}", irgen.deref().tree);
     irgen.into_arc()
 }
 
@@ -1118,7 +1118,7 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     let mut irgen = IrGenCow::new(db.ir_gen2_add_given_name(id));
     irgen.disambiguate_add_year_suffix(db, &mut ctx);
     irgen.disambiguate_conditionals(db, &mut ctx);
-    log::debug!("ir_fully_disambiguated: {:?}", irgen.deref());
+    log::debug!("ir_fully_disambiguated: {}", irgen.deref().tree);
     irgen.into_arc()
 }
 

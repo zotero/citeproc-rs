@@ -149,7 +149,7 @@ impl<'a, O: OutputFormat> fmt::Display for IrTreeRef<'a, O> {
         ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
-                write!(f, "    ")?;
+                write!(f, "  ")?;
             }
             writeln!(f, " - [{:?}] {}", pair.1, pair.0)?;
             node.children(arena)
@@ -170,7 +170,7 @@ impl<'a, O: OutputFormat> fmt::Debug for IrTreeRef<'a, O> {
         ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
-                write!(f, "    ")?;
+                write!(f, "  ")?;
             }
             writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
             node.children(arena)
