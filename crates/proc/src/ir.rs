@@ -7,6 +7,7 @@
 use crate::prelude::*;
 use citeproc_io::output::markup::Markup;
 use citeproc_io::output::LocalizedQuotes;
+use core::fmt;
 use csl::{Affixes, Choose, DateVariable, Formatting, GivenNameDisambiguationRule, TextElement};
 use csl::{NumberVariable, StandardVariable, Variable};
 
@@ -81,7 +82,7 @@ impl<O: OutputFormat> std::fmt::Display for IR<O> {
 /// # Disambiguation and group_vars
 ///
 /// IrSeq needs to hold things
-#[derive(Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Default, PartialEq, Eq, Clone)]
 pub struct IrSeq {
     pub formatting: Option<Formatting>,
     pub affixes: Option<Affixes>,
@@ -93,6 +94,54 @@ pub struct IrSeq {
     pub dropped_gv: Option<GroupVars>,
     pub should_inherit_delim: bool,
     pub is_layout: bool,
+}
+
+impl fmt::Debug for IrSeq {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            formatting,
+            affixes,
+            delimiter,
+            display,
+            quotes,
+            text_case,
+            dropped_gv,
+            should_inherit_delim,
+            is_layout,
+        } = self;
+        let mut f = f.debug_struct("IrSeq");
+        if formatting.is_some() {
+            f.field("formatting", &formatting);
+        }
+        if affixes.is_some() {
+            f.field("affixes", &affixes);
+        }
+        if delimiter.is_some() {
+            f.field("delimiter", &delimiter);
+        }
+        if display.is_some() {
+            f.field("display", &display);
+        }
+        if quotes.is_some() {
+            f.field("quotes", &quotes);
+        }
+        if quotes.is_some() {
+            f.field("quotes", &quotes);
+        }
+        if *text_case != TextCase::None {
+            f.field("text_case", &text_case);
+        }
+        if dropped_gv.is_some() {
+            f.field("dropped_gv", &dropped_gv);
+        }
+        if *should_inherit_delim {
+            f.field("should_inherit_delim", &should_inherit_delim);
+        }
+        if *is_layout {
+            f.field("is_layout", &is_layout);
+        }
+        f.finish()
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
