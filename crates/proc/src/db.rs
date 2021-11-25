@@ -1377,14 +1377,17 @@ fn bib_item_gen0_acontextual(
             // need to only supply the first appearing explicit one, or the first appearing implicit one.
             // TODO: comply with the spec where "hook in cite == explicit => no implicit in bib" and "vice
             // versa"
+            log::debug!("bib_ir_gen0: {}", tree);
             if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
                 disambiguate_add_year_suffix(&mut tree, &ctx, suffix);
+                log::debug!("bib_ir add_year_suffix: {}", tree);
             }
 
             if first_cite_used_disambiguate_true(db, ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::Conditionals);
                 disambiguate_true(db, &mut tree, &mut state, &ctx);
+                log::debug!("bib_ir disambiguate_true: {}", tree);
             }
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {

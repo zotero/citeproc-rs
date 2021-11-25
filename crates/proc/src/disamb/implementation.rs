@@ -187,7 +187,16 @@ impl Disambiguation<Markup> for Element {
                         .map(|x| fmt.output_in_context(x, stack, None))
                         .map(EdgeData::Output)
                         .map(|label| label);
-                    (RefIR::Edge(content), GroupVars::new())
+                    let gv = if let csl::TextTermSelector::Simple(csl::SimpleTermSelector::Misc(
+                        csl::MiscTerm::NoDate,
+                        _,
+                    )) = term_selector
+                    {
+                        GroupVars::Important // Make this Important (same for element.rs) to have no-date act as a variable
+                    } else {
+                        GroupVars::Plain
+                    };
+                    (RefIR::Edge(content), gv)
                 }
                 TextSource::Macro(ref name) => {
                     let macro_elements = ctx

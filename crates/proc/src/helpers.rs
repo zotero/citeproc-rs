@@ -32,11 +32,12 @@ where
 
     for el in els {
         let child = el.intermediate(db, state, ctx, arena);
-        let (ref _ch_ir, ch_gv) = *arena.get(child).unwrap().get();
-        // if *ch_ir == IR::Rendered(None) {
-        //     dropped_gv = dropped_gv.neighbour(ch_gv);
-        // }
-        self_node.append(child, arena);
+        let (ref ch_ir, ch_gv) = *arena.get(child).unwrap().get();
+        if *ch_ir == IR::Rendered(None) {
+            dropped_gv = dropped_gv.neighbour(ch_gv);
+        } else {
+            self_node.append(child, arena);
+        }
         overall_gv = overall_gv.neighbour(ch_gv)
     }
 

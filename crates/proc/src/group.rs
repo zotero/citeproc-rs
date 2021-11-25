@@ -153,7 +153,8 @@ impl GroupVars {
     #[inline]
     pub fn promote_plain(self) -> Self {
         match self {
-            Plain | Important => Important,
+            // We need to not do this!????
+            // Plain | Important => Important,
             _ => self,
         }
     }
