@@ -167,30 +167,49 @@ impl GroupVars {
     }
 
     #[inline]
-    pub fn implicit_conditional<T: Default>(self, ir: T, is_empty: bool) -> (T, Self) {
-        // self here is children_gvs.fold(Plain, neighbour).
-        if self == Missing {
-            // if it's missing, we replace any (clearly Plain-only) nodes we wrote into the seq,
-            // with the default for the seq type.
-            //
-            // Note that this does not affect UnresolvedMissing. That output is kept.
-            // Note also that the seq type does not necesssarily store its child nodes inline.
-            (T::default(), GroupVars::Missing)
-        } else if is_empty {
-            // if it's empty (== default implies empty), then we treat the seq node as Plain for
-            // the purposes of groups higher up.
-            (ir, GroupVars::Plain)
-        } else {
-            // otherwise, if it's Plain, make it Important. This means G(Missing, G(Plain)) will
-            // render the Plain part.
-            (ir, self.promote_plain())
+    pub fn is_unresolved(self) -> bool {
+        match self {
+            UnresolvedMissing | UnresolvedPlain | UnresolvedImportant => true,
+            _ => false,
         }
     }
 
-    /// Somehow we need a seq that ISN'T an implicit-conditional to be rendered, but also carry
-    /// variable missing-ness information upwards.
+    #[inline]
+    pub fn implicit_conditional<T: Default>(self, seq_ir: T, is_empty: bool) -> (T, Self) {
+        // self here is children_gvs.fold(Plain, neighbour).
+        match self {
+            // if it's missing, we replace any (clearly Plain-only) nodes we wrote into the seq,
+            // with the default for the seq type.
+            //
+            // Note also that this will, for T = IR, give IR::Rendered(None).
+            Missing => (T::default(), GroupVars::Missing),
+
+            // If it's empty, throw it out.
+            //
+            // If it's Unresolved*, we keep it, but you shouldn't be running implicit_conditional
+            // in the construction of an unresolved seq.
+            // hook in the tree to maybe render something later.
+            //
+            // if it's empty (== default implies empty), then we treat the seq node as Plain for
+            // the purposes of groups higher up.
+            //
+            // If we have Important but an empty seq, then we've made a mistake coding, because
+            // Important should have some content in it. Fine to throw out.
+            Plain | Important if is_empty => (T::default(), GroupVars::Plain),
+
+            // otherwise, if it's Plain, make it Important. This means G(Missing, G(Plain)) will
+            // render the Plain part.
+            _ => (seq_ir, self.promote_plain()),
+        }
+    }
+
+    /// We need a seq that ISN'T an implicit-conditional to be rendered, but also carry variable
+    /// missing-ness information upwards. This has a very simple implementation, with respect to
+    /// the group vars: change nothing, simply set the gv of such a seq to this value. Crucially,
+    /// you also have to render (i.e. flatten, or add_to_graph) everything except
+    /// `!gv.should_render_tree()` nodes.
     ///
-    /// Basically here we are referring to macro invocations and if/else-if/else branches.
+    /// Basically here we are referring to if/else-if/else branches.
     ///
     /// ```xml,ignore
     /// <group>
@@ -201,15 +220,20 @@ impl GroupVars {
     /// </group>
     /// ```
     ///
-    /// Should not render.
-    ///
-    /// So
-    /// - we should not promote Plain to Important;
-    /// - we should not decline to render (i.e. flatten, or produce edge for) such a Seq if it is
-    /// Missing/etc.
+    /// The variable is Missing, the if-branch is (because of this method) Missing, the outer group
+    /// is Missing + Plain = Missing, so nothing renders.
     #[inline]
     pub fn unconditional(self) -> Self {
+        self
+    }
+
+    /// Changes Unresolved* variants into their normal counterparts.
+    #[inline]
+    pub fn resolve(self) -> Self {
         match self {
+            UnresolvedImportant => Important,
+            UnresolvedPlain => Plain,
+            UnresolvedMissing => Missing,
             _ => self,
         }
     }

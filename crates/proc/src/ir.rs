@@ -424,7 +424,7 @@ impl IrSeq {
                 let gv = child.get_node().unwrap().get().1;
                 acc.neighbour(gv)
             })
-            // .unconditional()
+            .unconditional()
     }
     pub(crate) fn overall_group_vars<O: OutputFormat>(
         dropped_gv: Option<GroupVars>,
