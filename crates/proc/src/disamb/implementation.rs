@@ -120,7 +120,7 @@ impl Disambiguation<Markup> for Element {
                                 let gv = GroupVars::rendered_if(edge.is_some());
                                 return (RefIR::Edge(edge), gv);
                             } else {
-                                return (RefIR::Edge(None), GroupVars::Plain);
+                                return (RefIR::Edge(None), GroupVars::Missing);
                             }
                         }
                         StandardVariable::Ordinary(v @ Variable::CitationLabel) => {
