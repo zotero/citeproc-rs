@@ -6,7 +6,7 @@ input:
     author: [{family: "Smith"}]
   - id: smith-1999-2
     author: [{family: "Smith"}]
-  - id: smith-1999-3
+  - id: jones
     author: [{family: "Jones"}]
   - id: smith-2000
     author: [{family: "Smith"}]
@@ -15,7 +15,7 @@ clusters:
     cites:
       - id: smith-1999-1
       - id: smith-1999-2
-      - id: smith-1999-3
+      - id: jones
       - id: smith-2000
 csl: |
   <style class="in-text" version="1.0.1">
