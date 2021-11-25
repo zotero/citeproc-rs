@@ -167,20 +167,16 @@ impl GroupVars {
     }
 
     #[inline]
-    pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(
-        self,
-        ir: T,
-    ) -> (T, Self) {
+    pub fn implicit_conditional<T: Default>(self, ir: T, is_empty: bool) -> (T, Self) {
         // self here is children_gvs.fold(Plain, neighbour).
-        let def = T::default();
-
         if self == Missing {
             // if it's missing, we replace any (clearly Plain-only) nodes we wrote into the seq,
             // with the default for the seq type.
             //
             // Note that this does not affect UnresolvedMissing. That output is kept.
-            (def, GroupVars::Missing)
-        } else if ir == def {
+            // Note also that the seq type does not necesssarily store its child nodes inline.
+            (T::default(), GroupVars::Missing)
+        } else if is_empty {
             // if it's empty (== default implies empty), then we treat the seq node as Plain for
             // the purposes of groups higher up.
             (ir, GroupVars::Plain)

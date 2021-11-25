@@ -34,11 +34,12 @@ impl Disambiguation<Markup> for Group {
         // TODO: handle GroupVars
         let stack = self.formatting.map(|mine| stack.override_with(mine));
         let els = &self.elements;
-        let (seq, group_vars) = ref_sequence(
+        ref_sequence(
             db,
             state,
             ctx,
             els,
+            // implicit_conditional
             true,
             stack,
             Some(&|| RefIrSeq {
@@ -46,8 +47,7 @@ impl Disambiguation<Markup> for Group {
                 affixes: self.affixes.clone(),
                 ..Default::default()
             }),
-        );
-        group_vars.implicit_conditional(seq)
+        )
     }
 }
 
@@ -220,7 +220,7 @@ impl Disambiguation<Markup> for Element {
                         }),
                     );
                     state.pop_macro(name);
-                    group_vars.implicit_conditional(seq)
+                    (seq, group_vars)
                 }
             },
             Element::Label(label) => {

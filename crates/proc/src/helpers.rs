@@ -33,10 +33,20 @@ where
     for el in els {
         let child = el.intermediate(db, state, ctx, arena);
         let (ref ch_ir, ch_gv) = *arena.get(child).unwrap().get();
-        if *ch_ir == IR::Rendered(None) {
-            dropped_gv = dropped_gv.neighbour(ch_gv);
-        } else {
-            self_node.append(child, arena);
+        // we either append the child node to our node, or add it to the "dropped_gv" which means
+        // that some element that did not render, but was Missing, may cause a group to hide
+        // itself.
+        // We will not throw away UnresolvedMissing.
+        //
+        // Plain/None must be thrown out, because "did not render anything" is a property used by
+        // e.g. <substitute> to decide whether to render something else, etc.
+        match (ch_ir, ch_gv) {
+            (_, GroupVars::Missing) | (IR::Rendered(None), GroupVars::Plain) => {
+                dropped_gv = dropped_gv.neighbour(ch_gv);
+            }
+            _ => {
+                self_node.append(child, arena);
+            }
         }
         overall_gv = overall_gv.neighbour(ch_gv)
     }
@@ -63,7 +73,8 @@ where
     };
 
     let (set_ir, set_gv) = if implicit_conditional {
-        overall_gv.implicit_conditional(ir)
+        let is_empty = self_node.children(arena).next().is_none();
+        overall_gv.implicit_conditional(ir, is_empty)
     } else {
         (ir, overall_gv)
     };
@@ -79,7 +90,7 @@ pub fn ref_sequence<'c>(
     state: &mut IrState,
     ctx: &RefContext<'c, Markup>,
     els: &[Element],
-    _implicit_conditional: bool,
+    implicit_conditional: bool,
     formatting: Option<Formatting>,
     seq_template: Option<&dyn Fn() -> RefIrSeq>,
 ) -> (RefIR, GroupVars) {
@@ -112,7 +123,12 @@ pub fn ref_sequence<'c>(
         };
         seq.contents = contents;
         seq.formatting = formatting;
-        (RefIR::Seq(seq), overall_gv)
+        if implicit_conditional {
+            let is_empty = seq.contents.is_empty();
+            overall_gv.implicit_conditional(RefIR::Seq(seq), is_empty)
+        } else {
+            (RefIR::Seq(seq), overall_gv)
+        }
     }
 }
 

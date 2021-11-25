@@ -502,8 +502,9 @@ impl<'a, O: OutputFormat> StyleWalker for SortingWalker<'a, O> {
             }
         }
         let out = output.unwrap_or_default();
+        let is_empty = out.is_empty();
         match fold_type {
-            WalkerFoldType::Group(_g) => gv_acc.implicit_conditional(out),
+            WalkerFoldType::Group(_g) => gv_acc.implicit_conditional(out, is_empty),
             _ => (out, gv_acc),
         }
     }
