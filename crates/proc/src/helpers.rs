@@ -36,12 +36,18 @@ where
         // we either append the child node to our node, or add it to the "dropped_gv" which means
         // that some element that did not render, but was Missing, may cause a group to hide
         // itself.
-        // We will not throw away UnresolvedMissing.
         //
-        // Plain/None must be thrown out, because "did not render anything" is a property used by
-        // e.g. <substitute> to decide whether to render something else, etc.
-        match (ch_ir, ch_gv) {
-            (_, GroupVars::Missing) | (IR::Rendered(None), GroupVars::Plain) => {
+        // We will not throw away Unresolved* nodes, because they could change in future, so it is
+        // crucial that they stay in the tree so that disambiguation routines can search for them
+        // and modify those nodes to have content (or remove the content, etc).
+        //
+        // Empty child nodes must be thrown out, because "did not render anything" is a property used by
+        // e.g. <substitute> to decide whether to render something else, etc. Not rendering is
+        // determined by collapsing a seq with no child nodes at all into IR::Rendered(None)
+        //
+        // keep this in sync with same bit in implementation of `ref_sequence` below
+        match ch_ir {
+            IR::Rendered(None) if !ch_gv.is_unresolved() => {
                 dropped_gv = dropped_gv.neighbour(ch_gv);
             }
             _ => {
@@ -101,16 +107,18 @@ pub fn ref_sequence<'c>(
     let fmting = formatting.unwrap_or_default();
 
     for el in els {
-        let (got_ir, gv) = el.ref_ir(db, ctx, state, fmting);
-        match got_ir {
-            RefIR::Edge(None) => {
-                overall_gv = overall_gv.neighbour(gv);
+        let (ch_ir, ch_gv) = el.ref_ir(db, ctx, state, fmting);
+        // keep this in sync with same bit in implementation of `sequence` above
+        match &ch_ir {
+            RefIR::Edge(None) if !ch_gv.is_unresolved() => {
+                // drop these, no need to keep dropped_gv as RefIR does not need to be mutated
+                // later so storing overall_gv is sufficient to know if it needs to be output.
             }
             _ => {
-                contents.push(got_ir);
-                overall_gv = overall_gv.neighbour(gv)
+                contents.push(ch_ir);
             }
         }
+        overall_gv = overall_gv.neighbour(ch_gv);
     }
 
     if !contents.iter().any(|x| !matches!(x, RefIR::Edge(None))) {
