@@ -278,7 +278,7 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
                     None
                 } else if let (Some(first), Some(second)) = first_two {
                     match self.arena.get(second).unwrap().get() {
-                        (IR::YearSuffix(_), GroupVars::Unresolved) if has_explicit => {
+                        (IR::YearSuffix(_), GroupVars::UnresolvedImportant) if has_explicit => {
                             self.with_node(first, |f| f.suppress_first_year(has_explicit))
                         }
                         (IR::YearSuffix(_), GroupVars::Important)

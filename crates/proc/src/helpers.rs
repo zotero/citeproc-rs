@@ -21,8 +21,8 @@ where
     O: OutputFormat,
     I: OutputFormat,
 {
-    let mut overall_gv = GroupVars::new();
-    let mut dropped_gv = GroupVars::new();
+    let mut overall_gv = GroupVars::Plain;
+    let mut dropped_gv = GroupVars::Plain;
 
     // We will edit this later if it turns out it has content & isn't discarded
     let self_node = arena.new_node((IR::Rendered(None), GroupVars::Plain));
@@ -32,18 +32,12 @@ where
 
     for el in els {
         let child = el.intermediate(db, state, ctx, arena);
-        let ch = arena.get(child).unwrap().get();
-        let gv = ch.1;
-        match ch.0 {
-            IR::Rendered(None) => {
-                dropped_gv = dropped_gv.neighbour(gv);
-                overall_gv = overall_gv.neighbour(gv);
-            }
-            _ => {
-                self_node.append(child, arena);
-                overall_gv = overall_gv.neighbour(gv)
-            }
-        }
+        let (ref _ch_ir, ch_gv) = *arena.get(child).unwrap().get();
+        // if *ch_ir == IR::Rendered(None) {
+        //     dropped_gv = dropped_gv.neighbour(ch_gv);
+        // }
+        self_node.append(child, arena);
+        overall_gv = overall_gv.neighbour(ch_gv)
     }
 
     let ir = if self_node.children(arena).next().is_none() {

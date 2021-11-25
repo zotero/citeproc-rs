@@ -67,6 +67,9 @@ impl<O: OutputFormat> std::fmt::Display for IR<O> {
                 if let Some(suf) = seq.affixes.as_ref().map(|x| x.suffix.as_str()) {
                     dbg.field("suffix", &suf);
                 }
+                if let Some(gv) = seq.dropped_gv {
+                    dbg.field("dropped_gv", &gv);
+                }
                 dbg.finish()
             }
             IR::Substitute => write!(f, "Substitute"),
@@ -90,56 +93,45 @@ pub struct IrSeq {
     pub display: Option<DisplayMode>,
     pub quotes: Option<LocalizedQuotes>,
     pub text_case: TextCase,
-    /// If this is None, this sequence is simply an implicit conditional
+    /// GroupVars of the dropped nodes in an implicit conditional group.
+    ///
+    /// If this is Some, it contains the neighbour()-sum of the groupvars of any child nodes that
+    /// were thrown out during tree construction or modification. If nothing was thrown out, or we
+    /// only threw out empty plain text, then it's just the initial value (Plain); if something
+    /// *was* thrown out, then it will typically be `Missing`.
+    ///
+    /// In this fashion, you do not need to carry around a bunch of dead nodes just to recompute
+    /// the group vars of the seq. A variable that was called but empty will continue to impact the
+    /// rendering of implicit conditionals.
+    ///
+    /// If this is None, this sequence is simply not an implicit conditional. It might be, for
+    /// instance, a `<layout>` node.
     pub dropped_gv: Option<GroupVars>,
+    /// This is for `<if>` (etc) branches, which each behave as a seq, but do not clear the
+    /// delimiter from a surrounding group or layout seq; instead, they inherit it.
     pub should_inherit_delim: bool,
+    /// Useful for identifying each top-of-cite `<layout>` element, especially when two or more
+    /// cites have already been combined into one tree.
     pub is_layout: bool,
 }
 
 impl fmt::Debug for IrSeq {
+    #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let Self {
-            formatting,
-            affixes,
-            delimiter,
-            display,
-            quotes,
-            text_case,
-            dropped_gv,
-            should_inherit_delim,
-            is_layout,
+            formatting, affixes, delimiter, display, quotes,
+            text_case, dropped_gv, should_inherit_delim, is_layout,
         } = self;
         let mut f = f.debug_struct("IrSeq");
-        if formatting.is_some() {
-            f.field("formatting", &formatting);
-        }
-        if affixes.is_some() {
-            f.field("affixes", &affixes);
-        }
-        if delimiter.is_some() {
-            f.field("delimiter", &delimiter);
-        }
-        if display.is_some() {
-            f.field("display", &display);
-        }
-        if quotes.is_some() {
-            f.field("quotes", &quotes);
-        }
-        if quotes.is_some() {
-            f.field("quotes", &quotes);
-        }
-        if *text_case != TextCase::None {
-            f.field("text_case", &text_case);
-        }
-        if dropped_gv.is_some() {
-            f.field("dropped_gv", &dropped_gv);
-        }
-        if *should_inherit_delim {
-            f.field("should_inherit_delim", &should_inherit_delim);
-        }
-        if *is_layout {
-            f.field("is_layout", &is_layout);
-        }
+        if formatting.is_some() { f.field("formatting", &formatting); }
+        if affixes.is_some() { f.field("affixes", &affixes); }
+        if delimiter.is_some() { f.field("delimiter", &delimiter); }
+        if display.is_some() { f.field("display", &display); }
+        if quotes.is_some() { f.field("quotes", &quotes); }
+        if *text_case != TextCase::None { f.field("text_case", &text_case); }
+        if dropped_gv.is_some() { f.field("dropped_gv", &dropped_gv); }
+        if *should_inherit_delim { f.field("should_inherit_delim", &should_inherit_delim); }
+        if *is_layout { f.field("is_layout", &is_layout); }
         f.finish()
     }
 }
@@ -168,7 +160,9 @@ impl<O: OutputFormat> IR<O> {
                 hook,
                 suffix_num: None,
             }),
-            GroupVars::Unresolved,
+            // A year suffix is initially missing.
+            // It may later gain a value (UnresolvedImportant)
+            GroupVars::UnresolvedMissing,
         )
     }
 }
@@ -366,12 +360,12 @@ impl IR<Markup> {
         formatting: Formatting,
         inherit_delim: Option<&str>,
     ) {
-        let me = match arena.get(node) {
+        let (me, gv) = match arena.get(node) {
             Some(x) => x.get(),
             None => return,
         };
         let tree = IrTreeRef { node, arena };
-        match &me.0 {
+        match me {
             IR::Rendered(None) => {}
             IR::Rendered(Some(ed)) => edges.push(ed.to_edge_data(fmt, formatting)),
             IR::YearSuffix(_ys) => {
@@ -387,9 +381,7 @@ impl IR<Markup> {
                 IR::append_child_edges(node, arena, edges, fmt, formatting, inherit_delim)
             }
             IR::Seq(seq) => {
-                if IrSeq::overall_group_vars(seq.dropped_gv, tree)
-                    .map_or(true, |x| x.should_render_tree())
-                {
+                if gv.should_render_tree(seq.is_implicit_conditional()) {
                     seq.append_edges(node, arena, edges, fmt, formatting, inherit_delim)
                 }
             }
@@ -423,22 +415,34 @@ impl IR<Markup> {
 // }
 
 impl IrSeq {
+    pub(crate) fn is_implicit_conditional(&self) -> bool {
+        self.dropped_gv.is_some()
+    }
+    pub(crate) fn unconditional_child_gv_sum<O: OutputFormat>(tree: IrTreeRef<O>) -> GroupVars {
+        tree.children()
+            .fold(GroupVars::Plain, |acc, child| {
+                let gv = child.get_node().unwrap().get().1;
+                acc.neighbour(gv)
+            })
+            // .unconditional()
+    }
     pub(crate) fn overall_group_vars<O: OutputFormat>(
         dropped_gv: Option<GroupVars>,
         tree: IrTreeRef<O>,
-    ) -> Option<GroupVars> {
-        dropped_gv.map(|dropped| {
-            let acc = tree.children().fold(dropped, |acc, child| {
-                let gv = child.get_node().unwrap().get().1;
-                acc.neighbour(gv)
-            });
-            // Replicate GroupVars::implicit_conditional
-            if acc != GroupVars::Missing {
-                GroupVars::Important
-            } else {
-                GroupVars::Plain
-            }
-        })
+    ) -> GroupVars {
+        dropped_gv.map_or_else(
+            // Not an implicit conditional
+            || IrSeq::unconditional_child_gv_sum(tree),
+            // An implicit conditional
+            |dropped| {
+                let acc = tree.children().fold(dropped, |acc, child| {
+                    let gv = child.get_node().unwrap().get().1;
+                    acc.neighbour(gv)
+                });
+                // Replicate GroupVars::implicit_conditional
+                acc.promote_plain()
+            },
+        )
     }
 }
 
@@ -450,18 +454,22 @@ impl<'a, O: OutputFormat<Output = SmartString>> IrTreeRef<'a, O> {
             .unwrap_or_else(|| fmt.plain(if_empty))
     }
 
-    /// Assumes any group vars have been resolved, so every item touched by flatten should in fact
-    /// be rendered
+    /// Some group vars may be in an unresolved state.
+    /// Anything that's unresolved, do not render it. It might come back later.
     pub(crate) fn flatten(&self, fmt: &O, override_delim: Option<&str>) -> Option<O::Build> {
         // must clone
-        match self.arena.get(self.node)?.get().0 {
+        let (ref ir, gv) = *self.arena.get(self.node)?.get();
+        match ir {
             IR::Rendered(None) => None,
             IR::Rendered(Some(ref x)) => Some(x.inner()),
             IR::ConditionalDisamb(_) => self.flatten_children(fmt, override_delim),
             IR::YearSuffix(_) | IR::NameCounter(_) | IR::Name(_) | IR::Substitute => {
                 self.flatten_children(fmt, None)
             }
-            IR::Seq(ref seq) => seq.flatten_seq(*self, fmt, override_delim),
+            IR::Seq(seq) if gv.should_render_tree(seq.is_implicit_conditional()) => {
+                seq.flatten_seq(*self, fmt, override_delim)
+            }
+            _ => None,
         }
     }
     pub(crate) fn flatten_children(
@@ -506,13 +514,6 @@ impl IrSeq {
         fmt: &O,
         override_delim: Option<&str>,
     ) -> Option<O::Build> {
-        // Do this where it won't require mut access
-        // self.recompute_group_vars();
-        if !IrSeq::overall_group_vars(self.dropped_gv, tree)
-            .map_or(true, |x| x.should_render_tree())
-        {
-            return None;
-        }
         let IrSeq {
             formatting,
             ref delimiter,

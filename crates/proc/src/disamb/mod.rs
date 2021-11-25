@@ -238,9 +238,7 @@ pub trait Disambiguation<O: OutputFormat = Markup> {
         _ctx: &RefContext<O>,
         _state: &mut IrState,
         _stack: Formatting,
-    ) -> (RefIR, GroupVars) {
-        unimplemented!()
-    }
+    ) -> (RefIR, GroupVars);
 }
 
 /// Creates a Dfa that will match any cite that could have been made by a particular reference.

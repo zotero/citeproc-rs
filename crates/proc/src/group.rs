@@ -24,7 +24,7 @@ pub enum GroupVars {
     /// Initial value given to disambiguate="true" conditionals that are initially empty, as their
     /// content could go either way later, and their currently-empty output shouldn't affect
     /// whether the surrounding group should render before disambiguation comes around.
-    Unresolved,
+    UnresolvedImportant,
 
     /// For e.g. an explicit `<text variable="year-suffix" />`, which would otherwise cause a
     /// surrounding group to be Missing initially and be discarded too soon. Just means "don't
@@ -48,14 +48,14 @@ fn test_important_seq() {
             .promote_plain()
     };
     assert_eq!(f(&[Important, Missing]), Important);
-    assert_eq!(f(&[Unresolved, Missing]), UnresolvedMissing);
-    assert_eq!(f(&[Unresolved, Plain]), UnresolvedPlain);
-    assert_eq!(f(&[Unresolved, Plain, Important]), Important);
-    assert_eq!(f(&[Unresolved, Missing, Important]), Important);
-    assert_eq!(f(&[Important, Unresolved, Missing]), Important);
+    assert_eq!(f(&[UnresolvedImportant, Missing]), UnresolvedMissing);
+    assert_eq!(f(&[UnresolvedImportant, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[UnresolvedImportant, Plain, Important]), Important);
+    assert_eq!(f(&[UnresolvedImportant, Missing, Important]), Important);
+    assert_eq!(f(&[Important, UnresolvedImportant, Missing]), Important);
     // plains in a group end up being important.
     assert_eq!(f(&[Plain, Plain, Plain]), Important);
-    assert_eq!(f(&[Unresolved, Plain, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[UnresolvedImportant, Plain, Plain]), UnresolvedPlain);
     assert_eq!(f(&[UnresolvedMissing, Plain, Plain]), UnresolvedMissing);
 }
 
@@ -113,12 +113,12 @@ impl GroupVars {
             (Important, _) | (_, Important) => Important,
 
             // Unresolved + Missing has to stay Unresolved until disambiguation is done
-            (Unresolved, Missing)
-            | (Missing, Unresolved)
+            (UnresolvedImportant, Missing)
+            | (Missing, UnresolvedImportant)
             | (UnresolvedMissing, Missing)
             | (Missing, UnresolvedMissing)
-            | (UnresolvedMissing, Unresolved)
-            | (Unresolved, UnresolvedMissing)
+            | (UnresolvedMissing, UnresolvedImportant)
+            | (UnresolvedImportant, UnresolvedMissing)
             | (Plain, UnresolvedMissing)
             | (UnresolvedMissing, Plain)
             | (UnresolvedMissing, UnresolvedMissing)
@@ -128,12 +128,12 @@ impl GroupVars {
             | (Missing, UnresolvedPlain) => UnresolvedMissing,
 
             (UnresolvedPlain, UnresolvedPlain)
-            | (UnresolvedPlain, Unresolved)
-            | (Unresolved, UnresolvedPlain)
+            | (UnresolvedPlain, UnresolvedImportant)
+            | (UnresolvedImportant, UnresolvedPlain)
             | (UnresolvedPlain, Plain)
             | (Plain, UnresolvedPlain)
-            | (Unresolved, Plain)
-            | (Plain, Unresolved) => UnresolvedPlain,
+            | (UnresolvedImportant, Plain)
+            | (Plain, UnresolvedImportant) => UnresolvedPlain,
 
             // promote Missing over Plain; the style tried and failed to render a variable,
             // so we must take note of this.
@@ -141,7 +141,7 @@ impl GroupVars {
 
             (Plain, Plain) => Plain,
 
-            (Unresolved, Unresolved) => Unresolved,
+            (UnresolvedImportant, UnresolvedImportant) => UnresolvedImportant,
         }
     }
 
@@ -159,8 +159,11 @@ impl GroupVars {
     }
 
     #[inline]
-    pub fn should_render_tree(self) -> bool {
-        self != Missing && self != UnresolvedMissing && self != Unresolved
+    pub fn should_render_tree(self, is_implicit_conditional: bool) -> bool {
+        match self {
+            Missing | UnresolvedMissing if is_implicit_conditional => false,
+            _ => true,
+        }
     }
 
     #[inline]
@@ -185,6 +188,33 @@ impl GroupVars {
             // otherwise, if it's Plain, make it Important. This means G(Missing, G(Plain)) will
             // render the Plain part.
             (ir, self.promote_plain())
+        }
+    }
+
+    /// Somehow we need a seq that ISN'T an implicit-conditional to be rendered, but also carry
+    /// variable missing-ness information upwards.
+    ///
+    /// Basically here we are referring to macro invocations and if/else-if/else branches.
+    ///
+    /// ```xml,ignore
+    /// <group>
+    ///   <text value="PLAIN" />
+    ///   <choose><if ...>
+    ///     <text variable="MISSING" />
+    ///   </if></choose>
+    /// </group>
+    /// ```
+    ///
+    /// Should not render.
+    ///
+    /// So
+    /// - we should not promote Plain to Important;
+    /// - we should not decline to render (i.e. flatten, or produce edge for) such a Seq if it is
+    /// Missing/etc.
+    #[inline]
+    pub fn unconditional(self) -> Self {
+        match self {
+            _ => self,
         }
     }
 }

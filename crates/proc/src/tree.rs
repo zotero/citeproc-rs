@@ -290,11 +290,13 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
         }
         // Reverse, such that descendants are recalculated first
         for (seq_node, dropped_gv) in queue.into_iter().rev() {
-            // let data = arena.get_mut(node).unwrap().get_mut();
             let seq_tree = self.tree_at_node(seq_node);
-            if let Some(force) = IrSeq::overall_group_vars(dropped_gv, seq_tree) {
-                self.arena.get_mut(seq_node).unwrap().get_mut().1 = force;
+            let force = IrSeq::overall_group_vars(dropped_gv, seq_tree);
+            let existing = self.arena.get(seq_node).unwrap().get().1;
+            if existing != force {
+                log::debug!("recompute rewriting gv to {:?} {}", force, seq_tree);
             }
+            self.arena.get_mut(seq_node).unwrap().get_mut().1 = force;
         }
     }
 }
