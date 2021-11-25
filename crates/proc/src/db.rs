@@ -912,6 +912,7 @@ fn disambiguate_add_year_suffix(tree: &mut IrTree, ctx: &CiteContext<'_, Markup>
         break;
     }
     if added_suffix {
+        tree.recompute_group_vars();
         return;
     }
 
@@ -919,6 +920,7 @@ fn disambiguate_add_year_suffix(tree: &mut IrTree, ctx: &CiteContext<'_, Markup>
     for yid in hooks {
         let (ys, _) = get_ys_mut(yid, &mut tree.arena);
         let sum: IrSum<Markup> = match &ys.hook {
+            // This produces GroupVars::Important
             YearSuffixHook::Plain => ys.hook.render(ctx, suffix),
             _ => continue,
         };
@@ -1117,6 +1119,7 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     // Start with the given names done.
     let mut irgen = IrGenCow::new(db.ir_gen2_add_given_name(id));
     irgen.disambiguate_add_year_suffix(db, &mut ctx);
+    log::debug!("ir_add_year_suffix: {}", irgen.deref().tree);
     irgen.disambiguate_conditionals(db, &mut ctx);
     log::debug!("ir_fully_disambiguated: {}", irgen.deref().tree);
     irgen.into_arc()
