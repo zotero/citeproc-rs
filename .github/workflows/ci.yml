@@ -80,7 +80,8 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           mkdir -p .snapshots/branches
-          aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_BASE .snapshots/branches/$GITHUB_BASE
+          S3_PREFIX='https://citeproc-rs-test-results.cormacrelf.net'
+          curl -sL "$S3_PREFIX/.snapshots/branches/$GITHUB_BASE" -o ".snapshots/branches/$GITHUB_BASE"
 
       - name: Install Rust nightly-2021-08-30
         uses: actions-rs/toolchain@v1
@@ -111,9 +112,11 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
         run: |
-          if test -f .snapshots/current; then
-            aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
-            aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
+          # this will not run if the secret key is missing,
+          # which happens on PRs from non-collaborators
+          if test -f .snapshots/current && test -nz "$AWS_SECRET_ACCESS_KEY"; then
+            aws s3 cp .snapshots/current "s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD"
+            aws s3 cp .snapshots/current "s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA"
           fi
 
   wasm_tests:
