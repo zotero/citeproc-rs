@@ -122,8 +122,8 @@ jobs:
           if ${{github.event_name == 'push' && 'true' || 'false'}}; then
             echo "branches/$GITHUB_HEAD" > test-results/name
 
-            # TEMPORARY: then let's write to an old PR, just for now
-            echo "1" > test-results/pr-number
+            # DEBUGGING ONLY: write to an old PR
+            # echo "1" > test-results/pr-number
           fi
 
       - name: "Upload test result artifacts (GitHub Actions)"
