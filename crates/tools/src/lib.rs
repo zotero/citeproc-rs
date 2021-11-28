@@ -234,13 +234,16 @@ impl TestSummary {
         let mut new_ignores = Vec::new();
         let mut output_changed = Vec::new();
         let mut remaining_failures = Vec::new();
+        let mut new_ok = Vec::new();
         let remain_keys = self.test_names.difference(&common_keys);
 
         for key in remain_keys {
-            println!("remained key: {}", key);
             match self.kind_for_name(key).unwrap() {
                 EventKind::Failed => {
                     remaining_failures.push(self.failed.get(key).unwrap());
+                }
+                EventKind::Ok => {
+                    new_ok.push(self.ok.get(key).unwrap());
                 }
                 _ => {}
             }
@@ -288,6 +291,7 @@ impl TestSummary {
             new_ignores,
             output_changed,
             remaining_failures,
+            new_ok,
             count,
         }
     }
@@ -299,6 +303,7 @@ pub struct TestDiff<'a> {
     new_ignores: Vec<&'a Test>,
     output_changed: Vec<(&'a Test, &'a Test)>,
     remaining_failures: Vec<&'a Test>,
+    new_ok: Vec<&'a Test>,
     count: usize,
 }
 
@@ -310,17 +315,23 @@ impl TestDiff<'_> {
                 println!("        {}", line);
             }
         };
+        for test in &self.regressions {
+            println!("regression: {}", &test.name);
+            if let Some(orig) = test.stdout.as_ref() {
+                println!("    current (now failing):");
+                indent_lines(orig);
+            }
+        }
         for test in &self.remaining_failures {
             println!("failure: {}", &test.name);
             if let Some(orig) = test.stdout.as_ref() {
                 println!("{}", orig);
             }
         }
-        for test in &self.regressions {
-            println!("regression: {}", &test.name);
+        for test in &self.new_ok {
+            println!("added passing test: {}", &test.name);
             if let Some(orig) = test.stdout.as_ref() {
-                println!("    current (now failing):");
-                indent_lines(orig);
+                println!("{}", orig);
             }
         }
         for (orig, test) in &self.improvements {
@@ -348,7 +359,7 @@ impl TestDiff<'_> {
             "{}test result: {} regressions, {} new passing tests, {} new ignores, {} outputs changed, out of {} intersecting tests",
             pad,
             self.regressions.len(),
-            self.improvements.len(),
+            self.improvements.len() + self.new_ok.len(),
             self.new_ignores.len(),
             self.output_changed.len(),
             self.count
