@@ -582,7 +582,7 @@ impl Processor {
                 // TODO
                 max_offset: 0,
                 entry_spacing: bib.entry_spacing,
-                line_spacing: bib.line_spaces,
+                line_spacing: bib.line_spacing,
                 hanging_indent: bib.hanging_indent,
                 // To avoid serde derive in csl
                 second_field_align: bib.second_field_align.as_ref().map(|s| match s {

@@ -452,9 +452,9 @@ impl FromNode for Bibliography {
             );
         }
         let layout_node = layouts[0];
-        let line_spaces = attribute_int(node, "line-spaces", 1)?;
-        if line_spaces < 1 {
-            return Err(InvalidCsl::new(node, "line-spaces must be >= 1").into());
+        let line_spacing = attribute_int(node, "line-spacing", 1)?;
+        if line_spacing < 1 {
+            return Err(InvalidCsl::new(node, "line-spacing must be >= 1").into());
         }
         let entry_spacing = attribute_int(node, "entry-spacing", 1)?;
         let sorts: Vec<_> = node.children().filter(|n| n.has_tag_name("sort")).collect();
@@ -471,7 +471,7 @@ impl FromNode for Bibliography {
             layout: Layout::from_node(&layout_node, info)?,
             hanging_indent: bool::attribute_default_val(node, "hanging-indent", info, false)?,
             second_field_align: attribute_option(node, "second-field-align", info)?,
-            line_spaces,
+            line_spacing,
             entry_spacing,
             name_inheritance: Name::from_node(&node, info)?,
             subsequent_author_substitute: attribute_option(
