@@ -1,7 +1,7 @@
 name: Test
 on:
   pull_request: {}
-  push: 
+  push:
     branches:
     - master
     - ci/*
@@ -80,7 +80,9 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           mkdir -p .snapshots/branches
-          aws s3 cp s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_BASE .snapshots/branches/$GITHUB_BASE
+          mkdir -p test-results
+          S3_PREFIX='https://citeproc-rs-test-results.cormacrelf.net'
+          curl -sL "$S3_PREFIX/.snapshots/branches/$GITHUB_BASE" -o ".snapshots/branches/$GITHUB_BASE"
 
       - name: Install Rust nightly-2021-08-30
         uses: actions-rs/toolchain@v1
@@ -101,20 +103,42 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         run: |
           cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
-          cargo test-suite diff $GITHUB_BASE..$GITHUB_HEAD
-      - name: "Upload test result artifacts"
+          cargo test-suite diff $GITHUB_BASE..$GITHUB_HEAD | tee test-results/diff
+          echo $? > test-results/diff-status
+
+      - name: "Write the test-results artifact files"
         if: always()
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-southeast-2
+          PR_NUM: ${{ github.event.number }}
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
-          GITHUB_BASE: ${{ steps.branch.outputs.base }}
         run: |
-          if test -f .snapshots/current; then
-            aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/branches/$GITHUB_HEAD
-            aws s3 cp .snapshots/current s3://citeproc-rs-test-results/.snapshots/commits/$GITHUB_SHA
+          mkdir -p test-results
+          test -f .snapshots/current && cp .snapshots/current test-results/snapshot || echo "" > test-results/snapshot
+
+          if ${{ github.event_name == 'pull_request' && 'true' || 'false'}}; then
+            echo "$PR_NUM" > test-results/pr-number
+            echo "pulls/$PR_NUM" > test-results/name
           fi
+          if ${{github.event_name == 'push' && 'true' || 'false'}}; then
+            echo "branches/$GITHUB_HEAD" > test-results/name
+
+            # DEBUGGING ONLY: write to an old PR
+            # echo "1" > test-results/pr-number
+          fi
+
+      - name: "Upload test result artifacts (GitHub Actions)"
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: |
+            test-results/*
+          # i.e.
+          # test-results/pr-number
+          # test-results/name
+          # test-results/diff
+          # test-results/diff-status
+          # test-results/snapshot
 
   wasm_tests:
     name: "Test the WASM package"

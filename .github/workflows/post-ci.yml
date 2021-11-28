@@ -1,0 +1,153 @@
+name: CI Results
+
+# From the docs: https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#workflow_run
+#
+# > The workflow started by the workflow_run event is able to access secrets and
+# write tokens, even if the previous workflow was not.
+#
+# So we can upload results to S3 anyway.
+
+on:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
+
+jobs:
+  upload_test_results:
+    name: "Upload Test Results"
+    runs-on: ubuntu-20.04
+    steps:
+
+      # https://github.community/t/pull-request-attribute-empty-in-workflow-run-event-object-for-pr-from-forked-repo/154682
+      - name: "Download artifacts from PR workflow"
+        uses: dawidd6/action-download-artifact@v2.11.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: ci.yml
+          run_id: ${{ github.event.workflow_run.id }}
+
+      - name: Read the PR number file
+        id: wf
+        run: |
+          if test -d ./test-results; then
+            cd ./test-results
+            if test -f ./pr-number; then
+              echo "::set-output name=pr_number::$(cat ./pr-number)"
+            fi
+            echo "::set-output name=snapshot_name::$(cat ./name)"
+            echo "::set-output name=found::true"
+          else
+            echo "::set-output name=found::false"
+          fi
+
+      - name: "Upload results to S3"
+        if: steps.wf.outputs.found == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-southeast-2
+          GITHUB_HEAD: ${{ steps.branch.outputs.head }}
+          GITHUB_BASE: ${{ steps.branch.outputs.base }}
+          PR_NUM: ${{ steps.wf.outputs.pr_number }}
+          SNAPSHOT_NAME: ${{ steps.wf.outputs.snapshot_name }}
+        working-directory: ./test-results
+        run: |
+          if test -f snapshot; then
+            aws s3 cp snapshot "s3://citeproc-rs-test-results/.snapshots/$SNAPSHOT_NAME"
+          fi
+
+      - name: Write message to file
+        if: steps.wf.outputs.pr_number != 0
+        id: comment_txt
+        env:
+          PR_NUM: ${{ steps.wf.outputs.pr_number }}
+          SNAPSHOT_NAME: ${{ steps.wf.outputs.snapshot_name }}
+        working-directory: ./test-results
+        run: |
+          STATUS=$(cat ./diff-status)
+          if [ "$STATUS" = "0" ]; then STATUS="success"; else STATUS="failure"; fi
+          rm -f comment.txt diff.txt
+          # remove ansi escape codes, get github markdown to do the diffing
+          perl -pe 's/\e\[[0-9;]*m(?:\e\[K)?//g' ./diff > diff.txt
+          perl -i -ne '
+          if ($inblock) {
+            # note the break out from single quoted bash string here
+            if      (s/^        '\'', crates\/.*$/```\n/m) {
+              $inblock = 0;
+            } elsif (s/^        <(.*)$/-$1/g) {
+            } elsif (s/^        >(.*)$/+$1/g) {
+            } elsif (s/^         (.*)$/ $1/) { }
+            print;
+          } elsif (s/^(regression: |failure: |newly ignored: )(.*)$/\n### $1 $2\n/) {
+            print;
+          } elsif (/improved:/) {
+            if ($improved) { s/^improved: (.*)$/##### $1/
+            } else         { s/^(improved:) (.*)$/### $1\n\n##### $2/ }
+            $improved = 1; print;
+          } elsif (/^output changed: /) {
+            if ($output_changed) { s/^output changed: (.*)$/##### $1/
+            } else               { s/^(output changed:) (.*)$/### $1\n\n##### $2/ }
+            $output_changed = 1; print;
+          } elsif (/added passing test:/) {
+            if ($added) { s/^added passing test: (.*)$/- $1/
+            } else      { s/^(added passing test): (.*)$/### $1s:\n\n- $2/ }
+            $added = 1; print;
+          } elsif (s/^    (base \(now fixed\):)/$1\n/) { # extra newline to sep any log output
+            print;
+          } elsif (s?^        Diff < left / right > :$?\n```diff?) {
+            $inblock=1;
+            print;
+          } else {
+            print unless /^        $|RUST_BACKTRACE|panicked at '\''assertion failed: `\(left == right\)/
+          }
+          ' diff.txt
+
+          URL="https://cormacrelf.github.io/citeproc-rs-test-viewer/$SNAPSHOT_NAME"
+          RES=$(< ./diff tail -n 3 | head -n 1 | perl -ne '
+            s/ *test result: (.*)$/$1/;
+            my @components = split(", ", $_);
+            my @list = ();
+            foreach (@components) {
+              push(@list, $_) unless (/^0 |^out of/);
+            }
+            print join(", ", @list)
+            ')
+
+          # too boring, i.e. only the last three lines that are always there
+          if [ "$(wc -l ./diff | awk '{print $1}')" = "3" ] && [ "$STATUS" = "success" ] && test -z "$RES"; then
+            echo "::set-output name=exists::false"
+            echo "=> skipping PR comment because diff was empty"
+            echo
+            cat diff.txt
+            exit 0
+          fi
+          echo "::set-output name=exists::true"
+
+          { echo '<details><summary>'
+            echo "Test results (<strong>${STATUS}</strong>; <a href=\"${URL}\">full results</a>): $RES"
+            echo '</summary>'; echo
+            cat diff.txt
+            echo '</details>'
+          } >> comment.txt
+
+          echo
+          echo "=> Writing comment.txt with"
+          echo
+          head -n 10 comment.txt
+
+      - name: "Comment on PR with diff"
+        if: steps.wf.outputs.pr_number != 0 && steps.comment_txt.outputs.exists == 'true'
+        uses: actions/github-script@v5
+        env:
+          PR_NUM: ${{ steps.wf.outputs.pr_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { PR_NUM } = process.env;
+            const comment = fs.readFileSync("test-results/comment.txt", "utf8")
+            github.rest.issues.createComment({
+              issue_number: +PR_NUM,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment,
+            })
