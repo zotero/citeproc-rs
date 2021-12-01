@@ -295,6 +295,20 @@ impl Driver {
         })
     }
 
+    /// @deprecated Use `previewCluster` instead
+    #[wasm_bindgen(js_name = "previewCitationCluster")]
+    pub fn preview_citation_cluster(
+        &self,
+        cites: Box<[JsValue]>,
+        positions: Box<[JsValue]>,
+        format: Option<String>,
+    ) -> StringResult {
+        typescript_serde_result(|| {
+            let cites = utils::read_js_array_2(cites)?;
+            self.preview_cluster_inner(PreviewCluster::new(cites, None), positions, format)
+        })
+    }
+
     /// Previews a formatted citation cluster, in a particular position.
     ///
     /// - `cluster`: A cluster, without an `id` field. You'll want this to contain some cites.
@@ -305,29 +319,38 @@ impl Driver {
     /// - `format`: an optional argument, an output format as a string, that is used only for this
     ///   preview.
     ///
-    #[wasm_bindgen(js_name = "previewCitationCluster")]
-    pub fn preview_citation_cluster(
+    #[wasm_bindgen(js_name = "previewCluster")]
+    pub fn preview_cluster(
         &self,
-        cluster: TPreviewCluster,
+        preview_cluster: TPreviewCluster,
         positions: Box<[JsValue]>,
         format: Option<String>,
     ) -> StringResult {
         typescript_serde_result(|| {
-            let preview_cluster: PreviewCluster = cluster.into_serde()?;
-            let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
-            let mut eng = self.engine.borrow_mut();
-            let preview = eng.preview_citation_cluster(
-                preview_cluster,
-                PreviewPosition::MarkWithZeroStr(&positions),
-                format
-                    .map(|frmt| {
-                        frmt.parse::<SupportedFormat>()
-                            .map_err(|()| DriverError::UnknownOutputFormat(frmt))
-                    })
-                    .transpose()?,
-            );
-            Ok(preview?)
+            let preview_cluster: PreviewCluster = preview_cluster.into_serde()?;
+            self.preview_cluster_inner(preview_cluster, positions, format)
         })
+    }
+
+    fn preview_cluster_inner(
+        &self,
+        preview_cluster: PreviewCluster,
+        positions: Box<[JsValue]>,
+        format: Option<String>,
+    ) -> Result<Arc<SmartString>, DriverError> {
+        let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
+        let mut eng = self.engine.borrow_mut();
+        let preview = eng.preview_citation_cluster(
+            preview_cluster,
+            PreviewPosition::MarkWithZeroStr(&positions),
+            format
+                .map(|frmt| {
+                    frmt.parse::<SupportedFormat>()
+                        .map_err(|()| DriverError::UnknownOutputFormat(frmt))
+                })
+                .transpose()?,
+        );
+        Ok(preview?)
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]

@@ -473,8 +473,8 @@ it, before confirming the change.
 ```javascript
 let cluster = { cites: [ { id: "citekey", locator: "45" }, { ... } ] };
 let positions = [ ... before, { note: 34 }, ... after ];
-let preview = driver.previewCitationCluster(cluster, positions).unwrap();
-let plainPreview = driver.previewCitationCluster(cluster, positions, "plain").unwrap();
+let preview = driver.previewCluster(cluster, positions).unwrap();
+let plainPreview = driver.previewCluster(cluster, positions, "plain").unwrap();
 ```
 
 The cluster argument is just a cluster, without an `id` field, since it's
@@ -657,9 +657,9 @@ Both of these methods will require throwing out almost all cached computation,
 so use sparingly.
 
 If you need to render a preview in a different format, there is an argument on
-`previewCitationCluster` for doing just that. It does not throw out all the
+`previewCluster` for doing just that. It does not throw out all the
 computation. `citeproc-rs`' disambiguation procedures do take formatting into
 account, so `<i>Title</i>` can be distinct from `<b>Title</b>` in HTML and RTF,
 but not if the whole driver's output format is `"plain"`, since they both look
-identical in plain text. `previewCitationCluster` will simply translate the
-formatting into another format, without re-computing all the disambiguation.
+identical in plain text. `previewCluster` will simply translate the formatting
+into another format, without re-computing all the disambiguation.

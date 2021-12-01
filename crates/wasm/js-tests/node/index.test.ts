@@ -192,7 +192,7 @@ describe("batchedUpdates", () => {
 
 });
 
-describe("previewCitationCluster", () => {
+describe("previewCluster", () => {
 
     let ibidStyle = mkNoteStyle(
         `
@@ -223,7 +223,7 @@ describe("previewCitationCluster", () => {
     test("between two other clusters", () => {
         pccSetup((driver, [one, two]) => {
             // between the other two
-            let pcc = driver.previewCitationCluster(
+            let pcc = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{ id: one }, {}, { id: two }],
                 "plain"
@@ -235,14 +235,14 @@ describe("previewCitationCluster", () => {
     test("replacing a cluster", () => {
         pccSetup((driver, [one, two]) => {
             // replacing #1
-            var pcc = driver.previewCitationCluster(
+            var pcc = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{}, { id: two }],
                 "plain"
             ).unwrap();
             expect(pcc).toEqual("ONE");
             // replacing #1, with note numbers isntead
-            pcc = driver.previewCitationCluster(
+            pcc = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{ note: 1, }, { id: two, note: 5 }],
                 "plain"
@@ -253,14 +253,14 @@ describe("previewCitationCluster", () => {
 
     test("should error when supplying unsupported output format", () => {
         pccSetup((driver) => {
-            let res = driver.previewCitationCluster({ cites: [{ id: "r1" }] }, [{}], "plaintext");
+            let res = driver.previewCluster({ cites: [{ id: "r1" }] }, [{}], "plaintext");
             expect(() => res.unwrap()).toThrow("Unknown output format \"plaintext\"");
         })
     });
 
     test("should allow omitting the format argument", () => {
         pccSetup((driver, [_, two]) => {
-            let res = driver.previewCitationCluster(
+            let res = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{ note: 1 }, { id: two, note: 5 }]
             ).unwrap();
@@ -274,7 +274,7 @@ describe("previewCitationCluster", () => {
             driver.insertReference(
                 { title: "ONE", id: "r1", type: "book", author: [{ family: "Smith" }] }
             ).unwrap();
-            let res = driver.previewCitationCluster(
+            let res = driver.previewCluster(
                 { cites: [{ id: "r1" }], mode: "Composite", infix: ", whose book" },
                 [{ note: 1 }, { id: two, note: 5 }]
             ).unwrap();
