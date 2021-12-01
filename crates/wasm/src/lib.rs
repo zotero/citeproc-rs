@@ -143,6 +143,10 @@ impl Driver {
     ///
     /// First argument is the new output format, as a string ("html", "rtf", "plain"); second arg
     /// is the format options. If the second argument is null/undefined, it is set to the default.
+    ///
+    /// @param {"html" | "rtf" | "plain"} format
+    /// @param {FormatOptions | null} options
+    ///
     #[wasm_bindgen(js_name = "setOutputFormat")]
     pub fn set_output_format(&self, format: &str, options: Option<TFormatOptions>) -> EmptyResult {
         typescript_serde_result(|| {
@@ -153,7 +157,7 @@ impl Driver {
                 .map(|fo| -> Result<_, DriverError> {
                     let jsv: JsValue = fo.into();
                     let foa: FormatOptionsArg = JsValue::into_serde(&jsv)?;
-                    Ok(foa.options)
+                    Ok(foa.0)
                 })
                 .transpose()?
                 .unwrap_or_else(Default::default);
@@ -479,7 +483,7 @@ extern "C" {
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_1: &'static str = r#"
 interface FormatOptions {
-    linkAnchors: boolean,
+    linkAnchors?: boolean,
 }
 
 interface InitOptions {

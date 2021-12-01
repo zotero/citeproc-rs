@@ -19,10 +19,10 @@ fn bool_true() -> bool {
 /// `JsValue::into_serde()`. A wrapper works.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct FormatOptionsArg {
+pub struct FormatOptionsArg (
     #[serde(with = "JsFormatOptions")]
-    pub options: FormatOptions,
-}
+    pub FormatOptions,
+);
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,3 +96,5 @@ impl Fetcher {
         Ok(Some(fetcher))
     }
 }
+
+
