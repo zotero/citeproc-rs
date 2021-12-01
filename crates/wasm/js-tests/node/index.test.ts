@@ -13,6 +13,16 @@ let boldStyle = mkNoteStyle(
         <text variable="URL" prefix=" " />
     `,
 );
+let authorTitleStyle = mkInTextStyle(
+    `
+    <group delimiter=", ">
+    <names variable="author" />
+    <text variable="title" />
+    </group>
+    `,
+    ``
+);
+
 
 describe("Driver", () => {
 
@@ -198,7 +208,7 @@ describe("previewCitationCluster", () => {
         ``,
     );
 
-    function pccSetup(callback) {
+    function pccSetup(callback: (driver: Driver, ids: [string, string]) => void) {
         withDriver({ style: ibidStyle }, driver => {
             let one = "cluster-one";
             let two = "cluster-two";
@@ -242,28 +252,41 @@ describe("previewCitationCluster", () => {
     })
 
     test("should error when supplying unsupported output format", () => {
-        pccSetup((driver, [one, two]) => {
-            let res = driver.previewCitationCluster(
-                { cites: [{ id: "r1" }] }, [{}], "plaintext");
+        pccSetup((driver) => {
+            let res = driver.previewCitationCluster({ cites: [{ id: "r1" }] }, [{}], "plaintext");
             expect(() => res.unwrap()).toThrow("Unknown output format \"plaintext\"");
         })
-    })
+    });
+
+    test("should allow omitting the format argument", () => {
+        pccSetup((driver, [_, two]) => {
+            let res = driver.previewCitationCluster(
+                { cites: [{ id: "r1" }] },
+                [{ note: 1 }, { id: two, note: 5 }]
+            ).unwrap();
+            expect(res).toEqual("ONE");
+        })
+    });
+
+    test("should handle cluster modes", () => {
+        pccSetup((driver, [_, two]) => {
+            driver.setStyle(authorTitleStyle).unwrap();
+            driver.insertReference(
+                { title: "ONE", id: "r1", type: "book", author: [{ family: "Smith" }] }
+            ).unwrap();
+            let res = driver.previewCitationCluster(
+                { cites: [{ id: "r1" }], mode: "Composite", infix: ", whose book" },
+                [{ note: 1 }, { id: two, note: 5 }]
+            ).unwrap();
+            expect(res).toEqual("Smith, whose book ONE");
+        })
+    });
 
 });
 
 describe("AuthorOnly and friends", () => {
-    let style = mkInTextStyle(
-        `
-        <group delimiter=", ">
-            <names variable="author" />
-            <text variable="title" />
-        </group>
-    `,
-        ``
-    );
-
-    function withSupp(callback) {
-        withDriver({ style }, driver => {
+    function withSupp(callback: (driver: Driver, ids: [string, string]) => void) {
+        withDriver({ style: authorTitleStyle }, driver => {
             let one = "cluster-one";
             let two = "cluster-two";
             oneOneOne(driver, { title: "ONE", id: "r1", author: [{ family: "Smith" }] }, "cluster-one");
