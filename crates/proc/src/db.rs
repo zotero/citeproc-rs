@@ -517,9 +517,9 @@ fn refs_accepting_cite(
         })
         .collect();
 
-    if log_enabled!(log::Level::Warn) && !ret.contains(ref_id) {
+    if !ret.contains(ref_id) {
         let dfa = db.ref_dfa(ref_id.clone()).unwrap();
-        warn!(
+        error!(
             "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
             cite_id,
             ref_id,
