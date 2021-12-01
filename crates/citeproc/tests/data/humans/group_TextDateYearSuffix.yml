@@ -1,0 +1,52 @@
+mode: citation
+# The prefix should show up with either the date or an explicit year-suffix.
+# But it should not show up if neither are present.
+result: >
+  Smith pfx-1999a; Smith pfx-1999b;
+  Smith pfx-2000;
+  Jones pfx-a; Jones pfx-b;
+  Cuarón
+
+input:
+  - id: smith-1999-1
+    author: [{family: "Smith"}]
+    issued: { date-parts: [[1999]]}
+  - id: smith-1999-2
+    author: [{family: "Smith"}]
+    issued: { date-parts: [[1999]]}
+  - id: smith-2000
+    author: [{family: "Smith"}]
+    issued: { date-parts: [[2000]]}
+  - id: jones-1
+    author: [{family: "Jones"}]
+  - id: jones-2
+    author: [{family: "Jones"}]
+  - id: cuarón
+    author: [{family: "Cuarón"}]
+
+clusters:
+  - id: cluster-one
+    cites:
+      - id: smith-1999-1
+      - id: smith-1999-2
+      - id: smith-2000
+      - id: jones-1
+      - id: jones-2
+      - id: cuarón
+
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; ">
+        <group delimiter=" ">
+          <names variable="author" />
+          <group>
+            <text value="pfx-" />
+            <date variable="issued" form="numeric" date-parts="year" />
+            <text variable="year-suffix" />
+          </group>
+        </group>
+      </layout>
+    </citation>
+  </style>

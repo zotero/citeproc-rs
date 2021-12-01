@@ -1,0 +1,34 @@
+mode: citation
+# the space should not show up if the year-suffix doesn't
+result: (Smith a; Smith b; Jones; Smith c)
+input:
+  - id: smith-1999-1
+    author: [{family: "Smith"}]
+  - id: smith-1999-2
+    author: [{family: "Smith"}]
+  - id: jones
+    author: [{family: "Jones"}]
+  - id: smith-2000
+    author: [{family: "Smith"}]
+clusters:
+  - id: cluster-one
+    cites:
+      - id: smith-1999-1
+      - id: smith-1999-2
+      - id: jones
+      - id: smith-2000
+csl: |
+  <style class="in-text" version="1.0.1">
+    <info><id>id</id><title /></info>
+    <citation disambiguate-add-year-suffix="true">
+      <layout delimiter="; " prefix="(" suffix=")">
+        <group delimiter=" ">
+          <names variable="author" />
+          <group>
+            <text value=" " />
+            <text variable="year-suffix" />
+          </group>
+        </group>
+      </layout>
+    </citation>
+  </style>

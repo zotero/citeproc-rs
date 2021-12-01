@@ -1019,7 +1019,7 @@ pub struct Bibliography {
     pub layout: Layout,
     pub hanging_indent: bool, // default is false
     pub second_field_align: Option<SecondFieldAlign>,
-    pub line_spacing: u32,   // >= 1 only. default is 1
+    pub line_spacing: u32,  // >= 1 only. default is 1
     pub entry_spacing: u32, // >= 0. default is 1
     pub name_inheritance: Name,
     pub subsequent_author_substitute: Option<SmartString>,

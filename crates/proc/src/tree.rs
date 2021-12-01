@@ -1,6 +1,6 @@
-use indextree::Arena;
-
 use crate::prelude::*;
+use core::fmt;
+use indextree::Arena;
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct IrTree<O: OutputFormat = Markup> {
@@ -56,16 +56,21 @@ impl<'a, O: OutputFormat> IrTreeRef<'a, O> {
     }
 }
 
-impl<O: OutputFormat> std::fmt::Display for IrTree<O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<O: OutputFormat> fmt::Display for IrTree<O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.tree_ref().fmt(f)
     }
 }
 
-impl<O: OutputFormat> std::fmt::Debug for IrTree<O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<O: OutputFormat> fmt::Debug for IrTree<O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.tree_ref().fmt(f)
-        // <IrTreeRef<'_, _> as std::fmt::Debug>::fmt(&self.as_reference(), f)
+    }
+}
+
+impl<O: OutputFormat> fmt::Debug for IrTreeMut<'_, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <IrTreeRef<'_, _> as fmt::Debug>::fmt(&self.as_ref(), f)
     }
 }
 
@@ -134,17 +139,17 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
     }
 }
 
-impl<'a, O: OutputFormat> std::fmt::Display for IrTreeRef<'a, O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a, O: OutputFormat> fmt::Display for IrTreeRef<'a, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn go<O2: OutputFormat>(
             indent: u32,
             node: NodeId,
             arena: &IrArena<O2>,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
-                write!(f, "    ")?;
+                write!(f, "  ")?;
             }
             writeln!(f, " - [{:?}] {}", pair.1, pair.0)?;
             node.children(arena)
@@ -155,17 +160,17 @@ impl<'a, O: OutputFormat> std::fmt::Display for IrTreeRef<'a, O> {
     }
 }
 
-impl<'a, O: OutputFormat> std::fmt::Debug for IrTreeRef<'a, O> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a, O: OutputFormat> fmt::Debug for IrTreeRef<'a, O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fn go<O2: OutputFormat>(
             indent: u32,
             node: NodeId,
             arena: &IrArena<O2>,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
+            f: &mut fmt::Formatter<'_>,
+        ) -> fmt::Result {
             let pair = arena.get(node).unwrap().get();
             for _ in 0..indent {
-                write!(f, "    ")?;
+                write!(f, "  ")?;
             }
             writeln!(f, " - [{:?}] {:?}", pair.1, pair.0)?;
             node.children(arena)
@@ -285,11 +290,13 @@ impl<'a, O: OutputFormat> IrTreeMut<'a, O> {
         }
         // Reverse, such that descendants are recalculated first
         for (seq_node, dropped_gv) in queue.into_iter().rev() {
-            // let data = arena.get_mut(node).unwrap().get_mut();
             let seq_tree = self.tree_at_node(seq_node);
-            if let Some(force) = IrSeq::overall_group_vars(dropped_gv, seq_tree) {
-                self.arena.get_mut(seq_node).unwrap().get_mut().1 = force;
+            let force = IrSeq::overall_group_vars(dropped_gv, seq_tree);
+            let existing = self.arena.get(seq_node).unwrap().get().1;
+            if existing != force {
+                log::debug!("recompute rewriting gv to {:?} {}", force, seq_tree);
             }
+            self.arena.get_mut(seq_node).unwrap().get_mut().1 = force;
         }
     }
 }

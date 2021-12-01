@@ -517,9 +517,9 @@ fn refs_accepting_cite(
         })
         .collect();
 
-    if log_enabled!(log::Level::Warn) && !ret.contains(ref_id) {
+    if !ret.contains(ref_id) {
         let dfa = db.ref_dfa(ref_id.clone()).unwrap();
-        warn!(
+        error!(
             "{:?}: own reference {} did not match during pass {:?}:\n{}\n{:?}",
             cite_id,
             ref_id,
@@ -912,6 +912,7 @@ fn disambiguate_add_year_suffix(tree: &mut IrTree, ctx: &CiteContext<'_, Markup>
         break;
     }
     if added_suffix {
+        tree.recompute_group_vars();
         return;
     }
 
@@ -919,6 +920,7 @@ fn disambiguate_add_year_suffix(tree: &mut IrTree, ctx: &CiteContext<'_, Markup>
     for yid in hooks {
         let (ys, _) = get_ys_mut(yid, &mut tree.arena);
         let sum: IrSum<Markup> = match &ys.hook {
+            // This produces GroupVars::Important
             YearSuffixHook::Plain => ys.hook.render(ctx, suffix),
             _ => continue,
         };
@@ -983,6 +985,7 @@ fn ir_gen0(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
         .citation
         .intermediate(db, &mut state, &ctx, &mut arena);
     let irgen = IrGen::new(IrTree::new(root, arena), state, false);
+    log::debug!("ir_gen0: {}", irgen.tree);
     Arc::new(irgen)
 }
 
@@ -1101,6 +1104,7 @@ fn ir_gen2_add_given_name(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     irgen.update_is_ambiguous(db, &ctx);
     irgen.disambiguate_add_names(db, &mut ctx);
     irgen.disambiguate_add_given_name(db, &mut ctx);
+    log::debug!("ir_gen2_add_given_name: {}", irgen.deref().tree);
     irgen.into_arc()
 }
 
@@ -1115,7 +1119,9 @@ fn ir_fully_disambiguated(db: &dyn IrDatabase, id: CiteId) -> Arc<IrGen> {
     // Start with the given names done.
     let mut irgen = IrGenCow::new(db.ir_gen2_add_given_name(id));
     irgen.disambiguate_add_year_suffix(db, &mut ctx);
+    log::debug!("ir_add_year_suffix: {}", irgen.deref().tree);
     irgen.disambiguate_conditionals(db, &mut ctx);
+    log::debug!("ir_fully_disambiguated: {}", irgen.deref().tree);
     irgen.into_arc()
 }
 
@@ -1371,14 +1377,17 @@ fn bib_item_gen0_acontextual(
             // need to only supply the first appearing explicit one, or the first appearing implicit one.
             // TODO: comply with the spec where "hook in cite == explicit => no implicit in bib" and "vice
             // versa"
+            log::debug!("bib_ir_gen0: {}", tree);
             if let Some(suffix) = db.year_suffix_for(ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::AddYearSuffix(suffix));
                 disambiguate_add_year_suffix(&mut tree, &ctx, suffix);
+                log::debug!("bib_ir add_year_suffix: {}", tree);
             }
 
             if first_cite_used_disambiguate_true(db, ref_id.clone()) {
                 ctx.disamb_pass = Some(DisambPass::Conditionals);
                 disambiguate_true(db, &mut tree, &mut state, &ctx);
+                log::debug!("bib_ir disambiguate_true: {}", tree);
             }
 
             if bib.second_field_align == Some(csl::SecondFieldAlign::Flush) {

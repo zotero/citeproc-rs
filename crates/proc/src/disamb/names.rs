@@ -70,6 +70,11 @@ impl Disambiguation<Markup> for Names {
                     runner.bump_name_count += 1;
                 }
                 once = true;
+                let label_after_name = nir
+                    .names_inheritance
+                    .label
+                    .as_ref()
+                    .map_or(false, |x| x.after_name);
                 let (ntbs, ntb_len) = runner.names_to_builds(
                     &nir.disamb_names,
                     ctx.position,
@@ -93,7 +98,21 @@ impl Disambiguation<Markup> for Names {
                     runner.name_el.affixes.as_ref(),
                     start,
                     |nfa, mut spot| {
+                        // Generally, here we must match the behaviour of NameIR::rendered_ntbs_to_node
                         let mut iter = ntbs.into_iter().peekable();
+                        let mk_label = |nfa: &mut Nfa, place: &mut NodeIndex| {
+                            if let Some(built_label) = nir.built_label.as_ref() {
+                                let formatted =
+                                    fmt.output_in_context(built_label.clone(), child_stack, None);
+                                let new = nfa.graph.add_node(());
+                                let edge = NfaEdge::Token(EdgeData::Output(formatted));
+                                nfa.graph.add_edge(*place, new, edge);
+                                *place = new;
+                            }
+                        };
+                        if !label_after_name {
+                            mk_label(nfa, &mut spot);
+                        }
                         while let Some(ntb) = iter.next() {
                             match ntb {
                                 NameTokenBuilt::Built(b, _lat_cy) => {
@@ -144,6 +163,9 @@ impl Disambiguation<Markup> for Names {
                                     }
                                 },
                             }
+                        }
+                        if label_after_name {
+                            mk_label(nfa, &mut spot);
                         }
                         spot
                     },

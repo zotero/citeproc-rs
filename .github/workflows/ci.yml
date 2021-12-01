@@ -19,10 +19,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust nightly-2021-08-30
+      - name: install rust nightly-2021-10-07
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2021-08-30
+            toolchain: nightly-2021-10-07
             override: true
       - uses: Swatinem/rust-cache@v1
       - run: cargo test --lib
@@ -84,10 +84,10 @@ jobs:
           S3_PREFIX='https://citeproc-rs-test-results.cormacrelf.net'
           curl -sL "$S3_PREFIX/.snapshots/branches/$GITHUB_BASE" -o ".snapshots/branches/$GITHUB_BASE"
 
-      - name: Install Rust nightly-2021-08-30
+      - name: install rust nightly-2021-10-07
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2021-08-30
+            toolchain: nightly-2021-10-07
             override: true
       - uses: Swatinem/rust-cache@v1
 
@@ -101,10 +101,12 @@ jobs:
         env:
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
+        shell: bash
         run: |
           cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
           cargo test-suite diff $GITHUB_BASE..$GITHUB_HEAD | tee test-results/diff
-          echo $? > test-results/diff-status
+          # need the first command in the pipe, $? would give us tee's status
+          echo "${PIPESTATUS[0]}" > test-results/diff-status
 
       - name: "Write the test-results artifact files"
         if: always()

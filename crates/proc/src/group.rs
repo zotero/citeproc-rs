@@ -24,7 +24,7 @@ pub enum GroupVars {
     /// Initial value given to disambiguate="true" conditionals that are initially empty, as their
     /// content could go either way later, and their currently-empty output shouldn't affect
     /// whether the surrounding group should render before disambiguation comes around.
-    Unresolved,
+    UnresolvedImportant,
 
     /// For e.g. an explicit `<text variable="year-suffix" />`, which would otherwise cause a
     /// surrounding group to be Missing initially and be discarded too soon. Just means "don't
@@ -37,6 +37,26 @@ pub enum GroupVars {
     ///
     /// "Do render this one, but don't rely on it being plain to discard an outer group."
     UnresolvedPlain,
+}
+
+#[test]
+fn test_important_seq() {
+    let f = |slice: &[GroupVars]| {
+        slice
+            .iter()
+            .fold(GroupVars::Plain, |a, b| a.neighbour(*b))
+            .promote_plain()
+    };
+    assert_eq!(f(&[Important, Missing]), Important);
+    assert_eq!(f(&[UnresolvedImportant, Missing]), UnresolvedMissing);
+    assert_eq!(f(&[UnresolvedImportant, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[UnresolvedImportant, Plain, Important]), Important);
+    assert_eq!(f(&[UnresolvedImportant, Missing, Important]), Important);
+    assert_eq!(f(&[Important, UnresolvedImportant, Missing]), Important);
+    // plains in a group end up being important.
+    assert_eq!(f(&[Plain, Plain, Plain]), Important);
+    assert_eq!(f(&[UnresolvedImportant, Plain, Plain]), UnresolvedPlain);
+    assert_eq!(f(&[UnresolvedMissing, Plain, Plain]), UnresolvedMissing);
 }
 
 impl Default for GroupVars {
@@ -93,12 +113,12 @@ impl GroupVars {
             (Important, _) | (_, Important) => Important,
 
             // Unresolved + Missing has to stay Unresolved until disambiguation is done
-            (Unresolved, Missing)
-            | (Missing, Unresolved)
+            (UnresolvedImportant, Missing)
+            | (Missing, UnresolvedImportant)
             | (UnresolvedMissing, Missing)
             | (Missing, UnresolvedMissing)
-            | (UnresolvedMissing, Unresolved)
-            | (Unresolved, UnresolvedMissing)
+            | (UnresolvedMissing, UnresolvedImportant)
+            | (UnresolvedImportant, UnresolvedMissing)
             | (Plain, UnresolvedMissing)
             | (UnresolvedMissing, Plain)
             | (UnresolvedMissing, UnresolvedMissing)
@@ -108,12 +128,12 @@ impl GroupVars {
             | (Missing, UnresolvedPlain) => UnresolvedMissing,
 
             (UnresolvedPlain, UnresolvedPlain)
-            | (UnresolvedPlain, Unresolved)
-            | (Unresolved, UnresolvedPlain)
+            | (UnresolvedPlain, UnresolvedImportant)
+            | (UnresolvedImportant, UnresolvedPlain)
             | (UnresolvedPlain, Plain)
             | (Plain, UnresolvedPlain)
-            | (Unresolved, Plain)
-            | (Plain, Unresolved) => UnresolvedPlain,
+            | (UnresolvedImportant, Plain)
+            | (Plain, UnresolvedImportant) => UnresolvedPlain,
 
             // promote Missing over Plain; the style tried and failed to render a variable,
             // so we must take note of this.
@@ -121,32 +141,100 @@ impl GroupVars {
 
             (Plain, Plain) => Plain,
 
-            (Unresolved, Unresolved) => Unresolved,
+            (UnresolvedImportant, UnresolvedImportant) => UnresolvedImportant,
+        }
+    }
+
+    /// Resets the group vars so that G(Missing, G(Plain)) will
+    /// render the Plain part. Groups shouldn't look inside inner
+    /// groups to make themselves not render.
+    ///
+    /// https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
+    #[inline]
+    pub fn promote_plain(self) -> Self {
+        match self {
+            Plain | Important => Important,
+            _ => self,
         }
     }
 
     #[inline]
-    pub fn should_render_tree(self) -> bool {
-        self != Missing && self != UnresolvedMissing && self != Unresolved
+    pub fn should_render_tree(self, is_implicit_conditional: bool) -> bool {
+        match self {
+            Missing | UnresolvedMissing if is_implicit_conditional => false,
+            _ => true,
+        }
     }
 
     #[inline]
-    pub fn implicit_conditional<T: Default + PartialEq + std::fmt::Debug>(
-        self,
-        ir: T,
-    ) -> (T, Self) {
-        let default = T::default();
-        if self == Missing {
-            (default, GroupVars::Missing)
-        } else if ir == default {
-            (default, GroupVars::Plain)
-        } else {
-            // "reset" the group vars so that G(Plain, G(Missing)) will
-            // render the Plain part. Groups shouldn't look inside inner
-            // groups.
+    pub fn is_unresolved(self) -> bool {
+        match self {
+            UnresolvedMissing | UnresolvedPlain | UnresolvedImportant => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn implicit_conditional<T: Default>(self, seq_ir: T, is_empty: bool) -> (T, Self) {
+        // self here is children_gvs.fold(Plain, neighbour).
+        match self {
+            // if it's missing, we replace any (clearly Plain-only) nodes we wrote into the seq,
+            // with the default for the seq type.
             //
-            // https://discourse.citationstyles.org/t/groups-variables-and-missing-dates/1529/18
-            (ir, if self == Plain { Important } else { self })
+            // Note also that this will, for T = IR, give IR::Rendered(None).
+            Missing => (T::default(), GroupVars::Missing),
+
+            // If it's empty, throw it out.
+            //
+            // If it's Unresolved*, we keep it, but you shouldn't be running implicit_conditional
+            // in the construction of an unresolved seq.
+            // hook in the tree to maybe render something later.
+            //
+            // if it's empty (== default implies empty), then we treat the seq node as Plain for
+            // the purposes of groups higher up.
+            //
+            // If we have Important but an empty seq, then we've made a mistake coding, because
+            // Important should have some content in it. Fine to throw out.
+            Plain | Important if is_empty => (T::default(), GroupVars::Plain),
+
+            // otherwise, if it's Plain, make it Important. This means G(Missing, G(Plain)) will
+            // render the Plain part.
+            _ => (seq_ir, self.promote_plain()),
+        }
+    }
+
+    /// We need a seq that ISN'T an implicit-conditional to be rendered, but also carry variable
+    /// missing-ness information upwards. This has a very simple implementation, with respect to
+    /// the group vars: change nothing, simply set the gv of such a seq to this value. Crucially,
+    /// you also have to render (i.e. flatten, or add_to_graph) everything except
+    /// `!gv.should_render_tree()` nodes.
+    ///
+    /// Basically here we are referring to if/else-if/else branches.
+    ///
+    /// ```xml,ignore
+    /// <group>
+    ///   <text value="PLAIN" />
+    ///   <choose><if ...>
+    ///     <text variable="MISSING" />
+    ///   </if></choose>
+    /// </group>
+    /// ```
+    ///
+    /// The variable is Missing, the if-branch is (because of this method) Missing, the outer group
+    /// is Missing + Plain = Missing, so nothing renders.
+    #[inline]
+    pub fn unconditional(self) -> Self {
+        self
+    }
+
+    /// Changes Unresolved* variants into their normal counterparts.
+    #[inline]
+    pub fn resolve(self) -> Self {
+        match self {
+            UnresolvedImportant => Important,
+            UnresolvedPlain => Plain,
+            UnresolvedMissing => Missing,
+            _ => self,
         }
     }
 }

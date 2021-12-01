@@ -198,7 +198,15 @@ where
                         let content = renderer
                             .text_term(text, term_selector, plural)
                             .map(CiteEdgeData::Term);
-                        arena.new_node((IR::Rendered(content), GroupVars::new()))
+                        let gv = if let csl::TextTermSelector::Simple(
+                            csl::SimpleTermSelector::Misc(csl::MiscTerm::NoDate, _),
+                        ) = term_selector
+                        {
+                            GroupVars::Important
+                        } else {
+                            GroupVars::Plain
+                        };
+                        arena.new_node((IR::Rendered(content), gv))
                     }
                 }
             }

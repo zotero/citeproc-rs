@@ -533,6 +533,8 @@ impl<'c, O: OutputFormat> NameIR<O> {
         Some(rendered)
     }
 
+    /// This must match the behaviour of Names::ref_ir and the stuff it adds to the Nfa
+    /// graph.
     pub(crate) fn rendered_ntbs_to_node(
         rendered_ntbs: Vec<O::Build>,
         arena: &mut IrArena<O>,
