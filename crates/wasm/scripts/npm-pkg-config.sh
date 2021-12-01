@@ -99,46 +99,57 @@ if [ -z "$TARGETS_ALL" ]; then
   TARGETS_ALL="nodejs,browser,web,no-modules,zotero"
 fi
 
+TARGET_DIRS=()
+declare -p TARGET_DIRS
+
+target() {
+  local TARGET=${1:-}
+  local OUT=${2:-}
+  echo "$OUT"
+  local EXTRA_FEATURES=${3:-}
+  local SCRATCH="$DIR/pkg-scratch/$OUT"
+  wasm-pack build $DEV_OR_RELEASE \
+    --out-name citeproc_rs_wasm \
+    --scope citeproc-rs \
+    --target "$TARGET" \
+    --out-dir "$SCRATCH" \
+    -- --features "$FEATURES$EXTRA_FEATURES" \
+    || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
+
+  SNIPPETS="$DIR/pkg-scratch/$OUT/snippets"
+  (mkdir -p "$DEST/$OUT" \
+    && ([[ -d "$SNIPPETS" ]] && cp -R "$SNIPPETS" "$DEST/$OUT" || true) \
+    && cp -R  "$DIR/pkg-scratch/$OUT/citeproc_rs_wasm"* "$DEST/$OUT/" \
+    && cp "$DIR/pkg-scratch/$OUT/.gitignore" "$DEST/" \
+    ) || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
+}
+
 if [ -z "$PACKAGE_ONLY" ]; then
   mkdir -p "$DIR/pkg-scratch"
   rm -rf "$DEST"
   mkdir -p "$DEST"
 
   ## e.g. build into pkg-scratch/target; move files to $DEST/_target/
-  target() {
-    TARGET=${1:-}
-    OUT=${2:-}
-    EXTRA_FEATURES=${3:-}
-    SCRATCH="$DIR/pkg-scratch/$OUT"
-    wasm-pack build $DEV_OR_RELEASE \
-      --out-name citeproc_rs_wasm \
-      --scope citeproc-rs \
-      --target "$TARGET" \
-      --out-dir "$SCRATCH" \
-      -- --features "$FEATURES$EXTRA_FEATURES" \
-      || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
+  declare -p TARGET_DIRS
 
-    SNIPPETS="$DIR/pkg-scratch/$OUT/snippets"
-    (mkdir -p "$DEST/$OUT" \
-      && ([[ -d "$SNIPPETS" ]] && cp -R "$SNIPPETS" "$DEST/$OUT" || true) \
-      && cp -R  "$DIR/pkg-scratch/$OUT/citeproc_rs_wasm"* "$DEST/$OUT/" \
-      && cp "$DIR/pkg-scratch/$OUT/.gitignore" "$DEST/" \
-      ) || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
-  }
+  # the while loop here runs in a subshell, so you can't modify any global variables from it.
+  DIRS_ECHOED=$(echo "$TARGETS_ALL" | sed -n 1'p' | tr ',' '\n' | while read -r TARGET; do
+      if [ "$TARGET" = "nodejs" ]; then target nodejs _cjs; fi
+      if [ "$TARGET" = "browser" ]; then target browser _esm; fi
+      if [ "$TARGET" = "web" ]; then target web _web; fi
+      if [ "$TARGET" = "no-modules" ]; then target no-modules _no_modules ,no-modules; fi
+      if [ "$TARGET" = "zotero" ]; then target no-modules _zotero ,zotero; fi
+    done)
 
-  echo "$TARGETS_ALL" | sed -n 1'p' | tr ',' '\n' | while read -r TARGET; do
-      echo "TARGET: $TARGET"
-      if [ "$TARGET" == "nodejs" ]; then target nodejs _cjs; fi
-      if [ "$TARGET" == "browser" ]; then target browser _esm; fi
-      if [ "$TARGET" == "web" ]; then target web _web; fi
-      if [ "$TARGET" == "no-modules" ]; then target no-modules _no_modules ,no-modules; fi
-      if [ "$TARGET" == "zotero" ]; then target no-modules _zotero ,zotero; fi
-      echo "TARGET DONE: $TARGET"
-  done
-
+  IFS=' ' read -r -a TARGET_DIRS <<< "$DIRS_ECHOED"
 else
+  TARGET_DIRS+=("_esm" "_cjs" "_web" "_no_modules" "_zotero")
   mkdir -p "$DEST/_cjs" "$DEST/_esm" "$DEST/_web" "$DEST/_no_modules" "$DEST/_zotero"
 fi
+
+# just have to pick one
+declare -p TARGET_DIRS
+TYPESCRIPT_DIR="${TARGET_DIRS[0]}"
 
 if [[ $TARGETS_ALL =~ "zotero" ]]; then
   ZOTERO_BINDGEN_SRC="$DIR/pkg-scratch/_zotero/citeproc_rs_wasm.js"
@@ -158,18 +169,19 @@ fi
 NODEJS_INCLUDE=/dev/null
 NOMOD_INCLUDE=/dev/null
 ZOTERO_INCLUDE=/dev/null
-if [[ "$TARGETS_ALL" == *"nodejs"* ]]; then NODEJS_INCLUDE="$DEST/_cjs/snippets/**/include.js"; fi
+if [[ "$TARGETS_ALL" == *"nodejs"* ]]; then NODEJS_INCLUDE=("$DEST"/_cjs/snippets/**/include.js); fi
 if [[ "$TARGETS_ALL" == *"no-modules"* ]]; then NOMOD_INCLUDE="$DEST/_no_modules/citeproc_rs_wasm_include.js"; fi
 if [[ "$TARGETS_ALL" == *"zotero"* ]]; then ZOTERO_INCLUDE="$DEST/_zotero/citeproc_rs_wasm_include.js"; fi
 
 sed -e 's/export class/class/' < "$DIR/src/js/include.js" \
   | tee "$ZOTERO_INCLUDE" \
-  | tee "$NODEJS_INCLUDE" \
+  | tee "${NODEJS_INCLUDE[*]}" \
   > "$NOMOD_INCLUDE" \
   || bail "could not write include.js for no-modules targets"
 # We want the commonjs module.exports in both of these
 cat "$DIR/src/js/commonjs_export.js" >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
-cat "$DIR/src/js/commonjs_export.js" >> "$NODEJS_INCLUDE" || bail "failed writing $NODEJS_INCLUDE"
+cat "$DIR/src/js/commonjs_export.js" >> "${NODEJS_INCLUDE[*]}" || bail "failed writing
+${NODEJS_INCLUDE[*]}"
 # zotero is weird
 cat "$DIR/src/js/zotero.js" >> "$ZOTERO_INCLUDE" || bail "failed writing $ZOTERO_INCLUDE"
 
@@ -190,6 +202,8 @@ elif [ -n "$SET_VERSION" ]; then
 elif [ -n "$USE_CARGO_VERSION" ]; then
   append "--arg version $CARGO_VERSION" '.version = $version'
 fi
+
+append "--arg typescript_dir $TYPESCRIPT_DIR/citeproc_rs_wasm.d.ts" '.types = $typescript_dir'
 
 if [ -n "$GITHUB_PACKAGES_DEF" ]; then
   NO_AT=${GITHUB_PACKAGES_DEF#@}
