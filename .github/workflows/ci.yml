@@ -19,10 +19,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust nightly-2021-08-30
+      - name: install rust nightly-2021-10-07
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2021-08-30
+            toolchain: nightly-2021-10-07
             override: true
       - uses: Swatinem/rust-cache@v1
       - run: cargo test --lib
@@ -84,10 +84,10 @@ jobs:
           S3_PREFIX='https://citeproc-rs-test-results.cormacrelf.net'
           curl -sL "$S3_PREFIX/.snapshots/branches/$GITHUB_BASE" -o ".snapshots/branches/$GITHUB_BASE"
 
-      - name: Install Rust nightly-2021-08-30
+      - name: install rust nightly-2021-10-07
         uses: actions-rs/toolchain@v1
         with:
-            toolchain: nightly-2021-08-30
+            toolchain: nightly-2021-10-07
             override: true
       - uses: Swatinem/rust-cache@v1
 

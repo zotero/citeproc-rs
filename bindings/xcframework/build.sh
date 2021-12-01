@@ -8,7 +8,7 @@ set -euxo pipefail
 : "${OUTNAME:=CiteprocRs}"
 # needs PR https://github.com/rust-lang/rust/pull/87699
 # install with `rustup install $TOOLCHAIN && rustup component add rust-src --toolchain $TOOLCHAIN`
-# : "${TOOLCHAIN:=nightly-2021-08-30}"
+# : "${TOOLCHAIN:=nightly-2021-10-07}"
 : "${CONFIGURATION:=test}"
 
 export IPHONEOS_DEPLOYMENT_TARGET=13.0
