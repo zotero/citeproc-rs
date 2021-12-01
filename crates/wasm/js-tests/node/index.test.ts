@@ -1,6 +1,13 @@
 import { withDriver, oneOneOne, mkNoteStyle, mkInTextStyle, checkUpdatesLen } from './utils';
 import { UpdateSummary, Driver } from '@citeproc-rs/wasm';
 
+let italicStyle = mkNoteStyle(
+    '<text variable="title" font-style="italic" />',
+);
+let boldStyle = mkNoteStyle(
+    '<text variable="title" font-weight="bold" />'
+);
+
 describe("Driver", () => {
 
     test('boots', () => {
@@ -19,6 +26,21 @@ describe("Driver", () => {
             let res = driver.builtCluster("one").unwrap();
             expect(res).toBe("TEST_TITLE");
         });
+    });
+
+
+    test("can setOutputFormat", () => {
+        withDriver({ style: italicStyle, format: "html" }, driver => {
+            const one = "one";
+            oneOneOne(driver, { title: "Italicised" }, one);
+            expect(driver.builtCluster(one).unwrap()).toBe("<i>Italicised</i>");
+            driver.setOutputFormat("html", null).unwrap();
+            expect(driver.builtCluster(one).unwrap()).toBe("<i>Italicised</i>");
+            driver.setOutputFormat("rtf", null).unwrap();
+            expect(driver.builtCluster(one).unwrap()).toBe("{\\i Italicised}");
+            driver.setOutputFormat("plain", null).unwrap();
+            expect(driver.builtCluster(one).unwrap()).toBe("Italicised");
+        })
     });
 });
 
@@ -97,6 +119,43 @@ describe("batchedUpdates", () => {
             expect(once.clusters).toContainEqual(["123", "ADDED"]);
             expect(once.bibliography?.entryIds).toEqual(["citekey", "added"]);
             expect(once.bibliography?.updatedEntries).toHaveProperty("added", "ADDED");
+        })
+    });
+
+    test("produces updates when style or output format change", () => {
+        withDriver({ style: italicStyle, format: "html" }, driver => {
+            const one = "one";
+            let once: UpdateSummary, twice: UpdateSummary;
+            oneOneOne(driver, { title: "Italicised" }, one);
+            expect(driver.builtCluster(one).unwrap()).toBe("<i>Italicised</i>");
+
+            // no change
+            driver.batchedUpdates().unwrap();
+            driver.setOutputFormat("html", null).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).toEqual(twice);
+            checkUpdatesLen(once, 0, 0); checkUpdatesLen(twice, 0, 0);
+
+            // change to rtf
+            driver.setOutputFormat("rtf", null).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, "{\\i Italicised}"]);
+            checkUpdatesLen(twice, 0, 0);
+
+            // change style to bold instead of italic
+            driver.setStyle(boldStyle);
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, "{\\b Italicised}"]);
+            checkUpdatesLen(twice, 0, 0);
+
+            // back to html
+            driver.setOutputFormat("html", null).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, "<b>Italicised</b>"]);
+            checkUpdatesLen(twice, 0, 0);
         })
     });
 
@@ -295,3 +354,4 @@ describe("initialiser", () => {
         });
     });
 });
+
