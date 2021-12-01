@@ -534,7 +534,7 @@ interface InitOptions {
     localeOverride?: string,
 
     /** Disables sorting in the bibliography; items appear in cited order. */
-    bibliographyNoSort?: bool,
+    bibliographyNoSort?: boolean,
 }
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
@@ -585,7 +585,7 @@ export type Cluster = {
     cites: Cite[];
 } & ClusterMode;
 
-export type PreviewCluster {
+export type PreviewCluster = {
     cites: Cite[];
 } & ClusterMode;
 
@@ -732,11 +732,11 @@ interface WasmResult<T> {
     is_ok(): boolean;
     is_err(): boolean;
     /** If this is an error, returns the default value. */
-    unwrap_or(default: T): T;
+    unwrap_or(defaultValue: T): T;
     /** If this is Ok, returns f(ok_val), else returns Err unmodified. */
     map<R>(f: (t: T) => R): WasmResult<T>;
     /** If this is Ok, returns f(ok_val), else returns the default value. */
-    map_or<R>(default: R, f: (t: T) => R): R;
+    map_or<R>(defaultValue: R, f: (t: T) => R): R;
 }
 "#;
 
@@ -779,11 +779,11 @@ interface IndependentMeta {
     /** A list of languages for which a locale override was specified.
       * Does not include the language-less final override. */
     localeOverrides: string[],
-    hasBibliography: bool,
+    hasBibliography: boolean,
 }
 interface StyleMeta {
     info: StyleInfo,
-    features: { [feature: string]: bool },
+    features: { [feature: string]: boolean },
     defaultLocale: string,
     /** May be absent on a dependent style */
     class?: "in-text" | "note",
