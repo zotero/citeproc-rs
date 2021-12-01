@@ -198,10 +198,7 @@ where
                         let content = renderer
                             .text_term(text, term_selector, plural)
                             .map(CiteEdgeData::Term);
-                        let gv = if let csl::TextTermSelector::Simple(
-                            csl::SimpleTermSelector::Misc(csl::MiscTerm::NoDate, _),
-                        ) = term_selector
-                        {
+                        let gv = if term_selector == csl::MiscTerm::NoDate {
                             GroupVars::Important
                         } else {
                             GroupVars::Plain
