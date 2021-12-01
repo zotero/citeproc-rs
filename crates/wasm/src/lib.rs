@@ -141,11 +141,10 @@ impl Driver {
 
     /// Sets the output format (which will also cause everything to be recomputed, use sparingly)
     ///
-    /// First argument is the new output format, as a string ("html", "rtf", "plain"); second arg
-    /// is the format options. If the second argument is null/undefined, it is set to the default.
+    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as
+    ///                                          `Driver.new`
     ///
-    /// @param {"html" | "rtf" | "plain"} format
-    /// @param {FormatOptions | null} options
+    /// @param {FormatOptions | null} options If absent, this is set to the default FormatOptions.
     ///
     #[wasm_bindgen(js_name = "setOutputFormat")]
     pub fn set_output_format(&self, format: &str, options: Option<TFormatOptions>) -> EmptyResult {

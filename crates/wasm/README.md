@@ -638,3 +638,23 @@ if (parentMeta.independentMeta.hasBibliography) {
 // ...
 driver.free();
 ```
+
+### `setOutputFormat` and `setStyle`
+
+If you wish to change the output format of the entire driver, you can use 
+`setOutputFormat(format, formatOptions)`. The format is a string, one of `"html" | 
+"rtf" | "plain"` just like the `Driver.new` method. The options is an optional
+argument with the same value as `formatOptions` in `Driver.new`.
+
+`setStyle(xmlString)` will change the CSL style used by the driver.
+
+Both of these methods will require throwing out almost all cached computation,
+so use sparingly.
+
+If you need to render a preview in a different format, there is an argument on
+`previewCitationCluster` for doing just that. It does not throw out all the
+computation. `citeproc-rs`' disambiguation procedures do take formatting into
+account, so `<i>Title</i>` can be distinct from `<b>Title</b>` in HTML and RTF,
+but not if the whole driver's output format is `"plain"`, since they both look
+identical in plain text. `previewCitationCluster` will simply translate the
+formatting into another format, without re-computing all the disambiguation.
