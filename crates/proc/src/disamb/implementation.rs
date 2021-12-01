@@ -187,11 +187,7 @@ impl Disambiguation<Markup> for Element {
                         .map(|x| fmt.output_in_context(x, stack, None))
                         .map(EdgeData::Output)
                         .map(|label| label);
-                    let gv = if let csl::TextTermSelector::Simple(csl::SimpleTermSelector::Misc(
-                        csl::MiscTerm::NoDate,
-                        _,
-                    )) = term_selector
-                    {
+                    let gv = if term_selector == csl::MiscTerm::NoDate {
                         GroupVars::Important // Make this Important (same for element.rs) to have no-date act as a variable
                     } else {
                         GroupVars::Plain

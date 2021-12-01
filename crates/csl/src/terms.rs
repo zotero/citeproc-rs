@@ -22,6 +22,31 @@ pub enum TextTermSelector {
     // You can't render ordinals using a <text> node, only using <number>
 }
 
+// It's awkward to check if a term is equal to a TTS. So implement PartialEq for some convenient
+// `tts == MiscTerm::NoDate` etc
+
+macro_rules! tts_eq {
+    ($Term:ident, |$t:ident| $SelPat:pat => $eq:expr) => {
+        impl PartialEq<$Term> for TextTermSelector {
+            fn eq(&self, $t: &$Term) -> bool {
+                match self {
+                    $SelPat => $eq,
+                    _ => false,
+                }
+            }
+        }
+    };
+}
+
+tts_eq!(MiscTerm, |x| Self::Simple(SimpleTermSelector::Misc(t, _)) => x == t);
+tts_eq!(Category, |x| Self::Simple(SimpleTermSelector::Category(t, _)) => x == t);
+tts_eq!(QuoteTerm, |x| Self::Simple(SimpleTermSelector::Quote(t)) => x == t);
+tts_eq!(NumberVariable, |x| Self::Gendered(GenderedTermSelector::Number(t, _)) => x == t);
+tts_eq!(LocatorType, |x| Self::Gendered(GenderedTermSelector::Locator(t, _)) => x == t);
+tts_eq!(MonthTerm, |x| Self::Gendered(GenderedTermSelector::Month(t, _)) => x == t);
+tts_eq!(SeasonTerm, |x| Self::Gendered(GenderedTermSelector::Season(t, _)) => x == t);
+tts_eq!(RoleTerm, |x| Self::Role(RoleTermSelector(t, _)) => x == t);
+
 pub enum AnyTermName {
     Number(NumberVariable),
     Month(MonthTerm),
