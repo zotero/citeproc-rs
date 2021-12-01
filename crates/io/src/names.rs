@@ -4,7 +4,8 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
-use crate::{lazy, SmartCow, String};
+use crate::csl_json::RelaxedBool;
+use crate::{lazy, String};
 
 #[derive(Default, Debug, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -16,8 +17,7 @@ struct PersonNameInput {
     pub suffix: Option<String>,
     #[serde(default)]
     pub static_particles: bool,
-    // TODO: support "string", "number", "boolean"
-    #[serde(default)]
+    #[serde(default, deserialize_with = "RelaxedBool::deserialize_bool")]
     pub comma_suffix: bool,
 }
 
@@ -90,9 +90,6 @@ impl From<NameInput> for Name {
 
 // Now we implement From<PersonNameInput> for PersonName
 
-// Parsing particles
-// Ported from https://github.com/Juris-M/citeproc-js/blob/1aa49dd2ab9a1c85d3060073780d65c86754a438/src/util_name_particles.js
-
 macro_rules! regex {
     ($re:literal $(,)?) => {{
         static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
@@ -100,115 +97,82 @@ macro_rules! regex {
     }};
 }
 
-fn split_particles(orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^(?:\u{02bb}\\s|\u{2019}\\s|\\s|'\\s)?\\S+\\s*");
-    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
-    debug!("split_particles: {:?}", orig_name_str);
-    let (splitter, name_str) = if is_given {
-        (
-            givenn_particles_re,
-            SmartCow::Owned(orig_name_str.chars().rev().collect()),
-        )
-    } else {
-        (family_particles_re, SmartCow::Borrowed(orig_name_str))
-    };
-    let mut particles = Vec::new();
+fn split_nondrop_family(family: &mut String) -> Option<String> {
+    // our last name might start with 1 or more of:
+    // - lowercase anycase* apostrophe, i.e. "d'", "d’", "dʻ" (backwards, but sure), some other things like "d-"
+    // - lowercase anycase* space, i.e. "d ", "von " etc.
+    // - lowercase anycase* apostrophe space, i.e. "d’ "
+    // - apostrophe lowercase anycase*...
+    //
+    // overall regex should be therefore have either an apostrophe and space*, or apostrophe* and
+    // space+. Then we will repeat the whole thing to catch any number of them, starting at ^ with
+    // some possible leading whitespace.
+    //
+    let re = regex!(r#"^\s*(?:['’ʻ\.-]?\p{Lowercase}\p{Alphabetic}*(?:['’ʻ\s\.-]|\b))+\s*"#);
 
-    let mut slice = &name_str[..];
-    let mut eaten = 0;
-    while let Some(mat) = splitter.find(slice) {
-        let matched_particle = mat.as_str();
-        let particle = if is_given {
-            SmartCow::Owned(matched_particle.chars().rev().collect())
-        } else {
-            SmartCow::Borrowed(matched_particle)
-        };
-        debug!("found particle? {:?}", &particle);
-        // first sign of an uppercase word -- break out
-        let has_particle = particle
-            .chars()
-            // For " d'", etc
-            .filter(|c| !c.is_whitespace() && !['-', '\'', '\u{02bb}', '\u{2019}'].contains(c))
-            .nth(0)
-            .map_or(false, |c| c.is_lowercase());
-        if !has_particle {
-            break;
+    let mut particles = String::new();
+    let mut remain = &family[..];
+    if let Some(found) = re.find(remain) {
+        let particle = found.as_str();
+        if found.end() != remain.len() {
+            particles.push_str(particle);
+            remain = &remain[found.end()..];
+            *family = replace_apostrophes(remain);
         }
-        slice = &slice[particle.len()..];
-        eaten += particle.len();
-        particles.push(particle);
     }
-    let remain = if is_given {
-        particles.reverse();
-        if particles.len() > 1 {
-            for i in 1..particles.len() {
-                if particles[i].chars().nth(0) == Some(' ') {
-                    particles[i - 1].make_mut().push(' ');
-                }
-            }
-        }
-        for i in 0..particles.len() {
-            if particles[i].chars().nth(0) == Some(' ') {
-                particles[i].make_mut().remove(0);
-            }
-        }
-        &orig_name_str[..orig_name_str.len() - eaten]
-    } else {
-        &orig_name_str[eaten..]
-    };
     if particles.is_empty() {
-        None
-    } else {
-        use itertools::Itertools;
-        Some((
-            String::from(particles.iter().map(|cow| cow.as_ref()).join("")),
-            replace_apostrophes(remain),
-        ))
+        replace_apostrophes_mut(family);
+        return None;
     }
-}
-
-// Maybe {truncates given, returns a suffix}
-fn parse_suffix(given: &mut String, has_dropping_particle: bool) -> Option<(String, bool)> {
-    let comma = regex!(r"\s*,!?\s*");
-    let mut suff = None;
-    let trunc_len = if let Some(mat) = comma.find(given) {
-        let possible_suffix = &given[mat.end()..];
-        let possible_comma = mat.as_str().trim();
-        if (possible_suffix == "et al" || possible_suffix == "et al.") && !has_dropping_particle {
-            warn!("used et-al as a suffix in name, not handled with citeproc-js-style hacks");
-            return None;
-        } else {
-            let force_comma = possible_comma.len() == 2;
-            suff = Some((possible_suffix.into(), force_comma))
-        }
-        Some(mat.start())
-    } else {
-        None
-    };
-    if let Some(trun) = trunc_len {
-        given.truncate(trun);
-    }
-    suff
-}
-
-fn trim_last(string: &mut String) {
-    let last_char = string.chars().rev().nth(0);
-    string.trim_in_place();
-
-    if string.is_empty() {
-        return;
-    }
-    // graphemes unnecessary as particles basically end with one of a few select characters in the
-    // regex below
-    if let Some(last_char) = last_char {
-        if last_char == ' '
-            && string.chars().rev().nth(0).map_or(false, |second_last| {
-                second_last == '\'' || second_last == '\u{2019}'
-            })
-        {
-            string.push(' ');
+    if particles.trim_end_in_place() != 0 {
+        // these particular particle-terminals can be forced to have a space after them.
+        // simply input { family: "d' Lastname" }. normally, having an apostrophe at the
+        // end of the ndparticles will cause the space between the particles and the last
+        // name to be suppressed, so adding one here means it ends up in the output. (see
+        // dp_should_append_space in proc/src/names.rs)
+        match particles.chars().rev().next() {
+            Some('\'') | Some('\u{2018}') | Some('\u{2019}') => particles.push_str(" "),
+            _ => {}
         }
     }
+    replace_apostrophes_mut(&mut particles);
+    Some(particles)
+}
+
+fn split_drop_given(given: &mut String) -> Option<String> {
+    let re = regex!(r#"\s+(?:['’ʻ\.-]?\p{Lowercase}\p{Alphabetic}*(?:['’ʻ\s\.-]|\b)\s*)+$"#);
+    let mut particles = String::new();
+    // find gives us the leftmost-starting match, and that's what we want.
+    if let Some(found) = re.find(given) {
+        if found.start() != 0 {
+            let all = found.as_str().trim_start();
+            particles = replace_apostrophes(all);
+            let start = found.start();
+            drop(found);
+            given.truncate(start);
+        }
+    }
+    replace_apostrophes_mut(given);
+    if particles.is_empty() {
+        return None;
+    }
+    Some(particles)
+}
+
+fn split_suffix(given: &mut String) -> Option<(String, bool)> {
+    let re = regex!(r#",!?\s+\S.*$"#);
+    if let Some(found) = re.find(given) {
+        let s = found.as_str().trim_start_matches(",");
+        let after_excl = s.strip_prefix("!").map(|x| (x, true));
+        let (spaced_suffix, force_comma) = after_excl.unwrap_or((s, false));
+        let suffix: String = spaced_suffix.trim().into();
+        let start = found.start();
+        drop(found);
+        given.truncate(start);
+        given.trim_end_in_place();
+        return Some((suffix, force_comma));
+    }
+    None
 }
 
 impl From<PersonNameInput> for PersonName {
@@ -253,40 +217,30 @@ impl From<PersonNameInput> for PersonName {
             || dropping_particle.is_some()
             || suffix.is_some()
         {
-            *family = family.as_ref().map(|x| replace_apostrophes(x));
-            *given = given.as_ref().map(|x| replace_apostrophes(x));
-            *non_dropping_particle = non_dropping_particle
-                .as_ref()
-                .map(|x| replace_apostrophes(x));
-            *dropping_particle = dropping_particle.as_ref().map(|x| replace_apostrophes(x));
+            family.as_mut().map(replace_apostrophes_mut);
+            given.as_mut().map(replace_apostrophes_mut);
+            non_dropping_particle.as_mut().map(replace_apostrophes_mut);
+            dropping_particle.as_mut().map(replace_apostrophes_mut);
             return pn;
         }
+
         if let Some(family) = family {
             if family.starts_with('"') && family.ends_with('"') {
-                *family = replace_apostrophes(&family);
-            } else if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
-                trim_last(&mut nondrops);
-                *non_dropping_particle = Some(replace_apostrophes(nondrops));
-                *family = remain;
+                replace_apostrophes_mut(family);
             } else {
-                *family = replace_apostrophes(&family);
+                *non_dropping_particle = split_nondrop_family(family);
             }
         }
         if let Some(given) = given {
             if given.starts_with('"') && given.ends_with('"') {
-                *given = replace_apostrophes(&given);
+                replace_apostrophes_mut(given);
                 return pn;
             }
-            if let Some((suff, force_comma)) = parse_suffix(given, dropping_particle.is_some()) {
+            if let Some((suff, force_comma)) = split_suffix(given) {
                 *suffix = Some(suff);
                 *comma_suffix = force_comma;
             }
-            if let Some((drops, remain)) = split_particles(given.as_ref(), true) {
-                *dropping_particle = Some(replace_apostrophes(drops.trim()));
-                *given = remain;
-            } else {
-                *given = replace_apostrophes(&given);
-            }
+            *dropping_particle = split_drop_given(given);
         }
 
         pn
@@ -372,6 +326,22 @@ fn parse_particles() {
     );
 
     let init = PersonNameInput {
+        given: Some("Givenname de".into()),
+        family: Some("Familyname".into()),
+        ..Default::default()
+    };
+    assert_eq!(
+        init.parse_particles(),
+        PersonName {
+            given: Some("Givenname".into()),
+            dropping_particle: Some("de".into()),
+            family: Some("Familyname".into()),
+            is_latin_cyrillic: true,
+            ..Default::default()
+        }
+    );
+
+    let init = PersonNameInput {
         family: Some("Aubignac".into()),
         given: Some("François Hédelin d’".into()),
         ..Default::default()
@@ -436,8 +406,10 @@ fn parse_particles() {
 /// https://users.rust-lang.org/t/trim-string-in-place/15809/8
 pub trait TrimInPlace {
     fn trim_in_place(self: &'_ mut Self);
-    fn trim_start_in_place(self: &'_ mut Self);
-    fn trim_end_in_place(self: &'_ mut Self);
+    // Returns number of bytes trimmed, if any
+    fn trim_start_in_place(self: &'_ mut Self) -> usize;
+    // Returns number of bytes trimmed, if any
+    fn trim_end_in_place(self: &'_ mut Self) -> usize;
 }
 impl TrimInPlace for String {
     fn trim_in_place(self: &'_ mut Self) {
@@ -456,24 +428,38 @@ impl TrimInPlace for String {
         }
         self.truncate(len);
     }
-    fn trim_start_in_place(self: &'_ mut Self) {
-        let (start, len): (*const u8, usize) = {
+    fn trim_start_in_place(self: &'_ mut Self) -> usize {
+        let old_len = self.len();
+        let (start, new_len): (*const u8, usize) = {
             let self_trimmed: &str = self.trim_start();
             (self_trimmed.as_ptr(), self_trimmed.len())
         };
-        if len == self.len() {
-            return;
+        if new_len == self.len() {
+            return 0;
         }
         // See trim_in_place's unsafe block
         unsafe {
-            core::ptr::copy(start, self.as_bytes_mut().as_mut_ptr(), len);
+            core::ptr::copy(start, self.as_bytes_mut().as_mut_ptr(), new_len);
         }
-        self.truncate(len);
+        self.truncate(new_len);
+        return old_len - new_len;
     }
-    fn trim_end_in_place(self: &'_ mut Self) {
+    fn trim_end_in_place(self: &'_ mut Self) -> usize {
         // Nothing special here.
-        self.truncate(self.trim_end().len());
+        let old_len = self.len();
+        let new_len = self.trim_end().len();
+        self.truncate(new_len);
+        return old_len - new_len;
     }
+}
+
+fn replace_apostrophes_mut(s: &mut String) {
+    let trim_quoted = s.trim_matches('\"');
+    let replaced = lazy::lazy_replace_char(trim_quoted, '\'', "\u{2019}");
+    if trim_quoted.len() == s.len() && replaced.is_borrowed() {
+        return;
+    }
+    *s = replaced.into_owned();
 }
 
 fn replace_apostrophes(s: impl AsRef<str>) -> String {

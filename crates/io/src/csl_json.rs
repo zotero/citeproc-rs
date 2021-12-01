@@ -124,18 +124,27 @@ impl NumberLike {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum CircaValue {
+pub(crate) enum RelaxedBool {
     Str(String),
     Num(i32),
     Bool(bool),
 }
 
-impl CircaValue {
+impl Into<bool> for RelaxedBool {
+    fn into(self) -> bool {
+        self.to_bool()
+    }
+}
+
+impl RelaxedBool {
+    pub fn deserialize_bool<'de, D: serde::de::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+        Self::deserialize(d).map(|circa| circa.to_bool())
+    }
     pub fn to_bool(&self) -> bool {
         match *self {
-            CircaValue::Str(ref s) => s != "",
-            CircaValue::Num(n) => n != 0i32,
-            CircaValue::Bool(value) => value,
+            RelaxedBool::Str(ref s) => s == "true",
+            RelaxedBool::Num(n) => n != 0i32,
+            RelaxedBool::Bool(value) => value,
         }
     }
 }
@@ -538,7 +547,7 @@ impl<'de> Deserialize<'de> for MaybeDate {
                         }
                         DateType::Season => found_season = Some(map.next_value()?),
                         DateType::Circa => {
-                            if let Ok(circa) = map.next_value::<CircaValue>() {
+                            if let Ok(circa) = map.next_value::<RelaxedBool>() {
                                 found_circa = Some(circa.to_bool())
                             } else {
                                 log::warn!("invalid value for circa");
