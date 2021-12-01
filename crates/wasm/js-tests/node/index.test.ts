@@ -214,7 +214,7 @@ describe("previewCitationCluster", () => {
         pccSetup((driver, [one, two]) => {
             // between the other two
             let pcc = driver.previewCitationCluster(
-                [{ id: "r1" }],
+                { cites: [{ id: "r1" }] },
                 [{ id: one }, {}, { id: two }],
                 "plain"
             ).unwrap();
@@ -226,14 +226,14 @@ describe("previewCitationCluster", () => {
         pccSetup((driver, [one, two]) => {
             // replacing #1
             var pcc = driver.previewCitationCluster(
-                [{ id: "r1" }],
+                { cites: [{ id: "r1" }] },
                 [{}, { id: two }],
                 "plain"
             ).unwrap();
             expect(pcc).toEqual("ONE");
             // replacing #1, with note numbers isntead
             pcc = driver.previewCitationCluster(
-                [{ id: "r1" }],
+                { cites: [{ id: "r1" }] },
                 [{ note: 1, }, { id: two, note: 5 }],
                 "plain"
             ).unwrap();
@@ -243,7 +243,8 @@ describe("previewCitationCluster", () => {
 
     test("should error when supplying unsupported output format", () => {
         pccSetup((driver, [one, two]) => {
-            let res = driver.previewCitationCluster([{ id: "r1" }], [{}], "plaintext");
+            let res = driver.previewCitationCluster(
+                { cites: [{ id: "r1" }] }, [{}], "plaintext");
             expect(() => res.unwrap()).toThrow("Unknown output format \"plaintext\"");
         })
     })

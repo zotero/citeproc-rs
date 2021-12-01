@@ -20,7 +20,6 @@ extern crate log;
 use js_sys::Promise;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
@@ -298,30 +297,34 @@ impl Driver {
 
     /// Previews a formatted citation cluster, in a particular position.
     ///
-    /// - `cites`: The cites to go in the cluster
+    /// - `cluster`: A cluster, without an `id` field. You'll want this to contain some cites.
     /// - `positions`: An array of `ClusterPosition`s as in set_cluster_order, but with a single
     ///   cluster's id set to zero. The cluster with id=0 is the position to preview the cite. It
     ///   can replace another cluster, or be inserted before/after/between existing clusters, in
     ///   any location you can think of.
+    /// - `format`: an optional argument, an output format as a string, that is used only for this
+    ///   preview.
     ///
     #[wasm_bindgen(js_name = "previewCitationCluster")]
     pub fn preview_citation_cluster(
         &self,
-        cites: Box<[JsValue]>,
+        cluster: TPreviewCluster,
         positions: Box<[JsValue]>,
-        format: &str,
+        format: Option<String>,
     ) -> StringResult {
         typescript_serde_result(|| {
-            let cites: Vec<Cite<Markup>> = utils::read_js_array_2(cites)?;
+            let preview_cluster: PreviewCluster = cluster.into_serde()?;
             let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
             let mut eng = self.engine.borrow_mut();
             let preview = eng.preview_citation_cluster(
-                PreviewCluster::new(cites, None),
+                preview_cluster,
                 PreviewPosition::MarkWithZeroStr(&positions),
-                Some(
-                    SupportedFormat::from_str(format)
-                        .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?,
-                ),
+                format
+                    .map(|frmt| {
+                        frmt.parse::<SupportedFormat>()
+                            .map_err(|()| DriverError::UnknownOutputFormat(frmt))
+                    })
+                    .transpose()?,
             );
             Ok(preview?)
         })
