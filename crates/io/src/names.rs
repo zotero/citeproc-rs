@@ -4,6 +4,7 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+use crate::csl_json::RelaxedBool;
 use crate::{lazy, String};
 
 #[derive(Default, Debug, Deserialize, Clone)]
@@ -16,8 +17,7 @@ struct PersonNameInput {
     pub suffix: Option<String>,
     #[serde(default)]
     pub static_particles: bool,
-    // TODO: support "string", "number", "boolean"
-    #[serde(default)]
+    #[serde(default, deserialize_with = "RelaxedBool::deserialize_bool")]
     pub comma_suffix: bool,
 }
 
