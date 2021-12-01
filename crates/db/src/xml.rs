@@ -7,6 +7,7 @@
 use std::io;
 use std::sync::Arc;
 
+use citeproc_io::output::markup::Markup;
 use csl::{
     locale::{Lang, Locale, LocaleSource, EN_US},
     style::{Name, Style, TextElement, TextSource},
@@ -23,6 +24,9 @@ pub trait HasFetcher {
 pub trait StyleDatabase {
     #[salsa::input]
     fn style(&self) -> Arc<Style>;
+
+    #[salsa::input]
+    fn formatter(&self) -> Markup;
 
     /// Grabs the Name options from `<style>` + `<citation>` elements
     /// First one is the inherited names-delimiter

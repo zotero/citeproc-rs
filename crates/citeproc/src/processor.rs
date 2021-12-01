@@ -101,7 +101,7 @@ impl HasFetcher for Processor {
 
 impl ImplementationDetails for Processor {
     fn get_formatter(&self) -> Markup {
-        self.formatter.clone()
+        self.formatter()
     }
     fn lookup_cluster_id(&self, symbol: ClusterId) -> Option<SmartString> {
         let reader = self.interner.read().unwrap();
@@ -196,8 +196,6 @@ impl Processor {
         let fetcher =
             fetcher.unwrap_or_else(|| Arc::new(citeproc_db::PredefinedLocales::bundled_en_us()));
         let mut db = Processor::safe_default(fetcher);
-        db.format_options = format_options;
-        db.formatter = format.make_markup(db.format_options);
         let style = Style::parse_with_opts(
             &style,
             csl::ParseOptions {
@@ -207,11 +205,25 @@ impl Processor {
             },
         )?;
         db.set_style_with_durability(Arc::new(style), Durability::HIGH);
+        db.set_output_format(format, format_options);
         db.set_default_lang_override_with_durability(locale_override, Durability::HIGH);
         db.set_bibliography_no_sort_with_durability(bibliography_no_sort, Durability::HIGH);
         Ok(db)
     }
 
+    /// Sets the output format. Will require nearly everything to be recomputed, so call sparingly.
+    pub fn set_output_format(&mut self, format: SupportedFormat, options: FormatOptions) {
+        self.format_options = options;
+        let formatter = format.make_markup(options);
+        if self.formatter == formatter {
+            // Avoid recomputing everything if possible
+            return;
+        }
+        self.formatter = formatter.clone();
+        self.set_formatter_with_durability(formatter, Durability::HIGH);
+    }
+
+    /// Sets the CSL style to be used. Will require nearly everything to be recomputed, so call sparingly.
     pub fn set_style_text(&mut self, style_text: &str) -> Result<(), StyleError> {
         let style = Style::parse(style_text)?;
         self.set_style_with_durability(Arc::new(style), Durability::HIGH);
@@ -589,7 +601,7 @@ impl Processor {
                     csl::style::SecondFieldAlign::Flush => SecondFieldAlign::Flush,
                     csl::style::SecondFieldAlign::Margin => SecondFieldAlign::Margin,
                 }),
-                format_meta: self.formatter.meta(),
+                format_meta: self.get_formatter().meta(),
             }
         })
     }
@@ -813,7 +825,7 @@ impl Processor {
 
         let formatter = format
             .map(|fmt| fmt.make_markup(self.format_options))
-            .unwrap_or_else(|| self.formatter.clone());
+            .unwrap_or_else(|| self.get_formatter());
         let markup = citeproc_proc::db::built_cluster_preview(self, id, &formatter);
         let cluster_cites_sorted = self.cluster_cites_sorted(id);
         let nn = self.cluster_note_number(id);
@@ -835,7 +847,7 @@ impl Processor {
         self.set_reference_input(preview_ref_id.clone(), arc.clone());
         let formatter = format
             .map(|fmt| fmt.make_markup(self.format_options))
-            .unwrap_or_else(|| self.formatter.clone());
+            .unwrap_or_else(|| self.get_formatter().clone());
         citeproc_proc::bib_item_preview(self, preview_ref_id.clone(), arc.as_ref(), &formatter)
     }
 
