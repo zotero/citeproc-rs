@@ -101,10 +101,12 @@ jobs:
         env:
           GITHUB_BASE: ${{ steps.branch.outputs.base }}
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
+        shell: bash
         run: |
           cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
           cargo test-suite diff $GITHUB_BASE..$GITHUB_HEAD | tee test-results/diff
-          echo $? > test-results/diff-status
+          # need the first command in the pipe, $? would give us tee's status
+          echo "${PIPESTATUS[0]}" > test-results/diff-status
 
       - name: "Write the test-results artifact files"
         if: always()
