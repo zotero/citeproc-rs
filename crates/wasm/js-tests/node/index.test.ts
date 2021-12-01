@@ -282,6 +282,16 @@ describe("previewCluster", () => {
         })
     });
 
+    test("should also work via deprecated previewCitationCluster(cites: Cite[], ...)", () => {
+        pccSetup((driver, [_, two]) => {
+            let res = driver.previewCitationCluster(
+                [{ id: "r1" }],
+                [{ note: 1 }, { id: two, note: 5 }]
+            ).unwrap();
+            expect(res).toEqual("ONE");
+        })
+    });
+
 });
 
 describe("AuthorOnly and friends", () => {
