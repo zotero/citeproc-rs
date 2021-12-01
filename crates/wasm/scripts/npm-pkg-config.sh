@@ -6,7 +6,7 @@ shopt -s extglob
 shopt -s globstar
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DIR="$( cd $DIR/.. && pwd )"
+DIR="$( cd "$DIR/.." && pwd )"
 
 CLEAR='\033[0m'
 RED='\033[0;31m'
@@ -43,7 +43,7 @@ TARGETS=
 DEV_OR_RELEASE=--release
 
 # parse params
-while [[ "$#" > 0 ]]; do case $1 in
+while [[ $# -gt 0 ]]; do case $1 in
   --dest) DEST="$2"; shift;shift;;
   --set-name) SET_NAME="$2";shift;shift;;
   --canary-sha) CANARY_SHA="$2";shift;shift;;
@@ -61,10 +61,10 @@ esac; done
 SET_VERSION=${SET_VERSION#v}
 
 # default destination location is called 'dist' i.e. distribution
-CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps --manifest-path $DIR/Cargo.toml | jq -r '.packages  | .[] | select(.name=="wasm") | .version')
+CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps --manifest-path "$DIR/Cargo.toml" | jq -r '.packages  | .[] | select(.name=="wasm") | .version')
 
 bail() {
-  MESSAGE="$@"
+  MESSAGE="$*"
   echo -e "${RED}failed ${MESSAGE}${CLEAR}"
   exit 1
 }
@@ -100,9 +100,9 @@ if [ -z "$TARGETS_ALL" ]; then
 fi
 
 if [ -z "$PACKAGE_ONLY" ]; then
-  mkdir -p $DIR/pkg-scratch
-  rm -rf $DEST
-  mkdir -p $DEST
+  mkdir -p "$DIR/pkg-scratch"
+  rm -rf "$DEST"
+  mkdir -p "$DEST"
 
   ## e.g. build into pkg-scratch/target; move files to $DEST/_target/
   target() {
@@ -119,32 +119,32 @@ if [ -z "$PACKAGE_ONLY" ]; then
       || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
 
     SNIPPETS="$DIR/pkg-scratch/$OUT/snippets"
-    mkdir -p "$DEST/$OUT" \
+    (mkdir -p "$DEST/$OUT" \
       && ([[ -d "$SNIPPETS" ]] && cp -R "$SNIPPETS" "$DEST/$OUT" || true) \
-      && cp -R  $DIR/pkg-scratch/$OUT/citeproc_rs_wasm* "$DEST/$OUT/" \
-      && cp $DIR/pkg-scratch/$OUT/.gitignore "$DEST/" \
-      || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
+      && cp -R  "$DIR/pkg-scratch/$OUT/citeproc_rs_wasm"* "$DEST/$OUT/" \
+      && cp "$DIR/pkg-scratch/$OUT/.gitignore" "$DEST/" \
+      ) || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
   }
 
-  echo "$TARGETS_ALL" | sed -n 1'p' | tr ',' '\n' | while read TARGET; do
-      echo TARGET: $TARGET
+  echo "$TARGETS_ALL" | sed -n 1'p' | tr ',' '\n' | while read -r TARGET; do
+      echo "TARGET: $TARGET"
       if [ "$TARGET" == "nodejs" ]; then target nodejs _cjs; fi
       if [ "$TARGET" == "browser" ]; then target browser _esm; fi
       if [ "$TARGET" == "web" ]; then target web _web; fi
       if [ "$TARGET" == "no-modules" ]; then target no-modules _no_modules ,no-modules; fi
       if [ "$TARGET" == "zotero" ]; then target no-modules _zotero ,zotero; fi
-      echo TARGET DONE: $TARGET
+      echo "TARGET DONE: $TARGET"
   done
 
 else
-  mkdir -p $DEST/_cjs $DEST/_esm $DEST/_web $DEST/_no_modules $DEST/_zotero
+  mkdir -p "$DEST/_cjs" "$DEST/_esm" "$DEST/_web" "$DEST/_no_modules" "$DEST/_zotero"
 fi
 
 if [[ $TARGETS_ALL =~ "zotero" ]]; then
   ZOTERO_BINDGEN_SRC="$DIR/pkg-scratch/_zotero/citeproc_rs_wasm.js"
   ZOTERO_BINDGEN="$DEST/_zotero/citeproc_rs_wasm.js"
   sed -e 's/CITEPROC_RS_ZOTERO_GLOBAL/Zotero.CiteprocRs/g' \
-    < $ZOTERO_BINDGEN_SRC \
+    < "$ZOTERO_BINDGEN_SRC" \
     > "$ZOTERO_BINDGEN" \
     || bail "could not replace CITEPROC_RS_ZOTERO_GLOBAL"
   cat <<EOF >> "$ZOTERO_BINDGEN"
@@ -158,31 +158,29 @@ fi
 NODEJS_INCLUDE=/dev/null
 NOMOD_INCLUDE=/dev/null
 ZOTERO_INCLUDE=/dev/null
-if [[ "$TARGETS_ALL" == *"nodejs"* ]]; then NODEJS_INCLUDE=($DEST/_cjs/snippets/**/include.js); fi
+if [[ "$TARGETS_ALL" == *"nodejs"* ]]; then NODEJS_INCLUDE="$DEST/_cjs/snippets/**/include.js"; fi
 if [[ "$TARGETS_ALL" == *"no-modules"* ]]; then NOMOD_INCLUDE="$DEST/_no_modules/citeproc_rs_wasm_include.js"; fi
 if [[ "$TARGETS_ALL" == *"zotero"* ]]; then ZOTERO_INCLUDE="$DEST/_zotero/citeproc_rs_wasm_include.js"; fi
 
-sed -e 's/export class/class/' < $DIR/src/js/include.js \
+sed -e 's/export class/class/' < "$DIR/src/js/include.js" \
   | tee "$ZOTERO_INCLUDE" \
   | tee "$NODEJS_INCLUDE" \
   > "$NOMOD_INCLUDE" \
   || bail "could not write include.js for no-modules targets"
 # We want the commonjs module.exports in both of these
-cat $DIR/src/js/commonjs_export.js >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
-cat $DIR/src/js/commonjs_export.js >> "$NODEJS_INCLUDE" || bail "failed writing $NODEJS_INCLUDE"
+cat "$DIR/src/js/commonjs_export.js" >> "$NOMOD_INCLUDE" || bail "failed writing $NOMOD_INCLUDE"
+cat "$DIR/src/js/commonjs_export.js" >> "$NODEJS_INCLUDE" || bail "failed writing $NODEJS_INCLUDE"
 # zotero is weird
-cat $DIR/src/js/zotero.js >> "$ZOTERO_INCLUDE" || bail "failed writing $ZOTERO_INCLUDE"
+cat "$DIR/src/js/zotero.js" >> "$ZOTERO_INCLUDE" || bail "failed writing $ZOTERO_INCLUDE"
 
-cp $DIR/README.md $DEST/ || bail "could not copy README"
+cp "$DIR/README.md" "$DEST/" || bail "could not copy README"
 # cp $DIR/scripts/model-package.json $DEST/package.json
-
-TARGET_VERSION=${SET_VERSION:-$CARGO_VERSION}
 
 JQ_ARGS=""
 JQ_FILTERS="  ."
 function append() {
-  if [ -n "$1" ]; then JQ_ARGS=$(printf "$JQ_ARGS \n  $1"); fi
-  if [ -n "$2" ]; then JQ_FILTERS=$(printf "$JQ_FILTERS \n  | $2"); fi
+  if [ -n "$1" ]; then JQ_ARGS=$(printf "%s \n  $1" "$JQ_ARGS"); fi
+  if [ -n "$2" ]; then JQ_FILTERS=$(printf "%s \n  | $2" "$JQ_FILTERS"); fi
 }
 
 if [ -n "$CANARY_SHA" ]; then
@@ -195,10 +193,10 @@ fi
 
 if [ -n "$GITHUB_PACKAGES_DEF" ]; then
   NO_AT=${GITHUB_PACKAGES_DEF#@}
-  PKG=$(basename $NO_AT)
-  REPO=${NO_AT%/$PKG}
+  PKG=$(basename "$NO_AT")
+  REPO=${NO_AT%/"$PKG"}
   REPO=${REPO#@}
-  SCO=${NO_AT%%/*/$PKG}
+  SCO=${NO_AT%%/*/"$PKG"}
   NAME="@$SCO/$PKG"
 
   append '' '.publishConfig = { registry: "https://npm.pkg.github.com/cormacrelf" }'
@@ -213,9 +211,9 @@ elif [ -n "$SET_NAME" ]; then
 fi
 
 
-printf "Writing package.json with: $JQ_ARGS\n$JQ_FILTERS\n"
+printf "Writing package.json with: %s\n%s\n" "$JQ_ARGS" "$JQ_FILTERS"
 
-jq $JQ_ARGS "$JQ_FILTERS" < $DIR/scripts/model-package.json > $DEST/package.json \
+jq $JQ_ARGS "$JQ_FILTERS" < "$DIR/scripts/model-package.json" > "$DEST/package.json" \
   || bail "writing $DEST/package.json using scripts/model-package.json and jq"
 
 # cat $DEST/package.json | jq
