@@ -90,125 +90,11 @@ impl From<NameInput> for Name {
 
 // Now we implement From<PersonNameInput> for PersonName
 
-// Parsing particles
-// Ported from https://github.com/Juris-M/citeproc-js/blob/1aa49dd2ab9a1c85d3060073780d65c86754a438/src/util_name_particles.js
-
 macro_rules! regex {
     ($re:literal $(,)?) => {{
         static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
         RE.get_or_init(|| regex::Regex::new($re).unwrap())
     }};
-}
-
-fn split_particles(orig_name_str: &str, is_given: bool) -> Option<(String, String)> {
-    let givenn_particles_re = regex!("^(?:\u{02bb}\\s|\u{2019}\\s|\\s|'\\s)?\\S+\\s*");
-    let family_particles_re = regex!("^\\S+(?:\\-|\u{02bb}|\u{2019}|\\s|\')\\s*");
-    debug!("split_particles: {:?}", orig_name_str);
-    let (splitter, name_str) = if is_given {
-        (
-            givenn_particles_re,
-            SmartCow::Owned(orig_name_str.chars().rev().collect()),
-        )
-    } else {
-        (family_particles_re, SmartCow::Borrowed(orig_name_str))
-    };
-    let mut particles = Vec::new();
-
-    let mut slice = &name_str[..];
-    let mut eaten = 0;
-    while let Some(mat) = splitter.find(slice) {
-        let matched_particle = mat.as_str();
-        let particle = if is_given {
-            SmartCow::Owned(matched_particle.chars().rev().collect())
-        } else {
-            SmartCow::Borrowed(matched_particle)
-        };
-        debug!("found particle? {:?}", &particle);
-        // first sign of an uppercase word -- break out
-        let has_particle = particle
-            .chars()
-            // For " d'", etc
-            .filter(|c| !c.is_whitespace() && !['-', '\'', '\u{02bb}', '\u{2019}'].contains(c))
-            .nth(0)
-            .map_or(false, |c| c.is_lowercase());
-        if !has_particle {
-            break;
-        }
-        slice = &slice[particle.len()..];
-        eaten += particle.len();
-        particles.push(particle);
-    }
-    let remain = if is_given {
-        particles.reverse();
-        if particles.len() > 1 {
-            for i in 1..particles.len() {
-                if particles[i].chars().nth(0) == Some(' ') {
-                    particles[i - 1].make_mut().push(' ');
-                }
-            }
-        }
-        for i in 0..particles.len() {
-            if particles[i].chars().nth(0) == Some(' ') {
-                particles[i].make_mut().remove(0);
-            }
-        }
-        &orig_name_str[..orig_name_str.len() - eaten]
-    } else {
-        &orig_name_str[eaten..]
-    };
-    if particles.is_empty() {
-        None
-    } else {
-        use itertools::Itertools;
-        Some((
-            String::from(particles.iter().map(|cow| cow.as_ref()).join("")),
-            replace_apostrophes(remain),
-        ))
-    }
-}
-
-// Maybe {truncates given, returns a suffix}
-fn parse_suffix(given: &mut String, has_dropping_particle: bool) -> Option<(String, bool)> {
-    let comma = regex!(r"\s*,!?\s*");
-    let mut suff = None;
-    let trunc_len = if let Some(mat) = comma.find(given) {
-        let possible_suffix = &given[mat.end()..];
-        let possible_comma = mat.as_str().trim();
-        if (possible_suffix == "et al" || possible_suffix == "et al.") && !has_dropping_particle {
-            warn!("used et-al as a suffix in name, not handled with citeproc-js-style hacks");
-            return None;
-        } else {
-            let force_comma = possible_comma.len() == 2;
-            suff = Some((possible_suffix.into(), force_comma))
-        }
-        Some(mat.start())
-    } else {
-        None
-    };
-    if let Some(trun) = trunc_len {
-        given.truncate(trun);
-    }
-    suff
-}
-
-fn trim_last(string: &mut String) {
-    let last_char = string.chars().rev().nth(0);
-    string.trim_in_place();
-
-    if string.is_empty() {
-        return;
-    }
-    // graphemes unnecessary as particles basically end with one of a few select characters in the
-    // regex below
-    if let Some(last_char) = last_char {
-        if last_char == ' '
-            && string.chars().rev().nth(0).map_or(false, |second_last| {
-                second_last == '\'' || second_last == '\u{2019}'
-            })
-        {
-            string.push(' ');
-        }
-    }
 }
 
 impl From<PersonNameInput> for PersonName {
@@ -264,8 +150,7 @@ impl From<PersonNameInput> for PersonName {
         if let Some(family) = family {
             if family.starts_with('"') && family.ends_with('"') {
                 *family = replace_apostrophes(&family);
-            } else if let Some((mut nondrops, remain)) = split_particles(family.as_ref(), false) {
-                trim_last(&mut nondrops);
+            } else if let Some((mut nondrops, remain)) = todo!() {
                 *non_dropping_particle = Some(replace_apostrophes(nondrops));
                 *family = remain;
             } else {
@@ -277,11 +162,11 @@ impl From<PersonNameInput> for PersonName {
                 *given = replace_apostrophes(&given);
                 return pn;
             }
-            if let Some((suff, force_comma)) = parse_suffix(given, dropping_particle.is_some()) {
+            if let Some((suff, force_comma)) = todo!() {
                 *suffix = Some(suff);
                 *comma_suffix = force_comma;
             }
-            if let Some((drops, remain)) = split_particles(given.as_ref(), true) {
+            if let Some((drops, remain)) = todo!() {
                 *dropping_particle = Some(replace_apostrophes(drops.trim()));
                 *given = remain;
             } else {
