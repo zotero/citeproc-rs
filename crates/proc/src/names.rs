@@ -1306,11 +1306,11 @@ mod ord {
 
 /// we usually want to append a space to a non-dropping particle
 ///
-///     "von" + "Crumb" = "von Crumb"
+/// "von" + "Crumb" = "von Crumb"
 ///
 /// but not always; not when we have an apostrophe:
 ///
-///     "d'" + "Angelo" = "d'Angelo"
+/// "d'" + "Angelo" = "d'Angelo"
 ///
 /// see io/src/names.rs split_nondrop_family for the protocol for forcing the ndp to have a space
 /// (input { family: "d' Lastname" } and the space will be preserved).
