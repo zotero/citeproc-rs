@@ -9,6 +9,7 @@ mod utils;
 #[macro_use]
 mod wasm_result;
 mod options;
+use options::FormatOptionsArg;
 use options::{GetFetcherError, WasmInitOptions};
 use wasm_result::*;
 
@@ -85,7 +86,7 @@ impl Driver {
     ///
     /// * `style` is a CSL style as a string. Independent styles only.
     /// * `fetcher` must implement the `Fetcher` interface
-    /// * `format` is one of { "html", "rtf" }
+    /// * `format` is one of { "html", "rtf", "plain" }
     ///
     /// Throws an error if it cannot parse the style you gave it.
     pub fn new(options: TInitOptions) -> DriverResult {
@@ -129,11 +130,39 @@ impl Driver {
         .into()
     }
 
-    /// Sets the style (which will also cause everything to be recomputed)
+    /// Sets the style (which will also cause everything to be recomputed, use sparingly)
     #[wasm_bindgen(js_name = "setStyle")]
     pub fn set_style(&self, style_text: &str) -> EmptyResult {
         typescript_serde_result(|| {
             let _ = self.engine.borrow_mut().set_style_text(style_text)?;
+            Ok(())
+        })
+    }
+
+    /// Sets the output format (which will also cause everything to be recomputed, use sparingly)
+    ///
+    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as
+    ///                                          `Driver.new`
+    ///
+    /// @param {FormatOptions | null} options If absent, this is set to the default FormatOptions.
+    ///
+    #[wasm_bindgen(js_name = "setOutputFormat")]
+    pub fn set_output_format(&self, format: &str, options: Option<TFormatOptions>) -> EmptyResult {
+        typescript_serde_result(|| {
+            let format = format
+                .parse::<SupportedFormat>()
+                .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?;
+            let format_options = options
+                .map(|fo| -> Result<_, DriverError> {
+                    let jsv: JsValue = fo.into();
+                    let foa: FormatOptionsArg = JsValue::into_serde(&jsv)?;
+                    Ok(foa.0)
+                })
+                .transpose()?
+                .unwrap_or_else(Default::default);
+            self.engine
+                .borrow_mut()
+                .set_output_format(format, format_options);
             Ok(())
         })
     }
@@ -452,6 +481,10 @@ extern "C" {
 // wasm-bindgen pointer).
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_1: &'static str = r#"
+interface FormatOptions {
+    linkAnchors?: boolean,
+}
+
 interface InitOptions {
     /** A CSL style as an XML string */
     style: string,
@@ -464,6 +497,8 @@ interface InitOptions {
 
     /** The output format for this driver instance */
     format: "html" | "rtf" | "plain",
+    /** Configuration for the formatter */
+    formatOptions?: FormatOptions,
 
     /** A locale to use instead of the style's default-locale.
       *
@@ -770,6 +805,8 @@ extern "C" {
     pub type TReference;
     #[wasm_bindgen(typescript_type = "InitOptions")]
     pub type TInitOptions;
+    #[wasm_bindgen(typescript_type = "FormatOptions")]
+    pub type TFormatOptions;
 }
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.

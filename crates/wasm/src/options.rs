@@ -6,7 +6,7 @@ use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", remote = "FormatOptions")]
-struct JsFormatOptions {
+pub(crate) struct JsFormatOptions {
     #[serde(default = "bool_true")]
     link_anchors: bool,
 }
@@ -14,6 +14,15 @@ struct JsFormatOptions {
 fn bool_true() -> bool {
     true
 }
+
+/// `remote = "FormatOptions` means it doesn't implement `DeserializeOwned`, which we need to use
+/// `JsValue::into_serde()`. A wrapper works.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatOptionsArg (
+    #[serde(with = "JsFormatOptions")]
+    pub FormatOptions,
+);
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,3 +96,5 @@ impl Fetcher {
         Ok(Some(fetcher))
     }
 }
+
+

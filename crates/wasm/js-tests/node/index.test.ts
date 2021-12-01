@@ -1,6 +1,19 @@
 import { withDriver, oneOneOne, mkNoteStyle, mkInTextStyle, checkUpdatesLen } from './utils';
 import { UpdateSummary, Driver } from '@citeproc-rs/wasm';
 
+let italicStyle = mkNoteStyle(
+    `
+        <text variable="title" font-style="italic" />
+        <text variable="URL" prefix=" " />
+    `,
+);
+let boldStyle = mkNoteStyle(
+    `
+        <text variable="title" font-weight="bold" />
+        <text variable="URL" prefix=" " />
+    `,
+);
+
 describe("Driver", () => {
 
     test('boots', () => {
@@ -19,6 +32,28 @@ describe("Driver", () => {
             let res = driver.builtCluster("one").unwrap();
             expect(res).toBe("TEST_TITLE");
         });
+    });
+
+
+    test("can setOutputFormat", () => {
+        withDriver({ style: italicStyle, format: "html" }, driver => {
+            const one = "one";
+            oneOneOne(driver, { title: "Italicised", URL: "https://google.com" }, one);
+            expect(driver.builtCluster(one).unwrap())
+                .toBe("<i>Italicised</i> <a href=\"https://google.com/\">https://google.com</a>");
+            driver.setOutputFormat("html", {}).unwrap();
+            expect(driver.builtCluster(one).unwrap())
+                .toBe("<i>Italicised</i> <a href=\"https://google.com/\">https://google.com</a>");
+            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
+            expect(driver.builtCluster(one).unwrap())
+                .toBe("<i>Italicised</i> https://google.com");
+            driver.setOutputFormat("rtf", { linkAnchors: false }).unwrap();
+            expect(driver.builtCluster(one).unwrap())
+                .toBe("{\\i Italicised} https://google.com");
+            driver.setOutputFormat("plain").unwrap();
+            expect(driver.builtCluster(one).unwrap())
+                .toBe("Italicised https://google.com");
+        })
     });
 });
 
@@ -97,6 +132,51 @@ describe("batchedUpdates", () => {
             expect(once.clusters).toContainEqual(["123", "ADDED"]);
             expect(once.bibliography?.entryIds).toEqual(["citekey", "added"]);
             expect(once.bibliography?.updatedEntries).toHaveProperty("added", "ADDED");
+        })
+    });
+
+    test("produces updates when style or output format change", () => {
+        withDriver({ style: italicStyle, format: "html" }, driver => {
+            const one = "one";
+            let once: UpdateSummary, twice: UpdateSummary;
+            oneOneOne(driver, { title: "Italicised", URL: "https://a.com" }, one);
+
+            expect(driver.builtCluster(one).unwrap()).toBe('<i>Italicised</i> <a href="https://a.com/">https://a.com</a>');
+            driver.batchedUpdates().unwrap();
+
+            // no change
+            driver.setOutputFormat("html", {}).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).toEqual(twice);
+            checkUpdatesLen(once, 0, 0); checkUpdatesLen(twice, 0, 0);
+
+            // change part of FormatOptions
+            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, '<i>Italicised</i> https://a.com']);
+            checkUpdatesLen(twice, 0, 0);
+
+            // change to rtf
+            driver.setOutputFormat("rtf", { linkAnchors: false }).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, '{\\i Italicised} https://a.com']);
+            checkUpdatesLen(twice, 0, 0);
+
+            // change style to bold instead of italic
+            driver.setStyle(boldStyle);
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, '{\\b Italicised} https://a.com']);
+            checkUpdatesLen(twice, 0, 0);
+
+            // back to html
+            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
+            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            expect(once).not.toEqual(twice);
+            expect(once.clusters).toContainEqual([one, "<b>Italicised</b> https://a.com"]);
+            checkUpdatesLen(twice, 0, 0);
         })
     });
 
@@ -295,3 +375,4 @@ describe("initialiser", () => {
         });
     });
 });
+
