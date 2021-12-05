@@ -9,9 +9,9 @@
 #[macro_use]
 mod utils;
 #[macro_use]
-mod typescript;
+pub mod typescript;
 #[macro_use]
-mod errors;
+pub mod errors;
 mod options;
 
 pub use errors::Error;
