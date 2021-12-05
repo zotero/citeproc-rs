@@ -20,7 +20,6 @@ extern crate log;
 use js_sys::Promise;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
@@ -296,35 +295,62 @@ impl Driver {
         })
     }
 
-    /// Previews a formatted citation cluster, in a particular position.
-    ///
-    /// - `cites`: The cites to go in the cluster
-    /// - `positions`: An array of `ClusterPosition`s as in set_cluster_order, but with a single
-    ///   cluster's id set to zero. The cluster with id=0 is the position to preview the cite. It
-    ///   can replace another cluster, or be inserted before/after/between existing clusters, in
-    ///   any location you can think of.
-    ///
+    /// @deprecated Use `previewCluster` instead
     #[wasm_bindgen(js_name = "previewCitationCluster")]
     pub fn preview_citation_cluster(
         &self,
         cites: Box<[JsValue]>,
         positions: Box<[JsValue]>,
-        format: &str,
+        format: Option<String>,
     ) -> StringResult {
         typescript_serde_result(|| {
-            let cites: Vec<Cite<Markup>> = utils::read_js_array_2(cites)?;
-            let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
-            let mut eng = self.engine.borrow_mut();
-            let preview = eng.preview_citation_cluster(
-                PreviewCluster::new(cites, None),
-                PreviewPosition::MarkWithZeroStr(&positions),
-                Some(
-                    SupportedFormat::from_str(format)
-                        .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?,
-                ),
-            );
-            Ok(preview?)
+            let cites = utils::read_js_array_2(cites)?;
+            self.preview_cluster_inner(PreviewCluster::new(cites, None), positions, format)
         })
+    }
+
+    /// Previews a formatted citation cluster, in a particular position.
+    ///
+    /// - `cluster`: A cluster, without an `id` field. You'll want this to contain some cites.
+    /// - `positions`: An array of `ClusterPosition`s as in set_cluster_order, but with a single
+    ///   cluster's id set to zero. The cluster with id=0 is the position to preview the cite. It
+    ///   can replace another cluster, or be inserted before/after/between existing clusters, in
+    ///   any location you can think of.
+    /// - `format`: an optional argument, an output format as a string, that is used only for this
+    ///   preview.
+    ///
+    #[wasm_bindgen(js_name = "previewCluster")]
+    pub fn preview_cluster(
+        &self,
+        preview_cluster: TPreviewCluster,
+        positions: Box<[JsValue]>,
+        format: Option<String>,
+    ) -> StringResult {
+        typescript_serde_result(|| {
+            let preview_cluster: PreviewCluster = preview_cluster.into_serde()?;
+            self.preview_cluster_inner(preview_cluster, positions, format)
+        })
+    }
+
+    fn preview_cluster_inner(
+        &self,
+        preview_cluster: PreviewCluster,
+        positions: Box<[JsValue]>,
+        format: Option<String>,
+    ) -> Result<Arc<SmartString>, DriverError> {
+        let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
+        let mut eng = self.engine.borrow_mut();
+        let preview = eng.preview_citation_cluster(
+            preview_cluster,
+            PreviewPosition::MarkWithZeroStr(&positions),
+            format
+                .map(|frmt| {
+                    frmt.parse::<SupportedFormat>()
+                        .map_err(|()| DriverError::UnknownOutputFormat(frmt))
+                })
+                .transpose()?,
+        );
+        Ok(preview?)
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]
@@ -508,7 +534,7 @@ interface InitOptions {
     localeOverride?: string,
 
     /** Disables sorting in the bibliography; items appear in cited order. */
-    bibliographyNoSort?: bool,
+    bibliographyNoSort?: boolean,
 }
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
@@ -559,7 +585,7 @@ export type Cluster = {
     cites: Cite[];
 } & ClusterMode;
 
-export type PreviewCluster {
+export type PreviewCluster = {
     cites: Cite[];
 } & ClusterMode;
 
@@ -706,11 +732,11 @@ interface WasmResult<T> {
     is_ok(): boolean;
     is_err(): boolean;
     /** If this is an error, returns the default value. */
-    unwrap_or(default: T): T;
+    unwrap_or(defaultValue: T): T;
     /** If this is Ok, returns f(ok_val), else returns Err unmodified. */
     map<R>(f: (t: T) => R): WasmResult<T>;
     /** If this is Ok, returns f(ok_val), else returns the default value. */
-    map_or<R>(default: R, f: (t: T) => R): R;
+    map_or<R>(defaultValue: R, f: (t: T) => R): R;
 }
 "#;
 
@@ -753,11 +779,11 @@ interface IndependentMeta {
     /** A list of languages for which a locale override was specified.
       * Does not include the language-less final override. */
     localeOverrides: string[],
-    hasBibliography: bool,
+    hasBibliography: boolean,
 }
 interface StyleMeta {
     info: StyleInfo,
-    features: { [feature: string]: bool },
+    features: { [feature: string]: boolean },
     defaultLocale: string,
     /** May be absent on a dependent style */
     class?: "in-text" | "note",

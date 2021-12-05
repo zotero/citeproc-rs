@@ -471,14 +471,15 @@ Sometimes, a user wants to see how a cluster will look while they are editing
 it, before confirming the change.
 
 ```javascript
-let cites = [ { id: "citekey", locator: "45" }, { ... } ];
+let cluster = { cites: [ { id: "citekey", locator: "45" }, { ... } ] };
 let positions = [ ... before, { note: 34 }, ... after ];
-let preview = driver.previewCitationCluster(cites, positions, "html").unwrap();
+let preview = driver.previewCluster(cluster, positions).unwrap();
+let plainPreview = driver.previewCluster(cluster, positions, "plain").unwrap();
 ```
 
-The format argument is like the format passed to `Driver.new`: one of `"html"`,
-`"rtf"` or `"plain"`. The driver will use that instead of its normal output
-format.
+The cluster argument is just a cluster, without an `id` field, since it's
+ephemeral. The lack of `id` field is reflected in the `positions` argument as
+well.
 
 The positions array is exactly like a call to `setClusterOrder`, except exactly 
 one of the positions omits the id field. This could either:
@@ -491,6 +492,10 @@ If you passed only one position, it would be like previewing an operation like
 mean you would never see "ibid" in a preview.** So for maximum utility, 
 assemble the positions array as you would a call to `setClusterOrder` with 
 exactly the operation you're previewing applied.
+
+The format argument is optional, and works like the format passed to
+`Driver.new`: one of `"html"`, `"rtf"` or `"plain"`. The driver will use that
+instead of its normal output format.
 
 
 ### `AuthorOnly`, `SuppressAuthor` & `Composite`
@@ -652,9 +657,9 @@ Both of these methods will require throwing out almost all cached computation,
 so use sparingly.
 
 If you need to render a preview in a different format, there is an argument on
-`previewCitationCluster` for doing just that. It does not throw out all the
+`previewCluster` for doing just that. It does not throw out all the
 computation. `citeproc-rs`' disambiguation procedures do take formatting into
 account, so `<i>Title</i>` can be distinct from `<b>Title</b>` in HTML and RTF,
 but not if the whole driver's output format is `"plain"`, since they both look
-identical in plain text. `previewCitationCluster` will simply translate the
-formatting into another format, without re-computing all the disambiguation.
+identical in plain text. `previewCluster` will simply translate the formatting
+into another format, without re-computing all the disambiguation.
