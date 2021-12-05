@@ -1,3 +1,4 @@
 node_modules
 /dist
 /wasm-pack.log
+/build
