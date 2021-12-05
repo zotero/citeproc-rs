@@ -6,7 +6,9 @@ use csl::StyleError;
 
 use crate::options::GetFetcherError;
 
-/// Serialized as a subclass of CiteprocRsError
+/// Enum representing all the errors we throw in citeproc-rs.
+///
+/// Serialized as CiteprocRsError, or a subclass thereof.
 #[derive(thiserror::Error, Debug, serde::Serialize)]
 #[serde(tag = "tag", content = "content")]
 pub enum Error {
