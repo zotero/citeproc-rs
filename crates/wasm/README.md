@@ -205,7 +205,7 @@ await initWasmModule(wasmBinaryPromise);
 
 let driver;
 try {
-    driver = Zotero.CiteprocRs.Driver.new({...}).unwrap();
+    driver = Zotero.CiteprocRs.Driver.new({...});
 } catch (e) {
     if (e instanceof Zotero.CiteprocRs.CslStyleError) {
         // ...
@@ -236,37 +236,42 @@ The API also allows for non-interactive use. See below.
 
 ### Error handling
 
-To avoid [this issue][1963], almost every API wraps its return value in a 
-JavaScript object that contains either a successful result or an error, which 
-is a JavaScript Error object. This is called `WasmResult`, and it is modelled 
-on the Rust [`Result` type][rust-result]. If you just want your errors thrown, 
-simply tack `.unwrap()` onto nearly every API call. If you want to handle them 
-manually, you can, and this is mainly useful for showing style parse or 
-validation errors. Some error types have structured data attached to them.
+Many Driver methods can throw errors.
+
+If you want to handle the errors from this library specifically, you can, and
+this is mainly useful for showing style parse or validation errors. Some error
+types have structured data attached to them.
 
 ```typescript
-let result = Driver.new({ ... });
-if (result.is_err()) {
-    let error = result.unwrap_err();
+try {
+    let driver = Driver.new({ ... });
+    // do stuff with driver
+} catch (error) {
     if (error instanceof CslStyleError) {
-        console.warn("Could not parse CSL, error:", error);
-        // You can also
-        // throw error;
+        console.error("Could not parse CSL, error:", error);
+    } else if (error instanceof CiteprocRsDriverError) {
+        console.error("Error in usage of Driver", error);
+    } else if (error instanceof CiteprocRsError) {
+        // CslStyleError and CiteprocRsDriverError are both subclasses of
+        // CiteprocRsError, so this branch would catch them too had they not
+        // been checked already.
+        //
+        // There may be errors that are not a subclass, but directly an
+        // instance of CitprocRsError, so for completeness one should test for
+        // this too.
+        console.error("Catch-all error", error);
+    } else {
+        throw error;
     }
-} else {
-    let driver = result.unwrap();
+} finally {
+    // Driver is only undefined if Driver.new threw an error.
+    if (driver) {
+        driver.free()
+    }
 }
-// ...
-driver.free(); // No unwrap.
 ```
 
 The error types must unfortunately be global exports, on window/global/self.
-
-In this document, `.unwrap()` used after an example means it returns a 
-WasmResult.
-
-[1963]: https://github.com/rustwasm/wasm-bindgen/issues/1963
-[rust-result]: https://doc.rust-lang.org/stable/std/result/enum.Result.html
 
 ### 1. Creating a driver instance
 
@@ -280,7 +285,7 @@ format (one of `"html"`, `"rtf"` or `"plain"`).
 
 ```javascript
 let fetcher =  ...; // see below
-let driverResult = Driver.new({
+let driver = Driver.new({
     style: "<style version=\"1.0\" class=\"note\" ... > ... </style>",
     format: "html", // optional, html is the default
     formatOptions: { // optional
@@ -290,8 +295,6 @@ let driverResult = Driver.new({
     // bibliographyNoSort: true // disables sorting on the bibliography
     fetcher,
 });
-// Throw any errors, get the inner Driver
-let driver = driverResult.unwrap();
 // Fetch the chain of locale files required to use the specified locale
 await driver.fetchLocales();
 // ... use the driver ...
@@ -326,7 +329,7 @@ class Fetcher {
 }
 
 let fetcher = new Fetcher();
-let driver = Driver.new({ ..., fetcher }).unwrap();
+let driver = Driver.new({ ..., fetcher });
 // Make sure you actually fetch them!
 await driver.fetchLocales();
 ```
@@ -347,10 +350,10 @@ You can insert a reference like so. This is a [CSL-JSON][schema] object.
 [schema]: https://github.com/citation-style-language/schema
 
 ```javascript
-driver.insertReference({ id: "citekey", type: "book", title: "Title" }).unwrap();
-driver.insertReferences([ ... many references ... ]).unwrap();
-driver.resetReferences([ ... deletes any others ... ]).unwrap();
-driver.removeReference("citekey").unwrap();
+driver.insertReference({ id: "citekey", type: "book", title: "Title" });
+driver.insertReferences([ ... many references ... ]);
+driver.resetReferences([ ... deletes any others ... ]);
+driver.removeReference("citekey");
 ```
 
 #### Citation Clusters and their Cites
@@ -363,12 +366,12 @@ cluster has an `id`, which is any old string.
 driver.initClusters([
     { id: "one", cites: [ {id: "citekey"} ] },
     { id: "two", cites: [ {id: "citekey", locator: "56", label: "page" } ] },
-]).unwrap();
+]);
 // Update or insert any one of them like so
-driver.insertCluster({ id: "one", cites: [ { id: "updated_citekey" } ] }).unwrap();
+driver.insertCluster({ id: "one", cites: [ { id: "updated_citekey" } ] });
 // (You can use `driver.randomClusterId()` to generate a new one at random.)
 let three = driver.randomClusterId();
-driver.insertCluster({ id: three, cites: [ { id: "new_cluster_here" } ] }).unwrap();
+driver.insertCluster({ id: three, cites: [ { id: "new_cluster_here" } ] });
 ```
 
 These clusters do not contain position information, so reordering is a separate 
@@ -382,7 +385,7 @@ note numbers, which means there were non-citing footnotes in between. Omitting
 can have more than one cluster in the same footnote.
 
 ```javascript
-driver.setClusterOrder([ { id: "one", note: 1 }, { id: "two", note: 4 } ]).unwrap();
+driver.setClusterOrder([ { id: "one", note: 1 }, { id: "two", note: 4 } ]);
 ```
 
 You will notice that if an interactive user cuts and pastes a paragraph 
@@ -397,9 +400,9 @@ Sometimes a user wishes to include references in the bibliography even though
 they are not mentioned in a citation anywhere in the document.
 
 ```javascript
-driver.includeUncited("None").unwrap(); // Default
-driver.includeUncited("All").unwrap();
-driver.includeUncited({ Specific: ["citekeyA", "citekeyB"] }).unwrap();
+driver.includeUncited("None"); // Default
+driver.includeUncited("All");
+driver.includeUncited({ Specific: ["citekeyA", "citekeyB"] });
 ```
 
 The "All" is based on which references your driver knows about. If you have
@@ -417,7 +420,7 @@ that have changed, and bibliography entries that have changed.
 
 ```javascript
 // Get the diff since last time batchedUpdates, fullRender or drain was called.
-let diff = driver.batchedUpdates().unwrap();
+let diff = driver.batchedUpdates();
 
 // apply cluster changes to the UI.
 
@@ -456,10 +459,10 @@ producing a bibliography statically.
 ```javascript
 // returns BibliographyMeta, with information about how a library consumer should
 // lay out the bibliography. There is a similar API in citeproc-js.
-let meta = driver.bibliographyMeta().unwrap();
+let meta = driver.bibliographyMeta();
 
 // This is an array of BibEntry
-let bibliography = driver.makeBibliography().unwrap();
+let bibliography = driver.makeBibliography();
 for (let entry of bibliography) {
     console.log(entry.id, entry.value);
 }
@@ -473,8 +476,8 @@ it, before confirming the change.
 ```javascript
 let cluster = { cites: [ { id: "citekey", locator: "45" }, { ... } ] };
 let positions = [ ... before, { note: 34 }, ... after ];
-let preview = driver.previewCluster(cluster, positions).unwrap();
-let plainPreview = driver.previewCluster(cluster, positions, "plain").unwrap();
+let preview = driver.previewCluster(cluster, positions);
+let plainPreview = driver.previewCluster(cluster, positions, "plain");
 ```
 
 The cluster argument is just a cluster, without an `id` field, since it's
@@ -551,7 +554,7 @@ AFAIK no other processors support this syntax yet.
 ##### Option 2: Enable the `custom-intext` feature for all styles via `Driver.new`
 
 ```javascript
-let driver = Driver.new({ ..., cslFeatures: ["custom-intext"] }).unwrap();
+let driver = Driver.new({ ..., cslFeatures: ["custom-intext"] });
 // ... driver.free();
 ```
 
@@ -570,14 +573,14 @@ let allNotes = myDocument.footnotes.map(fn => {
 
 // Re-hydrate the entire document based on the reference library and your
 // document's clusters
-driver.resetReferences(myDocument.allReferences).unwrap();
-driver.initClusters(allNotes.map(fn => fn.cluster)).unwrap();
-driver.setClusterOrder(allNotes.map(fn => { id: fn.cluster.id, note: fn.number })).unwrap();
+driver.resetReferences(myDocument.allReferences);
+driver.initClusters(allNotes.map(fn => fn.cluster));
+driver.setClusterOrder(allNotes.map(fn => { id: fn.cluster.id, note: fn.number }));
 
 // Render every cluster and bibliography item.
 // It then drains the update queue, leaving the diff empty for the next edit.
 // see the FullRender typescript type
-let render = driver.fullRender().unwrap();
+let render = driver.fullRender();
 
 // Write out the rendered clusters into the doc
 for (let fn of allNotes) {
@@ -608,18 +611,19 @@ its own, and is essentially just a container for three pieces of information:
 `@citeproc-rs/wasm` provides an API for finding out what's in a CSL style file.
 
 ```typescript
-let result = parseStyleMetadata("<style ...> ... </style>").unwrap();
+let styleMeta = parseStyleMetadata("<style ...> ... </style>");
 ```
 
-The result could be a `CslStyleError`, but this is less likely than with
-Driver.new() as it will not actually attempt to parse and validate all the
-parts of a style.
+This function can still throw a `CslStyleError`, but this is less likely than
+with Driver.new() as it will not actually attempt to parse and validate all the
+parts of a style. It will throw if the XML is malformed or if the `<info>`
+block is too invalid to salvage.
 
 Here's how to use `parseStyleMetadata` to parse and use a dependent style.
 
 ```typescript
 let dependentStyle = "<style ...> ... </style>";
-let meta = parseStyleMetadata(dependentStyle).unwrap();
+let meta = parseStyleMetadata(dependentStyle);
 let isDependent = meta.info.parent != null;
 let parentStyleId = isDependent && meta.info.parent.href;
 let localeOverride = meta.defaultLocale;
@@ -630,13 +634,13 @@ let driver = Driver.new({
     style: parentStyle,
     localeOverride,
     ...
-}).unwrap();
+});
 await driver.fetchLocales();
 
 // Here you might also want to know if the style can render a bibliography or not
-let parentMeta = parseStyleMetadata(parentStyle).unwrap();
+let parentMeta = parseStyleMetadata(parentStyle);
 if (parentMeta.independentMeta.hasBibliography) {
-    let bib = driver.makeBibliography().unwrap();
+    let bib = driver.makeBibliography();
     // ...
 }
 
