@@ -89,36 +89,36 @@ typescript_deserialize!(
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT_1: &'static str = r#"
 interface FormatOptions {
-    linkAnchors?: boolean,
+    linkAnchors?: boolean;
 }
 
 interface InitOptions {
     /** A CSL style as an XML string */
-    style: string,
+    style: string;
 
     /** A Fetcher implementation for fetching locales.
       *
       * If not provided, then no locales can be fetched, and default-locale and localeOverride will
       * not be respected; the only locale used will be the bundled en-US. */
-    fetcher?: Fetcher,
+    fetcher?: Fetcher;
 
     /** The output format for this driver instance (default: html) */
-    format?: "html" | "rtf" | "plain",
+    format?: "html" | "rtf" | "plain";
     /** Configuration for the formatter */
-    formatOptions?: FormatOptions,
+    formatOptions?: FormatOptions;
 
     /** Optional array of CSL feature names to activate globally. Features are kebab-case. */
-    cslFeatures?: string[],
+    cslFeatures?: string[];
 
     /** A locale to use instead of the style's default-locale.
       *
       * For dependent styles, use parseStyleMetadata to find out which locale it prefers, and pass
       * in the parent style with a localeOverride set to that value.
       */
-    localeOverride?: string,
+    localeOverride?: string;
 
     /** Disables sorting in the bibliography; items appear in cited order. */
-    bibliographyNoSort?: boolean,
+    bibliographyNoSort?: boolean;
 }
 
 /** This interface lets citeproc retrieve locales or modules asynchronously,
@@ -162,9 +162,9 @@ typescript_serialize!(
     "FullRender",
     r#"
 interface FullRender {
-    allClusters: Map<string, string>,
-    bibEntries: BibEntry[],
-};
+    allClusters: Map<string, string>;
+    bibEntries: BibEntry[];
+}
 "#
 );
 typescript_serialize!(
@@ -180,9 +180,9 @@ interface BibliographyMeta {
     /** the second-field-align value of the CSL style */
     secondFieldAlign: null  | "flush" | "margin";
     /** Format-specific metadata */
-    formatMeta: any,
+    formatMeta: any;
 }
-    "#
+"#
 );
 typescript_serialize!(Vec<String>, StringArray, "string[]");
 
@@ -192,53 +192,53 @@ typescript_serialize!(
     "StyleMeta",
     r#"
 interface StyleMeta {
-    info: StyleInfo,
-    features: { [feature: string]: boolean },
-    defaultLocale: string,
+    info: StyleInfo;
+    features: { [feature: string]: boolean };
+    defaultLocale: string;
     /** May be absent on a dependent style */
-    class?: "in-text" | "note",
-    cslVersionRequired: string,
+    class?: "in-text" | "note";
+    cslVersionRequired: string;
     /** May be absent on a dependent style */
-    independentMeta?: IndependentMeta,
+    independentMeta?: IndependentMeta;
 }
 type CitationFormat = "author-date" | "author" | "numeric" | "label" | "note";
 interface LocalizedString {
-    value: string,
-    lang?: string,
+    value: string;
+    lang?: string;
 }
 interface ParentLink {
-    href: string,
-    lang?: string,
+    href: string;
+    lang?: string;
 }
 interface Link {
-    href: string,
-    rel: "self" | "documentation" | "template",
-    lang?: string,
+    href: string;
+    rel: "self" | "documentation" | "template";
+    lang?: string;
 }
 interface Rights {
-    value: string,
-    lang?: string,
-    license?: string,
+    value: string;
+    lang?: string;
+    license?: string;
 }
 interface StyleInfo {
-    id: string,
-    updated: string,
-    title: LocalizedString,
-    titleShort?: LocalizedString,
-    parent?: ParentLink,
-    links: Link[],
-    rights?: Rights,
-    citationFormat?: CitationFormat,
-    categories: string[],
-    issn?: string,
-    eissn?: string,
-    issnl?: string,
+    id: string;
+    updated: string;
+    title: LocalizedString;
+    titleShort?: LocalizedString;
+    parent?: ParentLink;
+    links: Link[];
+    rights?: Rights;
+    citationFormat?: CitationFormat;
+    categories: string[];
+    issn?: string;
+    eissn?: string;
+    issnl?: string;
 }
 interface IndependentMeta {
     /** A list of languages for which a locale override was specified.
       * Does not include the language-less final override. */
-    localeOverrides: string[],
-    hasBibliography: boolean,
+    localeOverrides: string[];
+    hasBibliography: boolean;
 }
 "#
 );
