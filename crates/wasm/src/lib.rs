@@ -526,6 +526,9 @@ interface InitOptions {
     /** Configuration for the formatter */
     formatOptions?: FormatOptions,
 
+    /** Optional array of CSL feature names to activate globally. Features are kebab-case. */
+    cslFeatures?: string[],
+
     /** A locale to use instead of the style's default-locale.
       *
       * For dependent styles, use parseStyleMetadata to find out which locale it prefers, and pass
