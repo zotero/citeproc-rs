@@ -37,4 +37,4 @@ debug = false
 [patch.'crates-io'.wasm-bindgen]
 version = "0.2.78"
 git = "https://github.com/cormacrelf/wasm-bindgen"
-branch = "wasm-result"
+tag = "no-unwrap"

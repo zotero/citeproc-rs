@@ -29,23 +29,39 @@ jobs:
         with:
           sharedKey: ${{ github.ref == 'refs/heads/master' && 'cargo-wasm-release' || 'cargo-wasm-debug' }}
 
-      - name: Install wasm-pack and binaryen
-        # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-        #
-        # wasm-opt seems to have a segfault, wasm-pack doesn't let you use a wasm-opt off your $PATH,
-        # it has to use its own pinned version and is not being updated much at the moment.
-        # So custom wasm-pack, and binaryen from github releases
+      - name: Install wasm-pack and binaryen (wasm-opt)
         run: |
           cd /tmp
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-          VERSION=manual-1
-          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzvf wasm-pack.tar.gz
-          cp wasm-pack $HOME/.local/bin/
+          # come back to this when we aren't running wasm-bindgen manually
+          # curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
 
-          VERSION=version_101
+          # normally wasm-pack does this for us
+          rustup target add wasm32-unknown-unknown
+
+          # to cross compile wasm-bindgen for linux on a mac:
+          # rustup target add x86_64-unknown-linux-gnu
+          # open https://github.com/chinedufn/cross-compile-rust-from-mac-to-linux
+          # ./download-libssl-dev.sh with updated .deb URL from debian stable
+          # mv target/usr/include/x86_64-linux-gnu/openssl/* target/usr/include/openssl
+          # ./build.sh
+          # set VERSION no-unwrap
+          # tar -zcv -f "$DIR/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz" -C target/x86_64-unknown-linux-gnu/release wasm-bindgen
+          # gh release -R cormacrelf/wasm-bindgen upload $VERSION wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+
+          VERSION=no-unwrap
+          curl -sL -o wasm-bindgen.tar.gz https://github.com/cormacrelf/wasm-bindgen/releases/download/$VERSION/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzvf wasm-bindgen.tar.gz
+          cp wasm-bindgen $HOME/.local/bin/
+
+          # VERSION=manual-1
+          # curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          # tar -xzvf wasm-pack.tar.gz
+          # cp wasm-pack $HOME/.local/bin/
+
+          VERSION=version_103
           curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
           tar -xzvf binaryen.tar.gz
           cp binaryen-$VERSION/bin/* $HOME/.local/bin/
@@ -127,15 +143,37 @@ jobs:
           mkdir -p $HOME/.local/bin
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-          VERSION=manual-1
-          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzvf wasm-pack.tar.gz
-          cp wasm-pack $HOME/.local/bin/
+          # come back to this when we aren't running wasm-bindgen manually
+          # curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
 
-          VERSION=version_101
+          # normally wasm-pack does this for us
+          rustup target add wasm32-unknown-unknown
+
+          # to cross compile wasm-bindgen for linux on a mac:
+          # rustup target add x86_64-unknown-linux-gnu
+          # open https://github.com/chinedufn/cross-compile-rust-from-mac-to-linux
+          # ./download-libssl-dev.sh with updated .deb URL from debian stable
+          # mv target/usr/include/x86_64-linux-gnu/openssl/* target/usr/include/openssl
+          # ./build.sh
+          # set VERSION no-unwrap
+          # tar -zcv -f "$DIR/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz" -C target/x86_64-unknown-linux-gnu/release wasm-bindgen
+          # gh release -R cormacrelf/wasm-bindgen upload $VERSION wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+
+          VERSION=no-unwrap
+          curl -sL -o wasm-bindgen.tar.gz https://github.com/cormacrelf/wasm-bindgen/releases/download/$VERSION/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzvf wasm-bindgen.tar.gz
+          cp wasm-bindgen $HOME/.local/bin/
+
+          # VERSION=manual-1
+          # curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+          # tar -xzvf wasm-pack.tar.gz
+          # cp wasm-pack $HOME/.local/bin/
+
+          VERSION=version_103
           curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
           tar -xzvf binaryen.tar.gz
           cp binaryen-$VERSION/bin/* $HOME/.local/bin/
+
 
       - name: Build for all targets
         working-directory: crates/wasm

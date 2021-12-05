@@ -123,7 +123,14 @@ target() {
     --target "$TARGET" \
     --out-dir "$SCRATCH" \
     --out-name citeproc_rs_wasm \
-    || bail "wasm-bindgen"
+    || bail "wasm-bindgen --target $TARGET"
+
+  if [ "$DEBUG_OR_RELEASE" = "release" ]; then
+    local input="$SCRATCH/citeproc_rs_wasm_bg.wasm"
+    local optimized="$SCRATCH/wasm-opt.wasm"
+    wasm-opt -g -O3 "$input" -o "$optimized" || bail "wasm-opt -g -O3"
+    mv "$optimized" "$input"
+  fi
 
   SNIPPETS="$DIR/pkg-scratch/$OUT/snippets"
   (mkdir -p "$DEST/$OUT" \

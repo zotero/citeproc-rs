@@ -2448,7 +2448,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen"
 version = "0.2.78"
-source = "git+https://github.com/cormacrelf/wasm-bindgen?branch=wasm-result#e90722944147167ec77565e677000f5e9446e3b4"
+source = "git+https://github.com/cormacrelf/wasm-bindgen?tag=no-unwrap#e90722944147167ec77565e677000f5e9446e3b4"
 dependencies = [
  "cfg-if 1.0.0",
  "serde",
@@ -2459,7 +2459,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-backend"
 version = "0.2.78"
-source = "git+https://github.com/cormacrelf/wasm-bindgen?branch=wasm-result#e90722944147167ec77565e677000f5e9446e3b4"
+source = "git+https://github.com/cormacrelf/wasm-bindgen?tag=no-unwrap#e90722944147167ec77565e677000f5e9446e3b4"
 dependencies = [
  "bumpalo",
  "lazy_static",
@@ -2485,7 +2485,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-macro"
 version = "0.2.78"
-source = "git+https://github.com/cormacrelf/wasm-bindgen?branch=wasm-result#e90722944147167ec77565e677000f5e9446e3b4"
+source = "git+https://github.com/cormacrelf/wasm-bindgen?tag=no-unwrap#e90722944147167ec77565e677000f5e9446e3b4"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -2494,7 +2494,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-macro-support"
 version = "0.2.78"
-source = "git+https://github.com/cormacrelf/wasm-bindgen?branch=wasm-result#e90722944147167ec77565e677000f5e9446e3b4"
+source = "git+https://github.com/cormacrelf/wasm-bindgen?tag=no-unwrap#e90722944147167ec77565e677000f5e9446e3b4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2506,7 +2506,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-shared"
 version = "0.2.78"
-source = "git+https://github.com/cormacrelf/wasm-bindgen?branch=wasm-result#e90722944147167ec77565e677000f5e9446e3b4"
+source = "git+https://github.com/cormacrelf/wasm-bindgen?tag=no-unwrap#e90722944147167ec77565e677000f5e9446e3b4"
 
 [[package]]
 name = "wasm-bindgen-test"
