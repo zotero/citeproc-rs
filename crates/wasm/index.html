@@ -60,11 +60,11 @@
         await init();
 
         // And afterwards we can use all the functionality defined in wasm.
-        // const result = Driver.new("<>noparse", {}, 2);
+        // const result = new Driver("<>noparse", {}, 2);
         const fetcher = new Fetcher();
-        const driver = Driver.new(style, fetcher, "html");
+        const driver = new Driver(style, fetcher, "html");
         if (driver == null) {
-          throw new Error("wasm Driver.new doesn't work!");
+          throw new Error("wasm new Driver() doesn't work!");
         }
 
         console.log("--- Successfully loaded wasm driver. You can now use it. ---")

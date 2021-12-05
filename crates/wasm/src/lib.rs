@@ -47,14 +47,15 @@ pub struct Driver {
 
 #[wasm_bindgen]
 impl Driver {
-    /// Creates a new Driver.
+    /// Creates a new Driver. Use the InitOptions object, which has (for example):
     ///
     /// * `style` is a CSL style as a string. Independent styles only.
     /// * `fetcher` must implement the `Fetcher` interface
     /// * `format` is one of { "html", "rtf", "plain" }
     ///
     /// Throws an error if it cannot parse the style you gave it.
-    pub fn new(options: typescript::InitOptions) -> DriverResult<Driver> {
+    #[wasm_bindgen(constructor)]
+    pub fn new(options: typescript::InitOptions) -> Result<Driver, Error> {
         utils::set_panic_hook();
         utils::init_log();
 
@@ -97,8 +98,7 @@ impl Driver {
 
     /// Sets the output format (which will also cause everything to be recomputed, use sparingly)
     ///
-    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as
-    ///                                          `Driver.new`
+    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as `new Driver`
     ///
     /// @param {FormatOptions | null} options If absent, this is set to the default FormatOptions.
     ///

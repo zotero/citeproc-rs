@@ -76,7 +76,7 @@ download can of course be cached if your web server is set up correctly, making
 the whole process very quick.
 
 You can use the regular-import Driver as a TypeScript type anywhere, just don't 
-use it to call `.new()`.
+use it to call `new Driver()`.
 
 ##### React
 
@@ -205,7 +205,7 @@ await initWasmModule(wasmBinaryPromise);
 
 let driver;
 try {
-    driver = Zotero.CiteprocRs.Driver.new({...});
+    driver = new Zotero.CiteprocRs.Driver({...});
 } catch (e) {
     if (e instanceof Zotero.CiteprocRs.CslStyleError) {
         // ...
@@ -244,7 +244,7 @@ types have structured data attached to them.
 
 ```typescript
 try {
-    let driver = Driver.new({ ... });
+    let driver = new Driver({ ... });
     // do stuff with driver
 } catch (error) {
     if (error instanceof CslStyleError) {
@@ -264,7 +264,7 @@ try {
         throw error;
     }
 } finally {
-    // Driver is only undefined if Driver.new threw an error.
+    // Driver is only undefined if `new Driver` threw an error.
     if (driver) {
         driver.free()
     }
@@ -285,7 +285,7 @@ format (one of `"html"`, `"rtf"` or `"plain"`).
 
 ```javascript
 let fetcher =  ...; // see below
-let driver = Driver.new({
+let driver = new Driver({
     style: "<style version=\"1.0\" class=\"note\" ... > ... </style>",
     format: "html", // optional, html is the default
     formatOptions: { // optional
@@ -329,7 +329,7 @@ class Fetcher {
 }
 
 let fetcher = new Fetcher();
-let driver = Driver.new({ ..., fetcher });
+let driver = new Driver({ ..., fetcher });
 // Make sure you actually fetch them!
 await driver.fetchLocales();
 ```
@@ -337,7 +337,7 @@ await driver.fetchLocales();
 Unless you don't have `async` syntax, in which case, return a `Promise` 
 directly, e.g. `return Promise.resolve("<locale> ... </locale>")`.
 
-Declining to provide a locale fetcher in `Driver.new` or forgetting to call
+Declining to provide a locale fetcher in `new Driver` or forgetting to call
 `await driver.fetchLocales()` results in use of the bundled `en-US` locale. You
 should also never attempt to use the driver instance while it is fetching locales.
 
@@ -497,7 +497,7 @@ assemble the positions array as you would a call to `setClusterOrder` with
 exactly the operation you're previewing applied.
 
 The format argument is optional, and works like the format passed to
-`Driver.new`: one of `"html"`, `"rtf"` or `"plain"`. The driver will use that
+`new Driver`: one of `"html"`, `"rtf"` or `"plain"`. The driver will use that
 instead of its normal output format.
 
 
@@ -551,10 +551,10 @@ If you want to use the `<intext>` element in CSL, you may either:
 
 AFAIK no other processors support this syntax yet.
 
-##### Option 2: Enable the `custom-intext` feature for all styles via `Driver.new`
+##### Option 2: Enable the `custom-intext` feature for all styles via `new Driver`
 
 ```javascript
-let driver = Driver.new({ ..., cslFeatures: ["custom-intext"] });
+let driver = new Driver({ ..., cslFeatures: ["custom-intext"] });
 // ... driver.free();
 ```
 
@@ -601,7 +601,7 @@ updateUserInterface(allNotes, myDocument, whatever);
 
 Sometimes you want information about a CSL style without actually booting up a
 whole driver. One important use case is a dependent style, which can't be used
-with `Driver.new()` because it doesn't have the ability to render citations on
+with `new Driver()` because it doesn't have the ability to render citations on
 its own, and is essentially just a container for three pieces of information:
 
 - A journal name
@@ -615,7 +615,7 @@ let styleMeta = parseStyleMetadata("<style ...> ... </style>");
 ```
 
 This function can still throw a `CslStyleError`, but this is less likely than
-with Driver.new() as it will not actually attempt to parse and validate all the
+with new Driver() as it will not actually attempt to parse and validate all the
 parts of a style. It will throw if the XML is malformed or if the `<info>`
 block is too invalid to salvage.
 
@@ -630,7 +630,7 @@ let localeOverride = meta.defaultLocale;
 
 // ...
 let parentStyle = await downloadStyleWithId(parentStyleId);
-let driver = Driver.new({
+let driver = new Driver({
     style: parentStyle,
     localeOverride,
     ...
@@ -652,8 +652,8 @@ driver.free();
 
 If you wish to change the output format of the entire driver, you can use 
 `setOutputFormat(format, formatOptions)`. The format is a string, one of `"html" | 
-"rtf" | "plain"` just like the `Driver.new` method. The options is an optional
-argument with the same value as `formatOptions` in `Driver.new`.
+"rtf" | "plain"` just like the `new Driver` method. The options is an optional
+argument with the same value as `formatOptions` in `new Driver`.
 
 `setStyle(xmlString)` will change the CSL style used by the driver.
 

@@ -51,7 +51,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
             try {
                 let meta = parseStyleMetadata(style).unwrap();
                 setMetadata(Some(meta));
-                let driver = CreateDriver.new({
+                let driver = new CreateDriver({
                     style,
                     fetcher,
                     format: "html",
@@ -198,7 +198,7 @@ class _ExampleManager implements Lifecycle {
         let styleText = await this.getStyle(name);
         let oldDriver = this.driver;
         // must be async imported to use
-        // let newDriver = Driver.new(styleText, this);
+        // let newDriver = new Driver(styleText, this);
         let newDriver = undefined as Driver;
         newDriver.resetReferences(this.references);
         newDriver.initClusters(this.clusters);

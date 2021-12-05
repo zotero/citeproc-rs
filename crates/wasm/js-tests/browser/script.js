@@ -35,7 +35,7 @@ async function test_citeproc_rs() {
     await wasm_bindgen('./pkg-nomod/_no_modules/citeproc_rs_wasm_bg.wasm');
 
     const fetcher = new Fetcher();
-    const driver = Driver.new({
+    const driver = new Driver({
         style,
         fetcher,
         format: "html"

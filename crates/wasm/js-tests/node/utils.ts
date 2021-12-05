@@ -64,7 +64,7 @@ export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
     cfg.fetcher = cfg.fetcher || boringFetcher;
     cfg.format = cfg.format || "plain";
     cfg.cslFeatures = cfg.cslFeatures || [];
-    let driver = Driver.new(cfg);
+    let driver = new Driver(cfg);
     callback(driver);
     driver.free();
 };

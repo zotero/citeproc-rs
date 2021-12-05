@@ -367,7 +367,7 @@ describe("AuthorOnly and friends", () => {
     );
 
     describe("<intext> element", () => {
-        test("should parse when custom-intext feature is enabled via Driver.new", () => {
+        test("should parse when custom-intext feature is enabled", () => {
             withDriver({ style: styleWithIntext, cslFeatures: ["custom-intext"] }, driver => {
                 let one = "cluster-one";
                 driver.insertReference({ id: "r1", type: "book", title: "hi", })
@@ -376,8 +376,8 @@ describe("AuthorOnly and friends", () => {
                 expect(driver.builtCluster(one)).toBe("intext element");
             });
         });
-        test("should fail to parse when custom-intext feature is not enabled via Driver.new", () => {
-            let closure = () => Driver.new({ style: styleWithIntext, cslFeatures: [] });
+        test("should fail to parse when custom-intext feature is not enabled", () => {
+            let closure = () => new Driver({ style: styleWithIntext, cslFeatures: [] });
             expect(closure).toThrowError(/Unknown element <intext>/);
         });
     });
