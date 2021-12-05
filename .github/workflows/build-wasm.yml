@@ -21,13 +21,24 @@ jobs:
       - uses: actions/checkout@v2
       - uses: ./.github/actions/setup-rust-wasm
       - name: Yarn install
-        run: cd crates/wasm/js-demo && yarn
-      - name: Yarn build (dev)
-        if: ${{ github.ref != 'refs/heads/master' }}
-        run: cd crates/wasm/js-demo && yarn build -d
-      - name: Yarn build (prod)
-        if: ${{ github.ref == 'refs/heads/master' }}
-        run: cd crates/wasm/js-demo && yarn build -p
+        working-directory: crates/wasm/js-demo
+        run: yarn install
+
+      - name: >
+          Build WASM pkg
+          (${{ github.ref == 'refs/heads/master' && '--release' || '--dev' }})
+        working-directory: crates/wasm
+        run: |
+          ./scripts/npm-pkg-config.sh \
+            ${{ github.ref != 'refs/heads/master' && '--dev' || '' }} \
+            --targets browser \
+            --set-name @citeproc-rs/wasm \
+            --dest ./pkg \
+            --features console,dot
+
+      - run: yarn build
+        working-directory: crates/wasm/js-demo
+
       - name: Deploy
         if: ${{ github.ref == 'refs/heads/master' }}
         uses: peaceiris/actions-gh-pages@v2
@@ -35,7 +46,7 @@ jobs:
           ACTIONS_DEPLOY_KEY: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_DIR: ./crates/wasm/js-demo/dist
+          PUBLISH_DIR: ./crates/wasm/js-demo/build
           EXTERNAL_REPOSITORY: cormacrelf/citeproc-wasm-demo
           PUBLISH_BRANCH: gh-pages
 
