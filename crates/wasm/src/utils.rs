@@ -81,7 +81,7 @@ macro_rules! js_import {
     };
 }
 
-/// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.WasmResult(...)`
+/// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.CslStyleError(...)`
 /// either from
 /// 1. that namespace, under zotero
 /// 2. the global namespace, under no-modules

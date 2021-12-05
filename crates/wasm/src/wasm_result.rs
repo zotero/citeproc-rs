@@ -1,23 +1,27 @@
 pub use helper::*;
+use wasm_bindgen::JsValue;
 
-pub trait TypescriptResult: From<WasmResult> {
+pub trait TypescriptAlias {
     type RustType;
 }
 
-macro_rules! result_type {
+pub trait JsonValue: serde::Serialize {
+    fn serialize_jsvalue<R: From<JsValue>>(&self) -> Result<R, crate::DriverError> {
+        let jsvalue = JsValue::from_serde(self)?;
+        Ok(jsvalue.into())
+    }
+}
+
+impl<T> JsonValue for T where T: serde::Serialize {}
+
+macro_rules! typescript_alias {
     ($ty:ty, $name:ident, $stringified:literal) => {
         #[wasm_bindgen]
         extern "C" {
             #[wasm_bindgen(typescript_type = $stringified)]
             pub type $name;
         }
-        impl From<$crate::wasm_result::WasmResult> for $name {
-            fn from(other: $crate::wasm_result::WasmResult) -> Self {
-                let jsv: JsValue = other.into();
-                $name::from(jsv)
-            }
-        }
-        impl TypescriptResult for $name {
+        impl TypescriptAlias for $name {
             type RustType = $ty;
         }
     };
@@ -25,32 +29,9 @@ macro_rules! result_type {
 
 #[allow(dead_code)]
 mod helper {
-    use super::TypescriptResult;
     use crate::{CiteprocRsDriverError, CiteprocRsError, CslStyleError, DriverError};
     use csl::StyleError;
-    use js_sys::Error as JsError;
-    use serde::Serialize;
     use wasm_bindgen::prelude::*;
-
-    crate::js_import_class_constructor! {
-        pub type WasmResult;
-        #[wasm_bindgen(constructor)]
-        fn new(value: JsValue) -> WasmResult;
-    }
-
-    pub fn js_value_err<V, E, F>(f: F) -> WasmResult
-    where
-        V: Into<JsValue>,
-        E: std::error::Error,
-        F: FnOnce() -> Result<V, E>,
-    {
-        let res = f();
-        let out = match res {
-            Ok(ok) => WasmResult::new(ok.into()),
-            Err(e) => WasmResult::new(JsError::new(&e.to_string()).into()),
-        };
-        out
-    }
 
     fn style_error_to_js_err(se: &StyleError) -> JsValue {
         let mut string = se.to_string();
@@ -86,106 +67,9 @@ mod helper {
         }
     }
 
-    impl From<Result<JsValue, DriverError>> for WasmResult {
-        fn from(res: Result<JsValue, DriverError>) -> Self {
-            match res {
-                Ok(ok) => WasmResult::new(ok.into()),
-                Err(e) => WasmResult::new(e.to_js_error()),
-            }
+    impl From<DriverError> for JsValue {
+        fn from(e: DriverError) -> Self {
+            e.to_js_error()
         }
-    }
-
-    pub fn js_driver_error<V, F>(f: F) -> WasmResult
-    where
-        V: Into<JsValue>,
-        F: FnOnce() -> Result<V, DriverError>,
-    {
-        f().map(|x| x.into()).into()
-    }
-
-    pub fn typescript_serde_result<R, F>(f: F) -> R
-    where
-        R: TypescriptResult,
-        R::RustType: Serialize,
-        F: FnOnce() -> Result<R::RustType, DriverError>,
-    {
-        let res = f().and_then(|rust| JsValue::from_serde(&rust).map_err(DriverError::from));
-        let out: WasmResult = res.into();
-        out.into()
-    }
-}
-
-#[allow(dead_code)]
-mod raw {
-    //! Alternative impl with no Javascript dependency but no methods available
-    //! on the returned objects.
-
-    use js_sys::Error as JsError;
-    use serde::Serialize;
-    use wasm_bindgen::prelude::*;
-
-    pub type WasmResult = JsValue;
-
-    // From serde_wasm_bindgen
-    /// Custom bindings to avoid using fallible `Reflect` for plain objects.
-    #[wasm_bindgen]
-    extern "C" {
-        pub type Object;
-
-        #[wasm_bindgen(constructor)]
-        pub fn new() -> Object;
-
-        #[wasm_bindgen(method, indexing_setter)]
-        pub fn set(this: &Object, key: JsValue, value: JsValue);
-    }
-
-    thread_local! {
-        pub static OK_FIELD: JsValue = JsValue::from_str("Ok");
-        pub static ERR_FIELD: JsValue = JsValue::from_str("Err");
-    }
-
-    pub fn js_value_err<E, F>(f: F) -> JsValue
-    where
-        E: std::error::Error,
-        F: FnOnce() -> Result<JsValue, E>,
-    {
-        let res = f();
-        let out = Object::new();
-        match res {
-            Ok(ok) => {
-                out.set(OK_FIELD.with(|f| f.clone()), ok);
-            }
-            Err(e) => {
-                out.set(
-                    ERR_FIELD.with(|f| f.clone()),
-                    JsError::new(&e.to_string()).into(),
-                );
-            }
-        }
-        out.into()
-    }
-
-    pub fn js_serde_err<T, E, F>(f: F) -> JsValue
-    where
-        T: Serialize,
-        E: std::error::Error,
-        F: FnOnce() -> Result<T, E>,
-    {
-        let res = f();
-        let out = Object::new();
-        match res {
-            Ok(ok) => {
-                let value = JsValue::from_serde(&ok)
-                    .expect("citeproc-wasm failed to serialize return value to JsValue");
-                out.set(OK_FIELD.with(|f| f.clone()), value);
-            }
-            Err(e) => {
-                out.set(
-                    ERR_FIELD.with(|f| f.clone()),
-                    JsError::new(&e.to_string()).into(),
-                );
-            }
-        }
-        out.into()
     }
 }

@@ -1,54 +1,3 @@
-export class WasmResult {
-    constructor(value) {
-        if (value instanceof Error) {
-            this.Err = value;
-        } else {
-            this.Ok = value;
-        }
-    }
-    is_err() {
-        return this.hasOwnProperty("Err");
-    }
-    is_ok() {
-        return !this.is_err();
-    }
-    unwrap() {
-        if (this.is_ok()) {
-            return this.Ok;
-        } else {
-            throw this.Err;
-        }
-    }
-    unwrap_err() {
-        if (this.is_ok()) {
-            throw new Error("Called unwrap_err on an Ok value");
-        } else {
-            return this.Err;
-        }
-    }
-    unwrap_or(otherwise) {
-        if (this.is_ok()) {
-            return this.Ok;
-        } else {
-            return otherwise;
-        }
-    }
-    map(func) {
-        if (this.is_ok()) {
-            return new WasmResult(func(this.Ok));
-        } else {
-            return this;
-        }
-    }
-    map_or(otherwise, func) {
-        if (this.is_ok()) {
-            return func(this.Ok);
-        } else {
-            return otherwise;
-        }
-    }
-}
-
 export class CiteprocRsError extends Error {
     constructor(message) {
         super(message);
@@ -71,7 +20,6 @@ export class CslStyleError extends CiteprocRsError {
 }
 
 function doExport(onto) {
-    onto.WasmResult = WasmResult;
     onto.CiteprocRsError = CiteprocRsError;
     onto.CslStyleError = CslStyleError;
     onto.CiteprocRsDriverError = CiteprocRsDriverError;
