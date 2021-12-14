@@ -113,11 +113,18 @@ target() {
     # https://github.com/rustwasm/wasm-pack/blob/ca4af7660f266b9347e4a00c882b0e3adfd13a1d/src/command/build.rs#L69
     TARGET="bundler"
   fi
+
+  local or_release=""
+  if [ "$DEBUG_OR_RELEASE" = "release" ]; then or_release="--release"; fi
+
+  echo "==> cargo build $or_release" > /dev/stderr
   cargo build \
+    $or_release \
     --target wasm32-unknown-unknown \
     --features "$FEATURES$EXTRA_FEATURES" \
     || bail "cargo build"
 
+  echo "==> wasm-bindgen --target $TARGET --out-dir $SCRATCH" > /dev/stderr
   wasm-bindgen \
     "$DIR/../../target/wasm32-unknown-unknown/$DEBUG_OR_RELEASE/wasm.wasm" \
     --target "$TARGET" \
@@ -125,9 +132,12 @@ target() {
     --out-name citeproc_rs_wasm \
     || bail "wasm-bindgen --target $TARGET"
 
+  echo '*' > "$SCRATCH/.gitignore"
+
   if [ "$DEBUG_OR_RELEASE" = "release" ]; then
     local input="$SCRATCH/citeproc_rs_wasm_bg.wasm"
     local optimized="$SCRATCH/wasm-opt.wasm"
+    echo "==> wasm-opt -g -O3 $input -o $optimized" > /dev/stderr
     wasm-opt -g -O3 "$input" -o "$optimized" || bail "wasm-opt -g -O3"
     mv "$optimized" "$input"
   fi
