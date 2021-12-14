@@ -46,10 +46,11 @@ jobs:
       - name: Extract branch name
         id: branch
         shell: bash
+        env:
+          GITHUB_HEAD: ${{ github.head_ref }}
+          GITHUB_BASE: ${{ github.base_ref }}
         run: |
           IS_CI_TEST=${{ github.event_name == 'push' && github.ref != 'refs/heads/master' && 'true' || 'false '}}
-          GITHUB_HEAD=${{ github.head_ref }}
-          GITHUB_BASE=${{ github.base_ref }}
 
           if test -z "$GITHUB_HEAD"; then
             GITHUB_HEAD="$GITHUB_REF"
@@ -60,7 +61,7 @@ jobs:
 
           # transforms refs/pulls/123/merge into pulls-123-merge
           GITHUB_HEAD=${GITHUB_HEAD#refs/heads/}
-          GITHUB_HEAD=$(echo ${GITHUB_HEAD#refs/} | tr '/' '-')
+          GITHUB_HEAD=$(echo "${GITHUB_HEAD#refs/}" | tr '/' '-')
           echo "GITHUB_HEAD = ${GITHUB_HEAD}"
           echo "::set-output name=head::${GITHUB_HEAD}"
 
@@ -68,7 +69,7 @@ jobs:
             echo "::set-output name=base::master"
           else
             GITHUB_BASE=${GITHUB_BASE#refs/heads/}
-            GITHUB_BASE=$(echo ${GITHUB_BASE#refs/} | tr '/' '-')
+            GITHUB_BASE=$(echo "${GITHUB_BASE#refs/}" | tr '/' '-')
             echo "GITHUB_BASE = ${GITHUB_BASE}"
             echo "::set-output name=base::${GITHUB_BASE}"
           fi
@@ -109,8 +110,8 @@ jobs:
           GITHUB_HEAD: ${{ steps.branch.outputs.head }}
         shell: bash
         run: |
-          cp .snapshots/current .snapshots/branches/$GITHUB_HEAD
-          cargo test-suite diff $GITHUB_BASE..$GITHUB_HEAD | tee test-results/diff
+          cp .snapshots/current ".snapshots/branches/$GITHUB_HEAD"
+          cargo test-suite diff "$GITHUB_BASE..$GITHUB_HEAD" | tee test-results/diff
           # need the first command in the pipe, $? would give us tee's status
           echo "${PIPESTATUS[0]}" > test-results/diff-status
 

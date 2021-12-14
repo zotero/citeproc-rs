@@ -62,8 +62,8 @@ jobs:
 
           if $IS_TAGGED_RELEASE; then
             TAG=${GITHUB_REF#refs/tags/wasm-}
-            IFS='-' read -ra PLAIN_VERSION POST_HYPHEN <<< "$TAG"
-            if ! [ -z "$POST_HYPHEN" ]; then
+            IFS='-' read -ra _ POST_HYPHEN <<< "$TAG"
+            if [ -n "$POST_HYPHEN" ]; then
               # i.e. there was a -alpha.1 appended, use the `next` dist tag
               set-output npm_dist_tag next
             else
