@@ -19,45 +19,26 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Rust 1.52.1
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.52.1
-          override: true
-      - uses: Swatinem/rust-cache@v1
-        with:
-          sharedKey: ${{ github.ref == 'refs/heads/master' && 'cargo-wasm-release' || 'cargo-wasm-debug' }}
-
-      - name: Install wasm-pack and binaryen
-        # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-        #
-        # wasm-opt seems to have a segfault, wasm-pack doesn't let you use a wasm-opt off your $PATH,
-        # it has to use its own pinned version and is not being updated much at the moment.
-        # So custom wasm-pack, and binaryen from github releases
-        run: |
-          cd /tmp
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-          VERSION=manual-1
-          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzvf wasm-pack.tar.gz
-          cp wasm-pack $HOME/.local/bin/
-
-          VERSION=version_101
-          curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
-          tar -xzvf binaryen.tar.gz
-          cp binaryen-$VERSION/bin/* $HOME/.local/bin/
-
+      - uses: ./.github/actions/setup-rust-wasm
       - name: Yarn install
-        run: cd crates/wasm/js-demo && yarn
-      - name: Yarn build (dev)
-        if: ${{ github.ref != 'refs/heads/master' }}
-        run: cd crates/wasm/js-demo && yarn build -d
-      - name: Yarn build (prod)
-        if: ${{ github.ref == 'refs/heads/master' }}
-        run: cd crates/wasm/js-demo && yarn build -p
+        working-directory: crates/wasm/js-demo
+        run: yarn install
+
+      - name: >
+          Build WASM pkg
+          (${{ github.ref == 'refs/heads/master' && '--release' || '--dev' }})
+        working-directory: crates/wasm
+        run: |
+          ./scripts/npm-pkg-config.sh \
+            ${{ github.ref != 'refs/heads/master' && '--dev' || '' }} \
+            --targets browser \
+            --set-name @citeproc-rs/wasm \
+            --dest ./pkg \
+            --features console,dot
+
+      - run: yarn build
+        working-directory: crates/wasm/js-demo
+
       - name: Deploy
         if: ${{ github.ref == 'refs/heads/master' }}
         uses: peaceiris/actions-gh-pages@v2
@@ -65,7 +46,7 @@ jobs:
           ACTIONS_DEPLOY_KEY: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
           # GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PUBLISH_DIR: ./crates/wasm/js-demo/dist
+          PUBLISH_DIR: ./crates/wasm/js-demo/build
           EXTERNAL_REPOSITORY: cormacrelf/citeproc-wasm-demo
           PUBLISH_BRANCH: gh-pages
 
@@ -92,8 +73,8 @@ jobs:
 
           if $IS_TAGGED_RELEASE; then
             TAG=${GITHUB_REF#refs/tags/wasm-}
-            IFS='-' read -ra PLAIN_VERSION POST_HYPHEN <<< "$TAG"
-            if ! [ -z "$POST_HYPHEN" ]; then
+            IFS='-' read -ra _ POST_HYPHEN <<< "$TAG"
+            if [ -n "$POST_HYPHEN" ]; then
               # i.e. there was a -alpha.1 appended, use the `next` dist tag
               set-output npm_dist_tag next
             else
@@ -111,31 +92,7 @@ jobs:
           dist tag ${{ steps.version.outputs.npm_dist_tag }}
         run: echo
 
-      - name: Install Rust 1.52.1
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: 1.52.1
-            override: true
-      - uses: Swatinem/rust-cache@v1
-        with:
-          sharedKey: cargo-wasm-release
-
-      - name: Install wasm-pack and binaryen
-        # run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
-        run: |
-          cd /tmp
-          mkdir -p $HOME/.local/bin
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-          VERSION=manual-1
-          curl -sL -o wasm-pack.tar.gz https://github.com/cormacrelf/wasm-pack/releases/download/$VERSION/wasm-pack-$VERSION-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzvf wasm-pack.tar.gz
-          cp wasm-pack $HOME/.local/bin/
-
-          VERSION=version_101
-          curl -sL -o binaryen.tar.gz https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz
-          tar -xzvf binaryen.tar.gz
-          cp binaryen-$VERSION/bin/* $HOME/.local/bin/
+      - uses: ./.github/actions/setup-rust-wasm
 
       - name: Build for all targets
         working-directory: crates/wasm
@@ -151,7 +108,7 @@ jobs:
       - name: Publish @citeproc-rs/wasm to NPM
         working-directory: crates/wasm
         run: >
-          npm publish dist --access public
+          npm publish ./dist --access public
           --tag ${{ steps.version.outputs.npm_dist_tag }}
           ${{ steps.version.outputs.npm_dry_run == 'true' && '--dry-run' || '' }}
 

@@ -1,0 +1,55 @@
+# For an example of a local composite actions:
+# https://docs.github.com/en/actions/creating-actions/creating-a-composite-action#creating-an-action-metadata-file
+#
+# The only reference I can find in the docs to actually using one in the same repo:
+# https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsuses
+name: 'Set up Rust stable, wasm-bindgen and binaryen/wasm-opt'
+runs:
+  using: "composite"
+  steps:
+
+    - name: Install Rust 1.52.1
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: 1.52.1
+          override: true
+          target: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: cargo-wasm-release
+
+    # simple version
+    # - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -f
+
+    # complicated version
+    - working-directory: /tmp
+      shell: bash
+      run: |
+        mkdir -p $HOME/.local/bin
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+        # we want a pre-built copy of wasm-bindgen to match the version we've pinned in Cargo.toml
+        #
+        # to cross compile wasm-bindgen for linux on a mac:
+        # rustup target add x86_64-unknown-linux-gnu
+        # open https://github.com/chinedufn/cross-compile-rust-from-mac-to-linux
+        # ./download-libssl-dev.sh with updated .deb URL from debian stable
+        # mv target/usr/include/x86_64-linux-gnu/openssl/* target/usr/include/openssl
+        # ./build.sh
+        # set VERSION no-unwrap
+        # tar -zcv -f "$DIR/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz" -C target/x86_64-unknown-linux-gnu/release wasm-bindgen
+        # gh release -R cormacrelf/wasm-bindgen upload $VERSION wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+
+        VERSION=no-unwrap
+        curl -sL -o wasm-bindgen.tar.gz \
+          "https://github.com/cormacrelf/wasm-bindgen/releases/download/$VERSION/wasm-bindgen-$VERSION-x86_64-unknown-linux-gnu.tar.gz"
+        tar -xzvf wasm-bindgen.tar.gz
+        cp wasm-bindgen $HOME/.local/bin/
+
+        VERSION=version_103
+        curl -sL -o binaryen.tar.gz \
+          "https://github.com/WebAssembly/binaryen/releases/download/$VERSION/binaryen-$VERSION-x86_64-linux.tar.gz"
+        tar -xzvf binaryen.tar.gz
+        # binaryen's releases no longer have $VERSION in folder name
+        # as they did for version_101 and earlier
+        cp binaryen-/bin/* $HOME/.local/bin/

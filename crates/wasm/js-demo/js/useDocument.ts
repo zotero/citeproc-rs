@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { Result, Err, Ok, Option, Some, None } from 'safe-types';
-import { parseStyleMetadata, Driver, Reference, Cluster, Cite, Lifecycle, UpdateSummary, StyleMeta } from '../../pkg';
-import { ClusterId, Document, RenderedDocument } from './Document';
+import { useState, useEffect } from 'react';
+import { Result, Err, Option, Some, None } from 'safe-types';
+import { parseStyleMetadata, Driver, Reference, Cluster, UpdateSummary, StyleMeta, Fetcher } from '../../pkg';
+import { Document } from './Document';
 import { CdnFetcher } from './CdnFetcher';
 
 // Global for caching.
@@ -30,7 +30,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     const [references, setReferences] = useState(initialReferences);
     const [document, setDocument] = useState(None() as Option<Document>);
     const [inFlight, setInFlight] = useState(false);
-    const [driver, setDriver] = useState<Result<Driver, any>>(Err("uninitialized"));
+    const [driver, setDriver] = useState<Result<Driver, CiteprocRsError>>(Err(new CiteprocRsError("uninitialized")));
     const [style, setStyle] = useState(initialStyle);
     const [metadata, setMetadata] = useState<Option<StyleMeta>>(None);
     const [error, setError] = useState<Option<CiteprocRsError>>(None());
@@ -45,22 +45,19 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
     }
 
     const createDriver = async (style: string) => {
-        // make sure it's not loading wasm in the initial chunk
-        const { Driver: CreateDriver } = await import('../../pkg');
         let d: Result<Driver, any> = Result.from(() => {
             try {
-                let meta = parseStyleMetadata(style).unwrap();
+                let meta = parseStyleMetadata(style);
                 setMetadata(Some(meta));
-                let driver = CreateDriver.new({
+                let d = new Driver({
                     style,
                     fetcher,
                     format: "html",
                     // localeOverride: "de-AT",
                 });
-                let d = driver.unwrap();
-                d.resetReferences(references).unwrap();
+                d.resetReferences(references);
                 return d;
-            } catch(e) {
+            } catch (e) {
                 if (e instanceof CiteprocRsError) {
                     setError(Some(e));
                 } else {
@@ -70,53 +67,53 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         });
         if (d.is_ok()) {
             let newDriver = d.unwrap();
-            newDriver.resetReferences(references).unwrap();
+            newDriver.resetReferences(references);
             await flightFetcher(newDriver);
         }
         setDriver(d);
     };
 
-    const updateStyle = async (style: string) => {
-        if (driver.is_ok()) {
-            let d = driver.unwrap();
+    const updateStyle = async (style: string) => await driver.match({
+        Ok: async driver => {
             try {
-                let meta = parseStyleMetadata(style).unwrap();
+                let meta = parseStyleMetadata(style);
                 if (meta.info.parent != null) {
                     console.log("this is a dependent style!");
                     console.log(meta);
                 }
                 setMetadata(Some(meta));
-                d.setStyle(style).unwrap();
+                driver.setStyle(style);
                 setError(None());
             } catch (e) {
                 console.error(e);
                 console.log(e.data);
                 setError(Some(e));
             }
-            await flightFetcher(d);
+            await flightFetcher(driver);
             setDocument(document.map(doc => doc.selfUpdate()));
-        } else {
+        },
+        Err: async () => {
             createDriver(style);
         }
-    }
+    });
 
-    useEffect(() => { updateStyle(style); }, [ style ]);
+
+    useEffect(() => { updateStyle(style); }, [style]);
 
     useEffect(() => {
         setError(None());
-        if (driver.is_ok()) {
+        driver.tap(newDriver => {
             // doc updated/created to use newDriver, after ref-setting & fetching
-            let newDriver = driver.unwrap();
             let newDoc = Some(document.match({
                 Some: old => old.rebuild(newDriver),
                 None: () => new Document(initialClusters, newDriver),
             }));
             setDocument(newDoc);
-        }
+        });
         return function cleanup() {
             driver.map(d => d.free());
         }
-    }, [ driver ]);
+    }, [driver]);
 
     // Setting references might mean waiting for a new locale to be fetched. So they're async 'methods'.
 
@@ -124,7 +121,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
         setReferences(refs);
         if (driver.is_ok()) {
             let d = driver.unwrap();
-            d.resetReferences(refs).unwrap();
+            d.resetReferences(refs);
             await flightFetcher(d);
             setDocument(document.map(doc => doc.selfUpdate()));
         }
@@ -179,7 +176,7 @@ export const useDocument = (initialStyle: string, initialReferences: Reference[]
  *   processing plugin, etc).
  * * Pass one of these to _ExampleManager
  */
-class _ExampleManager implements Lifecycle {
+class _ExampleManager implements Fetcher {
     private driver: Driver;
 
     /** You have some references and some cite clusters from a document. Let's start formatting citations. */
@@ -196,48 +193,38 @@ class _ExampleManager implements Lifecycle {
     /** Your user picked a new style from the list you know you can retrieve for them. */
     async setStyle(name: string) {
         let styleText = await this.getStyle(name);
-        let oldDriver = this.driver;
-        // must be async imported to use
-        // let newDriver = Driver.new(styleText, this);
-        let newDriver = undefined as Driver;
-        newDriver.resetReferences(this.references);
-        newDriver.initClusters(this.clusters);
-        // wait for any locales to come back
-        await newDriver.fetchLocales();
-        this.driver = newDriver;
-        if (oldDriver) {
-            oldDriver.free();
-        }
+        this.driver.setStyle(styleText);
+        await this.driver.fetchLocales();
         this.update();
     }
 
     /** 
-     * Call this when you no longer need the manager, because the database will
-     * not be automatically garbage collected.
-     */
+ * Call this when you no longer need the manager, because the database will
+ * not be automatically garbage collected.
+ */
     freeDriver() {
         this.driver.free();
         this.driver = undefined;
     }
 
     /**
-     * You have just fetched the initial 200-odd references from your reference
-     * manager. Use this to set the whole lot.
-     */
+ * You have just fetched the initial 200-odd references from your reference
+ * manager. Use this to set the whole lot.
+ */
     async resetReferences(refs: Reference[]) {
         this.references = refs;
         if (this.driver) {
-            this.driver.resetReferences(refs).unwrap();
+            this.driver.resetReferences(refs);
             await this.driver.fetchLocales();
             this.update();
         }
     }
 
     /**
-     * Your user's reference manager sends you a small part of your collection that got updated.
-     * Use this instead of simply merging and running resetReferences. It will likely be faster.
-     * 
-     */
+ * Your user's reference manager sends you a small part of your collection that got updated.
+ * Use this instead of simply merging and running resetReferences. It will likely be faster.
+ * 
+ */
     async updateReferences(refs: Reference[]) {
         let neu = this.references.slice(0);
         for (const ref of refs) {
@@ -249,7 +236,7 @@ class _ExampleManager implements Lifecycle {
             } else {
                 neu[i] = ref;
             }
-            this.driver && this.driver.resetReferences(refs).unwrap();
+            this.driver && this.driver.resetReferences(refs);
         }
         this.references = neu;
         if (this.driver) {
@@ -266,17 +253,16 @@ class _ExampleManager implements Lifecycle {
         // see Document
         // this.clusters[...] = ...;
         // ...
-        this.driver.replaceCluster(cluster);
+        this.driver.insertCluster(cluster);
         this.update();
     }
-    // abstract etc(...args: any[]): void;
 
-    private async getStyle(name: string): Promise<string> {
+    private async getStyle(_name: string): Promise<string> {
         // return await get(`/style?name=${name}.xml`);
         return "...";
     }
 
-    async fetchLocale(lang: string): Promise<string> {
+    async fetchLocale(_lang: string): Promise<string> {
         // You may want to include a cache if you switch style regularly.
         // return await get(`/locale-${name}.xml`);
         return "...";
@@ -290,7 +276,7 @@ interface DocumentUpdater {
 class DomUpdater implements DocumentUpdater {
     handleUpdate(summary: UpdateSummary): void {
         // fake jQuery
-        const $: any = () => {};
+        const $: any = () => { };
         for (const [id, html] of summary.clusters) {
             // this only runs once per cluster that actually needed to be updated
             $("#cluster-" + id).innerHtml(html);

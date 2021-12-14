@@ -1,13 +1,16 @@
 import { Reference, Cite, Cluster, ClusterPosition, Driver, UpdateSummary, IncludeUncited } from '../../pkg';
-import { produce, immerable, Draft } from 'immer';
+import { produce, immerable, enableMapSet, Draft } from 'immer';
+
+enableMapSet();
 
 export type ClusterId = string;
 export type CiteId = number;
 
 export class RenderedDocument {
+    [immerable] = true;
 
     /** Caches HTML for a ClusterId, that is pulled from the driver */
-    public builtClusters: { [id: number]: string } = {};
+    public builtClusters: Map<string, string> = new Map();
 
     public bibliographyIds: Array<string> = [];
     public bibliography: { [id: string]: string } = {};
@@ -17,10 +20,9 @@ export class RenderedDocument {
     /** For showing a paint splash when clusters are updated */
     public updatedLastRevision: { [id: number]: boolean } = {};
 
-    constructor(clusters: Cluster[], oci: Array<ClusterPosition>, driver: Driver) {
-        this[immerable] = true;
+    constructor(_clusters: Cluster[], oci: ClusterPosition[], driver: Driver) {
         this.orderedClusterIds = oci;
-        let render = driver.fullRender().unwrap();
+        let render = driver.fullRender();
         this.builtClusters = render.allClusters;
         for (let bibEntry of render.bibEntries) {
             this.bibliographyIds.push(bibEntry.id);
@@ -28,7 +30,7 @@ export class RenderedDocument {
         }
     }
 
-    public update(summary: UpdateSummary, oci: Array<ClusterPosition>) {
+    public update(summary: UpdateSummary, oci: ClusterPosition[]) {
         let neu = produce(this, draft => {
             draft.updatedLastRevision = {};
             draft.orderedClusterIds = oci;
@@ -54,7 +56,10 @@ export class RenderedDocument {
 
 class RefCounter {
     private citekeyRefcounts = new Map<string, number>();
-    constructor(private constructor_: (string) => void, private destructor: (string) => void) {}
+    constructor(
+        private constructor_: (s: string) => void,
+        private destructor: (s: string) => void) {
+    }
     increment(cluster: Cluster) {
         for (let cite of cluster.cites) {
             let old = this.citekeyRefcounts.get(cite.id);
@@ -91,6 +96,7 @@ class RefCounter {
  * performant, as long as you use React.memo or PureComponent in the right places.
  * */
 export class Document {
+    [immerable] = true;
 
     /** The brains of the operation */
     private driver: Driver;
@@ -105,10 +111,10 @@ export class Document {
 
     constructor(clusters: Cluster[], driver?: Driver) {
         this.refCounts = new RefCounter(
-            key => {
+            _key => {
                 // console.log("reference subscribed", key);
             },
-            key => {
+            _key => {
                 // Unsubscribe from changes in Zotero, etc.
                 // console.log("reference destructor:", key);
             }
@@ -128,9 +134,9 @@ export class Document {
 
     private init(driver: Driver) {
         this.driver = driver;
-        driver.initClusters(this.clusters).unwrap();
-        driver.setClusterOrder(this.clusterPositions()).unwrap();
-        driver.includeUncited(this.includeUncited).unwrap();
+        driver.initClusters(this.clusters);
+        driver.setClusterOrder(this.clusterPositions());
+        driver.includeUncited(this.includeUncited);
         this.rendered = new RenderedDocument(this.clusters, this.clusterPositions(), driver);
         console.log(this.driver);
     }
@@ -142,7 +148,7 @@ export class Document {
     }
 
     selfUpdate(): Document {
-        return this.produce(() => {});
+        return this.produce(() => { });
     }
 
     /** Immutably assemble a new document */
@@ -152,7 +158,7 @@ export class Document {
             fn(draft);
             driver.setClusterOrder(draft.clusterPositions());
             console.time("batchedUpdates");
-            let summary = driver.batchedUpdates().unwrap();
+            let summary = driver.batchedUpdates();
             console.timeEnd("batchedUpdates");
             draft.rendered = draft.rendered.update(summary, this.clusterPositions());
         });
@@ -170,7 +176,7 @@ export class Document {
 
     setIncludeUncited(uncited: IncludeUncited) {
         this.includeUncited = uncited;
-        this.driver.includeUncited(this.includeUncited).unwrap();
+        this.driver.includeUncited(this.includeUncited);
     }
 
     //////////////
@@ -191,7 +197,7 @@ export class Document {
         this.refCounts.decrement(this.clusters[idx]);
         this.clusters[idx] = cluster;
         // Inform the driver
-        this.driver.insertCluster(cluster).unwrap();
+        this.driver.insertCluster(cluster);
     }
 
     removeCluster(id: string) {
@@ -200,7 +206,7 @@ export class Document {
         this.refCounts.decrement(this.clusters[idx]);
         this.clusters.splice(idx, 1);
         // Inform the driver
-        this.driver.removeCluster(id).unwrap();
+        this.driver.removeCluster(id);
     }
 
     // TODO: be able to pick up a cluster and move it

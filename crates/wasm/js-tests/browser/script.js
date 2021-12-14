@@ -35,18 +35,18 @@ async function test_citeproc_rs() {
     await wasm_bindgen('./pkg-nomod/_no_modules/citeproc_rs_wasm_bg.wasm');
 
     const fetcher = new Fetcher();
-    const driver = Driver.new({
+    const driver = new Driver({
         style,
         fetcher,
         format: "html"
-    }).unwrap();
+    });
 
     console.log("--- Successfully loaded wasm driver. You can now use it. ---")
-    driver.insertReference({ id: "citekey", title: "Hello", language: 'fr-FR' }).unwrap();
-    driver.initClusters([{ id: "one", cites: [{ id: "citekey" }] }]).unwrap();
-    driver.setClusterOrder([{ id: "one" }]).unwrap();
+    driver.insertReference({ id: "citekey", title: "Hello", language: 'fr-FR' });
+    driver.initClusters([{ id: "one", cites: [{ id: "citekey" }] }]);
+    driver.setClusterOrder([{ id: "one" }]);
     await driver.fetchLocales();
-    let result = driver.builtCluster("one").unwrap();
+    let result = driver.builtCluster("one");
     console.log("Built a cite cluster:", result);
 }
 

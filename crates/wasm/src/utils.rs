@@ -61,6 +61,7 @@ cfg_if! {
 /// 1. the global namespace, under no-modules
 /// 2. the src/js/include.js file itself as an ES module in the other setups
 #[macro_export]
+#[doc(hidden)]
 macro_rules! js_import {
     {$($tt:tt)*} => {
         cfg_if::cfg_if! {
@@ -81,12 +82,13 @@ macro_rules! js_import {
     };
 }
 
-/// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.WasmResult(...)`
+/// Import a class with a constructor that's namespaced e.g. `new Zotero.CiteprocRs.CslStyleError(...)`
 /// either from
 /// 1. that namespace, under zotero
 /// 2. the global namespace, under no-modules
 /// 3. the src/js/include.js file itself as an ES module in the other setups
 #[macro_export]
+#[doc(hidden)]
 macro_rules! js_import_class_constructor {
     {
         pub type $name:ident;

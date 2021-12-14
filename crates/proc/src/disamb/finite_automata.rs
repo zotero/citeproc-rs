@@ -11,7 +11,6 @@ use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::fmt::Debug;
 
 // XXX(pandoc): maybe force this to be a string and coerce pandoc output into a string
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -150,24 +149,76 @@ enum DebugNode {
     StartAndAccepting,
 }
 
+impl fmt::Display for DebugNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Node => f.write_str(""),
+            _ => <Self as fmt::Debug>::fmt(self, f),
+        }
+    }
+}
+
+impl fmt::Display for EdgeData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Output(o) => <str as fmt::Debug>::fmt(&o, f),
+            _ => <Self as fmt::Debug>::fmt(self, f),
+        }
+    }
+}
+
 impl Dfa {
     pub fn debug_graph(&self, _db: &dyn IrDatabase) -> String {
         let g = self.graph.map(
             |node, _| {
-                let cont = self.accepting.contains(&node);
-                if node == self.start && cont {
+                let start = node == self.start;
+                let accept = self.accepting.contains(&node);
+                if start && accept {
                     DebugNode::StartAndAccepting
-                } else if node == self.start {
+                } else if start {
                     DebugNode::Start
-                } else if cont {
+                } else if accept {
                     DebugNode::Accepting
                 } else {
                     DebugNode::Node
                 }
             },
-            |_, edge| edge,
+            |_, edge| edge.clone(),
         );
-        format!("{:?}", Dot::with_config(&g, &[]))
+        format!(
+            "{}",
+            Dot::with_attr_getters(
+                &g,
+                &[],
+                &|g, e| {
+                    match &g[e.id()] {
+                        EdgeData::Output(o) => {
+                            return if o.starts_with(" ") || o.ends_with(" ") {
+                                format!("label=<&quot;{}&quot;>", o)
+                            } else {
+                                format!("label=<{}>", o)
+                            }
+                        }
+                        _ => r##"fontname="monospace" style="dashed" fontsize="12.0""##,
+                    }
+                    .to_string()
+                },
+                &|g, (node, _)| {
+                    match &g[node] {
+                        DebugNode::Start => {
+                            r##"shape="invhouse" style="filled" fillcolor="#b6d6e2""##
+                        }
+                        DebugNode::Node => {
+                            r##"shape="circle" width="0.2" style=filled fillcolor="#e2ecdf""##
+                        }
+                        DebugNode::Accepting => r##"shape="box" style=filled fillcolor="#A2B29F""##,
+                        // reddish, because it's basically an error
+                        DebugNode::StartAndAccepting => r##"style=filled fillcolor="#efb8a5""##,
+                    }
+                    .to_string()
+                }
+            )
+        )
     }
 }
 
@@ -231,7 +282,7 @@ impl Nfa {
 
 use std::fmt::{self, Formatter};
 
-impl Debug for Dfa {
+impl fmt::Debug for Dfa {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,

@@ -1,8 +1,8 @@
-import React, { Component, useState, useEffect, useRef } from 'react';
-import { Result, Err, Ok, Option, Some } from 'safe-types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Result, Some } from 'safe-types';
 import ReactJson from 'react-json-view';
 
-import { Reference, Cluster, Driver, StyleError, StyleMeta } from '../../pkg';
+import { Reference, Driver, StyleError } from '../../pkg';
 import { GraphViz } from './GraphViz';
 import { DocumentEditor } from './DocumentEditor';
 import { useDocument } from './useDocument';
@@ -40,12 +40,7 @@ const StyleErrorViewer = ({style, message, error}: { style: string, message: str
 }
 
 const ErrorViewer = ({style, error}: { style: string, error: CiteprocRsError }) => {
-    if (error instanceof CiteprocRsDriverError && error.data.tag == "StyleError") {
-        return <StyleErrorViewer
-                    style={style}
-                    message={error.message}
-                    error={error.data.content} />;
-    } else if (error instanceof CslStyleError) {
+    if (error instanceof CslStyleError) {
         let info = error.data;
         return <StyleErrorViewer
                     style={style}
@@ -60,7 +55,7 @@ const Results = ({ driver, style }: { driver: Result<Driver, CiteprocRsError>, s
     return driver.match({
         Ok: d => <p>
             locales in use:
-            <code>{JSON.stringify(d.toFetch().unwrap().sort())}</code>
+            <code>{JSON.stringify(d.toFetch().sort())}</code>
             </p>,
         Err: e => <ErrorViewer style={style} error={e} />
     });

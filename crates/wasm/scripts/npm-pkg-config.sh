@@ -41,6 +41,7 @@ CANARY_SHA=
 FEATURES=
 TARGETS=
 DEV_OR_RELEASE=--release
+DEBUG_OR_RELEASE=release
 
 # parse params
 while [[ $# -gt 0 ]]; do case $1 in
@@ -53,7 +54,7 @@ while [[ $# -gt 0 ]]; do case $1 in
   --github-packages) GITHUB_PACKAGES_DEF="$2";shift;shift;;
   --features) FEATURES="$2";shift;shift;;
   --targets) TARGETS="$2";shift;shift;;
-  --dev) DEV_OR_RELEASE="--dev";shift;;
+  --dev) DEV_OR_RELEASE="--dev"; DEBUG_OR_RELEASE="debug"; shift;;
   *) usage "Unknown parameter passed: $1"; shift; shift;;
 esac; done
 
@@ -108,13 +109,38 @@ target() {
   echo "$OUT"
   local EXTRA_FEATURES=${3:-}
   local SCRATCH="$DIR/pkg-scratch/$OUT"
-  wasm-pack build $DEV_OR_RELEASE \
-    --out-name citeproc_rs_wasm \
-    --scope citeproc-rs \
+  if [ "$TARGET" = "browser" ]; then
+    # https://github.com/rustwasm/wasm-pack/blob/ca4af7660f266b9347e4a00c882b0e3adfd13a1d/src/command/build.rs#L69
+    TARGET="bundler"
+  fi
+
+  local or_release=""
+  if [ "$DEBUG_OR_RELEASE" = "release" ]; then or_release="--release"; fi
+
+  echo "==> cargo build $or_release" > /dev/stderr
+  cargo build \
+    $or_release \
+    --target wasm32-unknown-unknown \
+    --features "$FEATURES$EXTRA_FEATURES" \
+    || bail "cargo build"
+
+  echo "==> wasm-bindgen --target $TARGET --out-dir $SCRATCH" > /dev/stderr
+  wasm-bindgen \
+    "$DIR/../../target/wasm32-unknown-unknown/$DEBUG_OR_RELEASE/wasm.wasm" \
     --target "$TARGET" \
     --out-dir "$SCRATCH" \
-    -- --features "$FEATURES$EXTRA_FEATURES" \
-    || bail "building target $TARGET -> $OUT --features \"$FEATURES$EXTRA_FEATURES\""
+    --out-name citeproc_rs_wasm \
+    || bail "wasm-bindgen --target $TARGET"
+
+  echo '*' > "$SCRATCH/.gitignore"
+
+  if [ "$DEBUG_OR_RELEASE" = "release" ]; then
+    local input="$SCRATCH/citeproc_rs_wasm_bg.wasm"
+    local optimized="$SCRATCH/wasm-opt.wasm"
+    echo "==> wasm-opt -g -O3 $input -o $optimized" > /dev/stderr
+    wasm-opt -g -O3 "$input" -o "$optimized" || bail "wasm-opt -g -O3"
+    mv "$optimized" "$input"
+  fi
 
   SNIPPETS="$DIR/pkg-scratch/$OUT/snippets"
   (mkdir -p "$DEST/$OUT" \

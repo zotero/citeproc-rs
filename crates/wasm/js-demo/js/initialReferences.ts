@@ -24,11 +24,13 @@ let refs: Reference[] = [
     },
     {
         id: "ysuf1",
+        type: "book",
         title: "NoAuthor",
         issued: { "raw": "2009-07-07" },
     },
     {
         id: "ysuf2",
+        type: "book",
         title: "NoAuthor",
         issued: { "raw": "2009-11-01" },
     },
@@ -45,7 +47,7 @@ let dupe: Reference = {
     id: "r",
     type: 'article-journal',
     title: "Article",
-    author: [{given: "Alicia", family: "Jones"}],
+    author: [{ given: "Alicia", family: "Jones" }],
     issued: { 'date-parts': [[date]] }
 };
 for (let i = 1; i <= 20; i++) {

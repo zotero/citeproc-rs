@@ -34,7 +34,7 @@ let style = '<?xml version="1.0" encoding="utf-8"?>\n<style xmlns="http://purl.o
 let prom = async () => {
   try {
     let fetcher = new Fetcher();
-    let driver = Driver.new(style, fetcher, "html");
+    let driver = new Driver(style, fetcher, "html");
     driver.insertReferences([
       {
         id: 'citekey',

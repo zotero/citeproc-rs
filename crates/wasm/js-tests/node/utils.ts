@@ -13,7 +13,7 @@ export const mkNoteStyle = (inner: string, bibliography?: string) => {
           ${inner}
         </layout>
       </citation>
-      ${ bibliography != null ? bibliography : "" }
+      ${bibliography != null ? bibliography : ""}
     </style>
     `;
 }
@@ -31,7 +31,7 @@ export const mkInTextStyle = (inner: string, bibliography?: string) => {
           ${inner}
         </layout>
       </citation>
-      ${ bibliography != null ? bibliography : "" }
+      ${bibliography != null ? bibliography : ""}
     </style>
     `;
 }
@@ -40,7 +40,7 @@ export const mkLocale = (lang: string, terms: { [key: string]: string }) => {
     return `
     <?xml version="1.0" encoding="utf-8"?> <locale xml:lang="${lang}">
     <terms>
-        ${ Object.entries(terms).map((k,v) => `<term name="${k}">${v}</term>`).join("\n") }
+        ${Object.entries(terms).map((k, v) => `<term name="${k}">${v}</term>`).join("\n")}
     </terms>
     </locale>
     `;
@@ -55,7 +55,7 @@ export class Fetcher {
 }
 
 export const boringFetcher = new Fetcher(
-    () => {},
+    () => { },
     (lang: string) => mkLocale(lang, {})
 );
 
@@ -64,7 +64,7 @@ export const withDriver = (cfg: any, callback: (driver: Driver) => void) => {
     cfg.fetcher = cfg.fetcher || boringFetcher;
     cfg.format = cfg.format || "plain";
     cfg.cslFeatures = cfg.cslFeatures || [];
-    let driver = Driver.new(cfg).unwrap();
+    let driver = new Driver(cfg);
     callback(driver);
     driver.free();
 };
@@ -78,9 +78,9 @@ export const oneOneOne = (driver: Driver, r?: any, cid?: string) => {
     };
     let id = refr.id;
     cid = cid || "one";
-    driver.insertReference(refr).unwrap();
-    driver.insertCluster({id: cid, cites: [{ id }]}).unwrap();
-    driver.setClusterOrder([{ id: cid }]).unwrap();
+    driver.insertReference(refr);
+    driver.insertCluster({ id: cid, cites: [{ id }] });
+    driver.setClusterOrder([{ id: cid }]);
 };
 
 export const checkUpdatesLen = (up: UpdateSummary, clusterCount: number, bibCount: number) => {

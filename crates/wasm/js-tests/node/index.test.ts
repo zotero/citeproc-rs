@@ -39,7 +39,7 @@ describe("Driver", () => {
             driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE" });
             driver.initClusters([{ id: "one", cites: [{ id: "citekey" }] }]);
             driver.setClusterOrder([{ id: "one" }]);
-            let res = driver.builtCluster("one").unwrap();
+            let res = driver.builtCluster("one");
             expect(res).toBe("TEST_TITLE");
         });
     });
@@ -49,19 +49,19 @@ describe("Driver", () => {
         withDriver({ style: italicStyle, format: "html" }, driver => {
             const one = "one";
             oneOneOne(driver, { title: "Italicised", URL: "https://google.com" }, one);
-            expect(driver.builtCluster(one).unwrap())
+            expect(driver.builtCluster(one))
                 .toBe("<i>Italicised</i> <a href=\"https://google.com/\">https://google.com</a>");
-            driver.setOutputFormat("html", {}).unwrap();
-            expect(driver.builtCluster(one).unwrap())
+            driver.setOutputFormat("html", {});
+            expect(driver.builtCluster(one))
                 .toBe("<i>Italicised</i> <a href=\"https://google.com/\">https://google.com</a>");
-            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
-            expect(driver.builtCluster(one).unwrap())
+            driver.setOutputFormat("html", { linkAnchors: false });
+            expect(driver.builtCluster(one))
                 .toBe("<i>Italicised</i> https://google.com");
-            driver.setOutputFormat("rtf", { linkAnchors: false }).unwrap();
-            expect(driver.builtCluster(one).unwrap())
+            driver.setOutputFormat("rtf", { linkAnchors: false });
+            expect(driver.builtCluster(one))
                 .toBe("{\\i Italicised} https://google.com");
-            driver.setOutputFormat("plain").unwrap();
-            expect(driver.builtCluster(one).unwrap())
+            driver.setOutputFormat("plain");
+            expect(driver.builtCluster(one))
                 .toBe("Italicised https://google.com");
         })
     });
@@ -71,10 +71,10 @@ describe("batchedUpdates", () => {
     test('gets an update when ref changes', () => {
         withDriver({}, driver => {
             oneOneOne(driver);
-            let updates = driver.batchedUpdates().unwrap();
+            let updates = driver.batchedUpdates();
             expect(updates.clusters).toContainEqual(["one", "TEST_TITLE"]);
             driver.insertReference({ id: "citekey", type: "book", title: "TEST_TITLE_2" });
-            updates = driver.batchedUpdates().unwrap();
+            updates = driver.batchedUpdates();
             expect(updates.clusters).toContainEqual(["one", "TEST_TITLE_2"]);
         });
     });
@@ -91,7 +91,7 @@ describe("batchedUpdates", () => {
     test('fullRender works', () => {
         withDriver({ style: bibStyle }, driver => {
             oneOneOne(driver);
-            let full = driver.fullRender().unwrap();
+            let full = driver.fullRender();
             expect(full.allClusters).toHaveProperty("one", "TEST_TITLE");
             expect(full.bibEntries).toContainEqual({ id: "citekey", value: "TEST_TITLE" });
         })
@@ -102,42 +102,42 @@ describe("batchedUpdates", () => {
             let once: UpdateSummary, twice: UpdateSummary;
 
             // Initially empty
-            checkUpdatesLen(driver.batchedUpdates().unwrap(), 0, 0);
+            checkUpdatesLen(driver.batchedUpdates(), 0, 0);
 
             // Add stuff, check it creates
             oneOneOne(driver);
-            checkUpdatesLen(driver.batchedUpdates().unwrap(), 1, 1);
+            checkUpdatesLen(driver.batchedUpdates(), 1, 1);
 
             // Now fullRender one should drain the queue.
             driver.fullRender();
-            checkUpdatesLen(driver.batchedUpdates().unwrap(), 0, 0);
+            checkUpdatesLen(driver.batchedUpdates(), 0, 0);
 
             // Edit a reference
             oneOneOne(driver, { title: "ALTERED" });
-            let up = driver.batchedUpdates().unwrap();
+            let up = driver.batchedUpdates();
             checkUpdatesLen(up, 1, 1);
             expect(up.bibliography?.entryIds).toEqual(null);
-            expect(driver.builtCluster("one").unwrap()).toBe("ALTERED");
+            expect(driver.builtCluster("one")).toBe("ALTERED");
 
             // Should have no updates, as we just called batchedUpdates.
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).toEqual(twice);
             expect(once.bibliography).toBeFalsy();
             checkUpdatesLen(once, 0, 0);
 
             // Only inserting a reference does nothing
             driver.insertReference({ id: "added", type: "book", title: "ADDED" });
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).toEqual(twice);
 
             // Only inserting a cluster not in the document does nothing
-            driver.insertCluster({ id: "123", cites: [{ id: "added" }] }).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.insertCluster({ id: "123", cites: [{ id: "added" }] });
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).toEqual(twice); checkUpdatesLen(once, 0, 0);
 
             // Add it to the document, and it's a different story
-            driver.setClusterOrder([{ id: "one" }, { id: "123" }]).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.setClusterOrder([{ id: "one" }, { id: "123" }]);
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).not.toEqual(twice); checkUpdatesLen(twice, 0, 0);
             expect(once.clusters).toContainEqual(["123", "ADDED"]);
             expect(once.bibliography?.entryIds).toEqual(["citekey", "added"]);
@@ -151,39 +151,39 @@ describe("batchedUpdates", () => {
             let once: UpdateSummary, twice: UpdateSummary;
             oneOneOne(driver, { title: "Italicised", URL: "https://a.com" }, one);
 
-            expect(driver.builtCluster(one).unwrap()).toBe('<i>Italicised</i> <a href="https://a.com/">https://a.com</a>');
-            driver.batchedUpdates().unwrap();
+            expect(driver.builtCluster(one)).toBe('<i>Italicised</i> <a href="https://a.com/">https://a.com</a>');
+            driver.batchedUpdates();
 
             // no change
-            driver.setOutputFormat("html", {}).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.setOutputFormat("html", {});
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).toEqual(twice);
             checkUpdatesLen(once, 0, 0); checkUpdatesLen(twice, 0, 0);
 
             // change part of FormatOptions
-            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.setOutputFormat("html", { linkAnchors: false });
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).not.toEqual(twice);
             expect(once.clusters).toContainEqual([one, '<i>Italicised</i> https://a.com']);
             checkUpdatesLen(twice, 0, 0);
 
             // change to rtf
-            driver.setOutputFormat("rtf", { linkAnchors: false }).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.setOutputFormat("rtf", { linkAnchors: false });
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).not.toEqual(twice);
             expect(once.clusters).toContainEqual([one, '{\\i Italicised} https://a.com']);
             checkUpdatesLen(twice, 0, 0);
 
             // change style to bold instead of italic
             driver.setStyle(boldStyle);
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).not.toEqual(twice);
             expect(once.clusters).toContainEqual([one, '{\\b Italicised} https://a.com']);
             checkUpdatesLen(twice, 0, 0);
 
             // back to html
-            driver.setOutputFormat("html", { linkAnchors: false }).unwrap();
-            once = driver.batchedUpdates().unwrap(); twice = driver.batchedUpdates().unwrap();
+            driver.setOutputFormat("html", { linkAnchors: false });
+            once = driver.batchedUpdates(); twice = driver.batchedUpdates();
             expect(once).not.toEqual(twice);
             expect(once.clusters).toContainEqual([one, "<b>Italicised</b> https://a.com"]);
             checkUpdatesLen(twice, 0, 0);
@@ -214,7 +214,7 @@ describe("previewCluster", () => {
             let two = "cluster-two";
             oneOneOne(driver, { title: "ONE", id: "r1" }, "cluster-one");
             oneOneOne(driver, { title: "TWO", id: "r2" }, "cluster-two");
-            driver.setClusterOrder([{ id: one }, { id: two }]).unwrap();
+            driver.setClusterOrder([{ id: one }, { id: two }]);
             callback(driver, [one, two]);
         })
     }
@@ -227,34 +227,34 @@ describe("previewCluster", () => {
                 { cites: [{ id: "r1" }] },
                 [{ id: one }, {}, { id: two }],
                 "plain"
-            ).unwrap();
+            );
             expect(pcc).toEqual("ibid");
         })
     })
 
     test("replacing a cluster", () => {
-        pccSetup((driver, [one, two]) => {
+        pccSetup((driver, [_, two]) => {
             // replacing #1
             var pcc = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{}, { id: two }],
                 "plain"
-            ).unwrap();
+            );
             expect(pcc).toEqual("ONE");
             // replacing #1, with note numbers isntead
             pcc = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{ note: 1, }, { id: two, note: 5 }],
                 "plain"
-            ).unwrap();
+            );
             expect(pcc).toEqual("ONE");
         })
     })
 
     test("should error when supplying unsupported output format", () => {
         pccSetup((driver) => {
-            let res = driver.previewCluster({ cites: [{ id: "r1" }] }, [{}], "plaintext");
-            expect(() => res.unwrap()).toThrow("Unknown output format \"plaintext\"");
+            let closure = () => driver.previewCluster({ cites: [{ id: "r1" }] }, [{}], "plaintext");
+            expect(closure).toThrow(/Unknown output format \"plaintext\"/);
         })
     });
 
@@ -263,21 +263,21 @@ describe("previewCluster", () => {
             let res = driver.previewCluster(
                 { cites: [{ id: "r1" }] },
                 [{ note: 1 }, { id: two, note: 5 }]
-            ).unwrap();
+            );
             expect(res).toEqual("ONE");
         })
     });
 
     test("should handle cluster modes", () => {
         pccSetup((driver, [_, two]) => {
-            driver.setStyle(authorTitleStyle).unwrap();
+            driver.setStyle(authorTitleStyle);
             driver.insertReference(
                 { title: "ONE", id: "r1", type: "book", author: [{ family: "Smith" }] }
-            ).unwrap();
+            );
             let res = driver.previewCluster(
                 { cites: [{ id: "r1" }], mode: "Composite", infix: ", whose book" },
                 [{ note: 1 }, { id: two, note: 5 }]
-            ).unwrap();
+            );
             expect(res).toEqual("Smith, whose book ONE");
         })
     });
@@ -287,7 +287,7 @@ describe("previewCluster", () => {
             let res = driver.previewCitationCluster(
                 [{ id: "r1" }],
                 [{ note: 1 }, { id: two, note: 5 }]
-            ).unwrap();
+            );
             expect(res).toEqual("ONE");
         })
     });
@@ -301,55 +301,55 @@ describe("AuthorOnly and friends", () => {
             let two = "cluster-two";
             oneOneOne(driver, { title: "ONE", id: "r1", author: [{ family: "Smith" }] }, "cluster-one");
             oneOneOne(driver, { title: "TWO", id: "r2", author: [{ family: "Jones" }] }, "cluster-two");
-            driver.setClusterOrder([{ id: one }, { id: two }]).unwrap();
+            driver.setClusterOrder([{ id: one }, { id: two }]);
             callback(driver, [one, two]);
         })
     }
 
     describe("on a Cite", () => {
         test("should accept mode: SuppressAuthor", () => {
-            withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, cites: [{ id: "r1" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith, ONE");
+            withSupp((driver, [one, _]) => {
+                driver.insertCluster({ id: one, cites: [{ id: "r1" }] });
+                expect(driver.builtCluster(one)).toEqual("Smith, ONE");
 
-                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "SuppressAuthor" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("ONE");
+                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "SuppressAuthor" }] });
+                expect(driver.builtCluster(one)).toEqual("ONE");
             })
         });
         test("should accept mode: AuthorOnly", () => {
-            withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, cites: [{ id: "r1" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith, ONE");
+            withSupp((driver, [one, _]) => {
+                driver.insertCluster({ id: one, cites: [{ id: "r1" }] });
+                expect(driver.builtCluster(one)).toEqual("Smith, ONE");
 
-                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "AuthorOnly" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith");
+                driver.insertCluster({ id: one, cites: [{ id: "r1", mode: "AuthorOnly" }] });
+                expect(driver.builtCluster(one)).toEqual("Smith");
             })
         });
     });
 
     describe("on a Cluster", () => {
         test("should accept mode: SuppressAuthor", () => {
-            withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "SuppressAuthor", cites: [{ id: "r1" }, { id: "r2" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("ONE; Jones, TWO");
-                driver.insertCluster({ id: one, mode: "SuppressAuthor", suppressFirst: 2, cites: [{ id: "r1", }, { id: "r2" }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("ONE; TWO");
+            withSupp((driver, [one, _]) => {
+                driver.insertCluster({ id: one, mode: "SuppressAuthor", cites: [{ id: "r1" }, { id: "r2" }] });
+                expect(driver.builtCluster(one)).toEqual("ONE; Jones, TWO");
+                driver.insertCluster({ id: one, mode: "SuppressAuthor", suppressFirst: 2, cites: [{ id: "r1", }, { id: "r2" }] });
+                expect(driver.builtCluster(one)).toEqual("ONE; TWO");
             })
         });
         test("should accept mode: AuthorOnly", () => {
-            withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith");
+            withSupp((driver, [one, _]) => {
+                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] });
+                expect(driver.builtCluster(one)).toEqual("Smith");
             })
         });
         test("should accept mode: Composite", () => {
-            withSupp((driver, [one, two]) => {
-                driver.insertCluster({ id: one, mode: "Composite", cites: [{ id: "r1", }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith ONE");
-                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", cites: [{ id: "r1", }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith, whose book ONE");
-                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", suppressFirst: 0, cites: [{ id: "r1", }] }).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toEqual("Smith, whose book ONE");
+            withSupp((driver, [one, _]) => {
+                driver.insertCluster({ id: one, mode: "Composite", cites: [{ id: "r1", }] });
+                expect(driver.builtCluster(one)).toEqual("Smith ONE");
+                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", cites: [{ id: "r1", }] });
+                expect(driver.builtCluster(one)).toEqual("Smith, whose book ONE");
+                driver.insertCluster({ id: one, mode: "Composite", infix: ", whose book", suppressFirst: 0, cites: [{ id: "r1", }] });
+                expect(driver.builtCluster(one)).toEqual("Smith, whose book ONE");
             })
         });
     });
@@ -367,18 +367,18 @@ describe("AuthorOnly and friends", () => {
     );
 
     describe("<intext> element", () => {
-        test("should parse when custom-intext feature is enabled via Driver.new", () => {
+        test("should parse when custom-intext feature is enabled", () => {
             withDriver({ style: styleWithIntext, cslFeatures: ["custom-intext"] }, driver => {
                 let one = "cluster-one";
-                driver.insertReference({ id: "r1", title: "hi", })
-                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] }).unwrap();
-                driver.setClusterOrder([{ id: one }]).unwrap();
-                expect(driver.builtCluster(one).unwrap()).toBe("intext element");
+                driver.insertReference({ id: "r1", type: "book", title: "hi", })
+                driver.insertCluster({ id: one, mode: "AuthorOnly", cites: [{ id: "r1", }] });
+                driver.setClusterOrder([{ id: one }]);
+                expect(driver.builtCluster(one)).toBe("intext element");
             });
         });
-        test("should fail to parse when custom-intext feature is not enabled via Driver.new", () => {
-            let driver_is_err = Driver.new({ style: styleWithIntext, cslFeatures: [] }).is_err();
-            expect(driver_is_err).toBe(true);
+        test("should fail to parse when custom-intext feature is not enabled", () => {
+            let closure = () => new Driver({ style: styleWithIntext, cslFeatures: [] });
+            expect(closure).toThrowError(/Unknown element <intext>/);
         });
     });
 });
@@ -396,16 +396,16 @@ describe("initialiser", () => {
         withDriver({ style: urlStyle, format: "html" }, driver => {
             let one = "cluster-one";
             oneOneOne(driver, { title: "ONE", id: "r1", url: "https://example.com/nice?work=buddy&q=5" }, one);
-            driver.setClusterOrder([{ id: one }]).unwrap();
-            expect(driver.builtCluster(one).unwrap()).toEqual(`<a href="https://example.com/nice?work=buddy&q=5">https://example.com/nice?work=buddy&amp;q=5</a>`)
+            driver.setClusterOrder([{ id: one }]);
+            expect(driver.builtCluster(one)).toEqual(`<a href="https://example.com/nice?work=buddy&q=5">https://example.com/nice?work=buddy&amp;q=5</a>`)
         });
     });
     test("can disable linkAnchors", () => {
         withDriver({ style: urlStyle, format: "html", formatOptions: { linkAnchors: false } }, driver => {
             let one = "cluster-one";
             oneOneOne(driver, { title: "ONE", id: "r1", url: "https://example.com/nice?work=buddy&q=5" }, one);
-            driver.setClusterOrder([{ id: one }]).unwrap();
-            expect(driver.builtCluster(one).unwrap()).toEqual(`https://example.com/nice?work=buddy&amp;q=5`)
+            driver.setClusterOrder([{ id: one }]);
+            expect(driver.builtCluster(one)).toEqual(`https://example.com/nice?work=buddy&amp;q=5`)
         });
     });
 });

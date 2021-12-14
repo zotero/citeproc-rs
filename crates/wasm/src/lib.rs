@@ -4,14 +4,18 @@
 //
 // Copyright © 2018 Corporation for Digital Scholarship
 
+#![allow(non_snake_case)]
+
 #[macro_use]
 mod utils;
 #[macro_use]
-mod wasm_result;
+pub mod typescript;
+#[macro_use]
+pub mod errors;
 mod options;
-use options::FormatOptionsArg;
-use options::{GetFetcherError, WasmInitOptions};
-use wasm_result::*;
+
+pub use errors::Error;
+use typescript::{JsonValue, TypescriptDeserialize};
 
 #[allow(unused_imports)]
 #[macro_use]
@@ -29,12 +33,10 @@ use citeproc::string_id;
 use csl::{Lang, StyleMeta};
 
 /// Parses a CSL style, either independent or dependent, and returns its metadata.
-#[wasm_bindgen(js_name = "parseStyleMetadata")]
-pub fn parse_style_metadata(style: &str) -> StyleMetaResult {
-    typescript_serde_result(|| {
-        let meta = StyleMeta::parse(style)?;
-        Ok(meta)
-    })
+#[wasm_bindgen]
+pub fn parseStyleMetadata(style: &str) -> Result<typescript::StyleMeta, Error> {
+    let meta = StyleMeta::parse(style)?;
+    meta.serialize_jsvalue()
 }
 
 #[wasm_bindgen]
@@ -43,201 +45,143 @@ pub struct Driver {
     fetcher: Option<Fetcher>,
 }
 
-#[derive(thiserror::Error, Debug, serde::Serialize)]
-#[serde(tag = "tag", content = "content")]
-pub enum DriverError {
-    #[error("Unknown output format {0:?}")]
-    UnknownOutputFormat(String),
-    #[error("Unknown CSL feature {0:?}")]
-    UnknownCSLFeature(String),
-    /// Never serialized as a CiteprocRsDriverError, only serialized as a CslStyleError.
-    #[error("Style error: {0}")]
-    StyleError(#[from] csl::StyleError),
-    #[error("JSON Deserialization Error: {0}")]
-    JsonError(
-        #[from]
-        #[serde(skip_serializing)]
-        serde_json::Error,
-    ),
-    #[error("Invalid fetcher object: {0}")]
-    GetFetcherError(#[from] GetFetcherError),
-    #[error("Non-Existent Cluster id: {0}")]
-    NonExistentCluster(String),
-    #[error("Reordering error: {0}")]
-    ReorderingError(
-        #[from]
-        #[serde(skip_serializing)]
-        string_id::ReorderingError,
-    ),
-
-    // This should not be necessary
-    #[error("Reordering error: {0}")]
-    ReorderingErrorNumericId(
-        #[from]
-        #[serde(skip_serializing)]
-        citeproc::ReorderingError,
-    ),
-}
-
 #[wasm_bindgen]
 impl Driver {
-    /// Creates a new Driver.
+    /// Creates a new Driver. Use the InitOptions object, which has (for example):
     ///
     /// * `style` is a CSL style as a string. Independent styles only.
     /// * `fetcher` must implement the `Fetcher` interface
     /// * `format` is one of { "html", "rtf", "plain" }
     ///
     /// Throws an error if it cannot parse the style you gave it.
-    pub fn new(options: TInitOptions) -> DriverResult {
+    #[wasm_bindgen(constructor)]
+    pub fn new(options: typescript::InitOptions) -> Result<Driver, Error> {
         utils::set_panic_hook();
         utils::init_log();
 
-        let options_js: JsValue = options.into();
+        // The Processor gets a "only has en-US, otherwise empty" fetcher.
+        let us_fetcher = Arc::new(utils::USFetcher);
+        let fetcher = Fetcher::from_options_object(&options)?;
+        let options = options.ts_deserialize()?;
+        let csl_features =
+            csl::version::read_features(options.csl_features.iter().map(|x| x.as_str()))
+                .map_err(|x| Error::UnknownCSLFeature(x.to_owned()))?;
+        let init = InitOptions {
+            style: options.style.as_ref(),
+            fetcher: Some(us_fetcher),
+            format: options.format,
+            format_options: options.format_options,
+            bibliography_no_sort: options.bibliography_no_sort,
+            locale_override: options.locale_override,
+            test_mode: false,
+            csl_features: Some(csl_features),
+            ..Default::default()
+        };
+        let engine = Processor::new(init)?;
 
-        js_driver_error(|| {
-            // The Processor gets a "only has en-US, otherwise empty" fetcher.
-            let us_fetcher = Arc::new(utils::USFetcher);
-            let options: WasmInitOptions = JsValue::into_serde(&options_js)?;
-            let fetcher = Fetcher::from_options_object(&options_js)?;
-            let csl_features = csl::version::read_features(options.csl_features.iter().map(|x| x.as_str()))
-                .map_err(|x| DriverError::UnknownCSLFeature(x.to_owned()))?;
-            let init = InitOptions {
-                style: options.style.as_ref(),
-                fetcher: Some(us_fetcher),
-                format: options.format,
-                format_options: options.format_options,
-                bibliography_no_sort: options.bibliography_no_sort,
-                locale_override: options.locale_override,
-                test_mode: false,
-                csl_features: Some(csl_features),
-                ..Default::default()
-            };
-            let engine = Processor::new(init)?;
+        if engine.default_lang() != Lang::en_us() && fetcher.is_none() {
+            log::warn!("citeproc-rs was initialized with a locale other than en-US, but without a locale fetcher, using built-in en-US instead.");
+        }
 
-            if engine.default_lang() != Lang::en_us() && fetcher.is_none() {
-                log::warn!("citeproc-rs was initialized with a locale other than en-US, but without a locale fetcher, using built-in en-US instead.");
-            }
-
-            let engine = Rc::new(RefCell::new(engine));
-            // The Driver manually adds locales fetched via Fetcher, which asks the consumer
-            // asynchronously.
-            Ok(Driver {
-                engine,
-                fetcher,
-            })
-        })
-        .into()
+        let engine = Rc::new(RefCell::new(engine));
+        // The Driver manually adds locales fetched via Fetcher, which asks the consumer
+        // asynchronously.
+        Ok(Driver { engine, fetcher })
     }
 
     /// Sets the style (which will also cause everything to be recomputed, use sparingly)
     #[wasm_bindgen(js_name = "setStyle")]
-    pub fn set_style(&self, style_text: &str) -> EmptyResult {
-        typescript_serde_result(|| {
-            let _ = self.engine.borrow_mut().set_style_text(style_text)?;
-            Ok(())
-        })
+    pub fn set_style(&self, style_text: &str) -> Result<(), Error> {
+        let _ = self.engine.borrow_mut().set_style_text(style_text)?;
+        Ok(())
     }
 
     /// Sets the output format (which will also cause everything to be recomputed, use sparingly)
     ///
-    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as
-    ///                                          `Driver.new`
+    /// @param {"html" | "rtf" | "plain"} format The new output format as a string, same as `new Driver`
     ///
     /// @param {FormatOptions | null} options If absent, this is set to the default FormatOptions.
     ///
     #[wasm_bindgen(js_name = "setOutputFormat")]
-    pub fn set_output_format(&self, format: &str, options: Option<TFormatOptions>) -> EmptyResult {
-        typescript_serde_result(|| {
-            let format = format
-                .parse::<SupportedFormat>()
-                .map_err(|()| DriverError::UnknownOutputFormat(format.to_owned()))?;
-            let format_options = options
-                .map(|fo| -> Result<_, DriverError> {
-                    let jsv: JsValue = fo.into();
-                    let foa: FormatOptionsArg = JsValue::into_serde(&jsv)?;
-                    Ok(foa.0)
-                })
-                .transpose()?
-                .unwrap_or_else(Default::default);
-            self.engine
-                .borrow_mut()
-                .set_output_format(format, format_options);
-            Ok(())
-        })
+    pub fn set_output_format(
+        &self,
+        format: &str,
+        options: Option<typescript::FormatOptions>,
+    ) -> Result<(), Error> {
+        let format = format
+            .parse::<SupportedFormat>()
+            .map_err(|()| Error::UnknownOutputFormat(format.to_owned()))?;
+        let format_options = options
+            .map(|fo| fo.ts_deserialize())
+            .transpose()?
+            .map(|fo| fo.0)
+            .unwrap_or_else(Default::default);
+        self.engine
+            .borrow_mut()
+            .set_output_format(format, format_options);
+        Ok(())
     }
 
     /// Completely overwrites the references library.
     /// This **will** delete references that are not in the provided list.
     #[wasm_bindgen(js_name = "resetReferences")]
-    pub fn reset_references(&self, refs: Box<[JsValue]>) -> EmptyResult {
-        typescript_serde_result(|| {
-            let refs = utils::read_js_array_2(refs)?;
-            self.engine.borrow_mut().reset_references(refs);
-            Ok(())
-        })
+    pub fn reset_references(&self, refs: Box<[JsValue]>) -> Result<(), Error> {
+        let refs = utils::read_js_array_2(refs)?;
+        self.engine.borrow_mut().reset_references(refs);
+        Ok(())
     }
 
     /// Inserts or overwrites references as a batch operation.
     /// This **will not** delete references that are not in the provided list.
     #[wasm_bindgen(js_name = "insertReferences")]
-    pub fn insert_references(&self, refs: Box<[JsValue]>) -> EmptyResult {
-        typescript_serde_result(|| {
-            let refs = utils::read_js_array_2(refs)?;
-            self.engine.borrow_mut().extend_references(refs);
-            Ok(())
-        })
+    pub fn insert_references(&self, refs: Box<[JsValue]>) -> Result<(), Error> {
+        let refs = utils::read_js_array_2(refs)?;
+        self.engine.borrow_mut().extend_references(refs);
+        Ok(())
     }
 
     /// Inserts or overwrites a reference.
     ///
     /// * `refr` is a Reference object.
     #[wasm_bindgen(js_name = "insertReference")]
-    pub fn insert_reference(&self, refr: TReference) -> EmptyResult {
-        typescript_serde_result(|| {
-            let refr = refr.into_serde()?;
-            // inserting & replacing are the same
-            self.engine.borrow_mut().insert_reference(refr);
-            Ok(())
-        })
+    pub fn insert_reference(&self, refr: typescript::Reference) -> Result<(), Error> {
+        let refr = refr.into_serde()?;
+        // inserting & replacing are the same
+        self.engine.borrow_mut().insert_reference(refr);
+        Ok(())
     }
 
     /// Removes a reference by id. If it is cited, any cites will be dangling. It will also
     /// disappear from the bibliography.
     #[wasm_bindgen(js_name = "removeReference")]
-    pub fn remove_reference(&self, id: &str) -> EmptyResult {
-        typescript_serde_result(|| {
-            let id = Atom::from(id);
-            self.engine.borrow_mut().remove_reference(id);
-            Ok(())
-        })
+    pub fn remove_reference(&self, id: &str) -> Result<(), Error> {
+        let id = Atom::from(id);
+        self.engine.borrow_mut().remove_reference(id);
+        Ok(())
     }
 
     /// Sets the references to be included in the bibliography despite not being directly cited.
     ///
     /// * `refr` is a
     #[wasm_bindgen(js_name = "includeUncited")]
-    pub fn include_uncited(&self, uncited: TIncludeUncited) -> EmptyResult {
-        typescript_serde_result(|| {
-            let uncited = uncited.into_serde()?;
-            self.engine.borrow_mut().include_uncited(uncited);
-            Ok(())
-        })
+    pub fn include_uncited(&self, uncited: typescript::IncludeUncited) -> Result<(), Error> {
+        let uncited = uncited.into_serde()?;
+        self.engine.borrow_mut().include_uncited(uncited);
+        Ok(())
     }
 
     /// Gets a list of locales in use by the references currently loaded.
     ///
     /// Note that Driver comes pre-loaded with the `en-US` locale.
     #[wasm_bindgen(js_name = "toFetch")]
-    pub fn locales_to_fetch(&self) -> StringArrayResult {
-        typescript_serde_result(|| {
-            let eng = self.engine.borrow();
-            let langs: Vec<_> = eng
-                .get_langs_in_use()
-                .iter()
-                .map(|l| l.to_string())
-                .collect();
-            Ok(langs)
-        })
+    pub fn locales_to_fetch(&self) -> Result<typescript::StringArray, Error> {
+        let eng = self.engine.borrow();
+        let langs: Vec<_> = eng
+            .get_langs_in_use()
+            .iter()
+            .map(|l| l.to_string())
+            .collect();
+        langs.serialize_jsvalue()
     }
 
     /// Returns a random cluster id, with an extra guarantee that it isn't already in use.
@@ -249,35 +193,29 @@ impl Driver {
 
     /// Inserts or replaces a cluster with a matching `id`.
     #[wasm_bindgen(js_name = "insertCluster")]
-    pub fn insert_cluster(&self, cluster: TCluster) -> EmptyResult {
-        typescript_serde_result(|| {
-            let cluster: string_id::Cluster = cluster.into_serde()?;
-            let mut eng = self.engine.borrow_mut();
-            eng.insert_cluster_str(cluster);
-            Ok(())
-        })
+    pub fn insert_cluster(&self, cluster: typescript::Cluster) -> Result<(), Error> {
+        let cluster: string_id::Cluster = cluster.into_serde()?;
+        let mut eng = self.engine.borrow_mut();
+        eng.insert_cluster_str(cluster);
+        Ok(())
     }
 
     /// Removes a cluster with a matching `id`
     #[wasm_bindgen(js_name = "removeCluster")]
-    pub fn remove_cluster(&self, cluster_id: &str) -> EmptyResult {
-        typescript_serde_result(|| {
-            let mut eng = self.engine.borrow_mut();
-            eng.remove_cluster_str(cluster_id);
-            Ok(())
-        })
+    pub fn remove_cluster(&self, cluster_id: &str) -> Result<(), Error> {
+        let mut eng = self.engine.borrow_mut();
+        eng.remove_cluster_str(cluster_id);
+        Ok(())
     }
 
     /// Resets all the clusters in the processor to a new list.
     ///
     /// * `clusters` is a Cluster[]
     #[wasm_bindgen(js_name = "initClusters")]
-    pub fn init_clusters(&self, clusters: Box<[JsValue]>) -> EmptyResult {
-        typescript_serde_result(|| {
-            let clusters: Vec<string_id::Cluster> = utils::read_js_array_2(clusters)?;
-            self.engine.borrow_mut().init_clusters_str(clusters);
-            Ok(())
-        })
+    pub fn init_clusters(&self, clusters: Box<[JsValue]>) -> Result<(), Error> {
+        let clusters: Vec<string_id::Cluster> = utils::read_js_array_2(clusters)?;
+        self.engine.borrow_mut().init_clusters_str(clusters);
+        Ok(())
     }
 
     /// Returns the formatted citation cluster for `cluster_id`.
@@ -285,14 +223,13 @@ impl Driver {
     /// Prefer `batchedUpdates` to avoid serializing unchanged clusters on every edit. This is
     /// still useful for initialization.
     #[wasm_bindgen(js_name = "builtCluster")]
-    pub fn built_cluster(&self, id: &str) -> StringResult {
-        typescript_serde_result(|| {
-            let eng = self.engine.borrow();
-            let built = eng
-                .get_cluster_str(id)
-                .ok_or_else(|| DriverError::NonExistentCluster(id.into()))?;
-            Ok(built)
-        })
+    pub fn built_cluster(&self, id: &str) -> Result<String, Error> {
+        let eng = self.engine.borrow();
+        let built = eng
+            .get_cluster_str(id)
+            .map(|arc| arc.to_string())
+            .ok_or_else(|| Error::NonExistentCluster(id.into()))?;
+        Ok(built)
     }
 
     /// @deprecated Use `previewCluster` instead
@@ -302,11 +239,10 @@ impl Driver {
         cites: Box<[JsValue]>,
         positions: Box<[JsValue]>,
         format: Option<String>,
-    ) -> StringResult {
-        typescript_serde_result(|| {
-            let cites = utils::read_js_array_2(cites)?;
-            self.preview_cluster_inner(PreviewCluster::new(cites, None), positions, format)
-        })
+    ) -> Result<String, Error> {
+        let cites = utils::read_js_array_2(cites)?;
+        self.preview_cluster_inner(PreviewCluster::new(cites, None), positions, format)
+            .map(|arc| arc.to_string())
     }
 
     /// Previews a formatted citation cluster, in a particular position.
@@ -322,14 +258,13 @@ impl Driver {
     #[wasm_bindgen(js_name = "previewCluster")]
     pub fn preview_cluster(
         &self,
-        preview_cluster: TPreviewCluster,
+        preview_cluster: typescript::PreviewCluster,
         positions: Box<[JsValue]>,
         format: Option<String>,
-    ) -> StringResult {
-        typescript_serde_result(|| {
-            let preview_cluster: PreviewCluster = preview_cluster.into_serde()?;
-            self.preview_cluster_inner(preview_cluster, positions, format)
-        })
+    ) -> Result<String, Error> {
+        let preview_cluster: PreviewCluster = preview_cluster.into_serde()?;
+        self.preview_cluster_inner(preview_cluster, positions, format)
+            .map(|arc| arc.to_string())
     }
 
     fn preview_cluster_inner(
@@ -337,7 +272,7 @@ impl Driver {
         preview_cluster: PreviewCluster,
         positions: Box<[JsValue]>,
         format: Option<String>,
-    ) -> Result<Arc<SmartString>, DriverError> {
+    ) -> Result<String, Error> {
         let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
         let mut eng = self.engine.borrow_mut();
         let preview = eng.preview_citation_cluster(
@@ -346,28 +281,25 @@ impl Driver {
             format
                 .map(|frmt| {
                     frmt.parse::<SupportedFormat>()
-                        .map_err(|()| DriverError::UnknownOutputFormat(frmt))
+                        .map_err(|()| Error::UnknownOutputFormat(frmt))
                 })
                 .transpose()?,
-        );
-        Ok(preview?)
+        )?;
+        Ok(preview.to_string())
     }
 
     #[wasm_bindgen(js_name = "makeBibliography")]
-    pub fn make_bibliography(&self) -> BibEntriesResult {
-        typescript_serde_result(|| {
-            let eng = self.engine.borrow();
-            Ok(eng.get_bibliography())
-        })
+    pub fn make_bibliography(&self) -> Result<typescript::BibEntries, Error> {
+        let eng = self.engine.borrow();
+        let bib = eng.get_bibliography();
+        bib.serialize_jsvalue()
     }
 
     #[wasm_bindgen(js_name = "bibliographyMeta")]
-    pub fn bibliography_meta(&self) -> BibliographyMetaResult {
-        typescript_serde_result(|| {
-            let eng = self.engine.borrow();
-            let meta = eng.get_bibliography_meta();
-            Ok(meta)
-        })
+    pub fn bibliography_meta(&self) -> Result<typescript::BibliographyMeta, Error> {
+        let eng = self.engine.borrow();
+        let meta = eng.get_bibliography_meta();
+        meta.serialize_jsvalue()
     }
 
     /// Specifies which clusters are actually considered to be in the document, and sets their
@@ -394,13 +326,11 @@ impl Driver {
     ///
     /// May error without having set_cluster_ids, but with some set_cluster_note_number-s executed.
     #[wasm_bindgen(js_name = "setClusterOrder")]
-    pub fn set_cluster_order(&self, positions: Box<[JsValue]>) -> EmptyResult {
-        typescript_serde_result(|| {
-            let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
-            let mut eng = self.engine.borrow_mut();
-            eng.set_cluster_order_str(&positions)?;
-            Ok(())
-        })
+    pub fn set_cluster_order(&self, positions: Box<[JsValue]>) -> Result<(), Error> {
+        let positions: Vec<string_id::ClusterPosition> = utils::read_js_array_2(positions)?;
+        let mut eng = self.engine.borrow_mut();
+        eng.set_cluster_order_str(&positions)?;
+        Ok(())
     }
 
     /// Retrieve any clusters that have been touched since last time `batchedUpdates` was
@@ -411,30 +341,26 @@ impl Driver {
     ///
     /// * returns an `UpdateSummary`
     #[wasm_bindgen(js_name = "batchedUpdates")]
-    pub fn batched_updates(&self) -> UpdateSummaryResult {
-        typescript_serde_result(|| {
-            let eng = self.engine.borrow();
-            let summary = eng.batched_updates_str();
-            Ok(summary)
-        })
+    pub fn batched_updates(&self) -> Result<typescript::UpdateSummary, Error> {
+        let eng = self.engine.borrow();
+        let summary = eng.batched_updates_str();
+        summary.serialize_jsvalue()
     }
 
     /// Returns all the clusters and bibliography entries in the document.
     /// Also drains the queue, just like batchedUpdates().
     /// Use this to rehydrate a document or run non-interactively.
     #[wasm_bindgen(js_name = "fullRender")]
-    pub fn full_render(&self) -> FullRenderResult {
-        typescript_serde_result(|| {
-            let mut eng = self.engine.borrow_mut();
-            let all_clusters = eng.all_clusters_str();
-            let bib_entries = eng.get_bibliography();
-            let all = string_id::FullRender {
-                all_clusters,
-                bib_entries,
-            };
-            eng.drain();
-            Ok(all)
-        })
+    pub fn full_render(&self) -> Result<typescript::FullRender, Error> {
+        let mut eng = self.engine.borrow_mut();
+        let all_clusters = eng.all_clusters_str();
+        let bib_entries = eng.get_bibliography();
+        let all = string_id::FullRender {
+            all_clusters,
+            bib_entries,
+        };
+        eng.drain();
+        all.serialize_jsvalue()
     }
 
     /// Drains the `batchedUpdates` queue manually.
@@ -500,339 +426,6 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "error", js_namespace = console)]
     fn log_js_error(val: JsValue);
-}
-
-// TODO: include note about free()-ing the Driver before an async fetchLocale() call comes back (in
-// which case the Driver reference held to by the promise handler function is now a dangling
-// wasm-bindgen pointer).
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_1: &'static str = r#"
-interface FormatOptions {
-    linkAnchors?: boolean,
-}
-
-interface InitOptions {
-    /** A CSL style as an XML string */
-    style: string,
-
-    /** A Fetcher implementation for fetching locales.
-      *
-      * If not provided, then no locales can be fetched, and default-locale and localeOverride will
-      * not be respected; the only locale used will be the bundled en-US. */
-    fetcher?: Fetcher,
-
-    /** The output format for this driver instance */
-    format: "html" | "rtf" | "plain",
-    /** Configuration for the formatter */
-    formatOptions?: FormatOptions,
-
-    /** A locale to use instead of the style's default-locale.
-      *
-      * For dependent styles, use parseStyleMetadata to find out which locale it prefers, and pass
-      * in the parent style with a localeOverride set to that value.
-      */
-    localeOverride?: string,
-
-    /** Disables sorting in the bibliography; items appear in cited order. */
-    bibliographyNoSort?: boolean,
-}
-
-/** This interface lets citeproc retrieve locales or modules asynchronously,
-    according to which ones are needed. */
-export interface Fetcher {
-    /** Return locale XML for a particular locale. */
-    fetchLocale(lang: string): Promise<string>;
-}
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_2: &'static str = r#"
-export type DateLiteral = { "literal": string; };
-export type DateRaw = { "raw": string; };
-export type DatePartsDate = [number] | [number, number] | [number, number, number];
-export type DatePartsSingle = { "date-parts": [DatePartsDate]; };
-export type DatePartsRange = { "date-parts": [DatePartsDate, DatePartsDate]; };
-export type DateParts = DatePartsSingle | DatePartsRange;
-export type DateOrRange = DateLiteral | DateRaw | DateParts;
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_3: &'static str = r#"
-/** Locator type, and a locator string */
-export type Locator = {
-    label?: string;
-    locator?: string;
-    locators: undefined;
-};
-
-export type CiteLocator = Locator | { locator: undefined; locators: Locator[]; };
-export type CiteMode = { mode?: "SuppressAuthor" | "AuthorOnly"; };
-
-export type Cite = {
-    id: string;
-    prefix?: string;
-    suffix?: string;
-} & Partial<CiteLocator> & CiteMode;
-
-export type ClusterMode
-    = { mode: "Composite"; infix?: string; suppressFirst?: number; } 
-    | { mode: "SuppressAuthor"; suppressFirst?: number; }
-    | { mode: "AuthorOnly"; }
-    | {};
-
-export type Cluster = {
-    id: string;
-    cites: Cite[];
-} & ClusterMode;
-
-export type PreviewCluster = {
-    cites: Cite[];
-} & ClusterMode;
-
-export type ClusterPosition = {
-    id: string;
-    /** Leaving off this field means this cluster is in-text. */
-    note?: number;
-}
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_4: &'static str = r#"
-export type Reference = {
-    id: string;
-    type: CslType;
-    [key: string]: any;
-};
-
-export type CslType = "book" | "article" | "legal_case" | "article-journal" | string;
-"#;
-
-// Bibliography handling
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_4: &'static str = r#"
-export interface BibliographyUpdate {
-    updatedEntries: Map<string, string>;
-    entryIds?: string[];
-}
-
-export type UpdateSummary<Output = string> = {
-    clusters: [string, Output][];
-    bibliography?: BibliographyUpdate;
-};
-
-type IncludeUncited = "None" | "All" | { Specific: string[] };
-
-type BibEntry = {
-    id: string;
-    value: string;
-};
-
-type BibEntries = BibEntry[];
-
-type FullRender = {
-    allClusters: Map<string, string>,
-    bibEntries: BibEntries,
-};
-
-type BibliographyMeta = {
-    maxOffset: number;
-    entrySpacing: number;
-    lineSpacing: number;
-    hangingIndent: boolean;
-    /** the second-field-align value of the CSL style */
-    secondFieldAlign: null  | "flush" | "margin";
-    /** Format-specific metadata */
-    formatMeta: any,
-};
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_5: &'static str = r#"
-type Severity = "Error" | "Warning";
-interface InvalidCsl {
-    severity: Severity;
-    /** Relevant bytes in the provided XML */
-    range: {
-        start: number,
-        end: number,
-    };
-    message: string;
-    hint: string | undefined;
-};
-type StyleError = {
-    tag: "Invalid",
-    content: InvalidCsl[],
-} | {
-    tag: "ParseError",
-    content: string,
-} | {
-    /** Cannot use a dependent style to format citations, pass the parent style instead. */
-    tag: "DependentStyle",
-    content: {
-        requiredParent: string,
-    }
-};
-type DriverError = {
-    tag: "UnknownOutputFormat",
-    content: string,
-} | {
-    tag: "JsonError",
-} | {
-    tag: "GetFetcherError",
-} | {
-    tag: "NonExistentCluster",
-    content: string,
-} | {
-    tag: "ReorderingError"
-} | {
-    tag: "ReorderingErrorNumericId"
-};
-
-declare global {
-    /** Catch-all citeproc-rs Error subclass. */
-    declare class CiteprocRsError extends Error {
-        constructor(message: string);
-    }
-    declare class CiteprocRsDriverError extends CiteprocRsError {
-        data: DriverError;
-        constructor(message: string, data: DriverError);
-    }
-    declare class CslStyleError extends CiteprocRsError {
-        data: StyleError;
-        constructor(message: string, data: StyleError);
-    }
-}
-"#;
-
-js_import_class_constructor! {
-    pub type CiteprocRsError;
-    #[wasm_bindgen(constructor)]
-    fn new(msg: JsValue) -> CiteprocRsError;
-}
-
-js_import_class_constructor! {
-    pub type CiteprocRsDriverError;
-    #[wasm_bindgen(constructor)]
-    fn new(msg: JsValue, data: JsValue) -> CiteprocRsDriverError;
-}
-
-js_import_class_constructor! {
-    pub type CslStyleError;
-    #[wasm_bindgen(constructor)]
-    fn new(msg: JsValue, data: JsValue) -> CslStyleError;
-}
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_5: &'static str = r#"
-interface WasmResult<T> {
-    /** If this is an error, throws the error. */
-    unwrap(): T;
-    /** If this is an error, returns it, else throws. */
-    unwrap_err(): Error;
-    is_ok(): boolean;
-    is_err(): boolean;
-    /** If this is an error, returns the default value. */
-    unwrap_or(defaultValue: T): T;
-    /** If this is Ok, returns f(ok_val), else returns Err unmodified. */
-    map<R>(f: (t: T) => R): WasmResult<T>;
-    /** If this is Ok, returns f(ok_val), else returns the default value. */
-    map_or<R>(defaultValue: R, f: (t: T) => R): R;
-}
-"#;
-
-#[wasm_bindgen(typescript_custom_section)]
-const TS_APPEND_CONTENT_5: &'static str = r#"
-type CitationFormat = "author-date" | "author" | "numeric" | "label" | "note";
-interface LocalizedString {
-    value: string,
-    lang?: string,
-}
-interface ParentLink {
-    href: string,
-    lang?: string,
-}
-interface Link {
-    href: string,
-    rel: "self" | "documentation" | "template",
-    lang?: string,
-}
-interface Rights {
-    value: string,
-    lang?: string,
-    license?: string,
-}
-interface StyleInfo {
-    id: string,
-    updated: string,
-    title: LocalizedString,
-    titleShort?: LocalizedString,
-    parent?: ParentLink,
-    links: Link[],
-    rights?: Rights,
-    citationFormat?: CitationFormat,
-    categories: string[],
-    issn?: string,
-    eissn?: string,
-    issnl?: string,
-}
-interface IndependentMeta {
-    /** A list of languages for which a locale override was specified.
-      * Does not include the language-less final override. */
-    localeOverrides: string[],
-    hasBibliography: boolean,
-}
-interface StyleMeta {
-    info: StyleInfo,
-    features: { [feature: string]: boolean },
-    defaultLocale: string,
-    /** May be absent on a dependent style */
-    class?: "in-text" | "note",
-    cslVersionRequired: string,
-    /** May be absent on a dependent style */
-    independentMeta?: IndependentMeta,
-};
-"#;
-
-result_type!(
-    string_id::UpdateSummary,
-    UpdateSummaryResult,
-    "WasmResult<UpdateSummary>"
-);
-result_type!(
-    Vec<citeproc::BibEntry>,
-    BibEntriesResult,
-    "WasmResult<BibEntries>"
-);
-result_type!(
-    string_id::FullRender,
-    FullRenderResult,
-    "WasmResult<FullRender>"
-);
-result_type!(Driver, DriverResult, "WasmResult<Driver>");
-result_type!(
-    Option<citeproc::BibliographyMeta>,
-    BibliographyMetaResult,
-    "WasmResult<BibliographyMeta>"
-);
-result_type!((), EmptyResult, "WasmResult<undefined>");
-result_type!(Arc<SmartString>, StringResult, "WasmResult<string>");
-result_type!(Vec<String>, StringArrayResult, "WasmResult<string[]>");
-result_type!(StyleMeta, StyleMetaResult, "WasmResult<StyleMeta>");
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(typescript_type = "Cluster")]
-    pub type TCluster;
-    #[wasm_bindgen(typescript_type = "PreviewCluster")]
-    pub type TPreviewCluster;
-    #[wasm_bindgen(typescript_type = "IncludeUncited")]
-    pub type TIncludeUncited;
-    #[wasm_bindgen(typescript_type = "Reference")]
-    pub type TReference;
-    #[wasm_bindgen(typescript_type = "InitOptions")]
-    pub type TInitOptions;
-    #[wasm_bindgen(typescript_type = "FormatOptions")]
-    pub type TFormatOptions;
 }
 
 /// Asks the JS side to fetch all of the locales that could be called by the style+refs.
