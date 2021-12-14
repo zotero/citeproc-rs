@@ -1,5 +1,43 @@
 # Changelog (@citeproc-rs/wasm)
 
+## [wasm-v0.2.0](https://github.com/zotero/citeproc-rs/tree/wasm-v0.2.0) (2021-12-14)
+
+[Full Changelog](https://github.com/zotero/citeproc-rs/compare/wasm-v0.1.0...wasm-v0.2.0)
+
+#### Breaking changes:
+
+- Add a way to specify the ClusterMode of a previewed cluster [\#119](https://github.com/zotero/citeproc-rs/issues/119)
+- Remove .unwrap\(\) from JS API; `Driver.new` =\> `new Driver` [\#142](https://github.com/zotero/citeproc-rs/pull/142) [[A-ci](https://github.com/zotero/citeproc-rs/labels/A-ci)]
+
+#### Implemented enhancements:
+
+- Set output format after driver initialization [\#122](https://github.com/zotero/citeproc-rs/issues/122)
+- previewCitationCluster =\> previewCluster [\#141](https://github.com/zotero/citeproc-rs/pull/141)
+- setOutputFormat API [\#140](https://github.com/zotero/citeproc-rs/pull/140)
+
+#### Fixed bugs:
+
+- PMID and PMCID urls are backwards [\#131](https://github.com/zotero/citeproc-rs/issues/131) [[I-bug](https://github.com/zotero/citeproc-rs/labels/I-bug)] [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+
+#### Closed issues:
+
+- CI errors downloading test results from S3 when PRs are submitted from people who aren't me [\#134](https://github.com/zotero/citeproc-rs/issues/134)
+- "\<" is ignored in prefix [\#129](https://github.com/zotero/citeproc-rs/issues/129) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- In some scenarios prefix needs to be ignored when wrapping DOI [\#127](https://github.com/zotero/citeproc-rs/issues/127) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- Invalid HTML produced when item URL contains a quotation symbol `"`. [\#123](https://github.com/zotero/citeproc-rs/issues/123)
+- BibliographyMeta wrongly cased/documented [\#77](https://github.com/zotero/citeproc-rs/issues/77)
+
+#### Merged pull requests:
+
+- reimplement name parsing [\#139](https://github.com/zotero/citeproc-rs/pull/139) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- Solve year-suffix / no-date interaction [\#137](https://github.com/zotero/citeproc-rs/pull/137) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- Fix "line-spacing" attribute on \<bibliography\> in CSL is ignored [\#133](https://github.com/zotero/citeproc-rs/pull/133) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- Fix doi urls in prefix duplication, and pmids/pmcids [\#132](https://github.com/zotero/citeproc-rs/pull/132) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+- Fix erroneous parsing of HTML in prefix="..."/suffix [\#130](https://github.com/zotero/citeproc-rs/pull/130)
+- Test case for \#127 [\#128](https://github.com/zotero/citeproc-rs/pull/128)
+- Test ESR wasm support [\#125](https://github.com/zotero/citeproc-rs/pull/125)
+- Escape urls, implement auto-prefixing and configurable link anchors [\#124](https://github.com/zotero/citeproc-rs/pull/124) [[A-core](https://github.com/zotero/citeproc-rs/labels/A-core)]
+
 ## [wasm-v0.1.0](https://github.com/zotero/citeproc-rs/tree/wasm-v0.1.0) (2021-10-21)
 
 [Full Changelog](https://github.com/zotero/citeproc-rs/compare/wasm-v0.0.0...wasm-v0.1.0)
