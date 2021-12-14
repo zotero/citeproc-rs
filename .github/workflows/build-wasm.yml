@@ -108,7 +108,7 @@ jobs:
       - name: Publish @citeproc-rs/wasm to NPM
         working-directory: crates/wasm
         run: >
-          npm publish dist --access public
+          npm publish ./dist --access public
           --tag ${{ steps.version.outputs.npm_dist_tag }}
           ${{ steps.version.outputs.npm_dry_run == 'true' && '--dry-run' || '' }}
 
