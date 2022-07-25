@@ -24,7 +24,7 @@ fn smash_string_push(base: &mut String, suff: &str) {
     let b_spaces = base.len() - btrim.len();
     let mut trimmed_len = btrim.len();
     let strim = suff.trim_start_matches(smash_trim);
-    let s_spaces = suff.len() - strim.len();
+    let _s_spaces = suff.len() - strim.len();
     let b_ends_punc = btrim.chars().rev().nth(0).map_or(false, is_punc);
     let s_starts_punc = strim.chars().nth(0).map_or(false, is_punc);
     if !b_ends_punc || !s_starts_punc {
@@ -270,6 +270,7 @@ pub fn normalise_text_elements_micro(slice: &mut Vec<MicroNode>) {
 
 enum Motion {
     RemovedAndRetry(usize),
+    #[allow(dead_code)]
     RemovedNoChanges(usize),
 }
 
@@ -492,6 +493,7 @@ pub fn is_punc(c: char) -> bool {
     c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':'
 }
 
+#[allow(dead_code)]
 fn is_punc_space(c: char) -> bool {
     is_punc(c) || c.is_whitespace()
 }
@@ -681,6 +683,7 @@ fn find_right_quote_inside_micro<'b>(
 }
 
 /// "Insertion" == push to one of these vectors.
+#[allow(dead_code)]
 #[derive(Debug)]
 enum RightQuoteInsertionPoint<'a> {
     InsideInline(&'a mut Vec<InlineElement>, &'a mut String),
@@ -696,6 +699,7 @@ enum RightQuoteInsertionPoint<'a> {
 }
 
 impl RightQuoteInsertionPoint<'_> {
+    #[allow(dead_code)]
     fn insert_smushed(&mut self, smushed: &str) {
         match self {
             // "quoted" => "quoted,"
