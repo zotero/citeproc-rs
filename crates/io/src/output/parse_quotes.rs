@@ -613,7 +613,7 @@ fn new_quote_splitter<'a>(
 }
 
 impl<'a, I: Iterator<Item = SplitPoint>> QuoteSplitter<'a, I> {
-    fn events(self) -> impl Iterator<Item = Event<'a>> {
+    fn events(self) -> impl Iterator<Item = Event<'a>> + 'a {
         self.flat_map(|x: Thingo| x).filter(|ev| match ev {
             Event::Text("") => false,
             _ => true,
