@@ -1461,19 +1461,29 @@ impl EnumGetAttribute for PageRangeFormat {}
 #[strum(serialize_all = "kebab_case")]
 pub enum CslType {
     Article,
+    ArticleJournal,
     ArticleMagazine,
     ArticleNewspaper,
-    ArticleJournal,
     Bill,
     Book,
     Broadcast,
     Chapter,
+    /// CSL-M only
+    #[strum(props(csl = "0", cslM = "1"))]
+    Classic,
+    Collection,
     Dataset,
+    Document,
     Entry,
     EntryDictionary,
     EntryEncyclopedia,
+    Event,
     Figure,
+    /// feature = cslm_legal_types
+    #[strum(props(feature = "cslm_legal_types"))]
+    Gazette,
     Graphic,
+    Hearing,
     Interview,
     Legislation,
     #[strum(serialize = "legal_case")]
@@ -1487,34 +1497,25 @@ pub enum CslType {
     Pamphlet,
     PaperConference,
     Patent,
-    Post,
-    PostWeblog,
+    Performance,
+    Periodical,
     #[strum(serialize = "personal_communication")]
     PersonalCommunication,
+    Post,
+    PostWeblog,
+    Regulation,
     Report,
     Review,
     ReviewBook,
+    Software,
     Song,
     Speech,
+    Standard,
     Thesis,
     Treaty,
-    Webpage,
-
-    /// CSL-M only
-    #[strum(props(csl = "0", cslM = "1"))]
-    Classic,
     /// CSL-M only
     #[strum(props(csl = "0", cslM = "1"))]
     Video,
-
-    /// feature = "cslm_legal_types"
-    #[strum(props(feature = "cslm_legal_types"))]
-    Gazette,
-    /// feature = cslm_legal_types
-    #[strum(props(feature = "cslm_legal_types"))]
-    Hearing,
-    /// feature = cslm_legal_types
-    #[strum(props(feature = "cslm_legal_types"))]
-    Regulation,
+    Webpage,
 }
 impl EnumGetAttribute for CslType {}
