@@ -28,7 +28,7 @@ nom = { version = "6.1.2", default-features = false, features = ["std"] }
 semver = "0.11.0"
 log = "0.4.11"
 thiserror = "1.0.20"
-smartstring = "0.2.5"
+smartstring = "1.0.1"
 string_cache = "0.8.0"
 url = "2.1.1"
 chrono = "0.4.19"

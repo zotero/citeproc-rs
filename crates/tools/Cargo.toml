@@ -19,7 +19,7 @@ directories = "3.0.1"
 git2 = "0.13.11"
 anyhow = "1.0.32"
 # latest release on crates.io doesn't support Ignored yet
-cargo-suity = { git = "https://github.com/andoriyu/cargo-suity", branch = "master", version = "0.2.1" }
+cargo-suity = "0.3"
 serde_json = "1.0.57"
 serde = "1.0.116"
 structopt = "0.3.18"
